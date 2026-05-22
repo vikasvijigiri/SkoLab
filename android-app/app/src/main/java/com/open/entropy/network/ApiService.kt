@@ -145,6 +145,9 @@ data class SummaryResponse(
     val top_skills: List<String>
 )
 
+// Mapped from PaperIntelligence.kt — using the model class directly
+// (no duplicate serializable needed — PaperIntelligence is @Serializable)
+
 // ── Service ───────────────────────────────────────────────────────────────────
 
 /**
@@ -360,6 +363,36 @@ class ApiService {
             httpClient.get("https://api.openalex.org/works/$id").body()
         } catch (e: Exception) {
             Log.e(tag, "getPaperDetails (OpenAlex) failed", e)
+            null
+        }
+    }
+
+    /**
+     * Calls the backend /analyze_paper endpoint which:
+     *   1. Downloads the full paper PDF (open-access sources)
+     *   2. Reads the complete text with pdfplumber
+     *   3. Runs the Research Intelligence Agent LLM (9-section structured extraction)
+     *
+     * Falls back to abstract-only analysis when no PDF is accessible.
+     * Results are cached server-side for 6 hours.
+     */
+    suspend fun analyzePaper(
+        title: String,
+        doi: String? = null,
+        openAlexId: String? = null
+    ): com.open.entropy.model.PaperIntelligence? {
+        val base = baseUrl() ?: run {
+            Log.w(tag, "analyzePaper: backend not reachable, skipping")
+            return null
+        }
+        return try {
+            httpClient.get("$base/analyze_paper") {
+                parameter("title", title)
+                if (!doi.isNullOrBlank())        parameter("doi", doi)
+                if (!openAlexId.isNullOrBlank()) parameter("openalex_id", openAlexId)
+            }.body()
+        } catch (e: Exception) {
+            Log.e(tag, "analyzePaper failed", e)
             null
         }
     }
