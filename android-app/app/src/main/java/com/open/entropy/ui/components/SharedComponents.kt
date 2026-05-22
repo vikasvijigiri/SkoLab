@@ -240,9 +240,17 @@ fun MarkdownText(
         update = { textView ->
             textView.setTextColor(color.toArgb())
             textView.setTextSize(TypedValue.COMPLEX_UNIT_PX, fontSizePx)
-            val processed = markdown
-                .replace(Regex("(?<!\\\\)mathrm\\{"), "\\\\mathrm{")
-                .replace(Regex("(?<!\\\\)text\\{"), "\\\\text{")
+            
+            // 1. Convert standard bracket math delimiters to dollar delimiters
+            var processed = markdown
+                .replace("\\[", "$$")
+                .replace("\\]", "$$")
+                .replace("\\(", "$")
+                .replace("\\)", "$")
+            
+            // 2. Double all backslashes so CommonMark parser doesn't eat LaTeX command prefixes
+            processed = processed.replace("\\", "\\\\")
+            
             markwon.setMarkdown(textView, processed)
         },
         modifier = modifier
