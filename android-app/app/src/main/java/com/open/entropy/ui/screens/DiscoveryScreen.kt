@@ -109,7 +109,6 @@ fun DiscoveryScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(bottom = com.open.entropy.ui.layout.ScreenInsets.bottomNavClearance)
         ) {
             // ── Top Bar ─────────────────────────────────────────
             LightTopBar(userName = userName, onProfileClick = onProfileClick)
