@@ -23,7 +23,19 @@ data class OpenAlexWork(
     val authorships: List<Authorship>? = null,
     val cited_by_count: Int? = 0,
     val primary_location: PrimaryLocation? = null,
-    val abstract_inverted_index: Map<String, List<Int>>? = null
+    val abstract_inverted_index: Map<String, List<Int>>? = null,
+    val primary_topic: OpenAlexTopic? = null
+)
+
+@Serializable
+data class OpenAlexTopic(
+    val display_name: String? = null,
+    val field: OpenAlexTopicField? = null
+)
+
+@Serializable
+data class OpenAlexTopicField(
+    val display_name: String? = null
 )
 
 @Serializable data class Authorship(val author: AuthorInfo? = null)
