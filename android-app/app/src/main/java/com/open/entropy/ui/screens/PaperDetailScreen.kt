@@ -38,6 +38,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.open.entropy.viewmodel.PaperUiState
 import com.open.entropy.viewmodel.PaperViewModel
+import com.open.entropy.viewmodel.IntelligenceUiState
+import com.open.entropy.model.PaperIntelligence
 import androidx.compose.ui.platform.LocalContext
 import com.open.entropy.R
 import com.open.entropy.ui.components.*
@@ -58,6 +60,7 @@ fun PaperDetailScreen(
     libraryViewModel: LibraryViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val intelligenceState by viewModel.intelligenceState.collectAsState()
     val savedIds by libraryViewModel.savedIds.collectAsState()
     val isSaved = savedIds.contains(paperId)
     val scope = rememberCoroutineScope()
@@ -130,13 +133,110 @@ fun PaperDetailScreen(
                             MetricCockpit(paper)
                         }
 
-                        item {
-                            AiIntelligenceBrief(paper)
-                        }
+                        // ── Progressive AI Research Intelligence Sections ──
+                        when (val intel = intelligenceState) {
+                            is IntelligenceUiState.Loading -> {
+                                item {
+                                    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.AutoAwesome,
+                                                contentDescription = null,
+                                                tint = ResQitAiInsight,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Text(
+                                                text = "ANALYZING FULL RESEARCH PAPER...",
+                                                style = Typography.labelMedium,
+                                                color = ResQitTextPrimary,
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 1.sp
+                                            )
+                                        }
+                                        IntelligenceShimmerBlock()
+                                    }
+                                }
+                            }
+                            is IntelligenceUiState.Unavailable -> {
+                                item {
+                                    IntelligenceUnavailableBlock(
+                                        onRetry = { viewModel.retryIntelligence(paper, paperId) },
+                                        reason = intel.reason
+                                    )
+                                }
+                            }
+                            is IntelligenceUiState.Success -> {
+                                val data = intel.data
 
-                        if (paper.latexFormula != null) {
-                            item {
-                                TechnicalFormulaBlock(paper.latexFormula)
+                                // Header Row with Confidence Indicator
+                                item {
+                                    ResearchIntelligenceHeader(data)
+                                }
+
+                                // 1. TL;DR Hero Card
+                                item {
+                                    TldrHeroCard(data)
+                                }
+
+                                // 2. Key Findings
+                                if (data.keyFindings.isNotEmpty()) {
+                                    item {
+                                        KeyFindingsBlock(data.keyFindings)
+                                    }
+                                }
+
+                                // 3. Techniques & Methods
+                                if (data.techniques.isNotEmpty()) {
+                                    item {
+                                        TechniquesBlock(data.techniques)
+                                    }
+                                }
+
+                                // 4. Tools & Software
+                                if (data.toolsAndSoftware.isNotEmpty()) {
+                                    item {
+                                        ToolsAndSoftwareBlock(data.toolsAndSoftware)
+                                    }
+                                }
+
+                                // 5. Core Concepts
+                                if (data.coreConcepts.isNotEmpty()) {
+                                    item {
+                                        CoreConceptsBlock(data.coreConcepts)
+                                    }
+                                }
+
+                                // 6. Mathematical Model (Formulas)
+                                if (data.formulas.isNotEmpty()) {
+                                    item {
+                                        IntelligenceFormulasBlock(data.formulas)
+                                    }
+                                }
+
+                                // 7. Honest Limitations
+                                if (data.limitations.isNotEmpty()) {
+                                    item {
+                                        LimitationsBlock(data.limitations)
+                                    }
+                                }
+
+                                // 8. Real-World Impact
+                                if (data.realWorldImpact.isNotBlank()) {
+                                    item {
+                                        RealWorldImpactBlock(data.realWorldImpact)
+                                    }
+                                }
+
+                                // 9. Future Directions
+                                if (data.futureDirections.isNotEmpty()) {
+                                    item {
+                                        FutureDirectionsBlock(data.futureDirections)
+                                    }
+                                }
                             }
                         }
 
@@ -212,12 +312,72 @@ fun MetricCockpit(paper: com.open.entropy.model.Paper) {
 }
 
 @Composable
-fun AiIntelligenceBrief(paper: com.open.entropy.model.Paper) {
-    var expanded by remember { mutableStateOf(false) }
+fun ResearchIntelligenceHeader(intelligence: PaperIntelligence) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Default.AutoAwesome,
+                contentDescription = null,
+                tint = ResQitAiInsight,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = "RESEARCH INTELLIGENCE REPORT",
+                style = Typography.labelMedium,
+                color = ResQitTextPrimary,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp
+            )
+        }
+        
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            val confidenceColor = when (intelligence.confidence) {
+                "High" -> AccentEmerald
+                "Medium" -> AccentAmber
+                else -> TextMuted
+            }
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(confidenceColor, CircleShape)
+            )
+            Text(
+                text = "${intelligence.confidence} CONFIDENCE",
+                style = Typography.labelSmall,
+                color = TextSecondary,
+                fontWeight = FontWeight.Bold,
+                fontFamily = MonoFontFamily,
+                fontSize = 9.sp
+            )
+        }
+    }
+}
+
+@Composable
+fun TldrHeroCard(data: PaperIntelligence) {
+    val sourceFriendlyName = when (data.textSource) {
+        "full_text_oa" -> "Full OpenAlex OA PDF"
+        "full_text_arxiv" -> "Full arXiv PDF"
+        "full_text_unpaywall" -> "Full Unpaywall OA PDF"
+        "full_text_s2" -> "Semantic Scholar Full Text"
+        "abstract_only" -> "Metadata & Abstract only"
+        else -> "Scientific Metadata"
+    }
+
     ScientificCard(
-        glowColor = ResQitAiInsight.copy(alpha = 0.1f),
+        glowColor = ResQitAiInsight.copy(alpha = 0.12f),
         accentColor = ResQitAiInsight,
-        onClick = { expanded = !expanded }
+        borderWidth = 1.dp
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -225,39 +385,169 @@ fun AiIntelligenceBrief(paper: com.open.entropy.model.Paper) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.AutoAwesome, null, tint = ResQitAiInsight, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(10.dp))
+                Text("📌", fontSize = 16.sp)
+                Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = LocalContext.current.getString(R.string.brand_intel_label).uppercase(),
+                    text = "EXECUTIVE TL;DR",
                     style = Typography.labelSmall,
                     color = ResQitAiInsight,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp
                 )
             }
-            Text(
-                text = if (expanded) "▲" else "▼",
-                color = ResQitAiInsight,
-                style = Typography.labelMedium
-            )
+            
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .background(if (data.isFullText) AccentEmerald else TextMuted, CircleShape)
+                )
+                Text(
+                    text = sourceFriendlyName.uppercase(),
+                    style = Typography.labelSmall,
+                    color = TextSecondary,
+                    fontFamily = MonoFontFamily,
+                    fontSize = 8.sp,
+                    letterSpacing = 0.5.sp
+                )
+            }
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        val rawInsight = paper.keyInsight.ifBlank { "Analyzing research signals…" }
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
         MarkdownText(
-            markdown = "*$rawInsight*",
+            markdown = "*${data.tldr}*",
             color = ResQitTextPrimary,
             fontSize = 16.sp,
             modifier = Modifier.fillMaxWidth()
         )
+    }
+}
 
-        AnimatedVisibility(visible = expanded) {
-            Column(modifier = Modifier.padding(top = 16.dp)) {
-                paper.aiSummary.split(". ").forEach { bullet ->
-                    if (bullet.isNotBlank()) {
-                        AIInsightBullet(text = bullet.trim())
-                    }
+@Composable
+fun KeyFindingsBlock(keyFindings: List<String>) {
+    Column {
+        Text(
+            text = "🔬 KEY FINDINGS",
+            style = Typography.labelSmall,
+            color = ResQitTextSecondary,
+            letterSpacing = 2.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        ScientificCard {
+            keyFindings.forEachIndexed { index, finding ->
+                AIInsightBullet(text = finding)
+                if (index < keyFindings.size - 1) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun TechniquesBlock(techniques: List<String>) {
+    Column {
+        Text(
+            text = "⚙️ TECHNIQUES & METHODS",
+            style = Typography.labelSmall,
+            color = ResQitTextSecondary,
+            letterSpacing = 2.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            techniques.forEach { technique ->
+                IntelligenceChip(text = technique, color = AccentIndigo)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ToolsAndSoftwareBlock(tools: List<String>) {
+    Column {
+        Text(
+            text = "🧰 TOOLS, SOFTWARE & DATASETS",
+            style = Typography.labelSmall,
+            color = ResQitTextSecondary,
+            letterSpacing = 2.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            tools.forEach { tool ->
+                IntelligenceChip(text = tool, color = AccentTeal)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun CoreConceptsBlock(concepts: List<String>) {
+    Column {
+        Text(
+            text = "💡 CORE CONCEPTS",
+            style = Typography.labelSmall,
+            color = ResQitTextSecondary,
+            letterSpacing = 2.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            concepts.forEach { concept ->
+                IntelligenceChip(text = concept, color = AccentViolet)
+            }
+        }
+    }
+}
+
+@Composable
+fun IntelligenceFormulasBlock(formulas: List<String>) {
+    Column {
+        Text(
+            text = "∑ MATHEMATICAL MODEL",
+            style = Typography.labelSmall,
+            color = ResQitTextSecondary,
+            letterSpacing = 2.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            formulas.forEach { formula ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MidnightBlue)
+                        .border(0.5.dp, GlassBorder, RoundedCornerShape(12.dp))
+                        .padding(20.dp)
+                ) {
+                    MarkdownText(
+                        markdown = formula,
+                        color = ResQitPrimary,
+                        fontSize = 13.sp
+                    )
                 }
             }
         }
@@ -265,29 +555,233 @@ fun AiIntelligenceBrief(paper: com.open.entropy.model.Paper) {
 }
 
 @Composable
-fun TechnicalFormulaBlock(formula: String) {
+fun LimitationsBlock(limitations: List<String>) {
     Column {
         Text(
-            text = "MATHEMATICAL MODEL",
+            text = "⚠️ HONEST LIMITATIONS",
             style = Typography.labelSmall,
             color = ResQitTextSecondary,
-            letterSpacing = 2.sp
+            letterSpacing = 2.sp,
+            fontWeight = FontWeight.Bold
         )
         Spacer(modifier = Modifier.height(12.dp))
+        ScientificCard(
+            borderColor = ResQitWarning.copy(alpha = 0.2f),
+            glowColor = ResQitWarning.copy(alpha = 0.03f)
+        ) {
+            limitations.forEachIndexed { index, limitation ->
+                LimitationsBullet(text = limitation)
+                if (index < limitations.size - 1) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LimitationsBullet(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.padding(vertical = 4.dp),
+        verticalAlignment = Alignment.Top
+    ) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .clip(RoundedCornerShape(12.dp))
-                .background(MidnightBlue)
-                .border(0.5.dp, GlassBorder, RoundedCornerShape(12.dp))
-                .padding(20.dp)
+                .padding(top = 6.dp, end = 8.dp)
+                .size(4.dp)
+                .background(AccentRose, RoundedCornerShape(50))
+        )
+        MarkdownText(
+            markdown = text,
+            color = ResQitTextPrimary,
+            fontSize = 14.sp,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+fun RealWorldImpactBlock(text: String) {
+    Column {
+        Text(
+            text = "🌍 REAL-WORLD IMPACT",
+            style = Typography.labelSmall,
+            color = ResQitTextSecondary,
+            letterSpacing = 2.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        ScientificCard(
+            glowColor = AccentAmber.copy(alpha = 0.08f),
+            borderColor = AccentAmber.copy(alpha = 0.3f)
         ) {
             MarkdownText(
-                markdown = formula,
-                color = ResQitDisruption,
-                fontSize = 13.sp
+                markdown = text,
+                color = ResQitTextPrimary,
+                fontSize = 14.sp,
+                modifier = Modifier.fillMaxWidth()
             )
+        }
+    }
+}
+
+@Composable
+fun FutureDirectionsBlock(futureDirections: List<String>) {
+    Column {
+        Text(
+            text = "🚀 FUTURE DIRECTIONS",
+            style = Typography.labelSmall,
+            color = ResQitTextSecondary,
+            letterSpacing = 2.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        ScientificCard {
+            futureDirections.forEachIndexed { index, direction ->
+                FutureBullet(text = direction)
+                if (index < futureDirections.size - 1) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FutureBullet(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.padding(vertical = 4.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(top = 6.dp, end = 8.dp)
+                .size(4.dp)
+                .background(AccentViolet, RoundedCornerShape(50))
+        )
+        MarkdownText(
+            markdown = text,
+            color = ResQitTextPrimary,
+            fontSize = 14.sp,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+fun IntelligenceChip(text: String, color: Color) {
+    Surface(
+        color = color.copy(alpha = 0.08f),
+        shape = RoundedCornerShape(20.dp),
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, color.copy(alpha = 0.3f)),
+        modifier = Modifier.padding(bottom = 8.dp)
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            style = Typography.labelSmall,
+            color = color,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+fun IntelligenceShimmerBlock() {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(24.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        // Header Shimmer
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SkeletonShimmer(Modifier.size(20.dp), shape = CircleShape)
+                Spacer(modifier = Modifier.width(10.dp))
+                SkeletonShimmer(Modifier.size(160.dp, 16.dp))
+            }
+            SkeletonShimmer(Modifier.size(100.dp, 14.dp))
+        }
+
+        // TL;DR Hero Card Shimmer
+        ScientificCard(glowColor = ResQitAiInsight.copy(alpha = 0.05f)) {
+            SkeletonShimmer(Modifier.size(80.dp, 12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+            SkeletonShimmer(Modifier.fillMaxWidth().height(18.dp))
+            Spacer(modifier = Modifier.height(6.dp))
+            SkeletonShimmer(Modifier.fillMaxWidth(0.8f).height(18.dp))
+        }
+
+        // Key Findings Shimmer
+        ScientificCard {
+            SkeletonShimmer(Modifier.size(120.dp, 14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+            repeat(3) { index ->
+                Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(vertical = 4.dp)) {
+                    SkeletonShimmer(Modifier.size(6.dp), shape = CircleShape)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    SkeletonShimmer(Modifier.fillMaxWidth(0.9f - index * 0.1f).height(14.dp))
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+
+        // Chips Shimmer (Techniques & Tools)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SkeletonShimmer(Modifier.size(90.dp, 28.dp), shape = RoundedCornerShape(14.dp))
+            SkeletonShimmer(Modifier.size(110.dp, 28.dp), shape = RoundedCornerShape(14.dp))
+            SkeletonShimmer(Modifier.size(80.dp, 28.dp), shape = RoundedCornerShape(14.dp))
+        }
+    }
+}
+
+@Composable
+fun IntelligenceUnavailableBlock(onRetry: () -> Unit, reason: String) {
+    ScientificCard(
+        borderColor = ResQitWarning.copy(alpha = 0.3f),
+        glowColor = ResQitWarning.copy(alpha = 0.05f)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "⚠️",
+                fontSize = 24.sp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Deep AI Analysis Unavailable",
+                style = Typography.titleMedium,
+                color = ResQitTextPrimary,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = if (reason.contains("not reachable")) "Check your network or restart the server." else "This work cannot be fetched in full text.",
+                style = Typography.bodyMedium,
+                color = ResQitTextSecondary,
+                modifier = Modifier.padding(horizontal = 16.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = onRetry,
+                colors = ButtonDefaults.buttonColors(containerColor = ResQitPrimary)
+            ) {
+                Text("Retry Analysis", color = Color.White)
+            }
         }
     }
 }
