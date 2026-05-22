@@ -2,31 +2,37 @@ package com.open.entropy.ui.screens
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
+import com.open.entropy.R
 import com.open.entropy.ui.components.BrandMark
 import kotlinx.coroutines.delay
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.random.Random
 
 @Composable
 fun SplashScreen(onAnimationFinished: () -> Unit) {
-    // Reduced count because they are bigger now, for better performance and aesthetic
-    val particles = remember { List(80) { Particle() } }
+    val particles = remember { List(100) { Particle() } }
+    
+    val logoAlpha = remember { Animatable(0f) }
+    val logoScale = remember { Animatable(0.3f) }
     
     val textAlpha = remember { Animatable(0f) }
-    val textScale = remember { Animatable(0.8f) }
+    val textOffsetY = remember { Animatable(30f) }
     
     val infiniteTransition = rememberInfiniteTransition(label = "entropy")
     val frame by infiniteTransition.animateFloat(
@@ -40,15 +46,31 @@ fun SplashScreen(onAnimationFinished: () -> Unit) {
     )
 
     LaunchedEffect(Unit) {
-        textAlpha.animateTo(1f, animationSpec = tween(1200, easing = EaseInOutQuart))
-        delay(1800)
+        logoAlpha.animateTo(1f, animationSpec = tween(500, easing = EaseOutCubic))
+    }
+
+    LaunchedEffect(Unit) {
+        logoScale.animateTo(1f, animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ))
+    }
+
+    LaunchedEffect(Unit) {
+        delay(300)
+        textAlpha.animateTo(1f, animationSpec = tween(400, easing = EaseOutCubic))
+    }
+
+    LaunchedEffect(Unit) {
+        delay(300)
+        textOffsetY.animateTo(0f, animationSpec = tween(500, easing = EaseOutQuart))
+    }
+
+    LaunchedEffect(Unit) {
+        delay(1300) // Fast, premium splash duration
         onAnimationFinished()
     }
     
-    LaunchedEffect(Unit) {
-        textScale.animateTo(1f, animationSpec = tween(2000, easing = EaseOutBack))
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -58,10 +80,10 @@ fun SplashScreen(onAnimationFinished: () -> Unit) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             drawRect(
                 brush = Brush.radialGradient(
-                    0.0f to Color(0xFF4CC9F0).copy(alpha = 0.15f),
+                    0.0f to Color(0xFF4CC9F0).copy(alpha = 0.18f),
                     1.0f to Color.Transparent,
                     center = center,
-                    radius = size.maxDimension
+                    radius = size.maxDimension * 0.8f
                 )
             )
             
@@ -71,10 +93,9 @@ fun SplashScreen(onAnimationFinished: () -> Unit) {
             particles.forEach { particle ->
                 particle.update(size.width, size.height)
                 
-                // Draw particle with an even larger aura for high contrast
                 drawCircle(
-                    color = particle.color.copy(alpha = 0.05f),
-                    radius = particle.radius * 8f,
+                    color = particle.color.copy(alpha = 0.04f),
+                    radius = particle.radius * 7f,
                     center = Offset(particle.x, particle.y)
                 )
                 drawCircle(
@@ -85,15 +106,35 @@ fun SplashScreen(onAnimationFinished: () -> Unit) {
             }
         }
 
-        BrandMark(
-            style = MaterialTheme.typography.displayLarge,
-            primaryColor = Color.White.copy(alpha = textAlpha.value),
-            accentColor = Color(0xFF00E5FF).copy(alpha = textAlpha.value),
-            modifier = Modifier.graphicsLayer {
-                scaleX = textScale.value
-                scaleY = textScale.value
-            }
-        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.logo),
+                contentDescription = "ResQit Logo",
+                modifier = Modifier
+                    .size(110.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .graphicsLayer {
+                        scaleX = logoScale.value
+                        scaleY = logoScale.value
+                        alpha = logoAlpha.value
+                    }
+            )
+            
+            Spacer(modifier = Modifier.height(18.dp))
+            
+            BrandMark(
+                style = MaterialTheme.typography.headlineLarge,
+                primaryColor = Color.White,
+                accentColor = Color(0xFF00E5FF),
+                modifier = Modifier.graphicsLayer {
+                    alpha = textAlpha.value
+                    translationY = textOffsetY.value
+                }
+            )
+        }
     }
 }
 
@@ -117,14 +158,17 @@ private class Particle {
 
     fun update(width: Float, height: Float) {
         if (!initialized && width > 0) {
-            x = Random.nextFloat() * width
-            y = Random.nextFloat() * height
-            // Significantly bigger radius
-            radius = Random.nextFloat() * 6f + 2f 
-            // Significantly faster initial velocity
-            vx = (Random.nextFloat() - 0.5f) * 12f
-            vy = (Random.nextFloat() - 0.5f) * 12f
-            color = palette.random().copy(alpha = Random.nextFloat() * 0.8f + 0.2f)
+            // Start at center for explosion effect
+            x = width / 2f
+            y = height / 2f
+            radius = Random.nextFloat() * 5f + 1.5f 
+            
+            val angle = Random.nextFloat() * 2f * Math.PI.toFloat()
+            val speed = Random.nextFloat() * 15f + 4f
+            vx = cos(angle) * speed
+            vy = sin(angle) * speed
+            
+            color = palette.random().copy(alpha = Random.nextFloat() * 0.7f + 0.3f)
             initialized = true
         }
 
@@ -132,18 +176,13 @@ private class Particle {
             x += vx
             y += vy
 
-            if (x < -50) x = width + 50
-            if (x > width + 50) x = -50f
-            if (y < -50) y = height + 50
-            if (y > height + 50) y = -50f
+            // Decelerate/friction
+            vx *= 0.95f
+            vy *= 0.95f
             
-            // Increased "chaos" force for faster direction changes
-            vx += (Random.nextFloat() - 0.5f) * 0.8f
-            vy += (Random.nextFloat() - 0.5f) * 0.8f
-            
-            // Reduced friction to maintain high speed
-            vx *= 0.998f
-            vy *= 0.998f
+            // Add a tiny bit of drift
+            x += (Random.nextFloat() - 0.5f) * 0.4f
+            y += (Random.nextFloat() - 0.5f) * 0.4f
         }
     }
 }

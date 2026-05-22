@@ -158,6 +158,26 @@ class ApiService {
 
     private val tag = "ApiService"
 
+    companion object {
+        // Caches suggestions (display name / key -> Suggestions list)
+        private val authorSuggestionsCache = java.util.Collections.synchronizedMap(
+            object : java.util.LinkedHashMap<String, List<AuthorSuggestion>>(100, 0.75f, true) {
+                override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<AuthorSuggestion>>?): Boolean {
+                    return size > 100
+                }
+            }
+        )
+
+        // Caches paper search results (search term -> Paper list)
+        private val paperSearchCache = java.util.Collections.synchronizedMap(
+            object : java.util.LinkedHashMap<String, List<OpenAlexWork>>(50, 0.75f, true) {
+                override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<OpenAlexWork>>?): Boolean {
+                    return size > 50
+                }
+            }
+        )
+    }
+
     private val httpClient = HttpClient(Android) {
         install(ContentNegotiation) {
             json(Json {
@@ -197,20 +217,35 @@ class ApiService {
 
     suspend fun getAuthorSuggestions(query: String): List<AuthorSuggestion> {
         if (query.length < 3) return emptyList()
+        val cacheKey = query.trim().lowercase()
+        val cached = authorSuggestionsCache[cacheKey]
+        if (cached != null) {
+            Log.d(tag, "Cache hit for author suggestions: $cacheKey")
+            return cached
+        }
+
         val base = baseUrl()
-        if (base != null) {
+        val results = if (base != null) {
             try {
-                return httpClient.get("$base/author_suggestions") {
+                httpClient.get("$base/author_suggestions") {
                     parameter("query", query)
                 }.body()
             } catch (e: Exception) {
                 Log.e(tag, "getAuthorSuggestions via backend failed, falling back to direct OpenAlex query", e)
+                fetchDirectAuthorSuggestions(query)
             }
         } else {
             Log.w(tag, "getAuthorSuggestions: backend not yet discovered, falling back to direct OpenAlex query")
+            fetchDirectAuthorSuggestions(query)
         }
 
-        // Direct OpenAlex suggestion fallback
+        if (results.isNotEmpty()) {
+            authorSuggestionsCache[cacheKey] = results
+        }
+        return results
+    }
+
+    private suspend fun fetchDirectAuthorSuggestions(query: String): List<AuthorSuggestion> {
         return try {
             val response: OpenAlexAuthorsResponse = httpClient.get("https://api.openalex.org/authors") {
                 parameter("search", query)
@@ -281,7 +316,15 @@ class ApiService {
     // ── External APIs (OpenAlex — no backend needed) ──────────────────────────
 
     suspend fun searchPapers(query: String): List<OpenAlexWork> {
-        return try {
+        if (query.isBlank()) return emptyList()
+        val cacheKey = query.trim().lowercase()
+        val cached = paperSearchCache[cacheKey]
+        if (cached != null) {
+            Log.d(tag, "Cache hit for paper search: $cacheKey")
+            return cached
+        }
+
+        val results = try {
             val response: OpenAlexResponse = httpClient.get("https://api.openalex.org/works") {
                 parameter("search", query)
             }.body()
@@ -290,6 +333,11 @@ class ApiService {
             Log.e(tag, "searchPapers (OpenAlex) failed", e)
             emptyList()
         }
+
+        if (results.isNotEmpty()) {
+            paperSearchCache[cacheKey] = results
+        }
+        return results
     }
 
     suspend fun getPaperDetails(openAlexId: String): OpenAlexWork? {

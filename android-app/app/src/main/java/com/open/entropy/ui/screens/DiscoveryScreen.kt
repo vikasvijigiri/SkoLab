@@ -93,7 +93,7 @@ fun DiscoveryScreen(
     LaunchedEffect(authorQuery) {
         if (authorQuery.length >= 3) {
             isSearchingSuggestions = true
-            delay(400)
+            delay(150)
             suggestions = apiService.getAuthorSuggestions(authorQuery)
             isSearchingSuggestions = false
         } else {

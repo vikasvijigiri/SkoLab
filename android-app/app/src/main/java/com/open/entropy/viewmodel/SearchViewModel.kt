@@ -34,7 +34,7 @@ class SearchViewModel(private val apiService: ApiService = ApiService()) : ViewM
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             _uiState.value = SearchUiState.Loading
-            delay(500) // Debounce
+            delay(150) // Debounce
             try {
                 val results = apiService.searchPapers(query)
                 _uiState.value = SearchUiState.Success(results.map { mapOpenAlexToPaper(it) })
