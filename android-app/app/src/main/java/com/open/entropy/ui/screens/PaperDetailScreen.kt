@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.*
@@ -44,6 +45,8 @@ import com.open.entropy.ui.layout.ScreenInsets
 import com.open.entropy.ui.components.primitives.MetricHeroRow
 import com.open.entropy.ui.components.primitives.SectionCaption
 import com.open.entropy.ui.theme.*
+import com.open.entropy.viewmodel.LibraryViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,9 +54,13 @@ fun PaperDetailScreen(
     paperId: String,
     onBack: () -> Unit,
     onAuthorClick: (String) -> Unit,
-    viewModel: PaperViewModel = viewModel()
+    viewModel: PaperViewModel = viewModel(),
+    libraryViewModel: LibraryViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val savedIds by libraryViewModel.savedIds.collectAsState()
+    val isSaved = savedIds.contains(paperId)
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(paperId) {
         viewModel.fetchPaperDetails(paperId)
@@ -70,7 +77,21 @@ fun PaperDetailScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { }) { Icon(Icons.Outlined.BookmarkBorder, null, tint = ResQitTextPrimary) }
+                    // Animated bookmark button
+                    IconButton(onClick = {
+                        scope.launch { libraryViewModel.toggleSaved(paperId) }
+                    }) {
+                        val bookmarkIcon = if (isSaved) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder
+                        val bookmarkTint = if (isSaved) AccentTeal else ResQitTextPrimary
+                        Icon(
+                            bookmarkIcon, null,
+                            tint = bookmarkTint,
+                            modifier = Modifier.graphicsLayer {
+                                scaleX = if (isSaved) 1.15f else 1f
+                                scaleY = if (isSaved) 1.15f else 1f
+                            }
+                        )
+                    }
                     IconButton(onClick = { }) { Icon(Icons.Default.Share, null, tint = ResQitTextPrimary) }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)

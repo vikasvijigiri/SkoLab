@@ -202,7 +202,7 @@ async def teleport_researcher(author_id: str):
                 "complexity_score": m["complexity"],
                 "skill_score": m["skill_set_score"],
                 "impact_factor": impact_factor,
-                "disruption_score": d_proxy,
+                "disruption_score": round(d_proxy * 100, 1),
                 "semantic_novelty": m["creativity"],
                 "open_science_score": m["skill_set_score"]
             })

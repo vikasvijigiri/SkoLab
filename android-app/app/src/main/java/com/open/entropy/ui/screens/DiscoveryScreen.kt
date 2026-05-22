@@ -1245,6 +1245,8 @@ fun FrontierMetricPillsSection(author: AuthorResponse) {
     data class MetricPill(val label: String, val value: String, val sub: String, val color: Color, val icon: ImageVector)
 
     val pills = remember(author) {
+        val accelVal = author.citation_acceleration.toInt()
+        val accelStr = if (accelVal >= 0) "+$accelVal" else accelVal.toString()
         listOf(
             MetricPill("Disruption",      "${author.disruption_score.toInt()}%",       "Research Disruption",    MetricDisruptionColor,   Icons.Default.FlashOn),
             MetricPill("Novelty",         "${author.semantic_novelty.toInt()}%",        "Semantic Novelty",       MetricNoveltyColor,      Icons.Default.AutoGraph),
@@ -1254,10 +1256,10 @@ fun FrontierMetricPillsSection(author: AuthorResponse) {
             MetricPill("Complexity",      "${author.average_complexity.toInt()}%",      "Avg Complexity",         MetricComplexityColor,   Icons.Default.Science),
             MetricPill("Open Science",    "${author.open_science_score.toInt()}%",      "Openness Score",         MetricOpenScienceColor,  Icons.Default.Public),
             MetricPill("Collaboration",   "${author.collaboration_diversity.toInt()}%", "Diversity Index",        MetricCollabColor,       Icons.Default.Groups),
-            MetricPill("Cit. Accel.",     "${author.citation_acceleration.toInt()}%",   "Citation Growth",        MetricInfluenceColor,    Icons.AutoMirrored.Filled.TrendingUp),
+            MetricPill("Cit. Accel.",     accelStr,                                     "Citation Growth",        MetricInfluenceColor,    Icons.AutoMirrored.Filled.TrendingUp),
             MetricPill("Consistency",     "${author.research_consistency.toInt()}%",    "Research Consistency",   MetricConsistencyColor,  Icons.Default.Timeline),
             MetricPill("Interdiscipl.",   "${author.interdisciplinary_index.toInt()}%", "Cross-domain Reach",     AccentViolet,            Icons.Default.AccountTree),
-            MetricPill("Policy Impact",   "${author.policy_patent_score.toInt()}%",     "Policy & Patent Score",  MetricPolicyColor,       Icons.Default.Gavel),
+            MetricPill("Policy Impact",   "${author.policy_patent_score.toInt()}",     "Policy & Patent Score",  MetricPolicyColor,       Icons.Default.Gavel),
         )
     }
 
@@ -1412,7 +1414,9 @@ fun LightPublicationCard(
                 PubChip("${work.citations ?: 0} cites", AccentIndigo)
                 if ((work.impact_factor ?: 0.0) > 0) PubChip("IF ${work.impact_factor}", AccentAmber)
                 if ((work.creativity_score ?: 0.0) > 0) PubChip("Creativity ${work.creativity_score?.toInt()}", AccentViolet)
-                if ((work.disruption_score ?: 0.0) > 0) PubChip("Disruption ${work.disruption_score?.toInt()}%", AccentRose)
+                val dVal = work.disruption_score ?: 0.0
+                val dPct = if (dVal > 0.0 && dVal <= 1.0) (dVal * 100).toInt() else dVal.toInt()
+                if (dPct > 0) PubChip("Disruption $dPct%", AccentRose)
                 if (work.is_open_access == true) PubChip("Open Access", AccentEmerald)
             }
 

@@ -17,16 +17,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.open.entropy.ui.components.ScientificCard
 import com.open.entropy.ui.components.ScientificBadge
 import com.open.entropy.ui.layout.ScreenInsets
 import com.open.entropy.ui.theme.*
+import com.open.entropy.viewmodel.LibraryViewModel
+import com.open.entropy.viewmodel.SavedPapersUiState
 
 // ─────────────────────────────────────────────────────────────────
 // LIBRARY SCREEN — Saved Papers + Grants + Nexus Bridges + Alerts
@@ -115,46 +119,160 @@ fun LibraryScreen(onPaperClick: (String) -> Unit) {
 // ─────────────────────────────────────────────────────────────────
 
 @Composable
-fun SavedPapersTab(onPaperClick: (String) -> Unit) {
-    val papers = listOf(
-        "Non-Abelian Statistics in Moiré Superlattices" to "Quantum",
-        "Neural Scaling Laws for Multi-Modal Generalization" to "AI Theory",
-        "Room Temperature Superconductivity in Hydride Compounds" to "Materials"
-    )
-    if (papers.isEmpty()) {
-        EmptyStateView(Icons.Default.Bookmark, "No saved papers yet", "Save papers from the search tab")
-    } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
-        ) {
-            items(papers) { (title, cat) ->
-                Surface(
-                    onClick = { onPaperClick("1") },
-                    shape = RoundedCornerShape(16.dp),
-                    color = BgCard,
-                    shadowElevation = 2.dp
-                ) {
-                    Row(
-                        modifier = Modifier.padding(14.dp).fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+fun SavedPapersTab(
+    onPaperClick: (String) -> Unit,
+    viewModel: LibraryViewModel = viewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+
+    when (val state = uiState) {
+        is SavedPapersUiState.Loading -> {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
+            ) {
+                items(3) { SavedPaperShimmer() }
+            }
+        }
+        is SavedPapersUiState.Empty -> {
+            EmptyStateView(
+                Icons.Default.Bookmark,
+                "No saved papers yet",
+                "Tap the bookmark icon on any paper to save it here"
+            )
+        }
+        is SavedPapersUiState.Error -> {
+            EmptyStateView(
+                Icons.Default.ErrorOutline,
+                "Could not load saved papers",
+                state.message
+            )
+        }
+        is SavedPapersUiState.Success -> {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
+            ) {
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = AccentTealLight,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(title, style = Typography.titleMedium, color = TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        }
-                        Spacer(Modifier.width(10.dp))
-                        Surface(shape = RoundedCornerShape(8.dp), color = AccentTealLight) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(Icons.Default.Bookmark, null, tint = AccentTeal, modifier = Modifier.size(18.dp))
                             Text(
-                                cat,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                color = AccentTeal,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
+                                "${state.papers.size} paper${if (state.papers.size != 1) "s" else ""} saved",
+                                color = AccentTealDark,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
                             )
                         }
                     }
+                }
+                items(state.papers) { paper ->
+                    SavedPaperCard(
+                        title = paper.title,
+                        authors = paper.authors,
+                        journal = paper.journal,
+                        year = paper.year,
+                        citedByCount = paper.citedByCount,
+                        onClick = { onPaperClick(paper.id) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SavedPaperShimmer() {
+    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.25f, targetValue = 0.6f,
+        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse),
+        label = "shimmerAlpha"
+    )
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = BgCard,
+        shadowElevation = 2.dp,
+        modifier = Modifier.fillMaxWidth().height(80.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(
+                            AccentTeal.copy(alpha = alpha * 0.1f),
+                            Color.Transparent,
+                            AccentIndigo.copy(alpha = alpha * 0.08f)
+                        )
+                    )
+                )
+        )
+    }
+}
+
+@Composable
+fun SavedPaperCard(
+    title: String,
+    authors: List<String>,
+    journal: String,
+    year: Int,
+    citedByCount: Int,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        color = BgCard,
+        shadowElevation = 2.dp
+    ) {
+        Column(modifier = Modifier.padding(14.dp).fillMaxWidth()) {
+            Text(
+                title,
+                style = Typography.titleMedium,
+                color = TextPrimary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(6.dp))
+            if (authors.isNotEmpty()) {
+                Text(
+                    authors.joinToString(", "),
+                    color = AccentTeal,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "$journal  •  $year",
+                    color = TextMuted,
+                    fontSize = 10.sp
+                )
+                Surface(shape = RoundedCornerShape(6.dp), color = AccentIndigoLight) {
+                    Text(
+                        if (citedByCount >= 1000) "${citedByCount / 1000}K citations" else "$citedByCount citations",
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                        color = AccentIndigo,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
