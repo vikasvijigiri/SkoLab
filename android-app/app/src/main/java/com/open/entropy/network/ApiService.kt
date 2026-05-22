@@ -295,15 +295,18 @@ class ApiService {
         }
     }
 
-    suspend fun searchAuthor(name: String): AuthorResponse? {
+    suspend fun searchAuthor(name: String, id: String? = null): AuthorResponse? {
         val base = baseUrl() ?: run {
             Log.w(tag, "searchAuthor: backend not yet discovered")
             return null
         }
         return try {
-            Log.d(tag, "Searching author: $name @ $base")
+            Log.d(tag, "Searching author: $name, id: $id @ $base")
             httpClient.get("$base/search_author") {
                 parameter("name", name)
+                if (id != null) {
+                    parameter("id", id)
+                }
             }.body()
         } catch (e: Exception) {
             Log.e(tag, "searchAuthor failed", e)

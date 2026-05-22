@@ -9,39 +9,74 @@ class PredictionService:
         self.base_url = "https://api.groq.com/openai/v1/chat/completions"
         self.model = "llama-3.3-70b-versatile"
 
-    async def predict_next_problem(self, last_works: List[str]) -> str:
+    async def predict_next_problem(
+        self,
+        author_name: str,
+        expertise: List[str],
+        works: List[dict]
+    ) -> str:
         """
-        Uses Groq's LLM to predict a viable next research problem and required tools 
-        based on the author's most recent 3-5 publications.
+        Uses Groq's LLM to predict an extremely meticulous, highly viable, and specific 
+        next research paper/problem and required tools, grounded perfectly in the 
+        author's current skillset, past work, and abstracts of their publications.
         """
-        if not self.api_key or not last_works:
-            return "**Problem**: Advanced Quantum Dynamics\n**Tools**: Python (Qiskit), Tensor Networks"
+        if not self.api_key or not works:
+            return (
+                "**Next Frontier**: Advanced Topological Fault-Tolerance in Monolithic Quantum Processors\n\n"
+                "**Toolkit**: Qiskit, Surface Codes, C++\n\n"
+                "**Logic**: This logic extrapolates previous research on quantum error correction codes, applying them to monolithic silicon architectures to overcome thermal decoherence limits."
+            )
 
-        # Focus on the most recent works
-        recent_context = "Recent Publications:\n" + "\n".join([f"- {title}" for title in last_works[:3]])
+        # Format past publications with title, year, abstract, and metrics
+        works_context_parts = []
+        for i, w in enumerate(works[:5]):  # Top 5 works
+            title = w.get("title", "Untitled")
+            year = w.get("year") or w.get("publication_year", "N/A")
+            abstract = w.get("abstract", "")
+            if len(abstract) > 300:
+                abstract = abstract[:300] + "..."
+            citations = w.get("citations", 0)
+            
+            part = (
+                f"Paper #{i+1}: {title} ({year})\n"
+                f"Citations: {citations}\n"
+                f"Focus/Abstract: {abstract}\n"
+            )
+            works_context_parts.append(part)
+            
+        works_context = "\n".join(works_context_parts)
+        expertise_str = ", ".join(expertise)
+        
+        user_content = (
+            f"Researcher Name: {author_name}\n"
+            f"Expertise/Skillset: {expertise_str}\n\n"
+            f"Selected Publications (Latest/Top):\n{works_context}"
+        )
         
         prompt = {
             "model": self.model,
             "messages": [
                 {
                     "role": "system",
-                    "content": """You are a world-class scientific research strategist. 
-                    Based on an author's recent publications, identify a VIABLE and SPECIFIC next research problem.
-                    
-                    FORMAT:
-                    **Next Frontier**: [A technical 1-sentence problem statement]
-                    **Toolkit**: [List 2-3 essential tools/skills, e.g., Python/JAX, LaTeX]
-                    
-                    Keep it extremely concise (max 30 words total).
-                    """
+                    "content": """You are an elite scientific research advisor and strategist. 
+Your task is to predict the next SPECIFIC, highly viable research paper the author is most likely to write.
+This prediction must be extremely meticulous, realistic, and strictly grounded in the author's existing skillset, mathematical/technical expertise, and the exact trajectory of their previous papers' findings/methods.
+
+Provide your response in this exact format:
+**Next Frontier**: [A technical, specific 1-sentence title/problem statement for their next possible paper]
+**Toolkit**: [2-3 advanced, highly specific tools, programming languages, or mathematical frameworks needed, aligned with their skillset]
+**Logic**: [A concise 1-2 sentence explanation of why this is the logical next step, directly connecting their past findings/methods to this new frontier]
+
+Be precise, academic, and extremely professional. Do not use generic buzzwords.
+"""
                 },
                 {
                     "role": "user",
-                    "content": recent_context
+                    "content": user_content
                 }
             ],
-            "temperature": 0.4,
-            "max_tokens": 150
+            "temperature": 0.3,
+            "max_tokens": 250
         }
 
         try:
@@ -53,20 +88,41 @@ class PredictionService:
                         "Content-Type": "application/json"
                     },
                     json=prompt,
-                    timeout=12.0
+                    timeout=15.0
                 )
                 
                 if response.status_code == 200:
                     data = response.json()
                     return data['choices'][0]['message']['content'].strip()
                 
-                return "**Problem**: Integrated Quantum Error Correction\n**Requirements**: Surface Codes, C++"
+                return self._generate_fallback_prediction(author_name, expertise, works)
         except Exception:
-            return self._generate_fallback_prediction(last_works)
+            return self._generate_fallback_prediction(author_name, expertise, works)
 
-    def _generate_fallback_prediction(self, last_works: List[str]) -> str:
-        combined_titles = " ".join(last_works).lower()
-        if "quantum" in combined_titles: return "Scalable Quantum Error Correction"
-        if "gravity" in combined_titles: return "Quantum Gravity in de Sitter Space"
-        if "entropy" in combined_titles: return "Holographic Complexity and Entanglement"
-        return "Non-equilibrium dynamics of many-body systems"
+    def _generate_fallback_prediction(
+        self,
+        author_name: str,
+        expertise: List[str],
+        works: List[dict]
+    ) -> str:
+        combined_titles = " ".join([w.get("title", "") for w in works]).lower()
+        if "quantum" in combined_titles:
+            return (
+                "**Next Frontier**: Fault-Tolerant Logical Qubits in Superconducting Systems\n\n"
+                "**Toolkit**: Python, Qiskit, C++\n\n"
+                "**Logic**: Builds upon recent quantum simulation results to realize physical-to-logical qubit mapping under constraints of noise."
+            )
+        if "gravity" in combined_titles:
+            return (
+                "**Next Frontier**: Emergent Gravity from Quantum Entanglement in AdS/CFT\n\n"
+                "**Toolkit**: Mathematica, Python, Tensor Networks\n\n"
+                "**Logic**: Extends recent work on holographic complexity to compute bulk metric corrections from boundary entanglement."
+            )
+        
+        # General default fallback
+        exp_topic = expertise[0] if expertise else "Non-equilibrium Many-Body Dynamics"
+        return (
+            f"**Next Frontier**: Novel Computational Methods in {exp_topic}\n\n"
+            "**Toolkit**: JAX, Python, High-Performance Computing\n\n"
+            f"**Logic**: Logical extension of past work in {exp_topic} using modern machine learning accelerated tools."
+        )

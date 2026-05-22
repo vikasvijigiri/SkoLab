@@ -299,9 +299,30 @@ async def teleport_researcher(author_id: str):
         scores = [c.get("score", 0) for c in author_concepts if c.get("level") is not None and c.get("level") <= 1]
         innovation_score = calculate_innovation_score(scores)
         
-        # Predict Frontier using titles from the latest 3 publications
-        recent_titles = [w.get("title") for w in works_results[:3] if w.get("title")]
-        next_prediction = await prediction_service.predict_next_problem(recent_titles)
+        # Predict Frontier using titles, abstracts and metrics from the top/recent publications
+        prediction_works = []
+        for w in works_results[:5]:
+            abstract_inverted = w.get("abstract_inverted_index")
+            abstract = ""
+            if abstract_inverted:
+                word_pos = []
+                for word, positions in abstract_inverted.items():
+                    for pos in positions: word_pos.append((pos, word))
+                word_pos.sort()
+                abstract = " ".join([wp[1] for wp in word_pos])
+            
+            prediction_works.append({
+                "title": w.get("title", "Untitled"),
+                "year": w.get("publication_year"),
+                "citations": w.get("cited_by_count", 0),
+                "abstract": abstract
+            })
+            
+        next_prediction = await prediction_service.predict_next_problem(
+            author_name=data.get("display_name", "Author"),
+            expertise=expertise,
+            works=prediction_works
+        )
 
         affiliations = data.get("affiliations", [])
         history_map = {}
