@@ -77,6 +77,7 @@ fun DiscoveryScreen(
     val apiService = remember { ApiService() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val authManager = remember { AuthManager(context) }
     val cachedUser by authManager.cachedUser.collectAsState(initial = null)
 
@@ -88,12 +89,18 @@ fun DiscoveryScreen(
     var authorData by remember { mutableStateOf<AuthorResponse?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     var isSearchingSuggestions by remember { mutableStateOf(false) }
+    var shouldSearchSuggestions by remember { mutableStateOf(true) }
 
     // Debounced suggestions
     LaunchedEffect(authorQuery) {
+        if (!shouldSearchSuggestions) {
+            shouldSearchSuggestions = true // Reset for next typing
+            suggestions = emptyList()
+            return@LaunchedEffect
+        }
         if (authorQuery.length >= 3) {
             isSearchingSuggestions = true
-            delay(150)
+            delay(300) // Industry-standard 300ms debounce
             suggestions = apiService.getAuthorSuggestions(authorQuery)
             isSearchingSuggestions = false
         } else {
@@ -130,8 +137,16 @@ fun DiscoveryScreen(
                         onValueChange = { authorQuery = it },
                         placeholder = "Search researchers, authors…",
                         isLoading = isSearchingSuggestions,
-                        onClear = { authorQuery = ""; suggestions = emptyList(); authorData = null },
+                        onClear = { 
+                            shouldSearchSuggestions = false
+                            authorQuery = ""
+                            suggestions = emptyList()
+                            authorData = null 
+                            keyboardController?.hide()
+                        },
                         onSearch = {
+                            shouldSearchSuggestions = false
+                            keyboardController?.hide()
                             scope.launch {
                                 isLoading = true
                                 suggestions = emptyList()
@@ -151,18 +166,21 @@ fun DiscoveryScreen(
                         .zIndex(21f)
                 ) {
                     AnimatedVisibility(
-                        visible = suggestions.isNotEmpty(),
+                        visible = authorQuery.length >= 3 && shouldSearchSuggestions,
                         enter = fadeIn(tween(150)) + expandVertically(tween(220), expandFrom = androidx.compose.ui.Alignment.Top),
                         exit  = fadeOut(tween(100)) + shrinkVertically(tween(160), shrinkTowards = androidx.compose.ui.Alignment.Top),
                     ) {
                         LightSuggestionsDropdown(
                             suggestions = suggestions,
+                            isLoading = isSearchingSuggestions,
                             onSelect = { suggestion ->
+                                shouldSearchSuggestions = false
                                 authorQuery = suggestion.display_name
                                 suggestions = emptyList()
+                                keyboardController?.hide()
                                 scope.launch {
                                     isLoading = true
-                                    authorData = apiService.searchAuthor(suggestion.display_name)
+                                    authorData = apiService.searchAuthor(suggestion.display_name, suggestion.id)
                                     isLoading = false
                                 }
                             }
@@ -189,11 +207,13 @@ fun DiscoveryScreen(
                             scope = scope,
                             onNavigateToReader = onNavigateToReader,
                             onUpdateData = { authorData = it },
-                            onSelectResearcher = { name ->
+                            onSelectResearcher = { name, id ->
+                                shouldSearchSuggestions = false
                                 authorQuery = name
+                                keyboardController?.hide()
                                 scope.launch {
                                     isLoading = true
-                                    authorData = apiService.searchAuthor(name)
+                                    authorData = apiService.searchAuthor(name, id)
                                     isLoading = false
                                 }
                             }
@@ -276,137 +296,265 @@ fun LightTopBar(userName: String, onProfileClick: () -> Unit) {
 // ─────────────────────────────────────────────────────────────────
 
 @Composable
+fun DropdownSkeletonRow(shimmerAlpha: Float) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        // Avatar circle pulse
+        Box(
+            modifier = Modifier
+                .size(42.dp)
+                .clip(CircleShape)
+                .background(BorderLight.copy(alpha = shimmerAlpha))
+        )
+        // Two line text pulse
+        Column(modifier = Modifier.weight(1f)) {
+            Box(
+                modifier = Modifier
+                    .width(140.dp)
+                    .height(14.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(BorderLight.copy(alpha = shimmerAlpha))
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Box(
+                modifier = Modifier
+                    .width(200.dp)
+                    .height(10.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(BorderLight.copy(alpha = shimmerAlpha))
+            )
+        }
+    }
+}
+
+@Composable
 fun LightSuggestionsDropdown(
     suggestions: List<AuthorSuggestion>,
+    isLoading: Boolean,
     onSelect: (AuthorSuggestion) -> Unit
 ) {
+    val infiniteTransition = rememberInfiniteTransition(label = "dropdownShimmer")
+    val shimmerAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.4f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "dropdownShimmerAlpha"
+    )
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(12.dp, RoundedCornerShape(16.dp)),
-        shape = RoundedCornerShape(16.dp),
-        color = BgCard,
-        border = BorderStroke(1.dp, BorderLight)
+            .shadow(
+                elevation = 16.dp,
+                shape = RoundedCornerShape(20.dp),
+                clip = false
+            ),
+        shape = RoundedCornerShape(20.dp),
+        color = BgCard.copy(alpha = 0.95f),
+        border = BorderStroke(1.dp, BorderLight.copy(alpha = 0.6f))
     ) {
         Column {
-            // Header — shows how many matches
+            // Header — shows how many matches with soft gradient
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(BgElevated)
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                BgElevated,
+                                BgCard.copy(alpha = 0.4f)
+                            )
+                        )
+                    )
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "${suggestions.size} researchers found",
+                    text = when {
+                        isLoading -> "Searching researchers..."
+                        suggestions.isEmpty() -> "No researchers found"
+                        else -> "${suggestions.size} researchers found"
+                    },
                     color = TextMuted,
-                    fontSize = 10.sp,
+                    fontSize = 10.5.sp,
                     fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.5.sp
+                    letterSpacing = 0.6.sp
                 )
                 Text(
                     text = "via OpenAlex",
                     color = AccentTeal,
                     fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.4.sp
                 )
             }
-            HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
+            HorizontalDivider(color = BorderLight.copy(alpha = 0.5f), thickness = 0.5.dp)
 
-            // Scrollable list — max height so it doesn't fill whole screen
-            LazyColumn(
-                modifier = Modifier.heightIn(max = 340.dp)
-            ) {
-                itemsIndexed(suggestions) { index, suggestion ->
-                    val avatarColors = listOf(AccentTeal, AccentIndigo, AccentEmerald, AccentViolet, AccentAmber, AccentOrange, AccentRose, AccentCyan)
-                    val color = avatarColors[index % avatarColors.size]
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelect(suggestion) }
-                            .padding(horizontal = 14.dp, vertical = 11.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        // Avatar initials circle
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(color.copy(alpha = 0.1f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = suggestion.display_name.take(1).uppercase(),
-                                color = color,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
-                                fontFamily = DisplayFontFamily
+            if (isLoading) {
+                Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                    repeat(3) { index ->
+                        DropdownSkeletonRow(shimmerAlpha = shimmerAlpha)
+                        if (index < 2) {
+                            HorizontalDivider(
+                                color = BorderLight.copy(alpha = 0.4f),
+                                thickness = 0.5.dp,
+                                modifier = Modifier.padding(start = 72.dp)
                             )
                         }
+                    }
+                }
+            } else if (suggestions.isEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp, horizontal = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(AccentTeal.copy(alpha = 0.08f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PersonSearch,
+                            contentDescription = null,
+                            tint = AccentTeal.copy(alpha = 0.6f),
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = "No matching researchers found",
+                        color = TextPrimary,
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = DisplayFontFamily
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Double-check the spelling or try a different name",
+                        color = TextMuted,
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            } else {
+                // Scrollable list — max height so it doesn't fill whole screen
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 340.dp)
+                ) {
+                    itemsIndexed(suggestions) { index, suggestion ->
+                        val avatarColors = listOf(AccentTeal, AccentIndigo, AccentEmerald, AccentViolet, AccentAmber, AccentOrange, AccentRose, AccentCyan)
+                        val color = avatarColors[index % avatarColors.size]
 
-                        // Name + institution + field
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = suggestion.display_name,
-                                color = TextPrimary,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 14.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                fontFamily = DisplayFontFamily
-                            )
-                            if (suggestion.institution.isNotBlank() && suggestion.institution != "Independent Researcher") {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        Icons.Default.AccountBalance,
-                                        null,
-                                        tint = AccentTeal,
-                                        modifier = Modifier.size(10.dp)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelect(suggestion) }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            // Avatar initials circle with dynamic soft ring
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        Brush.linearGradient(
+                                            colors = listOf(
+                                                color.copy(alpha = 0.15f),
+                                                color.copy(alpha = 0.03f)
+                                            )
+                                        )
                                     )
-                                    Spacer(Modifier.width(3.dp))
+                                    .border(BorderStroke(1.dp, color.copy(alpha = 0.25f)), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = suggestion.display_name.take(1).uppercase(),
+                                    color = color,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    fontFamily = DisplayFontFamily
+                                )
+                            }
+
+                            // Name + institution + field
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = suggestion.display_name,
+                                    color = TextPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    fontFamily = DisplayFontFamily
+                                )
+                                if (suggestion.institution.isNotBlank() && suggestion.institution != "Independent Researcher") {
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Default.AccountBalance,
+                                            null,
+                                            tint = color.copy(alpha = 0.8f),
+                                            modifier = Modifier.size(11.dp)
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(
+                                            text = suggestion.institution,
+                                            color = color.copy(alpha = 0.9f),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                                if (!suggestion.field_of_study.isNullOrBlank()) {
+                                    Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = suggestion.institution,
-                                        color = AccentTeal,
-                                        fontSize = 11.sp,
+                                        text = suggestion.field_of_study!!,
+                                        color = TextMuted,
+                                        fontSize = 10.sp,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
-                            if (!suggestion.field_of_study.isNullOrBlank()) {
-                                Text(
-                                    text = suggestion.field_of_study!!,
-                                    color = TextMuted,
-                                    fontSize = 10.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+
+                            // Tap arrow - Enclosed in sleek pill icon
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(color.copy(alpha = 0.08f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.ArrowForwardIos,
+                                    contentDescription = "View profile",
+                                    tint = color,
+                                    modifier = Modifier.size(12.dp)
                                 )
                             }
                         }
 
-                        // Tap arrow
-                        Surface(
-                            shape = CircleShape,
-                            color = color.copy(alpha = 0.08f)
-                        ) {
-                            Icon(
-                                Icons.Default.ArrowForwardIos,
-                                contentDescription = "View profile",
-                                tint = color,
-                                modifier = Modifier.size(26.dp).padding(7.dp)
+                        if (index < suggestions.lastIndex) {
+                            HorizontalDivider(
+                                color = BorderLight.copy(alpha = 0.4f),
+                                thickness = 0.5.dp,
+                                modifier = Modifier.padding(start = 72.dp)
                             )
                         }
-                    }
-
-                    if (index < suggestions.lastIndex) {
-                        HorizontalDivider(
-                            color = BorderLight,
-                            thickness = 0.5.dp,
-                            modifier = Modifier.padding(start = 66.dp)
-                        )
                     }
                 }
             }
@@ -480,7 +628,7 @@ fun ResearcherProfileView(
     scope: kotlinx.coroutines.CoroutineScope,
     onNavigateToReader: (String, String) -> Unit,
     onUpdateData: (AuthorResponse) -> Unit,
-    onSelectResearcher: (String) -> Unit
+    onSelectResearcher: (String, String) -> Unit
 ) {
     var isRefreshing by remember { mutableStateOf(false) }
 
@@ -489,7 +637,7 @@ fun ResearcherProfileView(
         onRefresh = {
             scope.launch {
                 isRefreshing = true
-                apiService.searchAuthor(author.display_name)?.let { onUpdateData(it) }
+                apiService.searchAuthor(author.display_name, author.id)?.let { onUpdateData(it) }
                 isRefreshing = false
             }
         },
@@ -662,7 +810,7 @@ fun ResearcherHeroCard(
                                         scope.launch {
                                             isRefreshingInner = true
                                             apiService.refreshAuthor(author.display_name)
-                                            apiService.searchAuthor(author.display_name)?.let { onUpdateData(it) }
+                                            apiService.searchAuthor(author.display_name, author.id)?.let { onUpdateData(it) }
                                             isRefreshingInner = false
                                         }
                                     },
@@ -1538,7 +1686,7 @@ fun PredictionCard(prediction: String) {
 @Composable
 fun SimilarResearchersSection(
     similar: List<AuthorSuggestion>,
-    onSelect: (String) -> Unit
+    onSelect: (String, String) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -1569,7 +1717,7 @@ fun SimilarResearchersSection(
                         .width(180.dp)
                         .height(150.dp)
                         .shadow(2.dp, RoundedCornerShape(16.dp))
-                        .clickable { onSelect(suggestion.display_name) },
+                        .clickable { onSelect(suggestion.display_name, suggestion.id) },
                     shape = RoundedCornerShape(16.dp),
                     color = BgCard,
                     border = BorderStroke(1.dp, BorderLight)
@@ -2243,7 +2391,7 @@ fun AuthorDetailView(
     scope = scope,
     onNavigateToReader = onNavigateToReader,
     onUpdateData = onUpdateData,
-    onSelectResearcher = {}
+    onSelectResearcher = { _, _ -> }
 )
 
 data class ResearchMetric(val label: String, val value: Int, val color: Color, val icon: ImageVector, val isPercentage: Boolean = true)

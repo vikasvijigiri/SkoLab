@@ -427,11 +427,15 @@ async def fetch_similar_authors(query_term: str, exclude_id: str) -> List[Author
     return []
 
 @app.get("/search_author", response_model=Union[AuthorResponse, dict])
-async def search_author(name: str = Query(...), background_tasks: BackgroundTasks = BackgroundTasks()):
-    cache_key = name.strip().lower()
+async def search_author(name: str = Query(...), id: Optional[str] = Query(None), background_tasks: BackgroundTasks = BackgroundTasks()):
+    print(f"### [DEBUG] search_author called with name='{name}', id='{id}'", flush=True)
+    clean_id = id.split("/")[-1] if id else None
+    print(f"### [DEBUG] clean_id={clean_id}", flush=True)
+    cache_key = f"id:{clean_id}" if clean_id else name.strip().lower()
+    print(f"### [DEBUG] cache_key={cache_key}", flush=True)
     cached = await profile_cache.get(cache_key)
     if cached is not None:
-        print(f"[Cache Hit] Profile for: '{name}'", flush=True)
+        print(f"[Cache Hit] Profile for: '{cache_key}'", flush=True)
         return cached
 
     # 1. Check Firestore first for indexed data
@@ -439,7 +443,11 @@ async def search_author(name: str = Query(...), background_tasks: BackgroundTask
     if FIRESTORE_AVAILABLE:
         try:
             db = firestore.client()
-            docs = db.collection("global_researchers").where("display_name", "==", name).limit(1).get()
+            if clean_id:
+                doc = db.collection("global_researchers").document(clean_id).get()
+                docs = [doc] if doc.exists else []
+            else:
+                docs = db.collection("global_researchers").where("display_name", "==", name).limit(1).get()
             
             if docs:
                 d = docs[0].to_dict()
@@ -496,94 +504,112 @@ async def search_author(name: str = Query(...), background_tasks: BackgroundTask
         "Accept": "application/json"
     }
     
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        author_params = {"search": name, "per_page": 1, "mailto": "vikki.4me@gmail.com"}
-        try:
-            res = await client.get(f"{BASE_URL}/authors", params=author_params, headers=headers)
-            if res.status_code != 200: return {"error": "API Error"}
-            
-            results = res.json().get("results", [])
-            if not results: return {"error": "Author not found"}
-            
-            author_data = results[0]
-            author_id = author_data["id"]
-            
-            # Teleport immediately to get full publications and metrics
-            try:
-                profile = await teleport_researcher(author_id)
-                if profile:
-                    works_data = [Work(**w) for w in profile.get("works", [])]
-                    field = profile.get("field_of_study") or (profile.get("expertise")[0] if profile.get("expertise") else "")
-                    similar = await fetch_similar_authors(field, profile.get("openalex_id", author_id))
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            author_id = None
+            author_data = None
+            if clean_id:
+                author_id = clean_id
+                try:
+                    res = await client.get(f"{BASE_URL}/authors/{clean_id}", headers=headers)
+                    if res.status_code == 200:
+                        author_data = res.json()
+                except Exception as e:
+                    print(f"Failed to fetch basic author data for {clean_id}: {e}")
+            else:
+                author_params = {"search": name, "per_page": 1, "mailto": "vikki.4me@gmail.com"}
+                try:
+                    res = await client.get(f"{BASE_URL}/authors", params=author_params, headers=headers)
+                    if res.status_code != 200: return {"error": "API Error"}
                     
-                    response_data = AuthorResponse(
-                        id=profile.get("openalex_id", author_id),
-                        display_name=profile.get("display_name", ""),
-                        orcid=profile.get("orcid"),
-                        h_index=profile.get("h_index", 0),
-                        i10_index=profile.get("i10_index", 0),
-                        works_count=profile.get("works_count", 0),
-                        cited_by_count=profile.get("cited_by_count", 0),
-                        institution=profile.get("current_institution", "Independent"),
-                        field_of_study=profile.get("field_of_study", "Multidisciplinary"),
-                        expertise=profile.get("expertise", []),
-                        academic_history=profile.get("academic_history", []),
-                        works=works_data,
-                        innovation_score=profile.get("innovation_score"),
-                        average_creativity=profile.get("average_creativity", 0.0),
-                        average_complexity=profile.get("average_complexity", 0.0),
-                        average_skill_score=profile.get("average_skill_score", 0.0),
-                        average_impact=profile.get("average_impact", 0.0),
-                        average_activity=profile.get("average_activity", 0.0),
-                        disruption_score=profile.get("disruption_score", 0.0),
-                        citation_acceleration=profile.get("citation_acceleration", 0.0),
-                        future_impact_score=profile.get("future_impact_score", 0.0),
-                        network_centrality=profile.get("network_centrality", 0.0),
-                        semantic_novelty=profile.get("semantic_novelty", 0.0),
-                        interdisciplinary_index=profile.get("interdisciplinary_index", 0.0),
-                        policy_patent_score=profile.get("policy_patent_score", 0.0),
-                        open_science_score=profile.get("open_science_score", 0.0),
-                        collaboration_diversity=profile.get("collaboration_diversity", 0.0),
-                        research_consistency=profile.get("research_consistency", 0.0),
-                        next_prediction=profile.get("next_prediction", "No prediction available."),
-                        similar_researchers=similar
-                    )
-                    await profile_cache.set(cache_key, response_data)
-                    return response_data
-            except Exception as e:
-                print(f"Inline teleportation failed: {e}")
- 
-            # Fallback to basic info if teleportation fails
-            last_insts = author_data.get("last_known_institutions")
-            inst = "Independent Researcher"
-            if last_insts and isinstance(last_insts, list) and len(last_insts) > 0:
-                first_inst = last_insts[0]
-                if first_inst and isinstance(first_inst, dict):
-                    inst = first_inst.get("display_name") or "Independent Researcher"
-            stats = author_data.get("summary_stats", {})
-            concepts = author_data.get("x_concepts", [])
-            field = concepts[0].get("display_name", "Multidisciplinary") if concepts else "Multidisciplinary"
-            expertise = [c.get("display_name") for c in concepts if c.get("level") in [1, 2]][:5]
-            if not expertise: expertise = [c.get("display_name") for c in concepts[:3]]
+                    results = res.json().get("results", [])
+                    if not results: return {"error": "Author not found"}
+                    
+                    author_data = results[0]
+                    author_id = author_data["id"]
+                except Exception as e:
+                    print(f"Failed to find author by name search: {e}")
+                    return {"error": f"Search failed: {e}"}
             
-            similar = await fetch_similar_authors(field, author_id)
-            response_data = AuthorResponse(
-                id=author_id,
-                display_name=author_data["display_name"],
-                orcid=author_data.get("orcid"),
-                h_index=stats.get("h_index", 0),
-                i10_index=stats.get("i10_index", 0),
-                works_count=author_data.get("works_count", 0),
-                cited_by_count=author_data.get("cited_by_count", 0),
-                institution=inst,
-                field_of_study=field,
-                expertise=expertise,
-                academic_history=[],
-                works=[],
-                next_prediction="Indexing innovation score...",
-                similar_researchers=similar
-            )
-            await profile_cache.set(cache_key, response_data)
-            return response_data
-        except Exception as e:
-            return {"error": f"Search failed: {str(e)}"}
+            if author_id and author_data:
+                # Teleport immediately to get full publications and metrics
+                try:
+                    profile = await teleport_researcher(author_id)
+                    if profile:
+                        works_data = [Work(**w) for w in profile.get("works", [])]
+                        field = profile.get("field_of_study") or (profile.get("expertise")[0] if profile.get("expertise") else "")
+                        similar = await fetch_similar_authors(field, profile.get("openalex_id", author_id))
+                        
+                        response_data = AuthorResponse(
+                            id=profile.get("openalex_id", author_id),
+                            display_name=profile.get("display_name", ""),
+                            orcid=profile.get("orcid"),
+                            h_index=profile.get("h_index", 0),
+                            i10_index=profile.get("i10_index", 0),
+                            works_count=profile.get("works_count", 0),
+                            cited_by_count=profile.get("cited_by_count", 0),
+                            institution=profile.get("current_institution", "Independent"),
+                            field_of_study=profile.get("field_of_study", "Multidisciplinary"),
+                            expertise=profile.get("expertise", []),
+                            academic_history=profile.get("academic_history", []),
+                            works=works_data,
+                            innovation_score=profile.get("innovation_score"),
+                            average_creativity=profile.get("average_creativity", 0.0),
+                            average_complexity=profile.get("average_complexity", 0.0),
+                            average_skill_score=profile.get("average_skill_score", 0.0),
+                            average_impact=profile.get("average_impact", 0.0),
+                            average_activity=profile.get("average_activity", 0.0),
+                            disruption_score=profile.get("disruption_score", 0.0),
+                            citation_acceleration=profile.get("citation_acceleration", 0.0),
+                            future_impact_score=profile.get("future_impact_score", 0.0),
+                            network_centrality=profile.get("network_centrality", 0.0),
+                            semantic_novelty=profile.get("semantic_novelty", 0.0),
+                            interdisciplinary_index=profile.get("interdisciplinary_index", 0.0),
+                            policy_patent_score=profile.get("policy_patent_score", 0.0),
+                            open_science_score=open_science_score_val if 'open_science_score_val' in locals() else profile.get("open_science_score", 0.0),
+                            collaboration_diversity=profile.get("collaboration_diversity", 0.0),
+                            research_consistency=profile.get("research_consistency", 0.0),
+                            next_prediction=profile.get("next_prediction", "No prediction available."),
+                            similar_researchers=similar
+                        )
+                        await profile_cache.set(cache_key, response_data)
+                        return response_data
+                except Exception as e:
+                    print(f"Inline teleportation failed: {e}")
+     
+                # Fallback to basic info if teleportation fails
+                last_insts = author_data.get("last_known_institutions")
+                inst = "Independent Researcher"
+                if last_insts and isinstance(last_insts, list) and len(last_insts) > 0:
+                    first_inst = last_insts[0]
+                    if first_inst and isinstance(first_inst, dict):
+                        inst = first_inst.get("display_name") or "Independent Researcher"
+                stats = author_data.get("summary_stats", {})
+                concepts = author_data.get("x_concepts", [])
+                field = concepts[0].get("display_name", "Multidisciplinary") if concepts else "Multidisciplinary"
+                expertise = [c.get("display_name") for c in concepts if c.get("level") in [1, 2]][:5]
+                if not expertise: expertise = [c.get("display_name") for c in concepts[:3]]
+                
+                similar = await fetch_similar_authors(field, author_id)
+                response_data = AuthorResponse(
+                    id=author_id,
+                    display_name=author_data["display_name"],
+                    orcid=author_data.get("orcid"),
+                    h_index=stats.get("h_index", 0),
+                    i10_index=stats.get("i10_index", 0),
+                    works_count=author_data.get("works_count", 0),
+                    cited_by_count=author_data.get("cited_by_count", 0),
+                    institution=inst,
+                    field_of_study=field,
+                    expertise=expertise,
+                    academic_history=[],
+                    works=[],
+                    next_prediction="Indexing innovation score...",
+                    similar_researchers=similar
+                )
+                await profile_cache.set(cache_key, response_data)
+                return response_data
+            else:
+                return {"error": "Author not found"}
+    except Exception as e:
+        return {"error": f"Search failed: {str(e)}"}

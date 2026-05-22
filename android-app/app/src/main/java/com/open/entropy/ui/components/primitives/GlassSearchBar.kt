@@ -59,20 +59,12 @@ fun GlassSearchBar(
             modifier = Modifier.padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                    color = AccentTeal
-                )
-            } else {
-                Icon(
-                    Icons.Default.Search,
-                    contentDescription = "Search",
-                    tint = if (isFocused || value.isNotEmpty()) AccentTeal else TextMuted,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+            Icon(
+                Icons.Default.Search,
+                contentDescription = "Search",
+                tint = if (isFocused || value.isNotEmpty()) AccentTeal else TextMuted,
+                modifier = Modifier.size(20.dp)
+            )
             Spacer(modifier = Modifier.width(10.dp))
             Box(modifier = Modifier.weight(1f)) {
                 if (value.isEmpty()) {
@@ -102,17 +94,31 @@ fun GlassSearchBar(
                     keyboardActions = KeyboardActions(onSearch = { onSearch?.invoke() })
                 )
             }
-            if (value.isNotEmpty()) {
-                IconButton(
-                    onClick = { onClear?.invoke() },
-                    modifier = Modifier.size(32.dp)
+            if (value.isNotEmpty() || isLoading) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = "Clear",
-                        tint = TextMuted,
-                        modifier = Modifier.size(16.dp)
-                    )
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = AccentTeal
+                        )
+                    }
+                    if (value.isNotEmpty()) {
+                        IconButton(
+                            onClick = { onClear?.invoke() },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Clear",
+                                tint = TextMuted,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
