@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Start/Launch Theme for Android 12+ Splash Screen -->
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <!-- Set the splash screen background to black to match our app theme style -->
+        <item name="windowSplashScreenBackground">@android:color/black</item>
+        
+        <!-- Use a transparent drawable for the icon to avoid showing a static duplicate logo at launch -->
+        <item name="windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+        
+        <!-- Switch to the main theme when the app starts -->
+        <item name="postSplashScreenTheme">@android:style/Theme.Material.Light.NoActionBar</item>
+    </style>
+</resources>

@@ -6,7 +6,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Box
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Hub
@@ -51,6 +58,7 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT)
@@ -106,14 +114,14 @@ fun ResQitMainApp() {
             NavHost(
                 navController = navController,
                 startDestination = "splash",
-                modifier = Modifier
-                    .screenSafeArea(includeBottom = currentRoute !in mainTabs)
-                    .padding(
-                        bottom = if (currentRoute in mainTabs) ScreenInsets.bottomNavClearance
-                        else scaffoldPadding.calculateBottomPadding()
-                    )
+                modifier = Modifier.fillMaxSize()
             ) {
-                composable("splash") {
+                composable(
+                    route = "splash",
+                    exitTransition = {
+                        fadeOut(animationSpec = tween(400, easing = EaseOutCubic))
+                    }
+                ) {
                     SplashScreen(
                         onAnimationFinished = {
                             val next = when {
@@ -127,87 +135,207 @@ fun ResQitMainApp() {
                         }
                     )
                 }
-                composable("onboarding") {
-                    OnboardingScreen(
-                        onFinish = {
-                            scope.launch { userPrefs.setOnboardingComplete() }
-                            val next = if (authManager.isSignedIn) "discover" else "auth"
-                            navController.navigate(next) {
-                                popUpTo("onboarding") { inclusive = true }
+                composable(
+                    route = "onboarding",
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                    }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .screenSafeArea(includeBottom = true)
+                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
+                    ) {
+                        OnboardingScreen(
+                            onFinish = {
+                                scope.launch { userPrefs.setOnboardingComplete() }
+                                val next = if (authManager.isSignedIn) "discover" else "auth"
+                                navController.navigate(next) {
+                                    popUpTo("onboarding") { inclusive = true }
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
-                composable("auth") {
-                    AuthScreen(
-                        onAuthSuccess = {
-                            navController.navigate("discover") {
-                                popUpTo("auth") { inclusive = true }
+                composable(
+                    route = "auth",
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                    }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .screenSafeArea(includeBottom = true)
+                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
+                    ) {
+                        AuthScreen(
+                            onAuthSuccess = {
+                                navController.navigate("discover") {
+                                    popUpTo("auth") { inclusive = true }
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
-                composable("discover") {
-                    DiscoveryScreen(
-                        onNavigateToReader = { title, doi ->
-                            navController.navigate("reader/${title.encodeForRoute()}/${doi.encodeForRoute()}")
-                        },
-                        onPaperClick = { paperId ->
-                            navController.navigate("paper_detail/$paperId")
-                        },
-                        onProfileClick = {
-                            navController.navigate("profile")
-                        },
-                        onTabNavigate = { route ->
-                            navController.navigate(route) {
-                                popUpTo("discover") { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
+                composable(
+                    route = "discover",
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                    }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .screenSafeArea(includeBottom = false)
+                            .padding(bottom = ScreenInsets.bottomNavClearance)
+                    ) {
+                        DiscoveryScreen(
+                            onNavigateToReader = { title, doi ->
+                                navController.navigate("reader/${title.encodeForRoute()}/${doi.encodeForRoute()}")
+                            },
+                            onPaperClick = { paperId ->
+                                navController.navigate("paper_detail/$paperId")
+                            },
+                            onProfileClick = {
+                                navController.navigate("profile")
+                            },
+                            onTabNavigate = { route ->
+                                navController.navigate(route) {
+                                    popUpTo("discover") { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
-                composable("profile") {
-                    ProfileScreen(
-                        onBack = {
-                            navController.popBackStack()
-                        }
-                    )
+                composable(
+                    route = "profile",
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                    }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .screenSafeArea(includeBottom = true)
+                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
+                    ) {
+                        ProfileScreen(
+                            onBack = {
+                                navController.popBackStack()
+                            }
+                        )
+                    }
                 }
-                composable("search") {
-                    SearchScreen(onPaperClick = { paperId -> navController.navigate("paper_detail/$paperId") })
+                composable(
+                    route = "search",
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                    }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .screenSafeArea(includeBottom = false)
+                            .padding(bottom = ScreenInsets.bottomNavClearance)
+                    ) {
+                        SearchScreen(onPaperClick = { paperId -> navController.navigate("paper_detail/$paperId") })
+                    }
                 }
-                composable("library") {
-                    LibraryScreen(onPaperClick = { paperId -> navController.navigate("paper_detail/$paperId") })
+                composable(
+                    route = "library",
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                    }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .screenSafeArea(includeBottom = false)
+                            .padding(bottom = ScreenInsets.bottomNavClearance)
+                    ) {
+                        LibraryScreen(onPaperClick = { paperId -> navController.navigate("paper_detail/$paperId") })
+                    }
                 }
-                composable("nexus") {
-                    NexusScreen()
+                composable(
+                    route = "nexus",
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                    }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .screenSafeArea(includeBottom = false)
+                            .padding(bottom = ScreenInsets.bottomNavClearance)
+                    ) {
+                        NexusScreen()
+                    }
                 }
-                composable("paper_detail/{paperId}") { backStackEntry ->
+                composable(
+                    route = "paper_detail/{paperId}",
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                    }
+                ) { backStackEntry ->
                     val paperId = backStackEntry.arguments?.getString("paperId") ?: ""
-                    PaperDetailScreen(
-                        paperId = paperId,
-                        onBack = { navController.popBackStack() },
-                        onAuthorClick = { authorName -> navController.navigate("author_detail/$authorName") }
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .screenSafeArea(includeBottom = true)
+                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
+                    ) {
+                        PaperDetailScreen(
+                            paperId = paperId,
+                            onBack = { navController.popBackStack() },
+                            onAuthorClick = { authorName -> navController.navigate("author_detail/$authorName") }
+                        )
+                    }
                 }
-                composable("author_detail/{authorName}") { backStackEntry ->
+                composable(
+                    route = "author_detail/{authorName}",
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                    }
+                ) { backStackEntry ->
                     val authorName = backStackEntry.arguments?.getString("authorName") ?: ""
-                    AuthorDetailScreen(
-                        authorName = authorName,
-                        onBack = { navController.popBackStack() },
-                        onPaperClick = { paperId -> navController.navigate("paper_detail/$paperId") }
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .screenSafeArea(includeBottom = true)
+                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
+                    ) {
+                        AuthorDetailScreen(
+                            authorName = authorName,
+                            onBack = { navController.popBackStack() },
+                            onPaperClick = { paperId -> navController.navigate("paper_detail/$paperId") }
+                        )
+                    }
                 }
-                composable("reader/{title}/{url}") { backStackEntry ->
+                composable(
+                    route = "reader/{title}/{url}",
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                    }
+                ) { backStackEntry ->
                     val title = backStackEntry.arguments?.getString("title")?.decodeFromRoute() ?: ""
                     val urlArg = backStackEntry.arguments?.getString("url")?.decodeFromRoute() ?: ""
                     val url = if (urlArg.startsWith("http")) urlArg else "https://doi.org/$urlArg"
-                    ArticleReaderScreen(
-                        url = url,
-                        title = title,
-                        onClose = { navController.popBackStack() }
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .screenSafeArea(includeBottom = true)
+                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
+                    ) {
+                        ArticleReaderScreen(
+                            url = url,
+                            title = title,
+                            onClose = { navController.popBackStack() }
+                        )
+                    }
                 }
             }
         }
