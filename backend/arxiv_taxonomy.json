@@ -1,0 +1,222 @@
+{
+  "Physics": {
+    "Astrophysics": {
+      "astro-ph.CO": {
+        "name": "Cosmology and Nongalactic Astrophysics",
+        "description": "Phenomenology of early universe, cosmic microwave background, cosmological parameters, primordial element abundances, extragalactic distance scale, large-scale structure of the universe. Groups, superclusters, voids, intergalactic medium. Particle astrophysics: dark energy, dark matter, baryogenesis, leptogenesis, inflationary models, reheating, monopoles, WIMPs, cosmic strings, primordial black holes, cosmological gravitational radiation.",
+        "keywords": ["early universe", "CMB", "dark energy", "dark matter", "inflationary models", "black holes", "gravitational radiation"]
+      },
+      "astro-ph.EP": {
+        "name": "Earth and Planetary Astrophysics",
+        "description": "Interplanetary medium, planetary physics, planetary astrobiology, extrasolar planets, comets, asteroids, meteorites. Structure and formation of the solar system.",
+        "keywords": ["planetary physics", "astrobiology", "extrasolar planets", "solar system"]
+      },
+      "astro-ph.GA": {
+        "name": "Astrophysics of Galaxies",
+        "description": "Phenomena pertaining to galaxies or the Milky Way. Star clusters, HII regions and planetary nebulae, the interstellar medium, atomic and molecular clouds, dust. Stellar populations. Galactic structure, formation, dynamics. Galactic nuclei, bulges, disks, halo. Active Galactic Nuclei, supermassive black holes, quasars. Gravitational lens systems. The Milky Way and its contents.",
+        "keywords": ["galaxies", "Milky Way", "interstellar medium", "stellar populations", "AGN", "quasars"]
+      },
+      "astro-ph.HE": {
+        "name": "High Energy Astrophysical Phenomena",
+        "description": "Cosmic ray production, acceleration, propagation, detection. Gamma ray astronomy and bursts, X-rays, charged particles, supernovae and other explosive phenomena, stellar remnants and accretion systems, jets, microquasars, neutron stars, pulsars, black holes.",
+        "keywords": ["cosmic rays", "gamma ray bursts", "X-rays", "supernovae", "neutron stars", "pulsars", "black holes"]
+      },
+      "astro-ph.IM": {
+        "name": "Instrumentation and Methods for Astrophysics",
+        "description": "Detector and telescope design, experiment proposals. Laboratory Astrophysics. Methods for data analysis, statistical methods. Software, database design.",
+        "keywords": ["telescope design", "data analysis", "statistical methods", "software", "detectors"]
+      },
+      "astro-ph.SR": {
+        "name": "Solar and Stellar Astrophysics",
+        "description": "White dwarfs, brown dwarfs, cataclysmic variables. Star formation and protostellar systems, stellar astrobiology, binary and multiple systems of stars, stellar evolution and structure, coronas. Central stars of planetary nebulae. Helioseismology, solar neutrinos, production and detection of gravitational radiation from stellar systems.",
+        "keywords": ["stellar evolution", "star formation", "helioseismology", "solar neutrinos", "binary stars"]
+      }
+    },
+    "Condensed Matter": {
+      "cond-mat.dis-nn": {
+        "name": "Disordered Systems and Neural Networks",
+        "description": "Glasses and spin glasses; properties of random, aperiodic and quasiperiodic systems; transport in disordered media; localization; phenomena mediated by defects and disorder; neural networks.",
+        "keywords": ["glasses", "spin glasses", "disordered media", "localization", "neural networks"]
+      },
+      "cond-mat.mes-hall": {
+        "name": "Mesoscale and Nanoscale Physics",
+        "description": "Semiconducting nanostructures: quantum dots, wires, and wells. Single electronics, spintronics, 2d electron gases, quantum Hall effect, nanotubes, graphene, plasmonic nanostructures.",
+        "keywords": ["nanostructures", "quantum dots", "spintronics", "quantum Hall effect", "graphene", "nanotubes"]
+      },
+      "cond-mat.mtrl-sci": {
+        "name": "Materials Science",
+        "description": "Techniques, synthesis, characterization, structure. Structural phase transitions, mechanical properties, phonons. Defects, adsorbates, interfaces.",
+        "keywords": ["synthesis", "characterization", "phase transitions", "phonons", "interfaces"]
+      },
+      "cond-mat.other": {
+        "name": "Other Condensed Matter",
+        "description": "Work in condensed matter that does not fit into the other cond-mat classifications.",
+        "keywords": ["condensed matter"]
+      },
+      "cond-mat.quant-gas": {
+        "name": "Quantum Gases",
+        "description": "Ultracold atomic and molecular gases, Bose-Einstein condensation, Feshbach resonances, spinor condensates, optical lattices, quantum simulation with cold atoms and molecules, macroscopic interference phenomena.",
+        "keywords": ["ultracold gases", "Bose-Einstein condensation", "optical lattices", "quantum simulation"]
+      },
+      "cond-mat.soft": {
+        "name": "Soft Condensed Matter",
+        "description": "Membranes, polymers, liquid crystals, glasses, colloids, granular matter.",
+        "keywords": ["membranes", "polymers", "liquid crystals", "colloids"]
+      },
+      "cond-mat.stat-mech": {
+        "name": "Statistical Mechanics",
+        "description": "Phase transitions, thermodynamics, field theory, non-equilibrium phenomena, renormalization group and scaling, integrable models, turbulence.",
+        "keywords": ["thermodynamics", "field theory", "renormalization group", "integrable models"]
+      },
+      "cond-mat.str-el": {
+        "name": "Strongly Correlated Electrons",
+        "description": "Quantum magnetism, non-Fermi liquids, spin liquids, quantum criticality, charge density waves, metal-insulator transitions.",
+        "keywords": ["quantum magnetism", "non-Fermi liquids", "spin liquids", "quantum criticality"]
+      },
+      "cond-mat.supr-con": {
+        "name": "Superconductivity",
+        "description": "Superconductivity: theory, models, experiment. Superflow in helium.",
+        "keywords": ["superconductivity", "superflow", "helium"]
+      }
+    },
+    "Physics_Archive": {
+      "physics.acc-ph": {
+        "name": "Accelerator Physics",
+        "description": "Accelerator theory, technology, experiments, beam physics, design and optimization, radiation sources.",
+        "keywords": ["accelerators", "beam physics", "synchrotron", "free electron lasers"]
+      },
+      "physics.ao-ph": {
+        "name": "Atmospheric and Oceanic Physics",
+        "description": "Atmospheric and oceanic physics and physical chemistry, biogeophysics, and climate science.",
+        "keywords": ["climate science", "oceanic physics", "atmospheric physics"]
+      },
+      "physics.app-ph": {
+        "name": "Applied Physics",
+        "description": "Applications of physics to new technology, including electronic devices, optics, photonics, microwaves, spintronics, advanced materials, metamaterials, nanotechnology, and energy sciences.",
+        "keywords": ["nanotechnology", "photonics", "spintronics", "energy sciences"]
+      },
+      "physics.bio-ph": {
+        "name": "Biological Physics",
+        "description": "Molecular, cellular, neurological, membrane, and single-molecule biophysics; quantum phenomena in biological systems.",
+        "keywords": ["biophysics", "molecular biophysics", "bioinformatics"]
+      },
+      "physics.chem-ph": {
+        "name": "Chemical Physics",
+        "description": "Experimental, computational, and theoretical physics of atoms, molecules, and clusters; chemical thermodynamics.",
+        "keywords": ["spectroscopy", "molecular dynamics", "thermodynamics"]
+      },
+      "physics.class-ph": {
+        "name": "Classical Physics",
+        "description": "Newtonian and relativistic dynamics; many particle systems; chaos; electromagnetism; acoustics.",
+        "keywords": ["dynamics", "chaos", "electromagnetism", "acoustics"]
+      },
+      "physics.comp-ph": {
+        "name": "Computational Physics",
+        "description": "All aspects of computational science applied to physics.",
+        "keywords": ["computational science", "simulation", "modeling"]
+      },
+      "physics.data-an": {
+        "name": "Data Analysis, Statistics and Probability",
+        "description": "Methods, software and hardware for physics data analysis; measurement methodology; uncertainties.",
+        "keywords": ["data analysis", "statistics", "uncertainties"]
+      },
+      "physics.flu-dyn": {
+        "name": "Fluid Dynamics",
+        "description": "Turbulence, instabilities, incompressible/compressible flows, reacting flows.",
+        "keywords": ["turbulence", "aero/hydrodynamics", "micro/nanofluidics"]
+      },
+      "physics.gen-ph": {
+        "name": "General Physics",
+        "description": "General physics topics.",
+        "keywords": ["general physics"]
+      },
+      "physics.geo-ph": {
+        "name": "Geophysics",
+        "description": "Atmospheric, computational geophysics, planetology, solar system, solid earth geophysics.",
+        "keywords": ["geophysics", "planetology", "seismology"]
+      },
+      "physics.hist-ph": {
+        "name": "History and Philosophy of Physics",
+        "description": "History and philosophy of all branches of physics, astrophysics, and cosmology.",
+        "keywords": ["history", "philosophy"]
+      },
+      "physics.ins-det": {
+        "name": "Instrumentation and Detectors",
+        "description": "Instrumentation and detectors for research in natural science; associated electronics and control equipment.",
+        "keywords": ["detectors", "instrumentation", "electronics"]
+      },
+      "physics.med-ph": {
+        "name": "Medical Physics",
+        "description": "Radiation therapy, dosimetry, biomedical imaging modelling, health physics.",
+        "keywords": ["radiation therapy", "biomedical imaging"]
+      },
+      "physics.optics": {
+        "name": "Optics",
+        "description": "Fiber optics, laser applications, quantum optics, ultrafast optics, X-ray optics.",
+        "keywords": ["lasers", "quantum optics", "fiber optics"]
+      },
+      "physics.plasm-ph": {
+        "name": "Plasma Physics",
+        "description": "Fundamental plasma physics, magnetically confined plasmas, high energy density plasmas.",
+        "keywords": ["fusion", "plasma diagnostics", "magnetohydrodynamics"]
+      },
+      "physics.soc-ph": {
+        "name": "Physics and Society",
+        "description": "Structure, dynamics and collective behavior of societies; social networks; infrastructure systems.",
+        "keywords": ["social networks", "complex systems"]
+      },
+      "physics.space-ph": {
+        "name": "Space Physics",
+        "description": "Space plasma physics, heliophysics, space weather, planetary magnetospheres.",
+        "keywords": ["space weather", "auroras", "cosmic rays"]
+      }
+    },
+    "High_Energy_Physics": {
+      "hep-ex": { "name": "Experiment", "keywords": ["standard model", "beyond standard model", "particle physics"] },
+      "hep-lat": { "name": "Lattice", "keywords": ["lattice field theory", "algorithms"] },
+      "hep-ph": { "name": "Phenomenology", "keywords": ["effective field theories", "prediction"] },
+      "hep-th": { "name": "Theory", "keywords": ["quantum field theory", "string theory", "supersymmetry"] }
+    },
+    "Other_Physics": {
+      "gr-qc": { "name": "General Relativity and Quantum Cosmology", "keywords": ["gravitational waves", "quantum gravity"] },
+      "math-ph": { "name": "Mathematical Physics", "keywords": ["mathematical methods", "rigorous formulations"] },
+      "nucl-ex": { "name": "Nuclear Experiment", "keywords": ["heavy-ion collisions", "fundamental interactions"] },
+      "nucl-th": { "name": "Nuclear Theory", "keywords": ["nuclear structure", "hadron structure"] },
+      "quant-ph": { "name": "Quantum Physics", "keywords": ["quantum information", "entanglement"] }
+    }
+  },
+  "Computer_Science": {
+    "cs.AI": { "name": "Artificial Intelligence", "keywords": ["expert systems", "knowledge representation", "planning"] },
+    "cs.CV": { "name": "Computer Vision and Pattern Recognition", "keywords": ["image processing", "scene understanding"] },
+    "cs.LG": { "name": "Machine Learning", "keywords": ["supervised learning", "reinforcement learning", "neural networks"] },
+    "cs.CL": { "name": "Computation and Language", "keywords": ["NLP", "speech recognition", "linguistics"] },
+    "cs.CR": { "name": "Cryptography and Security", "keywords": ["authentication", "privacy", "cryptography"] },
+    "cs.DC": { "name": "Distributed, Parallel, and Cluster Computing", "keywords": ["cloud computing", "parallel algorithms"] },
+    "cs.DS": { "name": "Data Structures and Algorithms", "keywords": ["complexity", "optimization"] },
+    "cs.IR": { "name": "Information Retrieval", "keywords": ["search engines", "indexing"] },
+    "cs.RO": { "name": "Robotics", "keywords": ["automation", "control systems"] },
+    "cs.SE": { "name": "Software Engineering", "keywords": ["software quality", "testing", "design"] }
+  },
+  "Mathematics": {
+    "math.AG": { "name": "Algebraic Geometry", "keywords": ["varieties", "stacks", "sheaves"] },
+    "math.CO": { "name": "Combinatorics", "keywords": ["graph theory", "discrete mathematics"] },
+    "math.DS": { "name": "Dynamical Systems", "keywords": ["chaos", "differential equations"] },
+    "math.NT": { "name": "Number Theory", "keywords": ["prime numbers", "diophantine equations"] },
+    "math.PR": { "name": "Probability", "keywords": ["stochastic processes", "random variables"] },
+    "math.ST": { "name": "Statistics Theory", "keywords": ["inference", "asymptotics"] }
+  },
+  "Quantitative_Biology": {
+    "q-bio.BM": { "name": "Biomolecules", "description": "DNA, RNA, proteins, lipids; structures and folding kinetics.", "keywords": ["molecular structures", "single-molecule"] },
+    "q-bio.NC": { "name": "Neurons and Cognition", "description": "Synapse, cortex, neural network, behavior.", "keywords": ["neural dynamics", "behavior"] },
+    "q-bio.GN": { "name": "Genomics", "description": "DNA sequencing, gene finding, mutational processes.", "keywords": ["sequencing", "epigenetics"] }
+  },
+  "Quantitative_Finance": {
+    "q-fin.CP": { "name": "Computational Finance", "keywords": ["Monte Carlo", "numerical methods"] },
+    "q-fin.RM": { "name": "Risk Management", "keywords": ["financial risks", "banking", "insurance"] },
+    "q-fin.ST": { "name": "Statistical Finance", "keywords": ["market analysis", "econometrics"] }
+  },
+  "Statistics": {
+    "stat.ML": { "name": "Machine Learning", "keywords": ["statistical learning", "theoretical grounding"] },
+    "stat.ME": { "name": "Methodology", "keywords": ["time series", "multivariate analysis"] }
+  }
+}

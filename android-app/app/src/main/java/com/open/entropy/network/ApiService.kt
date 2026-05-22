@@ -1,0 +1,304 @@
+package com.open.entropy.network
+
+import android.util.Log
+import io.ktor.client.*
+import io.ktor.client.call.*
+import io.ktor.client.engine.android.*
+import io.ktor.client.plugins.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.client.request.*
+import io.ktor.http.*
+import io.ktor.serialization.kotlinx.json.*
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+
+// ── Data models ───────────────────────────────────────────────────────────────
+
+@Serializable
+data class OpenAlexWork(
+    val id: String,
+    val doi: String? = null,
+    val title: String? = null,
+    val publication_year: Int? = null,
+    val authorships: List<Authorship>? = null,
+    val cited_by_count: Int? = 0,
+    val primary_location: PrimaryLocation? = null,
+    val abstract_inverted_index: Map<String, List<Int>>? = null
+)
+
+@Serializable data class Authorship(val author: AuthorInfo? = null)
+
+@Serializable
+data class AuthorInfo(
+    val id: String? = null,
+    val display_name: String? = null
+)
+
+@Serializable
+data class PrimaryLocation(
+    val source: SourceInfo? = null,
+    val landing_page_url: String? = null,
+    val pdf_url: String? = null
+)
+
+@Serializable data class SourceInfo(val display_name: String? = null)
+
+@Serializable data class OpenAlexResponse(val results: List<OpenAlexWork>)
+
+@Serializable
+data class OpenAlexAuthor(
+    val id: String,
+    val display_name: String? = null,
+    val last_known_institutions: List<OpenAlexInstitution>? = null
+)
+
+@Serializable
+data class OpenAlexInstitution(
+    val display_name: String? = null
+)
+
+@Serializable
+data class OpenAlexAuthorsResponse(
+    val results: List<OpenAlexAuthor>
+)
+
+@Serializable data class RandomResponse(val random_number: Int)
+
+@Serializable
+data class Work(
+    val title: String? = null,
+    val year: Int? = null,
+    val doi: String? = null,
+    val journal: String? = null,
+    val is_open_access: Boolean? = false,
+    val citations: Int? = 0,
+    val creativity_score: Double? = 0.0,
+    val complexity_score: Double? = 0.0,
+    val impact_factor: Double? = 0.0,
+    val disruption_score: Double? = 0.0,
+    val semantic_novelty: Double? = 0.0,
+    val open_science_score: Double? = 0.0,
+    val authors: List<String>? = null
+)
+
+@Serializable
+data class AuthorSuggestion(
+    val id: String,
+    val display_name: String,
+    val institution: String,
+    val field_of_study: String? = null
+)
+
+@Serializable
+data class AuthorResponse(
+    val id: String,
+    val display_name: String,
+    val orcid: String? = null,
+    val h_index: Int,
+    val i10_index: Int,
+    val works_count: Int,
+    val cited_by_count: Int,
+    val institution: String,
+    val field_of_study: String? = null,
+    val expertise: List<String> = emptyList(),
+    val academic_history: List<String>,
+    val works: List<Work>,
+    val average_creativity: Double = 0.0,
+    val average_complexity: Double = 0.0,
+    val average_activity: Double = 0.0,
+    val average_skill_score: Double = 0.0,
+    val average_impact: Double = 0.0,
+    val innovation_score: Double? = 0.0,
+    val disruption_score: Double = 0.0,
+    val citation_acceleration: Double = 0.0,
+    val future_impact_score: Double = 0.0,
+    val network_centrality: Double = 0.0,
+    val semantic_novelty: Double = 0.0,
+    val interdisciplinary_index: Double = 0.0,
+    val policy_patent_score: Double = 0.0,
+    val open_science_score: Double = 0.0,
+    val collaboration_diversity: Double = 0.0,
+    val research_consistency: Double = 0.0,
+    val next_prediction: String? = null,
+    val top_experimental_tools: List<ToolUsage> = emptyList(),
+    val similar_researchers: List<AuthorSuggestion> = emptyList()
+)
+
+@Serializable
+data class ToolUsage(
+    val name: String,
+    val frequency: Int,
+    val category: String
+)
+
+@Serializable
+data class Metrics(
+    val creativity: Int,
+    val complexity: Int,
+    val skill_set_score: Int
+)
+
+@Serializable
+data class SummaryResponse(
+    val bullets: List<String>,
+    val metrics: Metrics,
+    val top_skills: List<String>
+)
+
+// ── Service ───────────────────────────────────────────────────────────────────
+
+/**
+ * ApiService — all network calls to the ResQit backend.
+ *
+ * The backend URL is never hardcoded here.  It is read from [ServerLocator.baseUrl]
+ * on every request.  If the server has not been discovered yet, calls return a
+ * sensible empty/null result so the UI can show a "Searching for backend…" state.
+ */
+class ApiService {
+
+    private val tag = "ApiService"
+
+    private val httpClient = HttpClient(Android) {
+        install(ContentNegotiation) {
+            json(Json {
+                ignoreUnknownKeys = true
+                coerceInputValues = true
+            })
+        }
+        install(HttpTimeout) {
+            requestTimeoutMillis = 15_000
+            connectTimeoutMillis = 5_000
+        }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Returns the current backend base URL, or null if not yet discovered.
+     * Callers should treat null as "server unavailable" and return empty/null.
+     */
+    private fun baseUrl(): String? = ServerLocator.baseUrl.value
+
+    // ── Backend endpoints ─────────────────────────────────────────────────────
+
+    suspend fun getRandomNumber(): Int {
+        val base = baseUrl() ?: run {
+            Log.w(tag, "getRandomNumber: backend not yet discovered")
+            return -1
+        }
+        return try {
+            val response: RandomResponse = httpClient.get("$base/random").body()
+            response.random_number
+        } catch (e: Exception) {
+            Log.e(tag, "getRandomNumber failed", e)
+            -1
+        }
+    }
+
+    suspend fun getAuthorSuggestions(query: String): List<AuthorSuggestion> {
+        if (query.length < 3) return emptyList()
+        val base = baseUrl()
+        if (base != null) {
+            try {
+                return httpClient.get("$base/author_suggestions") {
+                    parameter("query", query)
+                }.body()
+            } catch (e: Exception) {
+                Log.e(tag, "getAuthorSuggestions via backend failed, falling back to direct OpenAlex query", e)
+            }
+        } else {
+            Log.w(tag, "getAuthorSuggestions: backend not yet discovered, falling back to direct OpenAlex query")
+        }
+
+        // Direct OpenAlex suggestion fallback
+        return try {
+            val response: OpenAlexAuthorsResponse = httpClient.get("https://api.openalex.org/authors") {
+                parameter("search", query)
+                parameter("per_page", 10)
+                parameter("mailto", "vikki.4me@gmail.com")
+            }.body()
+            
+            response.results.map { author ->
+                AuthorSuggestion(
+                    id = author.id,
+                    display_name = author.display_name ?: "Unknown",
+                    institution = author.last_known_institutions?.firstOrNull()?.display_name ?: "Independent Researcher"
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "getAuthorSuggestions (OpenAlex fallback) failed", e)
+            emptyList()
+        }
+    }
+
+    suspend fun searchAuthor(name: String): AuthorResponse? {
+        val base = baseUrl() ?: run {
+            Log.w(tag, "searchAuthor: backend not yet discovered")
+            return null
+        }
+        return try {
+            Log.d(tag, "Searching author: $name @ $base")
+            httpClient.get("$base/search_author") {
+                parameter("name", name)
+            }.body()
+        } catch (e: Exception) {
+            Log.e(tag, "searchAuthor failed", e)
+            null
+        }
+    }
+
+    suspend fun summarizeWork(title: String, doi: String?): SummaryResponse? {
+        val base = baseUrl() ?: run {
+            Log.w(tag, "summarizeWork: backend not yet discovered")
+            return null
+        }
+        return try {
+            httpClient.get("$base/summarize_work") {
+                parameter("title", title)
+                doi?.let { parameter("doi", it) }
+            }.body()
+        } catch (e: Exception) {
+            Log.e(tag, "summarizeWork failed", e)
+            null
+        }
+    }
+
+    suspend fun refreshAuthor(name: String): Boolean {
+        val base = baseUrl() ?: run {
+            Log.w(tag, "refreshAuthor: backend not yet discovered")
+            return false
+        }
+        return try {
+            httpClient.get("$base/refresh_author") {
+                parameter("name", name)
+            }.status.value == 200
+        } catch (e: Exception) {
+            Log.e(tag, "refreshAuthor failed", e)
+            false
+        }
+    }
+
+    // ── External APIs (OpenAlex — no backend needed) ──────────────────────────
+
+    suspend fun searchPapers(query: String): List<OpenAlexWork> {
+        return try {
+            val response: OpenAlexResponse = httpClient.get("https://api.openalex.org/works") {
+                parameter("search", query)
+            }.body()
+            response.results
+        } catch (e: Exception) {
+            Log.e(tag, "searchPapers (OpenAlex) failed", e)
+            emptyList()
+        }
+    }
+
+    suspend fun getPaperDetails(openAlexId: String): OpenAlexWork? {
+        return try {
+            val id = openAlexId.substringAfterLast("/")
+            httpClient.get("https://api.openalex.org/works/$id").body()
+        } catch (e: Exception) {
+            Log.e(tag, "getPaperDetails (OpenAlex) failed", e)
+            null
+        }
+    }
+}
