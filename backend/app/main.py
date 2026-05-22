@@ -69,6 +69,8 @@ class SimpleAsyncCache:
 
 suggestions_cache = SimpleAsyncCache(ttl_seconds=1800, max_size=300)
 profile_cache = SimpleAsyncCache(ttl_seconds=3600, max_size=100)
+# Intelligence results are expensive (PDF download + LLM) — cache for 6 hours
+analyze_paper_cache = SimpleAsyncCache(ttl_seconds=21600, max_size=200)
 
 app = FastAPI(
     title="ResQit API",
@@ -204,10 +206,54 @@ class AuthorResponse(BaseModel):
     next_prediction: Optional[str] = None
     similar_researchers: List[AuthorSuggestion] = []
 
+class PaperIntelligenceResponse(BaseModel):
+    tldr: str = ""
+    key_findings: List[str] = []
+    techniques: List[str] = []
+    tools_and_software: List[str] = []
+    core_concepts: List[str] = []
+    formulas: List[str] = []
+    limitations: List[str] = []
+    real_world_impact: str = ""
+    future_directions: List[str] = []
+    confidence: str = "Medium"
+    text_source: str = "abstract_only"
+
 @app.get("/summarize_work")
 async def summarize_work(title: str = Query(...), doi: Optional[str] = None):
     data = await summarization_service.summarize_paper(title, doi)
     return data
+
+@app.get("/analyze_paper", response_model=PaperIntelligenceResponse)
+async def analyze_paper(
+    title: str = Query(..., description="Full paper title"),
+    doi: Optional[str] = Query(None, description="DOI of the paper (e.g. 10.48550/arXiv.1706.03762)"),
+    openalex_id: Optional[str] = Query(None, description="OpenAlex work ID (e.g. W2741809807 or full URL)"),
+):
+    """
+    Deep paper intelligence: reads the FULL paper text (PDF when available)
+    and extracts 9 structured insight dimensions via a Research Intelligence Agent LLM.
+    
+    PDF sources tried (in order):
+      1. OpenAlex open-access PDF URL
+      2. arXiv direct PDF (auto-detected from DOI)
+      3. Unpaywall API
+      4. Semantic Scholar PDF link
+      5. Abstract + metadata fallback (when no PDF is accessible)
+    """
+    cache_key = f"intelligence:{openalex_id or doi or title}"
+    cached = await analyze_paper_cache.get(cache_key)
+    if cached is not None:
+        print(f"[/analyze_paper] Cache hit for: {title[:50]}", flush=True)
+        return cached
+
+    result = await summarization_service.analyze_paper(
+        title=title,
+        doi=doi,
+        openalex_id=openalex_id,
+    )
+    await analyze_paper_cache.set(cache_key, result)
+    return result
 
 @app.get("/presentation_outline")
 async def presentation_outline(title: str = Query(...), doi: Optional[str] = None):
