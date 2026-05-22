@@ -20,11 +20,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.open.entropy.ui.components.ScientificCard
 import com.open.entropy.ui.components.primitives.SectionHeader
 import com.open.entropy.ui.layout.ScreenInsets
 import com.open.entropy.ui.layout.screenHorizontalPadding
 import com.open.entropy.ui.theme.*
+import com.open.entropy.viewmodel.NexusCollabSuggestion
+import com.open.entropy.viewmodel.NexusUiState
+import com.open.entropy.viewmodel.NexusViewModel
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -250,14 +254,10 @@ data class CollabSuggestion(
 )
 
 @Composable
-fun CollaborationRadarCard() {
-    // TODO: replace with OpenAlex author similarity API
-    val suggestions = listOf(
-        CollabSuggestion("Dr. Priya Nair",      "IISc Bangalore",       87, "ML + Physics", AccentTeal),
-        CollabSuggestion("Dr. Arjun Mehta",     "TIFR Mumbai",           74, "Quantum Computing", AccentIndigo),
-        CollabSuggestion("Dr. Sarah Chen",      "MIT CSAIL",             68, "NLP + Bioinformatics", AccentEmerald),
-        CollabSuggestion("Dr. Carlos Ruiz",     "ETH Zurich",            61, "Materials Science", AccentAmber),
-    )
+fun CollaborationRadarCard(viewModel: NexusViewModel = viewModel()) {
+    val uiState by viewModel.uiState.collectAsState()
+
+    val collabColors = listOf(AccentTeal, AccentIndigo, AccentEmerald, AccentAmber, AccentViolet)
 
     Surface(
         shape = RoundedCornerShape(20.dp),
@@ -291,13 +291,93 @@ fun CollaborationRadarCard() {
 
             Spacer(Modifier.height(14.dp))
 
-            suggestions.forEachIndexed { index, collab ->
-                CollabRow(collab, index)
-                if (index < suggestions.lastIndex) {
-                    HorizontalDivider(color = BorderLight, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 10.dp))
+            when (val state = uiState) {
+                is NexusUiState.Loading -> {
+                    repeat(3) {
+                        CollabRowShimmer()
+                        Spacer(Modifier.height(10.dp))
+                    }
+                }
+                is NexusUiState.Error -> {
+                    Text(
+                        text = "Could not load suggestions. Tap to retry.",
+                        color = TextMuted,
+                        fontSize = 12.sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { viewModel.loadSuggestions() }
+                            .padding(vertical = 8.dp)
+                    )
+                }
+                is NexusUiState.Success -> {
+                    state.suggestions.forEachIndexed { index, collab ->
+                        val color = collabColors[index % collabColors.size]
+                        CollabRow(
+                            collab = CollabSuggestion(
+                                name = collab.name,
+                                institution = collab.institution,
+                                overlap = collab.overlapPct,
+                                field = collab.field,
+                                color = color
+                            ),
+                            index = index
+                        )
+                        if (index < state.suggestions.lastIndex) {
+                            HorizontalDivider(
+                                color = BorderLight,
+                                thickness = 0.5.dp,
+                                modifier = Modifier.padding(vertical = 10.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+fun CollabRowShimmer() {
+    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.2f, targetValue = 0.5f,
+        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse),
+        label = "shimmerAlpha"
+    )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(AccentTeal.copy(alpha = alpha * 0.3f))
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.6f)
+                    .height(12.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(TextMuted.copy(alpha = alpha))
+            )
+            Spacer(Modifier.height(4.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.4f)
+                    .height(10.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(TextMuted.copy(alpha = alpha * 0.6f))
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(40.dp, 24.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(AccentTeal.copy(alpha = alpha * 0.2f))
+        )
     }
 }
 

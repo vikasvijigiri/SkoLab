@@ -36,6 +36,8 @@ import com.open.entropy.ui.components.primitives.FilterChipRow
 import com.open.entropy.ui.theme.*
 import com.open.entropy.viewmodel.FeedUiState
 import com.open.entropy.viewmodel.FeedViewModel
+import com.open.entropy.viewmodel.HomeViewModel
+import com.open.entropy.viewmodel.TrendingUiState
 import kotlinx.coroutines.delay
 import java.util.Locale
 
@@ -47,7 +49,8 @@ import java.util.Locale
 fun HomeScreen(
     onPaperClick: (String) -> Unit,
     onMapClick: () -> Unit,
-    viewModel: FeedViewModel = viewModel()
+    viewModel: FeedViewModel = viewModel(),
+    homeViewModel: HomeViewModel = viewModel()
 ) {
     var selectedFilter by remember { mutableStateOf("All") }
     val filters = listOf("All", "Disruptive", "High Novelty", "Rising Stars", "Trending Fields")
@@ -71,7 +74,7 @@ fun HomeScreen(
             item { CitationAlertBanner() }
 
             // ── Hot Papers Trending ──────────────────────────────
-            item { HotPapersRow(onPaperClick) }
+            item { HotPapersRow(onPaperClick, homeViewModel) }
 
             // ── Filter chips ─────────────────────────────────────
             item { HomeFilterChipRow(filters, selectedFilter) { selectedFilter = it } }
@@ -281,29 +284,20 @@ fun CitationAlertBanner() {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// HOT PAPERS ROW
+// HOT PAPERS ROW  (live data from OpenAlex)
 // ─────────────────────────────────────────────────────────────────
 
-data class HotPaper(
-    val title: String,
-    val journal: String,
-    val velocity: String,   // e.g. "↑ 340%"
-    val field: String,
-    val color: Color
+private val trendingPaletteColors = listOf(
+    AccentIndigo, AccentTeal, AccentEmerald, AccentViolet,
+    AccentAmber, AccentRose, AccentTeal, AccentIndigo
 )
 
 @Composable
-fun HotPapersRow(onPaperClick: (String) -> Unit) {
-    // TODO: replace with live OpenAlex trending papers API
-    val papers = remember {
-        listOf(
-            HotPaper("Scaling Laws for Neural Language Models", "Nature Machine Intelligence", "↑ 892%", "AI", AccentIndigo),
-            HotPaper("Room-Temperature Superconductivity in Pressurized H₃S", "Physical Review Letters", "↑ 440%", "Physics", AccentTeal),
-            HotPaper("CRISPR-Cas9 Off-Target Effects in Primary Human Cells", "Cell", "↑ 320%", "Biology", AccentEmerald),
-            HotPaper("Attention Is All You Need — 2025 Retrospective", "ICML", "↑ 281%", "CS", AccentViolet),
-            HotPaper("Gravitational Wave Detection via Pulsar Timing Arrays", "Science", "↑ 195%", "Astrophysics", AccentAmber),
-        )
-    }
+fun HotPapersRow(
+    onPaperClick: (String) -> Unit,
+    viewModel: HomeViewModel = viewModel()
+) {
+    val state by viewModel.trendingState.collectAsState()
 
     Column {
         Row(
@@ -320,17 +314,61 @@ fun HotPapersRow(onPaperClick: (String) -> Unit) {
                     fontSize = 14.sp
                 )
             }
-            Text("See all →", color = AccentTeal, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                "See all →",
+                color = AccentTeal,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
         }
 
         Spacer(Modifier.height(8.dp))
 
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            itemsIndexed(papers) { index, paper ->
-                var visible by remember { mutableStateOf(false) }
-                LaunchedEffect(Unit) { delay(index * 80L); visible = true }
-                AnimatedVisibility(visible, enter = fadeIn(tween(350)) + slideInHorizontally(tween(350)) { 40 }) {
-                    HotPaperCard(paper = paper, onClick = { onPaperClick("hot_$index") })
+        when (val s = state) {
+            is TrendingUiState.Loading -> {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    items(4) { i ->
+                        HotPaperShimmerCard()
+                    }
+                }
+            }
+            is TrendingUiState.Error -> {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = AccentRose.copy(alpha = 0.08f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        "Could not load trending papers. Tap to retry.",
+                        color = TextMuted,
+                        fontSize = 12.sp,
+                        modifier = Modifier
+                            .padding(12.dp)
+                            .fillMaxWidth()
+                            .clickable { viewModel.loadTrending() }
+                    )
+                }
+            }
+            is TrendingUiState.Success -> {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    itemsIndexed(s.papers) { index, paper ->
+                        var visible by remember { mutableStateOf(false) }
+                        LaunchedEffect(paper.id) { delay(index * 60L); visible = true }
+                        AnimatedVisibility(
+                            visible = visible,
+                            enter = fadeIn(tween(350)) + slideInHorizontally(tween(350)) { 40 }
+                        ) {
+                            val color = trendingPaletteColors[index % trendingPaletteColors.size]
+                            HotPaperCard(
+                                title = paper.title,
+                                journal = paper.journal,
+                                citedByCount = paper.citedByCount,
+                                year = paper.year,
+                                accentColor = color,
+                                onClick = { onPaperClick(paper.id) }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -338,7 +376,43 @@ fun HotPapersRow(onPaperClick: (String) -> Unit) {
 }
 
 @Composable
-fun HotPaperCard(paper: HotPaper, onClick: () -> Unit) {
+fun HotPaperShimmerCard() {
+    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+    val shimmerAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f, targetValue = 0.8f,
+        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse),
+        label = "shimmerAlpha"
+    )
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = BgCard,
+        shadowElevation = 2.dp,
+        modifier = Modifier.width(200.dp).height(130.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            AccentTeal.copy(alpha = shimmerAlpha * 0.12f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+    }
+}
+
+@Composable
+fun HotPaperCard(
+    title: String,
+    journal: String,
+    citedByCount: Int,
+    year: Int,
+    accentColor: Color,
+    onClick: () -> Unit
+) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(16.dp),
@@ -347,15 +421,13 @@ fun HotPaperCard(paper: HotPaper, onClick: () -> Unit) {
         modifier = Modifier.width(200.dp)
     ) {
         Column {
-            // Field color bar
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(3.dp)
-                    .background(paper.color)
+                    .background(accentColor)
             )
             Column(modifier = Modifier.padding(12.dp)) {
-                // Field badge + velocity
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -363,18 +435,19 @@ fun HotPaperCard(paper: HotPaper, onClick: () -> Unit) {
                 ) {
                     Surface(
                         shape = RoundedCornerShape(6.dp),
-                        color = paper.color.copy(alpha = 0.1f)
+                        color = accentColor.copy(alpha = 0.1f)
                     ) {
                         Text(
-                            text = paper.field,
+                            text = year.toString(),
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            color = paper.color,
+                            color = accentColor,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
+                    // Citation count badge
                     Text(
-                        text = paper.velocity,
+                        text = if (citedByCount >= 1000) "${citedByCount / 1000}K cit." else "$citedByCount cit.",
                         color = AccentEmerald,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold
@@ -382,7 +455,7 @@ fun HotPaperCard(paper: HotPaper, onClick: () -> Unit) {
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = paper.title,
+                    text = title,
                     color = TextPrimary,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 12.sp,
@@ -392,7 +465,7 @@ fun HotPaperCard(paper: HotPaper, onClick: () -> Unit) {
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = paper.journal,
+                    text = journal,
                     color = TextMuted,
                     fontSize = 10.sp,
                     maxLines = 1,
