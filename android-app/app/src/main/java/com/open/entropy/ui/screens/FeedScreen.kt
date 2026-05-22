@@ -1,4 +1,4 @@
-﻿package com.open.entropy.ui.screens
+package com.open.entropy.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -51,7 +51,7 @@ fun FeedScreen(onPaperClick: (String) -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Transparent),
-        contentPadding = PaddingValues(bottom = ScreenInsets.bottomNavClearance)
+        contentPadding = PaddingValues(bottom = 24.dp)
     ) {
         item {
             DiscoveryHero()

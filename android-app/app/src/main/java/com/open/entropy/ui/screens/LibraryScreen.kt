@@ -127,7 +127,7 @@ fun SavedPapersTab(onPaperClick: (String) -> Unit) {
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(top = 16.dp, bottom = ScreenInsets.bottomNavClearance)
+            contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
         ) {
             items(papers) { (title, cat) ->
                 Surface(
@@ -212,7 +212,7 @@ fun GrantFeedTab() {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(top = 16.dp, bottom = ScreenInsets.bottomNavClearance)
+        contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
     ) {
         item {
             Surface(
@@ -345,7 +345,7 @@ fun NexusBridgesTab() {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(top = 12.dp, bottom = ScreenInsets.bottomNavClearance)
+        contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp)
     ) {
         items(bridges) { bridge ->
             ScientificCard(glowColor = AccentViolet.copy(alpha = 0.05f)) {

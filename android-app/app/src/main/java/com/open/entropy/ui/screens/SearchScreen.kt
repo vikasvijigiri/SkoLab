@@ -1,4 +1,4 @@
-﻿package com.open.entropy.ui.screens
+package com.open.entropy.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -87,7 +87,7 @@ fun SearchScreen(
                         contentPadding = PaddingValues(
                             start = ScreenInsets.horizontal,
                             end = ScreenInsets.horizontal,
-                            bottom = ScreenInsets.bottomNavClearance
+                            bottom = 24.dp
                         ),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
