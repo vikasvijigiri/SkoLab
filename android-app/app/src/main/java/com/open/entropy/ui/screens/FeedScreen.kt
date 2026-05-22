@@ -241,11 +241,10 @@ fun AiBriefCard(item: FeedItem, onClick: (String) -> Unit) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text(
-                text = item.title,
-                style = Typography.titleLarge,
+            MarkdownText(
+                markdown = item.title,
                 color = ResQitTextPrimary,
-                lineHeight = 22.sp,
+                fontSize = 16.sp,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -258,12 +257,11 @@ fun AiBriefCard(item: FeedItem, onClick: (String) -> Unit) {
                 ScoreArcMeter(score = item.dIndex, label = "D-INDEX", size = 52.dp, color = ResQitDisruption)
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = item.insight,
-                        style = Typography.bodyMedium,
+                    MarkdownText(
+                        markdown = item.insight,
                         color = ResQitTextPrimary,
-                        fontWeight = FontWeight.Medium,
-                        lineHeight = 18.sp
+                        fontSize = 14.sp,
+                        modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(

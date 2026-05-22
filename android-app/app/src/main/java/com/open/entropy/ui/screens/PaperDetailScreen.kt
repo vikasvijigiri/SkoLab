@@ -1,4 +1,4 @@
-﻿package com.open.entropy.ui.screens
+package com.open.entropy.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.*
@@ -135,11 +135,11 @@ fun PaperHero(paper: com.open.entropy.model.Paper, onAuthorClick: (String) -> Un
     Column {
         ScientificBadge(text = paper.journal, color = ResQitDisruption)
         Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = paper.title,
-            style = Typography.displayMedium,
+        MarkdownText(
+            markdown = paper.title,
             color = ResQitTextPrimary,
-            lineHeight = 28.sp
+            fontSize = 26.sp,
+            modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(20.dp))
         FlowRow(
@@ -223,12 +223,12 @@ fun AiIntelligenceBrief(paper: com.open.entropy.model.Paper) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text(
-            text = paper.keyInsight.ifBlank { "Analyzing research signals…" },
-            style = Typography.bodyLarge,
+        val rawInsight = paper.keyInsight.ifBlank { "Analyzing research signals…" }
+        MarkdownText(
+            markdown = "*$rawInsight*",
             color = ResQitTextPrimary,
-            fontStyle = FontStyle.Italic,
-            lineHeight = 24.sp
+            fontSize = 16.sp,
+            modifier = Modifier.fillMaxWidth()
         )
 
         AnimatedVisibility(visible = expanded) {
@@ -262,11 +262,9 @@ fun TechnicalFormulaBlock(formula: String) {
                 .border(0.5.dp, GlassBorder, RoundedCornerShape(12.dp))
                 .padding(20.dp)
         ) {
-            Text(
-                text = formula,
-                style = Typography.labelMedium,
+            MarkdownText(
+                markdown = formula,
                 color = ResQitDisruption,
-                fontFamily = MonoFontFamily,
                 fontSize = 13.sp
             )
         }

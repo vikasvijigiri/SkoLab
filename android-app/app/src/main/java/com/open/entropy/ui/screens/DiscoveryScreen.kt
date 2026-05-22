@@ -1384,13 +1384,10 @@ fun LightPublicationCard(
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             // Title
-            Text(
-                text = formatScientificTitle(work.title ?: "Untitled"),
+            MarkdownText(
+                markdown = formatScientificTitle(work.title ?: "Untitled"),
                 color = TextPrimary,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 13.sp,
-                lineHeight = 18.sp,
-                fontFamily = BodyFontFamily
+                fontSize = 13.sp
             )
 
             // Journal
@@ -1453,8 +1450,12 @@ fun LightPublicationCard(
                                             .clip(CircleShape)
                                             .background(AccentTeal)
                                     )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(bullet, color = TextSecondary, fontSize = 12.sp, lineHeight = 17.sp)
+                                    MarkdownText(
+                                        markdown = bullet,
+                                        color = TextSecondary,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.weight(1f)
+                                    )
                                 }
                             }
                             Spacer(Modifier.height(10.dp))
@@ -1515,7 +1516,12 @@ fun PredictionCard(prediction: String) {
             Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
                 Icon(Icons.Default.AutoAwesome, null, tint = AccentIndigo, modifier = Modifier.size(18.dp).padding(top = 2.dp))
                 Spacer(Modifier.width(10.dp))
-                Text(prediction, color = TextPrimary, fontSize = 13.sp, lineHeight = 19.sp)
+                MarkdownText(
+                    markdown = prediction,
+                    color = TextPrimary,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
     }
@@ -2149,57 +2155,6 @@ fun FeaturedResearchCard(title: String, authors: String, color: Color, onClick: 
     }
 }
 
-// ─────────────────────────────────────────────────────────────────
-// UTILITY COMPOSABLES (keep backward compat)
-// ─────────────────────────────────────────────────────────────────
-
-@Composable
-fun MarkdownText(
-    markdown: String,
-    modifier: Modifier = Modifier,
-    color: Color = TextPrimary,
-    fontSize: TextUnit = 13.sp
-) {
-    val context = LocalContext.current
-    val density = LocalDensity.current
-    val fontSizePx = with(density) { fontSize.toPx() }
-
-    val markwon = remember(context, fontSizePx, color) {
-        val colorInt = color.toArgb()
-        val accentInt = AccentTeal.toArgb()
-        Markwon.builder(context)
-            .usePlugin(CorePlugin.create())
-            .usePlugin(MarkwonInlineParserPlugin.create())
-            .usePlugin(JLatexMathPlugin.create(fontSizePx) { builder ->
-                builder.inlinesEnabled(true)
-                builder.theme().textColor(colorInt)
-            })
-            .usePlugin(object : AbstractMarkwonPlugin() {
-                override fun configureSpansFactory(builder: MarkwonSpansFactory.Builder) {
-                    builder.setFactory(StrongEmphasis::class.java) { _, _ ->
-                        arrayOf<CharacterStyle>(
-                            StyleSpan(Typeface.BOLD),
-                            ForegroundColorSpan(accentInt)
-                        )
-                    }
-                }
-            })
-            .build()
-    }
-
-    AndroidView(
-        factory = { ctx -> TextView(ctx).apply { setLayerType(View.LAYER_TYPE_SOFTWARE, null) } },
-        update = { textView ->
-            textView.setTextColor(color.toArgb())
-            textView.setTextSize(TypedValue.COMPLEX_UNIT_PX, fontSizePx)
-            val processed = markdown
-                .replace(Regex("(?<!\\\\)mathrm\\{"), "\\\\mathrm{")
-                .replace(Regex("(?<!\\\\)text\\{"), "\\\\text{")
-            markwon.setMarkdown(textView, processed)
-        },
-        modifier = modifier
-    )
-}
 
 fun formatScientificTitle(title: String): String = title
     .replace(Regex("<mml:math.*?>"), "")

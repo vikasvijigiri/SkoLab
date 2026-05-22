@@ -1,4 +1,4 @@
-﻿package com.open.entropy.ui.components
+package com.open.entropy.ui.components
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -22,6 +22,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.view.HapticFeedbackConstants
 import com.open.entropy.ui.theme.*
+import android.widget.TextView
+import androidx.compose.ui.viewinterop.AndroidView
+import android.util.TypedValue
+import android.view.View
+import io.noties.markwon.Markwon
+import io.noties.markwon.core.CorePlugin
+import io.noties.markwon.ext.latex.JLatexMathPlugin
+import io.noties.markwon.inlineparser.MarkwonInlineParserPlugin
+import androidx.compose.ui.graphics.toArgb
+import io.noties.markwon.AbstractMarkwonPlugin
+import io.noties.markwon.MarkwonSpansFactory
+import org.commonmark.node.StrongEmphasis
+import android.text.style.ForegroundColorSpan
+import android.text.style.CharacterStyle
+import android.text.style.StyleSpan
+import android.graphics.Typeface
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.TextUnit
 
 @Composable
 fun ScientificCard(
@@ -173,11 +192,59 @@ fun AIInsightBullet(
                 .size(4.dp)
                 .background(ResQitAiInsight, RoundedCornerShape(50))
         )
-        Text(
-            text = text,
-            style = Typography.bodyMedium,
+        MarkdownText(
+            markdown = text,
             color = ResQitTextPrimary,
-            lineHeight = 16.sp
+            fontSize = 14.sp,
+            modifier = Modifier.weight(1f)
         )
     }
+}
+
+@Composable
+fun MarkdownText(
+    markdown: String,
+    modifier: Modifier = Modifier,
+    color: Color = ResQitTextPrimary,
+    fontSize: TextUnit = 13.sp
+) {
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val fontSizePx = with(density) { fontSize.toPx() }
+
+    val markwon = remember(context, fontSizePx, color) {
+        val colorInt = color.toArgb()
+        val accentInt = AccentTeal.toArgb()
+        Markwon.builder(context)
+            .usePlugin(CorePlugin.create())
+            .usePlugin(MarkwonInlineParserPlugin.create())
+            .usePlugin(JLatexMathPlugin.create(fontSizePx) { builder ->
+                builder.inlinesEnabled(true)
+                builder.theme().textColor(colorInt)
+            })
+            .usePlugin(object : AbstractMarkwonPlugin() {
+                override fun configureSpansFactory(builder: MarkwonSpansFactory.Builder) {
+                    builder.setFactory(StrongEmphasis::class.java) { _, _ ->
+                        arrayOf<CharacterStyle>(
+                            StyleSpan(Typeface.BOLD),
+                            ForegroundColorSpan(accentInt)
+                        )
+                    }
+                }
+            })
+            .build()
+    }
+
+    AndroidView(
+        factory = { ctx -> TextView(ctx).apply { setLayerType(View.LAYER_TYPE_SOFTWARE, null) } },
+        update = { textView ->
+            textView.setTextColor(color.toArgb())
+            textView.setTextSize(TypedValue.COMPLEX_UNIT_PX, fontSizePx)
+            val processed = markdown
+                .replace(Regex("(?<!\\\\)mathrm\\{"), "\\\\mathrm{")
+                .replace(Regex("(?<!\\\\)text\\{"), "\\\\text{")
+            markwon.setMarkdown(textView, processed)
+        },
+        modifier = modifier
+    )
 }
