@@ -1,4 +1,4 @@
-﻿package com.open.entropy.ui.components
+package com.open.entropy.ui.components
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -44,12 +44,11 @@ fun PaperCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            Text(
-                text = paper.title,
-                style = if (compact) Typography.titleMedium else Typography.titleLarge,
+            MarkdownText(
+                markdown = paper.title,
                 color = ResQitTextPrimary,
-                lineHeight = if (compact) 20.sp else 24.sp,
-                maxLines = if (compact) 2 else 3
+                fontSize = if (compact) 15.sp else 16.sp,
+                modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(modifier = Modifier.height(8.dp))
