@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.open.entropy.ui.components.CollaboratorSynergyBottomSheet
 import com.open.entropy.ui.components.ScientificCard
 import com.open.entropy.ui.components.primitives.SectionHeader
 import com.open.entropy.ui.layout.ScreenInsets
@@ -39,6 +40,8 @@ import kotlin.math.sin
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NexusScreen() {
+    var activeSynergyCollab by remember { mutableStateOf<Pair<String, String>?>(null) }
+
     Box(modifier = Modifier.fillMaxSize().background(BgPrimary)) {
         // Keep the beautiful galaxy canvas as background (subtle)
         KnowledgeGalaxyMap()
@@ -89,10 +92,24 @@ fun NexusScreen() {
             item { PeerBenchmarkCard() }
 
             // ── Collaboration Radar ──────────────────────────────
-            item { CollaborationRadarCard() }
+            item {
+                CollaborationRadarCard(
+                    onRowClick = { id, name ->
+                        activeSynergyCollab = Pair(id, name)
+                    }
+                )
+            }
 
             // ── Knowledge Bridge (original feature, now smaller) ─
             item { KnowledgeBridgeCard() }
+        }
+
+        activeSynergyCollab?.let { (collabId, collabName) ->
+            CollaboratorSynergyBottomSheet(
+                collaboratorId = collabId,
+                collaboratorName = collabName,
+                onDismissRequest = { activeSynergyCollab = null }
+            )
         }
     }
 }
@@ -246,6 +263,7 @@ fun LegendDot(label: String, color: Color) {
 // ─────────────────────────────────────────────────────────────────
 
 data class CollabSuggestion(
+    val id: String,
     val name: String,
     val institution: String,
     val overlap: Int,      // %
@@ -254,7 +272,10 @@ data class CollabSuggestion(
 )
 
 @Composable
-fun CollaborationRadarCard(viewModel: NexusViewModel = viewModel()) {
+fun CollaborationRadarCard(
+    viewModel: NexusViewModel = viewModel(),
+    onRowClick: (String, String) -> Unit
+) {
     val uiState by viewModel.uiState.collectAsState()
 
     val collabColors = listOf(AccentTeal, AccentIndigo, AccentEmerald, AccentAmber, AccentViolet)
@@ -314,13 +335,15 @@ fun CollaborationRadarCard(viewModel: NexusViewModel = viewModel()) {
                         val color = collabColors[index % collabColors.size]
                         CollabRow(
                             collab = CollabSuggestion(
+                                id = collab.id,
                                 name = collab.name,
                                 institution = collab.institution,
                                 overlap = collab.overlapPct,
                                 field = collab.field,
                                 color = color
                             ),
-                            index = index
+                            index = index,
+                            onRowClick = onRowClick
                         )
                         if (index < state.suggestions.lastIndex) {
                             HorizontalDivider(
@@ -382,7 +405,11 @@ fun CollabRowShimmer() {
 }
 
 @Composable
-fun CollabRow(collab: CollabSuggestion, index: Int) {
+fun CollabRow(
+    collab: CollabSuggestion,
+    index: Int,
+    onRowClick: (String, String) -> Unit
+) {
     var animDone by remember { mutableStateOf(false) }
     val animOverlap by animateIntAsState(
         targetValue = if (animDone) collab.overlap else 0,
@@ -392,7 +419,10 @@ fun CollabRow(collab: CollabSuggestion, index: Int) {
     LaunchedEffect(Unit) { kotlinx.coroutines.delay(400L + index * 120); animDone = true }
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onRowClick(collab.id, collab.name) }
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {

@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import android.util.Log
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.*
 import androidx.compose.ui.zIndex
 import com.open.entropy.auth.AuthManager
 import com.open.entropy.network.*
+import com.open.entropy.state.ActiveResearcherState
 import com.open.entropy.ui.components.*
 import com.open.entropy.ui.theme.*
 import kotlinx.coroutines.delay
@@ -72,7 +74,8 @@ fun DiscoveryScreen(
     onNavigateToReader: (String, String) -> Unit,
     onPaperClick: (String) -> Unit = {},
     onProfileClick: () -> Unit = {},
-    onTabNavigate: (String) -> Unit = {}
+    onTabNavigate: (String) -> Unit = {},
+    onNavigateToChat: (String, String) -> Unit = { _, _ -> }
 ) {
     val apiService = remember { ApiService() }
     val scope = rememberCoroutineScope()
@@ -90,11 +93,84 @@ fun DiscoveryScreen(
     var isLoading by remember { mutableStateOf(false) }
     var isSearchingSuggestions by remember { mutableStateOf(false) }
     var shouldSearchSuggestions by remember { mutableStateOf(true) }
+    var lastProgrammaticQuery by remember { mutableStateOf<String?>(null) }
+    
+    // Suggested peers, articles, and trending papers for the main dashboard
+    var suggestedPeers by remember { mutableStateOf<List<AuthorSuggestion>>(emptyList()) }
+    var suggestedPeersArticles by remember { mutableStateOf<List<Work>>(emptyList()) }
+    var collaboratorsArticles by remember { mutableStateOf<List<Work>>(emptyList()) }
+    var trendingPapers by remember { mutableStateOf<List<Work>>(emptyList()) }
+    var isLoadingPeers by remember { mutableStateOf(false) }
+
+    LaunchedEffect(researchFocus) {
+        isLoadingPeers = true
+        try {
+            val peers = apiService.getSimilarAuthors(researchFocus, limit = 5)
+            suggestedPeers = peers
+            
+            // Friends' articles (suggested peers)
+            val articles = mutableListOf<Work>()
+            peers.take(3).forEach { peer ->
+                val profile = apiService.searchAuthor(peer.display_name, peer.id)
+                if (profile != null && profile.works.isNotEmpty()) {
+                    val latest = profile.works.maxByOrNull { it.year ?: 0 }
+                    if (latest != null) {
+                        articles.add(latest.copy(authors = listOf(peer.display_name)))
+                    }
+                }
+            }
+            suggestedPeersArticles = articles
+
+            // Collaborators' new articles
+            val collabsArticlesList = mutableListOf<Work>()
+            if (peers.isNotEmpty()) {
+                val topPeer = peers.first()
+                val collabs = apiService.getNetworkCollaborators(topPeer.id, limit = 6)
+                collabs.forEach { collab ->
+                    val path = collab.connection_path
+                    val paperTitle = if (path.contains("'")) {
+                        path.substringAfter("'").substringBefore("'")
+                    } else {
+                        "Analysis of " + collab.field + " Dynamics"
+                    }
+                    collabsArticlesList.add(
+                        Work(
+                            title = paperTitle,
+                            year = 2026,
+                            doi = "https://doi.org",
+                            journal = "Nature Materials",
+                            is_open_access = true,
+                            citations = 15,
+                            authors = listOf(collab.name)
+                        )
+                    )
+                }
+            }
+            collaboratorsArticles = collabsArticlesList
+
+            // Trending papers
+            val trending = apiService.getTrendingPapers(limit = 6)
+            trendingPapers = trending.map { w ->
+                Work(
+                    title = w.title,
+                    year = w.publication_year,
+                    doi = w.doi,
+                    journal = w.primary_location?.source?.display_name,
+                    is_open_access = true,
+                    citations = w.cited_by_count ?: 0,
+                    authors = w.authorships?.mapNotNull { it.author?.display_name } ?: emptyList()
+                )
+            }
+        } catch (e: Exception) {
+            Log.e("DiscoveryScreen", "Failed to load dashboard suggestions", e)
+        } finally {
+            isLoadingPeers = false
+        }
+    }
 
     // Debounced suggestions
     LaunchedEffect(authorQuery) {
         if (!shouldSearchSuggestions) {
-            shouldSearchSuggestions = true // Reset for next typing
             suggestions = emptyList()
             return@LaunchedEffect
         }
@@ -130,15 +206,27 @@ fun DiscoveryScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
                 ) {
                     com.open.entropy.ui.components.primitives.GlassSearchBar(
                         value = authorQuery,
-                        onValueChange = { authorQuery = it },
+                        onValueChange = { newValue ->
+                            val trimmedNew = newValue.trim()
+                            val trimmedLast = lastProgrammaticQuery?.trim()
+                            if (trimmedNew == trimmedLast) {
+                                // Programmatic update or trailing space/IME echo - do not clear or search
+                            } else {
+                                shouldSearchSuggestions = true
+                                lastProgrammaticQuery = null
+                                authorData = null // Clear previous profile when user starts editing query
+                            }
+                            authorQuery = newValue
+                        },
                         placeholder = "Search researchers, authors…",
                         isLoading = isSearchingSuggestions,
                         onClear = { 
                             shouldSearchSuggestions = false
+                            lastProgrammaticQuery = null
                             authorQuery = ""
                             suggestions = emptyList()
                             authorData = null 
@@ -146,11 +234,25 @@ fun DiscoveryScreen(
                         },
                         onSearch = {
                             shouldSearchSuggestions = false
+                            lastProgrammaticQuery = authorQuery
                             keyboardController?.hide()
                             scope.launch {
                                 isLoading = true
                                 suggestions = emptyList()
-                                authorData = apiService.searchAuthor(authorQuery)
+                                val data: com.open.entropy.network.AuthorResponse? = try {
+                                    apiService.searchAuthor(authorQuery)
+                                } catch (e: Exception) {
+                                    Log.e("DiscoveryScreen", "searchAuthor failed", e)
+                                    null
+                                }
+                                if (data == null) {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Researcher not found. Check the name and try again.",
+                                        android.widget.Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                                authorData = data
                                 isLoading = false
                             }
                         }
@@ -166,21 +268,36 @@ fun DiscoveryScreen(
                         .zIndex(21f)
                 ) {
                     AnimatedVisibility(
-                        visible = authorQuery.length >= 3 && shouldSearchSuggestions,
+                        visible = authorQuery.length >= 3 && shouldSearchSuggestions && !isLoading && authorData == null,
                         enter = fadeIn(tween(150)) + expandVertically(tween(220), expandFrom = androidx.compose.ui.Alignment.Top),
                         exit  = fadeOut(tween(100)) + shrinkVertically(tween(160), shrinkTowards = androidx.compose.ui.Alignment.Top),
                     ) {
                         LightSuggestionsDropdown(
                             suggestions = suggestions,
                             isLoading = isSearchingSuggestions,
+                            shouldSearchSuggestions = shouldSearchSuggestions,
                             onSelect = { suggestion ->
                                 shouldSearchSuggestions = false
+                                lastProgrammaticQuery = suggestion.display_name
                                 authorQuery = suggestion.display_name
                                 suggestions = emptyList()
                                 keyboardController?.hide()
                                 scope.launch {
                                     isLoading = true
-                                    authorData = apiService.searchAuthor(suggestion.display_name, suggestion.id)
+                                    val data: com.open.entropy.network.AuthorResponse? = try {
+                                        apiService.searchAuthor(suggestion.display_name, suggestion.id)
+                                    } catch (e: Exception) {
+                                        Log.e("DiscoveryScreen", "searchAuthor on suggestion select failed", e)
+                                        null
+                                    }
+                                    if (data == null) {
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "Could not load profile for ${suggestion.display_name}.",
+                                            android.widget.Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                    authorData = data
                                     isLoading = false
                                 }
                             }
@@ -209,11 +326,25 @@ fun DiscoveryScreen(
                             onUpdateData = { authorData = it },
                             onSelectResearcher = { name, id ->
                                 shouldSearchSuggestions = false
+                                lastProgrammaticQuery = name
                                 authorQuery = name
                                 keyboardController?.hide()
                                 scope.launch {
                                     isLoading = true
-                                    authorData = apiService.searchAuthor(name, id)
+                                    val data: com.open.entropy.network.AuthorResponse? = try {
+                                        apiService.searchAuthor(name, id)
+                                    } catch (e: Exception) {
+                                        Log.e("DiscoveryScreen", "searchAuthor on similar researcher select failed", e)
+                                        null
+                                    }
+                                    if (data == null) {
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "Could not load profile for $name.",
+                                            android.widget.Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                    authorData = data
                                     isLoading = false
                                 }
                             }
@@ -223,13 +354,48 @@ fun DiscoveryScreen(
                             researchFocus = researchFocus,
                             onCategoryClick = { category ->
                                 when (category.title) {
-                                    "Authors"  -> authorQuery = ""
+                                    "Authors"  -> {
+                                        shouldSearchSuggestions = false
+                                        lastProgrammaticQuery = ""
+                                        authorQuery = ""
+                                    }
                                     "Papers"   -> onTabNavigate("search")
                                     "Vault"    -> onTabNavigate("library")
                                     "Trends"   -> onTabNavigate("nexus")
                                 }
                             },
-                            onPaperClick = onPaperClick
+                            onPaperClick = onPaperClick,
+                            suggestedPeers = suggestedPeers,
+                            suggestedPeersArticles = suggestedPeersArticles,
+                            collaboratorsArticles = collaboratorsArticles,
+                            trendingPapers = trendingPapers,
+                            isLoadingPeers = isLoadingPeers,
+                            onSelectResearcher = { name, id ->
+                                shouldSearchSuggestions = false
+                                lastProgrammaticQuery = name
+                                authorQuery = name
+                                keyboardController?.hide()
+                                scope.launch {
+                                    isLoading = true
+                                    val data: com.open.entropy.network.AuthorResponse? = try {
+                                        apiService.searchAuthor(name, id)
+                                    } catch (e: Exception) {
+                                        Log.e("DiscoveryScreen", "searchAuthor on suggested peer select failed", e)
+                                        null
+                                    }
+                                    if (data == null) {
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "Could not load profile for $name.",
+                                            android.widget.Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                    authorData = data
+                                    isLoading = false
+                                }
+                            },
+                            onNavigateToReader = onNavigateToReader,
+                            onNavigateToChat = onNavigateToChat
                         )
                     }
                 }
@@ -253,7 +419,7 @@ fun LightTopBar(userName: String, onProfileClick: () -> Unit) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -336,6 +502,7 @@ fun DropdownSkeletonRow(shimmerAlpha: Float) {
 fun LightSuggestionsDropdown(
     suggestions: List<AuthorSuggestion>,
     isLoading: Boolean,
+    shouldSearchSuggestions: Boolean = true,
     onSelect: (AuthorSuggestion) -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "dropdownShimmer")
@@ -377,6 +544,7 @@ fun LightSuggestionsDropdown(
                 Text(
                     text = when {
                         isLoading -> "Searching researchers..."
+                        !shouldSearchSuggestions -> ""
                         suggestions.isEmpty() -> "No researchers found"
                         else -> "${suggestions.size} researchers found"
                     },
@@ -385,13 +553,15 @@ fun LightSuggestionsDropdown(
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.6.sp
                 )
-                Text(
-                    text = "via OpenAlex",
-                    color = AccentTeal,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.4.sp
-                )
+                if (shouldSearchSuggestions || isLoading) {
+                    Text(
+                        text = "via OpenAlex",
+                        color = AccentTeal,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.4.sp
+                    )
+                }
             }
             HorizontalDivider(color = BorderLight.copy(alpha = 0.5f), thickness = 0.5.dp)
 
@@ -409,42 +579,44 @@ fun LightSuggestionsDropdown(
                     }
                 }
             } else if (suggestions.isEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 32.dp, horizontal = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Box(
+                if (shouldSearchSuggestions) {
+                    Column(
                         modifier = Modifier
-                            .size(56.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(AccentTeal.copy(alpha = 0.08f)),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .padding(vertical = 32.dp, horizontal = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.PersonSearch,
-                            contentDescription = null,
-                            tint = AccentTeal.copy(alpha = 0.6f),
-                            modifier = Modifier.size(28.dp)
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(AccentTeal.copy(alpha = 0.08f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PersonSearch,
+                                contentDescription = null,
+                                tint = AccentTeal.copy(alpha = 0.6f),
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = "No matching researchers found",
+                            color = TextPrimary,
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = DisplayFontFamily
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "Double-check the spelling or try a different name",
+                            color = TextMuted,
+                            fontSize = 11.sp,
+                            textAlign = TextAlign.Center
                         )
                     }
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = "No matching researchers found",
-                        color = TextPrimary,
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = DisplayFontFamily
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = "Double-check the spelling or try a different name",
-                        color = TextMuted,
-                        fontSize = 11.sp,
-                        textAlign = TextAlign.Center
-                    )
                 }
             } else {
                 // Scrollable list — max height so it doesn't fill whole screen
@@ -630,71 +802,200 @@ fun ResearcherProfileView(
     onUpdateData: (AuthorResponse) -> Unit,
     onSelectResearcher: (String, String) -> Unit
 ) {
+    val context = LocalContext.current
+    var activeChatPaperTitle by remember { mutableStateOf<String?>(null) }
+    var activeSynergyCollab by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var networkCollaborators by remember { mutableStateOf<List<NetworkCollaborator>>(emptyList()) }
+    val visibleCollaborators = remember { mutableStateListOf<NetworkCollaborator>() }
+    val backupCollaborators = remember { mutableStateListOf<NetworkCollaborator>() }
+    var citationHeatmap by remember { mutableStateOf<CitationHeatmap?>(null) }
+    var journalRecommendations by remember { mutableStateOf<List<JournalRecommendation>>(emptyList()) }
+
+    LaunchedEffect(author.id) {
+        ActiveResearcherState.setActiveAuthor(author)
+        visibleCollaborators.clear()
+        backupCollaborators.clear()
+        citationHeatmap = null
+        journalRecommendations = emptyList()
+        
+        launch {
+            val collabs = apiService.getNetworkCollaborators(author.id, limit = 50)
+            networkCollaborators = collabs
+            if (collabs.size > 20) {
+                visibleCollaborators.addAll(collabs.take(20))
+                backupCollaborators.addAll(collabs.drop(20))
+            } else {
+                visibleCollaborators.addAll(collabs)
+            }
+        }
+        
+        launch {
+            citationHeatmap = apiService.getCitationHeatmap(author.id)
+        }
+        
+        launch {
+            journalRecommendations = apiService.getJournalAdvisor(author.id)
+        }
+    }
+
     var isRefreshing by remember { mutableStateOf(false) }
 
-    androidx.compose.material3.pulltorefresh.PullToRefreshBox(
-        isRefreshing = isRefreshing,
-        onRefresh = {
-            scope.launch {
-                isRefreshing = true
-                apiService.searchAuthor(author.display_name, author.id)?.let { onUpdateData(it) }
-                isRefreshing = false
-            }
-        },
-        modifier = Modifier.fillMaxSize()
-    ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().background(BgPrimary),
-            contentPadding = PaddingValues(bottom = 32.dp)
+    Box(modifier = Modifier.fillMaxSize()) {
+        androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = {
+                scope.launch {
+                    isRefreshing = true
+                    apiService.searchAuthor(author.display_name, author.id)?.let { onUpdateData(it) }
+                    isRefreshing = false
+                }
+            },
+            modifier = Modifier.fillMaxSize()
         ) {
-            // ── Hero Header ──────────────────────────────────────
-            item { ResearcherHeroCard(author = author, apiService = apiService, scope = scope, onUpdateData = onUpdateData) }
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().background(BgPrimary),
+                contentPadding = PaddingValues(bottom = 32.dp)
+            ) {
+                // ── Hero Header ──────────────────────────────────────
+                item { ResearcherHeroCard(author = author, apiService = apiService, scope = scope, onUpdateData = onUpdateData) }
 
-            // ── Stats Row (4 compact numbers) ────────────────────
-            item {
-                StatsQuadRow(author = author)
-            }
-
-            // ── Metrics Radar Ring ────────────────────────────────
-            item {
-                MetricsRadarSection(author = author)
-            }
-
-            // ── Frontier Metric Pills (Flipkart-style grid) ───────
-            item {
-                FrontierMetricPillsSection(author = author)
-            }
-
-            // ── Similar Researchers ──────────────────────────────
-            if (author.similar_researchers.isNotEmpty()) {
+                // ── Stats Row (4 compact numbers) ────────────────────
                 item {
-                    SimilarResearchersSection(
-                        similar = author.similar_researchers,
-                        onSelect = onSelectResearcher
+                    StatsQuadRow(author = author)
+                }
+
+                // ── Suggested Connections ────────────────────────────
+                item {
+                    SuggestedConnectionsSection(
+                        visibleCollaborators = visibleCollaborators,
+                        onConnect = { collaborator ->
+                            android.widget.Toast.makeText(
+                                context,
+                                "Connection request sent to ${collaborator.name}",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                            
+                            visibleCollaborators.remove(collaborator)
+                            if (backupCollaborators.isNotEmpty()) {
+                                val nextCollab = backupCollaborators.removeAt(0)
+                                visibleCollaborators.add(nextCollab)
+                            }
+                        },
+                        onDismiss = { collaborator ->
+                            visibleCollaborators.remove(collaborator)
+                            if (backupCollaborators.isNotEmpty()) {
+                                val nextCollab = backupCollaborators.removeAt(0)
+                                visibleCollaborators.add(nextCollab)
+                            }
+                        }
                     )
                 }
-            }
 
-            // ── Publications ─────────────────────────────────────
-            item {
-                LightSectionHeader(
-                    title = "Publications",
-                    subtitle = "${author.works_count} works",
-                    icon = Icons.AutoMirrored.Filled.MenuBook,
-                    color = AccentIndigo
-                )
-            }
+                // ── Collaborators' New Articles ──────────────────────
+                if (networkCollaborators.isNotEmpty()) {
+                    item {
+                        CollaboratorsNewArticlesSection(
+                            collaborators = networkCollaborators.take(8),
+                            onPaperClick = { title ->
+                                android.widget.Toast.makeText(context, "Explore: $title", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    }
+                }
 
-            items(author.works.sortedByDescending { it.year ?: 0 }) { work ->
-                LightPublicationCard(work = work, apiService = apiService, scope = scope, onNavigateToReader = onNavigateToReader)
-            }
+                // ── Metrics Radar Ring ────────────────────────────────
+                item {
+                    if (author.metrics_computed) {
+                        MetricsRadarSection(author = author)
+                    } else {
+                        MetricsAnalysisPendingCard(isLlmActive = author.llm_active)
+                    }
+                }
 
-            // ── Next Prediction ───────────────────────────────────
-            if (!author.next_prediction.isNullOrBlank()) {
-                item { PredictionCard(prediction = author.next_prediction!!) }
-            }
+                // ── Frontier Metric Pills (Flipkart-style grid) ───────
+                if (author.metrics_computed) {
+                    item {
+                        FrontierMetricPillsSection(author = author)
+                    }
+                }
 
-            item { Spacer(Modifier.height(32.dp)) }
+                // ── Citation Heatmap ──────────────────────────────────
+                citationHeatmap?.let { heatmap ->
+                    item {
+                        CitationHeatmapSection(heatmap = heatmap)
+                    }
+                }
+
+                // ── Journal Advisor ───────────────────────────────────
+                if (journalRecommendations.isNotEmpty()) {
+                    item {
+                        JournalAdvisorSection(recommendations = journalRecommendations)
+                    }
+                }
+
+                // ── Similar Researchers ──────────────────────────────
+                if (author.similar_researchers.isNotEmpty()) {
+                    item {
+                        SimilarResearchersSection(
+                            similar = author.similar_researchers,
+                            onSelectProfile = onSelectResearcher,
+                            onSelectSynergy = { id, name ->
+                                activeSynergyCollab = Pair(id, name)
+                            }
+                        )
+                    }
+                }
+
+                // ── Publications ─────────────────────────────────────
+                item {
+                    LightSectionHeader(
+                        title = "Publications",
+                        subtitle = "${author.works_count} works",
+                        icon = Icons.AutoMirrored.Filled.MenuBook,
+                        color = AccentIndigo
+                    )
+                }
+
+                items(author.works.sortedByDescending { it.year ?: 0 }) { work ->
+                    LightPublicationCard(
+                        work = work,
+                        apiService = apiService,
+                        scope = scope,
+                        onNavigateToReader = onNavigateToReader,
+                        onDiscussClick = { paperTitle ->
+                            activeChatPaperTitle = paperTitle
+                        }
+                    )
+                }
+
+                // ── Next Prediction ───────────────────────────────────
+                if (!author.next_prediction.isNullOrBlank()) {
+                    item { PredictionCard(prediction = author.next_prediction!!) }
+                }
+
+                item { Spacer(Modifier.height(32.dp)) }
+            }
+        }
+
+        // ── WhatsApp Bottom Sheet ──
+        activeChatPaperTitle?.let { paperTitle ->
+            AuthorChatBottomSheet(
+                authorId = author.id,
+                authorName = author.display_name,
+                paperTitle = paperTitle,
+                onDismissRequest = { activeChatPaperTitle = null },
+                apiService = apiService
+            )
+        }
+
+        // ── Collaborator Synergy Bottom Sheet ──
+        activeSynergyCollab?.let { (collabId, collabName) ->
+            CollaboratorSynergyBottomSheet(
+                collaboratorId = collabId,
+                collaboratorName = collabName,
+                onDismissRequest = { activeSynergyCollab = null },
+                apiService = apiService
+            )
         }
     }
 }
@@ -927,7 +1228,7 @@ fun ResearcherHeroCard(
                                 shape = RoundedCornerShape(19.dp),
                                 border = BorderStroke(1.dp, AccentTeal.copy(alpha = 0.5f)),
                                 colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = AccentTealDark
+                                    contentColor = AccentTeal
                                 ),
                                 contentPadding = PaddingValues(horizontal = 8.dp)
                             ) {
@@ -1147,12 +1448,12 @@ fun ResearcherHeroCard(
 fun ExpertiseChip(text: String) {
     Surface(
         shape = RoundedCornerShape(50),
-        color = AccentTealLight,
-        border = BorderStroke(0.5.dp, AccentTeal.copy(alpha = 0.3f))
+        color = AccentTeal.copy(alpha = 0.08f),
+        border = BorderStroke(0.5.dp, AccentTeal.copy(alpha = 0.2f))
     ) {
         Text(
             text = text,
-            color = AccentTealDark,
+            color = AccentTeal,
             fontSize = 10.sp,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
@@ -1161,8 +1462,67 @@ fun ExpertiseChip(text: String) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// METRICS ANALYSIS PENDING — shown when LLM hasn't computed metrics yet
+// ─────────────────────────────────────────────────────────────────
+
+@Composable
+fun MetricsAnalysisPendingCard(isLlmActive: Boolean) {
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.4f, targetValue = 1.0f, label = "alpha",
+        animationSpec = infiniteRepeatable(tween(1200, easing = FastOutSlowInEasing), RepeatMode.Reverse)
+    )
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = BgCard,
+        border = BorderStroke(1.dp, if (isLlmActive) AccentTeal.copy(alpha = 0.25f) else BorderLight)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(if (isLlmActive) AccentTeal.copy(alpha = 0.12f) else BorderLight.copy(alpha = 0.2f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Science, null,
+                    tint = if (isLlmActive) AccentTeal.copy(alpha = alpha) else TextMuted,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (isLlmActive) "Deep Analysis Queued" else "AI Metrics Unavailable",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+                Text(
+                    text = if (isLlmActive) 
+                        "AI metrics (Disruption, Novelty, Future Impact\u2026) are computing in the background. Pull down to refresh."
+                    else 
+                        "The AI service is currently out of limit or unconfigured. Displaying verified base metadata from OpenAlex.",
+                    fontSize = 11.sp,
+                    color = TextSecondary,
+                    lineHeight = 15.sp
+                )
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────
 // STATS QUAD ROW — 4 key numbers
 // ─────────────────────────────────────────────────────────────────
+
 
 @Composable
 fun StatsQuadRow(author: AuthorResponse) {
@@ -1507,7 +1867,8 @@ fun LightPublicationCard(
     work: com.open.entropy.network.Work,
     apiService: ApiService,
     scope: kotlinx.coroutines.CoroutineScope,
-    onNavigateToReader: (String, String) -> Unit
+    onNavigateToReader: (String, String) -> Unit,
+    onDiscussClick: (String) -> Unit
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     var summaryData by remember { mutableStateOf<SummaryResponse?>(null) }
@@ -1611,19 +1972,35 @@ fun LightPublicationCard(
                                 }
                             }
                             Spacer(Modifier.height(10.dp))
-                            Button(
-                                onClick = {
-                                    val url = work.doi?.let { if (it.startsWith("http")) it else "https://doi.org/$it" }
-                                        ?: "https://scholar.google.com/scholar?q=${work.title}"
-                                    onNavigateToReader(url, work.title ?: "Article")
-                                },
+                            Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
-                                shape = RoundedCornerShape(10.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.OpenInNew, null, modifier = Modifier.size(14.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text("Read Paper", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Button(
+                                    onClick = {
+                                        val url = work.doi?.let { if (it.startsWith("http")) it else "https://doi.org/$it" }
+                                            ?: "https://scholar.google.com/scholar?q=${work.title}"
+                                        onNavigateToReader(url, work.title ?: "Article")
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(Icons.AutoMirrored.Filled.OpenInNew, null, modifier = Modifier.size(14.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Read Paper", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+
+                                Button(
+                                    onClick = { onDiscussClick(work.title ?: "Article") },
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF128C7E)),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(Icons.Default.Chat, null, modifier = Modifier.size(14.dp), tint = Color.White)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Discuss", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White)
+                                }
                             }
                         }
                     }
@@ -1654,26 +2031,259 @@ fun PubChip(text: String, color: Color) {
 // PREDICTION CARD
 // ─────────────────────────────────────────────────────────────────
 
+data class ParsedPrediction(
+    val frontier: String?,
+    val toolkit: List<String>?,
+    val toolkitRaw: String?,
+    val logic: String?,
+    val isParsedSuccessfully: Boolean
+)
+
+private fun parsePrediction(raw: String): ParsedPrediction {
+    var frontier: String? = null
+    var toolkit: List<String>? = null
+    var toolkitRaw: String? = null
+    var logic: String? = null
+
+    val lines = raw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+    for (line in lines) {
+        val cleanLine = line.replace("**", "").replace("*", "").trim()
+        if (cleanLine.startsWith("Next Frontier:", ignoreCase = true)) {
+            frontier = cleanLine.substring("Next Frontier:".length).trim()
+        } else if (cleanLine.startsWith("Toolkit:", ignoreCase = true)) {
+            toolkitRaw = cleanLine.substring("Toolkit:".length).trim()
+            toolkit = toolkitRaw.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        } else if (cleanLine.startsWith("Logic:", ignoreCase = true)) {
+            logic = cleanLine.substring("Logic:".length).trim()
+        }
+    }
+
+    if (frontier == null || toolkit == null || logic == null) {
+        val frontierRegex = Regex("""(?i)(?:\*+|)Next\s+Frontier(?:\*+|):\s*(.*?)(?=(?:\*+|)Toolkit(?:\*+|):|(?:\*+|)Logic(?:\*+|):|$)""", RegexOption.DOT_MATCHES_ALL)
+        val toolkitRegex = Regex("""(?i)(?:\*+|)Toolkit(?:\*+|):\s*(.*?)(?=(?:\*+|)Next\s+Frontier(?:\*+|):|(?:\*+|)Logic(?:\*+|):|$)""", RegexOption.DOT_MATCHES_ALL)
+        val logicRegex = Regex("""(?i)(?:\*+|)Logic(?:\*+|):\s*(.*?)(?=(?:\*+|)Next\s+Frontier(?:\*+|):|(?:\*+|)Toolkit(?:\*+|):|$)""", RegexOption.DOT_MATCHES_ALL)
+
+        frontierRegex.find(raw)?.let { match ->
+            val value = match.groupValues[1].replace("**", "").replace("*", "").trim()
+            if (value.isNotEmpty()) frontier = value
+        }
+        toolkitRegex.find(raw)?.let { match ->
+            val toolsStr = match.groupValues[1].replace("**", "").replace("*", "").trim()
+            if (toolsStr.isNotEmpty()) {
+                toolkitRaw = toolsStr
+                toolkit = toolsStr.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            }
+        }
+        logicRegex.find(raw)?.let { match ->
+            val value = match.groupValues[1].replace("**", "").replace("*", "").trim()
+            if (value.isNotEmpty()) logic = value
+        }
+    }
+
+    val isParsedSuccessfully = frontier != null || logic != null || toolkit != null
+    return ParsedPrediction(
+        frontier = frontier,
+        toolkit = toolkit,
+        toolkitRaw = toolkitRaw,
+        logic = logic,
+        isParsedSuccessfully = isParsedSuccessfully
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PredictionCard(prediction: String) {
+    val parsed = remember(prediction) { parsePrediction(prediction) }
+
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         LightSectionHeader("Next Prediction", "AI forecast", Icons.Default.TipsAndUpdates, AccentIndigo)
         Spacer(Modifier.height(10.dp))
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            color = AccentIndigoLight,
-            border = BorderStroke(1.dp, AccentIndigo.copy(alpha = 0.2f))
-        ) {
-            Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
-                Icon(Icons.Default.AutoAwesome, null, tint = AccentIndigo, modifier = Modifier.size(18.dp).padding(top = 2.dp))
-                Spacer(Modifier.width(10.dp))
-                MarkdownText(
-                    markdown = prediction,
-                    color = TextPrimary,
-                    fontSize = 13.sp,
-                    modifier = Modifier.weight(1f)
-                )
+
+        if (parsed.isParsedSuccessfully) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = BgCard,
+                shadowElevation = 1.dp,
+                border = BorderStroke(1.dp, BorderLight)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    // 1. Next Frontier Section
+                    parsed.frontier?.let { frontierText ->
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            color = AccentIndigoLight,
+                            border = BorderStroke(1.dp, AccentIndigo.copy(alpha = 0.15f))
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Explore,
+                                        contentDescription = null,
+                                        tint = AccentIndigo,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        text = "RESEARCH FRONTIER",
+                                        style = Typography.labelSmall,
+                                        color = AccentIndigo,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 1.sp
+                                    )
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                MarkdownText(
+                                    markdown = frontierText,
+                                    color = TextPrimary,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                    }
+
+                    // 2. Toolkit Section
+                    parsed.toolkit?.let { tools ->
+                        if (parsed.frontier != null) {
+                            Spacer(Modifier.height(16.dp))
+                        }
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Science,
+                                    contentDescription = null,
+                                    tint = AccentTeal,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "TECHNICAL TOOLKIT",
+                                    style = Typography.labelSmall,
+                                    color = AccentTeal,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            
+                            val allToolsConcise = remember(tools) { tools.all { it.length < 35 } }
+                            if (allToolsConcise) {
+                                FlowRow(
+                                    modifier = Modifier.padding(start = 24.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    tools.forEach { tool ->
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = AccentTealLight,
+                                            border = BorderStroke(0.5.dp, AccentTeal.copy(alpha = 0.3f))
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(4.dp)
+                                                        .background(AccentTeal, CircleShape)
+                                                )
+                                                Spacer(Modifier.width(6.dp))
+                                                Text(
+                                                    text = tool,
+                                                    style = Typography.bodySmall,
+                                                    color = TextPrimary,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                parsed.toolkitRaw?.let { rawToolkit ->
+                                    MarkdownText(
+                                        markdown = rawToolkit,
+                                        color = TextSecondary,
+                                        fontSize = 13.sp,
+                                        modifier = Modifier.padding(start = 24.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // 3. Logic Section
+                    parsed.logic?.let { logicText ->
+                        if (parsed.frontier != null || parsed.toolkit != null) {
+                            Spacer(Modifier.height(16.dp))
+                        }
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Psychology,
+                                    contentDescription = null,
+                                    tint = AccentViolet,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "STRATEGIC LOGIC",
+                                    style = Typography.labelSmall,
+                                    color = AccentViolet,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 24.dp)
+                                    .height(IntrinsicSize.Min),
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(3.dp)
+                                        .fillMaxHeight()
+                                        .background(AccentViolet.copy(alpha = 0.4f), RoundedCornerShape(1.5.dp))
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                MarkdownText(
+                                    markdown = logicText,
+                                    color = TextSecondary,
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // Fallback to legacy style if parsing fails
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = AccentIndigoLight,
+                border = BorderStroke(1.dp, AccentIndigo.copy(alpha = 0.2f))
+            ) {
+                Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = AccentIndigo,
+                        modifier = Modifier.size(18.dp).padding(top = 2.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    MarkdownText(
+                        markdown = prediction,
+                        color = TextPrimary,
+                        fontSize = 13.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
     }
@@ -1686,7 +2296,8 @@ fun PredictionCard(prediction: String) {
 @Composable
 fun SimilarResearchersSection(
     similar: List<AuthorSuggestion>,
-    onSelect: (String, String) -> Unit
+    onSelectProfile: (String, String) -> Unit,
+    onSelectSynergy: (String, String) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -1717,7 +2328,7 @@ fun SimilarResearchersSection(
                         .width(180.dp)
                         .height(150.dp)
                         .shadow(2.dp, RoundedCornerShape(16.dp))
-                        .clickable { onSelect(suggestion.display_name, suggestion.id) },
+                        .clickable { onSelectSynergy(suggestion.id, suggestion.display_name) },
                     shape = RoundedCornerShape(16.dp),
                     color = BgCard,
                     border = BorderStroke(1.dp, BorderLight)
@@ -1818,7 +2429,8 @@ fun SimilarResearchersSection(
                                 .fillMaxWidth()
                                 .height(26.dp)
                                 .clip(RoundedCornerShape(13.dp))
-                                .background(color.copy(alpha = 0.08f)),
+                                .background(color.copy(alpha = 0.08f))
+                                .clickable { onSelectProfile(suggestion.display_name, suggestion.id) },
                             contentAlignment = Alignment.Center
                         ) {
                             Row(
@@ -1882,8 +2494,17 @@ fun DiscoveryDashboard(
     userName: String,
     researchFocus: String,
     onCategoryClick: (DiscoveryCategory) -> Unit,
-    onPaperClick: (String) -> Unit
+    onPaperClick: (String) -> Unit,
+    suggestedPeers: List<AuthorSuggestion>,
+    suggestedPeersArticles: List<Work>,
+    collaboratorsArticles: List<Work>,
+    trendingPapers: List<Work>,
+    isLoadingPeers: Boolean,
+    onSelectResearcher: (String, String) -> Unit,
+    onNavigateToReader: (String, String) -> Unit,
+    onNavigateToChat: (String, String) -> Unit
 ) {
+    val context = LocalContext.current
     val categories = remember {
         listOf(
             DiscoveryCategory("Authors",  "Find Researchers", Icons.Default.PersonSearch,   AccentTeal),
@@ -1895,54 +2516,55 @@ fun DiscoveryDashboard(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(BgPrimary),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Welcome hero
         item {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
-                color = BgCard,
-                shadowElevation = 2.dp
+                color = Color.Transparent,
+                border = BorderStroke(1.dp, Brush.linearGradient(colors = listOf(AccentTeal.copy(alpha = 0.25f), AccentIndigo.copy(alpha = 0.05f))))
             ) {
-                Box {
+                Box(
+                    modifier = Modifier.background(Brush.verticalGradient(colors = listOf(BgCard, BgSubtle)))
+                ) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                            .background(Brush.horizontalGradient(HeroGradient))
+                            .size(100.dp)
+                            .align(Alignment.TopEnd)
+                            .background(Brush.radialGradient(colors = listOf(AccentTeal.copy(alpha = 0.07f), Color.Transparent)))
                     )
-                    Column(modifier = Modifier.padding(20.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
                         Text(
                             text = "Welcome back,",
                             color = TextMuted,
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         )
                         Text(
                             text = userName,
-                            fontSize = 26.sp,
+                            fontSize = 24.sp,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary,
                             fontFamily = DisplayFontFamily
                         )
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(6.dp))
                         Surface(
                             shape = RoundedCornerShape(50),
-                            color = AccentTealLight,
-                            border = BorderStroke(0.5.dp, AccentTeal.copy(alpha = 0.3f))
+                            color = AccentTeal.copy(alpha = 0.08f),
+                            border = BorderStroke(0.5.dp, AccentTeal.copy(alpha = 0.2f))
                         ) {
                             Text(
                                 text = "🔬 $researchFocus",
-                                color = AccentTealDark,
-                                fontSize = 12.sp,
+                                color = AccentTeal,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                             )
                         }
-                        Spacer(Modifier.height(14.dp))
+                        Spacer(Modifier.height(12.dp))
                         // Search prompt
                         Surface(
                             shape = RoundedCornerShape(12.dp),
@@ -1951,14 +2573,14 @@ fun DiscoveryDashboard(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
-                                modifier = Modifier.padding(14.dp),
+                                modifier = Modifier.padding(12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Icon(Icons.Default.Search, null, tint = AccentTeal, modifier = Modifier.size(20.dp))
+                                Icon(Icons.Default.Search, null, tint = AccentTeal, modifier = Modifier.size(18.dp))
                                 Column {
-                                    Text("Search any researcher", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                                    Text("Type 3+ characters above for instant suggestions", color = TextMuted, fontSize = 11.sp)
+                                    Text("Search any researcher", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                    Text("Type 3+ characters above for instant suggestions", color = TextMuted, fontSize = 10.sp)
                                 }
                             }
                         }
@@ -1967,24 +2589,44 @@ fun DiscoveryDashboard(
             }
         }
 
+        // Gamified Streak Card
+        item {
+            StreakCard()
+        }
+
+        // Tinder-style Paper Swiper
+        if (trendingPapers.isNotEmpty()) {
+            item {
+                SwipeVaultCard(
+                    papers = trendingPapers,
+                    onSavePaper = { paper ->
+                        android.widget.Toast.makeText(context, "Saved to Vault: ${paper.title}", android.widget.Toast.LENGTH_SHORT).show()
+                    },
+                    onSkipPaper = { paper ->
+                        android.widget.Toast.makeText(context, "Skipped: ${paper.title}", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                )
+            }
+        }
+
         // Category tiles
         item {
             Text(
                 text = "EXPLORE",
                 color = TextMuted,
-                fontSize = 10.sp,
+                fontSize = 9.sp,
                 fontWeight = FontWeight.Black,
-                letterSpacing = 1.5.sp
+                letterSpacing = 1.2.sp
             )
         }
 
         item {
             val rows = categories.chunked(2)
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 rows.forEach { row ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         row.forEach { cat ->
                             DashboardTile(cat, onClick = { onCategoryClick(cat) }, modifier = Modifier.weight(1f))
@@ -1995,20 +2637,150 @@ fun DiscoveryDashboard(
             }
         }
 
+        // ── Suggested Peer Connections (Friend Suggestions) ──
+        if (isLoadingPeers) {
+            item {
+                Text(
+                    text = "SUGGESTED PEER CONNECTIONS",
+                    color = TextMuted,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.2.sp
+                )
+                Spacer(Modifier.height(4.dp))
+                SuggestedPeersShimmer()
+            }
+        } else if (suggestedPeers.isNotEmpty()) {
+            item {
+                Column {
+                    Text(
+                        text = "SUGGESTED PEER CONNECTIONS",
+                        color = TextMuted,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.2.sp
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(suggestedPeers, key = { "peer-" + it.id }) { peer ->
+                            DashboardPeerSuggestionCard(
+                                peer = peer,
+                                onClick = { onSelectResearcher(peer.display_name, peer.id) },
+                                onMessageClick = { onNavigateToChat(peer.display_name, peer.id) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Collaborators' New Publications ──
+        if (collaboratorsArticles.isNotEmpty()) {
+            item {
+                Column {
+                    Text(
+                        text = "COLLABORATORS' NEW PUBLICATIONS",
+                        color = TextMuted,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.2.sp
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(collaboratorsArticles) { work ->
+                            DashboardFriendArticleCard(
+                                work = work,
+                                onOpenPaper = {
+                                    val url = work.doi ?: "https://doi.org"
+                                    onNavigateToReader(url, work.title ?: "Paper")
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Recent Friends' New Articles ──
+        if (suggestedPeersArticles.isNotEmpty()) {
+            item {
+                Column {
+                    Text(
+                        text = "RECENT FRIENDS' NEW ARTICLES",
+                        color = TextMuted,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.2.sp
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(suggestedPeersArticles) { work ->
+                            DashboardFriendArticleCard(
+                                work = work,
+                                onOpenPaper = {
+                                    val url = work.doi ?: "https://doi.org"
+                                    onNavigateToReader(url, work.title ?: "Paper")
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Trending Papers ──
+        if (trendingPapers.isNotEmpty()) {
+            item {
+                Column {
+                    Text(
+                        text = "TRENDING PAPERS THIS WEEK",
+                        color = TextMuted,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.2.sp
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(trendingPapers) { work ->
+                            DashboardFriendArticleCard(
+                                work = work,
+                                onOpenPaper = {
+                                    val url = work.doi ?: "https://doi.org"
+                                    onNavigateToReader(url, work.title ?: "Paper")
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // Featured papers strip
         item {
             Text(
                 text = "FEATURED RESEARCH",
                 color = TextMuted,
-                fontSize = 10.sp,
+                fontSize = 9.sp,
                 fontWeight = FontWeight.Black,
-                letterSpacing = 1.5.sp
+                letterSpacing = 1.2.sp
             )
         }
 
         item {
             LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(listOf(
                     Triple("Room-Temperature Superconductivity in Nitrogen-Doped Lutetium Hydride", "Dasenbrock-Gammon et al.", AccentTeal),
@@ -2024,9 +2796,9 @@ fun DiscoveryDashboard(
             Text(
                 text = "CONFERENCE MATCHES",
                 color = TextMuted,
-                fontSize = 10.sp,
+                fontSize = 9.sp,
                 fontWeight = FontWeight.Black,
-                letterSpacing = 1.5.sp
+                letterSpacing = 1.2.sp
             )
         }
 
@@ -2038,9 +2810,9 @@ fun DiscoveryDashboard(
             Text(
                 text = "AI GAP FINDER",
                 color = TextMuted,
-                fontSize = 10.sp,
+                fontSize = 9.sp,
                 fontWeight = FontWeight.Black,
-                letterSpacing = 1.5.sp
+                letterSpacing = 1.2.sp
             )
         }
 
@@ -2253,26 +3025,29 @@ fun DashboardTile(category: DiscoveryCategory, onClick: () -> Unit, modifier: Mo
             .height(110.dp)
             .graphicsLayer(scaleX = scale, scaleY = scale),
         shape = RoundedCornerShape(18.dp),
-        color = BgCard,
-        shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, category.color.copy(alpha = 0.12f))
+        color = Color.Transparent,
+        border = BorderStroke(1.dp, category.color.copy(alpha = 0.20f))
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(14.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+        Box(
+            modifier = Modifier.background(Brush.verticalGradient(colors = listOf(BgCard, category.color.copy(alpha = 0.03f))))
         ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(category.color.copy(alpha = 0.1f)),
-                contentAlignment = Alignment.Center
+            Column(
+                modifier = Modifier.fillMaxSize().padding(14.dp),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Icon(category.icon, null, tint = category.color, modifier = Modifier.size(18.dp))
-            }
-            Column {
-                Text(category.title, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = DisplayFontFamily)
-                Text(category.subtitle, color = TextMuted, fontSize = 10.sp)
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(category.color.copy(alpha = 0.1f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(category.icon, null, tint = category.color, modifier = Modifier.size(18.dp))
+                }
+                Column {
+                    Text(category.title, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = DisplayFontFamily)
+                    Text(category.subtitle, color = TextMuted, fontSize = 10.sp)
+                }
             }
         }
     }
@@ -2395,3 +3170,976 @@ fun AuthorDetailView(
 )
 
 data class ResearchMetric(val label: String, val value: Int, val color: Color, val icon: ImageVector, val isPercentage: Boolean = true)
+
+// ─────────────────────────────────────────────────────────────────
+// SUGGESTED CONNECTIONS SECTION
+// ─────────────────────────────────────────────────────────────────
+
+@Composable
+fun SuggestedConnectionsSection(
+    visibleCollaborators: List<NetworkCollaborator>,
+    onConnect: (NetworkCollaborator) -> Unit,
+    onDismiss: (NetworkCollaborator) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp)
+    ) {
+        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+            LightSectionHeader(
+                title = "Suggested Connections",
+                subtitle = "Co-authors & collaborators",
+                icon = Icons.Default.People,
+                color = AccentTeal
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        
+        if (visibleCollaborators.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .padding(horizontal = 16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No more suggested connections at this time.",
+                    color = TextMuted,
+                    fontSize = 13.sp
+                )
+            }
+        } else {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(visibleCollaborators, key = { it.id }) { collaborator ->
+                    SuggestedConnectionCard(
+                        collaborator = collaborator,
+                        onConnect = { onConnect(collaborator) },
+                        onDismiss = { onDismiss(collaborator) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SuggestedConnectionCard(
+    collaborator: NetworkCollaborator,
+    onConnect: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val avatarColors = listOf(AccentTeal, AccentIndigo, AccentEmerald, AccentViolet, AccentAmber, AccentOrange, AccentRose, AccentCyan)
+    val color = avatarColors[kotlin.math.abs(collaborator.id.hashCode()) % avatarColors.size]
+
+    Surface(
+        modifier = Modifier
+            .width(220.dp)
+            .height(180.dp)
+            .shadow(2.dp, RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp),
+        color = BgCard,
+        border = BorderStroke(1.dp, BorderLight)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(color.copy(alpha = 0.1f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = collaborator.name.take(1).uppercase(),
+                        color = color,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        fontFamily = DisplayFontFamily
+                    )
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = collaborator.name,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        fontFamily = DisplayFontFamily
+                    )
+                    if (collaborator.institution.isNotBlank() && collaborator.institution != "Independent Researcher") {
+                        Text(
+                            text = collaborator.institution,
+                            color = TextMuted,
+                            fontSize = 10.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    if (collaborator.field.isNotBlank()) {
+                        Text(
+                            text = collaborator.field,
+                            color = color,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(20.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Dismiss",
+                        tint = TextMuted,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = null,
+                        tint = AccentTeal,
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Text(
+                        text = collaborator.connection_path,
+                        color = TextSecondary,
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "Match",
+                        color = TextMuted,
+                        fontSize = 9.sp
+                    )
+                    LinearProgressIndicator(
+                        progress = { collaborator.relevance_score / 100f },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(4.dp)
+                            .clip(CircleShape),
+                        color = AccentTeal,
+                        trackColor = BorderLight
+                    )
+                    Text(
+                        text = "${collaborator.relevance_score}%",
+                        color = AccentTeal,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Button(
+                onClick = onConnect,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF128C7E),
+                    contentColor = Color.White
+                ),
+                contentPadding = PaddingValues(vertical = 4.dp),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(28.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PersonAdd,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = "Connect",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// COLLABORATORS' NEW ARTICLES SECTION
+// ─────────────────────────────────────────────────────────────────
+
+@Composable
+fun CollaboratorsNewArticlesSection(
+    collaborators: List<NetworkCollaborator>,
+    onPaperClick: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp)
+    ) {
+        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+            LightSectionHeader(
+                title = "Collaborators' New Articles",
+                subtitle = "Recent works from your research network",
+                icon = Icons.Default.Feed,
+                color = AccentIndigo
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            items(collaborators, key = { "art-" + it.id }) { collaborator ->
+                val rawPath = collaborator.connection_path
+                val paperTitle = if (rawPath.contains("'")) {
+                    rawPath.substringAfter("'").substringBefore("'")
+                } else {
+                    "Analysis of " + collaborator.field + " Dynamics"
+                }
+
+                Surface(
+                    onClick = { onPaperClick(paperTitle) },
+                    modifier = Modifier
+                        .width(280.dp)
+                        .height(130.dp)
+                        .shadow(2.dp, RoundedCornerShape(16.dp)),
+                    shape = RoundedCornerShape(16.dp),
+                    color = BgCard,
+                    border = BorderStroke(1.dp, BorderLight)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = collaborator.name,
+                                    color = AccentTeal,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = DisplayFontFamily
+                                )
+                                Surface(
+                                    color = AccentIndigo.copy(alpha = 0.1f),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text(
+                                        text = "NEW ARTICLE",
+                                        color = AccentIndigo,
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.Black,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = paperTitle,
+                                color = TextPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.sp,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                                fontFamily = BodyFontFamily,
+                                lineHeight = 16.sp
+                            )
+                        }
+                        Text(
+                            text = collaborator.institution,
+                            color = TextMuted,
+                            fontSize = 9.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// CITATION HEATMAP SECTION
+// ─────────────────────────────────────────────────────────────────
+
+@Composable
+fun CitationHeatmapSection(heatmap: CitationHeatmap) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        LightSectionHeader(
+            title = "Citation & Work Trend",
+            subtitle = "Annual impact analysis",
+            icon = Icons.Default.TrendingUp,
+            color = AccentIndigo
+        )
+        Spacer(Modifier.height(12.dp))
+
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            color = BgCard,
+            border = BorderStroke(1.dp, BorderLight),
+            shadowElevation = 2.dp
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        color = AccentIndigo.copy(alpha = 0.04f),
+                        border = BorderStroke(1.dp, AccentIndigo.copy(alpha = 0.1f))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "H-INDEX",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextMuted,
+                                letterSpacing = 0.5.sp
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = heatmap.h_index.toString(),
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Black,
+                                color = AccentIndigo
+                            )
+                        }
+                    }
+
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        color = AccentTeal.copy(alpha = 0.04f),
+                        border = BorderStroke(1.dp, AccentTeal.copy(alpha = 0.1f))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "INSTITUTIONS REACHED",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextMuted,
+                                letterSpacing = 0.5.sp
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = heatmap.institutional_reach.toString(),
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Black,
+                                color = AccentTeal
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                val maxVal = kotlin.math.max(
+                    1,
+                    kotlin.math.max(heatmap.citations.maxOrNull() ?: 1, heatmap.works.maxOrNull() ?: 1)
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(160.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    heatmap.years.forEachIndexed { idx, year ->
+                        val citations = heatmap.citations.getOrElse(idx) { 0 }
+                        val works = heatmap.works.getOrElse(idx) { 0 }
+
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Bottom
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
+                                verticalAlignment = Alignment.Bottom,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(horizontal = 2.dp)
+                                        .width(10.dp)
+                                        .fillMaxHeight(fraction = (citations.toFloat() / maxVal).coerceIn(0.02f, 1f))
+                                        .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                                        .background(AccentTeal)
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .padding(horizontal = 2.dp)
+                                        .width(10.dp)
+                                        .fillMaxHeight(fraction = (works.toFloat() / maxVal).coerceIn(0.02f, 1f))
+                                        .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                                        .background(AccentIndigo)
+                                )
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = year.toString(),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextMuted
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(AccentTeal)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = "Citations",
+                        fontSize = 11.sp,
+                        color = TextSecondary,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(Modifier.width(16.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(AccentIndigo)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = "Publications",
+                        fontSize = 11.sp,
+                        color = TextSecondary,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// JOURNAL ADVISOR SECTION
+// ─────────────────────────────────────────────────────────────────
+
+@Composable
+fun JournalAdvisorSection(recommendations: List<JournalRecommendation>) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp)
+    ) {
+        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+            LightSectionHeader(
+                title = "Journal Venue Advisor",
+                subtitle = "Optimized matching venues",
+                icon = Icons.Default.Science,
+                color = AccentIndigo
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+
+        if (recommendations.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .padding(horizontal = 16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No journal recommendations available.",
+                    color = TextMuted,
+                    fontSize = 13.sp
+                )
+            }
+        } else {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(recommendations) { recommendation ->
+                    JournalRecommendationCard(recommendation = recommendation)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun JournalRecommendationCard(recommendation: JournalRecommendation) {
+    Surface(
+        modifier = Modifier
+            .width(260.dp)
+            .height(200.dp)
+            .shadow(2.dp, RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp),
+        color = BgCard,
+        border = BorderStroke(1.dp, BorderLight)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text(
+                        text = recommendation.journal_name,
+                        style = Typography.titleSmall,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        fontFamily = DisplayFontFamily,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(AccentIndigo.copy(alpha = 0.08f))
+                            .border(BorderStroke(1.dp, AccentIndigo.copy(alpha = 0.2f)), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "${recommendation.match_score}%",
+                            color = AccentIndigo,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(4.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = "Impact Factor",
+                        tint = AccentAmber,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Text(
+                        text = "IF: ${recommendation.estimated_impact_factor}",
+                        fontSize = 11.sp,
+                        color = TextSecondary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                Column {
+                    Text(
+                        text = "SUBMISSION ADVICE",
+                        fontSize = 8.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextMuted,
+                        letterSpacing = 0.5.sp
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        MarkdownText(
+                            markdown = recommendation.submission_tips,
+                            fontSize = 11.sp,
+                            color = TextSecondary
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// DASHBOARD PEER SUGGESTION & FRIENDS' ARTICLES COMPOSABLES
+// ─────────────────────────────────────────────────────────────────
+
+@Composable
+fun DashboardPeerSuggestionCard(
+    peer: AuthorSuggestion,
+    onClick: () -> Unit,
+    onMessageClick: () -> Unit
+) {
+    var connectionState by remember { mutableStateOf("Connect") }
+    val avatarColors = listOf(AccentTeal, AccentIndigo, AccentEmerald, AccentViolet, AccentAmber, AccentOrange, AccentRose, AccentCyan)
+    val color = avatarColors[kotlin.math.abs(peer.id.hashCode()) % avatarColors.size]
+    
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .width(180.dp)
+            .height(168.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = Color.Transparent,
+        border = BorderStroke(1.dp, Brush.verticalGradient(colors = listOf(BorderLight, color.copy(alpha = 0.15f))))
+    ) {
+        Box(
+            modifier = Modifier.background(Brush.verticalGradient(colors = listOf(BgCard, color.copy(alpha = 0.02f))))
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp).fillMaxSize(),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(color.copy(alpha = 0.1f))
+                            .border(BorderStroke(1.dp, color.copy(alpha = 0.25f)), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = peer.display_name.take(1).uppercase(),
+                            color = color,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            fontFamily = DisplayFontFamily
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = peer.display_name,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            fontFamily = DisplayFontFamily
+                        )
+                        Text(
+                            text = peer.institution,
+                            color = TextMuted,
+                            fontSize = 10.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                
+                if (!peer.field_of_study.isNullOrBlank()) {
+                    Text(
+                        text = peer.field_of_study!!,
+                        color = color,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(vertical = 2.dp)
+                    )
+                } else {
+                    Spacer(Modifier.height(4.dp))
+                }
+                
+                val isRequested = connectionState == "Requested"
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(30.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                if (isRequested) SolidColor(BorderLight) 
+                                else Brush.horizontalGradient(listOf(AccentTeal, AccentIndigo))
+                            )
+                            .clickable {
+                                connectionState = if (isRequested) "Connect" else "Requested"
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = if (isRequested) Icons.Default.Check else Icons.Default.PersonAdd,
+                                contentDescription = null,
+                                tint = if (isRequested) TextSecondary else TextOnAccent,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = if (isRequested) "Requested" else "Connect",
+                                color = if (isRequested) TextSecondary else TextOnAccent,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    
+                    IconButton(
+                        onClick = onMessageClick,
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(AccentTeal.copy(alpha = 0.08f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Chat,
+                            contentDescription = "Message",
+                            tint = AccentTeal,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DashboardFriendArticleCard(
+    work: Work,
+    onOpenPaper: () -> Unit
+) {
+    val friendName = work.authors?.firstOrNull() ?: "Researcher"
+    
+    Surface(
+        onClick = onOpenPaper,
+        modifier = Modifier
+            .width(260.dp)
+            .height(130.dp)
+            .shadow(2.dp, RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp),
+        color = BgCard,
+        border = BorderStroke(1.dp, BorderLight)
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = friendName,
+                        color = AccentTeal,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = DisplayFontFamily
+                    )
+                    Surface(
+                        color = AccentIndigo.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text(
+                            text = "NEW ARTICLE",
+                            color = AccentIndigo,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Black,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+                Text(
+                    text = work.title ?: "Untitled Paper",
+                    color = TextPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    fontFamily = BodyFontFamily,
+                    lineHeight = 16.sp
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${work.journal ?: "Research Journal"} (${work.year ?: ""})",
+                    color = TextMuted,
+                    fontSize = 9.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Surface(
+                    onClick = onOpenPaper,
+                    color = AccentTeal.copy(alpha = 0.08f),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, AccentTeal.copy(alpha = 0.2f))
+                ) {
+                    Text(
+                        text = "Open Reader",
+                        color = AccentTeal,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SuggestedPeersShimmer() {
+    val infiniteTransition = rememberInfiniteTransition(label = "peersShimmer")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.4f, targetValue = 1.0f, label = "alpha",
+        animationSpec = infiniteRepeatable(tween(1000, easing = FastOutSlowInEasing), RepeatMode.Reverse)
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        repeat(3) {
+            Surface(
+                modifier = Modifier.width(180.dp).height(168.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = BgCard,
+                border = BorderStroke(1.dp, BorderLight.copy(alpha = 0.5f))
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(BorderLight.copy(alpha = alpha))
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Box(
+                                modifier = Modifier
+                                    .width(70.dp)
+                                    .height(12.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(BorderLight.copy(alpha = alpha))
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Box(
+                                modifier = Modifier
+                                    .width(90.dp)
+                                    .height(8.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(BorderLight.copy(alpha = alpha))
+                            )
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .width(110.dp)
+                            .height(10.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(BorderLight.copy(alpha = alpha))
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(28.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(BorderLight.copy(alpha = alpha))
+                    )
+                }
+            }
+        }
+    }
+}

@@ -43,14 +43,14 @@ fun VaultScreen(viewModel: ResearcherViewModel = viewModel()) {
             Text(
                 text = "Research Vault",
                 style = MaterialTheme.typography.displaySmall,
-                color = HighContrastWhite,
+                color = TextPrimary,
                 fontWeight = FontWeight.Black,
                 letterSpacing = (-1).sp
             )
             Text(
                 text = "Real-time 1.1TB Graph Explorer",
                 style = MaterialTheme.typography.labelMedium,
-                color = ElectricCyan,
+                color = AccentTeal,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.sp
             )
@@ -69,10 +69,10 @@ fun VaultScreen(viewModel: ResearcherViewModel = viewModel()) {
                     Surface(
                         onClick = { viewModel.setField(field) },
                         shape = RoundedCornerShape(10.dp),
-                        color = if (isSelected) ElectricCyan.copy(alpha = 0.15f) else SurfaceDark,
+                        color = if (isSelected) AccentTeal.copy(alpha = 0.15f) else BgCard,
                         border = androidx.compose.foundation.BorderStroke(
                             1.dp, 
-                            if (isSelected) ElectricCyan.copy(alpha = 0.5f) else BorderColor.copy(alpha = 0.3f)
+                            if (isSelected) AccentTeal.copy(alpha = 0.5f) else BorderLight.copy(alpha = 0.3f)
                         ),
                         modifier = Modifier.height(36.dp)
                     ) {
@@ -80,7 +80,7 @@ fun VaultScreen(viewModel: ResearcherViewModel = viewModel()) {
                             Text(
                                 text = field,
                                 fontSize = 13.sp,
-                                color = if (isSelected) ElectricCyan else MutedGray,
+                                color = if (isSelected) AccentTeal else TextMuted,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                             )
                         }
@@ -91,7 +91,7 @@ fun VaultScreen(viewModel: ResearcherViewModel = viewModel()) {
 
         if (researchers.isEmpty()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = ElectricCyan, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+                CircularProgressIndicator(color = AccentTeal, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
             }
         } else {
             LazyColumn(
@@ -110,11 +110,11 @@ fun VaultScreen(viewModel: ResearcherViewModel = viewModel()) {
 @Composable
 fun UltraModernResearcherCard(researcher: GlobalResearcher) {
     Surface(
-        color = SurfaceDark.copy(alpha = 0.5f),
+        color = BgCard.copy(alpha = 0.5f),
         shape = RoundedCornerShape(16.dp),
         border = androidx.compose.foundation.BorderStroke(
             1.dp, 
-            Brush.verticalGradient(listOf(BorderColor.copy(alpha = 0.2f), Color.Transparent))
+            Brush.verticalGradient(listOf(BorderLight.copy(alpha = 0.2f), Color.Transparent))
         ),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -127,13 +127,13 @@ fun UltraModernResearcherCard(researcher: GlobalResearcher) {
                     modifier = Modifier
                         .size(42.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Brush.linearGradient(listOf(ElectricCyan.copy(alpha = 0.2f), Color.Transparent)))
-                        .border(1.dp, ElectricCyan.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
+                        .background(Brush.linearGradient(listOf(AccentTeal.copy(alpha = 0.2f), Color.Transparent)))
+                        .border(1.dp, AccentTeal.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = researcher.display_name.take(1),
-                        color = ElectricCyan,
+                        color = AccentTeal,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Black
                     )
@@ -146,19 +146,19 @@ fun UltraModernResearcherCard(researcher: GlobalResearcher) {
                         Text(
                             text = researcher.display_name,
                             style = MaterialTheme.typography.titleMedium,
-                            color = HighContrastWhite,
+                            color = TextPrimary,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1
                         )
                         if (researcher.is_verified) {
                             Spacer(modifier = Modifier.width(4.dp))
-                            Icon(Icons.Default.Verified, contentDescription = null, tint = ElectricCyan, modifier = Modifier.size(14.dp))
+                            Icon(Icons.Default.Verified, contentDescription = null, tint = AccentTeal, modifier = Modifier.size(14.dp))
                         }
                     }
                     Text(
                         text = researcher.current_institution,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MutedGray,
+                        color = TextMuted,
                         maxLines = 1
                     )
                 }
@@ -166,7 +166,7 @@ fun UltraModernResearcherCard(researcher: GlobalResearcher) {
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
                         text = "SCORE",
-                        color = MutedGray,
+                        color = TextMuted,
                         fontSize = 8.sp,
                         fontWeight = FontWeight.Black,
                         letterSpacing = 1.sp
@@ -174,7 +174,7 @@ fun UltraModernResearcherCard(researcher: GlobalResearcher) {
                     Text(
                         text = "${researcher.innovation_score.toInt()}",
                         style = MaterialTheme.typography.titleLarge,
-                        color = ElectricCyan,
+                        color = AccentTeal,
                         fontWeight = FontWeight.ExtraBold,
                         fontFamily = DisplayFontFamily
                     )
@@ -187,7 +187,7 @@ fun UltraModernResearcherCard(researcher: GlobalResearcher) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(8.dp))
-                    .background(SurfaceDark.copy(alpha = 0.3f))
+                    .background(BgCard.copy(alpha = 0.3f))
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -208,13 +208,13 @@ fun MetricItem(icon: ImageVector, value: String, isLabel: Boolean = false) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (isLabel) ElectricCyan else MutedGray,
+            tint = if (isLabel) AccentTeal else TextMuted,
             modifier = Modifier.size(12.dp)
         )
         Spacer(modifier = Modifier.width(6.dp))
         Text(
             text = value,
-            color = if (isLabel) ElectricCyan else HighContrastWhite,
+            color = if (isLabel) AccentTeal else TextPrimary,
             fontSize = 10.sp,
             fontWeight = if (isLabel) FontWeight.Black else FontWeight.SemiBold,
             letterSpacing = if (isLabel) 0.5.sp else 0.sp
@@ -227,7 +227,7 @@ fun VerticalDivider() {
     Box(
         modifier = Modifier
             .size(width = 1.dp, height = 12.dp)
-            .background(BorderColor)
+            .background(BorderLight)
     )
 }
 

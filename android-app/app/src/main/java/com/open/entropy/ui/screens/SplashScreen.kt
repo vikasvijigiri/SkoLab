@@ -19,6 +19,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.open.entropy.R
 import com.open.entropy.ui.components.BrandMark
+import com.open.entropy.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlin.math.cos
 import kotlin.math.sin
@@ -74,13 +75,13 @@ fun SplashScreen(onAnimationFinished: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(BgPrimary),
         contentAlignment = Alignment.Center
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             drawRect(
                 brush = Brush.radialGradient(
-                    0.0f to Color(0xFF4CC9F0).copy(alpha = 0.18f),
+                    0.0f to AccentTeal.copy(alpha = 0.12f),
                     1.0f to Color.Transparent,
                     center = center,
                     radius = size.maxDimension * 0.8f
@@ -112,7 +113,7 @@ fun SplashScreen(onAnimationFinished: () -> Unit) {
         ) {
             Image(
                 painter = painterResource(id = R.drawable.logo),
-                contentDescription = "ResQit Logo",
+                contentDescription = "ReQit Logo",
                 modifier = Modifier
                     .size(110.dp)
                     .clip(RoundedCornerShape(24.dp))
@@ -127,8 +128,8 @@ fun SplashScreen(onAnimationFinished: () -> Unit) {
             
             BrandMark(
                 style = MaterialTheme.typography.headlineLarge,
-                primaryColor = Color.White,
-                accentColor = Color(0xFF00E5FF),
+                primaryColor = TextPrimary,
+                accentColor = AccentTeal,
                 modifier = Modifier.graphicsLayer {
                     alpha = textAlpha.value
                     translationY = textOffsetY.value
@@ -142,18 +143,17 @@ private class Particle {
     var x by mutableStateOf(0f)
     var y by mutableStateOf(0f)
     var radius by mutableStateOf(0f)
-    var color by mutableStateOf(Color.White)
+    var color by mutableStateOf(AccentTeal)
     
     private var vx = 0f
     private var vy = 0f
     private var initialized = false
 
     private val palette = listOf(
-        Color(0xFF4CC9F0), // Vibrant Cyan
-        Color(0xFFF72585), // Neon Pink
-        Color(0xFFB5179E), // Grape
-        Color(0xFF7209B7), // Purple
-        Color.White
+        AccentTeal,
+        AccentViolet,
+        AccentIndigo,
+        TextMuted
     )
 
     fun update(width: Float, height: Float) {

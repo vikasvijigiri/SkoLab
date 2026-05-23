@@ -59,30 +59,30 @@ fun LogicEngineScreen() {
                     Text(
                         text = "30-DAY LOGIC ENGINE",
                         style = MaterialTheme.typography.labelSmall,
-                        color = ElectricCyan,
+                        color = AccentTeal,
                         fontWeight = FontWeight.Black,
                         letterSpacing = 2.sp
                     )
                     Text(
                         text = "Mastery Protocol",
                         style = MaterialTheme.typography.headlineMedium,
-                        color = HighContrastWhite,
+                        color = TextPrimary,
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = (-1).sp
                     )
                 }
                 
                 Surface(
-                    color = SurfaceDark.copy(alpha = 0.5f),
+                    color = BgCard.copy(alpha = 0.5f),
                     shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderColor.copy(alpha = 0.3f)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderLight.copy(alpha = 0.3f)),
                     modifier = Modifier.size(48.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             Icons.Default.Psychology,
                             contentDescription = null,
-                            tint = ElectricCyan,
+                            tint = AccentTeal,
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -100,14 +100,14 @@ fun LogicEngineScreen() {
                 ) {
                     Text(
                         "PHASE ${ (daysCompleted / 7) + 1 }",
-                        color = MutedGray,
+                        color = TextMuted,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Black,
                         letterSpacing = 1.sp
                     )
                     Text(
                         "${userMastery.toInt()}% COMPLETE",
-                        color = ElectricCyan,
+                        color = AccentTeal,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Black
                     )
@@ -117,14 +117,14 @@ fun LogicEngineScreen() {
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(4.dp)
-                        .background(SurfaceDark, CircleShape)
+                        .background(BgCard, CircleShape)
                 ) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(userMastery / 100f)
                             .fillMaxHeight()
                             .background(
-                                Brush.horizontalGradient(listOf(ElectricCyan, LogicBlue)),
+                                Brush.horizontalGradient(listOf(AccentTeal, AccentIndigo)),
                                 CircleShape
                             )
                     )
@@ -156,9 +156,9 @@ fun LogicEngineScreen() {
                     if (index % 7 == 0) {
                         val weekNum = (index / 7) + 1
                         if (weekNum <= 4) {
-                            ModernWeekHeader("WEEK $weekNum", if (isCompleted) ElectricCyan else if (index / 7 == daysCompleted / 7) HighContrastWhite else MutedGray)
+                            ModernWeekHeader("WEEK $weekNum", if (isCompleted) AccentTeal else if (index / 7 == daysCompleted / 7) TextPrimary else TextMuted)
                         } else if (index == 28) {
-                            ModernWeekHeader("FINAL STAGE", PlasmaPink)
+                            ModernWeekHeader("FINAL STAGE", AccentRose)
                         }
                     }
 
@@ -177,7 +177,7 @@ fun LogicEngineScreen() {
                                     .width(1.dp)
                                     .weight(1f)
                                     .background(
-                                        if (isCompleted) ElectricCyan.copy(alpha = 0.5f) else BorderColor.copy(alpha = 0.2f)
+                                        if (isCompleted) AccentTeal.copy(alpha = 0.5f) else BorderLight.copy(alpha = 0.2f)
                                     )
                             )
                             
@@ -185,12 +185,12 @@ fun LogicEngineScreen() {
                                 modifier = Modifier
                                     .size(10.dp)
                                     .background(
-                                        if (isCompleted) ElectricCyan else if (isCurrent) DeepSpace else Color.Transparent,
+                                        if (isCompleted) AccentTeal else if (isCurrent) BgPrimary else Color.Transparent,
                                         CircleShape
                                     )
                                     .border(
                                         if (isCurrent) 2.dp else 1.dp,
-                                        if (isCurrent) ElectricCyan else if (isCompleted) ElectricCyan else BorderColor.copy(alpha = 0.5f),
+                                        if (isCurrent) AccentTeal else if (isCompleted) AccentTeal else BorderLight.copy(alpha = 0.5f),
                                         CircleShape
                                     )
                             )
@@ -200,7 +200,7 @@ fun LogicEngineScreen() {
                                     .width(1.dp)
                                     .weight(1f)
                                     .background(
-                                        if (index < daysCompleted) ElectricCyan.copy(alpha = 0.5f) else BorderColor.copy(alpha = 0.2f)
+                                        if (index < daysCompleted) AccentTeal.copy(alpha = 0.5f) else BorderLight.copy(alpha = 0.2f)
                                     )
                             )
                         }
@@ -215,21 +215,21 @@ fun LogicEngineScreen() {
                                 Text(
                                     text = "DAY ${index + 1}",
                                     fontSize = 10.sp,
-                                    color = if (isCurrent) ElectricCyan else MutedGray,
+                                    color = if (isCurrent) AccentTeal else TextMuted,
                                     fontWeight = FontWeight.Black,
                                     letterSpacing = 0.5.sp
                                 )
                                 if (isCurrent) {
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Surface(
-                                        color = ElectricCyan,
+                                        color = AccentTeal,
                                         shape = RoundedCornerShape(4.dp)
                                     ) {
                                         Text(
                                             "ACTIVE",
                                             fontSize = 8.sp,
                                             fontWeight = FontWeight.Black,
-                                            color = DeepSpace,
+                                            color = BgPrimary,
                                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                         )
                                     }
@@ -239,7 +239,7 @@ fun LogicEngineScreen() {
                             Text(
                                 text = item,
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = if (isCompleted) HighContrastWhite.copy(alpha = 0.5f) else HighContrastWhite,
+                                color = if (isCompleted) TextPrimary.copy(alpha = 0.5f) else TextPrimary,
                                 fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
                                 modifier = Modifier.padding(top = 2.dp)
                             )
@@ -247,9 +247,9 @@ fun LogicEngineScreen() {
                             if (isCurrent) {
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Surface(
-                                    color = SurfaceDark.copy(alpha = 0.3f),
+                                    color = BgCard.copy(alpha = 0.3f),
                                     shape = RoundedCornerShape(12.dp),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, ElectricCyan.copy(alpha = 0.2f))
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentTeal.copy(alpha = 0.2f))
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(12.dp),
@@ -262,12 +262,12 @@ fun LogicEngineScreen() {
                                                 "YOU ARE HERE",
                                                 fontSize = 9.sp,
                                                 fontWeight = FontWeight.Black,
-                                                color = ElectricCyan
+                                                color = AccentTeal
                                             )
                                             Text(
                                                 "Keep pushing, Researcher.",
                                                 fontSize = 11.sp,
-                                                color = MutedGray
+                                                color = TextMuted
                                             )
                                         }
                                     }

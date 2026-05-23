@@ -2,6 +2,7 @@ package com.open.entropy.ui.screens
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -25,12 +26,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.open.entropy.network.ApiService
+import com.open.entropy.network.DailyFeedItem
 import com.open.entropy.ui.components.ScientificCard
 import com.open.entropy.ui.components.ScientificBadge
 import com.open.entropy.ui.layout.ScreenInsets
 import com.open.entropy.ui.theme.*
 import com.open.entropy.viewmodel.LibraryViewModel
 import com.open.entropy.viewmodel.SavedPapersUiState
+import kotlinx.coroutines.launch
 
 // ─────────────────────────────────────────────────────────────────
 // LIBRARY SCREEN — Saved Papers + Grants + Nexus Bridges + Alerts
@@ -39,7 +43,7 @@ import com.open.entropy.viewmodel.SavedPapersUiState
 @Composable
 fun LibraryScreen(onPaperClick: (String) -> Unit) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("SAVED", "GRANTS 🏆", "BRIDGES", "ALERTS")
+    val tabs = listOf("SAVED", "GRANTS 🏆", "BRIDGES", "DAILY FEED")
 
     Column(
         modifier = Modifier
@@ -108,7 +112,7 @@ fun LibraryScreen(onPaperClick: (String) -> Unit) {
                 0 -> SavedPapersTab(onPaperClick)
                 1 -> GrantFeedTab()
                 2 -> NexusBridgesTab()
-                3 -> AlertsTab()
+                3 -> DailyFeedTab(onPaperClick)
             }
         }
     }
@@ -283,48 +287,46 @@ fun SavedPaperCard(
 // GRANTS TAB
 // ─────────────────────────────────────────────────────────────────
 
-data class GrantOpportunity(
-    val title: String,
-    val agency: String,
-    val agencyColor: Color,
-    val daysLeft: Int,
-    val amount: String,
-    val field: String,
-    val matchScore: Int,    // %
-    val url: String
-)
-
 @Composable
 fun GrantFeedTab() {
-    // TODO: replace with live grant API (SERB, DST, NIH, NSF scraper)
-    val grants = remember {
-        listOf(
-            GrantOpportunity(
-                "Core Research Grant (CRG) 2025–26",
-                "SERB", AccentTeal, 23, "₹50–90 Lakh", "All STEM", 92,
-                "https://www.serbonline.in/"
-            ),
-            GrantOpportunity(
-                "National Science Foundation — CAREER Award",
-                "NSF", AccentIndigo, 41, "\$500K–1M", "CS/Engineering", 78,
-                "https://www.nsf.gov/funding/opportunities/career-faculty-early-career-development-program"
-            ),
-            GrantOpportunity(
-                "DST INSPIRE Faculty Award",
-                "DST", AccentEmerald, 58, "₹35 Lakh/yr", "Science & Tech", 85,
-                "https://dst.gov.in/scientific-programmes/scientific-engineering-research/inspire"
-            ),
-            GrantOpportunity(
-                "NIH R01 Research Project Grant",
-                "NIH", AccentRose, 67, "\$250K–1.5M", "Biomedical", 61,
-                "https://grants.nih.gov/grants/funding/r01.htm"
-            ),
-            GrantOpportunity(
-                "Prime Minister's Research Fellows (PMRF)",
-                "MoE", AccentAmber, 89, "₹80K/month + grants", "PhD Scholars", 88,
-                "https://www.pmrf.in/"
-            ),
+    val activeAuthor by com.open.entropy.state.ActiveResearcherState.activeAuthor.collectAsState()
+    val api = remember { ApiService() }
+    var grants by remember { mutableStateOf<List<com.open.entropy.network.GrantMatch>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(activeAuthor) {
+        isLoading = true
+        errorMsg = null
+        try {
+            val authorId = activeAuthor?.id ?: "A5023888391"
+            val results = api.matchGrants(authorId)
+            grants = results
+        } catch (e: Exception) {
+            errorMsg = e.message ?: "Failed to match grants"
+        } finally {
+            isLoading = false
+        }
+    }
+
+    if (isLoading) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
+        ) {
+            items(3) { SavedPaperShimmer() }
+        }
+        return
+    }
+
+    if (errorMsg != null) {
+        EmptyStateView(
+            Icons.Default.ErrorOutline,
+            "Could not match grants",
+            errorMsg ?: "Unknown error"
         )
+        return
     }
 
     LazyColumn(
@@ -344,12 +346,19 @@ fun GrantFeedTab() {
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Icon(Icons.Default.EmojiEvents, null, tint = AccentAmber, modifier = Modifier.size(20.dp))
-                    Text(
-                        "${grants.size} grants matching your research profile",
-                        color = AccentAmber,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.sp
-                    )
+                    Column {
+                        Text(
+                            text = if (activeAuthor != null) "${grants.size} grants matching ${activeAuthor?.display_name}" else "${grants.size} prestigious STEM funding opportunities",
+                            color = AccentAmber,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            text = "Scored based on publication velocity and citation impact",
+                            color = AccentAmber.copy(alpha = 0.8f),
+                            fontSize = 11.sp
+                        )
+                    }
                 }
             }
         }
@@ -361,10 +370,19 @@ fun GrantFeedTab() {
 }
 
 @Composable
-fun GrantCard(grant: GrantOpportunity) {
+fun GrantCard(grant: com.open.entropy.network.GrantMatch) {
+    var expanded by remember { mutableStateOf(false) }
+    val colorHex = grant.agency_color
+    val parsedColor = remember(colorHex) {
+        try {
+            Color(android.graphics.Color.parseColor(colorHex))
+        } catch (e: Exception) {
+            AccentTeal
+        }
+    }
     val urgencyColor = when {
-        grant.daysLeft < 30 -> AccentRose
-        grant.daysLeft < 60 -> AccentAmber
+        grant.days_left < 30 -> AccentRose
+        grant.days_left < 60 -> AccentAmber
         else                -> AccentEmerald
     }
 
@@ -380,7 +398,7 @@ fun GrantCard(grant: GrantOpportunity) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(3.dp)
-                    .background(grant.agencyColor)
+                    .background(parsedColor)
             )
             Column(modifier = Modifier.padding(14.dp)) {
                 // Agency + deadline
@@ -389,11 +407,11 @@ fun GrantCard(grant: GrantOpportunity) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Surface(shape = RoundedCornerShape(6.dp), color = grant.agencyColor.copy(alpha = 0.1f)) {
+                    Surface(shape = RoundedCornerShape(6.dp), color = parsedColor.copy(alpha = 0.1f)) {
                         Text(
                             grant.agency,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            color = grant.agencyColor,
+                            color = parsedColor,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Black
                         )
@@ -406,7 +424,7 @@ fun GrantCard(grant: GrantOpportunity) {
                         ) {
                             Icon(Icons.Default.Timer, null, tint = urgencyColor, modifier = Modifier.size(11.dp))
                             Text(
-                                "${grant.daysLeft}d left",
+                                "${grant.days_left}d left",
                                 color = urgencyColor,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
@@ -434,19 +452,54 @@ fun GrantCard(grant: GrantOpportunity) {
                     // Match score ring
                     Box(contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(
-                            progress = { grant.matchScore / 100f },
+                            progress = { grant.match_score / 100f },
                             modifier = Modifier.size(40.dp),
-                            color = grant.agencyColor,
+                            color = parsedColor,
                             trackColor = BorderLight,
                             strokeWidth = 3.dp
                         )
                         Text(
-                            "${grant.matchScore}%",
-                            color = grant.agencyColor,
+                            "${grant.match_score}%",
+                            color = parsedColor,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Black
                         )
                     }
+                }
+
+                Spacer(Modifier.height(8.dp))
+                Divider(color = BorderLight)
+                Spacer(Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { expanded = !expanded },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "AI match analysis",
+                        color = AccentViolet,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Icon(
+                        imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Expand",
+                        tint = AccentViolet,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                if (expanded) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = grant.rationale,
+                        style = Typography.bodySmall,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
                 }
             }
         }
@@ -480,12 +533,216 @@ fun NexusBridgesTab() {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// ALERTS TAB
+// DAILY FEED TAB
 // ─────────────────────────────────────────────────────────────────
 
 @Composable
-fun AlertsTab() {
-    EmptyStateView(Icons.Default.Notifications, "No alerts yet", "We'll notify you when papers in your field get cited heavily")
+fun DailyFeedTab(
+    onPaperClick: (String) -> Unit,
+    libraryViewModel: LibraryViewModel = viewModel()
+) {
+    val activeAuthor by com.open.entropy.state.ActiveResearcherState.activeAuthor.collectAsState()
+    val api = remember { ApiService() }
+    var feedItems by remember { mutableStateOf<List<DailyFeedItem>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val savedIds by libraryViewModel.savedIds.collectAsState()
+
+    LaunchedEffect(activeAuthor) {
+        isLoading = true
+        errorMsg = null
+        try {
+            val authorId = activeAuthor?.id ?: "A5023888391"
+            val fallbackQuery = activeAuthor?.field_of_study ?: "computer science"
+            val results = api.getDailyFeed(authorId, fallbackQuery)
+            feedItems = results
+        } catch (e: Exception) {
+            errorMsg = e.message ?: "Failed to load daily feed"
+        } finally {
+            isLoading = false
+        }
+    }
+
+    if (isLoading) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
+        ) {
+            items(3) { SavedPaperShimmer() }
+        }
+        return
+    }
+
+    if (errorMsg != null) {
+        EmptyStateView(
+            Icons.Default.ErrorOutline,
+            "Could not load daily feed",
+            errorMsg ?: "Unknown error"
+        )
+        return
+    }
+
+    if (feedItems.isEmpty()) {
+        EmptyStateView(
+            Icons.Default.Feed,
+            "No recommendations yet",
+            "Try selecting a researcher to build customized recommendations"
+        )
+        return
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
+    ) {
+        item {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = AccentTealLight,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(Icons.Default.AutoAwesome, null, tint = AccentTeal, modifier = Modifier.size(20.dp))
+                    Column {
+                        Text(
+                            text = if (activeAuthor != null) "Personalized for ${activeAuthor?.display_name}" else "Daily AI Research Feed",
+                            color = AccentTealDark,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            text = "Fresh recommendations based on your primary expertise",
+                            color = AccentTealDark.copy(alpha = 0.8f),
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        items(feedItems) { item ->
+            var expanded by remember { mutableStateOf(false) }
+            val isSaved = savedIds.contains(item.id)
+
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = BgCard,
+                shadowElevation = 2.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = AccentTealLight
+                        ) {
+                            Text(
+                                text = "${item.relevance_score}% MATCH",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                color = AccentTealDark,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    libraryViewModel.toggleSaved(item.id)
+                                }
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                contentDescription = "Bookmark",
+                                tint = if (isSaved) AccentTeal else TextMuted,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = item.title,
+                        style = Typography.titleMedium,
+                        color = TextPrimary,
+                        modifier = Modifier.clickable { onPaperClick(item.id) }
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = item.authors.joinToString(", "),
+                        color = AccentIndigo,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "${item.journal} • ${item.year}",
+                        color = TextMuted,
+                        fontSize = 11.sp
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+                    Divider(color = BorderLight)
+                    Spacer(Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { expanded = !expanded },
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = AccentViolet,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                "AI recommendation analysis",
+                                color = AccentViolet,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Icon(
+                            imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Expand",
+                            tint = AccentViolet,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    if (expanded) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = item.recommendation_reason,
+                            style = Typography.bodySmall,
+                            color = TextSecondary,
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────

@@ -2,309 +2,651 @@ package com.open.entropy.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.open.entropy.ui.components.*
-import com.open.entropy.ui.layout.ScreenInsets
-import com.open.entropy.ui.layout.screenHorizontalPadding
+import androidx.compose.ui.zIndex
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.open.entropy.model.Paper
+import com.open.entropy.model.Author
+import com.open.entropy.ui.components.ScoreArcMeter
+import com.open.entropy.ui.components.MarkdownText
+import com.open.entropy.ui.components.StreakCard
+import com.open.entropy.ui.components.SwipeVaultCard
 import com.open.entropy.ui.theme.*
+import com.open.entropy.viewmodel.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.util.Calendar
 
-data class FeedItem(
-    val id: String,
-    val author: String,
-    val journal: String,
-    val category: String,
-    val title: String,
-    val insight: String,
-    val bullets: List<String>,
-    val dIndex: Float,
-    val sIndex: Float,
-    val vIndex: Float,
-    val tags: List<String>
-)
-
-@Composable
-fun FeedScreen(onPaperClick: (String) -> Unit) {
-    val items = remember { getMockFeedData() }
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Transparent),
-        contentPadding = PaddingValues(bottom = 24.dp)
-    ) {
-        item {
-            DiscoveryHero()
-        }
-
-        item {
-            ScientificPulseRow()
-        }
-
-        item {
-            Text(
-                text = "EMERGING FRONTIERS",
-                modifier = Modifier.padding(start = 20.dp, top = 24.dp, bottom = 12.dp),
-                style = Typography.labelSmall,
-                color = ResQitDisruption.copy(alpha = 0.7f),
-                letterSpacing = 2.sp
-            )
-        }
-
-        items(items) { item ->
-            AiBriefCard(item, onPaperClick)
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-    }
+// ── ReQit Professional Flipkart Colors ─────────────────────────────────────
+object EntropiColors {
+    val Background = com.open.entropy.ui.theme.BgPrimary
+    val Card = com.open.entropy.ui.theme.BgCard
+    val Card2 = com.open.entropy.ui.theme.BgElevated
+    val Border = com.open.entropy.ui.theme.BorderLight
+    val Gold1 = com.open.entropy.ui.theme.AccentAmber
+    val Gold2 = com.open.entropy.ui.theme.AccentAmber
+    val Blue1 = com.open.entropy.ui.theme.AccentTeal
+    val Blue2 = com.open.entropy.ui.theme.AccentTeal
+    val Cyan = com.open.entropy.ui.theme.AccentCyan
+    val Purple1 = com.open.entropy.ui.theme.AccentViolet
+    val Purple2 = com.open.entropy.ui.theme.AccentViolet
+    val Red = com.open.entropy.ui.theme.AccentRose
+    val Green = com.open.entropy.ui.theme.AccentEmerald
+    val Text = com.open.entropy.ui.theme.TextPrimary
+    val Text2 = com.open.entropy.ui.theme.TextSecondary
+    val Text3 = com.open.entropy.ui.theme.TextMuted
 }
 
-@OptIn(ExperimentalAnimationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun DiscoveryHero() {
-    val infiniteTransition = rememberInfiniteTransition(label = "hero")
-    val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.1f,
-        targetValue = 0.3f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(4000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "glow"
-    )
+fun FeedScreen(
+    onPaperClick: (String) -> Unit,
+    onProfileClick: () -> Unit = {},
+    onNavigateToChat: (String, String) -> Unit = { _, _ -> },
+    onNavigateToReader: (String, String) -> Unit = { _, _ -> },
+    onTabNavigate: (String) -> Unit = {},
+    viewModel: FeedViewModel = viewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+    val haptic = LocalHapticFeedback.current
 
-    val placeholders = listOf(
-        "Search Quantum Topology...",
-        "Explain CRISPR architecture...",
-        "Find high-velocity citations in AI...",
-        "Discover emerging biophysics..."
-    )
-    var placeholderIndex by remember { mutableStateOf(0) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            kotlinx.coroutines.delay(3000)
-            placeholderIndex = (placeholderIndex + 1) % placeholders.size
+    // Scroll depth tracker for load more
+    val shouldLoadMore by remember {
+        derivedStateOf {
+            val totalItems = listState.layoutInfo.totalItemsCount
+            val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            totalItems > 0 && lastVisibleItem >= totalItems * 0.8
+        }
+    }
+
+    LaunchedEffect(shouldLoadMore) {
+        if (shouldLoadMore && !uiState.isLoading) {
+            // Load next page of recommendations asynchronously
         }
     }
 
     Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .screenHorizontalPadding()
-            .padding(top = 16.dp)
+            .fillMaxSize()
+            .background(EntropiColors.Background)
     ) {
-        ScientificCard(
-            glowColor = ResQitDisruption.copy(alpha = glowAlpha),
-            borderWidth = 1.dp,
-            borderColor = GlassBorder.copy(alpha = 0.6f)
+        // Cosmic Background Canvas
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            // Radial base glow top-right
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(EntropiColors.Purple1.copy(alpha = 0.08f), Color.Transparent),
+                    center = Offset(size.width * 0.8f, size.height * 0.2f),
+                    radius = size.width * 0.6f
+                ),
+                radius = size.width * 0.6f
+            )
+            // Radial base glow bottom-left
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(EntropiColors.Blue1.copy(alpha = 0.06f), Color.Transparent),
+                    center = Offset(size.width * 0.2f, size.height * 0.8f),
+                    radius = size.width * 0.6f
+                ),
+                radius = size.width * 0.6f
+            )
+        }
+
+        // Main LazyColumn
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 90.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column(modifier = Modifier.padding(8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(ResQitAiInsight, RoundedCornerShape(50))
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = "INTELLIGENT KNOWLEDGE SEARCH",
-                        style = Typography.labelSmall,
-                        color = ResQitAiInsight,
-                        letterSpacing = 1.sp
+            // Sticky top header
+            stickyHeader {
+                TopBar(
+                    user = uiState.user,
+                    unreadCount = 3,
+                    onSearchClick = { onTabNavigate("search") },
+                    onProfileClick = onProfileClick
+                )
+            }
+
+            // Metric Pulse Dashboard
+            item {
+                Spacer(Modifier.height(4.dp))
+                FrontierPulseCard(metrics = uiState.frontierMetrics)
+            }
+
+            // Gamified Streak Card & AI Summary Row
+            item {
+                Column(
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    StreakCard()
+                    AIDailyBriefCard(
+                        briefText = uiState.aiBriefText,
+                        isLoading = uiState.isLoading,
+                        userId = uiState.user.id
                     )
                 }
-                
-                Spacer(modifier = Modifier.height(20.dp))
-                
-                Text(
-                    text = "What would you like to discover today?",
-                    style = Typography.headlineMedium,
-                    color = ResQitTextPrimary,
-                    lineHeight = 26.sp,
-                    modifier = Modifier.fillMaxWidth()
+            }
+
+            // Tinder-style Paper Swiper
+            if (uiState.trendingPapers.isNotEmpty()) {
+                item {
+                    val context = LocalContext.current
+                    val workPapers = remember(uiState.trendingPapers) {
+                        uiState.trendingPapers.map { paper ->
+                            com.open.entropy.network.Work(
+                                title = paper.title,
+                                year = paper.year,
+                                doi = paper.doi,
+                                journal = paper.journal,
+                                is_open_access = paper.pdfUrl != null,
+                                citations = paper.citationCount,
+                                disruption_score = paper.disruptionScore.toDouble(),
+                                semantic_novelty = paper.noveltyScore.toDouble(),
+                                authors = paper.authors
+                            )
+                        }
+                    }
+                    SwipeVaultCard(
+                        papers = workPapers,
+                        onSavePaper = { work ->
+                            android.widget.Toast.makeText(context, "Saved to Vault: ${work.title}", android.widget.Toast.LENGTH_SHORT).show()
+                        },
+                        onSkipPaper = { work ->
+                            android.widget.Toast.makeText(context, "Skipped: ${work.title}", android.widget.Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
+                }
+            }
+
+            // ── 1. SUGGESTED CONNECTIONS (Horizontal Carousel) ──
+            item {
+                SectionHeader(
+                    title = "👥 Friends Suggestions",
+                    badgeCount = uiState.suggestedConnections.size,
+                    onSeeAll = {}
                 )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    color = ObsidianBlack.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(0.5.dp, GlassBorder)
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Search, null, tint = ResQitTextSecondary)
-                        Spacer(modifier = Modifier.width(16.dp))
-                        AnimatedContent(
-                            targetState = placeholders[placeholderIndex],
-                            transitionSpec = {
-                                (fadeIn(tween(500)) + slideInVertically { it / 2 }).togetherWith(
-                                        fadeOut(tween(500)) + slideOutVertically { -it / 2 })
-                            },
-                            label = "placeholder"
-                        ) { text ->
-                            Text(
-                                text = text,
-                                style = Typography.bodyLarge,
-                                color = ResQitTextMuted
+                    items(uiState.suggestedConnections.take(8)) { conn ->
+                        Box(modifier = Modifier.width(160.dp)) {
+                            ConnectionCard(
+                                connection = conn,
+                                onConnect = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                },
+                                onChatClick = {
+                                    onNavigateToChat(conn.author.name, conn.author.id)
+                                }
                             )
                         }
                     }
                 }
             }
+
+            // ── 2. COLLABORATORS' NEW PUBLICATIONS (Horizontal Carousel) ──
+            item {
+                SectionHeader(title = "👥 Collaborators' Publications", onSeeAll = {})
+            }
+            if (uiState.isLoading) {
+                item {
+                    Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+                        PaperShimmerCard()
+                    }
+                }
+            } else {
+                item {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(horizontal = 20.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(uiState.collaboratorsArticles) { paper ->
+                            Box(modifier = Modifier.width(280.dp)) {
+                                PaperFeedCard(
+                                    paper = paper,
+                                    accentColor = EntropiColors.Gold1,
+                                    onClick = { onPaperClick(paper.id) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── 3. RECENT PAPERS OF FRIENDS (Peers) ──
+            item {
+                SectionHeader(title = "🧬 Peers' New Articles", onSeeAll = {})
+            }
+            if (uiState.isLoading) {
+                item {
+                    Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+                        PaperShimmerCard()
+                    }
+                }
+            } else {
+                item {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(horizontal = 20.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(uiState.suggestedPeersArticles) { paper ->
+                            Box(modifier = Modifier.width(280.dp)) {
+                                PaperFeedCard(
+                                    paper = paper,
+                                    accentColor = EntropiColors.Blue1,
+                                    onClick = { onPaperClick(paper.id) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── 4. CONTINUE READING (Resume active drafts) ──
+            item {
+                SectionHeader(title = "📖 Continue Reading", onSeeAll = {})
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(uiState.continueReading) { progress ->
+                        ResumeCard(
+                            progress = progress,
+                            onClick = { onPaperClick(progress.paper.id) },
+                            onResume = { onNavigateToReader(progress.paper.title, progress.paper.doi) }
+                        )
+                    }
+                }
+            }
+
+            // ── 5. INFINITE FEED (Endless Literature Feed) ──
+            item {
+                SectionHeader(title = "🔥 Trending Literature Feed", onSeeAll = { onTabNavigate("search") })
+            }
+            if (uiState.isLoading) {
+                items(3) {
+                    PaperShimmerCard()
+                }
+            } else {
+                items(uiState.trendingPapers) { paper ->
+                    Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+                        PaperFeedCard(
+                            paper = paper,
+                            accentColor = EntropiColors.Blue1,
+                            onClick = { onPaperClick(paper.id) }
+                        )
+                    }
+                }
+            }
+        }
+
+        // Scroll to Top FAB (Section K)
+        val showFab by remember { derivedStateOf { listState.firstVisibleItemIndex > 3 } }
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 24.dp, end = 20.dp)
+        ) {
+            AnimatedVisibility(
+                visible = showFab,
+                enter = scaleIn(spring(stiffness = Spring.StiffnessLow)),
+                exit = scaleOut(spring(stiffness = Spring.StiffnessLow))
+            ) {
+                FloatingActionButton(
+                    onClick = {
+                        scope.launch {
+                            listState.animateScrollToItem(0)
+                        }
+                    },
+                    containerColor = EntropiColors.Gold1,
+                    contentColor = EntropiColors.Background,
+                    shape = CircleShape,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.KeyboardArrowUp,
+                        contentDescription = "Scroll to top",
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
         }
     }
 }
 
+// ── COMPONENT 1: TopBar ──────────────────────────────────────────────────────
 @Composable
-fun ScientificPulseRow() {
-    val pulses = listOf(
-        "↑24% Disruption in Bio-AI",
-        "🔥 New Nexus Bridge: Quantum Materials",
-        "⚡ Citation Velocity Spike: LLM Theory",
-        "🌀 Emerging Concept: Neural Mesh"
-    )
-
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = ScreenInsets.horizontal),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+fun TopBar(
+    user: User,
+    unreadCount: Int,
+    onSearchClick: () -> Unit,
+    onProfileClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = EntropiColors.Background.copy(alpha = 0.92f),
+        tonalElevation = 0.dp
     ) {
-        items(pulses) { pulse ->
-            ScientificCard(
-                modifier = Modifier.widthIn(max = 280.dp),
-                borderColor = ResQitDisruption.copy(alpha = 0.2f)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Brand Logo
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Res",
+                    fontFamily = SyneFontFamily,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 22.sp,
+                    color = EntropiColors.Blue1
+                )
+                Text(
+                    text = "Qit",
+                    fontFamily = SyneFontFamily,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 22.sp,
+                    color = EntropiColors.Gold1
+                )
+            }
+
+            Spacer(Modifier.weight(1f))
+
+            // Search Icon Button
+            IconButton(
+                onClick = onSearchClick,
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(EntropiColors.Card2)
+                    .border(BorderStroke(1.dp, EntropiColors.Border), RoundedCornerShape(8.dp))
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = "Search",
+                    tint = EntropiColors.Text2,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            // Notification Bell with Badge
+            Box(contentAlignment = Alignment.TopEnd) {
+                IconButton(
+                    onClick = {},
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(EntropiColors.Card2)
+                        .border(BorderStroke(1.dp, EntropiColors.Border), RoundedCornerShape(8.dp))
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Notifications,
+                        contentDescription = "Notifications",
+                        tint = EntropiColors.Text2,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                if (unreadCount > 0) {
+                    Box(
+                        modifier = Modifier
+                            .offset(x = 2.dp, y = (-2).dp)
+                            .size(14.dp)
+                            .background(EntropiColors.Red, CircleShape)
+                            .border(1.dp, EntropiColors.Background, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = unreadCount.toString(),
+                            color = Color.White,
+                            fontSize = 8.sp,
+                            fontFamily = JetBrainsMonoFontFamily,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            // User Profile Avatar
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.sweepGradient(
+                            colors = listOf(EntropiColors.Gold1, EntropiColors.Blue1, EntropiColors.Gold1)
+                        )
+                    )
+                    .clickable { onProfileClick() }
+                    .padding(1.5.dp)
+                    .background(EntropiColors.Background, CircleShape),
+                contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = pulse,
-                    style = Typography.labelSmall,
-                    color = ResQitDisruption,
-                    modifier = Modifier.padding(horizontal = 4.dp),
-                    maxLines = 2
+                    text = user.initials,
+                    color = EntropiColors.Gold2,
+                    fontFamily = SpaceGroteskFontFamily,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+// ── COMPONENT 2: FrontierPulseCard ───────────────────────────────────────────
 @Composable
-fun AiBriefCard(item: FeedItem, onClick: (String) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
+fun FrontierPulseCard(metrics: FrontierMetrics) {
+    val dProgress by animateFloatAsState(
+        targetValue = metrics.dIndex,
+        animationSpec = tween(800, easing = FastOutSlowInEasing),
+        label = "dProgress"
+    )
+    val sProgress by animateFloatAsState(
+        targetValue = metrics.sIndex,
+        animationSpec = tween(800, easing = FastOutSlowInEasing),
+        label = "sProgress"
+    )
 
-    Box(modifier = Modifier.screenHorizontalPadding()) {
-        ScientificCard(
-            onClick = { expanded = !expanded },
-            glowColor = if (item.dIndex > 0.8f) ResQitDisruption.copy(alpha = 0.1f) else Color.Transparent
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = EntropiColors.Card,
+        border = BorderStroke(1.dp, EntropiColors.Border),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .drawBehind {
+                    // radial Gold glow top-right
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(EntropiColors.Gold1.copy(alpha = 0.08f), Color.Transparent),
+                            center = Offset(size.width * 0.9f, size.height * 0.1f),
+                            radius = size.width * 0.4f
+                        ),
+                        radius = size.width * 0.4f
+                    )
+                    // radial Blue glow bottom-left
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(EntropiColors.Blue1.copy(alpha = 0.08f), Color.Transparent),
+                            center = Offset(size.width * 0.1f, size.height * 0.9f),
+                            radius = size.width * 0.4f
+                        ),
+                        radius = size.width * 0.4f
+                    )
+                }
+                .padding(16.dp)
         ) {
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.AutoAwesome, null, tint = ResQitAiInsight, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                // Header
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val infiniteTransition = rememberInfiniteTransition(label = "dotPulse")
+                    val alpha by infiniteTransition.animateFloat(
+                        initialValue = 0.4f, targetValue = 1f,
+                        animationSpec = infiniteRepeatable(tween(1000), RepeatMode.Reverse),
+                        label = "pulseAlpha"
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(EntropiColors.Gold1.copy(alpha = alpha), CircleShape)
+                    )
                     Text(
-                        text = "AI INTEL BRIEF",
-                        style = Typography.labelSmall,
-                        color = ResQitAiInsight,
+                        text = "FRONTIER PULSE · LIVE",
+                        fontFamily = SpaceGroteskFontFamily,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
+                        color = EntropiColors.Gold1,
+                        letterSpacing = 1.2.sp
                     )
                 }
-                ScientificBadge(text = item.category, color = ResQitNovelty)
-            }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            MarkdownText(
-                markdown = item.title,
-                color = ResQitTextPrimary,
-                fontSize = 16.sp,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top
-            ) {
-                ScoreArcMeter(score = item.dIndex, label = "D-INDEX", size = 52.dp, color = ResQitDisruption)
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    MarkdownText(
-                        markdown = item.insight,
-                        color = ResQitTextPrimary,
-                        fontSize = 14.sp,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "${item.author} • ${item.journal}",
-                        style = Typography.labelSmall,
-                        color = ResQitTextSecondary
-                    )
-                }
-            }
-
-            AnimatedVisibility(visible = expanded) {
-                Column(modifier = Modifier.padding(top = 20.dp)) {
-                    item.bullets.forEach { bullet ->
-                        AIInsightBullet(text = bullet)
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        item.tags.forEach { tag ->
-                            ScientificTag(text = tag)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Surface(
-                        onClick = { onClick(item.id) },
-                        color = ResQitDisruption,
-                        shape = RoundedCornerShape(4.dp),
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
+                // Three Metrics Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // D-Index
+                    Column(horizontalAlignment = Alignment.Start) {
                         Text(
-                            text = "OPEN COCKPIT",
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            style = Typography.labelSmall,
-                            color = ObsidianBlack,
-                            fontWeight = FontWeight.Bold
+                            text = String.format("%.2f", metrics.dIndex),
+                            fontFamily = SyneFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 28.sp,
+                            color = EntropiColors.Gold2
                         )
+                        Text("D-INDEX", fontFamily = SpaceGroteskFontFamily, fontSize = 9.sp, color = EntropiColors.Text3, fontWeight = FontWeight.Bold)
+                        Text("+${String.format("%.2f", metrics.dIndexDelta)} delta", fontFamily = JetBrainsMonoFontFamily, fontSize = 9.sp, color = EntropiColors.Green)
+                    }
+
+                    Box(modifier = Modifier.size(width = 1.dp, height = 36.dp).background(EntropiColors.Border))
+
+                    // S-Index
+                    Column(horizontalAlignment = Alignment.Start) {
+                        Text(
+                            text = String.format("%.2f", metrics.sIndex),
+                            fontFamily = SyneFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 28.sp,
+                            color = EntropiColors.Blue2
+                        )
+                        Text("S-INDEX", fontFamily = SpaceGroteskFontFamily, fontSize = 9.sp, color = EntropiColors.Text3, fontWeight = FontWeight.Bold)
+                        Text("+${String.format("%.2f", metrics.sIndexDelta)} delta", fontFamily = JetBrainsMonoFontFamily, fontSize = 9.sp, color = EntropiColors.Green)
+                    }
+
+                    Box(modifier = Modifier.size(width = 1.dp, height = 36.dp).background(EntropiColors.Border))
+
+                    // Total Papers
+                    Column(horizontalAlignment = Alignment.Start) {
+                        Text(
+                            text = metrics.papersCount.toString(),
+                            fontFamily = SyneFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 28.sp,
+                            color = EntropiColors.Purple2
+                        )
+                        Text("PAPERS", fontFamily = SpaceGroteskFontFamily, fontSize = 9.sp, color = EntropiColors.Text3, fontWeight = FontWeight.Bold)
+                        Text("+${metrics.papersDelta} new", fontFamily = JetBrainsMonoFontFamily, fontSize = 9.sp, color = EntropiColors.Green)
+                    }
+                }
+
+                // Arc meters row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(EntropiColors.Card2, RoundedCornerShape(8.dp))
+                            .border(1.dp, EntropiColors.Border, RoundedCornerShape(8.dp))
+                            .padding(vertical = 10.dp, horizontal = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        ScoreArcMeter(score = dProgress, label = "Disruption", size = 52.dp, color = EntropiColors.Gold1)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(EntropiColors.Card2, RoundedCornerShape(8.dp))
+                            .border(1.dp, EntropiColors.Border, RoundedCornerShape(8.dp))
+                            .padding(vertical = 10.dp, horizontal = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        ScoreArcMeter(score = sProgress, label = "Novelty", size = 52.dp, color = EntropiColors.Cyan)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(EntropiColors.Card2, RoundedCornerShape(8.dp))
+                            .border(1.dp, EntropiColors.Border, RoundedCornerShape(8.dp))
+                            .padding(vertical = 10.dp, horizontal = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        ScoreArcMeter(score = 0.82f, label = "Influence", size = 52.dp, color = EntropiColors.Purple2)
                     }
                 }
             }
@@ -312,31 +654,1139 @@ fun AiBriefCard(item: FeedItem, onClick: (String) -> Unit) {
     }
 }
 
-fun getMockFeedData(): List<FeedItem> = listOf(
-    FeedItem(
-        id = "1",
-        author = "Dr. Aris Xanthos",
-        journal = "Nature Physics",
-        category = "Quantum",
-        title = "Non-Abelian Statistics in Moire Superlattices",
-        insight = "Confirmed emergence of non-Abelian anyons in twisted bilayers.",
-        bullets = listOf("Measured 24% increase in coherence", "Confirmed topological protection", "Mapped 12 intermediate states"),
-        dIndex = 0.82f,
-        sIndex = 0.75f,
-        vIndex = 0.94f,
-        tags = listOf("Topology", "Moire")
-    ),
-    FeedItem(
-        id = "2",
-        author = "DeepMind Research",
-        journal = "Science",
-        category = "AI Theory",
-        title = "Neural Scaling Laws for Multi-Modal Generalization",
-        insight = "Derived power-law constants for cross-modal transfer learning.",
-        bullets = listOf("Optimized sparsity ratios", "Reduced compute by 40%", "Generalizes to 12 modalities"),
-        dIndex = 0.94f,
-        sIndex = 0.88f,
-        vIndex = 0.99f,
-        tags = listOf("Scaling", "Transformer")
+// ── COMPONENT 3: AIDailyBriefCard ────────────────────────────────────────────
+@Composable
+fun AIDailyBriefCard(
+    briefText: String,
+    isLoading: Boolean,
+    userId: String
+) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = EntropiColors.Card,
+        border = BorderStroke(1.dp, EntropiColors.Purple1.copy(alpha = 0.35f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .drawBehind {
+                    // radial Purple glow top-right
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(EntropiColors.Purple1.copy(alpha = 0.1f), Color.Transparent),
+                            center = Offset(size.width * 0.85f, size.height * 0.15f),
+                            radius = size.width * 0.45f
+                        ),
+                        radius = size.width * 0.45f
+                    )
+                }
+                .padding(16.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Header
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(26.dp)
+                            .background(EntropiColors.Purple1.copy(alpha = 0.12f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = "AI Brain",
+                            tint = EntropiColors.Purple2,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                    Text(
+                        text = "AI DAILY BRIEF",
+                        fontFamily = SpaceGroteskFontFamily,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = EntropiColors.Purple2,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        text = "Today",
+                        fontFamily = SpaceGroteskFontFamily,
+                        fontSize = 10.sp,
+                        color = EntropiColors.Text3,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                if (isLoading) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ShimmerBar(Modifier.fillMaxWidth().height(12.dp))
+                        ShimmerBar(Modifier.fillMaxWidth(0.85f).height(12.dp))
+                        ShimmerBar(Modifier.fillMaxWidth(0.5f).height(12.dp))
+                    }
+                } else {
+                    val annotatedString = buildAnnotatedString {
+                        val parts = briefText.split("**")
+                        parts.forEachIndexed { index, part ->
+                            if (index % 2 == 1) {
+                                withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = EntropiColors.Gold2)) {
+                                    append(part)
+                                }
+                            } else {
+                                append(part)
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = annotatedString,
+                        fontFamily = SpaceGroteskFontFamily,
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp,
+                        color = EntropiColors.Text
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ShimmerBar(modifier: Modifier = Modifier) {
+    val infiniteTransition = rememberInfiniteTransition(label = "shimmerBar")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.12f, targetValue = 0.35f,
+        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse),
+        label = "shimmerAlpha"
     )
-)
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(EntropiColors.Text3.copy(alpha = alpha))
+    )
+}
+
+// ── COMPONENT 4: QuickFilterRail ─────────────────────────────────────────────
+@Composable
+fun QuickFilterRail(
+    selectedFilter: ResearchFilter,
+    onFilterSelect: (ResearchFilter) -> Unit
+) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        items(ResearchFilter.values()) { filter ->
+            val isActive = selectedFilter == filter
+            Surface(
+                onClick = { onFilterSelect(filter) },
+                shape = RoundedCornerShape(20.dp),
+                color = if (isActive) EntropiColors.Gold1.copy(alpha = 0.12f) else EntropiColors.Card2,
+                border = BorderStroke(1.dp, if (isActive) EntropiColors.Gold1 else EntropiColors.Border)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(filter.color, CircleShape)
+                    )
+                    Text(
+                        text = filter.label,
+                        fontFamily = SpaceGroteskFontFamily,
+                        fontSize = 11.sp,
+                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isActive) EntropiColors.Gold2 else EntropiColors.Text2
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ── COUNTRY TILE ─────────────────────────────────────────────────────────────
+@Composable
+fun CountryTile(country: Country, onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1.0f,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "pressScale"
+    )
+
+    Surface(
+        onClick = onClick,
+        interactionSource = interactionSource,
+        modifier = Modifier
+            .size(80.dp, 90.dp)
+            .graphicsLayer(scaleX = scale, scaleY = scale),
+        shape = RoundedCornerShape(14.dp),
+        color = EntropiColors.Card,
+        border = BorderStroke(1.dp, if (isPressed) EntropiColors.Gold1 else EntropiColors.Border)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(text = country.flag, fontSize = 28.sp)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = country.name,
+                fontFamily = SpaceGroteskFontFamily,
+                fontSize = 11.sp,
+                color = EntropiColors.Text,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "${country.paperCount} papers",
+                fontFamily = JetBrainsMonoFontFamily,
+                fontSize = 9.sp,
+                color = EntropiColors.Gold2
+            )
+        }
+    }
+}
+
+// ── DISCIPLINE TILE ──────────────────────────────────────────────────────────
+@Composable
+fun DisciplineTile(discipline: Discipline, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.size(72.dp, 88.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = Color.Transparent
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color(android.graphics.Color.parseColor(discipline.gradientStart)),
+                            Color(android.graphics.Color.parseColor(discipline.gradientEnd))
+                        )
+                    )
+                )
+                .padding(8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(text = discipline.emoji, fontSize = 26.sp)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = discipline.name,
+                    fontFamily = SpaceGroteskFontFamily,
+                    fontSize = 10.sp,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = discipline.subCount,
+                    fontFamily = SpaceGroteskFontFamily,
+                    fontSize = 8.sp,
+                    color = EntropiColors.Text2,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+// ── RESEARCH AREA PILL ───────────────────────────────────────────────────────
+@Composable
+fun ResearchAreaPill(area: ResearchArea, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(20.dp),
+        color = area.color.copy(alpha = 0.08f),
+        border = BorderStroke(1.dp, area.color.copy(alpha = 0.35f)),
+        modifier = Modifier.height(34.dp)
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = area.name,
+                fontFamily = SpaceGroteskFontFamily,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = area.color
+            )
+        }
+    }
+}
+
+// ── COMPONENT: PaperFeedCard ─────────────────────────────────────────────────
+@Composable
+fun PaperFeedCard(
+    paper: Paper,
+    accentColor: Color,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1.0f,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "pressScale"
+    )
+
+    Surface(
+        onClick = onClick,
+        interactionSource = interactionSource,
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer(scaleX = scale, scaleY = scale),
+        shape = RoundedCornerShape(16.dp),
+        color = EntropiColors.Card,
+        border = BorderStroke(1.dp, if (isPressed) EntropiColors.Gold1 else EntropiColors.Border)
+    ) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            // Left Accent Bar (Gold -> Blue)
+            Box(
+                modifier = Modifier
+                    .width(3.5.dp)
+                    .fillMaxHeight()
+                    .align(Alignment.CenterVertically)
+                    .background(Brush.verticalGradient(colors = listOf(EntropiColors.Gold1, EntropiColors.Blue1)))
+            )
+
+            Column(modifier = Modifier.padding(14.dp)) {
+                // Header tags row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = EntropiColors.Card2,
+                            border = BorderStroke(0.5.dp, EntropiColors.Border)
+                        ) {
+                            Text(
+                                text = paper.journal.take(18),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                color = EntropiColors.Gold2,
+                                fontSize = 9.sp,
+                                fontFamily = JetBrainsMonoFontFamily,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = EntropiColors.Purple1.copy(alpha = 0.08f)
+                        ) {
+                            Text(
+                                text = "D·${String.format("%.2f", paper.disruptionScore)}",
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                color = EntropiColors.Purple2,
+                                fontSize = 9.sp,
+                                fontFamily = JetBrainsMonoFontFamily,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                    }
+
+                    // Score Badge
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .background(EntropiColors.Gold1.copy(alpha = 0.12f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = (paper.noveltyScore * 100).toInt().toString(),
+                            color = EntropiColors.Gold2,
+                            fontSize = 10.sp,
+                            fontFamily = JetBrainsMonoFontFamily,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Title
+                Text(
+                    text = paper.title,
+                    fontFamily = SyneFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    lineHeight = 19.sp,
+                    color = EntropiColors.Text,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(Modifier.height(6.dp))
+
+                // Authors
+                Text(
+                    text = paper.authors.firstOrNull()?.split("|")?.firstOrNull() ?: "Unknown Author",
+                    fontFamily = SpaceGroteskFontFamily,
+                    fontSize = 11.sp,
+                    color = EntropiColors.Text3,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                // Bottom stats row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(Icons.Default.RemoveRedEye, null, tint = EntropiColors.Text3, modifier = Modifier.size(12.dp))
+                        Text(text = "1.2k views", fontFamily = JetBrainsMonoFontFamily, fontSize = 9.sp, color = EntropiColors.Text3)
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(Icons.Default.FormatQuote, null, tint = EntropiColors.Green, modifier = Modifier.size(12.dp))
+                        Text(text = "${paper.citationCount} citations", fontFamily = JetBrainsMonoFontFamily, fontSize = 9.sp, color = EntropiColors.Green, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── COMPONENT: ResearcherCard ────────────────────────────────────────────────
+@Composable
+fun ResearcherCard(
+    researcher: Author,
+    onConnect: () -> Unit,
+    onViewProfile: () -> Unit
+) {
+    var isConnected by remember { mutableStateOf(false) }
+
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = EntropiColors.Card,
+        border = BorderStroke(1.dp, EntropiColors.Border),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Avatar
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(EntropiColors.Gold1, EntropiColors.Blue1)
+                        )
+                    )
+                    .padding(2.dp)
+                    .background(EntropiColors.Card, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = researcher.name.take(1).uppercase(),
+                    color = EntropiColors.Gold2,
+                    fontFamily = SyneFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Name
+            Text(
+                text = researcher.name,
+                fontFamily = SpaceGroteskFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
+                color = EntropiColors.Text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            // Inst
+            Text(
+                text = researcher.institution.take(16),
+                fontFamily = SpaceGroteskFontFamily,
+                fontSize = 10.sp,
+                color = EntropiColors.Text3,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(Modifier.height(10.dp))
+
+            // Stats Block
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(EntropiColors.Card2, RoundedCornerShape(6.dp))
+                    .padding(6.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "D·${(researcher.avgDisruptionScore * 100).toInt()}",
+                        fontFamily = JetBrainsMonoFontFamily,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = EntropiColors.Gold2
+                    )
+                    Text("Disruption", fontFamily = SpaceGroteskFontFamily, fontSize = 8.sp, color = EntropiColors.Text3)
+                }
+                Box(modifier = Modifier.size(width = 0.5.dp, height = 18.dp).background(EntropiColors.Border))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "6.2k",
+                        fontFamily = JetBrainsMonoFontFamily,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = EntropiColors.Green
+                    )
+                    Text("Citations", fontFamily = SpaceGroteskFontFamily, fontSize = 8.sp, color = EntropiColors.Text3)
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // Action Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                // Connect
+                Button(
+                    onClick = {
+                        isConnected = !isConnected
+                        onConnect()
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(28.dp),
+                    contentPadding = PaddingValues(0.dp),
+                    shape = RoundedCornerShape(6.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isConnected) EntropiColors.Card2 else Color.Transparent,
+                        contentColor = EntropiColors.Gold1
+                    ),
+                    border = BorderStroke(1.dp, if (isConnected) EntropiColors.Border else EntropiColors.Gold1)
+                ) {
+                    Text(
+                        text = if (isConnected) "Pending" else "Connect",
+                        fontFamily = SpaceGroteskFontFamily,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                // View profile
+                Button(
+                    onClick = onViewProfile,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(28.dp),
+                    contentPadding = PaddingValues(0.dp),
+                    shape = RoundedCornerShape(6.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = EntropiColors.Card2,
+                        contentColor = EntropiColors.Text2
+                    ),
+                    border = BorderStroke(1.dp, EntropiColors.Border)
+                ) {
+                    Text(
+                        text = "View",
+                        fontFamily = SpaceGroteskFontFamily,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ── SUGGESTED CONNECTIONS ────────────────────────────────────────────────────
+@Composable
+fun ConnectionCard(
+    connection: Connection,
+    onConnect: () -> Unit,
+    onChatClick: () -> Unit = {}
+) {
+    var isConnected by remember { mutableStateOf(false) }
+
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = EntropiColors.Card,
+        border = BorderStroke(1.dp, EntropiColors.Border),
+        modifier = Modifier.fillMaxWidth().clickable { onChatClick() }
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                // Avatar Left
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(EntropiColors.Card2),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = connection.author.name.take(1).uppercase(),
+                        color = EntropiColors.Text2,
+                        fontFamily = SyneFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+
+                // Depth Badge
+                val (depthLabel, depthColor) = when (connection.depth) {
+                    1 -> "Direct" to EntropiColors.Green
+                    2 -> "2nd" to EntropiColors.Blue2
+                    else -> "3rd+" to EntropiColors.Text3
+                }
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = depthColor.copy(alpha = 0.08f),
+                    border = BorderStroke(0.5.dp, depthColor.copy(alpha = 0.2f))
+                ) {
+                    Text(
+                        text = depthLabel,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                        color = depthColor,
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = SpaceGroteskFontFamily
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Details
+            Text(
+                text = connection.author.name,
+                fontFamily = SpaceGroteskFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = EntropiColors.Text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Start
+            )
+
+            Text(
+                text = connection.author.institution,
+                fontFamily = SpaceGroteskFontFamily,
+                fontSize = 10.sp,
+                color = EntropiColors.Text3,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Start
+            )
+
+            Spacer(Modifier.height(6.dp))
+
+            // Mutual connections
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = null,
+                    tint = EntropiColors.Text3,
+                    modifier = Modifier.size(11.dp)
+                )
+                Text(
+                    text = "${connection.mutualCount} mutual researchers",
+                    fontFamily = SpaceGroteskFontFamily,
+                    fontSize = 9.sp,
+                    color = EntropiColors.Text3
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // Blue-Purple Gradient Connect Button
+            Surface(
+                onClick = {
+                    isConnected = !isConnected
+                    onConnect()
+                    onChatClick()
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(32.dp),
+                shape = RoundedCornerShape(8.dp),
+                color = if (isConnected) EntropiColors.Card2 else Color.Transparent,
+                border = BorderStroke(1.dp, if (isConnected) EntropiColors.Border else Color.Transparent)
+            ) {
+                Box(
+                    modifier = if (isConnected) {
+                        Modifier.fillMaxSize()
+                    } else {
+                        Modifier
+                            .fillMaxSize()
+                            .background(Brush.horizontalGradient(listOf(EntropiColors.Blue1, EntropiColors.Purple1)))
+                    },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (isConnected) "Requested" else "+ Connect",
+                        fontFamily = SpaceGroteskFontFamily,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isConnected) EntropiColors.Gold2 else Color.White
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ── COMPONENT: CompactPaperTile ──────────────────────────────────────────────
+@Composable
+fun CompactPaperTile(
+    paper: Paper,
+    borderCol: Color,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        color = EntropiColors.Card,
+        border = BorderStroke(1.dp, EntropiColors.Border),
+        modifier = Modifier
+            .width(140.dp)
+            .height(180.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // Accent Color Top Strip
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .background(borderCol)
+            )
+            Column(modifier = Modifier.padding(10.dp)) {
+                // Journal tag
+                Text(
+                    text = paper.journal.take(16).uppercase(),
+                    color = borderCol,
+                    fontSize = 8.sp,
+                    fontFamily = JetBrainsMonoFontFamily,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                // Score orb centered
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = (paper.disruptionScore * 100).toInt().toString(),
+                        color = EntropiColors.Gold2,
+                        fontFamily = SyneFontFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 32.sp
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Title
+                Text(
+                    text = paper.title,
+                    fontFamily = SpaceGroteskFontFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 10.sp,
+                    color = EntropiColors.Text,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 13.sp
+                )
+
+                // Stats
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "${paper.citationCount} cit",
+                        color = EntropiColors.Green,
+                        fontSize = 8.sp,
+                        fontFamily = JetBrainsMonoFontFamily,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "2026",
+                        color = EntropiColors.Text3,
+                        fontSize = 8.sp,
+                        fontFamily = JetBrainsMonoFontFamily
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ── INSTITUTION TILE ─────────────────────────────────────────────────────────
+@Composable
+fun InstitutionTile(institution: Institution, onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.width(80.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(EntropiColors.Card)
+                .border(BorderStroke(1.dp, EntropiColors.Border), RoundedCornerShape(20.dp))
+                .clickable { onClick() },
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(institution.color.copy(alpha = 0.08f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = institution.initials,
+                    color = institution.color,
+                    fontFamily = SyneFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            }
+        }
+        Text(
+            text = institution.name,
+            fontFamily = SpaceGroteskFontFamily,
+            fontSize = 9.sp,
+            color = EntropiColors.Text2,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+// ── OPEN ACCESS CARD ─────────────────────────────────────────────────────────
+@Composable
+fun OpenAccessCard(
+    paper: Paper,
+    onClick: () -> Unit,
+    onDownload: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = EntropiColors.Card,
+        border = BorderStroke(1.dp, EntropiColors.Border),
+        modifier = Modifier
+            .width(280.dp)
+            .clickable { onClick() }
+    ) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .width(3.5.dp)
+                    .fillMaxHeight()
+                    .background(EntropiColors.Green)
+            )
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = EntropiColors.Green.copy(alpha = 0.08f),
+                        border = BorderStroke(0.5.dp, EntropiColors.Green.copy(alpha = 0.2f))
+                    ) {
+                        Text(
+                            text = "OPEN ACCESS",
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            color = EntropiColors.Green,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = SpaceGroteskFontFamily
+                        )
+                    }
+
+                    // Download button
+                    IconButton(
+                        onClick = onDownload,
+                        modifier = Modifier
+                            .size(24.dp)
+                            .background(EntropiColors.Card2, CircleShape)
+                            .border(0.5.dp, EntropiColors.Border, CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Download,
+                            contentDescription = "Read",
+                            tint = EntropiColors.Green,
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                Text(
+                    text = paper.title,
+                    fontFamily = SpaceGroteskFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    color = EntropiColors.Text,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(Modifier.height(4.dp))
+
+                Text(
+                    text = paper.journal,
+                    fontFamily = SpaceGroteskFontFamily,
+                    fontSize = 10.sp,
+                    color = EntropiColors.Text3
+                )
+            }
+        }
+    }
+}
+
+// ── RESUME CARD ──────────────────────────────────────────────────────────────
+@Composable
+fun ResumeCard(
+    progress: ReadingProgress,
+    onClick: () -> Unit,
+    onResume: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = EntropiColors.Card,
+        border = BorderStroke(1.dp, EntropiColors.Border),
+        modifier = Modifier
+            .width(200.dp)
+            .height(110.dp)
+            .clickable { onClick() }
+    ) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            // reading progress bar (vertical, 4dp wide, Gold fill, rounded)
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .fillMaxHeight()
+                    .background(EntropiColors.Border)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(4.dp)
+                        .fillMaxHeight(progress.progressPercent / 100f)
+                        .background(EntropiColors.Gold1)
+                )
+            }
+
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    text = progress.paper.title,
+                    fontFamily = SpaceGroteskFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp,
+                    color = EntropiColors.Text,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(Modifier.height(4.dp))
+
+                Text(
+                    text = progress.paper.journal,
+                    fontFamily = SpaceGroteskFontFamily,
+                    fontSize = 9.sp,
+                    color = EntropiColors.Text3,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(Modifier.weight(1f))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${progress.progressPercent}% read",
+                        color = EntropiColors.Gold2,
+                        fontSize = 9.sp,
+                        fontFamily = JetBrainsMonoFontFamily,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Resume →",
+                        color = EntropiColors.Blue2,
+                        fontFamily = SpaceGroteskFontFamily,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable { onResume() }
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ── SECTION HEADER ───────────────────────────────────────────────────────────
+@Composable
+fun SectionHeader(
+    title: String,
+    badgeCount: Int? = null,
+    subtitle: String? = null,
+    onSeeAll: () -> Unit = {}
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = title,
+                fontFamily = SpaceGroteskFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                color = EntropiColors.Text
+            )
+            if (badgeCount != null) {
+                Surface(
+                    shape = CircleShape,
+                    color = EntropiColors.Card2,
+                    border = BorderStroke(0.5.dp, EntropiColors.Border)
+                ) {
+                    Text(
+                        text = badgeCount.toString(),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        color = EntropiColors.Gold2,
+                        fontSize = 9.sp,
+                        fontFamily = JetBrainsMonoFontFamily,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        if (subtitle != null) {
+            Text(
+                text = subtitle,
+                fontFamily = JetBrainsMonoFontFamily,
+                fontSize = 10.sp,
+                color = EntropiColors.Red,
+                fontWeight = FontWeight.Bold
+            )
+        } else {
+            Text(
+                text = "See all →",
+                fontFamily = SpaceGroteskFontFamily,
+                fontSize = 11.sp,
+                color = EntropiColors.Gold2,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clickable { onSeeAll() }
+            )
+        }
+    }
+}
+
+// ── SHIMMER PAPER CARD ────────────────────────────────────────────────────────
+@Composable
+fun PaperShimmerCard() {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = EntropiColors.Card,
+        border = BorderStroke(1.dp, EntropiColors.Border),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                ShimmerBar(Modifier.width(120.dp).height(10.dp))
+                ShimmerBar(Modifier.width(36.dp).height(10.dp))
+            }
+            Spacer(Modifier.height(12.dp))
+            ShimmerBar(Modifier.fillMaxWidth().height(14.dp))
+            Spacer(Modifier.height(6.dp))
+            ShimmerBar(Modifier.fillMaxWidth(0.85f).height(14.dp))
+            Spacer(Modifier.height(10.dp))
+            ShimmerBar(Modifier.width(80.dp).height(8.dp))
+        }
+    }
+}
+
+private fun getCountdownText(): String {
+    val calendar = Calendar.getInstance()
+    val dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK)
+    val daysLeft = if (dayOfWeek == Calendar.SUNDAY) 0 else 8 - dayOfWeek
+    return "Resets in $daysLeft days"
+}

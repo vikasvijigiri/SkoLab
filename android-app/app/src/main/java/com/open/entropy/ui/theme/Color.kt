@@ -3,48 +3,48 @@ package com.open.entropy.ui.theme
 import androidx.compose.ui.graphics.Color
 
 // ═══════════════════════════════════════════════════════════════
-// ResQit — Ultra-Modern Light Design System
-// Inspired by Linear.app, Apple Health, Notion
+// ReQit — Professional Corporate Grade Design System
+// Inspired by Flipkart & Professional Corporate Dashboards
 // ═══════════════════════════════════════════════════════════════
 
 // ── Backgrounds ──────────────────────────────────────────────────
-val BgPrimary         = Color(0xFFF5F7FA)  // Near-white app background
-val BgCard            = Color(0xFFFFFFFF)  // Pure white cards
-val BgElevated        = Color(0xFFEEF2F7)  // Slightly tinted for contrast
-val BgSubtle          = Color(0xFFF8FAFC)  // Very subtle off-white sections
+val BgPrimary         = Color(0xFF070A13)  // Deep professional navy background
+val BgCard            = Color(0xFF0E1322)  // Peaceful corporate dark navy card
+val BgElevated        = Color(0xFF161E34)  // Professional corporate slate navy for elevation
+val BgSubtle          = Color(0xFF090D18)  // Very subtle corporate navy section
 
-// ── Accent Colors — Vibrant, Scientific ───────────────────────────
-val AccentTeal        = Color(0xFF0EA5E9)  // Sky blue — primary brand
-val AccentTealDark    = Color(0xFF0284C7)  // Pressed / deep state
-val AccentTealLight   = Color(0xFFE0F2FE)  // Tint background for teal items
-val AccentIndigo      = Color(0xFF6366F1)  // Indigo — AI / predictions
-val AccentIndigoLight = Color(0xFFEEF2FF)  // Indigo tint
-val AccentEmerald     = Color(0xFF10B981)  // Success / open science
-val AccentEmeraldLight= Color(0xFFD1FAE5)  // Emerald tint
-val AccentAmber       = Color(0xFFF59E0B)  // Gold / velocity / impact
-val AccentAmberLight  = Color(0xFFFEF3C7)  // Amber tint
-val AccentRose        = Color(0xFFF43F5E)  // Warning / disruption
-val AccentRoseLight   = Color(0xFFFFE4E6)  // Rose tint
-val AccentViolet      = Color(0xFF8B5CF6)  // Purple / novelty
-val AccentVioletLight = Color(0xFFF5F3FF)  // Violet tint
-val AccentOrange      = Color(0xFFEA580C)  // Orange / acceleration
-val AccentOrangeLight = Color(0xFFFFF7ED)  // Orange tint
-val AccentCyan        = Color(0xFF06B6D4)  // Cyan / collaboration
-val AccentCyanLight   = Color(0xFFCFFAFE)  // Cyan tint
-val AccentSlate       = Color(0xFF64748B)  // Neutral metric
+// ── Accent Colors — Professional Flipkart Blue & Gold ─────────────────────
+val AccentTeal        = Color(0xFF2874F0)  // Peaceful corporate Flipkart Blue
+val AccentTealDark    = Color(0xFF1B59C4)  // Pressed state Flipkart Blue
+val AccentTealLight   = Color(0x262874F0)  // 15% opacity Blue tint
+val AccentIndigo      = Color(0xFF5B78C2)  // Peaceful soft blue-slate — AI
+val AccentIndigoLight = Color(0x1A5B78C2)  // Soft Indigo tint
+val AccentEmerald     = Color(0xFF4CAF50)  // Peaceful soft success green
+val AccentEmeraldLight= Color(0x1A4CAF50)  // Emerald tint
+val AccentAmber       = Color(0xFFF4B400)  // Flipkart Gold/Yellow highlight
+val AccentAmberLight  = Color(0x26F4B400)  // Amber/Gold tint
+val AccentRose        = Color(0xFFE53935)  // Peaceful soft red
+val AccentRoseLight   = Color(0x1AE53935)  // Rose tint
+val AccentViolet      = Color(0xFF8E24AA)  // Peaceful soft purple
+val AccentVioletLight = Color(0x1A8E24AA)  // Violet tint
+val AccentOrange      = Color(0xFFF4511E)  // Peaceful soft orange
+val AccentOrangeLight = Color(0x1AF4511E)  // Orange tint
+val AccentCyan        = Color(0xFF00ACC1)  // Peaceful soft cyan
+val AccentCyanLight   = Color(0x1A00ACC1)  // Cyan tint
+val AccentSlate       = Color(0xFF607D8B)  // Neutral slate
 
 // ── Text ─────────────────────────────────────────────────────────
-val TextPrimary       = Color(0xFF0F172A)  // Almost-black headlines
-val TextSecondary     = Color(0xFF475569)  // Slate medium — secondary text
-val TextMuted         = Color(0xFF94A3B8)  // Muted slate — captions, labels
-val TextOnAccent      = Color(0xFFFFFFFF)  // White on colored backgrounds
+val TextPrimary       = Color(0xFFF1F5F9)  // Crisp white/slate headlines
+val TextSecondary     = Color(0xFF94A3B8)  // Peaceful slate secondary text
+val TextMuted         = Color(0xFF475569)  // Muted slate captions
+val TextOnAccent      = Color(0xFFFFFFFF)  // High contrast white text on accent badges
 
 // ── Borders & Dividers ────────────────────────────────────────────
-val BorderLight       = Color(0xFFE2E8F0)  // Hairline borders
-val BorderMedium      = Color(0xFFCBD5E1)  // Slightly stronger dividers
+val BorderLight       = Color(0xFF1E293B)  // Slate hairline borders
+val BorderMedium      = Color(0xFF334155)  // Slate dividers
 
 // ── Shadows (used as overlay tints) ───────────────────────────────
-val ShadowColor       = Color(0xFF0F172A)  // Dark for elevation shadows
+val ShadowColor       = Color(0xFF020617)  // Deep dark for elevation shadows
 
 // ── Metric-specific palette (10 research metrics) ────────────────
 val MetricDisruptionColor    = AccentRose       // Disruption score
@@ -56,10 +56,10 @@ val MetricComplexityColor    = AccentCyan       // Complexity
 val MetricOpenScienceColor   = AccentEmerald    // Open science
 val MetricCollabColor        = AccentOrange     // Collaboration diversity
 val MetricConsistencyColor   = AccentSlate      // Research consistency
-val MetricPolicyColor        = Color(0xFF7C3AED)// Policy/patent score
+val MetricPolicyColor        = Color(0xFFA78BFA)// Policy/patent score
 
 // ── Gradient lists ────────────────────────────────────────────────
-val HeroGradient      = listOf(Color(0xFF0EA5E9), Color(0xFF6366F1))
+val HeroGradient      = listOf(Color(0xFF00E5FF), Color(0xFF818CF8))
 val TealGradient      = listOf(AccentTeal, AccentCyan)
 val IndigoGradient    = listOf(AccentIndigo, AccentViolet)
 val WarmGradient      = listOf(AccentAmber, AccentOrange)

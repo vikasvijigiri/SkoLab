@@ -20,6 +20,8 @@ import re
 import io
 import asyncio
 from typing import Optional, List, Dict, Any, Tuple
+import firebase_admin
+from firebase_admin import firestore
 from .metrics_service import MetricsService
 
 
@@ -128,6 +130,19 @@ the abstract — use this to be MAXIMALLY accurate and specific.
 """
 
 
+# Shared module-level in-memory cache
+_global_intelligence_cache: Dict[str, Dict[str, Any]] = {}
+LLM_LIMIT_EXCEEDED = False
+
+def is_llm_working() -> bool:
+    global LLM_LIMIT_EXCEEDED
+    return bool(os.getenv("GROQ_API")) and not LLM_LIMIT_EXCEEDED
+
+def set_llm_limit_exceeded(exceeded: bool):
+    global LLM_LIMIT_EXCEEDED
+    LLM_LIMIT_EXCEEDED = exceeded
+    print(f"[LLM] LLM_LIMIT_EXCEEDED set to {exceeded}", flush=True)
+
 class SummarizationService:
     def __init__(self):
         self.api_key = os.getenv("GROQ_API")
@@ -136,7 +151,7 @@ class SummarizationService:
         self.metrics_service = MetricsService()
 
         # In-memory cache: DOI / OpenAlex ID → intelligence result (session-scoped)
-        self._intelligence_cache: Dict[str, Dict[str, Any]] = {}
+        self._intelligence_cache = _global_intelligence_cache
 
     # ══════════════════════════════════════════════════════════════════════════
     # PUBLIC — Deep Analysis (new /analyze_paper endpoint)
@@ -157,28 +172,73 @@ class SummarizationService:
             print(f"[analyze_paper] Cache hit for: {cache_key[:60]}", flush=True)
             return self._intelligence_cache[cache_key]
 
+        # Determine unique document ID for this paper to cache in Firestore
+        doc_id = None
+        if openalex_id:
+            doc_id = openalex_id.split("/")[-1]
+        elif doi:
+            doc_id = self._clean_doi(doi).replace("/", "_")
+        else:
+            import hashlib
+            doc_id = "title_" + hashlib.md5(title.lower().strip().encode("utf-8")).hexdigest()
+
+        # Check Firestore cache first if available
+        db = None
+        firestore_available = False
+        try:
+            from researcher_worker import FIRESTORE_AVAILABLE
+            firestore_available = FIRESTORE_AVAILABLE
+        except Exception:
+            firestore_available = bool(firebase_admin._apps)
+
+        if firestore_available and firebase_admin._apps:
+            try:
+                db = firestore.client()
+            except Exception as e:
+                print(f"[analyze_paper] Firestore client init failed: {e}", flush=True)
+
+        if db and doc_id:
+            try:
+                doc_ref = db.collection("paper_intelligence").document(doc_id)
+                doc = doc_ref.get(timeout=5.0)
+                if doc.exists:
+                    result = doc.to_dict()
+                    self._intelligence_cache[cache_key] = result
+                    print(f"[analyze_paper] Firestore cache hit for: {doc_id}", flush=True)
+                    return result
+            except Exception as e:
+                print(f"[analyze_paper] Firestore cache read error for {doc_id}: {e}", flush=True)
+
         # ── Step 1: Fetch OpenAlex metadata (always) ──────────────────────────
         print(f"[analyze_paper] Fetching metadata for: {title[:60]}", flush=True)
         meta = await self._fetch_openalex_meta(doi=doi, openalex_id=openalex_id)
 
         # ── Step 2: Attempt to get the full paper text ────────────────────────
-        full_text, text_source = await self._fetch_full_paper_text(
-            doi=doi,
-            openalex_id=openalex_id,
-            oa_url=meta.get("oa_url"),
-            arxiv_id=meta.get("arxiv_id"),
-        )
-
-        # ── Step 3: Build context for LLM ────────────────────────────────────
-        context = self._build_context(title, meta, full_text, text_source)
-
-        # ── Step 4: Run LLM ───────────────────────────────────────────────────
-        if not self.api_key:
-            result = self._intelligence_fallback(title, meta, text_source)
+        if not is_llm_working():
+            print("[analyze_paper] LLM out of limit/unconfigured. Skipping text extraction and context building.", flush=True)
+            result = self._intelligence_fallback(title, meta, "metadata_only")
         else:
+            full_text, text_source = await self._fetch_full_paper_text(
+                doi=doi,
+                openalex_id=openalex_id,
+                oa_url=meta.get("oa_url"),
+                arxiv_id=meta.get("arxiv_id"),
+            )
+            # ── Step 3: Build context for LLM ────────────────────────────────────
+            context = self._build_context(title, meta, full_text, text_source)
+            # ── Step 4: Run LLM ───────────────────────────────────────────────────
             result = await self._run_intelligence_llm(context, title, meta, text_source)
 
         self._intelligence_cache[cache_key] = result
+
+        # Save to Firestore cache
+        if db and doc_id and result:
+            try:
+                db.collection("paper_intelligence").document(doc_id).set(result, timeout=5.0)
+                print(f"[analyze_paper] Cached result to Firestore: {doc_id}", flush=True)
+            except Exception as e:
+                print(f"[analyze_paper] Firestore cache write error for {doc_id}: {e}", flush=True)
+
         return result
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -256,13 +316,13 @@ class SummarizationService:
             headers = {
                 "User-Agent": (
                     "ResQitApp/1.0 (mailto:vikki.4me@gmail.com) "
-                    "Academic research tool — reading open-access papers"
+                    "Academic research tool - reading open-access papers"
                 ),
                 "Accept": "application/pdf,*/*",
             }
             async with httpx.AsyncClient(
                 headers=headers,
-                timeout=httpx.Timeout(40.0, connect=10.0),
+                timeout=httpx.Timeout(2.0, connect=2.0),
                 follow_redirects=True,
             ) as client:
                 resp = await client.get(url)
@@ -296,7 +356,9 @@ class SummarizationService:
             print(f"[PDF] Download timed out: {url[:60]}", flush=True)
             return None
         except Exception as e:
-            print(f"[PDF] Download/extraction error: {e}", flush=True)
+            # Encode error message safely — PDF titles may contain non-ASCII chars (em-dashes etc.)
+            safe_err = str(e).encode('ascii', errors='replace').decode('ascii')
+            print(f"[PDF] Download/extraction error: {safe_err}", flush=True)
             return None
 
     @staticmethod
@@ -346,7 +408,8 @@ class SummarizationService:
 
             return full_text
         except Exception as e:
-            print(f"[pdfplumber] Extraction error: {e}", flush=True)
+            safe_err = str(e).encode('ascii', errors='replace').decode('ascii')
+            print(f"[pdfplumber] Extraction error: {safe_err}", flush=True)
             return None
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -551,6 +614,8 @@ class SummarizationService:
                 return self._parse_and_normalise(raw, title, meta, text_source)
             else:
                 print(f"[LLM] Error {resp.status_code}: {resp.text[:300]}", flush=True)
+                if resp.status_code in [401, 403, 429]:
+                    set_llm_limit_exceeded(True)
 
         except httpx.TimeoutException:
             print("[LLM] Groq request timed out", flush=True)
@@ -630,9 +695,8 @@ class SummarizationService:
             paper_data.get("concepts", [])
         )
 
-        if not self.api_key:
+        if not is_llm_working():
             fallback = self._generate_fallback_data(title)
-            fallback["metrics"] = metrics
             fallback["top_skills"] = top_skills
             return fallback
 
@@ -697,7 +761,6 @@ Return JSON: { "bullets": ["⚛️ ...", ...] }""",
             pass
 
         fallback = self._generate_fallback_data(title)
-        fallback["metrics"] = metrics
         fallback["top_skills"] = top_skills
         return fallback
 
@@ -844,9 +907,9 @@ Return JSON: { "slides": [{ "title": "...", "bullets": ["..."] }] }""",
                 "💡 Highlights critical implications for the field's trajectory.",
             ],
             "metrics": {
-                "creativity": random.randint(70, 95),
-                "complexity": random.randint(75, 98),
-                "skill_set_score": random.randint(65, 90),
+                "creativity": 0,
+                "complexity": 0,
+                "skill_set_score": 0,
             },
             "top_skills": ["Theoretical Physics", "Advanced Mathematics"],
         }

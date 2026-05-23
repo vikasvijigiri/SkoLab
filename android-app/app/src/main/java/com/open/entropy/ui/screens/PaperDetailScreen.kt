@@ -162,12 +162,7 @@ fun PaperDetailScreen(
                                 }
                             }
                             is IntelligenceUiState.Unavailable -> {
-                                item {
-                                    IntelligenceUnavailableBlock(
-                                        onRetry = { viewModel.retryIntelligence(paper, paperId) },
-                                        reason = intel.reason
-                                    )
-                                }
+                                // Ignore section gracefully: don't render a blocking retry card or stop showing other sections
                             }
                             is IntelligenceUiState.Success -> {
                                 val data = intel.data
@@ -268,12 +263,13 @@ fun PaperHero(paper: com.open.entropy.model.Paper, onAuthorClick: (String) -> Un
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            paper.authors.take(4).forEach { author ->
+            paper.authors.take(4).forEach { authorCombined ->
+                val name = authorCombined.substringBefore("|")
                 Text(
-                    text = author,
+                    text = name,
                     style = Typography.labelMedium,
                     color = ResQitDisruption,
-                    modifier = Modifier.clickable { onAuthorClick(author) }
+                    modifier = Modifier.clickable { onAuthorClick(authorCombined) }
                 )
             }
             if (paper.authors.size > 4) {
