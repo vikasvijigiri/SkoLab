@@ -6,21 +6,29 @@ import os
 from typing import Optional, List, Dict
 import re
 import concurrent.futures
+import asyncio
 
-# Initialize Firebase with Project ID only (for simple environments)
+# Initialize Firebase with service-account.json if present, otherwise fallback
 if not firebase_admin._apps:
     try:
-        # Try to use default credentials first
-        cred = credentials.ApplicationDefault()
-        firebase_admin.initialize_app(cred)
-    except Exception:
+        service_account_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "service-account.json")
+        if os.path.exists(service_account_path):
+            cred = credentials.Certificate(service_account_path)
+            firebase_admin.initialize_app(cred)
+            print(f"[Firebase] Initialized with Certificate from {service_account_path}", flush=True)
+        else:
+            cred = credentials.ApplicationDefault()
+            firebase_admin.initialize_app(cred)
+            print("[Firebase] Initialized with ApplicationDefault", flush=True)
+    except Exception as e_cert:
+        print(f"[Firebase] Initialization with credentials failed: {e_cert}. Trying fallback options...", flush=True)
         try:
-            # Fallback for local development if ADC is not set
             firebase_admin.initialize_app(options={
                 'projectId': 'resqit-a7980',
             })
-        except Exception:
-            pass
+            print("[Firebase] Initialized with fallback projectId", flush=True)
+        except Exception as e_fallback:
+            print(f"[Firebase] Fallback initialization failed: {e_fallback}", flush=True)
 
 FIRESTORE_AVAILABLE = False
 db = None
@@ -40,14 +48,45 @@ def set_firestore_available(available: bool):
     print(f"[Firestore] FIRESTORE_AVAILABLE set to {FIRESTORE_AVAILABLE}", flush=True)
 
 def check_connection_sync() -> bool:
-    print("[Firestore] connection check bypassed (returns False)", flush=True)
-    return False
+    """
+    Checks if Firestore connection is responsive by attempting a read with a timeout.
+    Uses a daemon thread to prevent indefinite hanging during gRPC connection establishment.
+    """
+    import threading
+    if not firebase_admin._apps:
+        return False
+
+    result = {"success": False}
+    def target():
+        try:
+            client = firestore.client()
+            doc_ref = client.collection("connection_check").document("test")
+            # Trigger network load
+            doc_ref.get(timeout=2.0)
+            result["success"] = True
+        except Exception:
+            pass
+
+    t = threading.Thread(target=target)
+    t.daemon = True
+    t.start()
+    t.join(timeout=2.0)
+    
+    if result["success"]:
+        print("[Firestore] connection check succeeded", flush=True)
+        return True
+    else:
+        print("[Firestore] connection check failed or timed out", flush=True)
+        return False
+
 
 from app.services.metrics_service import MetricsService
 from app.services.prediction_service import PredictionService
+from app.services.summarization_service import SummarizationService
 
 metrics_service = MetricsService()
 prediction_service = PredictionService()
+summarization_service = SummarizationService()
 
 async def teleport_researcher(author_id: str):
     """
@@ -253,6 +292,58 @@ async def teleport_researcher(author_id: str):
         else:
             avg_activity = 0.0
 
+        # Concurrently fetch/produce summaries for up to 10 recent works
+        recent_works = works_results[:10]
+        summaries = []
+        summary_by_id = {}
+        extracted_tools = []
+        extracted_techniques = []
+        extracted_core_concepts = []
+        
+        if recent_works:
+            print(f"[teleport_researcher] Analyzing {len(recent_works)} papers concurrently...", flush=True)
+            tasks = [
+                summarization_service.analyze_paper(
+                    title=w.get("title", ""),
+                    doi=w.get("doi"),
+                    openalex_id=w.get("id"),
+                )
+                for w in recent_works
+            ]
+            summaries = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            for w, summary in zip(recent_works, summaries):
+                if isinstance(summary, Exception) or not summary or not isinstance(summary, dict):
+                    continue
+                
+                key = w.get("id") or w.get("doi") or w.get("title")
+                if key:
+                    summary_by_id[key] = summary
+                    
+                # Extract tools
+                for tool in summary.get("tools_and_software", []):
+                    if isinstance(tool, str):
+                        t_clean = tool.strip()
+                        t_lower = t_clean.lower()
+                        if t_clean and t_lower not in ["not specified", "not mentioned in paper", "none", "n/a", "not mentioned", "not specified."]:
+                            extracted_tools.append(t_clean)
+                
+                # Extract techniques
+                for tech in summary.get("techniques", []):
+                    if isinstance(tech, str):
+                        tech_clean = tech.strip()
+                        tech_lower = tech_clean.lower()
+                        if tech_clean and tech_lower not in ["not specified", "not mentioned in paper", "none", "n/a", "not mentioned", "not specified."]:
+                            extracted_techniques.append(tech_clean)
+                            
+                # Extract core concepts
+                for concept in summary.get("core_concepts", []):
+                    if isinstance(concept, str):
+                        c_clean = concept.strip()
+                        c_lower = c_clean.lower()
+                        if c_clean and c_lower not in ["not specified", "not mentioned in paper", "none", "n/a", "not mentioned", "not specified."]:
+                            extracted_core_concepts.append(c_clean)
+
         # 4. Innovation Score & Prediction
         # Expertise/Interests: Quality-Weighted top areas from paper-level concepts
         # This prioritizes what the researcher is FAMOUS for (citations) and focuses on (frequency)
@@ -284,24 +375,51 @@ async def teleport_researcher(author_id: str):
             if c.get("level") in [1, 2, 3]
         ]
         # Intersect with weighted top interests to ensure accuracy
-        expertise = [e for e in top_research_interests if e in expertise_pool]
+        base_expertise = [e for e in top_research_interests if e in expertise_pool]
         # Fill remaining slots with highest weighted specific concepts
         for item in top_research_interests:
-            if item not in expertise:
-                expertise.append(item)
+            if item not in base_expertise:
+                base_expertise.append(item)
         
-        expertise = list(dict.fromkeys(expertise))[:8] # Unique and limit to 8 tags for density
+        base_expertise = list(dict.fromkeys(base_expertise))[:8] # Unique and limit to 8 tags for density
 
         # Fallback
-        if not expertise:
-            expertise = [c.get("display_name") for c in author_concepts[:3]]
+        if not base_expertise:
+            base_expertise = [c.get("display_name") for c in author_concepts[:3]]
+
+        # Merge with extracted paper intelligence (techniques, tools, core_concepts)
+        seen_lower = set()
+        merged_expertise = []
+        
+        def add_tag(tag: str):
+            if not tag:
+                return
+            t_clean = tag.strip()
+            t_lower = t_clean.lower()
+            if t_lower in ["not specified", "none", "n/a", "python", "r", "software", "analysis", "method"]:
+                return
+            if t_lower not in seen_lower:
+                seen_lower.add(t_lower)
+                merged_expertise.append(t_clean)
+
+        # Prioritize extracted techniques, tools, concepts first to ensure direct alignment with recent papers
+        for tech in extracted_techniques:
+            add_tag(tech)
+        for tool in extracted_tools:
+            add_tag(tool)
+        for concept in extracted_core_concepts:
+            add_tag(concept)
+        for item in base_expertise:
+            add_tag(item)
+            
+        expertise = merged_expertise[:12]
 
         scores = [c.get("score", 0) for c in author_concepts if c.get("level") is not None and c.get("level") <= 1]
         innovation_score = calculate_innovation_score(scores)
         
         # Predict Frontier using titles, abstracts and metrics from the top/recent publications
         prediction_works = []
-        for w in works_results[:5]:
+        for w in works_results[:10]:
             abstract_inverted = w.get("abstract_inverted_index")
             abstract = ""
             if abstract_inverted:
@@ -311,12 +429,22 @@ async def teleport_researcher(author_id: str):
                 word_pos.sort()
                 abstract = " ".join([wp[1] for wp in word_pos])
             
-            prediction_works.append({
+            key = w.get("id") or w.get("doi") or w.get("title")
+            summary = summary_by_id.get(key)
+            
+            work_item = {
                 "title": w.get("title", "Untitled"),
                 "year": w.get("publication_year"),
                 "citations": w.get("cited_by_count", 0),
                 "abstract": abstract
-            })
+            }
+            if summary and isinstance(summary, dict):
+                work_item["tldr"] = summary.get("tldr")
+                work_item["techniques"] = summary.get("techniques")
+                work_item["tools_and_software"] = summary.get("tools_and_software")
+                work_item["core_concepts"] = summary.get("core_concepts")
+                
+            prediction_works.append(work_item)
             
         next_prediction = await prediction_service.predict_next_problem(
             author_name=data.get("display_name", "Author"),
@@ -355,6 +483,8 @@ async def teleport_researcher(author_id: str):
                 curr_inst = first_inst.get("display_name") or "Independent"
 
         # 5. Build Document
+        import datetime
+        now_iso = datetime.datetime.utcnow().isoformat() + "Z"
         researcher_profile = {
             "openalex_id": data.get("id", author_id),
             "display_name": data.get("display_name"),
@@ -376,15 +506,17 @@ async def teleport_researcher(author_id: str):
             "works": processed_works,
             "next_prediction": next_prediction,
             "is_verified": True,
-            "last_synced": firestore.SERVER_TIMESTAMP,
+            "last_synced": now_iso,
             # Modern 10 Metrics
             **modern_metrics
         }
 
-        # 6. Atomic Sync
+        # 6. Atomic Sync — use SERVER_TIMESTAMP only in the Firestore write
         if FIRESTORE_AVAILABLE and db:
             try:
-                db.collection("global_researchers").document(canonical_id).set(researcher_profile)
+                firestore_doc = dict(researcher_profile)
+                firestore_doc["last_synced"] = firestore.SERVER_TIMESTAMP  # Firestore sentinel only for write
+                db.collection("global_researchers").document(canonical_id).set(firestore_doc)
                 print(f"Successfully vaulted Deep Data with Prediction for: {researcher_profile['display_name']}")
             except Exception as e:
                 print(f"Firestore Sync Failed: {e}")

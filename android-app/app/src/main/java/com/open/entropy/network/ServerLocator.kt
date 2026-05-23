@@ -152,6 +152,27 @@ object ServerLocator {
         Log.i(TAG, "Service discovery stopped")
     }
 
+    /**
+     * Reports that a network request to the given URL failed.
+     * If this matches the current baseUrl, we reset it to null to trigger rediscovery.
+     */
+    fun reportFailure(url: String) {
+        val current = _baseUrl.value ?: return
+        if (url.startsWith(current) || current.startsWith(url)) {
+            Log.w(TAG, "Reported failure for active backend URL: $url. Resetting baseUrl to null.")
+            _baseUrl.value = null
+            // Also invalidate SharedPreferences cache
+            appContext?.let { ctx ->
+                try {
+                    val prefs = ctx.getSharedPreferences("server_locator_prefs", Context.MODE_PRIVATE)
+                    prefs.edit().remove("last_resolved_url").apply()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to clear SharedPreferences cache", e)
+                }
+            }
+        }
+    }
+
     // ── Listeners ────────────────────────────────────────────────────────────
 
     private fun buildDiscoveryListener() = object : NsdManager.DiscoveryListener {
@@ -206,15 +227,29 @@ object ServerLocator {
                     }
 
                     override fun onServiceUpdated(serviceInfo: NsdServiceInfo) {
-                        resolveInProgress = false
                         val hostAddresses = serviceInfo.hostAddresses
-                        val host = hostAddresses.firstOrNull()?.hostAddress ?: return
                         val port = serviceInfo.port
-                        val url = "http://$host:$port"
-                        Log.i(TAG, "Backend resolved → $url")
-                        updateBaseUrl(url)
-                        // Unregister now that we have the URL
-                        nsdManager?.unregisterServiceInfoCallback(this)
+                        val callbackInstance = this
+                        Executors.newSingleThreadExecutor().execute {
+                            var resolvedUrl: String? = null
+                            for (addr in hostAddresses) {
+                                val host = addr.hostAddress ?: continue
+                                val url = "http://$host:$port"
+                                Log.d(TAG, "Probing resolved address: $url")
+                                if (probeUrl(url)) {
+                                    resolvedUrl = url
+                                    break
+                                }
+                            }
+                            resolveInProgress = false
+                            if (resolvedUrl != null) {
+                                Log.i(TAG, "Backend resolved and verified → $resolvedUrl")
+                                updateBaseUrl(resolvedUrl)
+                                nsdManager?.unregisterServiceInfoCallback(callbackInstance)
+                            } else {
+                                Log.w(TAG, "None of the resolved addresses are reachable")
+                            }
+                        }
                     }
 
                     override fun onServiceLost() {
@@ -236,12 +271,31 @@ object ServerLocator {
 
                 override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
                     resolveInProgress = false
-                    @Suppress("DEPRECATION")
-                    val host = serviceInfo.host?.hostAddress ?: return
                     val port = serviceInfo.port
-                    val url = "http://$host:$port"
-                    Log.i(TAG, "Backend resolved → $url")
-                    updateBaseUrl(url)
+                    val hostAddresses = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                        serviceInfo.hostAddresses
+                    } else {
+                        @Suppress("DEPRECATION")
+                        listOfNotNull(serviceInfo.host)
+                    }
+                    Executors.newSingleThreadExecutor().execute {
+                        var resolvedUrl: String? = null
+                        for (addr in hostAddresses) {
+                            val host = addr.hostAddress ?: continue
+                            val url = "http://$host:$port"
+                            Log.d(TAG, "Probing resolved address (legacy): $url")
+                            if (probeUrl(url)) {
+                                resolvedUrl = url
+                                break
+                            }
+                        }
+                        if (resolvedUrl != null) {
+                            Log.i(TAG, "Backend resolved and verified (legacy) → $resolvedUrl")
+                            updateBaseUrl(resolvedUrl)
+                        } else {
+                            Log.w(TAG, "None of the legacy resolved addresses are reachable")
+                        }
+                    }
                 }
             }
             nsdManager?.resolveService(service, resolveListener)

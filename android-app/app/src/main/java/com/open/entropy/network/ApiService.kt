@@ -74,6 +74,46 @@ data class OpenAlexAuthorsResponse(
     val results: List<OpenAlexAuthor>
 )
 
+@Serializable
+data class OpenAlexSummaryStats(
+    val h_index: Int = 0,
+    val i10_index: Int = 0,
+    val cited_by_count: Int = 0
+)
+
+@Serializable
+data class OpenAlexConcept(
+    val display_name: String? = null,
+    val level: Int? = null,
+    val score: Double? = null
+)
+
+@Serializable
+data class OpenAlexAffiliationInstitution(
+    val display_name: String? = null
+)
+
+@Serializable
+data class OpenAlexAffiliation(
+    val institution: OpenAlexAffiliationInstitution? = null,
+    val years: List<Int>? = null
+)
+
+/** Full author detail from /authors/{id} — used for direct OpenAlex fallback */
+@Serializable
+data class OpenAlexAuthorDetail(
+    val id: String,
+    val display_name: String? = null,
+    val orcid: String? = null,
+    val works_count: Int? = null,
+    val cited_by_count: Int? = null,
+    val summary_stats: OpenAlexSummaryStats? = null,
+    val x_concepts: List<OpenAlexConcept>? = null,
+    val last_known_institutions: List<OpenAlexInstitution>? = null,
+    val affiliations: List<OpenAlexAffiliation>? = null
+)
+
+
 @Serializable data class RandomResponse(val random_number: Int)
 
 @Serializable
@@ -98,7 +138,9 @@ data class AuthorSuggestion(
     val id: String,
     val display_name: String,
     val institution: String,
-    val field_of_study: String? = null
+    val field_of_study: String? = null,
+    val h_index: Int? = null,
+    val innovation_score: Int? = null
 )
 
 @Serializable
@@ -121,6 +163,9 @@ data class AuthorResponse(
     val average_skill_score: Double = 0.0,
     val average_impact: Double = 0.0,
     val innovation_score: Double? = 0.0,
+    // False = LLM pipeline hasn't run yet; UI should show N/A for computed metrics
+    val metrics_computed: Boolean = false,
+    val llm_active: Boolean = true,
     val disruption_score: Double = 0.0,
     val citation_acceleration: Double = 0.0,
     val future_impact_score: Double = 0.0,
@@ -155,6 +200,87 @@ data class SummaryResponse(
     val bullets: List<String>,
     val metrics: Metrics,
     val top_skills: List<String>
+)
+
+@Serializable
+data class DailyFeedItem(
+    val id: String,
+    val title: String,
+    val authors: List<String>,
+    val journal: String,
+    val year: Int,
+    val relevance_score: Int,
+    val recommendation_reason: String,
+    val doi: String? = null
+)
+
+@Serializable
+data class GrantMatch(
+    val title: String,
+    val agency: String,
+    val agency_color: String,
+    val days_left: Int,
+    val amount: String,
+    val field: String,
+    val match_score: Int,
+    val url: String,
+    val rationale: String
+)
+
+@Serializable
+data class CollaboratorSynergy(
+    val synergy_score: Int,
+    val joint_proposal_title: String,
+    val co_authorship_direction: String,
+    val strategic_action_plan: List<String>
+)
+
+@Serializable
+data class CitationHeatmap(
+    val years: List<Int>,
+    val citations: List<Int>,
+    val works: List<Int>,
+    val institutional_reach: Int,
+    val h_index: Int
+)
+
+@Serializable
+data class JournalRecommendation(
+    val journal_name: String,
+    val estimated_impact_factor: Double,
+    val match_score: Int,
+    val submission_tips: String
+)
+
+@Serializable
+data class NetworkCollaborator(
+    val id: String,
+    val name: String,
+    val institution: String,
+    val field: String,
+    val connection_path: String,
+    val relevance_score: Int
+)
+
+@Serializable
+data class ChatMessage(
+    val role: String,
+    val content: String
+)
+
+@Serializable
+data class ChatRequest(
+    val author_id: String,
+    val paper_title: String,
+    val user_message: String,
+    val history: List<ChatMessage>
+)
+
+@Serializable
+data class ChatResponse(
+    val author_id: String,
+    val author_name: String,
+    val reply: String
 )
 
 // Mapped from PaperIntelligence.kt — using the model class directly
@@ -228,6 +354,14 @@ class ApiService {
      */
     private fun baseUrl(): String? = ServerLocator.baseUrl.value
 
+    private fun handleNetworkException(e: Exception, base: String?) {
+        if (base != null && (e is java.io.IOException || 
+            e.javaClass.name.contains("Timeout") || 
+            e.javaClass.name.contains("Connect"))) {
+            ServerLocator.reportFailure(base)
+        }
+    }
+
     // ── Backend endpoints ─────────────────────────────────────────────────────
 
     suspend fun getRandomNumber(): Int {
@@ -239,6 +373,7 @@ class ApiService {
             val response: RandomResponse = httpClient.get("$base/random").body()
             response.random_number
         } catch (e: Exception) {
+            handleNetworkException(e, base)
             Log.e(tag, "getRandomNumber failed", e)
             -1
         }
@@ -260,6 +395,7 @@ class ApiService {
                     parameter("query", query)
                 }.body()
             } catch (e: Exception) {
+                handleNetworkException(e, base)
                 Log.e(tag, "getAuthorSuggestions via backend failed, falling back to direct OpenAlex query", e)
                 fetchDirectAuthorSuggestions(query)
             }
@@ -296,20 +432,133 @@ class ApiService {
     }
 
     suspend fun searchAuthor(name: String, id: String? = null): AuthorResponse? {
-        val base = baseUrl() ?: run {
-            Log.w(tag, "searchAuthor: backend not yet discovered")
-            return null
+        val base = baseUrl()
+        // Try backend first
+        if (base != null) {
+            try {
+                Log.d(tag, "Searching author via backend: $name, id: $id @ $base")
+                val result: AuthorResponse = httpClient.get("$base/search_author") {
+                    parameter("name", name)
+                    if (id != null) parameter("id", id)
+                }.body()
+                return result
+            } catch (e: Exception) {
+                handleNetworkException(e, base)
+                Log.w(tag, "searchAuthor backend failed, falling back to OpenAlex direct", e)
+            }
+        } else {
+            Log.w(tag, "searchAuthor: backend not yet discovered, using OpenAlex direct")
         }
+        // Fallback: fetch directly from OpenAlex — real data, no hallucination
+        return fetchAuthorFromOpenAlex(name, id)
+    }
+
+    /**
+     * Fetches an author profile directly from OpenAlex when the backend is unreachable.
+     * Returns real data (name, institution, works) with metrics_computed=false.
+     */
+    private suspend fun fetchAuthorFromOpenAlex(name: String, id: String? = null): AuthorResponse? {
         return try {
-            Log.d(tag, "Searching author: $name, id: $id @ $base")
-            httpClient.get("$base/search_author") {
-                parameter("name", name)
-                if (id != null) {
-                    parameter("id", id)
+            val authorData = if (id != null) {
+                val cleanId = id.substringAfterLast("/")
+                httpClient.get("https://api.openalex.org/authors/$cleanId") {
+                    parameter("mailto", "vikki.4me@gmail.com")
+                }.body<OpenAlexAuthorDetail>()
+            } else {
+                val resp = httpClient.get("https://api.openalex.org/authors") {
+                    parameter("search", name)
+                    parameter("per_page", 1)
+                    parameter("mailto", "vikki.4me@gmail.com")
+                }.body<OpenAlexAuthorsResponse>()
+                val first = resp.results.firstOrNull() ?: return null
+                // Re-fetch full detail by ID for complete data
+                val cleanId = first.id.substringAfterLast("/")
+                httpClient.get("https://api.openalex.org/authors/$cleanId") {
+                    parameter("mailto", "vikki.4me@gmail.com")
+                }.body()
+            }
+
+            // Fetch recent works
+            val cleanId = authorData.id.substringAfterLast("/")
+            val worksResp = try {
+                httpClient.get("https://api.openalex.org/works") {
+                    parameter("filter", "authorships.author.id:$cleanId")
+                    parameter("per_page", 20)
+                    parameter("sort", "publication_year:desc")
+                    parameter("mailto", "vikki.4me@gmail.com")
+                }.body<OpenAlexResponse>()
+            } catch (e: Exception) {
+                Log.w(tag, "fetchAuthorFromOpenAlex: works fetch failed", e)
+                OpenAlexResponse(emptyList())
+            }
+
+            val institution = authorData.last_known_institutions?.firstOrNull()?.display_name
+                ?: "Independent Researcher"
+            val concepts = authorData.x_concepts ?: emptyList()
+            val fieldOfStudy = concepts.firstOrNull { it.level == 1 }?.display_name
+                ?: concepts.firstOrNull()?.display_name
+                ?: "Multidisciplinary"
+            val expertise = concepts.filter { it.level in listOf(1, 2) }.take(6).mapNotNull { it.display_name }
+
+            // Build affiliations history from OpenAlex affiliations
+            val affiliations = authorData.affiliations ?: emptyList()
+            val histMap = mutableMapOf<String, Pair<Int, Int>>()
+            affiliations.forEach { aff ->
+                val instName = aff.institution?.display_name ?: return@forEach
+                val years = aff.years ?: return@forEach
+                if (years.isEmpty()) return@forEach
+                val existing = histMap[instName]
+                histMap[instName] = if (existing == null) {
+                    Pair(years.min(), years.max())
+                } else {
+                    Pair(minOf(existing.first, years.min()), maxOf(existing.second, years.max()))
                 }
-            }.body()
+            }
+            val academicHistory = histMap.entries
+                .sortedBy { it.value.first }
+                .map { (name, years) ->
+                    if (years.first == years.second) "$name (${years.first})"
+                    else "$name (${years.first}\u2013${years.second})"
+                }
+
+            val works = worksResp.results.map { w ->
+                Work(
+                    title = w.title,
+                    year = w.publication_year,
+                    doi = w.doi,
+                    journal = w.primary_location?.source?.display_name,
+                    is_open_access = false,
+                    citations = w.cited_by_count ?: 0,
+                    creativity_score = 0.0,
+                    complexity_score = 0.0,
+                    impact_factor = 0.0,
+                    disruption_score = 0.0,
+                    semantic_novelty = 0.0,
+                    open_science_score = 0.0,
+                    authors = w.authorships?.mapNotNull { it.author?.display_name } ?: emptyList()
+                )
+            }
+
+            val stats = authorData.summary_stats
+            AuthorResponse(
+                id = authorData.id,
+                display_name = authorData.display_name ?: name,
+                orcid = authorData.orcid,
+                h_index = stats?.h_index ?: 0,
+                i10_index = stats?.i10_index ?: 0,
+                works_count = authorData.works_count ?: 0,
+                cited_by_count = authorData.cited_by_count ?: 0,
+                institution = institution,
+                field_of_study = fieldOfStudy,
+                expertise = expertise,
+                academic_history = academicHistory,
+                works = works,
+                metrics_computed = false,  // LLM pipeline did not run
+                next_prediction = null,
+                similar_researchers = emptyList()
+            )
         } catch (e: Exception) {
-            Log.e(tag, "searchAuthor failed", e)
+            Log.e(tag, "fetchAuthorFromOpenAlex failed", e)
             null
         }
     }
@@ -325,6 +574,7 @@ class ApiService {
                 doi?.let { parameter("doi", it) }
             }.body()
         } catch (e: Exception) {
+            handleNetworkException(e, base)
             Log.e(tag, "summarizeWork failed", e)
             null
         }
@@ -340,6 +590,7 @@ class ApiService {
                 parameter("name", name)
             }.status.value == 200
         } catch (e: Exception) {
+            handleNetworkException(e, base)
             Log.e(tag, "refreshAuthor failed", e)
             false
         }
@@ -407,6 +658,7 @@ class ApiService {
                 if (!openAlexId.isNullOrBlank()) parameter("openalex_id", openAlexId)
             }.body()
         } catch (e: Exception) {
+            handleNetworkException(e, base)
             Log.e(tag, "analyzePaper failed", e)
             null
         }
@@ -470,6 +722,7 @@ class ApiService {
                 }.body()
                 list.take(limit)
             } catch (e: Exception) {
+                handleNetworkException(e, base)
                 Log.w(tag, "getSimilarAuthors via backend failed, falling back to OpenAlex", e)
                 fetchSimilarAuthorsFromOpenAlex(fieldQuery, limit)
             }
@@ -501,6 +754,111 @@ class ApiService {
         } catch (e: Exception) {
             Log.e(tag, "fetchSimilarAuthorsFromOpenAlex failed", e)
             emptyList()
+        }
+    }
+
+    suspend fun getDailyFeed(authorId: String?, queryFallback: String? = null): List<DailyFeedItem> {
+        val base = baseUrl() ?: return emptyList()
+        return try {
+            httpClient.get("$base/daily_feed") {
+                authorId?.let { parameter("author_id", it) }
+                queryFallback?.let { parameter("query_fallback", it) }
+            }.body()
+        } catch (e: Exception) {
+            handleNetworkException(e, base)
+            Log.e(tag, "getDailyFeed failed", e)
+            emptyList()
+        }
+    }
+
+    suspend fun matchGrants(authorId: String): List<GrantMatch> {
+        val base = baseUrl() ?: return emptyList()
+        return try {
+            httpClient.get("$base/match_grants") {
+                parameter("author_id", authorId)
+            }.body()
+        } catch (e: Exception) {
+            handleNetworkException(e, base)
+            Log.e(tag, "matchGrants failed", e)
+            emptyList()
+        }
+    }
+
+    suspend fun getCollaboratorSynergy(authorId: String, collaboratorId: String): CollaboratorSynergy? {
+        val base = baseUrl() ?: return null
+        return try {
+            httpClient.get("$base/collaborator_synergy") {
+                parameter("author_id", authorId)
+                parameter("collaborator_id", collaboratorId)
+            }.body()
+        } catch (e: Exception) {
+            handleNetworkException(e, base)
+            Log.e(tag, "getCollaboratorSynergy failed", e)
+            null
+        }
+    }
+
+    suspend fun getCitationHeatmap(authorId: String): CitationHeatmap? {
+        val base = baseUrl() ?: return null
+        return try {
+            httpClient.get("$base/citation_heatmap") {
+                parameter("author_id", authorId)
+            }.body()
+        } catch (e: Exception) {
+            handleNetworkException(e, base)
+            Log.e(tag, "getCitationHeatmap failed", e)
+            null
+        }
+    }
+
+    suspend fun getJournalAdvisor(authorId: String): List<JournalRecommendation> {
+        val base = baseUrl() ?: return emptyList()
+        return try {
+            httpClient.get("$base/journal_advisor") {
+                parameter("author_id", authorId)
+            }.body()
+        } catch (e: Exception) {
+            handleNetworkException(e, base)
+            Log.e(tag, "getJournalAdvisor failed", e)
+            emptyList()
+        }
+    }
+
+    suspend fun getNetworkCollaborators(authorId: String, limit: Int = 50): List<NetworkCollaborator> {
+        val base = baseUrl() ?: return emptyList()
+        return try {
+            httpClient.get("$base/network_collaborators") {
+                parameter("author_id", authorId)
+                parameter("limit", limit)
+            }.body()
+        } catch (e: Exception) {
+            handleNetworkException(e, base)
+            Log.e(tag, "getNetworkCollaborators failed", e)
+            emptyList()
+        }
+    }
+
+    suspend fun chatWithAuthor(
+        authorId: String,
+        paperTitle: String,
+        userMessage: String,
+        history: List<ChatMessage>
+    ): ChatResponse? {
+        val base = baseUrl() ?: return null
+        return try {
+            httpClient.post("$base/chat_with_author") {
+                contentType(ContentType.Application.Json)
+                setBody(ChatRequest(
+                    author_id = authorId,
+                    paper_title = paperTitle,
+                    user_message = userMessage,
+                    history = history
+                ))
+            }.body()
+        } catch (e: Exception) {
+            handleNetworkException(e, base)
+            Log.e(tag, "chatWithAuthor failed", e)
+            null
         }
     }
 }

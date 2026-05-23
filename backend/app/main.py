@@ -15,6 +15,7 @@ from firebase_admin import firestore
 from app.config import settings          # ← single source of truth
 from app.services.prediction_service import PredictionService
 from app.services.summarization_service import SummarizationService
+from app.services.pipeline_services import PipelineServices
 from researcher_worker import teleport_researcher
 from zeroconf import ServiceInfo
 from zeroconf.asyncio import AsyncZeroconf
@@ -72,6 +73,13 @@ profile_cache = SimpleAsyncCache(ttl_seconds=3600, max_size=100)
 # Intelligence results are expensive (PDF download + LLM) — cache for 6 hours
 analyze_paper_cache = SimpleAsyncCache(ttl_seconds=21600, max_size=200)
 
+daily_feed_cache = SimpleAsyncCache(ttl_seconds=3600, max_size=100)
+match_grants_cache = SimpleAsyncCache(ttl_seconds=3600, max_size=100)
+collaborator_synergy_cache = SimpleAsyncCache(ttl_seconds=7200, max_size=200)
+citation_heatmap_cache = SimpleAsyncCache(ttl_seconds=3600, max_size=100)
+journal_advisor_cache = SimpleAsyncCache(ttl_seconds=7200, max_size=100)
+network_collaborators_cache = SimpleAsyncCache(ttl_seconds=3600, max_size=100)
+
 app = FastAPI(
     title="ResQit API",
     description="The backend API for the ResQit platform",
@@ -113,18 +121,34 @@ async def register_mdns() -> None:
     global _zeroconf, _mdns_info
     import traceback
     try:
+        ips = []
+        try:
+            for info in socket.getaddrinfo(socket.gethostname(), None):
+                ip = info[4][0]
+                if "." in ip and not ip.startswith("127.") and not ip.startswith("169.254"):
+                    if ip not in ips:
+                        ips.append(ip)
+        except Exception as e:
+            print(f"[mDNS] Failed to get IPs via getaddrinfo: {e}", flush=True)
+        
+        if not ips:
+            ips = [settings.lan_ip]
+
+        addresses = [socket.inet_aton(ip) for ip in ips]
+        print(f"[mDNS] Advertising backend on IPs: {ips}", flush=True)
+
         _mdns_info = ServiceInfo(
             type_=settings.mdns_service_type,
             name=settings.mdns_fqdn,
-            addresses=[socket.inet_aton(settings.lan_ip)],
+            addresses=addresses,
             port=settings.port,
             properties={"path": "/", "version": "1"},
         )
         _zeroconf = AsyncZeroconf()
-        await _zeroconf.async_register_service(_mdns_info)
+        await _zeroconf.async_register_service(_mdns_info, allow_name_change=True)
         print(
             f"[mDNS] '{settings.mdns_service_name}' registered at "
-            f"{settings.lan_ip}:{settings.port}"
+            f"{ips}:{settings.port}"
         )
     except Exception as exc:
         print(f"[mDNS] Registration failed: {exc}")
@@ -142,6 +166,7 @@ async def unregister_mdns() -> None:
 
 prediction_service = PredictionService()
 summarization_service = SummarizationService()
+pipeline_services = PipelineServices()
 
 # Configure CORS
 app.add_middleware(
@@ -171,6 +196,8 @@ class AuthorSuggestion(BaseModel):
     display_name: str
     institution: str
     field_of_study: Optional[str] = None
+    h_index: Optional[int] = None
+    innovation_score: Optional[int] = None
 
 class AuthorResponse(BaseModel):
     id: str
@@ -186,6 +213,9 @@ class AuthorResponse(BaseModel):
     academic_history: List[str]
     works: List[Work]
     innovation_score: Optional[float] = None
+    # metrics_computed: False means LLM analysis hasn't run yet — UI should show N/A for computed metrics
+    metrics_computed: bool = False
+    llm_active: bool = True
     # Modern Metrics (Averages/Global)
     average_creativity: float = 0.0
     average_complexity: float = 0.0
@@ -218,6 +248,16 @@ class PaperIntelligenceResponse(BaseModel):
     future_directions: List[str] = []
     confidence: str = "Medium"
     text_source: str = "abstract_only"
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+class ChatRequest(BaseModel):
+    author_id: str
+    paper_title: str
+    user_message: str
+    history: List[ChatMessage] = []
 
 @app.get("/summarize_work")
 async def summarize_work(title: str = Query(...), doi: Optional[str] = None):
@@ -263,10 +303,12 @@ async def presentation_outline(title: str = Query(...), doi: Optional[str] = Non
 @app.get("/ai_status")
 async def ai_status():
     """Checks if the AI services have valid API keys and are reachable."""
+    from app.services.summarization_service import is_llm_working
     groq_key = os.getenv("GROQ_API")
     has_key = groq_key is not None and len(groq_key) > 10
     return {
         "groq_api_configured": has_key,
+        "llm_active": is_llm_working(),
         "model": "llama-3.3-70b-versatile",
         "key_prefix": groq_key[:7] if has_key else "None"
     }
@@ -298,14 +340,18 @@ async def get_author_suggestions(query: str = Query(...)):
                 .get()
             
             if docs:
-                suggestions = [
-                    AuthorSuggestion(
+                suggestions = []
+                for d in [doc.to_dict() for doc in docs]:
+                    h_idx = d.get("h_index")
+                    inv_score = d.get("innovation_score")
+                    suggestions.append(AuthorSuggestion(
                         id=d.get("openalex_id"),
                         display_name=d.get("display_name"),
-                        institution=d.get("current_institution"),
-                        field_of_study=d.get("field_of_study")
-                    ) for d in [doc.to_dict() for doc in docs]
-                ]
+                        institution=d.get("current_institution") or "Independent Researcher",
+                        field_of_study=d.get("field_of_study"),
+                        h_index=int(h_idx) if h_idx is not None else None,
+                        innovation_score=int(inv_score) if inv_score is not None else None
+                    ))
                 await suggestions_cache.set(cache_key, suggestions)
                 return suggestions
         except Exception as e:
@@ -332,14 +378,21 @@ async def get_author_suggestions(query: str = Query(...)):
                         first_inst = last_insts[0]
                         if first_inst and isinstance(first_inst, dict):
                             inst = first_inst.get("display_name") or "Independent Researcher"
+                    
+                    stats = author.get("summary_stats") or {}
+                    h_idx = stats.get("h_index")
+                    
                     suggestions.append(AuthorSuggestion(
                         id=author["id"],
                         display_name=author["display_name"],
-                        institution=inst
+                        institution=inst,
+                        h_index=int(h_idx) if h_idx is not None else None,
+                        innovation_score=None
                     ))
                 await suggestions_cache.set(cache_key, suggestions)
                 return suggestions
-        except: pass
+        except Exception as e:
+            print(f"OpenAlex Suggester Error: {e}")
     return []
 
 @app.get("/refresh_author")
@@ -413,11 +466,16 @@ async def fetch_similar_authors(query_term: str, exclude_id: str) -> List[Author
                     concepts = author.get("x_concepts", [])
                     field = concepts[0].get("display_name", "Multidisciplinary") if concepts else "Multidisciplinary"
                     
+                    stats = author.get("summary_stats") or {}
+                    h_idx = stats.get("h_index")
+                    
                     suggestions.append(AuthorSuggestion(
                         id=author_id,
                         display_name=author.get("display_name", "Unknown"),
                         institution=inst,
-                        field_of_study=field
+                        field_of_study=field,
+                        h_index=int(h_idx) if h_idx is not None else None,
+                        innovation_score=None
                     ))
                     if len(suggestions) >= 5:
                         break
@@ -427,37 +485,51 @@ async def fetch_similar_authors(query_term: str, exclude_id: str) -> List[Author
     return []
 
 @app.get("/search_author", response_model=Union[AuthorResponse, dict])
-async def search_author(name: str = Query(...), id: Optional[str] = Query(None), background_tasks: BackgroundTasks = BackgroundTasks()):
-    print(f"### [DEBUG] search_author called with name='{name}', id='{id}'", flush=True)
+async def search_author(
+    name: str = Query(...),
+    id: Optional[str] = Query(None),
+    background_tasks: BackgroundTasks = BackgroundTasks()
+):
+    """
+    ARCHITECTURE: OpenAlex is the single source of truth for all profile data.
+    - Works, titles, institution, counts → OpenAlex ONLY, returned immediately.
+    - LLM metrics (disruption_score, predictions, etc.) → background teleport only.
+    - metrics_computed=False until full teleport has run and been cached.
+    """
+    from app.services.summarization_service import is_llm_working
+    print(f"[search_author] name='{name}', id='{id}'", flush=True)
     clean_id = id.split("/")[-1] if id else None
-    print(f"### [DEBUG] clean_id={clean_id}", flush=True)
     cache_key = f"id:{clean_id}" if clean_id else name.strip().lower()
-    print(f"### [DEBUG] cache_key={cache_key}", flush=True)
+
+    # ── 1. Check in-memory cache ──────────────────────────────────────────────
     cached = await profile_cache.get(cache_key)
     if cached is not None:
-        print(f"[Cache Hit] Profile for: '{cache_key}'", flush=True)
+        print(f"[search_author] In-memory cache hit: '{cache_key}'", flush=True)
         return cached
 
-    # 1. Check Firestore first for indexed data
+    # ── 2. Check Firestore (pre-computed by teleport_researcher) ──────────────
     from researcher_worker import FIRESTORE_AVAILABLE
     if FIRESTORE_AVAILABLE:
         try:
             db = firestore.client()
             if clean_id:
                 doc = db.collection("global_researchers").document(clean_id).get()
-                docs = [doc] if doc.exists else []
+                d = doc.to_dict() if doc.exists else None
             else:
                 docs = db.collection("global_researchers").where("display_name", "==", name).limit(1).get()
-            
-            if docs:
-                d = docs[0].to_dict()
-                # Retrieve stored works correctly
-                works_data = [Work(**w) for w in d.get("works", [])]
-                
-                # Fetch similar researchers
-                field = d.get("field_of_study") or (d.get("expertise")[0] if d.get("expertise") else "")
+                d = docs[0].to_dict() if docs else None
+
+            if d:
+                print(f"[search_author] Firestore cache hit for: '{clean_id or name}'", flush=True)
+                # Works in Firestore come from teleport_researcher which sourced them from OpenAlex
+                works_data = []
+                for w in d.get("works", []):
+                    try:
+                        works_data.append(Work(**{k: v for k, v in w.items() if k in Work.__fields__}))
+                    except Exception:
+                        pass
+                field = d.get("field_of_study") or (d.get("expertise", [""])[0] if d.get("expertise") else "")
                 similar = await fetch_similar_authors(field, d.get("openalex_id", ""))
-                
                 response_data = AuthorResponse(
                     id=d.get("openalex_id", ""),
                     display_name=d.get("display_name", ""),
@@ -466,18 +538,19 @@ async def search_author(name: str = Query(...), id: Optional[str] = Query(None),
                     i10_index=d.get("i10_index", 0),
                     works_count=d.get("works_count", 0),
                     cited_by_count=d.get("cited_by_count", 0),
-                    institution=d.get("current_institution", "Independent"),
+                    institution=d.get("current_institution") or "Independent Researcher",
                     field_of_study=d.get("field_of_study", "Multidisciplinary"),
                     expertise=d.get("expertise", []),
                     academic_history=d.get("academic_history", []),
                     works=works_data,
                     innovation_score=d.get("innovation_score"),
+                    metrics_computed=is_llm_working() and d.get("metrics_computed", False),
+                    llm_active=is_llm_working(),
                     average_creativity=d.get("average_creativity", 0.0),
                     average_complexity=d.get("average_complexity", 0.0),
                     average_skill_score=d.get("average_skill_score", 0.0),
                     average_impact=d.get("average_impact", 0.0),
                     average_activity=d.get("average_activity", 0.0),
-                    # New metrics
                     disruption_score=d.get("disruption_score", 0.0),
                     citation_acceleration=d.get("citation_acceleration", 0.0),
                     future_impact_score=d.get("future_impact_score", 0.0),
@@ -488,128 +561,237 @@ async def search_author(name: str = Query(...), id: Optional[str] = Query(None),
                     open_science_score=d.get("open_science_score", 0.0),
                     collaboration_diversity=d.get("collaboration_diversity", 0.0),
                     research_consistency=d.get("research_consistency", 0.0),
-                    next_prediction=d.get("next_prediction", "No prediction available."),
+                    next_prediction=d.get("next_prediction"),
                     similar_researchers=similar
                 )
                 await profile_cache.set(cache_key, response_data)
                 return response_data
         except Exception as e:
-            print(f"Firestore Search Error: {e}")
+            print(f"[search_author] Firestore lookup error: {e}", flush=True)
 
-    # 2. If not in Firestore, fetch from OpenAlex
+    # ── 3. Fetch directly from OpenAlex — source of truth ────────────────────
     BASE_URL = "https://api.openalex.org"
-    timeout = httpx.Timeout(20.0, connect=10.0)
     headers = {
         "User-Agent": "ResQitApp/1.0 (mailto:vikki.4me@gmail.com)",
         "Accept": "application/json"
     }
-    
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            author_id = None
+        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=8.0), headers=headers) as client:
+            # ── 3a. Resolve author ──────────────────────────────────────────
             author_data = None
+            resolved_id = None
+
             if clean_id:
-                author_id = clean_id
-                try:
-                    res = await client.get(f"{BASE_URL}/authors/{clean_id}", headers=headers)
-                    if res.status_code == 200:
-                        author_data = res.json()
-                except Exception as e:
-                    print(f"Failed to fetch basic author data for {clean_id}: {e}")
+                res = await client.get(f"{BASE_URL}/authors/{clean_id}",
+                                       params={"mailto": "vikki.4me@gmail.com"})
+                if res.status_code == 200:
+                    author_data = res.json()
+                    resolved_id = clean_id
             else:
-                author_params = {"search": name, "per_page": 1, "mailto": "vikki.4me@gmail.com"}
-                try:
-                    res = await client.get(f"{BASE_URL}/authors", params=author_params, headers=headers)
-                    if res.status_code != 200: return {"error": "API Error"}
-                    
+                res = await client.get(f"{BASE_URL}/authors",
+                                       params={"search": name, "per_page": 1,
+                                               "mailto": "vikki.4me@gmail.com"})
+                if res.status_code == 200:
                     results = res.json().get("results", [])
-                    if not results: return {"error": "Author not found"}
-                    
-                    author_data = results[0]
-                    author_id = author_data["id"]
-                except Exception as e:
-                    print(f"Failed to find author by name search: {e}")
-                    return {"error": f"Search failed: {e}"}
-            
-            if author_id and author_data:
-                # Teleport immediately to get full publications and metrics
-                try:
-                    profile = await teleport_researcher(author_id)
-                    if profile:
-                        works_data = [Work(**w) for w in profile.get("works", [])]
-                        field = profile.get("field_of_study") or (profile.get("expertise")[0] if profile.get("expertise") else "")
-                        similar = await fetch_similar_authors(field, profile.get("openalex_id", author_id))
-                        
-                        response_data = AuthorResponse(
-                            id=profile.get("openalex_id", author_id),
-                            display_name=profile.get("display_name", ""),
-                            orcid=profile.get("orcid"),
-                            h_index=profile.get("h_index", 0),
-                            i10_index=profile.get("i10_index", 0),
-                            works_count=profile.get("works_count", 0),
-                            cited_by_count=profile.get("cited_by_count", 0),
-                            institution=profile.get("current_institution", "Independent"),
-                            field_of_study=profile.get("field_of_study", "Multidisciplinary"),
-                            expertise=profile.get("expertise", []),
-                            academic_history=profile.get("academic_history", []),
-                            works=works_data,
-                            innovation_score=profile.get("innovation_score"),
-                            average_creativity=profile.get("average_creativity", 0.0),
-                            average_complexity=profile.get("average_complexity", 0.0),
-                            average_skill_score=profile.get("average_skill_score", 0.0),
-                            average_impact=profile.get("average_impact", 0.0),
-                            average_activity=profile.get("average_activity", 0.0),
-                            disruption_score=profile.get("disruption_score", 0.0),
-                            citation_acceleration=profile.get("citation_acceleration", 0.0),
-                            future_impact_score=profile.get("future_impact_score", 0.0),
-                            network_centrality=profile.get("network_centrality", 0.0),
-                            semantic_novelty=profile.get("semantic_novelty", 0.0),
-                            interdisciplinary_index=profile.get("interdisciplinary_index", 0.0),
-                            policy_patent_score=profile.get("policy_patent_score", 0.0),
-                            open_science_score=open_science_score_val if 'open_science_score_val' in locals() else profile.get("open_science_score", 0.0),
-                            collaboration_diversity=profile.get("collaboration_diversity", 0.0),
-                            research_consistency=profile.get("research_consistency", 0.0),
-                            next_prediction=profile.get("next_prediction", "No prediction available."),
-                            similar_researchers=similar
-                        )
-                        await profile_cache.set(cache_key, response_data)
-                        return response_data
-                except Exception as e:
-                    print(f"Inline teleportation failed: {e}")
-     
-                # Fallback to basic info if teleportation fails
-                last_insts = author_data.get("last_known_institutions")
-                inst = "Independent Researcher"
-                if last_insts and isinstance(last_insts, list) and len(last_insts) > 0:
-                    first_inst = last_insts[0]
-                    if first_inst and isinstance(first_inst, dict):
-                        inst = first_inst.get("display_name") or "Independent Researcher"
-                stats = author_data.get("summary_stats", {})
-                concepts = author_data.get("x_concepts", [])
-                field = concepts[0].get("display_name", "Multidisciplinary") if concepts else "Multidisciplinary"
-                expertise = [c.get("display_name") for c in concepts if c.get("level") in [1, 2]][:5]
-                if not expertise: expertise = [c.get("display_name") for c in concepts[:3]]
-                
-                similar = await fetch_similar_authors(field, author_id)
-                response_data = AuthorResponse(
-                    id=author_id,
-                    display_name=author_data["display_name"],
-                    orcid=author_data.get("orcid"),
-                    h_index=stats.get("h_index", 0),
-                    i10_index=stats.get("i10_index", 0),
-                    works_count=author_data.get("works_count", 0),
-                    cited_by_count=author_data.get("cited_by_count", 0),
-                    institution=inst,
-                    field_of_study=field,
-                    expertise=expertise,
-                    academic_history=[],
-                    works=[],
-                    next_prediction="Indexing innovation score...",
-                    similar_researchers=similar
-                )
-                await profile_cache.set(cache_key, response_data)
-                return response_data
+                    if results:
+                        author_data = results[0]
+                        resolved_id = author_data["id"].split("/")[-1]
+
+            if not author_data or not resolved_id:
+                return {"error": "Author not found on OpenAlex"}
+
+            # ── 3b. Fetch recent works (pure OpenAlex, no LLM) ──────────────
+            works_res = await client.get(
+                f"{BASE_URL}/works",
+                params={
+                    "filter": f"authorships.author.id:{resolved_id}",
+                    "per_page": 50,
+                    "sort": "publication_year:desc",
+                    "mailto": "vikki.4me@gmail.com"
+                }
+            )
+            raw_works = works_res.json().get("results", []) if works_res.status_code == 200 else []
+
+            # Build Work objects from pure OpenAlex data — titles NEVER from LLM
+            works_data = []
+            for w in raw_works:
+                title = w.get("title") or ""
+                if not title.strip():
+                    continue  # Skip untitled works
+                primary_location = w.get("primary_location") or {}
+                source = primary_location.get("source") or {}
+                journal_name = source.get("display_name")
+                pub_year = w.get("publication_year")
+                citations = w.get("cited_by_count", 0)
+                impact = source.get("2yr_mean_citedness", 0.0) or 0.0
+
+                # Reconstruct abstract from inverted index (OpenAlex format)
+                abstract = ""
+                inv_idx = w.get("abstract_inverted_index") or {}
+                if inv_idx:
+                    try:
+                        word_pos = [(pos, word) for word, positions in inv_idx.items() for pos in positions]
+                        abstract = " ".join(wp[1] for wp in sorted(word_pos))
+                    except Exception:
+                        pass
+
+                works_data.append(Work(
+                    title=title,
+                    year=pub_year,
+                    doi=w.get("doi"),
+                    journal=journal_name,
+                    is_open_access=bool((w.get("open_access") or {}).get("is_oa")),
+                    citations=citations,
+                    creativity_score=0.0,   # LLM-computed — pending background task
+                    complexity_score=0.0,
+                    impact_factor=round(float(impact), 2),
+                    disruption_score=0.0,
+                    semantic_novelty=0.0,
+                    open_science_score=0.0
+                ))
+
+            # ── 3c. Parse OpenAlex author metadata ──────────────────────────
+            last_insts = author_data.get("last_known_institutions") or []
+            institution = "Independent Researcher"
+            if last_insts and isinstance(last_insts, list):
+                first = last_insts[0]
+                if first and isinstance(first, dict):
+                    institution = first.get("display_name") or "Independent Researcher"
+
+            stats = author_data.get("summary_stats") or {}
+            concepts = author_data.get("x_concepts") or []
+            field = next((c.get("display_name") for c in concepts if c.get("level") == 1), None) \
+                    or (concepts[0].get("display_name") if concepts else "Multidisciplinary")
+            expertise = [c.get("display_name") for c in concepts
+                         if c.get("level") in [1, 2] and c.get("display_name")][:6]
+
+            # Build academic history from affiliations
+            affiliations = author_data.get("affiliations") or []
+            hist_map: dict = {}
+            for aff in affiliations:
+                inst = (aff.get("institution") or {})
+                inst_name = inst.get("display_name")
+                years = aff.get("years") or []
+                if not inst_name or not years:
+                    continue
+                existing = hist_map.get(inst_name)
+                if existing is None:
+                    hist_map[inst_name] = [min(years), max(years)]
+                else:
+                    hist_map[inst_name] = [min(existing[0], min(years)), max(existing[1], max(years))]
+            academic_history = [
+                f"{n} ({y[0]}\u2013{y[1]})" if y[0] != y[1] else f"{n} ({y[0]})"
+                for n, y in sorted(hist_map.items(), key=lambda x: x[1][0])
+            ]
+
+            similar = await fetch_similar_authors(field, author_data.get("id", ""))
+
+            # ── 3d. Return pure OpenAlex profile immediately ─────────────────
+            response_data = AuthorResponse(
+                id=author_data.get("id", resolved_id),
+                display_name=author_data.get("display_name", name),
+                orcid=author_data.get("orcid"),
+                h_index=stats.get("h_index", 0),
+                i10_index=stats.get("i10_index", 0),
+                works_count=author_data.get("works_count", 0),
+                cited_by_count=author_data.get("cited_by_count", 0),
+                institution=institution,
+                field_of_study=field,
+                expertise=expertise,
+                academic_history=academic_history,
+                works=works_data,
+                innovation_score=None,
+                metrics_computed=False,  # LLM metrics pending — background task queued
+                llm_active=is_llm_working(),
+                next_prediction=None,
+                similar_researchers=similar
+            )
+
+            # Cache this OpenAlex-sourced result
+            await profile_cache.set(cache_key, response_data)
+
+            # ── 3e. Queue LLM enrichment in the background (NEVER blocks response)
+            if is_llm_working():
+                author_full_id = author_data.get("id", resolved_id)
+                background_tasks.add_task(teleport_researcher, author_full_id)
+                print(f"[search_author] Queued background teleport for: {author_data.get('display_name')}", flush=True)
             else:
-                return {"error": "Author not found"}
+                print(f"[search_author] LLM offline or unconfigured, skipping background task.", flush=True)
+
+            return response_data
+
     except Exception as e:
+        print(f"[search_author] OpenAlex fetch error: {e}", flush=True)
         return {"error": f"Search failed: {str(e)}"}
+
+@app.get("/daily_feed")
+async def get_daily_feed(author_id: Optional[str] = None, query_fallback: Optional[str] = None):
+    cache_key = f"daily_feed:{author_id or ''}:{query_fallback or ''}"
+    cached = await daily_feed_cache.get(cache_key)
+    if cached is not None:
+        return cached
+    data = await pipeline_services.get_daily_feed(author_id, query_fallback)
+    await daily_feed_cache.set(cache_key, data)
+    return data
+
+@app.get("/match_grants")
+async def match_grants(author_id: str = Query(...)):
+    cache_key = f"match_grants:{author_id}"
+    cached = await match_grants_cache.get(cache_key)
+    if cached is not None:
+        return cached
+    data = await pipeline_services.match_grants(author_id)
+    await match_grants_cache.set(cache_key, data)
+    return data
+
+@app.get("/collaborator_synergy")
+async def get_collaborator_synergy(author_id: str = Query(...), collaborator_id: str = Query(...)):
+    ids = sorted([author_id, collaborator_id])
+    cache_key = f"synergy:{ids[0]}:{ids[1]}"
+    cached = await collaborator_synergy_cache.get(cache_key)
+    if cached is not None:
+        return cached
+    data = await pipeline_services.get_collaborator_synergy(author_id, collaborator_id)
+    await collaborator_synergy_cache.set(cache_key, data)
+    return data
+
+@app.get("/citation_heatmap")
+async def get_citation_heatmap(author_id: str = Query(...)):
+    cache_key = f"citation_heatmap:{author_id}"
+    cached = await citation_heatmap_cache.get(cache_key)
+    if cached is not None:
+        return cached
+    data = await pipeline_services.get_citation_heatmap(author_id)
+    await citation_heatmap_cache.set(cache_key, data)
+    return data
+
+@app.get("/journal_advisor")
+async def get_journal_advisor(author_id: str = Query(...)):
+    cache_key = f"journal_advisor:{author_id}"
+    cached = await journal_advisor_cache.get(cache_key)
+    if cached is not None:
+        return cached
+    data = await pipeline_services.get_journal_advisor(author_id)
+    await journal_advisor_cache.set(cache_key, data)
+    return data
+
+@app.get("/network_collaborators")
+async def get_network_collaborators(author_id: str = Query(...), limit: int = Query(50)):
+    cache_key = f"network_collaborators:{author_id}:{limit}"
+    cached = await network_collaborators_cache.get(cache_key)
+    if cached is not None:
+        return cached
+    data = await pipeline_services.get_network_collaborators(author_id, limit)
+    await network_collaborators_cache.set(cache_key, data)
+    return data
+
+@app.post("/chat_with_author")
+async def chat_with_author(req: ChatRequest):
+    hist_dict = [{"role": h.role, "content": h.content} for h in req.history]
+    data = await pipeline_services.chat_with_author(
+        author_id=req.author_id,
+        paper_title=req.paper_title,
+        user_message=req.user_message,
+        history=hist_dict
+    )
+    return data

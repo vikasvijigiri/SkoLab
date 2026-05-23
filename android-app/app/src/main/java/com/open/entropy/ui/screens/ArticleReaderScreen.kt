@@ -1,4 +1,4 @@
-﻿package com.open.entropy.ui.screens
+package com.open.entropy.ui.screens
 
 import android.annotation.SuppressLint
 import android.webkit.WebView
@@ -72,7 +72,7 @@ fun ArticleReaderScreen(
                         )
                         if (paper != null) {
                             Text(
-                                text = paper.authors.joinToString(", "),
+                                text = paper.authors.joinToString(", ") { it.substringBefore("|") },
                                 style = Typography.labelSmall,
                                 color = ResQitTextSecondary,
                                 maxLines = 1
@@ -235,15 +235,18 @@ fun ArticleReaderScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
+                                    val creativityVal = if (summary.metrics.creativity > 0) "${summary.metrics.creativity}%" else "N/A"
+                                    val complexityVal = if (summary.metrics.complexity > 0) "${summary.metrics.complexity}%" else "N/A"
+                                    
                                     AnalyticBox(
                                         label = "Creativity",
-                                        value = "${summary.metrics.creativity}%",
+                                        value = creativityVal,
                                         color = ResQitNovelty,
                                         modifier = Modifier.weight(1f)
                                     )
                                     AnalyticBox(
                                         label = "Complexity",
-                                        value = "${summary.metrics.complexity}%",
+                                        value = complexityVal,
                                         color = ResQitDisruption,
                                         modifier = Modifier.weight(1f)
                                     )

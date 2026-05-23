@@ -1,4 +1,4 @@
-﻿package com.open.entropy.model
+package com.open.entropy.model
 
 import androidx.compose.ui.graphics.Color
 
@@ -334,4 +334,89 @@ object MockData {
         Alert(id = "L4", type = "Rising Star", target = "Deep Learning", threshold = null, frequency = "Daily", isActive = true, lastTriggered = 1713888000000),
         Alert(id = "L5", type = "New Retraction", target = "Physics", threshold = null, frequency = "Instant", isActive = true, lastTriggered = 1713974400000)
     )
+
+    fun generateDynamicMockAuthor(name: String, id: String? = null): com.open.entropy.network.AuthorResponse {
+        val cleanId = id ?: "A_dynamic_${Math.abs(name.hashCode())}"
+        val institutions = listOf(
+            "Stanford University", "Massachusetts Institute of Technology", 
+            "UC Berkeley", "Harvard University", "California Institute of Technology", 
+            "Princeton University", "Oxford University", "Cambridge University", 
+            "ETH Zurich", "Tsinghua University", "UC San Diego", "Columbia University"
+        )
+        val inst = institutions[Math.abs(name.hashCode()) % institutions.size]
+        val hIndex = 15 + (Math.abs(name.hashCode()) % 20)
+        val worksCount = 30 + (Math.abs(name.hashCode()) % 80)
+        val citations = worksCount * 12 + (Math.abs(name.hashCode()) % 200)
+        
+        val works = listOf(
+            com.open.entropy.network.Work(
+                title = "Emergent Behaviors and Scalable Paradigms in ${name}'s Frontiers",
+                year = 2024,
+                doi = "10.1145/dynamic.${Math.abs(name.hashCode())}",
+                journal = "Journal of Advanced Science",
+                is_open_access = true,
+                citations = hIndex * 2,
+                creativity_score = 0.84,
+                complexity_score = 0.79,
+                impact_factor = 5.4,
+                disruption_score = 0.62,
+                semantic_novelty = 0.81,
+                open_science_score = 0.90,
+                authors = listOf(name, "Dr. Sarah Jenkins")
+            ),
+            com.open.entropy.network.Work(
+                title = "Empirical Validation of Phase Boundaries and Entropy in Modern Systems",
+                year = 2022,
+                doi = "10.1145/dynamic2.${Math.abs(name.hashCode())}",
+                journal = "Nature Communications",
+                is_open_access = true,
+                citations = hIndex,
+                creativity_score = 0.78,
+                complexity_score = 0.85,
+                impact_factor = 12.1,
+                disruption_score = 0.45,
+                semantic_novelty = 0.74,
+                open_science_score = 0.85,
+                authors = listOf(name, "Prof. Linus Vance")
+            )
+        )
+
+        return com.open.entropy.network.AuthorResponse(
+            id = cleanId,
+            display_name = name,
+            orcid = "0000-0002-${Math.abs(name.hashCode()) % 9000 + 1000}-${Math.abs(name.hashCode()) % 9000 + 1000}",
+            h_index = hIndex,
+            i10_index = maxOf(0, hIndex - 5),
+            works_count = worksCount,
+            cited_by_count = citations,
+            institution = inst,
+            field_of_study = "Computer Science",
+            expertise = listOf("Quantum Frontiers", "Disruptive Mechanics", "Mathematical Modeling"),
+            academic_history = listOf("Academic Portfolio — $inst"),
+            works = works,
+            average_creativity = 0.81,
+            average_complexity = 0.82,
+            average_activity = 0.79,
+            average_skill_score = 0.88,
+            average_impact = 0.80,
+            innovation_score = 75.0,
+            disruption_score = 0.54,
+            citation_acceleration = 8.4,
+            future_impact_score = 82.5,
+            network_centrality = 0.78,
+            semantic_novelty = 0.75,
+            interdisciplinary_index = 0.68,
+            policy_patent_score = 24.0,
+            open_science_score = 0.85,
+            collaboration_diversity = 0.58,
+            research_consistency = 0.82,
+            next_prediction = "**Next Frontier**: High-Resolution Mapping of Computational Modeling in ${name}'s research loops.\n\n**Toolkit**: Python, PyTorch, CUDA\n\n**Logic**: Builds upon recent observations to optimize operational boundaries in their target field.",
+            top_experimental_tools = listOf(
+                com.open.entropy.network.ToolUsage("Python", 42, "Software"),
+                com.open.entropy.network.ToolUsage("PyTorch", 24, "Software")
+            ),
+            similar_researchers = emptyList()
+        )
+    }
 }
+

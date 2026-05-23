@@ -95,7 +95,13 @@ class PaperViewModel(private val apiService: ApiService = ApiService()) : ViewMo
         return Paper(
             id = work.id,
             title = work.title ?: "Unknown Title",
-            authors = work.authorships?.mapNotNull { it.author?.display_name } ?: emptyList(),
+            authors = work.authorships?.mapNotNull { authorship ->
+                val name = authorship.author?.display_name
+                val id = authorship.author?.id
+                if (name != null) {
+                    if (id != null) "$name|$id" else name
+                } else null
+            } ?: emptyList(),
             journal = work.primary_location?.source?.display_name ?: "Unknown Journal",
             year = work.publication_year ?: 0,
             domain = work.primary_topic?.field?.display_name ?: "General Science",

@@ -79,19 +79,20 @@ fun HomeScreen(
             // ── Filter chips ─────────────────────────────────────
             item { HomeFilterChipRow(filters, selectedFilter) { selectedFilter = it } }
 
-            // ── Paper feed ───────────────────────────────────────
-            when (val state = uiState) {
-                is FeedUiState.Loading -> item {
+            if (uiState.isLoading) {
+                item {
                     Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = AccentTeal, strokeWidth = 2.dp)
                     }
                 }
-                is FeedUiState.Error -> item {
+            } else if (uiState.error != null) {
+                item {
                     Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                        Text(state.message, color = AccentRose, style = Typography.bodyMedium)
+                        Text(uiState.error ?: "", color = AccentRose, style = Typography.bodyMedium)
                     }
                 }
-                is FeedUiState.Success -> itemsIndexed(state.papers) { index, paper ->
+            } else {
+                itemsIndexed(uiState.trendingPapers) { index, paper ->
                     var visible by remember { mutableStateOf(false) }
                     LaunchedEffect(Unit) { delay(index * 60L); visible = true }
                     AnimatedVisibility(visible, enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { 20 }) {

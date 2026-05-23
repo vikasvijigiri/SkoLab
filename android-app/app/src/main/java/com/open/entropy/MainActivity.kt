@@ -46,6 +46,7 @@ import com.open.entropy.ui.screens.ArticleReaderScreen
 import com.open.entropy.ui.screens.AuthScreen
 import com.open.entropy.ui.screens.AuthorDetailScreen
 import com.open.entropy.ui.screens.DiscoveryScreen
+import com.open.entropy.ui.screens.FeedScreen
 import com.open.entropy.ui.screens.ProfileScreen
 import com.open.entropy.ui.screens.LibraryScreen
 import com.open.entropy.ui.screens.NexusScreen
@@ -53,6 +54,7 @@ import com.open.entropy.ui.screens.OnboardingScreen
 import com.open.entropy.ui.screens.PaperDetailScreen
 import com.open.entropy.ui.screens.SearchScreen
 import com.open.entropy.ui.screens.SplashScreen
+import com.open.entropy.ui.screens.ChatRoomScreen
 import com.open.entropy.ui.theme.ResQitTheme
 import kotlinx.coroutines.launch
 
@@ -191,15 +193,18 @@ fun ResQitMainApp() {
                             .screenSafeArea(includeBottom = false)
                             .padding(bottom = ScreenInsets.bottomNavClearance)
                     ) {
-                        DiscoveryScreen(
-                            onNavigateToReader = { title, doi ->
-                                navController.navigate("reader/${title.encodeForRoute()}/${doi.encodeForRoute()}")
-                            },
+                        FeedScreen(
                             onPaperClick = { paperId ->
                                 navController.navigate("paper_detail/$paperId")
                             },
                             onProfileClick = {
                                 navController.navigate("profile")
+                            },
+                            onNavigateToChat = { name, id ->
+                                navController.navigate("chat/${name.encodeForRoute()}/${id.encodeForRoute()}")
+                            },
+                            onNavigateToReader = { title, doi ->
+                                navController.navigate("reader/${title.encodeForRoute()}/${doi.encodeForRoute()}")
                             },
                             onTabNavigate = { route ->
                                 navController.navigate(route) {
@@ -242,7 +247,10 @@ fun ResQitMainApp() {
                             .screenSafeArea(includeBottom = false)
                             .padding(bottom = ScreenInsets.bottomNavClearance)
                     ) {
-                        SearchScreen(onPaperClick = { paperId -> navController.navigate("paper_detail/$paperId") })
+                        SearchScreen(
+                            onPaperClick = { paperId -> navController.navigate("paper_detail/$paperId") },
+                            onAuthorClick = { authorName -> navController.navigate("author_detail/${authorName.encodeForRoute()}") }
+                        )
                     }
                 }
                 composable(
@@ -291,7 +299,7 @@ fun ResQitMainApp() {
                         PaperDetailScreen(
                             paperId = paperId,
                             onBack = { navController.popBackStack() },
-                            onAuthorClick = { authorName -> navController.navigate("author_detail/$authorName") }
+                            onAuthorClick = { authorName -> navController.navigate("author_detail/${authorName.encodeForRoute()}") }
                         )
                     }
                 }
@@ -301,7 +309,7 @@ fun ResQitMainApp() {
                         fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
                     }
                 ) { backStackEntry ->
-                    val authorName = backStackEntry.arguments?.getString("authorName") ?: ""
+                    val authorName = backStackEntry.arguments?.getString("authorName")?.decodeFromRoute() ?: ""
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -334,6 +342,27 @@ fun ResQitMainApp() {
                             url = url,
                             title = title,
                             onClose = { navController.popBackStack() }
+                        )
+                    }
+                }
+                composable(
+                    route = "chat/{peerName}/{peerId}",
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                    }
+                ) { backStackEntry ->
+                    val peerName = backStackEntry.arguments?.getString("peerName")?.decodeFromRoute() ?: ""
+                    val peerId = backStackEntry.arguments?.getString("peerId")?.decodeFromRoute() ?: ""
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .screenSafeArea(includeBottom = true)
+                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
+                    ) {
+                        ChatRoomScreen(
+                            peerName = peerName,
+                            peerId = peerId,
+                            onBack = { navController.popBackStack() }
                         )
                     }
                 }
