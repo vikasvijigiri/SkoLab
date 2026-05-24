@@ -9,6 +9,7 @@ import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
+import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -38,7 +39,7 @@ data class OpenAlexTopicField(
     val display_name: String? = null
 )
 
-@Serializable data class Authorship(val author: AuthorInfo? = null)
+@Serializable data class Authorship(val author: AuthorInfo? = null, val institutions: List<OpenAlexInstitution>? = null)
 
 @Serializable
 data class AuthorInfo(
@@ -118,6 +119,7 @@ data class OpenAlexAuthorDetail(
 
 @Serializable
 data class Work(
+    val id: String? = null,
     val title: String? = null,
     val year: Int? = null,
     val doi: String? = null,
@@ -437,10 +439,17 @@ class ApiService {
         if (base != null) {
             try {
                 Log.d(tag, "Searching author via backend: $name, id: $id @ $base")
-                val result: AuthorResponse = httpClient.get("$base/search_author") {
+                val response = httpClient.get("$base/search_author") {
                     parameter("name", name)
                     if (id != null) parameter("id", id)
-                }.body()
+                }
+                val bodyText = response.bodyAsText()
+                Log.d(tag, "searchAuthor raw body: $bodyText")
+                if (bodyText.contains("\"error\"")) {
+                    Log.w(tag, "searchAuthor backend returned error: $bodyText, falling back to direct OpenAlex query")
+                    return fetchAuthorFromOpenAlex(name, id)
+                }
+                val result: AuthorResponse = Json { ignoreUnknownKeys = true }.decodeFromString(bodyText)
                 return result
             } catch (e: Exception) {
                 handleNetworkException(e, base)
@@ -535,7 +544,12 @@ class ApiService {
                     disruption_score = 0.0,
                     semantic_novelty = 0.0,
                     open_science_score = 0.0,
-                    authors = w.authorships?.mapNotNull { it.author?.display_name } ?: emptyList()
+                    authors = w.authorships?.mapNotNull { authship ->
+                        val authInfo = authship.author ?: return@mapNotNull null
+                        val dispName = authInfo.display_name ?: return@mapNotNull null
+                        val authId = authInfo.id ?: return@mapNotNull null
+                        "$dispName|$authId"
+                    } ?: emptyList()
                 )
             }
 
@@ -668,31 +682,37 @@ class ApiService {
      * Fetches trending/highly-cited papers from OpenAlex for this year.
      * Results are cached in-memory for 30 minutes.
      */
-    suspend fun getTrendingPapers(limit: Int = 8): List<OpenAlexWork> {
+    suspend fun getTrendingPapers(focus: String? = null, limit: Int = 8): List<OpenAlexWork> {
         val now = System.currentTimeMillis()
         val cached = trendingPapersCache
-        if (cached != null && (now - trendingPapersCacheTime) < TRENDING_CACHE_TTL_MS) {
+        if (focus == null && cached != null && (now - trendingPapersCacheTime) < TRENDING_CACHE_TTL_MS) {
             Log.d(tag, "Cache hit for trending papers")
             return cached
         }
         val year = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+        val prevYear = year - 1
         return try {
             val response: OpenAlexResponse = httpClient.get("https://api.openalex.org/works") {
-                parameter("filter", "publication_year:$year")
+                parameter("filter", "publication_year:$prevYear|$year")
+                if (!focus.isNullOrBlank()) {
+                    parameter("search", focus)
+                }
                 parameter("sort", "cited_by_count:desc")
                 parameter("per_page", limit)
                 parameter("mailto", "vikki.4me@gmail.com")
             }.body()
             val results = response.results
-            trendingPapersCache = results
-            trendingPapersCacheTime = now
+            if (focus == null) {
+                trendingPapersCache = results
+                trendingPapersCacheTime = now
+            }
             results
         } catch (e: Exception) {
             Log.e(tag, "getTrendingPapers (OpenAlex) failed", e)
             // Fallback: search for highly-cited ML papers as a graceful degradation
             try {
                 val fallback: OpenAlexResponse = httpClient.get("https://api.openalex.org/works") {
-                    parameter("search", "machine learning deep learning")
+                    parameter("search", focus ?: "machine learning deep learning")
                     parameter("sort", "cited_by_count:desc")
                     parameter("per_page", limit)
                     parameter("mailto", "vikki.4me@gmail.com")
@@ -704,6 +724,27 @@ class ApiService {
             }
         }
     }
+
+
+    /**
+     * Fetches recent works of a specific author directly from OpenAlex.
+     */
+    suspend fun getAuthorWorks(authorId: String, limit: Int = 3): List<OpenAlexWork> {
+        val cleanId = authorId.substringAfterLast("/")
+        return try {
+            val response: OpenAlexResponse = httpClient.get("https://api.openalex.org/works") {
+                parameter("filter", "authorships.author.id:$cleanId")
+                parameter("per_page", limit)
+                parameter("sort", "publication_year:desc,cited_by_count:desc")
+                parameter("mailto", "vikki.4me@gmail.com")
+            }.body()
+            response.results
+        } catch (e: Exception) {
+            Log.e(tag, "getAuthorWorks (OpenAlex) failed for authorId: $authorId", e)
+            emptyList()
+        }
+    }
+
 
     /**
      * Fetches researchers with a similar field as the given query.
@@ -737,23 +778,88 @@ class ApiService {
     }
 
     private suspend fun fetchSimilarAuthorsFromOpenAlex(query: String, limit: Int): List<AuthorSuggestion> {
-        return try {
-            val response: OpenAlexAuthorsResponse = httpClient.get("https://api.openalex.org/authors") {
+        val nonPersonKeywords = setOf(
+            "collaboration", "group", "consortium", "committee", "team", "network", "project", 
+            "society", "association", "institute", "university", "department", "lab", "laboratory", 
+            "center", "centre", "foundation", "quantum", "topology", "invariants", "materials", 
+            "systems", "physics", "biology", "chemistry", "science", "computing", "theory", 
+            "applications", "methods", "frontiers", "research"
+        )
+        
+        fun isNonPerson(name: String): Boolean {
+            val lower = name.lowercase()
+            return nonPersonKeywords.any { lower.contains(it) }
+        }
+        
+        fun isValidName(name: String): Boolean {
+            val trimmed = name.trim()
+            val words = trimmed.split(Regex("\\s+"))
+            return words.size in 2..4 && !isNonPerson(trimmed)
+        }
+
+        val suggestions = mutableListOf<AuthorSuggestion>()
+        try {
+            // 1. Try direct authors search first
+            val authorResponse: OpenAlexAuthorsResponse = httpClient.get("https://api.openalex.org/authors") {
                 parameter("search", query)
-                parameter("per_page", limit + 2) // fetch extra in case we need to filter
+                parameter("per_page", limit + 10)
                 parameter("mailto", "vikki.4me@gmail.com")
             }.body()
-            response.results.take(limit).map { author ->
-                AuthorSuggestion(
-                    id = author.id,
-                    display_name = author.display_name ?: "Unknown",
-                    institution = author.last_known_institutions?.firstOrNull()?.display_name
-                        ?: "Independent Researcher"
+            
+            for (author in authorResponse.results) {
+                val dispName = author.display_name ?: continue
+                if (!isValidName(dispName)) continue
+                
+                val inst = author.last_known_institutions?.firstOrNull()?.display_name ?: "Independent Researcher"
+                suggestions.add(
+                    AuthorSuggestion(
+                        id = author.id,
+                        display_name = dispName,
+                        institution = inst
+                    )
                 )
             }
+            
+            // 2. If not enough individual researchers, search works and extract authors
+            if (suggestions.size < 4) {
+                Log.i(tag, "fetchSimilarAuthorsFromOpenAlex: insufficient human authors for '$query', searching works...")
+                val worksResponse: OpenAlexResponse = httpClient.get("https://api.openalex.org/works") {
+                    parameter("search", query)
+                    parameter("per_page", 20)
+                    parameter("mailto", "vikki.4me@gmail.com")
+                }.body()
+                
+                val seenIds = suggestions.map { it.id }.toMutableSet()
+                for (work in worksResponse.results) {
+                    val authorships = work.authorships ?: continue
+                    for (authorship in authorships) {
+                        val authInfo = authorship.author ?: continue
+                        val authId = authInfo.id ?: continue
+                        val authName = authInfo.display_name ?: continue
+                        
+                        if (authId in seenIds || !isValidName(authName)) continue
+                        
+                        // Extract institution name safely
+                        val inst = authorship.institutions?.firstOrNull()?.display_name ?: "Independent Researcher"
+                        
+                        seenIds.add(authId)
+                        suggestions.add(
+                            AuthorSuggestion(
+                                id = authId,
+                                display_name = authName,
+                                institution = inst
+                            )
+                        )
+                        if (suggestions.size >= limit) break
+                    }
+                    if (suggestions.size >= limit) break
+                }
+            }
+            
+            return suggestions.take(limit)
         } catch (e: Exception) {
             Log.e(tag, "fetchSimilarAuthorsFromOpenAlex failed", e)
-            emptyList()
+            return emptyList()
         }
     }
 
@@ -824,12 +930,15 @@ class ApiService {
         }
     }
 
-    suspend fun getNetworkCollaborators(authorId: String, limit: Int = 50): List<NetworkCollaborator> {
+    suspend fun getNetworkCollaborators(authorId: String, limit: Int = 50, excludeIds: List<String> = emptyList()): List<NetworkCollaborator> {
         val base = baseUrl() ?: return emptyList()
         return try {
             httpClient.get("$base/network_collaborators") {
                 parameter("author_id", authorId)
                 parameter("limit", limit)
+                if (excludeIds.isNotEmpty()) {
+                    parameter("exclude_ids", excludeIds.joinToString(","))
+                }
             }.body()
         } catch (e: Exception) {
             handleNetworkException(e, base)

@@ -100,6 +100,17 @@ async def verify_firestore() -> None:
     import concurrent.futures
     
     print("[Firestore] Verifying Firestore connection on startup...", flush=True)
+    
+    # Wipe stale caches on startup to force fresh loading of updated schemas/authors
+    try:
+        await suggestions_cache.clear()
+        await profile_cache.clear()
+        await daily_feed_cache.clear()
+        await network_collaborators_cache.clear()
+        print("[Cache] All startup caches cleared successfully!", flush=True)
+    except Exception as e:
+        print(f"[Cache] Startup clear failed: {e}", flush=True)
+
     loop = asyncio.get_event_loop()
     try:
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
@@ -178,6 +189,7 @@ app.add_middleware(
 )
 
 class Work(BaseModel):
+    id: Optional[str] = None
     title: Optional[str] = None
     year: Optional[int] = None
     doi: Optional[str] = None
@@ -190,6 +202,7 @@ class Work(BaseModel):
     disruption_score: float = 0.0
     semantic_novelty: float = 0.0
     open_science_score: float = 0.0
+    authors: Optional[List[str]] = None
 
 class AuthorSuggestion(BaseModel):
     id: str
@@ -364,14 +377,34 @@ async def get_author_suggestions(query: str = Query(...)):
         "User-Agent": "ResQitApp/1.0 (mailto:vikki.4me@gmail.com)",
         "Accept": "application/json"
     }
+    
+    import re
+    non_person_keywords = re.compile(
+        r"\b(collaboration|group|consortium|committee|team|network|project|society|association|institute|university|department|lab|laboratory|center|centre|foundation|quantum|topology|invariants|materials|systems|physics|biology|chemistry|science|computing|theory|applications|methods|frontiers|research)\b",
+        re.IGNORECASE
+    )
+
     async with httpx.AsyncClient(timeout=timeout) as client:
-        params = {"search": query, "per_page": 10, "mailto": "vikki.4me@gmail.com"}
+        suggestions = []
         try:
-            res = await client.get(f"{BASE_URL}/authors", params=params, headers=headers)
+            # First try direct author search
+            res = await client.get(f"{BASE_URL}/authors", params={"search": query, "per_page": 10, "mailto": "vikki.4me@gmail.com"}, headers=headers)
             if res.status_code == 200:
                 results = res.json().get("results", [])
-                suggestions = []
                 for author in results:
+                    disp_name = author.get("display_name")
+                    if not disp_name:
+                        continue
+                    
+                    # Filter out non-person names
+                    if non_person_keywords.search(disp_name):
+                        continue
+                    
+                    # Check that name is at least 2 words and not excessively long
+                    words = disp_name.strip().split()
+                    if len(words) < 2 or len(words) > 4:
+                        continue
+                        
                     last_insts = author.get("last_known_institutions")
                     inst = "Independent Researcher"
                     if last_insts and isinstance(last_insts, list) and len(last_insts) > 0:
@@ -384,11 +417,55 @@ async def get_author_suggestions(query: str = Query(...)):
                     
                     suggestions.append(AuthorSuggestion(
                         id=author["id"],
-                        display_name=author["display_name"],
+                        display_name=disp_name,
                         institution=inst,
                         h_index=int(h_idx) if h_idx is not None else None,
                         innovation_score=None
                     ))
+            
+            # If we don't have enough suggestions (less than 4), it's likely a topic query or has too many filtered names.
+            # Fall back to searching works and extracting authors.
+            if len(suggestions) < 4:
+                print(f"[Fallback to Works] Insufficient human authors for '{query}', searching works...", flush=True)
+                works_res = await client.get(f"{BASE_URL}/works", params={"search": query, "per_page": 20, "mailto": "vikki.4me@gmail.com"}, headers=headers)
+                if works_res.status_code == 200:
+                    works = works_res.json().get("results", [])
+                    seen_ids = {s.id for s in suggestions}
+                    for work in works:
+                        for authorship in work.get("authorships", []):
+                            author = authorship.get("author", {})
+                            auth_name = author.get("display_name")
+                            auth_id = author.get("id")
+                            
+                            if not auth_name or not auth_id or auth_id in seen_ids:
+                                continue
+                                
+                            if non_person_keywords.search(auth_name):
+                                continue
+                                
+                            words = auth_name.strip().split()
+                            if len(words) < 2 or len(words) > 4:
+                                continue
+                                
+                            last_insts = authorship.get("institutions", [])
+                            inst = "Independent Researcher"
+                            if last_insts:
+                                inst = last_insts[0].get("display_name") or "Independent Researcher"
+                                
+                            seen_ids.add(auth_id)
+                            suggestions.append(AuthorSuggestion(
+                                id=auth_id,
+                                display_name=auth_name,
+                                institution=inst,
+                                h_index=None,
+                                innovation_score=None
+                            ))
+                            if len(suggestions) >= 10:
+                                break
+                        if len(suggestions) >= 10:
+                            break
+                            
+            if suggestions:
                 await suggestions_cache.set(cache_key, suggestions)
                 return suggestions
         except Exception as e:
@@ -635,7 +712,17 @@ async def search_author(
                     except Exception:
                         pass
 
+                authors_list = []
+                for auth_ship in w.get("authorships", []):
+                    author_info = auth_ship.get("author")
+                    if author_info:
+                        a_name = author_info.get("display_name")
+                        a_id = author_info.get("id")
+                        if a_name and a_id:
+                            authors_list.append(f"{a_name}|{a_id}")
+
                 works_data.append(Work(
+                    id=w.get("id"),
                     title=title,
                     year=pub_year,
                     doi=w.get("doi"),
@@ -647,7 +734,8 @@ async def search_author(
                     impact_factor=round(float(impact), 2),
                     disruption_score=0.0,
                     semantic_novelty=0.0,
-                    open_science_score=0.0
+                    open_science_score=0.0,
+                    authors=authors_list
                 ))
 
             # ── 3c. Parse OpenAlex author metadata ──────────────────────────
@@ -776,12 +864,13 @@ async def get_journal_advisor(author_id: str = Query(...)):
     return data
 
 @app.get("/network_collaborators")
-async def get_network_collaborators(author_id: str = Query(...), limit: int = Query(50)):
-    cache_key = f"network_collaborators:{author_id}:{limit}"
+async def get_network_collaborators(author_id: str = Query(...), limit: int = Query(50), exclude_ids: str = Query("")):
+    cache_key = f"network_collaborators:{author_id}:{limit}:{exclude_ids}"
     cached = await network_collaborators_cache.get(cache_key)
     if cached is not None:
         return cached
-    data = await pipeline_services.get_network_collaborators(author_id, limit)
+    excl_list = [x.strip() for x in exclude_ids.split(",")] if exclude_ids else []
+    data = await pipeline_services.get_network_collaborators(author_id, limit, excl_list)
     await network_collaborators_cache.set(cache_key, data)
     return data
 

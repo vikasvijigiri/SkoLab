@@ -44,6 +44,8 @@ import com.open.entropy.ui.components.*
 import com.open.entropy.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import android.widget.TextView
 import androidx.compose.ui.viewinterop.AndroidView
 import android.util.TypedValue
@@ -107,60 +109,63 @@ fun DiscoveryScreen(
         try {
             val peers = apiService.getSimilarAuthors(researchFocus, limit = 5)
             suggestedPeers = peers
-            
-            // Friends' articles (suggested peers)
-            val articles = mutableListOf<Work>()
-            peers.take(3).forEach { peer ->
-                val profile = apiService.searchAuthor(peer.display_name, peer.id)
-                if (profile != null && profile.works.isNotEmpty()) {
-                    val latest = profile.works.maxByOrNull { it.year ?: 0 }
-                    if (latest != null) {
-                        articles.add(latest.copy(authors = listOf(peer.display_name)))
-                    }
-                }
-            }
-            suggestedPeersArticles = articles
 
-            // Collaborators' new articles
-            val collabsArticlesList = mutableListOf<Work>()
-            if (peers.isNotEmpty()) {
-                val topPeer = peers.first()
-                val collabs = apiService.getNetworkCollaborators(topPeer.id, limit = 6)
-                collabs.forEach { collab ->
-                    val path = collab.connection_path
-                    val paperTitle = if (path.contains("'")) {
-                        path.substringAfter("'").substringBefore("'")
-                    } else {
-                        "Analysis of " + collab.field + " Dynamics"
-                    }
-                    collabsArticlesList.add(
-                        Work(
-                            title = paperTitle,
-                            year = 2026,
-                            doi = "https://doi.org",
-                            journal = "Nature Materials",
-                            is_open_access = true,
-                            citations = 15,
-                            authors = listOf(collab.name)
-                        )
-                    )
-                }
-            }
-            collaboratorsArticles = collabsArticlesList
-
-            // Trending papers
-            val trending = apiService.getTrendingPapers(limit = 6)
-            trendingPapers = trending.map { w ->
+            val mapToWork: (OpenAlexWork) -> Work = { w ->
                 Work(
-                    title = w.title,
-                    year = w.publication_year,
-                    doi = w.doi,
-                    journal = w.primary_location?.source?.display_name,
-                    is_open_access = true,
+                    title = w.title ?: "Untitled Paper",
+                    year = w.publication_year ?: 2025,
+                    doi = w.doi ?: "",
+                    journal = w.primary_location?.source?.display_name ?: "Scientific Journal",
+                    is_open_access = w.primary_location?.pdf_url != null,
                     citations = w.cited_by_count ?: 0,
                     authors = w.authorships?.mapNotNull { it.author?.display_name } ?: emptyList()
                 )
             }
+            
+            // Friends' articles (suggested peers) - Concurrently fetched from live OpenAlex
+            val peerArticlesDeferred = peers.take(3).map { peer ->
+                async(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        val rawWorks = apiService.getAuthorWorks(peer.id, limit = 1)
+                        rawWorks.firstOrNull()?.let { mapToWork(it) }
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+            }
+            suggestedPeersArticles = peerArticlesDeferred.awaitAll().filterNotNull()
+
+            // Collaborators' new articles - Concurrently fetched from live OpenAlex
+            val collabsArticlesList = mutableListOf<Work>()
+            if (peers.isNotEmpty()) {
+                val topPeer = peers.first()
+                val collabs = apiService.getNetworkCollaborators(topPeer.id, limit = 4)
+                val collabsDeferred = collabs.map { collab ->
+                    async(kotlinx.coroutines.Dispatchers.IO) {
+                        try {
+                            val rawWorks = apiService.getAuthorWorks(collab.id, limit = 1)
+                            rawWorks.firstOrNull()?.let { mapToWork(it) }
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+                }
+                collabsArticlesList.addAll(
+                    collabsDeferred.awaitAll().filterNotNull()
+                )
+            }
+            
+            // Trending papers - Concurrently fetched from live OpenAlex
+            val trending = apiService.getTrendingPapers(limit = 6)
+            val mappedTrending = trending.map { mapToWork(it) }
+            trendingPapers = mappedTrending
+
+            // Fallback for collaborators articles if they are empty
+            if (collabsArticlesList.isEmpty() && mappedTrending.isNotEmpty()) {
+                collabsArticlesList.addAll(mappedTrending.take(3))
+            }
+            collaboratorsArticles = collabsArticlesList
+
         } catch (e: Exception) {
             Log.e("DiscoveryScreen", "Failed to load dashboard suggestions", e)
         } finally {

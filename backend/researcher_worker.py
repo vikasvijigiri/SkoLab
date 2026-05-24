@@ -88,7 +88,7 @@ metrics_service = MetricsService()
 prediction_service = PredictionService()
 summarization_service = SummarizationService()
 
-async def teleport_researcher(author_id: str):
+async def teleport_researcher(author_id: str, teleport_coauthors: bool = True):
     """
     Deep-fetches all metrics and works for a researcher and caches them in Firestore.
     """
@@ -231,6 +231,7 @@ async def teleport_researcher(author_id: str):
             m = metrics_service.calculate_metrics(paper_dna)
             
             processed_works.append({
+                "id": w.get("id"),
                 "title": w.get("title"),
                 "year": w.get("publication_year"),
                 "doi": w.get("doi"),
@@ -243,7 +244,8 @@ async def teleport_researcher(author_id: str):
                 "impact_factor": impact_factor,
                 "disruption_score": round(d_proxy * 100, 1),
                 "semantic_novelty": m["creativity"],
-                "open_science_score": m["skill_set_score"]
+                "open_science_score": m["skill_set_score"],
+                "authors": [f"{a.get('author', {}).get('display_name')}|{a.get('author', {}).get('id')}" for a in w.get("authorships", []) if a.get("author") and a.get("author", {}).get("display_name") and a.get("author", {}).get("id")]
             })
             total_creativity += m["creativity"]
             total_complexity += m["complexity"]
@@ -518,6 +520,13 @@ async def teleport_researcher(author_id: str):
                 firestore_doc["last_synced"] = firestore.SERVER_TIMESTAMP  # Firestore sentinel only for write
                 db.collection("global_researchers").document(canonical_id).set(firestore_doc)
                 print(f"Successfully vaulted Deep Data with Prediction for: {researcher_profile['display_name']}")
+                
+                # Dynamic pre-fetching of co-author profiles to save in our DB
+                if teleport_coauthors and len(co_authors) > 0:
+                    top_co_authors = list(co_authors)[:5]  # Limit to top 5 to keep it fast
+                    print(f"Pre-fetching co-authors: {top_co_authors}", flush=True)
+                    for ca_id in top_co_authors:
+                        asyncio.create_task(teleport_researcher(ca_id, teleport_coauthors=False))
             except Exception as e:
                 print(f"Firestore Sync Failed: {e}")
         else:
