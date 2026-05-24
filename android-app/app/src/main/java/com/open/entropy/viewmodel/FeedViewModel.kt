@@ -293,64 +293,45 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                     if (userAuthorProfile != null) {
                         Log.i("FeedViewModel", "Fetching network collaborators for id: ${userAuthorProfile.id}")
                         val networkList = apiService.getNetworkCollaborators(userAuthorProfile.id, limit = 10)
-                        connections = networkList.map { collab ->
-                            val isDepth1 = collab.connection_path.contains("Co-authored")
-                            Connection(
-                                author = Author(
-                                    id = collab.id,
-                                    name = collab.name,
-                                    institution = collab.institution,
-                                    country = "US",
-                                    orcidId = null,
-                                    fingerprintType = collab.field ?: focus,
-                                    radarScores = mapOf("Disruption" to 0.85f, "Novelty" to 0.72f),
-                                    careerArc = emptyList(),
-                                    topPapers = emptyList(),
-                                    collaborators = emptyList(),
-                                    totalPapers = 18,
-                                    avgDisruptionScore = 0.75f
-                                ),
-                                depth = if (isDepth1) 1 else 2,
-                                mutualCount = collab.relevance_score,
-                                tags = listOf(collab.field ?: "Collaborator"),
-                                connectionPath = collab.connection_path,
-                                openStatus = "Available for Collaboration",
-                                papersCollaborated = collab.papers_collaborated ?: 0,
-                                totalPublications = collab.total_publications ?: 0,
-                                hIndex = collab.h_index ?: 0
-                            )
+                        if (networkList.isEmpty()) {
+                            Log.w("FeedViewModel", "Network list from OpenAlex was empty, falling back to mock")
+                            connections = getMockConnections(focus)
+                        } else {
+                            connections = networkList.map { collab ->
+                                val isDepth1 = collab.connection_path.contains("Co-authored")
+                                Connection(
+                                    author = Author(
+                                        id = collab.id,
+                                        name = collab.name,
+                                        institution = collab.institution,
+                                        country = "US",
+                                        orcidId = null,
+                                        fingerprintType = collab.field ?: focus,
+                                        radarScores = mapOf("Disruption" to 0.85f, "Novelty" to 0.72f),
+                                        careerArc = emptyList(),
+                                        topPapers = emptyList(),
+                                        collaborators = emptyList(),
+                                        totalPapers = 18,
+                                        avgDisruptionScore = 0.75f
+                                    ),
+                                    depth = if (isDepth1) 1 else 2,
+                                    mutualCount = collab.relevance_score,
+                                    tags = listOf(collab.field ?: "Collaborator"),
+                                    connectionPath = collab.connection_path,
+                                    openStatus = "Available for Collaboration",
+                                    papersCollaborated = collab.papers_collaborated ?: 0,
+                                    totalPublications = collab.total_publications ?: 0,
+                                    hIndex = collab.h_index ?: 0
+                                )
+                            }
                         }
                     } else {
                         Log.w("FeedViewModel", "Failed to find author profile for $name, falling back to mock")
-                        connections = MockData.authors.take(4).mapIndexed { i, author ->
-                            Connection(
-                                author = author,
-                                depth = (i % 3) + 1,
-                                mutualCount = 75 + (i * 5), // e.g. 75, 80, 85, 90 relevance
-                                tags = listOf(focus, "Basic Science"),
-                                connectionPath = "Fallback Connection",
-                                openStatus = "Available",
-                                papersCollaborated = (i + 1) * 3, // e.g. 3, 6, 9, 12
-                                totalPublications = 42 + (i * 15), // e.g. 42, 57, 72, 87
-                                hIndex = 12 + (i * 4) // e.g. 12, 16, 20, 24
-                            )
-                        }
+                        connections = getMockConnections(focus)
                     }
                 } catch (e: Exception) {
                     Log.e("FeedViewModel", "Error fetching connections from OpenAlex API", e)
-                    connections = MockData.authors.take(4).mapIndexed { i, author ->
-                        Connection(
-                            author = author,
-                            depth = (i % 3) + 1,
-                            mutualCount = 75 + (i * 5),
-                            tags = listOf(focus, "Basic Science"),
-                            connectionPath = "Fallback Connection",
-                            openStatus = "Available",
-                            papersCollaborated = (i + 1) * 3,
-                            totalPublications = 42 + (i * 15),
-                            hIndex = 12 + (i * 4)
-                        )
-                    }
+                    connections = getMockConnections(focus)
                 }
 
                 // AI Daily Brief Text - Fetches from live backend Daily Feed
