@@ -36,36 +36,49 @@ fun AuthorDetailScreen(
     val context = LocalContext.current
 
     LaunchedEffect(authorName) {
-        isLoading = true
-        try {
-            val parts = authorName.split("|")
-            val displayName = parts.firstOrNull() ?: authorName
-            val authorId = if (parts.size > 1) parts[1] else null
+        val parts = authorName.split("|")
+        val displayName = parts.firstOrNull() ?: authorName
+        val authorId = if (parts.size > 1) parts[1] else null
 
-            // Attempt dynamic OpenAlex / backend database lookup
-            var data: com.open.entropy.network.AuthorResponse? = null
-            try {
-                data = apiService.searchAuthor(displayName, authorId)
-            } catch (e: Exception) {
-                Log.e("AuthorDetailScreen", "API searchAuthor failed", e)
-            }
-            
-            if (data == null) {
-                // Show a short warning/Toast to handle errors in an industry-standard way
-                android.widget.Toast.makeText(context, "ResQit server unreachable. Using local fallback database.", android.widget.Toast.LENGTH_LONG).show()
-                // Graceful mock database fallback
-                val mockAuthor = MockData.authors.find {
-                    it.name.equals(displayName, ignoreCase = true) ||
-                    it.name.contains(displayName, ignoreCase = true) ||
-                    displayName.contains(it.name, ignoreCase = true)
+        val cacheKey = authorId ?: displayName
+        val cached = apiService.getCachedAuthorProfile(cacheKey)
+        if (cached != null) {
+            authorData = cached
+            isLoading = false
+        } else {
+            isLoading = true
+        }
+
+        try {
+            if (cached == null || !cached.metrics_computed) {
+                // Attempt dynamic OpenAlex / backend database lookup
+                var data: com.open.entropy.network.AuthorResponse? = null
+                try {
+                    data = apiService.searchAuthor(displayName, authorId, forceRefresh = cached != null)
+                } catch (e: Exception) {
+                    Log.e("AuthorDetailScreen", "API searchAuthor failed", e)
                 }
-                data = if (mockAuthor != null) {
-                    mockAuthor.toAuthorResponse()
-                } else {
-                    MockData.generateDynamicMockAuthor(displayName, authorId)
+                
+                if (data == null && cached == null) {
+                    // Show a short warning/Toast to handle errors in an industry-standard way
+                    android.widget.Toast.makeText(context, "ResQit server unreachable. Using local fallback database.", android.widget.Toast.LENGTH_LONG).show()
+                    // Graceful mock database fallback
+                    val mockAuthor = MockData.authors.find {
+                        it.name.equals(displayName, ignoreCase = true) ||
+                        it.name.contains(displayName, ignoreCase = true) ||
+                        displayName.contains(it.name, ignoreCase = true)
+                    }
+                    data = if (mockAuthor != null) {
+                        mockAuthor.toAuthorResponse()
+                    } else {
+                        MockData.generateDynamicMockAuthor(displayName, authorId)
+                    }
+                }
+                
+                if (data != null) {
+                    authorData = data
                 }
             }
-            authorData = data
         } catch (e: Exception) {
             Log.e("AuthorDetailScreen", "Failed to retrieve researcher metrics", e)
         } finally {

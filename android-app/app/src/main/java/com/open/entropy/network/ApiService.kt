@@ -337,6 +337,25 @@ class ApiService {
                 }
             }
         )
+
+        // Caches author profile details (authorId/displayName -> AuthorResponse)
+        val authorProfileCache: MutableMap<String, AuthorResponse> = java.util.Collections.synchronizedMap(
+            object : java.util.LinkedHashMap<String, AuthorResponse>(50, 0.75f, true) {
+                override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, AuthorResponse>?): Boolean {
+                    return size > 50
+                }
+            }
+        )
+    }
+
+    fun getCachedAuthorProfile(key: String): AuthorResponse? {
+        val cleanKey = key.substringAfterLast("/").trim().lowercase()
+        return authorProfileCache[cleanKey]
+    }
+
+    fun cacheAuthorProfile(key: String, profile: AuthorResponse) {
+        val cleanKey = key.substringAfterLast("/").trim().lowercase()
+        authorProfileCache[cleanKey] = profile
     }
 
     private val httpClient = HttpClient(Android) {
@@ -437,10 +456,17 @@ class ApiService {
         }
     }
 
-    suspend fun searchAuthor(name: String, id: String? = null): AuthorResponse? {
+    suspend fun searchAuthor(name: String, id: String? = null, forceRefresh: Boolean = false): AuthorResponse? {
+        val cacheKey = (id ?: name).substringAfterLast("/").trim().lowercase()
+        if (!forceRefresh) {
+            getCachedAuthorProfile(cacheKey)?.let {
+                Log.d(tag, "Client-side cache hit for searchAuthor: $cacheKey")
+                return it
+            }
+        }
+
         val base = baseUrl()
-        // Try backend first
-        if (base != null) {
+        val result = if (base != null) {
             try {
                 Log.d(tag, "Searching author via backend: $name, id: $id @ $base")
                 val response = httpClient.get("$base/search_author") {
@@ -451,19 +477,25 @@ class ApiService {
                 Log.d(tag, "searchAuthor raw body: $bodyText")
                 if (bodyText.contains("\"error\"")) {
                     Log.w(tag, "searchAuthor backend returned error: $bodyText, falling back to direct OpenAlex query")
-                    return fetchAuthorFromOpenAlex(name, id)
+                    fetchAuthorFromOpenAlex(name, id)
+                } else {
+                    val decoded: AuthorResponse = Json { ignoreUnknownKeys = true }.decodeFromString(bodyText)
+                    decoded
                 }
-                val result: AuthorResponse = Json { ignoreUnknownKeys = true }.decodeFromString(bodyText)
-                return result
             } catch (e: Exception) {
                 handleNetworkException(e, base)
                 Log.w(tag, "searchAuthor backend failed, falling back to OpenAlex direct", e)
+                fetchAuthorFromOpenAlex(name, id)
             }
         } else {
             Log.w(tag, "searchAuthor: backend not yet discovered, using OpenAlex direct")
+            fetchAuthorFromOpenAlex(name, id)
         }
-        // Fallback: fetch directly from OpenAlex — real data, no hallucination
-        return fetchAuthorFromOpenAlex(name, id)
+
+        if (result != null) {
+            cacheAuthorProfile(cacheKey, result)
+        }
+        return result
     }
 
     /**
