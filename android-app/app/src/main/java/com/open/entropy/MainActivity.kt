@@ -90,6 +90,7 @@ fun ResQitMainApp() {
     val currentRoute = navBackStackEntry?.destination?.route
 
     val hasSeenOnboarding by userPrefs.hasSeenOnboarding.collectAsStateWithLifecycle(initialValue = false)
+    var isFeedLoading by remember { mutableStateOf(true) }
 
     val mainTabs = listOf("discover", "search", "library", "nexus")
     val dockItems = listOf(
@@ -103,7 +104,12 @@ fun ResQitMainApp() {
         Scaffold(
             containerColor = Color.Transparent,
             bottomBar = {
-                if (currentRoute in mainTabs) {
+                val showBottomBar = currentRoute in mainTabs && (!isFeedLoading || currentRoute != "discover")
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showBottomBar,
+                    enter = fadeIn(animationSpec = tween(350, easing = EaseOutCubic)),
+                    exit = fadeOut(animationSpec = tween(250, easing = EaseOutCubic))
+                ) {
                     BottomNavDock(
                         items = dockItems,
                         currentRoute = currentRoute,
@@ -223,7 +229,8 @@ fun ResQitMainApp() {
                             },
                             onAuthorClick = { authorName ->
                                 navController.navigate("author_detail/${authorName.encodeForRoute()}")
-                            }
+                            },
+                            onLoadingStateChanged = { isFeedLoading = it }
                         )
                     }
                 }

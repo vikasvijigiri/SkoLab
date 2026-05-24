@@ -91,6 +91,7 @@ fun FeedScreen(
     onNavigateToReader: (String, String) -> Unit = { _, _ -> },
     onTabNavigate: (String) -> Unit = {},
     onAuthorClick: (String) -> Unit = {},
+    onLoadingStateChanged: (Boolean) -> Unit = {},
     viewModel: FeedViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -103,6 +104,15 @@ fun FeedScreen(
     val userPrefs = remember { com.open.entropy.data.UserPreferences(context) }
     val cachedUser by authManager.cachedUser.collectAsState(initial = null)
     val connectionsList by userPrefs.userConnections.collectAsState(initial = emptyList())
+
+    val isInitialLoad = remember { mutableStateOf(true) }
+    LaunchedEffect(uiState.isLoading) {
+        if (!uiState.isLoading) {
+            isInitialLoad.value = false
+        }
+        onLoadingStateChanged(uiState.isLoading && isInitialLoad.value)
+    }
+
 
     LaunchedEffect(cachedUser) {
         val userName = cachedUser?.name ?: "Vikas Vijigiri"
