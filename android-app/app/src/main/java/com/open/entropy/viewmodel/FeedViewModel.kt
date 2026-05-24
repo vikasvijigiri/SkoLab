@@ -71,7 +71,13 @@ data class Connection(
     val author: Author,
     val depth: Int,              // 1, 2, or 3
     val mutualCount: Int,
-    val sharedAreas: List<String>
+    val tags: List<String> = emptyList(),
+    val connectionPath: String = "",
+    val openStatus: String = "Available for Collaboration",
+    val sharedAreas: List<String> = emptyList(),
+    val papersCollaborated: Int = 0,
+    val totalPublications: Int = 0,
+    val hIndex: Int = 0
 )
 
 data class Institution(
@@ -156,7 +162,7 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
         viewModelScope.launch {
             try {
                 val excludeIds = connections.map { it.author.id }
-                val newNetwork = apiService.getNetworkCollaborators(expandId, limit = 20, excludeIds = excludeIds)
+                val newNetwork = apiService.getNetworkCollaborators(expandId, limit = 10, excludeIds = excludeIds)
                 
                 if (newNetwork.isNotEmpty()) {
                     val focus = currentState.user.researchFocus
@@ -278,32 +284,6 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                     Institution("NASA", "NSA", androidx.compose.ui.graphics.Color(0xFF3D6FFF))
                 )
 
-                // 1. Dynamic Paper fetching from API (Trending and OpenAccess locked to user focus)
-                var trendingList = emptyList<Paper>()
-                var hotList = emptyList<Paper>()
-                var openAccessList = emptyList<Paper>()
-                
-                try {
-                    val rawTrending = apiService.getTrendingPapers(focus = focus, limit = 6)
-                    trendingList = rawTrending.map { mapOpenAlexToPaper(it) }
-                    
-                    // Hot papers have high citations
-                    hotList = trendingList.sortedByDescending { it.citationCount }
-                    
-                    // Open Access filtering
-                    openAccessList = trendingList.filter { it.pdfUrl != null }
-                } catch (e: Exception) {
-                    Log.e("FeedViewModel", "Failed to fetch from apiService for focus: $focus", e)
-                }
-
-                // fallback to mock papers if lists are empty
-                if (trendingList.isEmpty()) {
-                    val mockList = MockData.authors.flatMap { it.topPapers }
-                    trendingList = mockList.take(6)
-                    hotList = mockList.sortedByDescending { it.citationCount }.take(6)
-                    openAccessList = mockList.filter { it.pdfUrl != null }.take(6)
-                }
-
                 // 2. Search for the logged-in user profile to extract actual collaborators (co-authors)
                 var userAuthorProfile: com.open.entropy.network.AuthorResponse? = null
                 var connections = emptyList<Connection>()
@@ -312,7 +292,7 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                     userAuthorProfile = apiService.searchAuthor(name)
                     if (userAuthorProfile != null) {
                         Log.i("FeedViewModel", "Fetching network collaborators for id: ${userAuthorProfile.id}")
-                        val networkList = apiService.getNetworkCollaborators(userAuthorProfile.id, limit = 50)
+                        val networkList = apiService.getNetworkCollaborators(userAuthorProfile.id, limit = 10)
                         connections = networkList.map { collab ->
                             val isDepth1 = collab.connection_path.contains("Co-authored")
                             Connection(
@@ -331,94 +311,47 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                                     avgDisruptionScore = 0.75f
                                 ),
                                 depth = if (isDepth1) 1 else 2,
-                                mutualCount = (collab.relevance_score / 10),
-                                sharedAreas = listOf(focus)
+                                mutualCount = collab.relevance_score,
+                                tags = listOf(collab.field ?: "Collaborator"),
+                                connectionPath = collab.connection_path,
+                                openStatus = "Available for Collaboration",
+                                papersCollaborated = collab.papers_collaborated ?: 0,
+                                totalPublications = collab.total_publications ?: 0,
+                                hIndex = collab.h_index ?: 0
+                            )
+                        }
+                    } else {
+                        Log.w("FeedViewModel", "Failed to find author profile for $name, falling back to mock")
+                        connections = MockData.authors.take(4).mapIndexed { i, author ->
+                            Connection(
+                                author = author,
+                                depth = (i % 3) + 1,
+                                mutualCount = 75 + (i * 5), // e.g. 75, 80, 85, 90 relevance
+                                tags = listOf(focus, "Basic Science"),
+                                connectionPath = "Fallback Connection",
+                                openStatus = "Available",
+                                papersCollaborated = (i + 1) * 3, // e.g. 3, 6, 9, 12
+                                totalPublications = 42 + (i * 15), // e.g. 42, 57, 72, 87
+                                hIndex = 12 + (i * 4) // e.g. 12, 16, 20, 24
                             )
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e("FeedViewModel", "Failed to analyze network collaborators", e)
-                }
-
-                // 3. Suggested Peers (Rising researchers based on focus field)
-                var suggestedPeers = emptyList<Author>()
-                try {
-                    val rawPeers = apiService.getSimilarAuthors(focus, limit = 6)
-                    suggestedPeers = rawPeers.map { peer ->
-                        Author(
-                            id = peer.id,
-                            name = peer.display_name,
-                            institution = peer.institution,
-                            country = "US",
-                            orcidId = null,
-                            fingerprintType = focus,
-                            radarScores = mapOf("Disruption" to 0.82f, "Novelty" to 0.74f),
-                            careerArc = emptyList(),
-                            topPapers = emptyList(),
-                            collaborators = emptyList(),
-                            totalPapers = 32,
-                            avgDisruptionScore = 0.78f
+                    Log.e("FeedViewModel", "Error fetching connections from OpenAlex API", e)
+                    connections = MockData.authors.take(4).mapIndexed { i, author ->
+                        Connection(
+                            author = author,
+                            depth = (i % 3) + 1,
+                            mutualCount = 75 + (i * 5),
+                            tags = listOf(focus, "Basic Science"),
+                            connectionPath = "Fallback Connection",
+                            openStatus = "Available",
+                            papersCollaborated = (i + 1) * 3,
+                            totalPublications = 42 + (i * 15),
+                            hIndex = 12 + (i * 4)
                         )
                     }
-                } catch (e: Exception) {
-                    Log.e("FeedViewModel", "Rising researchers retrieval failed for focus: $focus", e)
                 }
-
-                if (suggestedPeers.isEmpty()) {
-                    suggestedPeers = MockData.authors.take(6)
-                }
-
-                // Fallback Connections if network is empty
-                if (connections.isEmpty()) {
-                    connections = suggestedPeers.take(4).mapIndexed { i, author ->
-                        Connection(author, depth = (i % 3) + 1, mutualCount = i * 2, sharedAreas = listOf(focus, "Basic Science"))
-                    }
-                }
-
-
-                // Concurrently fetch real, distinct publications for Suggested Connections and Suggested Peers using getAuthorWorks
-                val updatedPeers = suggestedPeers.take(4).map { peer ->
-                    viewModelScope.async(kotlinx.coroutines.Dispatchers.IO) {
-                        try {
-                            val rawWorks = apiService.getAuthorWorks(peer.id, limit = 2)
-                            val papers = rawWorks.map { mapOpenAlexToPaper(it) }
-                            if (papers.isNotEmpty()) {
-                                peer.copy(topPapers = papers)
-                            } else {
-                                val fallbackPaper = trendingList.firstOrNull()
-                                peer.copy(topPapers = if (fallbackPaper != null) listOf(fallbackPaper) else emptyList())
-                            }
-                        } catch (e: Exception) {
-                            peer
-                        }
-                    }
-                }.awaitAll()
-
-                val finalPeers = updatedPeers + suggestedPeers.drop(4)
-
-                val updatedConnections = connections.take(4).map { conn ->
-                    viewModelScope.async(kotlinx.coroutines.Dispatchers.IO) {
-                        try {
-                            val rawWorks = apiService.getAuthorWorks(conn.author.id, limit = 2)
-                            val papers = rawWorks.map { mapOpenAlexToPaper(it) }
-                            if (papers.isNotEmpty()) {
-                                conn.copy(author = conn.author.copy(topPapers = papers))
-                            } else {
-                                val fallbackPaper = trendingList.firstOrNull()
-                                conn.copy(author = conn.author.copy(topPapers = if (fallbackPaper != null) listOf(fallbackPaper) else emptyList()))
-                            }
-                        } catch (e: Exception) {
-                            conn
-                        }
-                    }
-                }.awaitAll()
-
-                val finalConnections = updatedConnections + connections.drop(4)
-
-                // 1. Collaborators' New Articles
-                val collabsArticlesList = updatedConnections.flatMap { it.author.topPapers }
-                // 2. Suggested Peers' (Friends) Articles
-                val friendsArticlesList = updatedPeers.flatMap { it.topPapers }
 
                 // AI Daily Brief Text - Fetches from live backend Daily Feed
                 var aiText = "Emerging Quantum Topology node convergence shows a **24% increase** in Disruption metric driven by Moire superlattice protected states. Coherence maps show **12 stable states** across twist domains."
@@ -432,11 +365,6 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                     Log.e("FeedViewModel", "Failed to load live AI daily feed", e)
                 }
 
-                // Continue Reading progress
-                val continueReadingList = trendingList.take(3).mapIndexed { idx, paper ->
-                    ReadingProgress(paper, progressPercent = (idx + 1) * 30)
-                }
-
                 val finalDIndex = if (userAuthorProfile != null && userAuthorProfile.disruption_score > 0.0) userAuthorProfile.disruption_score.toFloat() else 0.85f
                 val finalSIndex = if (userAuthorProfile != null && userAuthorProfile.average_skill_score > 0.0) userAuthorProfile.average_skill_score.toFloat() else 0.79f
                 val finalPapersCount = if (userAuthorProfile != null && userAuthorProfile.works_count > 0) userAuthorProfile.works_count else 24
@@ -448,23 +376,23 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                         sIndex = finalSIndex,
                         papersCount = finalPapersCount,
                         dIndexDelta = 0.06f,
-                        sIndexDelta = 0.04f,
-                        papersDelta = 3
+                        sIndexDelta = -0.02f,
+                        papersDelta = 2
                     ),
                     aiBriefText = aiText,
                     selectedFilter = ResearchFilter.ALL,
                     topCountries = countries,
                     disciplines = disciplines,
                     researchAreas = researchAreas,
-                    trendingPapers = trendingList,
-                    suggestedResearchers = finalPeers,
-                    suggestedConnections = finalConnections,
-                    hotPapers = hotList,
+                    suggestedConnections = connections,
+                    suggestedResearchers = emptyList(),
+                    trendingPapers = emptyList(),
+                    hotPapers = emptyList(),
+                    openAccessPapers = emptyList(),
+                    continueReading = emptyList(),
+                    collaboratorsArticles = emptyList(),
+                    suggestedPeersArticles = emptyList(),
                     topInstitutions = institutions,
-                    openAccessPapers = openAccessList,
-                    continueReading = continueReadingList,
-                    collaboratorsArticles = collabsArticlesList,
-                    suggestedPeersArticles = friendsArticlesList,
                     isLoading = false,
                     error = null
                 )

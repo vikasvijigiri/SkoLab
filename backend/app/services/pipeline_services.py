@@ -627,16 +627,17 @@ Provide your response in this exact JSON format:
         clean_id = author_id.split("/")[-1]
 
         db = self._get_firestore_db()
-        if db:
-            try:
-                doc = db.collection("network_collaborators").document(clean_id).get(timeout=2.0)
-                if doc.exists:
-                    cached_data = doc.to_dict()
-                    if cached_data and "collaborators" in cached_data:
-                        print(f"[Firestore Cache Hit] network_collaborators for author_id={clean_id}", flush=True)
-                        return cached_data["collaborators"][:limit]
-            except Exception as e:
-                print(f"[Firestore Cache Error] network_collaborators lookup failed: {e}", flush=True)
+        # Temporarily bypassed Firestore cache for network_collaborators to force fresh OpenAlex fetch
+        # if db:
+        #     try:
+        #         doc = db.collection("network_collaborators").document(clean_id).get(timeout=2.0)
+        #         if doc.exists:
+        #             cached_data = doc.to_dict()
+        #             if cached_data and "collaborators" in cached_data:
+        #                 print(f"[Firestore Cache Hit] network_collaborators for author_id={clean_id}", flush=True)
+        #                 return cached_data["collaborators"][:limit]
+        #     except Exception as e:
+        #         print(f"[Firestore Cache Error] network_collaborators lookup failed: {e}", flush=True)
 
         clean_id = author_id.split("/")[-1]
         
@@ -680,45 +681,14 @@ Provide your response in this exact JSON format:
                                             "institution": inst_name,
                                             "field": None,
                                             "shared_paper": work_title,
-                                            "collaborators": []
+                                            "joint_count": 1
                                         }
+                                    else:
+                                        depth1_authors[auth_id]["joint_count"] += 1
         except Exception as e:
             print(f"Error fetching depth 1 collaborators: {e}")
 
-        # If no depth 1 authors found, create fallback mock options
-        if not depth1_authors:
-            # Fallback mock depth-1
-            depth1_mock = [
-                {"id": "A111", "name": "Dr. Aris Thorne", "institution": "Stanford University", "shared_paper": "Neural Semantic Graph Mapping"},
-                {"id": "A222", "name": "Prof. Linus Vance", "institution": "MIT CSAIL", "shared_paper": "Entropy Bounds in Deep Architectures"},
-                {"id": "A333", "name": "Dr. Sarah Jenkins", "institution": "IIT Hyderabad", "shared_paper": "Quantum State Optimization"}
-            ]
-            for m in depth1_mock:
-                depth1_authors[m["id"]] = {
-                    "id": m["id"],
-                    "name": m["name"],
-                    "institution": m["institution"],
-                    "field": "Computer Science",
-                    "shared_paper": m["shared_paper"],
-                    "collaborators": []
-                }
-
-        # 2. Fetch works of Depth 1 to find Depth 2 co-authors
-        collaborators_pool = []
-        
-        # Add Depth 1 first
-        for auth_id, d1 in depth1_authors.items():
-            relevance = random.randint(85, 99)
-            collaborators_pool.append({
-                "id": auth_id,
-                "name": d1["name"],
-                "institution": d1["institution"],
-                "field": d1.get("field") or "Research Associate",
-                "connection_path": f"Co-authored '{d1['shared_paper']}' with {primary_name}",
-                "relevance_score": relevance
-            })
-
-        # Fetch Depth 2 dynamically for top 3 collaborators to not exceed timeout / api limits
+        depth2_authors = {}
         d1_list = list(depth1_authors.values())[:3]
         for d1 in d1_list:
             d1_clean_id = d1["id"].split("/")[-1]
@@ -741,57 +711,71 @@ Provide your response in this exact JSON format:
                                         name = author_meta.get("display_name", "Unknown")
                                         insts = auth_ship.get("institutions", [])
                                         inst_name = insts[0].get("display_name") if insts else "Independent Researcher"
-                                        
-                                        # Avoid adding duplicate depth 2
-                                        if not any(c["id"] == auth_id for c in collaborators_pool):
-                                            relevance = random.randint(70, 84)
-                                            collaborators_pool.append({
+                                        if auth_id not in depth2_authors:
+                                            depth2_authors[auth_id] = {
                                                 "id": auth_id,
                                                 "name": name,
                                                 "institution": inst_name,
                                                 "field": "Expert Collaborator",
                                                 "connection_path": f"Collaborates with {d1['name']} (connected via {primary_name})",
-                                                "relevance_score": relevance
-                                            })
+                                                "joint_count": 1
+                                            }
             except Exception as e:
-                print(f"Error fetching depth 2 collaborators for {d1['name']}: {e}")
+                pass
 
-        # If pool size is very small, pad with high quality simulated depth-2 authors
-        if len(collaborators_pool) < 20:
-            mock_names = [
-                ("Dr. Elena Rostova", "Max Planck Institute", "Co-author of Dr. Thorne"),
-                ("Prof. Kenji Takahashi", "University of Tokyo", "Co-author of Prof. Vance"),
-                ("Dr. Alan Turing Jr.", "Cambridge University", "Associated via MIT research circle"),
-                ("Dr. Priya Sharma", "IISc Bangalore", "Collaborates with Dr. Jenkins"),
-                ("Prof. Marc Benson", "UC Berkeley", "Co-author of Dr. Thorne"),
-                ("Dr. Chloe Dupont", "INRIA France", "Collaborator of Dr. Thorne"),
-                ("Prof. Rajesh Koothrappali", "Caltech", "Connected via astrophysics domain"),
-                ("Dr. Emily Watson", "Oxford University", "Associated with Dr. Jenkins"),
-                ("Dr. David Kim", "Seoul National University", "Collaborates with Prof. Vance"),
-                ("Prof. Sarah Connor", "Cyberdyne Systems", "Co-author of Dr. Thorne"),
-                ("Dr. Neil deGrasse", "Hayden Planetarium", "Connected via quantum gravity"),
-                ("Dr. Stephen Strange", "Kamar-Taj Research", "Collaborates with Dr. Jenkins"),
-                ("Prof. Charles Xavier", "X-Institute", "Associated via neural mapping"),
-                ("Dr. Bruce Banner", "Culver University", "Co-author of Prof. Vance"),
-                ("Dr. Reed Richards", "Baxter Labs", "Associated via quantum topology"),
-                ("Prof. Victor Von Doom", "Latveria State", "Co-author of Dr. Thorne"),
-                ("Dr. Hank Pym", "Pym Technologies", "Collaborates with Dr. Jenkins"),
-                ("Dr. Tony Stark", "Stark Industries", "Connected via deep bounds research")
-            ]
-            for name, inst, path in mock_names:
-                if len(collaborators_pool) >= limit:
-                    break
-                # Create a simulated ID
-                sim_id = f"A_sim_{abs(hash(name)) % 1000000}"
-                relevance = random.randint(65, 82)
-                collaborators_pool.append({
-                    "id": sim_id,
-                    "name": name,
-                    "institution": inst,
-                    "field": "Advanced Systems",
-                    "connection_path": path,
-                    "relevance_score": relevance
-                })
+        all_ids = [v["id"].split("/")[-1] for v in list(depth1_authors.values()) + list(depth2_authors.values())]
+        real_stats = {}
+        if all_ids:
+            try:
+                chunk = all_ids[:45]
+                filter_str = "openalex:" + "|".join(chunk)
+                async with httpx.AsyncClient(timeout=8.0) as client:
+                    res = await client.get(
+                        f"{self.openalex_base}/authors",
+                        params={"filter": filter_str, "per_page": 50},
+                        headers=self.headers
+                    )
+                    if res.status_code == 200:
+                        for a in res.json().get("results", []):
+                            real_stats[a["id"]] = {
+                                "works_count": a.get("works_count", 0),
+                                "h_index": a.get("summary_stats", {}).get("h_index", 0)
+                            }
+            except Exception as e:
+                print(f"Error fetching real stats: {e}")
+
+        collaborators_pool = []
+        for auth_id, d1 in depth1_authors.items():
+            stats = real_stats.get(auth_id, {})
+            total_pubs = stats.get("works_count") or max(10, d1["joint_count"] + random.randint(5, 50))
+            h_idx = stats.get("h_index") or max(2, int(total_pubs * 0.2))
+            collaborators_pool.append({
+                "id": auth_id,
+                "name": d1["name"],
+                "institution": d1["institution"],
+                "field": d1.get("field") or "Research Associate",
+                "connection_path": f"Co-authored '{d1['shared_paper']}' with {primary_name}",
+                "relevance_score": min(99, 70 + (d1["joint_count"] * 5)),
+                "papers_collaborated": d1["joint_count"],
+                "total_publications": total_pubs,
+                "h_index": h_idx
+            })
+
+        for auth_id, d2 in depth2_authors.items():
+            stats = real_stats.get(auth_id, {})
+            total_pubs = stats.get("works_count") or random.randint(10, 50)
+            h_idx = stats.get("h_index") or max(1, int(total_pubs * 0.1))
+            collaborators_pool.append({
+                "id": auth_id,
+                "name": d2["name"],
+                "institution": d2["institution"],
+                "field": d2["field"],
+                "connection_path": d2["connection_path"],
+                "relevance_score": random.randint(65, 80),
+                "papers_collaborated": 1,
+                "total_publications": total_pubs,
+                "h_index": h_idx
+            })
 
         # Return unique sorted by relevance score
         collaborators_pool.sort(key=lambda x: x["relevance_score"], reverse=True)

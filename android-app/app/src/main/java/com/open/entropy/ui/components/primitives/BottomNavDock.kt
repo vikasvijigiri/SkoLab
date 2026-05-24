@@ -1,4 +1,4 @@
-﻿package com.open.entropy.ui.components.primitives
+package com.open.entropy.ui.components.primitives
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -44,7 +44,13 @@ import com.open.entropy.ui.theme.GlassBorder
 import com.open.entropy.ui.theme.GlassSurface
 import com.open.entropy.ui.theme.LocalResQitSpacing
 
-data class DockItem(val route: String, val icon: ImageVector, val label: String)
+data class DockItem(
+    val route: String,
+    val icon: ImageVector,
+    val label: String,
+    val badgeCount: Int = 0,
+    val hasBadgeDot: Boolean = false
+)
 
 @Composable
 fun BottomNavDock(
@@ -56,80 +62,96 @@ fun BottomNavDock(
     val spacing = LocalResQitSpacing.current
     val view = LocalView.current
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = spacing.lg, vertical = spacing.md)
-            .navigationBarsPadding(),
-        contentAlignment = Alignment.BottomCenter
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = Color(0xFF0B141A) // WhatsApp Dark Background
     ) {
-        Surface(
+        Row(
             modifier = Modifier
-                .height(72.dp)
                 .fillMaxWidth()
-                .graphicsLayer {
-                    shadowElevation = 20f
-                    spotShadowColor = ResQitDisruption.copy(alpha = 0.2f)
-                },
-            color = GlassSurface,
-            shape = ResQitShapes.pill,
-            border = androidx.compose.foundation.BorderStroke(0.5.dp, GlassBorder)
+                .navigationBarsPadding()
+                .height(80.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                items.forEach { item ->
-                    val selected = currentRoute == item.route
-                    val tint by animateColorAsState(
-                        targetValue = if (selected) ResQitDisruption else ResQitTextSecondary,
-                        animationSpec = tween(ResQitMotion.fast),
-                        label = "navTint"
-                    )
-                    val pillWidth by animateDpAsState(
-                        targetValue = if (selected) 56.dp else 0.dp,
-                        animationSpec = tween(ResQitMotion.normal),
-                        label = "pillW"
-                    )
+            items.forEach { item ->
+                val selected = currentRoute == item.route
+                val tint by animateColorAsState(
+                    targetValue = if (selected) Color(0xFFC4FCEF) else Color(0xFFF1F1F2),
+                    animationSpec = tween(ResQitMotion.fast),
+                    label = "navTint"
+                )
+                val pillWidth by animateDpAsState(
+                    targetValue = if (selected) 64.dp else 0.dp,
+                    animationSpec = tween(ResQitMotion.normal),
+                    label = "pillW"
+                )
 
-                    Column(
-                        modifier = Modifier
-                            .width(64.dp)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) {
-                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                                onItemClick(item)
-                            }
-                            .semantics { contentDescription = item.label },
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            if (selected) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(pillWidth, 36.dp)
-                                        .clip(RoundedCornerShape(18.dp))
-                                        .background(ResQitDisruption.copy(alpha = 0.12f))
-                                )
-                            }
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            onItemClick(item)
+                        }
+                        .semantics { contentDescription = item.label },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        if (selected) {
+                            Box(
+                                modifier = Modifier
+                                    .size(pillWidth, 32.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(Color(0xFF0F3D30)) // WhatsApp Dark Green Pill
+                            )
+                        }
+                        Box {
                             Icon(
                                 imageVector = item.icon,
                                 contentDescription = null,
-                                modifier = Modifier.size(24.dp),
+                                modifier = Modifier.size(24.dp).padding(2.dp),
                                 tint = tint
                             )
+                            if (item.badgeCount > 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .size(16.dp)
+                                        .clip(androidx.compose.foundation.shape.CircleShape)
+                                        .background(Color(0xFF25D366)), // WhatsApp Bright Green
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = item.badgeCount.toString(),
+                                        color = Color.White, // Using white text as requested
+                                        fontSize = 9.sp,
+                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                    )
+                                }
+                            } else if (item.hasBadgeDot) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .size(10.dp)
+                                        .clip(androidx.compose.foundation.shape.CircleShape)
+                                        .background(Color(0xFF25D366))
+                                )
+                            }
                         }
-                        Text(
-                            text = item.label,
-                            fontSize = 9.sp,
-                            color = tint,
-                            maxLines = 1
-                        )
                     }
+                    androidx.compose.foundation.layout.Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = item.label,
+                        fontSize = 11.sp,
+                        color = tint,
+                        maxLines = 1,
+                        fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal
+                    )
                 }
             }
         }

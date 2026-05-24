@@ -88,6 +88,7 @@ fun FeedScreen(
     onNavigateToChat: (String, String) -> Unit = { _, _ -> },
     onNavigateToReader: (String, String) -> Unit = { _, _ -> },
     onTabNavigate: (String) -> Unit = {},
+    onAuthorClick: (String) -> Unit = {},
     viewModel: FeedViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -106,33 +107,22 @@ fun FeedScreen(
         viewModel.setUserContext(userName, researchFocus)
     }
 
+    LaunchedEffect(uiState.suggestedConnections.size) {
+        android.util.Log.d("FeedScreen", "suggestedConnections size is now: ${uiState.suggestedConnections.size}")
+        android.util.Log.d("FeedScreen", "isLoading is now: ${uiState.isLoading}")
+    }
+
     // Scroll depth tracker for load more
     val shouldLoadMore by remember {
         derivedStateOf {
             val totalItems = listState.layoutInfo.totalItemsCount
             val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            totalItems > 0 && lastVisibleItem >= totalItems * 0.8
+            totalItems > 0 && lastVisibleItem >= totalItems - 3
         }
     }
 
     LaunchedEffect(shouldLoadMore) {
-        if (shouldLoadMore && !uiState.isLoading) {
-            // Load next page of recommendations asynchronously
-        }
-    }
-
-    // Scroll depth tracker for Connections horizontal list
-    val connectionsListState = rememberLazyListState()
-    val shouldLoadMoreConnections by remember {
-        derivedStateOf {
-            val totalItems = connectionsListState.layoutInfo.totalItemsCount
-            val lastVisibleItem = connectionsListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            totalItems > 0 && lastVisibleItem >= totalItems - 2
-        }
-    }
-
-    LaunchedEffect(shouldLoadMoreConnections) {
-        if (shouldLoadMoreConnections && !uiState.isLoadingMoreConnections && !uiState.isLoading) {
+        if (shouldLoadMore && !uiState.isLoadingMoreConnections && !uiState.isLoading) {
             viewModel.loadMoreConnections()
         }
     }
@@ -181,207 +171,67 @@ fun FeedScreen(
                 )
             }
 
-            // Metric Pulse Dashboard
-            item {
-                Spacer(Modifier.height(4.dp))
-                FrontierPulseCard(metrics = uiState.frontierMetrics)
-            }
-
-            // Gamified Streak Card & AI Summary Row
-            item {
-                Column(
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    StreakCard()
-                    AIDailyBriefCard(
-                        briefText = uiState.aiBriefText,
-                        isLoading = uiState.isLoading,
-                        userId = uiState.user.id
-                    )
-                }
-            }
-
-            // Tinder-style Paper Swiper
-            if (uiState.trendingPapers.isNotEmpty()) {
-                item {
-                    val context = LocalContext.current
-                    val workPapers = remember(uiState.trendingPapers) {
-                        uiState.trendingPapers.map { paper ->
-                            com.open.entropy.network.Work(
-                                id = paper.id,
-                                title = paper.title,
-                                year = paper.year,
-                                doi = paper.doi,
-                                journal = paper.journal,
-                                is_open_access = paper.pdfUrl != null,
-                                citations = paper.citationCount,
-                                disruption_score = paper.disruptionScore.toDouble(),
-                                semantic_novelty = paper.noveltyScore.toDouble(),
-                                authors = paper.authors
-                            )
-                        }
-                    }
-                    SwipeVaultCard(
-                        papers = workPapers,
-                        onSavePaper = { work ->
-                            work.id?.let { paperId ->
-                                scope.launch {
-                                    val isSaved = userPrefs.toggleSavedPaper(paperId)
-                                    val msg = if (isSaved) "Saved to Vault: ${work.title}" else "Removed from Vault: ${work.title}"
-                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
-                                }
-                            } ?: run {
-                                android.widget.Toast.makeText(context, "Cannot save: paper has no ID", android.widget.Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        onSkipPaper = { work ->
-                            android.widget.Toast.makeText(context, "Skipped: ${work.title}", android.widget.Toast.LENGTH_SHORT).show()
-                        },
-                        modifier = Modifier.padding(horizontal = 20.dp)
-                    )
-                }
-            }
-
-            // ── 1. SUGGESTED CONNECTIONS (Horizontal Carousel) ──
-            item {
-                SectionHeader(
-                    title = "👥 Friends Suggestions",
-                    badgeCount = uiState.suggestedConnections.size,
-                    onSeeAll = {}
-                )
-                LazyRow(
-                    state = connectionsListState,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(horizontal = 20.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(uiState.suggestedConnections) { conn ->
-                        Box(modifier = Modifier.width(160.dp)) {
-                            ConnectionCard(
-                                connection = conn,
-                                onConnect = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                },
-                                onChatClick = {
-                                    onNavigateToChat(conn.author.name, conn.author.id)
-                                }
-                            )
-                        }
-                    }
-                    if (uiState.isLoadingMoreConnections) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .width(60.dp)
-                                    .fillMaxHeight(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    color = EntropiColors.Blue1,
-                                    modifier = Modifier.size(24.dp),
-                                    strokeWidth = 2.dp
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ── 2. COLLABORATORS' NEW PUBLICATIONS (Horizontal Carousel) ──
-            item {
-                SectionHeader(title = "👥 Collaborators' Publications", onSeeAll = {})
-            }
-            if (uiState.isLoading) {
-                item {
+            // Vertical Infinite Feed of Collaborators
+            if (uiState.isLoading && uiState.suggestedConnections.isEmpty()) {
+                items(5) {
                     Box(modifier = Modifier.padding(horizontal = 20.dp)) {
-                        PaperShimmerCard()
+                        PaperShimmerCard() // Wait, I'll just use a generic shimmer here
                     }
                 }
-            } else {
+            } else if (uiState.suggestedConnections.isEmpty()) {
                 item {
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(horizontal = 20.dp),
-                        modifier = Modifier.fillMaxWidth()
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(32.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        items(uiState.collaboratorsArticles) { paper ->
-                            Box(modifier = Modifier.width(280.dp)) {
-                                PaperFeedCard(
-                                    paper = paper,
-                                    accentColor = EntropiColors.Gold1,
-                                    onClick = { onPaperClick(paper.id) }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ── 3. RECENT PAPERS OF FRIENDS (Peers) ──
-            item {
-                SectionHeader(title = "🧬 Peers' New Articles", onSeeAll = {})
-            }
-            if (uiState.isLoading) {
-                item {
-                    Box(modifier = Modifier.padding(horizontal = 20.dp)) {
-                        PaperShimmerCard()
-                    }
-                }
-            } else {
-                item {
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(horizontal = 20.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        items(uiState.suggestedPeersArticles) { paper ->
-                            Box(modifier = Modifier.width(280.dp)) {
-                                PaperFeedCard(
-                                    paper = paper,
-                                    accentColor = EntropiColors.Blue1,
-                                    onClick = { onPaperClick(paper.id) }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ── 4. CONTINUE READING (Resume active drafts) ──
-            item {
-                SectionHeader(title = "📖 Continue Reading", onSeeAll = {})
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(horizontal = 20.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(uiState.continueReading) { progress ->
-                        ResumeCard(
-                            progress = progress,
-                            onClick = { onPaperClick(progress.paper.id) },
-                            onResume = { onNavigateToReader(progress.paper.title, progress.paper.doi) }
+                        Text(
+                            text = "No connections found.",
+                            color = EntropiColors.Text3,
+                            fontSize = 14.sp
                         )
                     }
                 }
-            }
-
-            // ── 5. INFINITE FEED (Endless Literature Feed) ──
-            item {
-                SectionHeader(title = "🔥 Trending Literature Feed", onSeeAll = { onTabNavigate("search") })
-            }
-            if (uiState.isLoading) {
-                items(3) {
-                    PaperShimmerCard()
-                }
             } else {
-                items(uiState.trendingPapers) { paper ->
-                    Box(modifier = Modifier.padding(horizontal = 20.dp)) {
-                        PaperFeedCard(
-                            paper = paper,
-                            accentColor = EntropiColors.Blue1,
-                            onClick = { onPaperClick(paper.id) }
-                        )
+                items(uiState.suggestedConnections.chunked(2)) { rowItems ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        for (conn in rowItems) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                ConnectionCard(
+                                    connection = conn,
+                                    onConnect = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    },
+                                    onChatClick = {
+                                        onNavigateToChat(conn.author.name, conn.author.id)
+                                    },
+                                    onAuthorClick = {
+                                        onAuthorClick("${conn.author.name}|${conn.author.id}")
+                                    }
+                                )
+                            }
+                        }
+                        if (rowItems.size < 2) {
+                            Spacer(modifier = Modifier.weight((2 - rowItems.size).toFloat()))
+                        }
+                    }
+                }
+                if (uiState.isLoadingMoreConnections) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = EntropiColors.Blue1,
+                                modifier = Modifier.size(32.dp),
+                                strokeWidth = 3.dp
+                            )
+                        }
                     }
                 }
             }
@@ -1248,10 +1098,10 @@ fun ResearcherCard(
                     contentPadding = PaddingValues(0.dp),
                     shape = RoundedCornerShape(6.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isConnected) EntropiColors.Card2 else Color.Transparent,
-                        contentColor = EntropiColors.Gold1
+                        containerColor = if (isConnected) EntropiColors.Card2 else Color(0xFF2E7D32), // Dark Green
+                        contentColor = if (isConnected) EntropiColors.Gold1 else Color.White
                     ),
-                    border = BorderStroke(1.dp, if (isConnected) EntropiColors.Border else EntropiColors.Gold1)
+                    border = BorderStroke(1.dp, if (isConnected) EntropiColors.Border else Color.Transparent)
                 ) {
                     Text(
                         text = if (isConnected) "Pending" else "Connect",
@@ -1292,7 +1142,8 @@ fun ResearcherCard(
 fun ConnectionCard(
     connection: Connection,
     onConnect: () -> Unit,
-    onChatClick: () -> Unit = {}
+    onChatClick: () -> Unit = {},
+    onAuthorClick: () -> Unit
 ) {
     var isConnected by remember { mutableStateOf(false) }
 
@@ -1300,7 +1151,7 @@ fun ConnectionCard(
         shape = RoundedCornerShape(16.dp),
         color = EntropiColors.Card,
         border = BorderStroke(1.dp, EntropiColors.Border),
-        modifier = Modifier.fillMaxWidth().clickable { onChatClick() }
+        modifier = Modifier.fillMaxWidth().clickable { onAuthorClick() }
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
@@ -1378,27 +1229,52 @@ fun ConnectionCard(
 
             Spacer(Modifier.height(6.dp))
 
-            // Mutual connections
+            // New Metrics Row (Joint, Total, H-Index)
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = null,
-                    tint = EntropiColors.Text3,
-                    modifier = Modifier.size(11.dp)
-                )
-                Text(
-                    text = "${connection.mutualCount} mutual researchers",
-                    fontFamily = SpaceGroteskFontFamily,
-                    fontSize = 9.sp,
-                    color = EntropiColors.Text3
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = connection.papersCollaborated.toString(), color = EntropiColors.Blue1, fontWeight = FontWeight.Bold, fontSize = 14.sp, fontFamily = JetBrainsMonoFontFamily)
+                    Text(text = "Joint", color = EntropiColors.Text3, fontSize = 9.sp, fontFamily = SpaceGroteskFontFamily, fontWeight = FontWeight.Medium)
+                }
+                Box(modifier = Modifier.width(1.dp).height(16.dp).background(EntropiColors.Border))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = connection.totalPublications.toString(), color = EntropiColors.Text, fontWeight = FontWeight.Bold, fontSize = 14.sp, fontFamily = JetBrainsMonoFontFamily)
+                    Text(text = "Total", color = EntropiColors.Text3, fontSize = 9.sp, fontFamily = SpaceGroteskFontFamily, fontWeight = FontWeight.Medium)
+                }
+                Box(modifier = Modifier.width(1.dp).height(16.dp).background(EntropiColors.Border))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = connection.hIndex.toString(), color = EntropiColors.Purple1, fontWeight = FontWeight.Bold, fontSize = 14.sp, fontFamily = JetBrainsMonoFontFamily)
+                    Text(text = "H-Index", color = EntropiColors.Text3, fontSize = 9.sp, fontFamily = SpaceGroteskFontFamily, fontWeight = FontWeight.Medium)
+                }
             }
 
-            Spacer(Modifier.height(12.dp))
+            // Relevance Match Banner
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = EntropiColors.Green.copy(alpha = 0.12f),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = EntropiColors.Green, modifier = Modifier.size(12.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "${connection.mutualCount}% Relevance Match",
+                        color = EntropiColors.Green,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = SpaceGroteskFontFamily
+                    )
+                }
+            }
 
             // Blue-Purple Gradient Connect Button
             Surface(
@@ -1420,7 +1296,7 @@ fun ConnectionCard(
                     } else {
                         Modifier
                             .fillMaxSize()
-                            .background(Brush.horizontalGradient(listOf(EntropiColors.Blue1, EntropiColors.Purple1)))
+                            .background(Color(0xFF2E7D32)) // Dark Green for Connect
                     },
                     contentAlignment = Alignment.Center
                 ) {

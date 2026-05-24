@@ -884,3 +884,5 @@ async def chat_with_author(req: ChatRequest):
         history=hist_dict
     )
     return data
+
+# Trigger reload
