@@ -253,7 +253,7 @@ fun MarkdownText(
                 .replace(Regex("(?<!\\$)\\$(?!\\$)"), "\\$\\$")
             
             // 2. Double all backslashes so CommonMark parser doesn't eat LaTeX command prefixes
-            processed = processed.replace("\\", "\\\\")
+            // processed = processed.replace("\\", "\\\\")
             
             markwon.setMarkdown(textView, processed)
         },
