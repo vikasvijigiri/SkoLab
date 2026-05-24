@@ -55,6 +55,7 @@ import com.open.entropy.ui.components.ScoreArcMeter
 import com.open.entropy.ui.components.MarkdownText
 import com.open.entropy.ui.components.StreakCard
 import com.open.entropy.ui.components.SwipeVaultCard
+import com.open.entropy.ui.screens.toAuthorResponse
 import com.open.entropy.ui.theme.*
 import com.open.entropy.viewmodel.*
 import kotlinx.coroutines.delay
@@ -103,6 +104,7 @@ fun FeedScreen(
     val context = LocalContext.current
     val authManager = remember { com.open.entropy.auth.AuthManager(context) }
     val userPrefs = remember { com.open.entropy.data.UserPreferences(context) }
+    val apiService = remember { com.open.entropy.network.ApiService() }
     val cachedUser by authManager.cachedUser.collectAsState(initial = null)
     val connectionsList by userPrefs.userConnections.collectAsState(initial = emptyList())
 
@@ -244,6 +246,12 @@ fun FeedScreen(
                                         onNavigateToChat(conn.author.name, conn.author.id)
                                     },
                                     onAuthorClick = {
+                                        try {
+                                            val preview = conn.author.toAuthorResponse()
+                                            apiService.cacheAuthorProfile(conn.author.id, preview)
+                                        } catch (e: Exception) {
+                                            android.util.Log.e("FeedScreen", "Failed to cache author profile preview", e)
+                                        }
                                         onAuthorClick("${conn.author.name}|${conn.author.id}")
                                     }
                                 )
