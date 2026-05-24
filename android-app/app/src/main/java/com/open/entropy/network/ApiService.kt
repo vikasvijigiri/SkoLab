@@ -261,7 +261,10 @@ data class NetworkCollaborator(
     val institution: String,
     val field: String,
     val connection_path: String,
-    val relevance_score: Int
+    val relevance_score: Int,
+    val papers_collaborated: Int? = null,
+    val total_publications: Int? = null,
+    val h_index: Int? = null
 )
 
 @Serializable

@@ -67,6 +67,19 @@ object ServerLocator {
         if (nsdManager != null) return  // already started
 
         appContext = context.applicationContext
+        
+        val isEmulator = Build.FINGERPRINT.contains("generic") || Build.MODEL.contains("Emulator")
+        if (com.open.entropy.BuildConfig.DEBUG) {
+            if (isEmulator) {
+                _baseUrl.value = "http://10.0.2.2:8000"
+                Log.i(TAG, "Emulator detected. Forcing baseUrl to http://10.0.2.2:8000")
+            } else {
+                _baseUrl.value = "http://127.0.0.1:8000"
+                Log.i(TAG, "Physical device in debug mode. Forcing baseUrl to http://127.0.0.1:8000 (Requires adb reverse tcp:8000 tcp:8000)")
+            }
+            return
+        }
+
         nsdManager = appContext?.getSystemService(Context.NSD_SERVICE) as? NsdManager
 
         // Load cached URL from SharedPreferences as immediate fallback
@@ -157,6 +170,10 @@ object ServerLocator {
      * If this matches the current baseUrl, we reset it to null to trigger rediscovery.
      */
     fun reportFailure(url: String) {
+        if (com.open.entropy.BuildConfig.DEBUG) {
+            Log.d(TAG, "Failure reported in debug mode for $url, keeping forced debug URL active.")
+            return
+        }
         val current = _baseUrl.value ?: return
         if (url.startsWith(current) || current.startsWith(url)) {
             Log.w(TAG, "Reported failure for active backend URL: $url. Resetting baseUrl to null.")
@@ -169,6 +186,11 @@ object ServerLocator {
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to clear SharedPreferences cache", e)
                 }
+                
+                // Restart discovery to scan again
+                Log.i(TAG, "Restarting server discovery...")
+                stop()
+                start(ctx)
             }
         }
     }

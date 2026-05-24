@@ -20,6 +20,10 @@ import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.filled.DynamicFeed
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -88,10 +92,10 @@ fun ResQitMainApp() {
 
     val mainTabs = listOf("discover", "search", "library", "nexus")
     val dockItems = listOf(
-        DockItem("discover", Icons.Outlined.AutoAwesome, "Discover"),
-        DockItem("search", Icons.Outlined.Search, "Papers"),
-        DockItem("library", Icons.Outlined.BookmarkBorder, "Vault"),
-        DockItem("nexus", Icons.Outlined.Hub, "Nexus")
+        DockItem("discover", Icons.AutoMirrored.Filled.Chat, "Chats", badgeCount = 1),
+        DockItem("search", Icons.Filled.DynamicFeed, "Updates", hasBadgeDot = true),
+        DockItem("library", Icons.Filled.Groups, "Communities"),
+        DockItem("nexus", Icons.Filled.Call, "Calls")
     )
 
     ResQitScaffold { innerPadding ->
@@ -212,6 +216,9 @@ fun ResQitMainApp() {
                                     launchSingleTop = true
                                     restoreState = true
                                 }
+                            },
+                            onAuthorClick = { authorName ->
+                                navController.navigate("author_detail/${authorName.encodeForRoute()}")
                             }
                         )
                     }

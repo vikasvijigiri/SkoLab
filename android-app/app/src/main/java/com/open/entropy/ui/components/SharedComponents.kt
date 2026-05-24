@@ -244,12 +244,13 @@ fun MarkdownText(
             // 0. Globally clean up MathML tags and convert them into clean standard LaTeX
             val cleaned = cleanScientificText(markdown)
             
-            // 1. Convert standard bracket math delimiters to dollar delimiters
+            // 1. Convert standard bracket math delimiters and single dollar delimiters to double dollars
             var processed = cleaned
                 .replace("\\[", "$$")
                 .replace("\\]", "$$")
-                .replace("\\(", "$")
-                .replace("\\)", "$")
+                .replace("\\(", "$$")
+                .replace("\\)", "$$")
+                .replace(Regex("(?<!\\$)\\$(?!\\$)"), "\\$\\$")
             
             // 2. Double all backslashes so CommonMark parser doesn't eat LaTeX command prefixes
             processed = processed.replace("\\", "\\\\")
@@ -550,7 +551,7 @@ fun cleanScientificText(text: String): String {
         } else if (mathTags.contains(root.name)) {
             val latex = nodeToLatex(root).trim().replace("$", "")
             if (latex.isNotEmpty()) {
-                resultParts.add("$$latex$")
+                resultParts.add("$$" + latex + "$$")
             }
         } else {
             resultParts.add(reconstructNonMathNode(root))

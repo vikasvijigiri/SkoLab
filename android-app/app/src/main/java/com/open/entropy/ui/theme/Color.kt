@@ -8,10 +8,10 @@ import androidx.compose.ui.graphics.Color
 // ═══════════════════════════════════════════════════════════════
 
 // ── Backgrounds ──────────────────────────────────────────────────
-val BgPrimary         = Color(0xFF070A13)  // Deep professional navy background
-val BgCard            = Color(0xFF0E1322)  // Peaceful corporate dark navy card
-val BgElevated        = Color(0xFF161E34)  // Professional corporate slate navy for elevation
-val BgSubtle          = Color(0xFF090D18)  // Very subtle corporate navy section
+val BgPrimary         = Color(0xFF131F24)  // Duolingo Dark Slate background
+val BgCard            = Color(0xFF202F36)  // Duolingo Dark Slate card
+val BgElevated        = Color(0xFF202F36)  // Duolingo Dark Slate elevated
+val BgSubtle          = Color(0xFF1B282F)  // Subtle section
 
 // ── Accent Colors — Professional Flipkart Blue & Gold ─────────────────────
 val AccentTeal        = Color(0xFF2874F0)  // Peaceful corporate Flipkart Blue
@@ -27,8 +27,8 @@ val AccentRose        = Color(0xFFE53935)  // Peaceful soft red
 val AccentRoseLight   = Color(0x1AE53935)  // Rose tint
 val AccentViolet      = Color(0xFF8E24AA)  // Peaceful soft purple
 val AccentVioletLight = Color(0x1A8E24AA)  // Violet tint
-val AccentOrange      = Color(0xFFF4511E)  // Peaceful soft orange
-val AccentOrangeLight = Color(0x1AF4511E)  // Orange tint
+val AccentOrange      = Color(0xFF1E88E5)  // Changed to Blue as requested
+val AccentOrangeLight = Color(0x1A1E88E5)  // Blue tint
 val AccentCyan        = Color(0xFF00ACC1)  // Peaceful soft cyan
 val AccentCyanLight   = Color(0x1A00ACC1)  // Cyan tint
 val AccentSlate       = Color(0xFF607D8B)  // Neutral slate
@@ -62,7 +62,7 @@ val MetricPolicyColor        = Color(0xFFA78BFA)// Policy/patent score
 val HeroGradient      = listOf(Color(0xFF00E5FF), Color(0xFF818CF8))
 val TealGradient      = listOf(AccentTeal, AccentCyan)
 val IndigoGradient    = listOf(AccentIndigo, AccentViolet)
-val WarmGradient      = listOf(AccentAmber, AccentOrange)
+val WarmGradient      = listOf(AccentAmber, AccentTeal)
 
 // ── Legacy Aliases (keep compilation of other screens) ────────────
 // Map old dark-theme names → new light equivalents

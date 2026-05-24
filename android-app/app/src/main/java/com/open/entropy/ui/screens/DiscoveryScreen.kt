@@ -892,7 +892,8 @@ fun ResearcherProfileView(
                                 val nextCollab = backupCollaborators.removeAt(0)
                                 visibleCollaborators.add(nextCollab)
                             }
-                        }
+                        },
+                        onSelectProfile = onSelectResearcher
                     )
                 }
 
@@ -938,18 +939,6 @@ fun ResearcherProfileView(
                     }
                 }
 
-                // ── Similar Researchers ──────────────────────────────
-                if (author.similar_researchers.isNotEmpty()) {
-                    item {
-                        SimilarResearchersSection(
-                            similar = author.similar_researchers,
-                            onSelectProfile = onSelectResearcher,
-                            onSelectSynergy = { id, name ->
-                                activeSynergyCollab = Pair(id, name)
-                            }
-                        )
-                    }
-                }
 
                 // ── Publications ─────────────────────────────────────
                 item {
@@ -1187,8 +1176,8 @@ fun ResearcherHeroCard(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             val isRequested = connectionState == "Requested"
-                            val buttonColor = if (isRequested) BorderLight else AccentTeal
-                            val contentColor = if (isRequested) TextSecondary else TextOnAccent
+                            val buttonColor = if (isRequested) BorderLight else Color(0xFF2E7D32) // Dark Green
+                            val contentColor = if (isRequested) TextSecondary else Color.White
                             
                             Button(
                                 onClick = {
@@ -2294,176 +2283,6 @@ fun PredictionCard(prediction: String) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────
-// SIMILAR RESEARCHERS SECTION
-// ─────────────────────────────────────────────────────────────────
-
-@Composable
-fun SimilarResearchersSection(
-    similar: List<AuthorSuggestion>,
-    onSelectProfile: (String, String) -> Unit,
-    onSelectSynergy: (String, String) -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp)
-    ) {
-        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-            LightSectionHeader(
-                title = "Similar Researchers",
-                subtitle = "Overlapping fields",
-                icon = Icons.Default.Science,
-                color = AccentTeal
-            )
-        }
-        Spacer(Modifier.height(10.dp))
-        
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            itemsIndexed(similar) { index, suggestion ->
-                val avatarColors = listOf(AccentTeal, AccentIndigo, AccentEmerald, AccentViolet, AccentAmber, AccentOrange, AccentRose, AccentCyan)
-                val color = avatarColors[index % avatarColors.size]
-                
-                Surface(
-                    modifier = Modifier
-                        .width(180.dp)
-                        .height(150.dp)
-                        .shadow(2.dp, RoundedCornerShape(16.dp))
-                        .clickable { onSelectSynergy(suggestion.id, suggestion.display_name) },
-                    shape = RoundedCornerShape(16.dp),
-                    color = BgCard,
-                    border = BorderStroke(1.dp, BorderLight)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            // Avatar initials
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(color.copy(alpha = 0.1f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = suggestion.display_name.take(1).uppercase(),
-                                    color = color,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp,
-                                    fontFamily = DisplayFontFamily
-                                )
-                            }
-                            
-                            // Name
-                            Text(
-                                text = suggestion.display_name,
-                                color = TextPrimary,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 13.sp,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                fontFamily = DisplayFontFamily,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                        
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier.weight(1f).padding(vertical = 4.dp)
-                        ) {
-                            // Institution
-                            if (suggestion.institution.isNotBlank() && suggestion.institution != "Independent Researcher") {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.AccountBalance,
-                                        null,
-                                        tint = AccentTeal,
-                                        modifier = Modifier.size(11.dp)
-                                    )
-                                    Text(
-                                        text = suggestion.institution,
-                                        color = AccentTeal,
-                                        fontSize = 10.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
-                            
-                            // Field
-                            if (!suggestion.field_of_study.isNullOrBlank()) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.Science,
-                                        null,
-                                        tint = TextMuted,
-                                        modifier = Modifier.size(11.dp)
-                                    )
-                                    Text(
-                                        text = suggestion.field_of_study!!,
-                                        color = TextMuted,
-                                        fontSize = 10.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-                        }
-                        
-                        // Action View Button inside card
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(26.dp)
-                                .clip(RoundedCornerShape(13.dp))
-                                .background(color.copy(alpha = 0.08f))
-                                .clickable { onSelectProfile(suggestion.display_name, suggestion.id) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center,
-                                modifier = Modifier.padding(horizontal = 8.dp)
-                            ) {
-                                Text(
-                                    text = "View Profile",
-                                    color = color,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(Modifier.width(2.dp))
-                                Icon(
-                                    Icons.Default.ChevronRight,
-                                    null,
-                                    tint = color,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 // ─────────────────────────────────────────────────────────────────
 // SECTION HEADER
@@ -3089,14 +2908,6 @@ fun FeaturedResearchCard(title: String, authors: String, color: Color, onClick: 
 
 
 fun formatScientificTitle(title: String): String = title
-    .replace(Regex("<mml:math.*?>"), "")
-    .replace("</mml:math>", "")
-    .replace(Regex("<mml:mrow.*?>"), "")
-    .replace("</mml:mrow>", "")
-    .replace(Regex("<mml:mi.*?>"), "")
-    .replace("</mml:mi>", "")
-    .replace(Regex("<mml:mn.*?>"), "")
-    .replace("</mml:mn>", "")
     .replace("&nbsp;", " ")
     .trim()
 
@@ -3184,7 +2995,8 @@ data class ResearchMetric(val label: String, val value: Int, val color: Color, v
 fun SuggestedConnectionsSection(
     visibleCollaborators: List<NetworkCollaborator>,
     onConnect: (NetworkCollaborator) -> Unit,
-    onDismiss: (NetworkCollaborator) -> Unit
+    onDismiss: (NetworkCollaborator) -> Unit,
+    onSelectProfile: (String, String) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -3225,7 +3037,8 @@ fun SuggestedConnectionsSection(
                     SuggestedConnectionCard(
                         collaborator = collaborator,
                         onConnect = { onConnect(collaborator) },
-                        onDismiss = { onDismiss(collaborator) }
+                        onDismiss = { onDismiss(collaborator) },
+                        onCardClick = { onSelectProfile(collaborator.name, collaborator.id) }
                     )
                 }
             }
@@ -3237,7 +3050,8 @@ fun SuggestedConnectionsSection(
 fun SuggestedConnectionCard(
     collaborator: NetworkCollaborator,
     onConnect: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onCardClick: () -> Unit
 ) {
     val avatarColors = listOf(AccentTeal, AccentIndigo, AccentEmerald, AccentViolet, AccentAmber, AccentOrange, AccentRose, AccentCyan)
     val color = avatarColors[kotlin.math.abs(collaborator.id.hashCode()) % avatarColors.size]
@@ -3246,7 +3060,8 @@ fun SuggestedConnectionCard(
         modifier = Modifier
             .width(220.dp)
             .height(180.dp)
-            .shadow(2.dp, RoundedCornerShape(16.dp)),
+            .shadow(2.dp, RoundedCornerShape(16.dp))
+            .clickable { onCardClick() },
         shape = RoundedCornerShape(16.dp),
         color = BgCard,
         border = BorderStroke(1.dp, BorderLight)

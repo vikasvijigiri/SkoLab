@@ -103,6 +103,8 @@ if (-not $hasDevice) {
         Write-Warning "adb install failed. Please ensure your device is unlocked and screen is on."
     } else {
         if (-not $SkipLaunch) {
+            Write-Host "Setting up USB port forwarding for backend access..."
+            adb reverse tcp:8000 tcp:8000
             Write-Host "Launching ResQit..."
             adb shell am start -n com.company.ResQit/com.open.entropy.MainActivity
         }
