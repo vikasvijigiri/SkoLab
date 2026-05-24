@@ -29,10 +29,6 @@ $buildRoot = Join-Path $env:LOCALAPPDATA "ResQit-build"
 $androidDst = Join-Path $buildRoot "android-app"
 
 if (-not $InstallOnly) {
-    Write-Host "Stopping Gradle daemons..."
-    Push-Location $androidSrc
-    try { & .\gradlew.bat --stop 2>&1 | Out-Null } catch { }
-    Pop-Location
 
     if (Test-Path $buildRoot) {
         Write-Host "Removing old build cache at $buildRoot ..."
@@ -57,7 +53,7 @@ if (-not $InstallOnly) {
     Write-Host "Building debug APK..."
     Push-Location $androidDst
     try {
-        & .\gradlew.bat :app:assembleDebug
+        & .\gradlew.bat :app:assembleDebug --no-daemon
         if ($LASTEXITCODE -ne 0) { throw "Gradle build failed (exit $LASTEXITCODE)" }
     } finally {
         Pop-Location

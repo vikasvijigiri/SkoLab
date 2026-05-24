@@ -50,6 +50,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.open.entropy.model.Paper
 import com.open.entropy.model.Author
+import com.open.entropy.model.UserConnection
 import com.open.entropy.ui.components.ScoreArcMeter
 import com.open.entropy.ui.components.MarkdownText
 import com.open.entropy.ui.components.StreakCard
@@ -86,6 +87,7 @@ fun FeedScreen(
     onPaperClick: (String) -> Unit,
     onProfileClick: () -> Unit = {},
     onNavigateToChat: (String, String) -> Unit = { _, _ -> },
+    onNavigateToChatList: () -> Unit = {},
     onNavigateToReader: (String, String) -> Unit = { _, _ -> },
     onTabNavigate: (String) -> Unit = {},
     onAuthorClick: (String) -> Unit = {},
@@ -100,6 +102,7 @@ fun FeedScreen(
     val authManager = remember { com.open.entropy.auth.AuthManager(context) }
     val userPrefs = remember { com.open.entropy.data.UserPreferences(context) }
     val cachedUser by authManager.cachedUser.collectAsState(initial = null)
+    val connectionsList by userPrefs.userConnections.collectAsState(initial = emptyList())
 
     LaunchedEffect(cachedUser) {
         val userName = cachedUser?.name ?: "Vikas Vijigiri"
@@ -167,7 +170,8 @@ fun FeedScreen(
                     user = uiState.user,
                     unreadCount = 3,
                     onSearchClick = { onTabNavigate("search") },
-                    onProfileClick = onProfileClick
+                    onProfileClick = onProfileClick,
+                    onChatClick = onNavigateToChatList
                 )
             }
 
@@ -198,10 +202,22 @@ fun FeedScreen(
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         for (conn in rowItems) {
+                            val isConnected = connectionsList.any { it.id == conn.author.id }
                             Box(modifier = Modifier.weight(1f)) {
                                 ConnectionCard(
                                     connection = conn,
+                                    isConnectedExternal = isConnected,
                                     onConnect = {
+                                        scope.launch {
+                                            val newConn = UserConnection(
+                                                id = conn.author.id,
+                                                name = conn.author.name,
+                                                institution = conn.author.institution,
+                                                field = conn.sharedAreas.firstOrNull() ?: ""
+                                            )
+                                            userPrefs.addConnection(newConn)
+                                            authManager.addConnectionToFirestore(newConn)
+                                        }
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     },
                                     onChatClick = {
@@ -277,7 +293,8 @@ fun TopBar(
     user: User,
     unreadCount: Int,
     onSearchClick: () -> Unit,
-    onProfileClick: () -> Unit
+    onProfileClick: () -> Unit,
+    onChatClick: () -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -311,6 +328,23 @@ fun TopBar(
             }
 
             Spacer(Modifier.weight(1f))
+
+            // Chat Icon Button
+            IconButton(
+                onClick = onChatClick,
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(EntropiColors.Card2)
+                    .border(BorderStroke(1.dp, EntropiColors.Border), RoundedCornerShape(8.dp))
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Chat,
+                    contentDescription = "Chats",
+                    tint = EntropiColors.Text2,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
 
             // Search Icon Button
             IconButton(
@@ -1141,11 +1175,11 @@ fun ResearcherCard(
 @Composable
 fun ConnectionCard(
     connection: Connection,
+    isConnectedExternal: Boolean,
     onConnect: () -> Unit,
     onChatClick: () -> Unit = {},
     onAuthorClick: () -> Unit
 ) {
-    var isConnected by remember { mutableStateOf(false) }
 
     Surface(
         shape = RoundedCornerShape(16.dp),
@@ -1279,19 +1313,20 @@ fun ConnectionCard(
             // Blue-Purple Gradient Connect Button
             Surface(
                 onClick = {
-                    isConnected = !isConnected
-                    onConnect()
+                    if (!isConnectedExternal) {
+                        onConnect()
+                    }
                     onChatClick()
                 },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(32.dp),
                 shape = RoundedCornerShape(8.dp),
-                color = if (isConnected) EntropiColors.Card2 else Color.Transparent,
-                border = BorderStroke(1.dp, if (isConnected) EntropiColors.Border else Color.Transparent)
+                color = if (isConnectedExternal) EntropiColors.Card2 else Color.Transparent,
+                border = BorderStroke(1.dp, if (isConnectedExternal) EntropiColors.Border else Color.Transparent)
             ) {
                 Box(
-                    modifier = if (isConnected) {
+                    modifier = if (isConnectedExternal) {
                         Modifier.fillMaxSize()
                     } else {
                         Modifier
@@ -1301,11 +1336,11 @@ fun ConnectionCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (isConnected) "Requested" else "+ Connect",
+                        text = if (isConnectedExternal) "Message" else "+ Connect",
                         fontFamily = SpaceGroteskFontFamily,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isConnected) EntropiColors.Gold2 else Color.White
+                        color = if (isConnectedExternal) EntropiColors.Gold2 else Color.White
                     )
                 }
             }
