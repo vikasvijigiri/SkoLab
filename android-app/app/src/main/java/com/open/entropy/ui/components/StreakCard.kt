@@ -17,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -24,10 +25,20 @@ import com.open.entropy.ui.theme.*
 
 @Composable
 fun StreakCard(
+    onClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var streakCount by remember { mutableIntStateOf(5) }
-    var checkedIn by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val userPrefs = remember { com.open.entropy.data.UserPreferences(context) }
+    val scope = rememberCoroutineScope()
+
+    val streakCount by userPrefs.streakCount.collectAsState(initial = 5)
+    val lastCheckedInDate by userPrefs.lastCheckedInDate.collectAsState(initial = null)
+
+    val today = remember {
+        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+    }
+    val checkedIn = lastCheckedInDate == today
 
     val infiniteTransition = rememberInfiniteTransition(label = "flamePulse")
     val scale by infiniteTransition.animateFloat(
@@ -41,6 +52,7 @@ fun StreakCard(
     )
 
     Surface(
+        onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         color = Color.Transparent,
@@ -85,7 +97,7 @@ fun StreakCard(
                         fontFamily = DisplayFontFamily
                     )
                     Text(
-                        text = if (checkedIn) "Today's check-in complete!" else "Review 1 paper today to maintain streak.",
+                        text = if (checkedIn) "Today's check-in complete!" else "Solve today's Conjecture to maintain streak.",
                         color = TextMuted,
                         fontSize = 10.sp
                     )
@@ -93,12 +105,7 @@ fun StreakCard(
 
                 // Check-in trigger
                 Surface(
-                    onClick = {
-                        if (!checkedIn) {
-                            checkedIn = true
-                            streakCount += 1
-                        }
-                    },
+                    onClick = onClick,
                     shape = RoundedCornerShape(10.dp),
                     color = if (checkedIn) AccentEmerald.copy(alpha = 0.12f) else AccentOrange.copy(alpha = 0.12f),
                     border = BorderStroke(1.dp, if (checkedIn) AccentEmerald.copy(alpha = 0.3f) else AccentOrange.copy(alpha = 0.3f))

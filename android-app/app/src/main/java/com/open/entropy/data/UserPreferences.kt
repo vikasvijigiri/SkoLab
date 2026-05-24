@@ -21,6 +21,28 @@ class UserPreferences(private val context: Context) {
     // Saved paper OpenAlex IDs stored as a comma-separated string
     private val savedPaperIdsKey = stringPreferencesKey("saved_paper_ids")
     private val connectionsKey = stringPreferencesKey("user_connections_json")
+    private val streakCountKey = intPreferencesKey("streak_count")
+    private val lastCheckedInDateKey = stringPreferencesKey("last_checked_in_date")
+
+    val streakCount: Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[streakCountKey] ?: 5
+    }
+
+    val lastCheckedInDate: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[lastCheckedInDateKey]
+    }
+
+    suspend fun incrementStreakAndCheckIn() {
+        val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+        context.dataStore.edit { prefs ->
+            val lastCheckIn = prefs[lastCheckedInDateKey]
+            if (lastCheckIn != today) {
+                val currentStreak = prefs[streakCountKey] ?: 5
+                prefs[streakCountKey] = currentStreak + 1
+                prefs[lastCheckedInDateKey] = today
+            }
+        }
+    }
 
     val hasSeenOnboarding: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[hasSeenOnboardingKey] ?: false

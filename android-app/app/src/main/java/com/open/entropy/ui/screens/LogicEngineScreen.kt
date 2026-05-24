@@ -9,11 +9,13 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoGraph
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,18 +29,35 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.open.entropy.auth.AuthManager
 import com.open.entropy.ui.components.CosmicBackground
+import com.open.entropy.ui.components.StreakCard
+import com.open.entropy.ui.components.ConjectureCard
 import com.open.entropy.ui.theme.*
 import kotlin.math.floor
 
 @Composable
-fun LogicEngineScreen() {
+fun LogicEngineScreen(onBack: () -> Unit = {}) {
     val context = LocalContext.current
     val authManager = remember { AuthManager(context) }
     
-    // In a production app, these would come from a shared ViewModel
-    val userMastery = 42f 
+    val apiService = remember { com.open.entropy.network.ApiService() }
+    val userPrefs = remember { com.open.entropy.data.UserPreferences(context) }
+    val scope = rememberCoroutineScope()
+    
+    var conjecture by remember { mutableStateOf<com.open.entropy.model.Conjecture?>(null) }
+    var isConjectureLoading by remember { mutableStateOf(true) }
+    
+    var localUserMastery by remember { mutableStateOf(42f) }
+    val cachedUser by authManager.cachedUser.collectAsState(initial = null)
+    
+    LaunchedEffect(cachedUser) {
+        val focus = cachedUser?.researchFocus ?: "Quantum Topology"
+        isConjectureLoading = true
+        conjecture = apiService.getDailyConjecture(focus)
+        isConjectureLoading = false
+    }
+
     val totalDays = 30
-    val daysCompleted = floor((userMastery / 100f) * totalDays).toInt()
+    val daysCompleted = floor((localUserMastery / 100f) * totalDays).toInt()
     
     Box(modifier = Modifier.fillMaxSize().background(Color.Transparent)) {
         
@@ -53,23 +72,36 @@ fun LogicEngineScreen() {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(
-                        text = "30-DAY LOGIC ENGINE",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = AccentTeal,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 2.sp
-                    )
-                    Text(
-                        text = "Mastery Protocol",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = TextPrimary,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = (-1).sp
-                    )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = TextPrimary
+                        )
+                    }
+
+                    Column {
+                        Text(
+                            text = "30-DAY LOGIC ENGINE",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AccentTeal,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 2.sp
+                        )
+                        Text(
+                            text = "Mastery Protocol",
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = (-1).sp
+                        )
+                    }
                 }
                 
                 Surface(
@@ -106,7 +138,7 @@ fun LogicEngineScreen() {
                         letterSpacing = 1.sp
                     )
                     Text(
-                        "${userMastery.toInt()}% COMPLETE",
+                        "${localUserMastery.toInt()}% COMPLETE",
                         color = AccentTeal,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Black
@@ -121,7 +153,7 @@ fun LogicEngineScreen() {
                 ) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(userMastery / 100f)
+                            .fillMaxWidth(localUserMastery / 100f)
                             .fillMaxHeight()
                             .background(
                                 Brush.horizontalGradient(listOf(AccentTeal, AccentIndigo)),
@@ -138,6 +170,38 @@ fun LogicEngineScreen() {
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    StreakCard()
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                item {
+                    if (isConjectureLoading) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(120.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = AccentTeal)
+                        }
+                    } else {
+                        conjecture?.let { conj ->
+                            ConjectureCard(
+                                conjecture = conj,
+                                onConjectureSolved = { attempts ->
+                                    scope.launch {
+                                        userPrefs.incrementStreakAndCheckIn()
+                                        localUserMastery = minOf(100f, localUserMastery + 20f)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+
                 val curriculum = List(30) { i -> 
                     when(i) {
                         0 -> "Foundations of Quantum Information"

@@ -92,6 +92,7 @@ fun FeedScreen(
     onTabNavigate: (String) -> Unit = {},
     onAuthorClick: (String) -> Unit = {},
     onLoadingStateChanged: (Boolean) -> Unit = {},
+    onNavigateToLogicEngine: () -> Unit = {},
     viewModel: FeedViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -183,6 +184,15 @@ fun FeedScreen(
                     onProfileClick = onProfileClick,
                     onChatClick = onNavigateToChatList
                 )
+            }
+
+            // Gamified Streak Check-In Touchpoint
+            item {
+                Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+                    StreakCard(
+                        onClick = onNavigateToLogicEngine
+                    )
+                }
             }
 
             // Vertical Infinite Feed of Collaborators
