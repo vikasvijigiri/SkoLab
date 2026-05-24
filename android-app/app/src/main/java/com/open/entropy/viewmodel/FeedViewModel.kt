@@ -452,6 +452,23 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
         )
     }
 
+    private fun getMockConnections(focus: String): List<Connection> {
+        return MockData.authors.take(4).mapIndexed { i, author ->
+            Connection(
+                author = author,
+                depth = (i % 3) + 1,
+                mutualCount = 75 + (i * 5),
+                tags = listOf(focus, "Basic Science"),
+                connectionPath = "Fallback Connection",
+                openStatus = "Available",
+                papersCollaborated = (i + 1) * 3,
+                totalPublications = 42 + (i * 15),
+                hIndex = 12 + (i * 4),
+                sharedAreas = listOf(focus)
+            )
+        }
+    }
+
     private fun mapOpenAlexToPaper(work: OpenAlexWork): Paper {
         return Paper(
             id = work.id,
@@ -485,3 +502,4 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
         )
     }
 }
+
