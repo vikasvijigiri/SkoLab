@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import com.open.entropy.model.ResQitUser
+import com.open.entropy.model.UserConnection
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -19,6 +20,7 @@ class UserPreferences(private val context: Context) {
     private val userComplexityScoreKey = floatPreferencesKey("user_complexity_score")
     // Saved paper OpenAlex IDs stored as a comma-separated string
     private val savedPaperIdsKey = stringPreferencesKey("saved_paper_ids")
+    private val connectionsKey = stringPreferencesKey("user_connections_json")
 
     val hasSeenOnboarding: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[hasSeenOnboardingKey] ?: false
@@ -95,5 +97,37 @@ class UserPreferences(private val context: Context) {
     private fun parseSavedPaperIds(raw: String?): List<String> {
         if (raw.isNullOrBlank()) return emptyList()
         return raw.split(",").filter { it.isNotBlank() }
+    }
+
+    /** Flow of connected user researchers (persisted locally). */
+    val userConnections: Flow<List<UserConnection>> = context.dataStore.data.map { prefs ->
+        parseConnections(prefs[connectionsKey])
+    }
+
+    suspend fun addConnection(connection: UserConnection) {
+        context.dataStore.edit { prefs ->
+            val current = parseConnections(prefs[connectionsKey]).toMutableList()
+            if (!current.any { it.id == connection.id }) {
+                current.add(connection)
+                prefs[connectionsKey] = kotlinx.serialization.json.Json.encodeToString(current)
+            }
+        }
+    }
+
+    suspend fun removeConnection(connectionId: String) {
+        context.dataStore.edit { prefs ->
+            val current = parseConnections(prefs[connectionsKey]).toMutableList()
+            current.removeAll { it.id == connectionId }
+            prefs[connectionsKey] = kotlinx.serialization.json.Json.encodeToString(current)
+        }
+    }
+
+    private fun parseConnections(raw: String?): List<UserConnection> {
+        if (raw.isNullOrBlank()) return emptyList()
+        return try {
+            kotlinx.serialization.json.Json.decodeFromString(raw)
+        } catch (e: Exception) {
+            emptyList()
+        }
     }
 }

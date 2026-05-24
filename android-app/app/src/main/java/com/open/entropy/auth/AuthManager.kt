@@ -18,6 +18,7 @@ import com.google.firebase.ktx.Firebase
 import com.open.entropy.BuildConfig
 import com.open.entropy.R
 import com.open.entropy.model.ResQitUser
+import com.open.entropy.model.UserConnection
 import kotlinx.coroutines.tasks.await
 
 import com.open.entropy.data.UserPreferences
@@ -206,6 +207,36 @@ class AuthManager(private val context: Context) {
         } catch (e: Exception) {
             Log.w("AuthManager", "Error getting user data (offline?), returning cached if available", e)
             userPrefs.cachedUser.firstOrNull() // return local cache rather than null
+        }
+    }
+
+    suspend fun addConnectionToFirestore(connection: UserConnection) {
+        val user = currentUser ?: return
+        try {
+            val cleanId = connection.id.substringAfterLast("/")
+            db.collection("researchers")
+                .document(user.uid)
+                .collection("connections")
+                .document(cleanId)
+                .set(connection)
+                .await()
+        } catch (e: Exception) {
+            Log.w("AuthManager", "Failed to sync connection to Firestore, queuing offline", e)
+        }
+    }
+
+    suspend fun removeConnectionFromFirestore(connectionId: String) {
+        val user = currentUser ?: return
+        try {
+            val cleanId = connectionId.substringAfterLast("/")
+            db.collection("researchers")
+                .document(user.uid)
+                .collection("connections")
+                .document(cleanId)
+                .delete()
+                .await()
+        } catch (e: Exception) {
+            Log.w("AuthManager", "Failed to sync connection deletion to Firestore", e)
         }
     }
 

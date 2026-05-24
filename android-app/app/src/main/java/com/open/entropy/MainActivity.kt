@@ -59,6 +59,7 @@ import com.open.entropy.ui.screens.PaperDetailScreen
 import com.open.entropy.ui.screens.SearchScreen
 import com.open.entropy.ui.screens.SplashScreen
 import com.open.entropy.ui.screens.ChatRoomScreen
+import com.open.entropy.ui.screens.ChatListScreen
 import com.open.entropy.ui.theme.ResQitTheme
 import kotlinx.coroutines.launch
 
@@ -206,6 +207,9 @@ fun ResQitMainApp() {
                             },
                             onNavigateToChat = { name, id ->
                                 navController.navigate("chat/${name.encodeForRoute()}/${id.encodeForRoute()}")
+                            },
+                            onNavigateToChatList = {
+                                navController.navigate("chat_list")
                             },
                             onNavigateToReader = { title, doi ->
                                 navController.navigate("reader/${title.encodeForRoute()}/${doi.encodeForRoute()}")
@@ -369,6 +373,26 @@ fun ResQitMainApp() {
                         ChatRoomScreen(
                             peerName = peerName,
                             peerId = peerId,
+                            onBack = { navController.popBackStack() }
+                        )
+                    }
+                }
+                composable(
+                    route = "chat_list",
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                    }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .screenSafeArea(includeBottom = true)
+                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
+                    ) {
+                        ChatListScreen(
+                            onChatClick = { peerName, peerId ->
+                                navController.navigate("chat/${peerName.encodeForRoute()}/${peerId.encodeForRoute()}")
+                            },
                             onBack = { navController.popBackStack() }
                         )
                     }

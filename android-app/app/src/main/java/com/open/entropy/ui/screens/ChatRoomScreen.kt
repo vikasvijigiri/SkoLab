@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.open.entropy.network.ApiService
 import com.open.entropy.network.ChatMessage
+import com.open.entropy.data.ChatStorage
+import com.open.entropy.auth.AuthManager
 import com.open.entropy.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -50,18 +52,33 @@ fun ChatRoomScreen(
     var chatHistory by remember { mutableStateOf<List<ChatMessage>>(emptyList()) }
     var isPeerTyping by remember { mutableStateOf(false) }
 
+    val context = LocalContext.current
+    val authManager = remember { AuthManager(context) }
+    val cachedUser by authManager.cachedUser.collectAsState(initial = null)
+    val userUid = cachedUser?.uid ?: ""
+    val chatStorage = remember(userUid) { if (userUid.isNotEmpty()) ChatStorage(context, userUid) else null }
+
     // Initials color
     val avatarColors = listOf(AccentTeal, AccentIndigo, AccentEmerald, AccentViolet, AccentAmber, AccentOrange, AccentRose, AccentCyan)
     val color = avatarColors[kotlin.math.abs(peerId.hashCode()) % avatarColors.size]
 
-    // Load initial greeting message
-    LaunchedEffect(peerId) {
-        chatHistory = listOf(
-            ChatMessage(
-                role = "assistant",
-                content = "Hi there! I am modeled after $peerName's research profile. Ask me anything about my publication topics or methodologies!"
-            )
-        )
+    // Load initial greeting message or history
+    LaunchedEffect(peerId, chatStorage) {
+        if (chatStorage != null) {
+            val history = chatStorage.getChatHistory(peerId)
+            if (history.isEmpty()) {
+                val initial = listOf(
+                    ChatMessage(
+                        role = "assistant",
+                        content = "Hi there! I am modeled after $peerName's research profile. Ask me anything about my publication topics or methodologies!"
+                    )
+                )
+                chatStorage.saveChatHistory(peerId, initial)
+                chatHistory = initial
+            } else {
+                chatHistory = history
+            }
+        }
     }
 
     // Scroll to bottom when history updates
@@ -156,7 +173,7 @@ fun ChatRoomScreen(
             ) {
                 items(chatHistory) { msg ->
                     val isMe = msg.role == "user"
-                    ChatBubble(message = msg.content, isMe = isMe)
+                    ChatBubble(message = msg, isMe = isMe)
                 }
                 
                 if (isPeerTyping) {
@@ -225,6 +242,7 @@ fun ChatRoomScreen(
                                 val userMsg = messageText.trim()
                                 val updatedHistory = chatHistory + ChatMessage(role = "user", content = userMsg)
                                 chatHistory = updatedHistory
+                                chatStorage?.saveChatHistory(peerId, updatedHistory)
                                 messageText = ""
                                 
                                 // Trigger peer reply
@@ -240,12 +258,16 @@ fun ChatRoomScreen(
                                     delay(800)
                                     isPeerTyping = false
                                     if (response != null && !response.reply.isNullOrBlank()) {
-                                        chatHistory = chatHistory + ChatMessage(role = "assistant", content = response.reply)
+                                        val finalHistory = chatHistory + ChatMessage(role = "assistant", content = response.reply)
+                                        chatHistory = finalHistory
+                                        chatStorage?.saveChatHistory(peerId, finalHistory)
                                     } else {
-                                        chatHistory = chatHistory + ChatMessage(
+                                        val fallback = chatHistory + ChatMessage(
                                             role = "assistant",
                                             content = "I've considered your point. Based on my research models, that's an area with significant convergence potential."
                                         )
+                                        chatHistory = fallback
+                                        chatStorage?.saveChatHistory(peerId, fallback)
                                     }
                                 }
                             }
@@ -264,7 +286,7 @@ fun ChatRoomScreen(
 }
 
 @Composable
-fun ChatBubble(message: String, isMe: Boolean) {
+fun ChatBubble(message: ChatMessage, isMe: Boolean) {
     val bubbleShape = if (isMe) {
         RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 2.dp)
     } else {
@@ -272,7 +294,9 @@ fun ChatBubble(message: String, isMe: Boolean) {
     }
     
     val alignment = if (isMe) Alignment.CenterEnd else Alignment.CenterStart
-    val timestamp = remember { SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date()) }
+    val timestamp = remember(message.timestamp) { 
+        SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)) 
+    }
 
     Box(
         modifier = Modifier
@@ -288,7 +312,7 @@ fun ChatBubble(message: String, isMe: Boolean) {
         ) {
             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                 Text(
-                    text = message,
+                    text = message.content,
                     color = if (isMe) TextPrimary else TextSecondary,
                     fontSize = 13.sp,
                     lineHeight = 17.sp
