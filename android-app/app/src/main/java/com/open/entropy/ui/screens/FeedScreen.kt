@@ -95,6 +95,17 @@ fun FeedScreen(
     val listState = rememberLazyListState()
     val haptic = LocalHapticFeedback.current
 
+    val context = LocalContext.current
+    val authManager = remember { com.open.entropy.auth.AuthManager(context) }
+    val userPrefs = remember { com.open.entropy.data.UserPreferences(context) }
+    val cachedUser by authManager.cachedUser.collectAsState(initial = null)
+
+    LaunchedEffect(cachedUser) {
+        val userName = cachedUser?.name ?: "Vikas Vijigiri"
+        val researchFocus = cachedUser?.researchFocus ?: "Quantum Topology"
+        viewModel.setUserContext(userName, researchFocus)
+    }
+
     // Scroll depth tracker for load more
     val shouldLoadMore by remember {
         derivedStateOf {
@@ -107,6 +118,22 @@ fun FeedScreen(
     LaunchedEffect(shouldLoadMore) {
         if (shouldLoadMore && !uiState.isLoading) {
             // Load next page of recommendations asynchronously
+        }
+    }
+
+    // Scroll depth tracker for Connections horizontal list
+    val connectionsListState = rememberLazyListState()
+    val shouldLoadMoreConnections by remember {
+        derivedStateOf {
+            val totalItems = connectionsListState.layoutInfo.totalItemsCount
+            val lastVisibleItem = connectionsListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            totalItems > 0 && lastVisibleItem >= totalItems - 2
+        }
+    }
+
+    LaunchedEffect(shouldLoadMoreConnections) {
+        if (shouldLoadMoreConnections && !uiState.isLoadingMoreConnections && !uiState.isLoading) {
+            viewModel.loadMoreConnections()
         }
     }
 
@@ -182,6 +209,7 @@ fun FeedScreen(
                     val workPapers = remember(uiState.trendingPapers) {
                         uiState.trendingPapers.map { paper ->
                             com.open.entropy.network.Work(
+                                id = paper.id,
                                 title = paper.title,
                                 year = paper.year,
                                 doi = paper.doi,
@@ -197,7 +225,15 @@ fun FeedScreen(
                     SwipeVaultCard(
                         papers = workPapers,
                         onSavePaper = { work ->
-                            android.widget.Toast.makeText(context, "Saved to Vault: ${work.title}", android.widget.Toast.LENGTH_SHORT).show()
+                            work.id?.let { paperId ->
+                                scope.launch {
+                                    val isSaved = userPrefs.toggleSavedPaper(paperId)
+                                    val msg = if (isSaved) "Saved to Vault: ${work.title}" else "Removed from Vault: ${work.title}"
+                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            } ?: run {
+                                android.widget.Toast.makeText(context, "Cannot save: paper has no ID", android.widget.Toast.LENGTH_SHORT).show()
+                            }
                         },
                         onSkipPaper = { work ->
                             android.widget.Toast.makeText(context, "Skipped: ${work.title}", android.widget.Toast.LENGTH_SHORT).show()
@@ -215,11 +251,12 @@ fun FeedScreen(
                     onSeeAll = {}
                 )
                 LazyRow(
+                    state = connectionsListState,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(horizontal = 20.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    items(uiState.suggestedConnections.take(8)) { conn ->
+                    items(uiState.suggestedConnections) { conn ->
                         Box(modifier = Modifier.width(160.dp)) {
                             ConnectionCard(
                                 connection = conn,
@@ -230,6 +267,22 @@ fun FeedScreen(
                                     onNavigateToChat(conn.author.name, conn.author.id)
                                 }
                             )
+                        }
+                    }
+                    if (uiState.isLoadingMoreConnections) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .width(60.dp)
+                                    .fillMaxHeight(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    color = EntropiColors.Blue1,
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            }
                         }
                     }
                 }

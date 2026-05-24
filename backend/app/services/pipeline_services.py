@@ -617,7 +617,7 @@ Provide your response in this exact JSON format:
 
         return venues[:3]
 
-    async def get_network_collaborators(self, author_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+    async def get_network_collaborators(self, author_id: str, limit: int = 50, exclude_ids: List[str] = None) -> List[Dict[str, Any]]:
         """
         Fetches Depth-2 collaborators by:
         1. Fetching the works of the primary author to extract Depth 1 co-authors.
@@ -639,6 +639,9 @@ Provide your response in this exact JSON format:
                 print(f"[Firestore Cache Error] network_collaborators lookup failed: {e}", flush=True)
 
         clean_id = author_id.split("/")[-1]
+        
+        exclude_set = set(exclude_ids) if exclude_ids else set()
+        exclude_set.add(clean_id)
         
         # 1. Fetch works of primary author to find Depth 1 co-authors
         depth1_authors = {} # id -> (name, institution, field, papers_shared)
@@ -664,19 +667,21 @@ Provide your response in this exact JSON format:
                         for auth_ship in work.get("authorships", []):
                             author_meta = auth_ship.get("author", {})
                             auth_id = author_meta.get("id")
-                            if auth_id and auth_id.split("/")[-1] != clean_id:
-                                name = author_meta.get("display_name", "Unknown")
-                                insts = auth_ship.get("institutions", [])
-                                inst_name = insts[0].get("display_name") if insts else "Independent Researcher"
-                                if auth_id not in depth1_authors:
-                                    depth1_authors[auth_id] = {
-                                        "id": auth_id,
-                                        "name": name,
-                                        "institution": inst_name,
-                                        "field": None,
-                                        "shared_paper": work_title,
-                                        "collaborators": []
-                                    }
+                            if auth_id:
+                                auth_clean = auth_id.split("/")[-1]
+                                if auth_clean not in exclude_set:
+                                    name = author_meta.get("display_name", "Unknown")
+                                    insts = auth_ship.get("institutions", [])
+                                    inst_name = insts[0].get("display_name") if insts else "Independent Researcher"
+                                    if auth_id not in depth1_authors:
+                                        depth1_authors[auth_id] = {
+                                            "id": auth_id,
+                                            "name": name,
+                                            "institution": inst_name,
+                                            "field": None,
+                                            "shared_paper": work_title,
+                                            "collaborators": []
+                                        }
         except Exception as e:
             print(f"Error fetching depth 1 collaborators: {e}")
 
@@ -732,7 +737,7 @@ Provide your response in this exact JSON format:
                                 auth_id = author_meta.get("id")
                                 if auth_id:
                                     auth_clean = auth_id.split("/")[-1]
-                                    if auth_clean != clean_id and auth_id not in depth1_authors:
+                                    if auth_clean not in exclude_set and auth_id not in depth1_authors:
                                         name = author_meta.get("display_name", "Unknown")
                                         insts = auth_ship.get("institutions", [])
                                         inst_name = insts[0].get("display_name") if insts else "Independent Researcher"

@@ -245,7 +245,11 @@ object ServerLocator {
                             if (resolvedUrl != null) {
                                 Log.i(TAG, "Backend resolved and verified → $resolvedUrl")
                                 updateBaseUrl(resolvedUrl)
-                                nsdManager?.unregisterServiceInfoCallback(callbackInstance)
+                                try {
+                                    nsdManager?.unregisterServiceInfoCallback(callbackInstance)
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Failed to unregister service info callback: ${e.message}")
+                                }
                             } else {
                                 Log.w(TAG, "None of the resolved addresses are reachable")
                             }
