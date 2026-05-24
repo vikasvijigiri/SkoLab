@@ -742,11 +742,41 @@ class ApiService {
                 parameter("sort", "publication_year:desc,cited_by_count:desc")
                 parameter("mailto", "vikki.4me@gmail.com")
             }.body()
-            response.results
+                    response.results
         } catch (e: Exception) {
             Log.e(tag, "getAuthorWorks (OpenAlex) failed for authorId: $authorId", e)
             emptyList()
         }
+    }
+
+    suspend fun getDailyConjecture(focus: String): com.open.entropy.model.Conjecture? {
+        val base = baseUrl()
+        if (base != null) {
+            try {
+                Log.d(tag, "Fetching daily conjecture from backend for focus: $focus")
+                val response = httpClient.get("$base/daily_conjecture") {
+                    parameter("focus", focus)
+                }
+                if (response.status.value == 200) {
+                    return response.body<com.open.entropy.model.Conjecture>()
+                }
+            } catch (e: Exception) {
+                handleNetworkException(e, base)
+                Log.e(tag, "getDailyConjecture backend failed, falling back to local database", e)
+            }
+        } else {
+            Log.w(tag, "getDailyConjecture: backend not discovered, using local database")
+        }
+        // Fallback: search our local dataset
+        val localList = com.open.entropy.model.ConjectureData.conjectures
+        val lowerFocus = focus.lowercase()
+        return if (lowerFocus.contains("quantum") || lowerFocus.contains("physics") || lowerFocus.contains("topology")) {
+            localList.firstOrNull { it.id == "1" }
+        } else if (lowerFocus.contains("ai") || lowerFocus.contains("ml") || lowerFocus.contains("learn") || lowerFocus.contains("neural") || lowerFocus.contains("model")) {
+            localList.firstOrNull { it.id == "2" }
+        } else {
+            localList.firstOrNull { it.id == "3" }
+        } ?: localList.firstOrNull()
     }
 
 

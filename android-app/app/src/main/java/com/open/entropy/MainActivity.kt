@@ -60,6 +60,7 @@ import com.open.entropy.ui.screens.SearchScreen
 import com.open.entropy.ui.screens.SplashScreen
 import com.open.entropy.ui.screens.ChatRoomScreen
 import com.open.entropy.ui.screens.ChatListScreen
+import com.open.entropy.ui.screens.LogicEngineScreen
 import com.open.entropy.ui.theme.ResQitTheme
 import kotlinx.coroutines.launch
 
@@ -230,7 +231,10 @@ fun ResQitMainApp() {
                             onAuthorClick = { authorName ->
                                 navController.navigate("author_detail/${authorName.encodeForRoute()}")
                             },
-                            onLoadingStateChanged = { isFeedLoading = it }
+                            onLoadingStateChanged = { isFeedLoading = it },
+                            onNavigateToLogicEngine = {
+                                navController.navigate("logic_engine")
+                            }
                         )
                     }
                 }
@@ -400,6 +404,23 @@ fun ResQitMainApp() {
                             onChatClick = { peerName, peerId ->
                                 navController.navigate("chat/${peerName.encodeForRoute()}/${peerId.encodeForRoute()}")
                             },
+                            onBack = { navController.popBackStack() }
+                        )
+                    }
+                }
+                composable(
+                    route = "logic_engine",
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                    }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .screenSafeArea(includeBottom = true)
+                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
+                    ) {
+                        LogicEngineScreen(
                             onBack = { navController.popBackStack() }
                         )
                     }
