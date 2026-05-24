@@ -20,10 +20,10 @@ import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material.icons.outlined.BookmarkBorder
-import androidx.compose.material.icons.filled.DynamicFeed
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.Hub
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.AutoGraph
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -92,10 +92,10 @@ fun ResQitMainApp() {
 
     val mainTabs = listOf("discover", "search", "library", "nexus")
     val dockItems = listOf(
-        DockItem("discover", Icons.AutoMirrored.Filled.Chat, "Chats", badgeCount = 1),
-        DockItem("search", Icons.Filled.DynamicFeed, "Updates", hasBadgeDot = true),
-        DockItem("library", Icons.Filled.Groups, "Communities"),
-        DockItem("nexus", Icons.Filled.Call, "Calls")
+        DockItem("discover", Icons.Filled.Hub, "Network", badgeCount = 1),
+        DockItem("search", Icons.Filled.Search, "Search", hasBadgeDot = true),
+        DockItem("library", Icons.AutoMirrored.Filled.MenuBook, "Library"),
+        DockItem("nexus", Icons.Filled.AutoGraph, "Nexus")
     )
 
     ResQitScaffold { innerPadding ->
@@ -199,7 +199,7 @@ fun ResQitMainApp() {
                     ) {
                         FeedScreen(
                             onPaperClick = { paperId ->
-                                navController.navigate("paper_detail/$paperId")
+                                navController.navigate("paper_detail/${paperId.encodeForRoute()}")
                             },
                             onProfileClick = {
                                 navController.navigate("profile")
@@ -255,7 +255,7 @@ fun ResQitMainApp() {
                             .padding(bottom = ScreenInsets.bottomNavClearance)
                     ) {
                         SearchScreen(
-                            onPaperClick = { paperId -> navController.navigate("paper_detail/$paperId") },
+                            onPaperClick = { paperId -> navController.navigate("paper_detail/${paperId.encodeForRoute()}") },
                             onAuthorClick = { authorName -> navController.navigate("author_detail/${authorName.encodeForRoute()}") }
                         )
                     }
@@ -272,7 +272,7 @@ fun ResQitMainApp() {
                             .screenSafeArea(includeBottom = false)
                             .padding(bottom = ScreenInsets.bottomNavClearance)
                     ) {
-                        LibraryScreen(onPaperClick = { paperId -> navController.navigate("paper_detail/$paperId") })
+                        LibraryScreen(onPaperClick = { paperId -> navController.navigate("paper_detail/${paperId.encodeForRoute()}") })
                     }
                 }
                 composable(
@@ -296,7 +296,7 @@ fun ResQitMainApp() {
                         fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
                     }
                 ) { backStackEntry ->
-                    val paperId = backStackEntry.arguments?.getString("paperId") ?: ""
+                    val paperId = backStackEntry.arguments?.getString("paperId")?.decodeFromRoute() ?: ""
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -326,7 +326,7 @@ fun ResQitMainApp() {
                         AuthorDetailScreen(
                             authorName = authorName,
                             onBack = { navController.popBackStack() },
-                            onPaperClick = { paperId -> navController.navigate("paper_detail/$paperId") }
+                            onPaperClick = { paperId -> navController.navigate("paper_detail/${paperId.encodeForRoute()}") }
                         )
                     }
                 }
