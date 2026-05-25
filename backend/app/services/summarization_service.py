@@ -719,7 +719,7 @@ Return JSON: { "bullets": ["⚛️ ...", ...] }""",
             }
 
             try:
-                async with httpx.AsyncClient() as client:
+                async with httpx.AsyncClient(timeout=30.0) as client:
                     resp = await client.post(
                         self.base_url,
                         headers={
@@ -781,7 +781,7 @@ Return JSON: { "slides": [{ "title": "...", "bullets": ["..."] }] }""",
                 "response_format": {"type": "json_object"},
             }
             try:
-                async with httpx.AsyncClient() as client:
+                async with httpx.AsyncClient(timeout=30.0) as client:
                     resp = await client.post(
                         self.base_url,
                         headers={

@@ -250,7 +250,8 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
                 val name = _uiState.value.user.name
-                val focus = _uiState.value.user.researchFocus
+                val baseFocus = _uiState.value.user.researchFocus
+                val currentFilter = _uiState.value.selectedFilter
 
                 // Static/Local structured definitions
                 val countries = listOf(
@@ -276,6 +277,20 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                 }
 
                 val profile = userAuthorProfile
+                
+                // Dynamically derive the true semantic focus from the user's actual OpenAlex profile
+                val focus = if (currentFilter.name != "ALL") {
+                    currentFilter.name
+                } else if (profile != null && profile.expertise.isNotEmpty()) {
+                    profile.expertise.first() // Uses their #1 OpenAlex expertise field!
+                } else if (baseFocus.isNotBlank() && baseFocus.lowercase() != "research") {
+                    baseFocus
+                } else {
+                    "Computer Science" // Safe semantic fallback so it never defaults to global raw citations
+                }
+                
+                val displayFocus = focus
+                
                 val dynamicDisciplines = mutableListOf<Discipline>()
                 if (profile != null && profile.expertise.isNotEmpty()) {
                     profile.expertise.take(6).forEachIndexed { idx, exp ->
@@ -309,7 +324,7 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                     }
                 }
                 if (dynamicDisciplines.isEmpty()) {
-                    dynamicDisciplines.add(Discipline(focus.ifBlank { "Physics" }, "⚛️", "420 papers", "#0F172A", "#3D6FFF"))
+                    dynamicDisciplines.add(Discipline(displayFocus.ifBlank { "Physics" }, "⚛️", "420 papers", "#0F172A", "#3D6FFF"))
                 }
                 val disciplines = dynamicDisciplines
 
@@ -327,7 +342,7 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                         dynamicResearchAreas.add(ResearchArea(exp, colors[index % colors.size]))
                     }
                 } else {
-                    dynamicResearchAreas.add(ResearchArea(focus.ifBlank { "Physics" }, androidx.compose.ui.graphics.Color(0xFF3D6FFF)))
+                    dynamicResearchAreas.add(ResearchArea(displayFocus.ifBlank { "Physics" }, androidx.compose.ui.graphics.Color(0xFF3D6FFF)))
                 }
                 val researchAreas = dynamicResearchAreas
 
@@ -363,7 +378,7 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                                     institution = collab.institution,
                                     country = "US",
                                     orcidId = null,
-                                    fingerprintType = collab.field.ifBlank { focus },
+                                    fingerprintType = collab.field.ifBlank { displayFocus },
                                     radarScores = mapOf("Disruption" to (collab.relevance_score / 100f), "Novelty" to (collab.relevance_score / 100f * 0.9f)),
                                     careerArc = emptyList(),
                                     topPapers = emptyList(),
@@ -405,12 +420,12 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                 }
 
                 // AI Daily Brief Text - Fetches from live backend Daily Feed
-                var aiText = "Based on your research focus in **$focus**, our agents are scanning the latest preprints for disruptive insights. Check back soon as new data streams are ingested."
+                var aiText = "Based on your research focus in **$displayFocus**, our agents are scanning the latest preprints for disruptive insights. Check back soon as new data streams are ingested."
                 try {
-                    val dailyFeed = apiService.getDailyFeed(profile?.id, focus)
+                    val dailyFeed = apiService.getDailyFeed(profile?.id, displayFocus)
                     if (dailyFeed.isNotEmpty()) {
                         val first = dailyFeed.first()
-                        aiText = "Based on your focus in **$focus**, we recommend the new breakthrough paper **${first.title}** published in *${first.journal}* (${first.year}) by ${first.authors.firstOrNull() ?: "Unknown"}. Recommendation: **${first.recommendation_reason}**"
+                        aiText = "Based on your focus in **$displayFocus**, we recommend the new breakthrough paper **${first.title}** published in *${first.journal}* (${first.year}) by ${first.authors.firstOrNull() ?: "Unknown"}. Recommendation: **${first.recommendation_reason}**"
                     }
                 } catch (e: Exception) {
                     Log.e("FeedViewModel", "Failed to load live AI daily feed", e)
@@ -440,7 +455,7 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
 
                 val openAccessDeferred = async(kotlinx.coroutines.Dispatchers.IO) {
                     try {
-                        apiService.getTrendingPapers(focus.ifBlank { "physics" }, limit = 8)
+                        apiService.getTrendingPapers(displayFocus.ifBlank { "physics" }, limit = 8)
                             .filter { !it.primary_location?.pdf_url.isNullOrBlank() }
                             .map { mapOpenAlexToPaper(it) }
                             .map { it.copy(pdfUrl = it.pdfUrl ?: "https://arxiv.org/pdf/1706.03762.pdf") }
@@ -454,14 +469,14 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
 
                 val risingDeferred = async(kotlinx.coroutines.Dispatchers.IO) {
                     try {
-                        apiService.getSimilarAuthors(focus.ifBlank { "physics" }, limit = 6).map { collab ->
+                        apiService.getSimilarAuthors(displayFocus.ifBlank { "physics" }, limit = 6).map { collab ->
                             Author(
                                 id = collab.id,
                                 name = collab.display_name,
                                 institution = collab.institution,
                                 country = "US",
                                 orcidId = null,
-                                fingerprintType = collab.field_of_study ?: focus.ifBlank { "physics" },
+                                fingerprintType = collab.field_of_study ?: displayFocus.ifBlank { "physics" },
                                 radarScores = mapOf("Disruption" to 0.85f, "Novelty" to 0.72f),
                                 careerArc = emptyList(),
                                 topPapers = emptyList(),
@@ -488,7 +503,7 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                 val finalPapersCount = if (profile != null && profile.works_count > 0) profile.works_count else 24
 
                 _uiState.value = FeedUiState(
-                    user = User("user_vikas", name, name.take(2).uppercase(), focus),
+                    user = User("user_vikas", name, name.take(2).uppercase(), displayFocus),
                     frontierMetrics = FrontierMetrics(
                         dIndex = finalDIndex,
                         sIndex = finalSIndex,

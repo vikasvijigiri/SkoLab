@@ -104,7 +104,7 @@ Be precise, academic, and extremely professional. Do not use generic buzzwords.
             }
 
             try:
-                async with httpx.AsyncClient() as client:
+                async with httpx.AsyncClient(timeout=30.0) as client:
                     response = await client.post(
                         self.base_url,
                         headers={

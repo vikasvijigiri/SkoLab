@@ -1053,7 +1053,7 @@ fun ResearcherHeroCard(
                             .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                             .background(Brush.horizontalGradient(HeroGradient))
                     )
-                    Column(modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 18.dp)) {
+                    Column(modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 8.dp, bottom = 18.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1065,10 +1065,9 @@ fun ResearcherHeroCard(
                                     fontSize = 22.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = TextPrimary,
-                                    fontFamily = DisplayFontFamily,
-                                    lineHeight = 28.sp
+                                    fontFamily = DisplayFontFamily
                                 )
-                                Spacer(Modifier.height(4.dp))
+                                Spacer(Modifier.height(1.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
                                         Icons.Default.AccountBalance,
