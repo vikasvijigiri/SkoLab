@@ -33,6 +33,7 @@ import com.open.entropy.ui.theme.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.open.entropy.ui.components.MarkdownText
 
 data class CoLabMessage(
     val sender: String,
@@ -250,25 +251,25 @@ fun CoLabChatView(
         LazyColumn(
             state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             items(messages) { msg ->
                 if (msg.isSystem) {
                     Box(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Surface(
-                            color = BgSubtle,
-                            shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(0.5.dp, BorderLight)
+                            color = BgSubtle.copy(alpha = 0.6f),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(0.5.dp, BorderLight.copy(alpha = 0.5f))
                         ) {
                             Text(
                                 text = msg.content,
                                 color = TextSecondary,
-                                fontSize = 11.sp,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
                                 textAlign = TextAlign.Center
                             )
                         }
@@ -282,37 +283,40 @@ fun CoLabChatView(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = alignment
                     ) {
-                        if (!msg.isMe) {
-                            Text(
-                                text = msg.sender,
-                                color = if (msg.sender.contains("Pujari")) AccentAmber else AccentCyan,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
-                            )
-                        }
                         Surface(
                             color = bubbleBg,
                             shape = RoundedCornerShape(
                                 topStart = 12.dp,
                                 topEnd = 12.dp,
-                                bottomStart = if (msg.isMe) 12.dp else 0.dp,
-                                bottomEnd = if (msg.isMe) 0.dp else 12.dp
+                                bottomStart = if (msg.isMe) 12.dp else 2.dp,
+                                bottomEnd = if (msg.isMe) 2.dp else 12.dp
                             ),
                             border = BorderStroke(0.5.dp, BorderLight),
-                            modifier = Modifier.widthIn(max = 280.dp)
+                            modifier = Modifier.widthIn(max = 290.dp)
                         ) {
-                            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                                Text(
-                                    text = msg.content,
+                            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                                if (!msg.isMe) {
+                                    Text(
+                                        text = msg.sender,
+                                        color = if (msg.sender.contains("Pujari")) AccentAmber else AccentCyan,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.padding(bottom = 2.dp)
+                                    )
+                                }
+                                
+                                MarkdownText(
+                                    markdown = msg.content,
                                     color = textColor,
-                                    fontSize = 14.sp
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.fillMaxWidth()
                                 )
+                                
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = msg.time,
                                     color = TextMuted,
-                                    fontSize = 10.sp,
+                                    fontSize = 9.sp,
                                     modifier = Modifier.align(Alignment.End)
                                 )
                             }
@@ -332,13 +336,14 @@ fun CoLabChatView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .imePadding()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 OutlinedTextField(
                     value = userMessage,
                     onValueChange = onMessageChange,
-                    placeholder = { Text("Message co-authors...", color = TextMuted) },
+                    placeholder = { Text("Message co-authors...", color = TextMuted, fontSize = 13.sp) },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Color.Transparent,
                         unfocusedBorderColor = Color.Transparent,
@@ -347,22 +352,24 @@ fun CoLabChatView(
                         focusedTextColor = TextPrimary,
                         unfocusedTextColor = TextPrimary
                     ),
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(24.dp),
                     modifier = Modifier.weight(1f),
-                    maxLines = 4
+                    maxLines = 4,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                FloatingActionButton(
+                Spacer(modifier = Modifier.width(6.dp))
+                IconButton(
                     onClick = onSendMessage,
-                    containerColor = AccentTeal,
-                    contentColor = TextOnAccent,
-                    shape = CircleShape,
-                    modifier = Modifier.size(40.dp)
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(AccentTeal)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Send,
                         contentDescription = "Send",
-                        modifier = Modifier.size(18.dp)
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
@@ -421,26 +428,25 @@ fun SharedEquationsBlackboard(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .background(BgSubtle, RoundedCornerShape(8.dp))
-                        .border(BorderStroke(0.5.dp, BorderLight), RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF0E1A14)) // Dark chalk green
+                        .border(1.dp, Color(0xFF1E3A2F), RoundedCornerShape(10.dp))
                         .padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = "RENDERED LATEX FORMULA",
-                            color = TextMuted,
+                            color = Color(0xFFD1F2E5).copy(alpha = 0.5f),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(20.dp))
-                        Text(
-                            text = equation,
-                            color = AccentTeal,
+                        MarkdownText(
+                            markdown = "$$" + equation + "$$",
+                            color = Color(0xFFD1F2E5),
                             fontSize = 18.sp,
-                            fontWeight = FontWeight.Medium,
-                            textAlign = TextAlign.Center,
-                            fontFamily = FontFamily.Monospace
+                            modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(

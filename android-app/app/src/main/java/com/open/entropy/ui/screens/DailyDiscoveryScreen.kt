@@ -30,6 +30,7 @@ import com.open.entropy.ui.theme.DisplayFontFamily
 import com.open.entropy.ui.theme.EntropiColors
 import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
+import com.open.entropy.ui.components.MarkdownText
 
 // Mock Data for the stack
 data class DiscoveryItem(
@@ -186,14 +187,11 @@ fun DiscoveryCard(item: DiscoveryItem, modifier: Modifier = Modifier) {
                 .fillMaxSize()
                 .padding(24.dp)
         ) {
-            Text(
-                text = item.title,
+            MarkdownText(
+                markdown = item.title,
                 color = EntropiColors.Text1,
                 fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = DisplayFontFamily,
-                maxLines = 4,
-                overflow = TextOverflow.Ellipsis
+                modifier = Modifier.fillMaxWidth()
             )
             
             Spacer(modifier = Modifier.height(8.dp))
@@ -232,11 +230,11 @@ fun DiscoveryCard(item: DiscoveryItem, modifier: Modifier = Modifier) {
             
             Spacer(modifier = Modifier.height(8.dp))
             
-            Text(
-                text = item.abstractText,
+            MarkdownText(
+                markdown = item.abstractText,
                 color = EntropiColors.Text2,
                 fontSize = 15.sp,
-                lineHeight = 22.sp
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }

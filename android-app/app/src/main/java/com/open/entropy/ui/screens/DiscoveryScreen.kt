@@ -1,5 +1,6 @@
 package com.open.entropy.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -95,9 +96,16 @@ fun DiscoveryScreen(
     var authorQuery by remember { mutableStateOf("") }
     var suggestions by remember { mutableStateOf<List<AuthorSuggestion>>(emptyList()) }
     var authorData by remember { mutableStateOf<AuthorResponse?>(null) }
+
     var isLoading by remember { mutableStateOf(false) }
     var isSearchingSuggestions by remember { mutableStateOf(false) }
     var shouldSearchSuggestions by remember { mutableStateOf(true) }
+
+    BackHandler(enabled = authorData != null) {
+        authorData = null
+        authorQuery = ""
+        shouldSearchSuggestions = true
+    }
     var lastProgrammaticQuery by remember { mutableStateOf<String?>(null) }
     
     // Suggested peers, articles, and trending papers for the main dashboard
@@ -142,7 +150,7 @@ fun DiscoveryScreen(
             val collabsArticlesList = mutableListOf<Work>()
             if (peers.isNotEmpty()) {
                 val topPeer = peers.first()
-                val collabs = apiService.getNetworkCollaborators(topPeer.id, limit = 4)
+                val collabs = apiService.getNetworkCollaborators(topPeer.id, limit = 4, excludeName = userName)
                 val collabsDeferred = collabs.map { collab ->
                     async(kotlinx.coroutines.Dispatchers.IO) {
                         try {
@@ -811,6 +819,10 @@ fun ResearcherProfileView(
     onSelectResearcher: (String, String) -> Unit
 ) {
     val context = LocalContext.current
+    val authManager = remember { com.open.entropy.auth.AuthManager(context) }
+    val cachedUser by authManager.cachedUser.collectAsState(initial = null)
+    val userName = cachedUser?.name ?: "Researcher"
+
     var activeChatPaperTitle by remember { mutableStateOf<String?>(null) }
     var activeSynergyCollab by remember { mutableStateOf<Pair<String, String>?>(null) }
     var networkCollaborators by remember { mutableStateOf<List<NetworkCollaborator>>(emptyList()) }
@@ -827,7 +839,7 @@ fun ResearcherProfileView(
         journalRecommendations = emptyList()
         
         launch {
-            val collabs = apiService.getNetworkCollaborators(author.id, limit = 50)
+            val collabs = apiService.getNetworkCollaborators(author.id, limit = 50, excludeName = userName)
             networkCollaborators = collabs
             if (collabs.size > 20) {
                 visibleCollaborators.addAll(collabs.take(20))
