@@ -113,7 +113,7 @@ fun SplashScreen(onAnimationFinished: () -> Unit) {
         ) {
             Image(
                 painter = painterResource(id = R.drawable.logo),
-                contentDescription = "ReQit Logo",
+                contentDescription = "ResQit Logo",
                 modifier = Modifier
                     .size(110.dp)
                     .clip(RoundedCornerShape(24.dp))

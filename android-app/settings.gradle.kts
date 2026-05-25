@@ -16,6 +16,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ReQit"
+rootProject.name = "ResQit"
 include(":app")
 project(":app").projectDir = file("app")

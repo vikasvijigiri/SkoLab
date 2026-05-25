@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.rounded.*
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -55,6 +56,10 @@ import com.open.entropy.ui.components.ScoreArcMeter
 import com.open.entropy.ui.components.MarkdownText
 import com.open.entropy.ui.components.StreakCard
 import com.open.entropy.ui.components.SwipeVaultCard
+import com.open.entropy.ui.components.PaperCard
+import com.open.entropy.ui.components.primitives.EmptyState
+import com.open.entropy.ui.components.primitives.ErrorState
+import com.open.entropy.ui.components.primitives.GlassSearchBar
 import com.open.entropy.ui.screens.toAuthorResponse
 import com.open.entropy.ui.theme.*
 import com.open.entropy.viewmodel.*
@@ -94,12 +99,19 @@ fun FeedScreen(
     onAuthorClick: (String) -> Unit = {},
     onLoadingStateChanged: (Boolean) -> Unit = {},
     onNavigateToLogicEngine: () -> Unit = {},
+    onNavigateToDailyDiscovery: () -> Unit = {},
     viewModel: FeedViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val haptic = LocalHapticFeedback.current
+    val searchViewModel: SearchViewModel = viewModel()
+    val searchUiState by searchViewModel.uiState.collectAsState()
+    var isSearchExpanded by remember { mutableStateOf(false) }
+    var searchMode by remember { mutableStateOf(0) } // 0 = Papers, 1 = Profiles
+    var searchQuery by remember { mutableStateOf("") }
+
 
     val context = LocalContext.current
     val authManager = remember { com.open.entropy.auth.AuthManager(context) }
@@ -118,9 +130,10 @@ fun FeedScreen(
 
 
     LaunchedEffect(cachedUser) {
+        val uid = cachedUser?.uid ?: "user_vikas"
         val userName = cachedUser?.name ?: "Vikas Vijigiri"
-        val researchFocus = cachedUser?.researchFocus ?: "Quantum Topology"
-        viewModel.setUserContext(userName, researchFocus)
+        val researchFocus = cachedUser?.researchFocus ?: "Researcher"
+        viewModel.setUserContext(uid, userName, researchFocus)
     }
 
     LaunchedEffect(uiState.suggestedConnections.size) {
@@ -179,102 +192,316 @@ fun FeedScreen(
         ) {
             // Sticky top header
             stickyHeader {
-                TopBar(
-                    user = uiState.user,
-                    unreadCount = 3,
-                    onSearchClick = { onTabNavigate("search") },
-                    onProfileClick = onProfileClick,
-                    onChatClick = onNavigateToChatList
-                )
-            }
-
-            // Gamified Streak Check-In Touchpoint
-            item {
-                Box(modifier = Modifier.padding(horizontal = 20.dp)) {
-                    StreakCard(
-                        onClick = onNavigateToLogicEngine
+                if (isSearchExpanded) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = EntropiColors.Background.copy(alpha = 0.95f),
+                        tonalElevation = 0.dp
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .statusBarsPadding()
+                                .padding(horizontal = 20.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                // Search Input field
+                                Box(modifier = Modifier.weight(1f)) {
+                                    GlassSearchBar(
+                                        value = searchQuery,
+                                        onValueChange = {
+                                            searchQuery = it
+                                            if (searchMode == 0) {
+                                                searchViewModel.onSearchQueryChanged(it)
+                                            }
+                                        },
+                                        placeholder = if (searchMode == 0) "Search papers, topics..." else "Search researchers...",
+                                        onClear = {
+                                            searchQuery = ""
+                                            if (searchMode == 0) {
+                                                searchViewModel.onSearchQueryChanged("")
+                                            }
+                                        }
+                                    )
+                                }
+                                // Close button
+                                TextButton(
+                                    onClick = {
+                                        isSearchExpanded = false
+                                        searchQuery = ""
+                                        searchViewModel.onSearchQueryChanged("")
+                                    }
+                                ) {
+                                    Text("Cancel", color = EntropiColors.Blue1, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                }
+                            }
+                            
+                            // Row selector for Papers / Profiles
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(36.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                color = EntropiColors.Card2.copy(alpha = 0.8f),
+                                border = BorderStroke(0.5.dp, EntropiColors.Border)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxSize().padding(2.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    listOf("Papers", "Profiles").forEachIndexed { index, title ->
+                                        val isSelected = searchMode == index
+                                        Surface(
+                                            onClick = { 
+                                                searchMode = index 
+                                                searchQuery = ""
+                                                searchViewModel.onSearchQueryChanged("")
+                                            },
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .fillMaxHeight(),
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = if (isSelected) EntropiColors.Blue1 else Color.Transparent
+                                        ) {
+                                            Box(
+                                                contentAlignment = Alignment.Center,
+                                                modifier = Modifier.fillMaxSize()
+                                            ) {
+                                                Text(
+                                                    text = title,
+                                                    color = if (isSelected) Color.White else EntropiColors.Text3,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    TopBar(
+                        user = uiState.user,
+                        unreadCount = 3,
+                        onSearchClick = { isSearchExpanded = true },
+                        onProfileClick = onProfileClick,
+                        onChatClick = onNavigateToChatList
                     )
                 }
             }
 
-            // Vertical Infinite Feed of Collaborators
-            if (uiState.isLoading && uiState.suggestedConnections.isEmpty()) {
-                items(5) {
-                    Box(modifier = Modifier.padding(horizontal = 20.dp)) {
-                        PaperShimmerCard() // Wait, I'll just use a generic shimmer here
-                    }
-                }
-            } else if (uiState.suggestedConnections.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(32.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No connections found.",
-                            color = EntropiColors.Text3,
-                            fontSize = 14.sp
-                        )
-                    }
-                }
-            } else {
-                items(uiState.suggestedConnections.chunked(2)) { rowItems ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        for (conn in rowItems) {
-                            val isConnected = connectionsList.any { it.id == conn.author.id }
-                            Box(modifier = Modifier.weight(1f)) {
-                                ConnectionCard(
-                                    connection = conn,
-                                    isConnectedExternal = isConnected,
-                                    onConnect = {
-                                        scope.launch {
-                                            val newConn = UserConnection(
-                                                id = conn.author.id,
-                                                name = conn.author.name,
-                                                institution = conn.author.institution,
-                                                field = conn.sharedAreas.firstOrNull() ?: ""
-                                            )
-                                            userPrefs.addConnection(newConn)
-                                            authManager.addConnectionToFirestore(newConn)
-                                        }
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    },
-                                    onChatClick = {
-                                        onNavigateToChat(conn.author.name, conn.author.id)
-                                    },
-                                    onAuthorClick = {
-                                        try {
-                                            val preview = conn.author.toAuthorResponse()
-                                            apiService.cacheAuthorProfile(conn.author.id, preview)
-                                        } catch (e: Exception) {
-                                            android.util.Log.e("FeedScreen", "Failed to cache author profile preview", e)
-                                        }
-                                        onAuthorClick("${conn.author.name}|${conn.author.id}")
-                                    }
+            if (isSearchExpanded) {
+                if (searchMode == 0) {
+                    when (val state = searchUiState) {
+                        is SearchUiState.Idle -> {
+                            item {
+                                EmptyState(
+                                    title = "Explore the literature",
+                                    message = "Search OpenAlex to surface papers and research quality signals.",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 80.dp)
                                 )
                             }
                         }
-                        if (rowItems.size < 2) {
-                            Spacer(modifier = Modifier.weight((2 - rowItems.size).toFloat()))
+                        is SearchUiState.Loading -> {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 120.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(color = EntropiColors.Blue1)
+                                }
+                            }
+                        }
+                        is SearchUiState.Error -> {
+                            item {
+                                ErrorState(
+                                    message = state.message,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 80.dp),
+                                    onRetry = { searchViewModel.onSearchQueryChanged(searchQuery) }
+                                )
+                            }
+                        }
+                        is SearchUiState.Success -> {
+                            if (state.results.isEmpty() && searchQuery.isNotBlank()) {
+                                item {
+                                    EmptyState(
+                                        title = "No matches",
+                                        message = "No results for \"$searchQuery\". Try a broader query.",
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 80.dp)
+                                    )
+                                }
+                            } else if (state.results.isNotEmpty()) {
+                                items(state.results) { paper ->
+                                    Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+                                        PaperCard(
+                                            paper = paper,
+                                            onClick = { onPaperClick(paper.id) },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
-                }
-                if (uiState.isLoadingMoreConnections) {
+                } else {
                     item {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 16.dp),
+                                .height(580.dp)
+                        ) {
+                            SearchProfilesScreen(
+                                onAuthorClick = onAuthorClick,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                }
+            } else {
+                if (uiState.error != null) {
+                    item {
+                        Surface(
+                            color = Color(0x22EF4444),
+                            border = BorderStroke(1.dp, Color(0x66EF4444)),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ErrorOutline,
+                                    contentDescription = "Error",
+                                    tint = Color(0xFFEF4444),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = "API Request Failed",
+                                        color = Color(0xFFEF4444),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        text = uiState.error ?: "",
+                                        color = Color.White.copy(alpha = 0.7f),
+                                        fontSize = 11.sp,
+                                        maxLines = 3,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Gamified Streak Check-In Touchpoint
+                item {
+                    Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+                        StreakCard(
+                            onClick = onNavigateToLogicEngine
+                        )
+                    }
+                }
+
+                // Vertical Infinite Feed of Collaborators
+                if (uiState.isLoading && uiState.suggestedConnections.isEmpty()) {
+                    items(5) {
+                        Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+                            PaperShimmerCard() // Shimmer loader
+                        }
+                    }
+                } else if (uiState.suggestedConnections.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(32.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(
-                                color = EntropiColors.Blue1,
-                                modifier = Modifier.size(32.dp),
-                                strokeWidth = 3.dp
+                            Text(
+                                text = "No connections found.",
+                                color = EntropiColors.Text3,
+                                fontSize = 14.sp
                             )
+                        }
+                    }
+                } else {
+                    items(uiState.suggestedConnections.chunked(2)) { rowItems ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            for (conn in rowItems) {
+                                val isConnected = connectionsList.any { it.id == conn.author.id }
+                                Box(modifier = Modifier.weight(1f)) {
+                                    ConnectionCard(
+                                        connection = conn,
+                                        isConnectedExternal = isConnected,
+                                        onConnect = {
+                                            scope.launch {
+                                                val newConn = UserConnection(
+                                                    id = conn.author.id,
+                                                    name = conn.author.name,
+                                                    institution = conn.author.institution,
+                                                    field = conn.sharedAreas.firstOrNull() ?: ""
+                                                )
+                                                userPrefs.addConnection(newConn)
+                                                authManager.addConnectionToFirestore(newConn)
+                                            }
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        },
+                                        onChatClick = {
+                                            onNavigateToChat(conn.author.name, conn.author.id)
+                                        },
+                                        onAuthorClick = {
+                                            try {
+                                                val preview = conn.author.toAuthorResponse()
+                                                apiService.cacheAuthorProfile(conn.author.id, preview)
+                                            } catch (e: Exception) {
+                                                android.util.Log.e("FeedScreen", "Failed to cache author profile preview", e)
+                                            }
+                                            onAuthorClick("${conn.author.name}|${conn.author.id}")
+                                        }
+                                    )
+                                }
+                            }
+                            if (rowItems.size < 2) {
+                                Spacer(modifier = Modifier.weight((2 - rowItems.size).toFloat()))
+                            }
+                        }
+                    }
+                    if (uiState.isLoadingMoreConnections) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    color = EntropiColors.Blue1,
+                                    modifier = Modifier.size(32.dp),
+                                    strokeWidth = 3.dp
+                                )
+                            }
                         }
                     }
                 }
@@ -367,7 +594,7 @@ fun TopBar(
                     .border(BorderStroke(1.dp, EntropiColors.Border), RoundedCornerShape(8.dp))
             ) {
                 Icon(
-                    imageVector = Icons.Default.Chat,
+                    imageVector = Icons.AutoMirrored.Filled.Chat,
                     contentDescription = "Chats",
                     tint = EntropiColors.Text2,
                     modifier = Modifier.size(18.dp)

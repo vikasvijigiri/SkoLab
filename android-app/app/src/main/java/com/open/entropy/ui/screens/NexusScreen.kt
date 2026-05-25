@@ -39,12 +39,38 @@ import kotlin.math.sin
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NexusScreen() {
+fun NexusScreen(viewModel: NexusViewModel = viewModel()) {
     var activeSynergyCollab by remember { mutableStateOf<Pair<String, String>?>(null) }
+    val uiState by viewModel.uiState.collectAsState()
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val userPrefs = remember { com.open.entropy.data.UserPreferences(context) }
+    val cachedUser by userPrefs.cachedUser.collectAsState(initial = null)
+
+    LaunchedEffect(cachedUser) {
+        val uid = cachedUser?.uid ?: "user_vikas"
+        val userName = cachedUser?.name ?: "Vikas Vijigiri"
+        val userFocus = cachedUser?.researchFocus ?: "Researcher"
+        viewModel.setUserContext(uid, userName, userFocus)
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(BgPrimary)) {
-        // Keep the beautiful galaxy canvas as background (subtle)
-        KnowledgeGalaxyMap()
+        // Uniform Duolingo-style background: flat dark + subtle dot grid
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val dotSpacing = 28.dp.toPx()
+            val dotRadius = 0.8.dp.toPx()
+            val cols = (size.width / dotSpacing).toInt() + 1
+            val rows = (size.height / dotSpacing).toInt() + 1
+            for (col in 0..cols) {
+                for (row in 0..rows) {
+                    drawCircle(
+                        color = Color(0xFF8891B8).copy(alpha = 0.04f),
+                        radius = dotRadius,
+                        center = Offset(col * dotSpacing, row * dotSpacing)
+                    )
+                }
+            }
+        }
 
         LazyColumn(
             modifier = Modifier
@@ -91,13 +117,77 @@ fun NexusScreen() {
             // ── Peer Benchmark ───────────────────────────────────
             item { PeerBenchmarkCard() }
 
-            // ── Collaboration Radar ──────────────────────────────
+            // ── Collaboration Radar Header ───────────────────────────
             item {
-                CollaborationRadarCard(
-                    onRowClick = { id, name ->
-                        activeSynergyCollab = Pair(id, name)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 16.dp, bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            "COLLABORATION RADAR",
+                            style = Typography.labelSmall,
+                            color = TextMuted,
+                            letterSpacing = 1.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Multi-hop network connections",
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
                     }
-                )
+                    Icon(Icons.Default.Hub, null, tint = AccentViolet, modifier = Modifier.size(22.dp))
+                }
+            }
+
+            val collabColors = listOf(AccentTeal, AccentIndigo, AccentEmerald, AccentAmber, AccentViolet)
+
+            when (val state = uiState) {
+                is NexusUiState.Loading -> {
+                    items(5) { CollabRowShimmer() }
+                }
+                is NexusUiState.Error -> {
+                    item {
+                        Text(
+                            text = "Could not load connections. Tap to retry.",
+                            color = TextMuted,
+                            fontSize = 12.sp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.loadSuggestions(isRefresh = true) }
+                                .padding(vertical = 16.dp)
+                        )
+                    }
+                }
+                is NexusUiState.Success -> {
+                    items(state.suggestions.size) { index ->
+                        val collab = state.suggestions[index]
+                        val color = collabColors[index % collabColors.size]
+                        
+                        CollabSuggestionCard(
+                            collab = collab,
+                            color = color,
+                            index = index,
+                            onRowClick = { id, name -> activeSynergyCollab = Pair(id, name) }
+                        )
+
+                        if (index == state.suggestions.lastIndex && state.hasMore && !state.isPaginating) {
+                            LaunchedEffect(index) {
+                                viewModel.loadSuggestions(isRefresh = false)
+                            }
+                        }
+                    }
+                    if (state.isPaginating) {
+                        item {
+                            Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(color = AccentTeal, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                            }
+                        }
+                    }
+                }
             }
 
             // ── Knowledge Bridge (original feature, now smaller) ─
@@ -242,9 +332,7 @@ fun BenchmarkRow(metric: BenchmarkMetric, animate: Boolean) {
                     .fillMaxWidth(animatedWidth)
                     .height(8.dp)
                     .clip(RoundedCornerShape(4.dp))
-                    .background(
-                        Brush.horizontalGradient(listOf(metric.color, metric.color.copy(alpha = 0.7f)))
-                    )
+                    .background(metric.color)
             )
         }
     }
@@ -255,107 +343,6 @@ fun LegendDot(label: String, color: Color) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
         Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(color))
         Text(label, color = TextMuted, fontSize = 10.sp)
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────
-// COLLABORATION RADAR CARD
-// ─────────────────────────────────────────────────────────────────
-
-data class CollabSuggestion(
-    val id: String,
-    val name: String,
-    val institution: String,
-    val overlap: Int,      // %
-    val field: String,
-    val color: Color
-)
-
-@Composable
-fun CollaborationRadarCard(
-    viewModel: NexusViewModel = viewModel(),
-    onRowClick: (String, String) -> Unit
-) {
-    val uiState by viewModel.uiState.collectAsState()
-
-    val collabColors = listOf(AccentTeal, AccentIndigo, AccentEmerald, AccentAmber, AccentViolet)
-
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = BgCard,
-        shadowElevation = 3.dp,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        "COLLABORATION RADAR",
-                        style = Typography.labelSmall,
-                        color = TextMuted,
-                        letterSpacing = 1.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "Researchers with overlapping interests",
-                        color = TextPrimary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
-                }
-                Icon(Icons.Default.Hub, null, tint = AccentViolet, modifier = Modifier.size(22.dp))
-            }
-
-            Spacer(Modifier.height(14.dp))
-
-            when (val state = uiState) {
-                is NexusUiState.Loading -> {
-                    repeat(3) {
-                        CollabRowShimmer()
-                        Spacer(Modifier.height(10.dp))
-                    }
-                }
-                is NexusUiState.Error -> {
-                    Text(
-                        text = "Could not load suggestions. Tap to retry.",
-                        color = TextMuted,
-                        fontSize = 12.sp,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.loadSuggestions() }
-                            .padding(vertical = 8.dp)
-                    )
-                }
-                is NexusUiState.Success -> {
-                    state.suggestions.forEachIndexed { index, collab ->
-                        val color = collabColors[index % collabColors.size]
-                        CollabRow(
-                            collab = CollabSuggestion(
-                                id = collab.id,
-                                name = collab.name,
-                                institution = collab.institution,
-                                overlap = collab.overlapPct,
-                                field = collab.field,
-                                color = color
-                            ),
-                            index = index,
-                            onRowClick = onRowClick
-                        )
-                        if (index < state.suggestions.lastIndex) {
-                            HorizontalDivider(
-                                color = BorderLight,
-                                thickness = 0.5.dp,
-                                modifier = Modifier.padding(vertical = 10.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -405,54 +392,76 @@ fun CollabRowShimmer() {
 }
 
 @Composable
-fun CollabRow(
-    collab: CollabSuggestion,
+fun CollabSuggestionCard(
+    collab: com.open.entropy.viewmodel.NexusCollabSuggestion,
+    color: Color,
     index: Int,
     onRowClick: (String, String) -> Unit
 ) {
     var animDone by remember { mutableStateOf(false) }
     val animOverlap by animateIntAsState(
-        targetValue = if (animDone) collab.overlap else 0,
-        animationSpec = tween(800, delayMillis = index * 120, easing = FastOutSlowInEasing),
+        targetValue = if (animDone) collab.overlapPct else 0,
+        animationSpec = tween(800, delayMillis = (index % 10) * 100, easing = FastOutSlowInEasing),
         label = "overlap"
     )
-    LaunchedEffect(Unit) { kotlinx.coroutines.delay(400L + index * 120); animDone = true }
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(200L + (index % 10) * 100); animDone = true }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onRowClick(collab.id, collab.name) }
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = BgCard,
+        modifier = Modifier.fillMaxWidth().clickable { onRowClick(collab.id, collab.name) }
     ) {
-        // Avatar
-        Box(
-            modifier = Modifier.size(40.dp).clip(CircleShape).background(collab.color.copy(alpha = 0.1f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                collab.name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString(""),
-                color = collab.color,
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp
-            )
-        }
-        // Name + institution
-        Column(modifier = Modifier.weight(1f)) {
-            Text(collab.name, color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-            Text(collab.institution, color = AccentTeal, fontSize = 10.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-            Text(collab.field, color = TextMuted, fontSize = 10.sp)
-        }
-        // Overlap badge
-        Surface(shape = RoundedCornerShape(8.dp), color = collab.color.copy(alpha = 0.1f)) {
-            Text(
-                "$animOverlap%",
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                color = collab.color,
-                fontWeight = FontWeight.Black,
-                fontSize = 13.sp
-            )
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Avatar
+                Box(
+                    modifier = Modifier.size(44.dp).clip(CircleShape).background(color.copy(alpha = 0.1f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        collab.name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString(""),
+                        color = color,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+                // Name + institution
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(collab.name, color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Text(collab.institution, color = color, fontSize = 11.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text(collab.field, color = TextMuted, fontSize = 11.sp)
+                    
+                    Spacer(modifier = Modifier.height(6.dp))
+                    
+                    // Connection Path
+                    if (collab.connectionPath.isNotBlank()) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Icon(Icons.Default.AccountTree, null, tint = TextMuted, modifier = Modifier.size(10.dp))
+                            Text(
+                                text = collab.connectionPath,
+                                color = TextSecondary,
+                                fontSize = 10.sp,
+                                maxLines = 2,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+                // Overlap badge
+                Surface(shape = RoundedCornerShape(8.dp), color = color.copy(alpha = 0.1f)) {
+                    Text(
+                        "$animOverlap%",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        color = color,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 13.sp
+                    )
+                }
+            }
         }
     }
 }
@@ -508,37 +517,4 @@ fun KnowledgeBridgeCard() {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────
-// GALAXY CANVAS (unchanged)
-// ─────────────────────────────────────────────────────────────────
-
-@Composable
-fun KnowledgeGalaxyMap() {
-    val infiniteTransition = rememberInfiniteTransition(label = "galaxy")
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f, targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(60000, easing = LinearEasing), RepeatMode.Restart),
-        label = "rotation"
-    )
-    androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
-        val center = Offset(size.width / 2, size.height / 2)
-        val nodes = 20
-        for (i in 0 until nodes) {
-            val angle = Math.toRadians((rotation + (i * 360f / nodes)).toDouble())
-            val radius = 200.dp.toPx() + (sin(rotation * 0.05f + i) * 50.dp.toPx())
-            val x = center.x + radius * cos(angle).toFloat()
-            val y = center.y + radius * sin(angle).toFloat()
-            drawLine(
-                brush = Brush.linearGradient(
-                    colors = listOf(AccentTeal.copy(alpha = 0.05f), Color.Transparent),
-                    start = center, end = Offset(x, y)
-                ),
-                start = center, end = Offset(x, y), strokeWidth = 1.dp.toPx()
-            )
-            drawCircle(
-                color = if (i % 3 == 0) AccentViolet else AccentTeal,
-                radius = 3.dp.toPx(), center = Offset(x, y), alpha = 0.2f
-            )
-        }
-    }
-}
+// GALAXY CANVAS REMOVED IN FAVOR OF FLAT UNIFORM BACKGROUND

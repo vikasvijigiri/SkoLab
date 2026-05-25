@@ -1,4 +1,4 @@
-﻿package com.open.entropy.ui.components
+package com.open.entropy.ui.components
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
@@ -37,18 +37,14 @@ fun CosmicBackground(
     )
 
     Canvas(modifier = modifier.fillMaxSize()) {
-        // Layer 1: Base Neural Deep-Teal Atmospheric Gradient
-        drawRect(
-            brush = Brush.verticalGradient(
-                colors = listOf(ObsidianBlack, MidnightBlue, ObsidianBlack)
-            )
-        )
+        // Layer 1: Solid Dark Grey/Teal background matching WhatsApp
+        drawRect(color = ObsidianBlack)
         
         // Layer 2: Repeating WhatsApp-Style Textured Scientific Doodle Wallpaper
         val tileWidth = 130.dp.toPx()
         val tileHeight = 130.dp.toPx()
         val strokeWidth = 1.dp.toPx()
-        val doodleColor = ResQitDisruption.copy(alpha = 0.045f) // Ultra-subtle textured teal green
+        val doodleColor = ResQitDisruption.copy(alpha = 0.03f) // Subtler textured green
         
         val cols = (size.width / tileWidth).toInt() + 1
         val rows = (size.height / tileHeight).toInt() + 1
@@ -63,7 +59,7 @@ fun CosmicBackground(
                 val centerX = col * tileWidth + tileWidth / 2f + randX
                 val centerY = row * tileHeight + tileHeight / 2f + randY
                 
-                val rotation = (Math.abs(seed % 59).toFloat() / 59f - 0.5f) * 36f // Organic rotation (-18 to 18 deg)
+                val rotation = (Math.abs(seed % 59).toFloat() / 59f - 0.5f) * 36f // Organic rotation
                 val doodleIndex = Math.abs(seed) % 8
                 val shapeSize = 26.dp.toPx()
                 
@@ -82,31 +78,6 @@ fun CosmicBackground(
                     }
                 }
             }
-        }
-
-        // Layer 3: Floating Scientific Particles (Glow effect)
-        @Suppress("UNUSED_VARIABLE")
-        val drive = frame 
-        
-        particles.forEach { particle ->
-            particle.update(size.width, size.height)
-            
-            // Draw particle aura
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(particle.color.copy(alpha = 0.06f), Color.Transparent),
-                    center = Offset(particle.x, particle.y),
-                    radius = particle.radius * 12f
-                ),
-                radius = particle.radius * 12f,
-                center = Offset(particle.x, particle.y)
-            )
-            // Draw particle core
-            drawCircle(
-                color = particle.color.copy(alpha = 0.25f),
-                radius = particle.radius,
-                center = Offset(particle.x, particle.y)
-            )
         }
     }
 }

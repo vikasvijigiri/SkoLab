@@ -15,9 +15,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Brush
@@ -39,7 +40,10 @@ import com.open.entropy.ui.theme.*
 import kotlinx.coroutines.launch
 
 @Composable
-fun ProfileScreen(onBack: () -> Unit = {}) {
+fun ProfileScreen(
+    onBack: () -> Unit = {},
+    onNavigateToProWorkspace: () -> Unit = {}
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val authManager = remember { AuthManager(context) }
@@ -82,6 +86,7 @@ fun ProfileScreen(onBack: () -> Unit = {}) {
             ProfileContent(
                 firebaseUser = currentUser!!,
                 resQitUser = resQitUser,
+                onNavigateToProWorkspace = onNavigateToProWorkspace,
                 onSignOut = {
                     scope.launch {
                         authManager.signOut()
@@ -176,6 +181,7 @@ fun LoginContent(onSignInClick: () -> Unit, onBack: () -> Unit) {
 fun ProfileContent(
     firebaseUser: FirebaseUser,
     resQitUser: com.open.entropy.model.ResQitUser?,
+    onNavigateToProWorkspace: () -> Unit,
     onSignOut: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -183,6 +189,30 @@ fun ProfileContent(
     val complexity = resQitUser?.complexityScore ?: 0f
     val mastery = (kotlin.math.ln(savedCount.toFloat() + 1f) * 20f + complexity * 0.3f).coerceIn(0f, 100f)
     val resQitScore = (mastery * 6.5f + complexity * 3.5f).toInt().coerceIn(100, 1000)
+
+    val context = LocalContext.current
+    val authManager = remember { AuthManager(context) }
+    val apiService = remember { com.open.entropy.network.ApiService() }
+    var aiProfile by remember { mutableStateOf<com.open.entropy.network.AuthorResponse?>(null) }
+    var isLoadingProfile by remember { mutableStateOf(false) }
+
+    LaunchedEffect(firebaseUser.displayName) {
+        val name = firebaseUser.displayName
+        if (name != null) {
+            isLoadingProfile = true
+            try {
+                val profile = apiService.searchAuthor(name)
+                aiProfile = profile
+                if (profile != null && profile.field_of_study != null) {
+                    authManager.updateUserResearchFocus(profile.field_of_study)
+                }
+            } catch (e: Exception) {
+                Log.e("ProfileScreen", "Failed to fetch AI profile", e)
+            } finally {
+                isLoadingProfile = false
+            }
+        }
+    }
 
     var animatedProgress by remember { mutableStateOf(0f) }
     LaunchedEffect(resQitScore) {
@@ -267,6 +297,56 @@ fun ProfileContent(
                 }
             }
         
+            // Pro Workspace Card
+            Spacer(modifier = Modifier.height(24.dp))
+            Surface(
+                onClick = onNavigateToProWorkspace,
+                color = BgCard,
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, Color(0xFFF4B400))
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "ResQit Pro & Labs Workspace",
+                                color = TextPrimary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color(0x33F4B400),
+                                border = BorderStroke(0.5.dp, Color(0xFFF4B400))
+                            ) {
+                                Text(
+                                    text = "PRO",
+                                    color = Color(0xFFF4B400),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Black,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Manage subscription, scoop shield alerts, collaborative workspaces & job matching.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Outlined.AutoAwesome,
+                        contentDescription = "Access Pro",
+                        tint = Color(0xFFF4B400),
+                        modifier = Modifier.size(24.dp).padding(start = 8.dp)
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
             
             Text(
@@ -289,6 +369,10 @@ fun ProfileContent(
             
             Spacer(modifier = Modifier.height(24.dp))
             
+            ExpertiseProfileCard(aiProfile = aiProfile, isLoading = isLoadingProfile)
+            
+            Spacer(modifier = Modifier.height(24.dp))
+            
             ShareProfileButton(
                 displayName = firebaseUser.displayName ?: "Researcher",
                 score = resQitScore,
@@ -304,7 +388,7 @@ fun ProfileContent(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
                 colors = ButtonDefaults.textButtonColors(contentColor = Color.Red.copy(alpha = 0.6f))
             ) {
-                Icon(Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Terminate Session", fontWeight = FontWeight.Bold, fontSize = 14.sp)
             }
@@ -467,3 +551,83 @@ fun ShareProfileButton(displayName: String, score: Int, mastery: Float, complexi
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ExpertiseProfileCard(aiProfile: com.open.entropy.network.AuthorResponse?, isLoading: Boolean) {
+    Surface(
+        color = BgCard,
+        shape = RoundedCornerShape(24.dp),
+        shadowElevation = 3.dp,
+        border = BorderStroke(1.dp, BorderLight),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.AutoAwesome, contentDescription = "AI Extracted", tint = AccentViolet, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("AI EXTRACTED RESEARCH FOCUS", fontSize = 10.sp, color = AccentViolet, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (isLoading) {
+                CircularProgressIndicator(color = AccentTeal, modifier = Modifier.size(24.dp))
+                Text("Analyzing publications...", fontSize = 12.sp, color = TextMuted, modifier = Modifier.padding(top = 8.dp))
+            } else if (aiProfile != null) {
+                Text(
+                    text = aiProfile.field_of_study ?: "Multi-disciplinary",
+                    color = TextPrimary,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Black
+                )
+
+                if (aiProfile.expertise.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("AREAS OF INTEREST & SKILLS", fontSize = 10.sp, color = TextSecondary, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        aiProfile.expertise.forEach { skill ->
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = AccentTeal.copy(alpha = 0.1f),
+                                border = BorderStroke(1.dp, AccentTeal.copy(alpha = 0.2f))
+                            ) {
+                                Text(
+                                    text = skill,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    color = AccentTeal,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (aiProfile.academic_history.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Text("ACADEMIC BACKGROUND", fontSize = 10.sp, color = TextSecondary, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        aiProfile.academic_history.forEach { history ->
+                            Row(verticalAlignment = Alignment.Top) {
+                                Text("•", color = AccentViolet, modifier = Modifier.padding(end = 8.dp))
+                                Text(history, color = TextPrimary, fontSize = 13.sp)
+                            }
+                        }
+                    }
+                }
+            } else {
+                Text(
+                    text = "No published works found to extract profile.",
+                    color = TextSecondary,
+                    fontSize = 13.sp
+                )
+            }
+        }
+    }
+}

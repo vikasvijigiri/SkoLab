@@ -43,6 +43,8 @@ import com.open.entropy.ui.theme.ResQitTextSecondary
 import com.open.entropy.ui.theme.GlassBorder
 import com.open.entropy.ui.theme.GlassSurface
 import com.open.entropy.ui.theme.LocalResQitSpacing
+import com.open.entropy.ui.theme.BgPrimary
+import com.open.entropy.ui.theme.BorderLight
 
 data class DockItem(
     val route: String,
@@ -64,86 +66,81 @@ fun BottomNavDock(
 
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = Color(0xFF0B141A) // WhatsApp Dark Background
+        color = BgPrimary // Matches BgPrimary WhatsApp Dark Background
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .height(80.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            items.forEach { item ->
-                val selected = currentRoute == item.route
-                val tint by animateColorAsState(
-                    targetValue = if (selected) Color(0xFFC4FCEF) else Color(0xFFF1F1F2),
-                    animationSpec = tween(ResQitMotion.fast),
-                    label = "navTint"
-                )
-                val pillWidth by animateDpAsState(
-                    targetValue = if (selected) 64.dp else 0.dp,
-                    animationSpec = tween(ResQitMotion.normal),
-                    label = "pillW"
-                )
-
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                            onItemClick(item)
-                        }
-                        .semantics { contentDescription = item.label },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        if (selected) {
-                            Box(
-                                modifier = Modifier
-                                    .size(pillWidth, 32.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(Color(0xFF0F3D30)) // WhatsApp Dark Green Pill
-                            )
-                        }
-                        Box {
-                            Icon(
-                                imageVector = item.icon,
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp).padding(2.dp),
-                                tint = tint
-                            )
-                            if (item.badgeCount > 0) {
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .size(16.dp)
-                                        .clip(androidx.compose.foundation.shape.CircleShape)
-                                        .background(Color(0xFF25D366)), // WhatsApp Bright Green
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = item.badgeCount.toString(),
-                                        color = Color.White, // Using white text as requested
-                                        fontSize = 9.sp,
-                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Horizontal border/divider at the top of the bar
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(0.5.dp)
+                    .background(BorderLight)
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .height(64.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                items.forEach { item ->
+                    val selected = currentRoute == item.route
+                    val tint by animateColorAsState(
+                        targetValue = if (selected) Color(0xFF00A884) else Color(0xFF8696A0),
+                        animationSpec = tween(ResQitMotion.fast),
+                        label = "navTint"
+                    )
+    
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                onItemClick(item)
+                            }
+                            .semantics { contentDescription = item.label },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Box {
+                                Icon(
+                                    imageVector = item.icon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp).padding(2.dp),
+                                    tint = tint
+                                )
+                                if (item.badgeCount > 0) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .size(16.dp)
+                                            .clip(androidx.compose.foundation.shape.CircleShape)
+                                            .background(Color(0xFF25D366)), // WhatsApp Bright Green
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = item.badgeCount.toString(),
+                                            color = Color.White, // Using white text as requested
+                                            fontSize = 9.sp,
+                                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                        )
+                                    }
+                                } else if (item.hasBadgeDot) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .size(10.dp)
+                                            .clip(androidx.compose.foundation.shape.CircleShape)
+                                            .background(Color(0xFF25D366))
                                     )
                                 }
-                            } else if (item.hasBadgeDot) {
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .size(10.dp)
-                                        .clip(androidx.compose.foundation.shape.CircleShape)
-                                        .background(Color(0xFF25D366))
-                                )
                             }
                         }
-                    }
                     androidx.compose.foundation.layout.Spacer(Modifier.height(4.dp))
                     Text(
                         text = item.label,
@@ -156,4 +153,5 @@ fun BottomNavDock(
             }
         }
     }
+}
 }

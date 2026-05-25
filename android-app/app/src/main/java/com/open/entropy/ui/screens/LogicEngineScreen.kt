@@ -49,11 +49,20 @@ fun LogicEngineScreen(onBack: () -> Unit = {}) {
     var localUserMastery by remember { mutableStateOf(42f) }
     val cachedUser by authManager.cachedUser.collectAsState(initial = null)
     
+    var conjectureError by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(cachedUser) {
-        val focus = cachedUser?.researchFocus ?: "Quantum Topology"
+        val uid = cachedUser?.uid ?: ""
+        val name = cachedUser?.name ?: "Vikas Vijigiri"
         isConjectureLoading = true
-        conjecture = apiService.getDailyConjecture(focus)
-        isConjectureLoading = false
+        conjectureError = null
+        try {
+            conjecture = apiService.getDailyConjecture(uid, name)
+        } catch (e: Exception) {
+            conjectureError = e.message ?: "Failed to load daily conjecture."
+            conjecture = null
+        } finally {
+            isConjectureLoading = false
+        }
     }
 
     val totalDays = 30
@@ -185,6 +194,40 @@ fun LogicEngineScreen(onBack: () -> Unit = {}) {
                             contentAlignment = Alignment.Center
                         ) {
                             CircularProgressIndicator(color = AccentTeal)
+                        }
+                    } else if (conjectureError != null) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF3F1F25).copy(alpha = 0.85f)),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF5252).copy(alpha = 0.4f)),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("⚠️ SERVICE ERROR", color = Color(0xFFFF5252), fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.5.sp)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(conjectureError ?: "Conjecture Service Offline", color = TextPrimary, fontSize = 13.sp, textAlign = TextAlign.Center, fontWeight = FontWeight.Medium)
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            isConjectureLoading = true
+                                            conjectureError = null
+                                            try {
+                                                conjecture = apiService.getDailyConjecture(cachedUser?.uid ?: "", cachedUser?.name ?: "Vikas Vijigiri")
+                                            } catch (e: Exception) {
+                                                conjectureError = e.message ?: "Failed to load daily conjecture."
+                                                conjecture = null
+                                            } finally {
+                                                isConjectureLoading = false
+                                            }
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252)),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text("Retry Connection", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                            }
                         }
                     } else {
                         conjecture?.let { conj ->

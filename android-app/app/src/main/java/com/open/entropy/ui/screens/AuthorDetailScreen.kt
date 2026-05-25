@@ -149,9 +149,7 @@ fun AuthorDetailScreen(
                                         MockData.generateDynamicMockAuthor(name)
                                     }
                                 }
-                                if (newData != null) {
-                                    authorData = newData
-                                }
+                                authorData = newData
                                 isLoading = false
                             }
                         }
@@ -220,7 +218,7 @@ fun Author.toAuthorResponse(): AuthorResponse {
         open_science_score = 0.90,
         collaboration_diversity = 0.65,
         research_consistency = 0.88,
-        next_prediction = "Significant shift towards scalable Topological phase gates in upcoming works.",
+        next_prediction = "**Next Frontier**: Advanced research in their field by ${this.name}.\n\n**Toolkit**: Specialized modeling tools\n\n**Logic**: Based on recent publications at ${this.institution}.",
         top_experimental_tools = listOf(
             ToolUsage("Qiskit Runtime", 32, "Software"),
             ToolUsage("Dilution Refrigerator", 12, "Hardware")

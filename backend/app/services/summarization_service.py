@@ -19,6 +19,7 @@ import json
 import re
 import io
 import asyncio
+import time
 from typing import Optional, List, Dict, Any, Tuple
 import firebase_admin
 from firebase_admin import firestore
@@ -133,21 +134,35 @@ the abstract — use this to be MAXIMALLY accurate and specific.
 # Shared module-level in-memory cache
 _global_intelligence_cache: Dict[str, Dict[str, Any]] = {}
 LLM_LIMIT_EXCEEDED = False
+LLM_LIMIT_EXCEEDED_TIME = 0.0
 
 def is_llm_working() -> bool:
-    global LLM_LIMIT_EXCEEDED
+    global LLM_LIMIT_EXCEEDED, LLM_LIMIT_EXCEEDED_TIME
+    if LLM_LIMIT_EXCEEDED:
+        # If 15 minutes have passed, attempt to reset and try again
+        if time.time() - LLM_LIMIT_EXCEEDED_TIME > 900:
+            LLM_LIMIT_EXCEEDED = False
+            print("[LLM] Attempting to reset LLM_LIMIT_EXCEEDED after 15-minute cooldown...", flush=True)
     return bool(os.getenv("GROQ_API")) and not LLM_LIMIT_EXCEEDED
 
 def set_llm_limit_exceeded(exceeded: bool):
-    global LLM_LIMIT_EXCEEDED
+    global LLM_LIMIT_EXCEEDED, LLM_LIMIT_EXCEEDED_TIME
     LLM_LIMIT_EXCEEDED = exceeded
+    if exceeded:
+        LLM_LIMIT_EXCEEDED_TIME = time.time()
     print(f"[LLM] LLM_LIMIT_EXCEEDED set to {exceeded}", flush=True)
 
 class SummarizationService:
     def __init__(self):
         self.api_key = os.getenv("GROQ_API")
         self.base_url = "https://api.groq.com/openai/v1/chat/completions"
-        self.model = "llama-3.3-70b-versatile"
+        self.models = [
+            "llama-3.3-70b-versatile",
+            "llama3-8b-8192",
+            "mixtral-8x7b-32768",
+            "gemma2-9b-it",
+            "llama-3.1-8b-instant"
+        ]
         self.metrics_service = MetricsService()
 
         # In-memory cache: DOI / OpenAlex ID → intelligence result (session-scoped)
@@ -168,46 +183,7 @@ class SummarizationService:
         and extracts 9-dimensional structured intelligence via the LLM.
         """
         cache_key = openalex_id or doi or title
-        if cache_key in self._intelligence_cache:
-            print(f"[analyze_paper] Cache hit for: {cache_key[:60]}", flush=True)
-            return self._intelligence_cache[cache_key]
-
-        # Determine unique document ID for this paper to cache in Firestore
-        doc_id = None
-        if openalex_id:
-            doc_id = openalex_id.split("/")[-1]
-        elif doi:
-            doc_id = self._clean_doi(doi).replace("/", "_")
-        else:
-            import hashlib
-            doc_id = "title_" + hashlib.md5(title.lower().strip().encode("utf-8")).hexdigest()
-
-        # Check Firestore cache first if available
-        db = None
-        firestore_available = False
-        try:
-            from researcher_worker import FIRESTORE_AVAILABLE
-            firestore_available = FIRESTORE_AVAILABLE
-        except Exception:
-            firestore_available = bool(firebase_admin._apps)
-
-        if firestore_available and firebase_admin._apps:
-            try:
-                db = firestore.client()
-            except Exception as e:
-                print(f"[analyze_paper] Firestore client init failed: {e}", flush=True)
-
-        if db and doc_id:
-            try:
-                doc_ref = db.collection("paper_intelligence").document(doc_id)
-                doc = doc_ref.get(timeout=5.0)
-                if doc.exists:
-                    result = doc.to_dict()
-                    self._intelligence_cache[cache_key] = result
-                    print(f"[analyze_paper] Firestore cache hit for: {doc_id}", flush=True)
-                    return result
-            except Exception as e:
-                print(f"[analyze_paper] Firestore cache read error for {doc_id}: {e}", flush=True)
+        # Caching disabled as per complete cache removal requirement
 
         # ── Step 1: Fetch OpenAlex metadata (always) ──────────────────────────
         print(f"[analyze_paper] Fetching metadata for: {title[:60]}", flush=True)
@@ -215,29 +191,18 @@ class SummarizationService:
 
         # ── Step 2: Attempt to get the full paper text ────────────────────────
         if not is_llm_working():
-            print("[analyze_paper] LLM out of limit/unconfigured. Skipping text extraction and context building.", flush=True)
-            result = self._intelligence_fallback(title, meta, "metadata_only")
-        else:
-            full_text, text_source = await self._fetch_full_paper_text(
-                doi=doi,
-                openalex_id=openalex_id,
-                oa_url=meta.get("oa_url"),
-                arxiv_id=meta.get("arxiv_id"),
-            )
-            # ── Step 3: Build context for LLM ────────────────────────────────────
-            context = self._build_context(title, meta, full_text, text_source)
-            # ── Step 4: Run LLM ───────────────────────────────────────────────────
-            result = await self._run_intelligence_llm(context, title, meta, text_source)
-
-        self._intelligence_cache[cache_key] = result
-
-        # Save to Firestore cache
-        if db and doc_id and result:
-            try:
-                db.collection("paper_intelligence").document(doc_id).set(result, timeout=5.0)
-                print(f"[analyze_paper] Cached result to Firestore: {doc_id}", flush=True)
-            except Exception as e:
-                print(f"[analyze_paper] Firestore cache write error for {doc_id}: {e}", flush=True)
+            raise Exception("LLM services are currently unavailable or rate-limited.")
+        
+        full_text, text_source = await self._fetch_full_paper_text(
+            doi=doi,
+            openalex_id=openalex_id,
+            oa_url=meta.get("oa_url"),
+            arxiv_id=meta.get("arxiv_id"),
+        )
+        # ── Step 3: Build context for LLM ────────────────────────────────────
+        context = self._build_context(title, meta, full_text, text_source)
+        # ── Step 4: Run LLM ───────────────────────────────────────────────────
+        result = await self._run_intelligence_llm(context, title, meta, text_source)
 
         return result
 
@@ -469,16 +434,24 @@ class SummarizationService:
                 "User-Agent": "ResQitApp/1.0 (mailto:vikki.4me@gmail.com)",
                 "Accept": "application/json",
             }
+            from app.config import settings
+            if settings.openalex_api_key:
+                headers["api_key"] = settings.openalex_api_key
             async with httpx.AsyncClient(headers=headers, timeout=15.0) as client:
                 resp = await client.get(url)
                 if resp.status_code != 200:
                     return {}
                 data = resp.json()
 
+            if not data or not isinstance(data, dict):
+                return {}
+
             abstract = self._reconstruct_abstract(data.get("abstract_inverted_index"))
 
             # best_oa_location gives the most likely free PDF
-            best_oa = data.get("best_oa_location") or {}
+            best_oa = data.get("best_oa_location")
+            if not isinstance(best_oa, dict):
+                best_oa = {}
             oa_url = best_oa.get("pdf_url") or best_oa.get("landing_page_url")
 
             # arXiv detection from DOIs or IDs
@@ -486,27 +459,41 @@ class SummarizationService:
             raw_doi = data.get("doi", "") or doi or ""
             arxiv_id = self._extract_arxiv_id(raw_doi)
 
-            topics = [
-                t.get("display_name", "")
-                for t in data.get("topics", [])[:12]
-                if t.get("display_name")
-            ]
-            concepts = [
-                c.get("display_name", "")
-                for c in data.get("concepts", [])[:15]
-                if c.get("display_name")
-            ]
-            authors = [
-                a.get("author", {}).get("display_name", "")
-                for a in data.get("authorships", [])[:8]
-                if a.get("author", {}).get("display_name")
-            ]
+            topics = []
+            for t in (data.get("topics") or [])[:12]:
+                if isinstance(t, dict):
+                    name = t.get("display_name")
+                    if name:
+                        topics.append(name)
 
-            journal = (
-                (data.get("primary_location") or {})
-                .get("source", {})
-                .get("display_name", "")
-            )
+            concepts = []
+            for c in (data.get("concepts") or [])[:15]:
+                if isinstance(c, dict):
+                    name = c.get("display_name")
+                    if name:
+                        concepts.append(name)
+
+            authors = []
+            for a in (data.get("authorships") or [])[:8]:
+                if isinstance(a, dict):
+                    author_obj = a.get("author")
+                    if isinstance(author_obj, dict):
+                        name = author_obj.get("display_name")
+                        if name:
+                            authors.append(name)
+
+            primary_loc = data.get("primary_location")
+            if not isinstance(primary_loc, dict):
+                primary_loc = {}
+            source_obj = primary_loc.get("source")
+            if not isinstance(source_obj, dict):
+                source_obj = {}
+            journal = source_obj.get("display_name", "")
+
+            # open_access dict check
+            oa_obj = data.get("open_access")
+            if not isinstance(oa_obj, dict):
+                oa_obj = {}
 
             return {
                 "abstract": abstract,
@@ -518,12 +505,14 @@ class SummarizationService:
                 "year": data.get("publication_year"),
                 "cited_by_count": data.get("cited_by_count", 0),
                 "referenced_works_count": data.get("referenced_works_count", 0),
-                "is_open_access": data.get("open_access", {}).get("is_oa", False),
+                "is_open_access": oa_obj.get("is_oa", False),
                 "journal": journal,
                 "doi": data.get("doi", ""),
             }
         except Exception as e:
             print(f"[OpenAlex meta] Error: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
             return {}
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -584,45 +573,47 @@ class SummarizationService:
         text_source: str,
     ) -> Dict[str, Any]:
         """Calls Groq with the Research Intelligence Agent prompt."""
-        payload = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": RESEARCH_INTELLIGENCE_SYSTEM_PROMPT},
-                {"role": "user", "content": context},
-            ],
-            "temperature": 0.15,   # Very low — precision over creativity
-            "max_tokens": 2048,
-            "response_format": {"type": "json_object"},
-        }
+        for model in self.models:
+            payload = {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": RESEARCH_INTELLIGENCE_SYSTEM_PROMPT},
+                    {"role": "user", "content": context},
+                ],
+                "temperature": 0.15,   # Very low — precision over creativity
+                "max_tokens": 2048,
+                "response_format": {"type": "json_object"},
+            }
 
-        try:
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(45.0, connect=8.0)
-            ) as client:
-                resp = await client.post(
-                    self.base_url,
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json=payload,
-                )
+            try:
+                async with httpx.AsyncClient(
+                    timeout=httpx.Timeout(45.0, connect=8.0)
+                ) as client:
+                    resp = await client.post(
+                        self.base_url,
+                        headers={
+                            "Authorization": f"Bearer {self.api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json=payload,
+                    )
 
-            if resp.status_code == 200:
-                raw = resp.json()["choices"][0]["message"]["content"]
-                print(f"[LLM] Response received ({len(raw)} chars)", flush=True)
-                return self._parse_and_normalise(raw, title, meta, text_source)
-            else:
-                print(f"[LLM] Error {resp.status_code}: {resp.text[:300]}", flush=True)
-                if resp.status_code in [401, 403, 429]:
-                    set_llm_limit_exceeded(True)
+                if resp.status_code == 200:
+                    raw = resp.json()["choices"][0]["message"]["content"]
+                    print(f"[LLM] Response received using {model} ({len(raw)} chars)", flush=True)
+                    return self._parse_and_normalise(raw, title, meta, text_source)
+                else:
+                    print(f"[LLM] Error {resp.status_code} with {model}: {resp.text[:300]}", flush=True)
+                    if resp.status_code in [401, 403]:
+                        set_llm_limit_exceeded(True)
+                        break
 
-        except httpx.TimeoutException:
-            print("[LLM] Groq request timed out", flush=True)
-        except Exception as e:
-            print(f"[LLM] Exception: {e}", flush=True)
+            except httpx.TimeoutException:
+                print(f"[LLM] Groq request timed out for {model}", flush=True)
+            except Exception as e:
+                print(f"[LLM] Exception for {model}: {e}", flush=True)
 
-        return self._intelligence_fallback(title, meta, text_source)
+        raise Exception("Failed to analyze paper using any available LLM models.")
 
     def _parse_and_normalise(
         self,
@@ -643,9 +634,9 @@ class SummarizationService:
                     raw,
                 )
                 content = json.loads(fixed)
-            except Exception:
+            except Exception as parse_err:
                 print(f"[LLM] JSON parse failed: {raw[:400]}", flush=True)
-                return self._intelligence_fallback(title, meta, text_source)
+                raise Exception(f"Failed to parse LLM response: {parse_err}")
 
         def fix_latex(s: str) -> str:
             """Normalise double-escaped backslashes back to single for display."""
@@ -696,9 +687,7 @@ class SummarizationService:
         )
 
         if not is_llm_working():
-            fallback = self._generate_fallback_data(title)
-            fallback["top_skills"] = top_skills
-            return fallback
+            raise Exception("LLM services are currently unavailable or rate-limited.")
 
         context = f"Title: {title}\n"
         if paper_data.get("abstract"):
@@ -706,12 +695,13 @@ class SummarizationService:
         if paper_data.get("concepts"):
             context += f"Concepts: {', '.join(paper_data['concepts'][:10])}\n"
 
-        payload = {
-            "model": self.model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": r"""You are a world-class scientific communicator.
+        for model in self.models:
+            payload = {
+                "model": model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": r"""You are a world-class scientific communicator.
 Summarize the provided paper into 4-5 high-impact, technical bullet points.
 
 RULES:
@@ -721,48 +711,46 @@ RULES:
 - Only use information provided. Do NOT invent numbers.
 
 Return JSON: { "bullets": ["⚛️ ...", ...] }""",
-                },
-                {"role": "user", "content": context},
-            ],
-            "temperature": 0.3,
-            "response_format": {"type": "json_object"},
-        }
-
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    self.base_url,
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
                     },
-                    json=payload,
-                    timeout=20.0,
-                )
-            if resp.status_code == 200:
-                raw = resp.json()["choices"][0]["message"]["content"]
-                try:
-                    content = json.loads(raw)
-                except json.JSONDecodeError:
-                    fixed = re.sub(
-                        r'(?<!\\)\\(?!["\\\/bfnrt]|u[0-9a-fA-F]{4})',
-                        r'\\\\',
-                        raw,
-                    )
-                    content = json.loads(fixed)
-                if "bullets" in content:
-                    content["bullets"] = [
-                        b.replace("\\\\", "\\") for b in content["bullets"]
-                    ]
-                content["metrics"] = metrics
-                content["top_skills"] = top_skills
-                return content
-        except Exception:
-            pass
+                    {"role": "user", "content": context},
+                ],
+                "temperature": 0.3,
+                "response_format": {"type": "json_object"},
+            }
 
-        fallback = self._generate_fallback_data(title)
-        fallback["top_skills"] = top_skills
-        return fallback
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(
+                        self.base_url,
+                        headers={
+                            "Authorization": f"Bearer {self.api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json=payload,
+                        timeout=20.0,
+                    )
+                if resp.status_code == 200:
+                    raw = resp.json()["choices"][0]["message"]["content"]
+                    try:
+                        content = json.loads(raw)
+                    except json.JSONDecodeError:
+                        fixed = re.sub(
+                            r'(?<!\\)\\(?!["\\\/bfnrt]|u[0-9a-fA-F]{4})',
+                            r'\\\\',
+                            raw,
+                        )
+                        content = json.loads(fixed)
+                    if "bullets" in content:
+                        content["bullets"] = [
+                            b.replace("\\\\", "\\") for b in content["bullets"]
+                        ]
+                    content["metrics"] = metrics
+                    content["top_skills"] = top_skills
+                    return content
+            except Exception:
+                pass
+
+        raise Exception("Failed to summarize paper using any available LLM models.")
 
     async def generate_presentation(
         self, title: str, doi: Optional[str] = None
@@ -775,37 +763,38 @@ Return JSON: { "bullets": ["⚛️ ...", ...] }""",
         if paper_data.get("concepts"):
             context += f"Concepts: {', '.join(paper_data['concepts'][:8])}\n"
 
-        payload = {
-            "model": self.model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": r"""You are an expert academic presenter.
+        for model in self.models:
+            payload = {
+                "model": model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": r"""You are an expert academic presenter.
 Convert the paper DNA into a professional 7-slide outline.
 STRUCTURE: Title, Problem, Methodology, Key Discovery, Complexity, Application, Future.
 Each slide: 'title' + 3-4 'bullets'. Use $$LaTeX$$ for formulas.
 Return JSON: { "slides": [{ "title": "...", "bullets": ["..."] }] }""",
-                },
-                {"role": "user", "content": context},
-            ],
-            "temperature": 0.4,
-            "response_format": {"type": "json_object"},
-        }
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    self.base_url,
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
                     },
-                    json=payload,
-                    timeout=30.0,
-                )
-            if resp.status_code == 200:
-                return json.loads(resp.json()["choices"][0]["message"]["content"])
-        except Exception:
-            pass
+                    {"role": "user", "content": context},
+                ],
+                "temperature": 0.4,
+                "response_format": {"type": "json_object"},
+            }
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(
+                        self.base_url,
+                        headers={
+                            "Authorization": f"Bearer {self.api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json=payload,
+                        timeout=30.0,
+                    )
+                if resp.status_code == 200:
+                    return json.loads(resp.json()["choices"][0]["message"]["content"])
+            except Exception:
+                pass
         return {"slides": []}
 
     # ══════════════════════════════════════════════════════════════════════════

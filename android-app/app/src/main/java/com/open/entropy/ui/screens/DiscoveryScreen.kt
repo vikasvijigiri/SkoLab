@@ -16,6 +16,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.Feed
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -699,7 +702,7 @@ fun LightSuggestionsDropdown(
                                 if (!suggestion.field_of_study.isNullOrBlank()) {
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = suggestion.field_of_study!!,
+                                        text = suggestion.field_of_study,
                                         color = TextMuted,
                                         fontSize = 10.sp,
                                         maxLines = 1,
@@ -717,7 +720,7 @@ fun LightSuggestionsDropdown(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    Icons.Default.ArrowForwardIos,
+                                    Icons.AutoMirrored.Filled.ArrowForwardIos,
                                     contentDescription = "View profile",
                                     tint = color,
                                     modifier = Modifier.size(12.dp)
@@ -963,8 +966,10 @@ fun ResearcherProfileView(
                 }
 
                 // ── Next Prediction ───────────────────────────────────
-                if (!author.next_prediction.isNullOrBlank()) {
-                    item { PredictionCard(prediction = author.next_prediction!!) }
+                if (author.metrics_computed && !author.next_prediction.isNullOrBlank()) {
+                    item { PredictionCard(prediction = author.next_prediction) }
+                } else if (!author.metrics_computed) {
+                    item { PredictionCard(prediction = "**Next Frontier**: Metrics Unavailable\n\n**Toolkit**: N/A\n\n**Logic**: AI brief is currently unavailable due to limited credits or pending analysis.") }
                 }
 
                 item { Spacer(Modifier.height(32.dp)) }
@@ -1072,7 +1077,7 @@ fun ResearcherHeroCard(
                                 if (!author.field_of_study.isNullOrBlank()) {
                                     Spacer(Modifier.height(2.dp))
                                     Text(
-                                        text = author.field_of_study!!,
+                                        text = author.field_of_study,
                                         fontSize = 12.sp,
                                         color = TextMuted,
                                         maxLines = 1
@@ -1899,7 +1904,7 @@ fun LightPublicationCard(
             if (!work.journal.isNullOrBlank()) {
                 Spacer(Modifier.height(3.dp))
                 Text(
-                    text = work.journal!!,
+                    text = work.journal,
                     color = AccentTeal,
                     fontSize = 11.sp,
                     fontStyle = FontStyle.Italic,
@@ -1991,7 +1996,7 @@ fun LightPublicationCard(
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF128C7E)),
                                     shape = RoundedCornerShape(10.dp)
                                 ) {
-                                    Icon(Icons.Default.Chat, null, modifier = Modifier.size(14.dp), tint = Color.White)
+                                    Icon(Icons.AutoMirrored.Filled.Chat, null, modifier = Modifier.size(14.dp), tint = Color.White)
                                     Spacer(Modifier.width(6.dp))
                                     Text("Discuss", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White)
                                 }
@@ -3237,7 +3242,7 @@ fun CollaboratorsNewArticlesSection(
             LightSectionHeader(
                 title = "Collaborators' New Articles",
                 subtitle = "Recent works from your research network",
-                icon = Icons.Default.Feed,
+                icon = Icons.AutoMirrored.Filled.Feed,
                 color = AccentIndigo
             )
         }
@@ -3337,7 +3342,7 @@ fun CitationHeatmapSection(heatmap: CitationHeatmap) {
         LightSectionHeader(
             title = "Citation & Work Trend",
             subtitle = "Annual impact analysis",
-            icon = Icons.Default.TrendingUp,
+            icon = Icons.AutoMirrored.Filled.TrendingUp,
             color = AccentIndigo
         )
         Spacer(Modifier.height(12.dp))
@@ -3735,7 +3740,7 @@ fun DashboardPeerSuggestionCard(
                 
                 if (!peer.field_of_study.isNullOrBlank()) {
                     Text(
-                        text = peer.field_of_study!!,
+                        text = peer.field_of_study,
                         color = color,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -3795,7 +3800,7 @@ fun DashboardPeerSuggestionCard(
                             .background(AccentTeal.copy(alpha = 0.08f))
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Chat,
+                            imageVector = Icons.AutoMirrored.Filled.Chat,
                             contentDescription = "Message",
                             tint = AccentTeal,
                             modifier = Modifier.size(14.dp)

@@ -8,7 +8,13 @@ class PredictionService:
     def __init__(self):
         self.api_key = os.getenv("GROQ_API")
         self.base_url = "https://api.groq.com/openai/v1/chat/completions"
-        self.model = "llama-3.3-70b-versatile"
+        self.models = [
+            "llama-3.3-70b-versatile",
+            "llama3-8b-8192",
+            "mixtral-8x7b-32768",
+            "gemma2-9b-it",
+            "llama-3.1-8b-instant"
+        ]
 
     async def predict_next_problem(
         self,
@@ -21,8 +27,10 @@ class PredictionService:
         next research paper/problem and required tools, grounded perfectly in the 
         author's current skillset, past work, and abstracts of their publications.
         """
-        if not is_llm_working() or not works:
-            return self._generate_fallback_prediction(author_name, expertise, works)
+        if not works:
+            raise ValueError("Cannot predict next problem: no publications found for this researcher.")
+        if not is_llm_working():
+            raise Exception("LLM services are currently unavailable or rate-limited.")
 
         # Format past publications with title, year, abstract, and metrics/summaries
         works_context_parts = []
@@ -64,12 +72,13 @@ class PredictionService:
             f"Selected Publications (Latest/Top):\n{works_context}"
         )
         
-        prompt = {
-            "model": self.model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": """You are an elite scientific research advisor and strategist. 
+        for model in self.models:
+            prompt = {
+                "model": model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": """You are an elite scientific research advisor and strategist. 
 Your task is to predict the next SPECIFIC, highly viable research paper the author is most likely to write.
 This prediction must be extremely meticulous, realistic, and strictly grounded in the author's existing skillset, mathematical/technical expertise, and the exact trajectory of their previous papers' findings/methods.
 
@@ -84,39 +93,39 @@ Provide your response in this exact format:
 
 Be precise, academic, and extremely professional. Do not use generic buzzwords.
 """
-                },
-                {
-                    "role": "user",
-                    "content": user_content
-                }
-            ],
-            "temperature": 0.3,
-            "max_tokens": 250
-        }
-
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    self.base_url,
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json"
                     },
-                    json=prompt,
-                    timeout=15.0
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    return data['choices'][0]['message']['content'].strip()
-                elif response.status_code in [401, 403, 429]:
-                    print(f"[PredictionService] Groq API returned status {response.status_code}. Setting LLM limit exceeded.", flush=True)
-                    set_llm_limit_exceeded(True)
-                
-                return self._generate_fallback_prediction(author_name, expertise, works)
-        except Exception as e:
-            print(f"[PredictionService] Exception in predict_next_problem: {e}", flush=True)
-            return self._generate_fallback_prediction(author_name, expertise, works)
+                    {
+                        "role": "user",
+                        "content": user_content
+                    }
+                ],
+                "temperature": 0.3,
+                "max_tokens": 250
+            }
+
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        self.base_url,
+                        headers={
+                            "Authorization": f"Bearer {self.api_key}",
+                            "Content-Type": "application/json"
+                        },
+                        json=prompt,
+                        timeout=15.0
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        return data['choices'][0]['message']['content'].strip()
+                    elif response.status_code in [401, 403]:
+                        print(f"[PredictionService] Groq API returned status {response.status_code}. Setting LLM limit exceeded.", flush=True)
+                        set_llm_limit_exceeded(True)
+                        break
+            except Exception as e:
+                print(f"[PredictionService] Exception for {model}: {e}", flush=True)
+
+        raise Exception("Failed to predict next research problem using any available LLM models.")
 
     def _generate_fallback_prediction(
         self,

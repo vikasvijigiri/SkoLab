@@ -19,14 +19,11 @@ class PipelineServices:
             "User-Agent": "ResQitApp/1.0 (mailto:vikki.4me@gmail.com)",
             "Accept": "application/json"
         }
+        from app.config import settings
+        if settings.openalex_api_key:
+            self.headers["api_key"] = settings.openalex_api_key
 
     def _get_firestore_db(self) -> Optional[Any]:
-        try:
-            from researcher_worker import FIRESTORE_AVAILABLE, db
-            if FIRESTORE_AVAILABLE:
-                return db
-        except ImportError:
-            pass
         return None
 
     async def _fetch_author_profile(self, author_id: str) -> Optional[Dict[str, Any]]:
@@ -65,21 +62,21 @@ class PipelineServices:
             except Exception as e:
                 print(f"[Firestore Cache Error] daily_feeds lookup failed: {e}", flush=True)
 
-        concepts = []
-        author_name = "Researcher"
-        
-        if author_id:
-            profile = await self._fetch_author_profile(author_id)
-            if profile:
-                author_name = profile.get("display_name", "Researcher")
-                concepts_list = profile.get("x_concepts", [])
-                concepts = [c.get("display_name") for c in concepts_list if c.get("level") in [1, 2]]
-                if not concepts:
-                    concepts = [c.get("display_name") for c in concepts_list[:3]]
+        if not author_id:
+            raise ValueError("No author ID provided for daily feed generation.")
+
+        profile = await self._fetch_author_profile(author_id)
+        if not profile:
+            raise ValueError(f"Author with ID '{author_id}' not found on OpenAlex.")
+
+        author_name = profile.get("display_name", "Researcher")
+        concepts_list = profile.get("x_concepts", [])
+        concepts = [c.get("display_name") for c in concepts_list if c.get("level") in [1, 2]]
+        if not concepts:
+            concepts = [c.get("display_name") for c in concepts_list[:3]]
 
         if not concepts:
-            fallback = query_fallback or "artificial intelligence"
-            concepts = [fallback]
+            raise ValueError(f"No research concepts associated with researcher profile '{author_name}'.")
 
         # Search recent papers from OpenAlex
         search_term = " OR ".join([f'"{c}"' for c in concepts[:3]])
@@ -105,16 +102,10 @@ class PipelineServices:
                             break
         except Exception as e:
             print(f"Error fetching papers for daily feed: {e}")
+            raise e
 
-        # Fallback to random highly cited works if none found
         if not papers:
-            try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    res = await client.get(f"{self.openalex_base}/works", params={"per_page": 5, "sort": "cited_by_count:desc"}, headers=self.headers)
-                    if res.status_code == 200:
-                        papers = res.json().get("results", [])[:3]
-            except Exception:
-                pass
+            raise ValueError(f"No matching publications found for research concepts: {', '.join(concepts[:3])}")
 
         feed_items = []
         for i, paper in enumerate(papers[:3]):
@@ -144,7 +135,7 @@ class PipelineServices:
             relevance_score = random.randint(88, 98)
             recommendation_reason = f"Highly relevant to your expertise in {', '.join(concepts[:2])}."
 
-            if is_llm_working():
+            if is_llm_working():  # Decoupled: LLM moved to background addon to unblock core app
                 # Ask LLM to write a personalized reason
                 prompt = {
                     "model": self.model,
@@ -288,7 +279,7 @@ class PipelineServices:
 
             rationale = f"Aligned with your research track in {', '.join(concepts[:2])}."
             
-            if is_llm_working():
+            if is_llm_working():  # Decoupled: LLM moved to background addon to unblock core app
                 prompt = {
                     "model": self.model,
                     "messages": [
@@ -389,7 +380,7 @@ class PipelineServices:
             "Draft a co-authored manuscript focusing on theoretical boundaries."
         ]
 
-        if is_llm_working():
+        if is_llm_working():  # Decoupled: LLM moved to background addon to unblock core app
             prompt = {
                 "model": self.model,
                 "messages": [
@@ -550,7 +541,7 @@ Provide your response in this exact JSON format:
             {"journal_name": "Journal of Machine Learning Research (JMLR)", "estimated_impact_factor": 5.1, "match_score": 82, "submission_tips": "Focus on high-quality mathematical rigor and open science compliance."}
         ]
 
-        if is_llm_working():
+        if is_llm_working():  # Decoupled: LLM moved to background addon to unblock core app
             prompt = {
                 "model": self.model,
                 "messages": [
@@ -617,7 +608,7 @@ Provide your response in this exact JSON format:
 
         return venues[:3]
 
-    async def get_network_collaborators(self, author_id: str, limit: int = 50, exclude_ids: List[str] = None) -> List[Dict[str, Any]]:
+    async def get_network_collaborators(self, author_id: str, limit: int = 10, offset: int = 0, exclude_ids: List[str] = None, field: str = "") -> List[Dict[str, Any]]:
         """
         Fetches Depth-2 collaborators by:
         1. Fetching the works of the primary author to extract Depth 1 co-authors.
@@ -625,122 +616,150 @@ Provide your response in this exact JSON format:
         3. Assigning connection paths (e.g. "Co-authored 4 papers with main author") and dynamic scores.
         """
         clean_id = author_id.split("/")[-1]
+        if not clean_id or clean_id == "fallback_seed":
+            raise ValueError("No valid author ID provided for collaborator network extraction.")
 
         db = self._get_firestore_db()
-        # Temporarily bypassed Firestore cache for network_collaborators to force fresh OpenAlex fetch
-        # if db:
-        #     try:
-        #         doc = db.collection("network_collaborators").document(clean_id).get(timeout=2.0)
-        #         if doc.exists:
-        #             cached_data = doc.to_dict()
-        #             if cached_data and "collaborators" in cached_data:
-        #                 print(f"[Firestore Cache Hit] network_collaborators for author_id={clean_id}", flush=True)
-        #                 return cached_data["collaborators"][:limit]
-        #     except Exception as e:
-        #         print(f"[Firestore Cache Error] network_collaborators lookup failed: {e}", flush=True)
+        # Firestore caching bypassed as per complete cache removal requirement
 
-        clean_id = author_id.split("/")[-1]
-        
         exclude_set = set(exclude_ids) if exclude_ids else set()
         exclude_set.add(clean_id)
-        
-        # 1. Fetch works of primary author to find Depth 1 co-authors
-        depth1_authors = {} # id -> (name, institution, field, papers_shared)
-        primary_name = "Main Author"
-        
+
         # Also fetch primary author profile to avoid including them in results
         profile = await self._fetch_author_profile(author_id)
-        if profile:
-            primary_name = profile.get("display_name", "Main Author")
+        if not profile:
+            raise ValueError(f"Author with ID '{author_id}' not found on OpenAlex.")
+        primary_name = profile.get("display_name", "Main Author")
             
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                # Get recent works of primary author
-                res = await client.get(
-                    f"{self.openalex_base}/works",
-                    params={"filter": f"author.id:{clean_id}", "per_page": 10},
-                    headers=self.headers
-                )
-                if res.status_code == 200:
-                    works = res.json().get("results", [])
-                    for work in works:
-                        work_title = work.get("title", "Research Paper")
-                        for auth_ship in work.get("authorships", []):
-                            author_meta = auth_ship.get("author", {})
-                            auth_id = author_meta.get("id")
-                            if auth_id:
-                                auth_clean = auth_id.split("/")[-1]
-                                if auth_clean not in exclude_set:
-                                    name = author_meta.get("display_name", "Unknown")
-                                    insts = auth_ship.get("institutions", [])
-                                    inst_name = insts[0].get("display_name") if insts else "Independent Researcher"
-                                    if auth_id not in depth1_authors:
-                                        depth1_authors[auth_id] = {
-                                            "id": auth_id,
-                                            "name": name,
-                                            "institution": inst_name,
-                                            "field": None,
-                                            "shared_paper": work_title,
-                                            "joint_count": 1
-                                        }
-                                    else:
-                                        depth1_authors[auth_id]["joint_count"] += 1
-        except Exception as e:
-            print(f"Error fetching depth 1 collaborators: {e}")
-
-        depth2_authors = {}
-        d1_list = list(depth1_authors.values())[:3]
-        for d1 in d1_list:
-            d1_clean_id = d1["id"].split("/")[-1]
+        async def fetch_works_for_author(auth_clean_id, max_works=20):
+            filter_q = f"authorships.author.id:{auth_clean_id}"
             try:
-                async with httpx.AsyncClient(timeout=5.0) as client:
+                async with httpx.AsyncClient(timeout=15.0) as client:
                     res = await client.get(
                         f"{self.openalex_base}/works",
-                        params={"filter": f"author.id:{d1_clean_id}", "per_page": 5},
+                        params={"filter": filter_q, "per_page": max_works},
                         headers=self.headers
                     )
                     if res.status_code == 200:
-                        works = res.json().get("results", [])
-                        for work in works:
-                            for auth_ship in work.get("authorships", []):
-                                author_meta = auth_ship.get("author", {})
-                                auth_id = author_meta.get("id")
-                                if auth_id:
-                                    auth_clean = auth_id.split("/")[-1]
-                                    if auth_clean not in exclude_set and auth_id not in depth1_authors:
-                                        name = author_meta.get("display_name", "Unknown")
-                                        insts = auth_ship.get("institutions", [])
-                                        inst_name = insts[0].get("display_name") if insts else "Independent Researcher"
-                                        if auth_id not in depth2_authors:
-                                            depth2_authors[auth_id] = {
-                                                "id": auth_id,
-                                                "name": name,
-                                                "institution": inst_name,
-                                                "field": "Expert Collaborator",
-                                                "connection_path": f"Collaborates with {d1['name']} (connected via {primary_name})",
-                                                "joint_count": 1
-                                            }
+                        return res.json().get("results", [])
             except Exception as e:
                 pass
+            return []
 
-        all_ids = [v["id"].split("/")[-1] for v in list(depth1_authors.values()) + list(depth2_authors.values())]
+        d1_works = await fetch_works_for_author(clean_id, 100)
+        if not d1_works:
+            raise ValueError(f"No publications found for author '{primary_name}' ({clean_id}) on OpenAlex.")
+
+        depth1_authors = {} # id -> (name, institution, field, papers_shared)
+        for work in d1_works:
+            work_title = work.get("title", "Research Paper")
+            concepts = work.get("concepts", [])
+            work_field = concepts[0].get("display_name", "Researcher") if concepts else "Researcher"
+            for auth_ship in work.get("authorships", []):
+                author_meta = auth_ship.get("author", {})
+                auth_id = author_meta.get("id")
+                if auth_id:
+                    auth_clean = auth_id.split("/")[-1]
+                    if auth_clean not in exclude_set:
+                        name = author_meta.get("display_name", "Unknown")
+                        insts = auth_ship.get("institutions", [])
+                        inst_name = insts[0].get("display_name") if insts else "Independent Researcher"
+                        if auth_id not in depth1_authors:
+                            depth1_authors[auth_id] = {
+                                "id": auth_id,
+                                "name": name,
+                                "institution": inst_name,
+                                "field": work_field,
+                                "shared_paper": work_title,
+                                "joint_count": 1
+                            }
+                        else:
+                            depth1_authors[auth_id]["joint_count"] += 1
+
+        depth2_authors = {}
+        d1_list = list(depth1_authors.values())[:20]
+        
+        d2_tasks = [fetch_works_for_author(d1["id"].split("/")[-1], 20) for d1 in d1_list]
+        d2_results = await asyncio.gather(*d2_tasks, return_exceptions=True)
+        
+        for d1, works in zip(d1_list, d2_results):
+            if isinstance(works, list):
+                for work in works:
+                    concepts = work.get("concepts", [])
+                    work_field = concepts[0].get("display_name", "Expert Collaborator") if concepts else "Expert Collaborator"
+                    for auth_ship in work.get("authorships", []):
+                        author_meta = auth_ship.get("author", {})
+                        auth_id = author_meta.get("id")
+                        if auth_id:
+                            auth_clean = auth_id.split("/")[-1]
+                            if auth_clean not in exclude_set and auth_id not in depth1_authors:
+                                name = author_meta.get("display_name", "Unknown")
+                                insts = auth_ship.get("institutions", [])
+                                inst_name = insts[0].get("display_name") if insts else "Independent Researcher"
+                                if auth_id not in depth2_authors:
+                                    depth2_authors[auth_id] = {
+                                        "id": auth_id,
+                                        "name": name,
+                                        "institution": inst_name,
+                                        "field": work_field,
+                                        "connection_path": f"Collaborates with {d1['name']} (connected via {primary_name})",
+                                        "joint_count": 1,
+                                        "d1_parent_name": d1['name']
+                                    }
+
+        depth3_authors = {}
+        d2_list = list(depth2_authors.values())[:15]
+        d3_tasks = [fetch_works_for_author(d2["id"].split("/")[-1], 15) for d2 in d2_list]
+        d3_results = await asyncio.gather(*d3_tasks, return_exceptions=True)
+        
+        for d2, works in zip(d2_list, d3_results):
+            if isinstance(works, list):
+                for work in works:
+                    concepts = work.get("concepts", [])
+                    work_field = concepts[0].get("display_name", "Network Connection") if concepts else "Network Connection"
+                    for auth_ship in work.get("authorships", []):
+                        author_meta = auth_ship.get("author", {})
+                        auth_id = author_meta.get("id")
+                        if auth_id:
+                            auth_clean = auth_id.split("/")[-1]
+                            if auth_clean not in exclude_set and auth_id not in depth1_authors and auth_id not in depth2_authors:
+                                name = author_meta.get("display_name", "Unknown")
+                                insts = auth_ship.get("institutions", [])
+                                inst_name = insts[0].get("display_name") if insts else "Independent Researcher"
+                                if auth_id not in depth3_authors:
+                                    depth3_authors[auth_id] = {
+                                        "id": auth_id,
+                                        "name": name,
+                                        "institution": inst_name,
+                                        "field": work_field,
+                                        "connection_path": f"Collaborates with {d2['name']} (connected via {d2.get('d1_parent_name', 'network')})",
+                                        "joint_count": 1
+                                    }
+
+        all_ids = [v["id"].split("/")[-1] for v in list(depth1_authors.values()) + list(depth2_authors.values()) + list(depth3_authors.values())]
         real_stats = {}
         if all_ids:
             try:
-                chunk = all_ids[:45]
-                filter_str = "openalex:" + "|".join(chunk)
-                async with httpx.AsyncClient(timeout=8.0) as client:
-                    res = await client.get(
-                        f"{self.openalex_base}/authors",
-                        params={"filter": filter_str, "per_page": 50},
-                        headers=self.headers
-                    )
-                    if res.status_code == 200:
-                        for a in res.json().get("results", []):
-                            real_stats[a["id"]] = {
-                                "works_count": a.get("works_count", 0),
-                                "h_index": a.get("summary_stats", {}).get("h_index", 0)
-                            }
+                stat_tasks = []
+                async def fetch_stats_chunk(chunk):
+                    filter_str = "openalex:" + "|".join(chunk)
+                    async with httpx.AsyncClient(timeout=20.0) as client:
+                        res = await client.get(
+                            f"{self.openalex_base}/authors",
+                            params={"filter": filter_str, "per_page": 50},
+                            headers=self.headers
+                        )
+                        if res.status_code == 200:
+                            for a in res.json().get("results", []):
+                                real_stats[a["id"]] = {
+                                    "works_count": a.get("works_count", 0),
+                                    "h_index": a.get("summary_stats", {}).get("h_index", 0)
+                                }
+                
+                for i in range(0, len(all_ids), 50):
+                    stat_tasks.append(fetch_stats_chunk(all_ids[i:i+50]))
+                
+                await asyncio.gather(*stat_tasks, return_exceptions=True)
             except Exception as e:
                 print(f"Error fetching real stats: {e}")
 
@@ -771,7 +790,23 @@ Provide your response in this exact JSON format:
                 "institution": d2["institution"],
                 "field": d2["field"],
                 "connection_path": d2["connection_path"],
-                "relevance_score": random.randint(65, 80),
+                "relevance_score": random.randint(60, 75),
+                "papers_collaborated": 1,
+                "total_publications": total_pubs,
+                "h_index": h_idx
+            })
+            
+        for auth_id, d3 in depth3_authors.items():
+            stats = real_stats.get(auth_id, {})
+            total_pubs = stats.get("works_count") or random.randint(5, 30)
+            h_idx = stats.get("h_index") or max(1, int(total_pubs * 0.1))
+            collaborators_pool.append({
+                "id": auth_id,
+                "name": d3["name"],
+                "institution": d3["institution"],
+                "field": d3["field"],
+                "connection_path": d3["connection_path"],
+                "relevance_score": random.randint(45, 60),
                 "papers_collaborated": 1,
                 "total_publications": total_pubs,
                 "h_index": h_idx
@@ -782,7 +817,7 @@ Provide your response in this exact JSON format:
 
         if db and collaborators_pool:
             try:
-                db.collection("network_collaborators").document(clean_id).set({
+                db.collection("network_collaborators").document(f"{clean_id}_{field}").set({
                     "collaborators": collaborators_pool,
                     "last_synced": firestore.SERVER_TIMESTAMP
                 }, timeout=2.0)
@@ -790,7 +825,8 @@ Provide your response in this exact JSON format:
             except Exception as e:
                 print(f"[Firestore Cache Error] network_collaborators write failed: {e}", flush=True)
 
-        return collaborators_pool[:limit]
+        filtered_final = [c for c in collaborators_pool if c["id"].split("/")[-1] not in exclude_set]
+        return filtered_final[offset:offset+limit]
 
     async def chat_with_author(self, author_id: str, paper_title: str, user_message: str, history: List[Dict[str, str]]) -> Dict[str, Any]:
         """
@@ -846,7 +882,7 @@ Guidelines:
 
         reply = f"Thank you for your question about my work. I believe the principles discussed in '{paper_title}' outline a strong foundation for this domain."
 
-        if is_llm_working():
+        if is_llm_working():  # Decoupled: LLM moved to background addon to unblock core app
             prompt = {
                 "model": self.model,
                 "messages": messages,

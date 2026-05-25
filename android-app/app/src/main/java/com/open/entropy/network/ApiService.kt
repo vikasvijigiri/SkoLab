@@ -12,8 +12,17 @@ import io.ktor.serialization.kotlinx.json.*
 import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.coroutines.*
 
 // ── Data models ───────────────────────────────────────────────────────────────
+
+@Serializable
+data class AiStatusResponse(
+    val groq_api_configured: Boolean,
+    val llm_active: Boolean,
+    val model: String,
+    val key_prefix: String
+)
 
 @Serializable
 data class OpenAlexWork(
@@ -62,7 +71,9 @@ data class PrimaryLocation(
 data class OpenAlexAuthor(
     val id: String,
     val display_name: String? = null,
-    val last_known_institutions: List<OpenAlexInstitution>? = null
+    val last_known_institutions: List<OpenAlexInstitution>? = null,
+    val summary_stats: OpenAlexSummaryStats? = null,
+    val works_count: Int? = null
 )
 
 @Serializable
@@ -349,21 +360,21 @@ class ApiService {
     }
 
     fun getCachedAuthorProfile(key: String): AuthorResponse? {
-        val cleanKey = key.substringAfterLast("/").trim().lowercase()
-        return authorProfileCache[cleanKey]
+        return null
     }
 
     fun cacheAuthorProfile(key: String, profile: AuthorResponse) {
-        val cleanKey = key.substringAfterLast("/").trim().lowercase()
-        authorProfileCache[cleanKey] = profile
+        // no-op: caching is disabled
+    }
+
+    private val lenientJson = Json {
+        ignoreUnknownKeys = true
+        coerceInputValues = true
     }
 
     private val httpClient = HttpClient(Android) {
         install(ContentNegotiation) {
-            json(Json {
-                ignoreUnknownKeys = true
-                coerceInputValues = true
-            })
+            json(lenientJson)
         }
         install(HttpTimeout) {
             requestTimeoutMillis = 15_000
@@ -385,9 +396,29 @@ class ApiService {
             e.javaClass.name.contains("Connect"))) {
             ServerLocator.reportFailure(base)
         }
+        
+        ServerLocator.appContext?.let { context ->
+            val handler = android.os.Handler(android.os.Looper.getMainLooper())
+            handler.post {
+                val msg = "Backend Exception: ${e.localizedMessage ?: e.toString()}"
+                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     // ── Backend endpoints ─────────────────────────────────────────────────────
+
+    suspend fun checkAiStatus(): Boolean {
+        val base = baseUrl() ?: return true
+        return try {
+            val response = httpClient.get("$base/ai_status")
+            val decoded = lenientJson.decodeFromString<AiStatusResponse>(response.bodyAsText())
+            decoded.llm_active
+        } catch (e: Exception) {
+            handleNetworkException(e, base)
+            true // default to true if backend is unreachable so we don't spam errors
+        }
+    }
 
     suspend fun getRandomNumber(): Int {
         val base = baseUrl() ?: run {
@@ -406,33 +437,16 @@ class ApiService {
 
     suspend fun getAuthorSuggestions(query: String): List<AuthorSuggestion> {
         if (query.length < 3) return emptyList()
-        val cacheKey = query.trim().lowercase()
-        val cached = authorSuggestionsCache[cacheKey]
-        if (cached != null) {
-            Log.d(tag, "Cache hit for author suggestions: $cacheKey")
-            return cached
+        val base = baseUrl() ?: throw Exception("ResQit backend services are currently unreachable.")
+        try {
+            return httpClient.get("$base/author_suggestions") {
+                parameter("query", query)
+            }.body()
+        } catch (e: Exception) {
+            handleNetworkException(e, base)
+            Log.e(tag, "getAuthorSuggestions failed", e)
+            throw e
         }
-
-        val base = baseUrl()
-        val results = if (base != null) {
-            try {
-                httpClient.get("$base/author_suggestions") {
-                    parameter("query", query)
-                }.body()
-            } catch (e: Exception) {
-                handleNetworkException(e, base)
-                Log.e(tag, "getAuthorSuggestions via backend failed, falling back to direct OpenAlex query", e)
-                fetchDirectAuthorSuggestions(query)
-            }
-        } else {
-            Log.w(tag, "getAuthorSuggestions: backend not yet discovered, falling back to direct OpenAlex query")
-            fetchDirectAuthorSuggestions(query)
-        }
-
-        if (results.isNotEmpty()) {
-            authorSuggestionsCache[cacheKey] = results
-        }
-        return results
     }
 
     private suspend fun fetchDirectAuthorSuggestions(query: String): List<AuthorSuggestion> {
@@ -457,45 +471,27 @@ class ApiService {
     }
 
     suspend fun searchAuthor(name: String, id: String? = null, forceRefresh: Boolean = false): AuthorResponse? {
-        val cacheKey = (id ?: name).substringAfterLast("/").trim().lowercase()
-        if (!forceRefresh) {
-            getCachedAuthorProfile(cacheKey)?.let {
-                Log.d(tag, "Client-side cache hit for searchAuthor: $cacheKey")
-                return it
-            }
-        }
-
-        val base = baseUrl()
-        val result = if (base != null) {
-            try {
-                Log.d(tag, "Searching author via backend: $name, id: $id @ $base")
-                val response = httpClient.get("$base/search_author") {
-                    parameter("name", name)
-                    if (id != null) parameter("id", id)
-                }
-                val bodyText = response.bodyAsText()
-                Log.d(tag, "searchAuthor raw body: $bodyText")
-                if (bodyText.contains("\"error\"")) {
-                    Log.w(tag, "searchAuthor backend returned error: $bodyText, falling back to direct OpenAlex query")
-                    fetchAuthorFromOpenAlex(name, id)
-                } else {
-                    val decoded: AuthorResponse = Json { ignoreUnknownKeys = true }.decodeFromString(bodyText)
-                    decoded
-                }
-            } catch (e: Exception) {
-                handleNetworkException(e, base)
-                Log.w(tag, "searchAuthor backend failed, falling back to OpenAlex direct", e)
-                fetchAuthorFromOpenAlex(name, id)
-            }
+        val mappedName = if (name.trim().equals("vikas", ignoreCase = true) || name.trim().equals("user_vikas", ignoreCase = true)) {
+            "Vikas Vijigiri"
         } else {
-            Log.w(tag, "searchAuthor: backend not yet discovered, using OpenAlex direct")
-            fetchAuthorFromOpenAlex(name, id)
+            name
         }
-
-        if (result != null) {
-            cacheAuthorProfile(cacheKey, result)
+        val base = baseUrl() ?: throw Exception("ResQit backend services are currently unreachable.")
+        try {
+            Log.d(tag, "Searching author via backend: $mappedName, id: $id @ $base")
+            val response = httpClient.get("$base/search_author") {
+                parameter("name", mappedName)
+                if (id != null) parameter("id", id)
+            }
+            val bodyText = response.bodyAsText()
+            Log.d(tag, "searchAuthor raw body: $bodyText")
+            val decoded: AuthorResponse = lenientJson.decodeFromString(bodyText)
+            return decoded
+        } catch (e: Exception) {
+            handleNetworkException(e, base)
+            Log.e(tag, "searchAuthor backend failed", e)
+            throw e
         }
-        return result
     }
 
     /**
@@ -503,6 +499,11 @@ class ApiService {
      * Returns real data (name, institution, works) with metrics_computed=false.
      */
     private suspend fun fetchAuthorFromOpenAlex(name: String, id: String? = null): AuthorResponse? {
+        val mappedName = if (name.trim().equals("vikas", ignoreCase = true) || name.trim().equals("user_vikas", ignoreCase = true)) {
+            "Vikas Vijigiri"
+        } else {
+            name
+        }
         return try {
             val authorData = if (id != null) {
                 val cleanId = id.substringAfterLast("/")
@@ -511,7 +512,7 @@ class ApiService {
                 }.body<OpenAlexAuthorDetail>()
             } else {
                 val resp = httpClient.get("https://api.openalex.org/authors") {
-                    parameter("search", name)
+                    parameter("search", mappedName)
                     parameter("per_page", 1)
                     parameter("mailto", "vikki.4me@gmail.com")
                 }.body<OpenAlexAuthorsResponse>()
@@ -719,12 +720,6 @@ class ApiService {
      * Results are cached in-memory for 30 minutes.
      */
     suspend fun getTrendingPapers(focus: String? = null, limit: Int = 8): List<OpenAlexWork> {
-        val now = System.currentTimeMillis()
-        val cached = trendingPapersCache
-        if (focus == null && cached != null && (now - trendingPapersCacheTime) < TRENDING_CACHE_TTL_MS) {
-            Log.d(tag, "Cache hit for trending papers")
-            return cached
-        }
         val year = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
         val prevYear = year - 1
         return try {
@@ -737,27 +732,10 @@ class ApiService {
                 parameter("per_page", limit)
                 parameter("mailto", "vikki.4me@gmail.com")
             }.body()
-            val results = response.results
-            if (focus == null) {
-                trendingPapersCache = results
-                trendingPapersCacheTime = now
-            }
-            results
+            response.results
         } catch (e: Exception) {
             Log.e(tag, "getTrendingPapers (OpenAlex) failed", e)
-            // Fallback: search for highly-cited ML papers as a graceful degradation
-            try {
-                val fallback: OpenAlexResponse = httpClient.get("https://api.openalex.org/works") {
-                    parameter("search", focus ?: "machine learning deep learning")
-                    parameter("sort", "cited_by_count:desc")
-                    parameter("per_page", limit)
-                    parameter("mailto", "vikki.4me@gmail.com")
-                }.body()
-                fallback.results
-            } catch (e2: Exception) {
-                Log.e(tag, "getTrendingPapers fallback failed", e2)
-                emptyList()
-            }
+            throw e
         }
     }
 
@@ -781,34 +759,24 @@ class ApiService {
         }
     }
 
-    suspend fun getDailyConjecture(focus: String): com.open.entropy.model.Conjecture? {
-        val base = baseUrl()
-        if (base != null) {
-            try {
-                Log.d(tag, "Fetching daily conjecture from backend for focus: $focus")
-                val response = httpClient.get("$base/daily_conjecture") {
-                    parameter("focus", focus)
-                }
-                if (response.status.value == 200) {
-                    return response.body<com.open.entropy.model.Conjecture>()
-                }
-            } catch (e: Exception) {
-                handleNetworkException(e, base)
-                Log.e(tag, "getDailyConjecture backend failed, falling back to local database", e)
+    suspend fun getDailyConjecture(authorId: String, name: String): com.open.entropy.model.Conjecture? {
+        val base = baseUrl() ?: throw Exception("ResQit backend services are currently unreachable.")
+        try {
+            Log.d(tag, "Fetching daily conjecture from backend for name: $name, id: $authorId")
+            val response = httpClient.get("$base/daily_conjecture") {
+                parameter("author_id", authorId)
+                parameter("name", name)
             }
-        } else {
-            Log.w(tag, "getDailyConjecture: backend not discovered, using local database")
+            if (response.status.value == 200) {
+                return response.body<com.open.entropy.model.Conjecture>()
+            } else {
+                throw Exception("Failed to fetch daily conjecture (status: ${response.status.value})")
+            }
+        } catch (e: Exception) {
+            handleNetworkException(e, base)
+            Log.e(tag, "getDailyConjecture backend failed", e)
+            throw e
         }
-        // Fallback: search our local dataset
-        val localList = com.open.entropy.model.ConjectureData.conjectures
-        val lowerFocus = focus.lowercase()
-        return if (lowerFocus.contains("quantum") || lowerFocus.contains("physics") || lowerFocus.contains("topology")) {
-            localList.firstOrNull { it.id == "1" }
-        } else if (lowerFocus.contains("ai") || lowerFocus.contains("ml") || lowerFocus.contains("learn") || lowerFocus.contains("neural") || lowerFocus.contains("model")) {
-            localList.firstOrNull { it.id == "2" }
-        } else {
-            localList.firstOrNull { it.id == "3" }
-        } ?: localList.firstOrNull()
     }
 
 
@@ -817,30 +785,17 @@ class ApiService {
      * Used to populate the Nexus Collaboration Radar card.
      */
     suspend fun getSimilarAuthors(fieldQuery: String, limit: Int = 5): List<AuthorSuggestion> {
-        val cacheKey = fieldQuery.trim().lowercase()
-        similarAuthorsCache[cacheKey]?.let { return it }
-
-        // Try backend first (it has the field-aware query logic)
-        val base = baseUrl()
-        val results: List<AuthorSuggestion> = if (base != null) {
-            try {
-                val list: List<AuthorSuggestion> = httpClient.get("$base/author_suggestions") {
-                    parameter("query", fieldQuery)
-                }.body()
-                list.take(limit)
-            } catch (e: Exception) {
-                handleNetworkException(e, base)
-                Log.w(tag, "getSimilarAuthors via backend failed, falling back to OpenAlex", e)
-                fetchSimilarAuthorsFromOpenAlex(fieldQuery, limit)
-            }
-        } else {
-            fetchSimilarAuthorsFromOpenAlex(fieldQuery, limit)
+        val base = baseUrl() ?: throw Exception("ResQit backend services are currently unreachable.")
+        try {
+            val list: List<AuthorSuggestion> = httpClient.get("$base/author_suggestions") {
+                parameter("query", fieldQuery)
+            }.body()
+            return list.take(limit)
+        } catch (e: Exception) {
+            handleNetworkException(e, base)
+            Log.e(tag, "getSimilarAuthors failed", e)
+            throw e
         }
-
-        if (results.isNotEmpty()) {
-            similarAuthorsCache[cacheKey] = results
-        }
-        return results
     }
 
     private suspend fun fetchSimilarAuthorsFromOpenAlex(query: String, limit: Int): List<AuthorSuggestion> {
@@ -996,20 +951,205 @@ class ApiService {
         }
     }
 
-    suspend fun getNetworkCollaborators(authorId: String, limit: Int = 50, excludeIds: List<String> = emptyList()): List<NetworkCollaborator> {
-        val base = baseUrl() ?: return emptyList()
-        return try {
-            httpClient.get("$base/network_collaborators") {
-                parameter("author_id", authorId)
-                parameter("limit", limit)
-                if (excludeIds.isNotEmpty()) {
-                    parameter("exclude_ids", excludeIds.joinToString(","))
+    suspend fun getNetworkCollaborators(authorId: String, limit: Int = 10, offset: Int = 0, excludeIds: List<String> = emptyList()): List<NetworkCollaborator> = coroutineScope {
+        val cleanId = authorId.substringAfterLast("/")
+        if (cleanId.isBlank() || cleanId == "fallback_seed") {
+            return@coroutineScope emptyList<NetworkCollaborator>()
+        }
+
+        try {
+            // 1. Fetch works of primary author from OpenAlex
+            val worksUrl = "https://api.openalex.org/works"
+            val worksResponse = httpClient.get(worksUrl) {
+                parameter("filter", "authorships.author.id:$cleanId")
+                parameter("per_page", 50)
+                parameter("mailto", "vikki.4me@gmail.com")
+            }.body<OpenAlexResponse>()
+
+            val excludeSet = (excludeIds.map { it.substringAfterLast("/") } + cleanId).toSet()
+
+            // Depth 1: clean_id -> properties
+            val depth1Map = mutableMapOf<String, MutableMap<String, Any>>()
+
+            for (work in worksResponse.results) {
+                val workTitle = work.title ?: "Research Paper"
+                val workField = work.primary_topic?.display_name 
+                    ?: work.primary_topic?.field?.display_name 
+                    ?: "Research"
+
+                val authorships = work.authorships ?: emptyList()
+                for (authShip in authorships) {
+                    val author = authShip.author ?: continue
+                    val authId = author.id ?: continue
+                    val authClean = authId.substringAfterLast("/")
+                    if (authClean !in excludeSet) {
+                        val name = author.display_name ?: "Unknown"
+                        val instName = authShip.institutions?.firstOrNull()?.display_name 
+                            ?: "Independent Researcher"
+
+                        val existing = depth1Map[authClean]
+                        if (existing == null) {
+                            depth1Map[authClean] = mutableMapOf(
+                                "id" to authId,
+                                "name" to name,
+                                "institution" to instName,
+                                "field" to workField,
+                                "shared_paper" to workTitle,
+                                "joint_count" to 1
+                            )
+                        } else {
+                            existing["joint_count"] = (existing["joint_count"] as Int) + 1
+                        }
+                    }
                 }
-            }.body()
+            }
+
+            val d1List = depth1Map.values.toList()
+
+            // Fetch works for top 5 co-authors in parallel to get Depth 2
+            val d1Subset = d1List.sortedByDescending { it["joint_count"] as Int }.take(5)
+            val depth2Map = mutableMapOf<String, MutableMap<String, Any>>()
+
+            if (d1Subset.isNotEmpty()) {
+                val d2Deferred = d1Subset.map { d1 ->
+                    val d1CleanId = (d1["id"] as String).substringAfterLast("/")
+                    async(Dispatchers.IO) {
+                        try {
+                            httpClient.get(worksUrl) {
+                                parameter("filter", "authorships.author.id:$d1CleanId")
+                                parameter("per_page", 15)
+                                parameter("mailto", "vikki.4me@gmail.com")
+                            }.body<OpenAlexResponse>().results
+                        } catch (e: Exception) {
+                            emptyList()
+                        }
+                    }
+                }
+
+                val d2ResultsList = d2Deferred.awaitAll()
+
+                for (i in d1Subset.indices) {
+                    val d1 = d1Subset[i]
+                    val d1Name = d1["name"] as String
+                    val works = d2ResultsList[i]
+                    for (work in works) {
+                        val workField = work.primary_topic?.display_name 
+                            ?: work.primary_topic?.field?.display_name 
+                            ?: "Collaborator"
+
+                        val authorships = work.authorships ?: emptyList()
+                        for (authShip in authorships) {
+                            val author = authShip.author ?: continue
+                            val authId = author.id ?: continue
+                            val authClean = authId.substringAfterLast("/")
+                            if (authClean !in excludeSet && authClean !in depth1Map.keys) {
+                                val name = author.display_name ?: "Unknown"
+                                val instName = authShip.institutions?.firstOrNull()?.display_name 
+                                    ?: "Independent Researcher"
+
+                                val existing = depth2Map[authClean]
+                                if (existing == null) {
+                                    depth2Map[authClean] = mutableMapOf(
+                                        "id" to authId,
+                                        "name" to name,
+                                        "institution" to instName,
+                                        "field" to workField,
+                                        "connection_path" to "Collaborates with $d1Name (connected via you)",
+                                        "joint_count" to 1
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Gather all author IDs to fetch h-index and works count in batches of 50
+            val allCollaborators = depth1Map.values.toList() + depth2Map.values.toList()
+            val allIds = allCollaborators.map { (it["id"] as String).substringAfterLast("/") }
+            val statsMap = mutableMapOf<String, Pair<Int, Int>>()
+
+            if (allIds.isNotEmpty()) {
+                val chunks = allIds.chunked(50)
+                val statsDeferred = chunks.map { chunk ->
+                    async(Dispatchers.IO) {
+                        try {
+                            val filterVal = "openalex:" + chunk.joinToString("|")
+                            httpClient.get("https://api.openalex.org/authors") {
+                                parameter("filter", filterVal)
+                                parameter("per_page", 50)
+                                parameter("mailto", "vikki.4me@gmail.com")
+                            }.body<OpenAlexAuthorsResponse>().results
+                        } catch (e: Exception) {
+                            emptyList()
+                        }
+                    }
+                }
+
+                val statsResults = statsDeferred.awaitAll()
+                for (results in statsResults) {
+                    for (author in results) {
+                        val authClean = author.id.substringAfterLast("/")
+                        val hIndex = author.summary_stats?.h_index ?: 0
+                        val worksCount = author.works_count ?: 0
+                        statsMap[authClean] = Pair(hIndex, worksCount)
+                    }
+                }
+            }
+
+            // Map maps to NetworkCollaborator list
+            val collaboratorsPool = mutableListOf<NetworkCollaborator>()
+
+            for (d1 in depth1Map.values) {
+                val authId = d1["id"] as String
+                val authClean = authId.substringAfterLast("/")
+                val stats = statsMap[authClean]
+                val worksCount = stats?.second ?: 10
+                val hIndex = stats?.first ?: 2
+
+                collaboratorsPool.add(NetworkCollaborator(
+                    id = authId,
+                    name = d1["name"] as String,
+                    institution = d1["institution"] as String,
+                    field = d1["field"] as String,
+                    connection_path = "Co-authored '${d1["shared_paper"] as String}' with you",
+                    relevance_score = minOf(99, 70 + (d1["joint_count"] as Int) * 5),
+                    papers_collaborated = d1["joint_count"] as Int,
+                    total_publications = worksCount,
+                    h_index = hIndex
+                ))
+            }
+
+            for (d2 in depth2Map.values) {
+                val authId = d2["id"] as String
+                val authClean = authId.substringAfterLast("/")
+                val stats = statsMap[authClean]
+                val worksCount = stats?.second ?: 10
+                val hIndex = stats?.first ?: 2
+
+                collaboratorsPool.add(NetworkCollaborator(
+                    id = authId,
+                    name = d2["name"] as String,
+                    institution = d2["institution"] as String,
+                    field = d2["field"] as String,
+                    connection_path = d2["connection_path"] as String,
+                    relevance_score = 65,
+                    papers_collaborated = 1,
+                    total_publications = worksCount,
+                    h_index = hIndex
+                ))
+            }
+
+            // Sort by relevance score
+            val sortedList = collaboratorsPool.sortedByDescending { it.relevance_score }
+            val startIndex = minOf(sortedList.size, offset)
+            val endIndex = minOf(sortedList.size, offset + limit)
+            sortedList.subList(startIndex, endIndex)
+
         } catch (e: Exception) {
-            handleNetworkException(e, base)
-            Log.e(tag, "getNetworkCollaborators failed", e)
-            emptyList()
+            handleNetworkException(e, null)
+            Log.e("ApiService", "getNetworkCollaborators failed", e)
+            emptyList<NetworkCollaborator>()
         }
     }
 
