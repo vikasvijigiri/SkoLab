@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AutoGraph
+import androidx.compose.material.icons.filled.BusinessCenter
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -73,8 +74,8 @@ import com.open.entropy.ui.screens.ProWorkspaceScreen
 import com.open.entropy.ui.screens.DailyDiscoveryScreen
 import com.open.entropy.ui.screens.CoLabWorkspaceScreen
 import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.Lightbulb
-import com.open.entropy.ui.screens.BrainstormingScreen
+import androidx.compose.material.icons.filled.AutoAwesome
+import com.open.entropy.ui.screens.AgentScreen
 import com.open.entropy.ui.theme.ResQitTheme
 import kotlinx.coroutines.launch
 
@@ -116,13 +117,13 @@ fun ResQitMainApp() {
         }
     }
 
-    val mainTabs = listOf("discover", "collabs", "papers", "nexus", "profile")
+    val mainTabs = listOf("discover", "collabs", "agent", "nexus", "industry")
     val dockItems = listOf(
         DockItem("discover", Icons.Filled.Hub, "Home", badgeCount = 1),
         DockItem("collabs", Icons.Filled.Groups, "Collabs", hasBadgeDot = true),
-        DockItem("brainstorm", Icons.Filled.Lightbulb, "Brainstorm"),
+        DockItem("agent", Icons.Filled.AutoAwesome, "Agent"),
         DockItem("nexus", Icons.Filled.AutoGraph, "Network"),
-        DockItem("profile", Icons.Outlined.Person, "You")
+        DockItem("industry", Icons.Filled.BusinessCenter, "Industry")
     )
 
     ResQitScaffold { innerPadding ->
@@ -287,6 +288,9 @@ fun ResQitMainApp() {
                             onLoadingStateChanged = { isFeedLoading = it },
                             onNavigateToLogicEngine = {
                                 navController.navigate("logic_engine")
+                            },
+                            onNavigateToDailyDiscovery = {
+                                navController.navigate("daily_discovery")
                             }
                         )
                     }
@@ -324,7 +328,7 @@ fun ResQitMainApp() {
                     }
                 }
                 composable(
-                    route = "brainstorm",
+                    route = "agent",
                     enterTransition = {
                         fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
                     }
@@ -335,8 +339,25 @@ fun ResQitMainApp() {
                             .screenSafeArea(includeBottom = false)
                             .padding(bottom = ScreenInsets.bottomNavClearance)
                     ) {
-                        BrainstormingScreen(
-                            onSaveIdea = { /* To be implemented */ }
+                        AgentScreen()
+                    }
+                }
+                composable(
+                    route = "industry",
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                    }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .screenSafeArea(includeBottom = false)
+                            .padding(bottom = ScreenInsets.bottomNavClearance)
+                    ) {
+                        com.open.entropy.ui.screens.IndustryScreen(
+                            onNavigateToReader = { title, doi ->
+                                navController.navigate("reader/${title.encodeForRoute()}/${doi.encodeForRoute()}")
+                            }
                         )
                     }
                 }

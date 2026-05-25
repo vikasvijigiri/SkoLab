@@ -13,6 +13,9 @@ import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.coroutines.*
+import android.content.Context
+import android.net.Uri
+import io.ktor.client.request.forms.*
 
 // ── Data models ───────────────────────────────────────────────────────────────
 
@@ -22,6 +25,12 @@ data class AiStatusResponse(
     val llm_active: Boolean,
     val model: String,
     val key_prefix: String
+)
+
+@Serializable
+data class UploadDocumentResponse(
+    val filename: String,
+    val extracted_text: String
 )
 
 @Serializable
@@ -65,7 +74,7 @@ data class PrimaryLocation(
 
 @Serializable data class SourceInfo(val display_name: String? = null)
 
-@Serializable data class OpenAlexResponse(val results: List<OpenAlexWork>)
+@Serializable data class OpenAlexResponse(val results: List<OpenAlexWork> = emptyList())
 
 @Serializable
 data class OpenAlexAuthor(
@@ -81,9 +90,8 @@ data class OpenAlexInstitution(
     val display_name: String? = null
 )
 
-@Serializable
-data class OpenAlexAuthorsResponse(
-    val results: List<OpenAlexAuthor>
+@Serializable data class OpenAlexAuthorsResponse(
+    val results: List<OpenAlexAuthor> = emptyList()
 )
 
 @Serializable
@@ -297,6 +305,18 @@ data class ChatRequest(
 data class ChatResponse(
     val author_id: String,
     val author_name: String,
+    val reply: String
+)
+
+@Serializable
+data class AgentChatRequest(
+    val message: String,
+    val history: List<Map<String, String>>,
+    val mode: String
+)
+
+@Serializable
+data class AgentChatResponse(
     val reply: String
 )
 
@@ -734,8 +754,8 @@ class ApiService {
             val response: OpenAlexResponse = httpClient.get("https://api.openalex.org/works") {
                 parameter("filter", "publication_year:$prevYear|$year")
                 if (!focus.isNullOrBlank()) {
-                    // OpenAlex semantic search: use search param and don't force cited_by sort
-                    parameter("search", focus)
+                    // OpenAlex semantic search: use default.search param and don't force cited_by sort
+                    parameter("default.search", focus)
                     parameter("sort", "relevance_score:desc")
                 } else {
                     // Fallback to highest cited for global generic lists
@@ -1212,6 +1232,63 @@ class ApiService {
             handleNetworkException(e, base)
             Log.e(tag, "chatWithAuthor failed", e)
             null
+        }
+    }
+
+    // ── Agent Integration ──────────────────────────────────────────────────────────
+    suspend fun chatWithAgent(message: String, history: List<ChatMessage>, mode: String = "RESEARCH"): String {
+        return withContext(Dispatchers.IO) {
+            val base = baseUrl() ?: return@withContext "API is not configured."
+            try {
+                val histMaps = history.map { mapOf("role" to it.role, "content" to it.content) }
+                val request = AgentChatRequest(
+                    message = message,
+                    history = histMaps,
+                    mode = mode
+                )
+                
+                val chatResp = httpClient.post("$base/agent/chat") {
+                    contentType(ContentType.Application.Json)
+                    setBody(request)
+                    timeout {
+                        requestTimeoutMillis = 60000
+                    }
+                }.body<AgentChatResponse>()
+
+                chatResp.reply
+            } catch (e: Exception) {
+                Log.e("ApiService", "Error in chatWithAgent: ${e.message}")
+                throw e
+            }
+        }
+    }
+
+    suspend fun uploadDocument(uri: Uri, context: Context, fileName: String): UploadDocumentResponse? {
+        return withContext(Dispatchers.IO) {
+            val base = baseUrl() ?: return@withContext null
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri) ?: return@withContext null
+                val bytes = inputStream.readBytes()
+                inputStream.close()
+                
+                val response = httpClient.post("$base/agent/upload_document") {
+                    setBody(MultiPartFormDataContent(
+                        formData {
+                            append("file", bytes, Headers.build {
+                                append(HttpHeaders.ContentDisposition, "filename=\"$fileName\"")
+                            })
+                        }
+                    ))
+                    timeout {
+                        requestTimeoutMillis = 60000
+                    }
+                }.body<UploadDocumentResponse>()
+                
+                response
+            } catch (e: Exception) {
+                Log.e("ApiService", "Error in uploadDocument: ${e.message}")
+                null
+            }
         }
     }
 }

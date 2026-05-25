@@ -60,19 +60,8 @@ fun AuthorDetailScreen(
                 }
                 
                 if (data == null && cached == null) {
-                    // Show a short warning/Toast to handle errors in an industry-standard way
-                    android.widget.Toast.makeText(context, "ResQit server unreachable. Using local fallback database.", android.widget.Toast.LENGTH_LONG).show()
-                    // Graceful mock database fallback
-                    val mockAuthor = MockData.authors.find {
-                        it.name.equals(displayName, ignoreCase = true) ||
-                        it.name.contains(displayName, ignoreCase = true) ||
-                        displayName.contains(it.name, ignoreCase = true)
-                    }
-                    data = if (mockAuthor != null) {
-                        mockAuthor.toAuthorResponse()
-                    } else {
-                        MockData.generateDynamicMockAuthor(displayName, authorId)
-                    }
+                    // Stop falling back to MockData (dummy profiles)
+                    android.widget.Toast.makeText(context, "ResQit server unreachable. Please try again later.", android.widget.Toast.LENGTH_LONG).show()
                 }
                 
                 if (data != null) {
@@ -129,17 +118,7 @@ fun AuthorDetailScreen(
                                     Log.e("AuthorDetailScreen", "onSelectResearcher API searchAuthor failed", e)
                                 }
                                 if (newData == null) {
-                                    android.widget.Toast.makeText(context, "ResQit server unreachable. Using local fallback.", android.widget.Toast.LENGTH_LONG).show()
-                                    val mockAuthor = MockData.authors.find {
-                                        it.name.equals(name, ignoreCase = true) ||
-                                        it.name.contains(name, ignoreCase = true) ||
-                                        name.contains(it.name, ignoreCase = true)
-                                    }
-                                    newData = if (mockAuthor != null) {
-                                        mockAuthor.toAuthorResponse()
-                                    } else {
-                                        MockData.generateDynamicMockAuthor(name)
-                                    }
+                                    android.widget.Toast.makeText(context, "ResQit server unreachable. Please try again later.", android.widget.Toast.LENGTH_LONG).show()
                                 }
                                 authorData = newData
                                 isLoading = false
