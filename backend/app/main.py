@@ -7,7 +7,9 @@ import random
 import httpx
 import os
 import asyncio
-from fastapi import FastAPI, Query, BackgroundTasks
+import io
+import pdfplumber
+from fastapi import FastAPI, Query, BackgroundTasks, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional, Union
 from pydantic import BaseModel
@@ -978,11 +980,11 @@ async def search_author(
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 @app.get("/daily_feed")
-async def get_daily_feed(author_id: Optional[str] = None):
+async def get_daily_feed(author_id: Optional[str] = None, query_fallback: Optional[str] = None):
     # Caching bypassed as per complete cache removal requirement
     from fastapi import HTTPException
     try:
-        data = await pipeline_services.get_daily_feed(author_id)
+        data = await pipeline_services.get_daily_feed(author_id, query_fallback=query_fallback)
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1029,11 +1031,18 @@ async def get_journal_advisor(author_id: str = Query(...)):
 
 @app.get("/network_collaborators")
 async def get_network_collaborators(author_id: str = Query(...), limit: int = Query(10), offset: int = Query(0), exclude_ids: str = Query(""), field: str = Query("")):
-    # Caching bypassed
     from fastapi import HTTPException
+    
+    cache_key = f"{author_id}_{limit}_{offset}_{exclude_ids}_{field}"
+    cached_data = await network_collaborators_cache.get(cache_key)
+    if cached_data is not None:
+        return cached_data
+        
     excl_list = [x.strip() for x in exclude_ids.split(",")] if exclude_ids else []
     try:
         data = await pipeline_services.get_network_collaborators(author_id, limit, offset, excl_list, field)
+        if data:
+            await network_collaborators_cache.set(cache_key, data)
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1049,4 +1058,55 @@ async def chat_with_author(req: ChatRequest):
     )
     return data
 
-# Trigger reload
+@app.post("/agent/upload_document")
+async def upload_document(file: UploadFile = File(...)):
+    try:
+        content = await file.read()
+        extracted_text = ""
+        filename = file.filename or "unknown"
+        
+        if file.content_type == "application/pdf" or filename.endswith(".pdf"):
+            with pdfplumber.open(io.BytesIO(content)) as pdf:
+                for page in pdf.pages:
+                    text = page.extract_text()
+                    if text:
+                        extracted_text += text + "\n"
+        else:
+            # Assume text or markdown
+            extracted_text = content.decode("utf-8", errors="replace")
+            
+        return {"filename": filename, "extracted_text": extracted_text.strip()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class AgentChatRequest(BaseModel):
+    message: str
+    history: list[dict[str, str]] = []
+    mode: str = "RESEARCH"
+
+@app.post("/agent/chat")
+async def agent_chat(req: AgentChatRequest):
+    try:
+        system_prompt = f"You are ResQit Copilot, an expert AI {req.mode} assistant for a senior researcher. Be concise and professional."
+        messages = [{"role": "system", "content": system_prompt}]
+        for h in req.history[-10:]:
+            if h.get("role") in ["user", "assistant"]:
+                messages.append({"role": h["role"], "content": h.get("content", "")})
+        messages.append({"role": "user", "content": req.message})
+        
+        from app.services.pipeline_services import is_llm_working
+        if is_llm_working():
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                res = await client.post(
+                    pipeline_services.base_url,
+                    headers={"Authorization": f"Bearer {pipeline_services.api_key}", "Content-Type": "application/json"},
+                    json={"model": pipeline_services.model, "messages": messages, "temperature": 0.5, "max_tokens": 1024},
+                    timeout=20.0
+                )
+                if res.status_code == 200:
+                    reply = res.json()['choices'][0]['message']['content'].strip()
+                    return {"reply": reply}
+        return {"reply": "I am currently offline or rate-limited. Your query has been noted."}
+    except Exception as e:
+        print(f"Agent chat failed: {e}")
+        return {"reply": "An error occurred while processing your query. Please try again."}

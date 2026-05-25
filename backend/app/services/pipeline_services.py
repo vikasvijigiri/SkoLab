@@ -62,24 +62,29 @@ class PipelineServices:
             except Exception as e:
                 print(f"[Firestore Cache Error] daily_feeds lookup failed: {e}", flush=True)
 
-        if not author_id:
-            raise ValueError("No author ID provided for daily feed generation.")
+        if not author_id and not query_fallback:
+            raise ValueError("No author ID or query fallback provided for daily feed generation.")
 
-        profile = await self._fetch_author_profile(author_id)
-        if not profile:
-            raise ValueError(f"Author with ID '{author_id}' not found on OpenAlex.")
+        concepts = []
+        author_name = "Researcher"
+        if author_id:
+            profile = await self._fetch_author_profile(author_id)
+            if not profile:
+                raise ValueError(f"Author with ID '{author_id}' not found on OpenAlex.")
 
-        author_name = profile.get("display_name", "Researcher")
-        concepts_list = profile.get("x_concepts", [])
-        concepts = [c.get("display_name") for c in concepts_list if c.get("level") in [1, 2]]
-        if not concepts:
-            concepts = [c.get("display_name") for c in concepts_list[:3]]
+            author_name = profile.get("display_name", "Researcher")
+            concepts_list = profile.get("x_concepts", [])
+            concepts = [c.get("display_name") for c in concepts_list if c.get("level") in [1, 2]]
+            if not concepts:
+                concepts = [c.get("display_name") for c in concepts_list[:3]]
 
-        if not concepts:
-            raise ValueError(f"No research concepts associated with researcher profile '{author_name}'.")
+            if not concepts:
+                raise ValueError(f"No research concepts associated with researcher profile '{author_name}'.")
 
-        # Search recent papers from OpenAlex
-        search_term = " OR ".join([f'"{c}"' for c in concepts[:3]])
+            # Search recent papers from OpenAlex
+            search_term = " OR ".join([f'"{c}"' for c in concepts[:3]])
+        elif query_fallback:
+            search_term = query_fallback
         params = {
             "search": search_term,
             "per_page": 20,
@@ -620,7 +625,21 @@ Provide your response in this exact JSON format:
             raise ValueError("No valid author ID provided for collaborator network extraction.")
 
         db = self._get_firestore_db()
-        # Firestore caching bypassed as per complete cache removal requirement
+        if db:
+            try:
+                doc = db.collection("network_collaborators").document(f"{clean_id}_{field}").get(timeout=2.0)
+                if doc.exists:
+                    print(f"[Firestore Cache Hit] network_collaborators for author_id={clean_id}", flush=True)
+                    cached_data = doc.to_dict()
+                    if cached_data and "collaborators" in cached_data:
+                        collaborators = cached_data["collaborators"]
+                        # Filter by exclude_set if necessary
+                        if exclude_ids:
+                            exclude_set = set(exclude_ids)
+                            collaborators = [c for c in collaborators if c["id"].split("/")[-1] not in exclude_set]
+                        return collaborators[offset:offset+limit]
+            except Exception as e:
+                print(f"[Firestore Cache Error] network_collaborators lookup failed: {e}", flush=True)
 
         exclude_set = set(exclude_ids) if exclude_ids else set()
         exclude_set.add(clean_id)

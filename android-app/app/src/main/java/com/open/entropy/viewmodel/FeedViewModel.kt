@@ -283,10 +283,12 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                     currentFilter.name
                 } else if (profile != null && profile.expertise.isNotEmpty()) {
                     profile.expertise.first() // Uses their #1 OpenAlex expertise field!
+                } else if (profile != null && !profile.field_of_study.isNullOrBlank()) {
+                    profile.field_of_study
                 } else if (baseFocus.isNotBlank() && baseFocus.lowercase() != "research") {
                     baseFocus
                 } else {
-                    "Computer Science" // Safe semantic fallback so it never defaults to global raw citations
+                    "Physics" // Safe semantic fallback so it never defaults to global raw citations, using Physics for testing
                 }
                 
                 val displayFocus = focus
