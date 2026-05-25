@@ -1,5 +1,6 @@
 package com.open.entropy.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -111,6 +112,13 @@ fun FeedScreen(
     var isSearchExpanded by remember { mutableStateOf(false) }
     var searchMode by remember { mutableStateOf(0) } // 0 = Papers, 1 = Profiles
     var searchQuery by remember { mutableStateOf("") }
+    var selectedCountryFilter by remember { mutableStateOf("Global") }
+
+    BackHandler(enabled = isSearchExpanded) {
+        isSearchExpanded = false
+        searchQuery = ""
+        searchViewModel.onSearchQueryChanged("")
+    }
 
 
     val context = LocalContext.current
@@ -228,16 +236,6 @@ fun FeedScreen(
                                             }
                                         }
                                     )
-                                }
-                                // Close button
-                                TextButton(
-                                    onClick = {
-                                        isSearchExpanded = false
-                                        searchQuery = ""
-                                        searchViewModel.onSearchQueryChanged("")
-                                    }
-                                ) {
-                                    Text("Cancel", color = EntropiColors.Blue1, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                                 }
                             }
                             
@@ -424,13 +422,64 @@ fun FeedScreen(
                 }
 
                 // Vertical Infinite Feed of Collaborators
-                if (uiState.isLoading && uiState.suggestedConnections.isEmpty()) {
+                
+                // NEW: People You May Know Header + Filter Chips
+                item {
+                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.People, contentDescription = null, tint = EntropiColors.Blue1, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "People You May Know",
+                                color = EntropiColors.Text,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
+                        }
+                        
+                        Spacer(Modifier.height(12.dp))
+                        
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(listOf("Global", "USA", "UK", "India", "Germany", "Canada", "Australia", "France", "Japan")) { country ->
+                                val isSelected = selectedCountryFilter == country
+                                Surface(
+                                    onClick = { selectedCountryFilter = country },
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = if (isSelected) EntropiColors.Blue1 else EntropiColors.Card2,
+                                    border = BorderStroke(1.dp, if (isSelected) Color.Transparent else EntropiColors.Border)
+                                ) {
+                                    Text(
+                                        text = country,
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                                        color = if (isSelected) Color.White else EntropiColors.Text2,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                val filteredConnections = if (selectedCountryFilter == "Global") {
+                    uiState.suggestedConnections
+                } else {
+                    uiState.suggestedConnections.filter { 
+                        it.author.country.contains(selectedCountryFilter, ignoreCase = true) || 
+                        it.author.institution.contains(selectedCountryFilter, ignoreCase = true) 
+                    }
+                }
+
+                if (uiState.isLoading && filteredConnections.isEmpty()) {
                     items(5) {
                         Box(modifier = Modifier.padding(horizontal = 20.dp)) {
                             PaperShimmerCard() // Shimmer loader
                         }
                     }
-                } else if (uiState.suggestedConnections.isEmpty()) {
+                } else if (filteredConnections.isEmpty()) {
                     item {
                         Box(
                             modifier = Modifier.fillMaxWidth().padding(32.dp),
@@ -444,7 +493,7 @@ fun FeedScreen(
                         }
                     }
                 } else {
-                    items(uiState.suggestedConnections.chunked(2)) { rowItems ->
+                    items(filteredConnections.chunked(2)) { rowItems ->
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                             horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -560,7 +609,7 @@ fun TopBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .padding(horizontal = 20.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -1503,6 +1552,22 @@ fun ConnectionCard(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Start
+            )
+
+            val inferredRole = when {
+                connection.author.totalPapers > 50 -> "Professor"
+                connection.author.totalPapers > 15 -> "Postdoc"
+                else -> "PhD Candidate"
+            }
+            Text(
+                text = "$inferredRole • ${connection.author.country.ifEmpty { "Unknown" }}",
+                fontFamily = SpaceGroteskFontFamily,
+                fontSize = 9.sp,
+                color = EntropiColors.Text2,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                textAlign = TextAlign.Start,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
 
             Text(

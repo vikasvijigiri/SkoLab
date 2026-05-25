@@ -175,7 +175,13 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
         viewModelScope.launch {
             try {
                 val currentOffset = connections.size
-                val newNetwork = apiService.getNetworkCollaborators(expandId, limit = 10, offset = currentOffset, excludeIds = emptyList())
+                val newNetwork = apiService.getNetworkCollaborators(
+                    authorId = expandId,
+                    limit = 10,
+                    offset = currentOffset,
+                    excludeIds = emptyList(),
+                    excludeName = currentState.user.name
+                )
                 
                 if (newNetwork.isNotEmpty()) {
                     val focus = currentState.user.researchFocus
@@ -341,7 +347,12 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                 try {
                     val targetId = profile?.id ?: "fallback_seed"
                     Log.i("FeedViewModel", "Fetching network collaborators for id: $targetId")
-                    val networkList = apiService.getNetworkCollaborators(targetId, limit = 10, offset = 0)
+                    val networkList = apiService.getNetworkCollaborators(
+                        authorId = targetId,
+                        limit = 10,
+                        offset = 0,
+                        excludeName = name
+                    )
                     if (networkList.isNotEmpty()) {
                         val initialConnections = networkList.map { collab ->
                             val isDepth1 = collab.connection_path.contains("Co-authored")

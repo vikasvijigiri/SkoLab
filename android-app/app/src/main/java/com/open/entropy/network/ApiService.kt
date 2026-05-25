@@ -476,7 +476,11 @@ class ApiService {
         } else {
             name
         }
-        val base = baseUrl() ?: throw Exception("ResQit backend services are currently unreachable.")
+        val base = baseUrl()
+        if (base == null) {
+            Log.i(tag, "searchAuthor: backend base URL is null. Querying OpenAlex directly...")
+            return fetchAuthorFromOpenAlex(mappedName, id)
+        }
         try {
             Log.d(tag, "Searching author via backend: $mappedName, id: $id @ $base")
             val response = httpClient.get("$base/search_author") {
@@ -488,9 +492,13 @@ class ApiService {
             val decoded: AuthorResponse = lenientJson.decodeFromString(bodyText)
             return decoded
         } catch (e: Exception) {
-            handleNetworkException(e, base)
-            Log.e(tag, "searchAuthor backend failed", e)
-            throw e
+            Log.e(tag, "searchAuthor backend failed, falling back to direct OpenAlex query", e)
+            try {
+                return fetchAuthorFromOpenAlex(mappedName, id)
+            } catch (ex: Exception) {
+                handleNetworkException(e, base)
+                throw e
+            }
         }
     }
 
@@ -951,7 +959,13 @@ class ApiService {
         }
     }
 
-    suspend fun getNetworkCollaborators(authorId: String, limit: Int = 10, offset: Int = 0, excludeIds: List<String> = emptyList()): List<NetworkCollaborator> = coroutineScope {
+    suspend fun getNetworkCollaborators(
+        authorId: String,
+        limit: Int = 10,
+        offset: Int = 0,
+        excludeIds: List<String> = emptyList(),
+        excludeName: String? = null
+    ): List<NetworkCollaborator> = coroutineScope {
         val cleanId = authorId.substringAfterLast("/")
         if (cleanId.isBlank() || cleanId == "fallback_seed") {
             return@coroutineScope emptyList<NetworkCollaborator>()
@@ -1102,6 +1116,16 @@ class ApiService {
 
             for (d1 in depth1Map.values) {
                 val authId = d1["id"] as String
+                val name = d1["name"] as String
+                if (excludeName != null) {
+                    val normCollab = name.trim().lowercase()
+                    val normExclude = excludeName.trim().lowercase()
+                    if (normCollab == normExclude || 
+                        (normExclude.length > 3 && normCollab.contains(normExclude)) || 
+                        (normCollab.length > 3 && normExclude.contains(normCollab))) {
+                        continue
+                    }
+                }
                 val authClean = authId.substringAfterLast("/")
                 val stats = statsMap[authClean]
                 val worksCount = stats?.second ?: 10
@@ -1109,7 +1133,7 @@ class ApiService {
 
                 collaboratorsPool.add(NetworkCollaborator(
                     id = authId,
-                    name = d1["name"] as String,
+                    name = name,
                     institution = d1["institution"] as String,
                     field = d1["field"] as String,
                     connection_path = "Co-authored '${d1["shared_paper"] as String}' with you",
@@ -1122,6 +1146,16 @@ class ApiService {
 
             for (d2 in depth2Map.values) {
                 val authId = d2["id"] as String
+                val name = d2["name"] as String
+                if (excludeName != null) {
+                    val normCollab = name.trim().lowercase()
+                    val normExclude = excludeName.trim().lowercase()
+                    if (normCollab == normExclude || 
+                        (normExclude.length > 3 && normCollab.contains(normExclude)) || 
+                        (normCollab.length > 3 && normExclude.contains(normCollab))) {
+                        continue
+                    }
+                }
                 val authClean = authId.substringAfterLast("/")
                 val stats = statsMap[authClean]
                 val worksCount = stats?.second ?: 10
@@ -1129,7 +1163,7 @@ class ApiService {
 
                 collaboratorsPool.add(NetworkCollaborator(
                     id = authId,
-                    name = d2["name"] as String,
+                    name = name,
                     institution = d2["institution"] as String,
                     field = d2["field"] as String,
                     connection_path = d2["connection_path"] as String,

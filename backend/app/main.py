@@ -344,6 +344,21 @@ async def get_daily_conjecture(author_id: Optional[str] = Query(None), name: Opt
     clean_id = author_id.split("/")[-1] if author_id else None
     from fastapi import HTTPException
     
+    fallback_conjecture = ConjectureResponse(
+        id="fallback-1",
+        category="Quantum Computing",
+        title="The Qubit Coherence Paradox",
+        hypothesis="A researcher prepares a qubit in the state $$\\frac{1}{\\sqrt{2}}(|0\\rangle + |1\\rangle)$$ and subjects it to continuous, strong projective measurements in the computational basis. According to the quantum Zeno effect, what should happen to the state's evolution?",
+        options=[
+            "The state rapidly collapses into a mixed state with equal probabilities.",
+            "The state's evolution is effectively 'frozen', remaining in its initial superposition.",
+            "The measurement completely decoheres the state into $|0\\rangle$ only.",
+            "The state undergoes rapid oscillation between $|0\\rangle$ and $|1\\rangle$."
+        ],
+        correctOptionIndex=1,
+        explanation="The quantum Zeno effect describes how frequent observation 'freezes' the evolution of a quantum system, preventing it from changing state."
+    )
+    
     try:
         async with httpx.AsyncClient(timeout=15.0, headers=headers) as client:
             if clean_id:
@@ -360,7 +375,7 @@ async def get_daily_conjecture(author_id: Optional[str] = Query(None), name: Opt
                         resolved_id = author_data["id"].split("/")[-1]
             
             if not author_data or not resolved_id:
-                raise HTTPException(status_code=404, detail="Author not found to generate conjecture.")
+                return fallback_conjecture
 
             # Fetch recent works of the author
             works_res = await client.get(
@@ -374,11 +389,9 @@ async def get_daily_conjecture(author_id: Optional[str] = Query(None), name: Opt
             )
             works = works_res.json().get("results", []) if works_res.status_code == 200 else []
             if not works:
-                raise HTTPException(status_code=404, detail="No publications found for this author to generate conjecture.")
+                return fallback_conjecture
     except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=500, detail=f"Failed to fetch profile: {str(e)}")
+        return fallback_conjecture
 
     # Build works context for LLM
     works_context = "\n".join([
@@ -421,11 +434,11 @@ Only output the JSON object, do not wrap it in markdown or comments. Ensure it i
 
     from app.services.summarization_service import is_llm_working
     if not is_llm_working():
-        raise HTTPException(status_code=503, detail="LLM service is currently unavailable.")
+        return fallback_conjecture
         
     groq_key = os.getenv("GROQ_API")
     if not groq_key:
-        raise HTTPException(status_code=500, detail="Groq API key not configured on backend.")
+        return fallback_conjecture
         
     try:
         async with httpx.AsyncClient() as client:
@@ -441,11 +454,9 @@ Only output the JSON object, do not wrap it in markdown or comments. Ensure it i
                 conjecture_data = json.loads(raw_content)
                 return ConjectureResponse(**conjecture_data)
             else:
-                raise HTTPException(status_code=502, detail=f"LLM service error: {res.text}")
+                return fallback_conjecture
     except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=500, detail=f"Conjecture generation failed: {str(e)}")
+        return fallback_conjecture
 
 @app.get("/")
 def read_root():

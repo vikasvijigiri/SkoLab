@@ -245,11 +245,10 @@ fun ConjectureCard(
                                     fontSize = 14.sp
                                 )
 
-                                Text(
-                                    text = option,
+                                MarkdownText(
+                                    markdown = option,
                                     color = if (isSolved && isCorrectOption) TextPrimary else TextSecondary,
                                     fontSize = 12.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                     modifier = Modifier.weight(1f)
                                 )
 

@@ -34,6 +34,7 @@ import com.open.entropy.auth.AuthManager
 import com.open.entropy.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.open.entropy.ui.components.MarkdownText
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -311,11 +312,11 @@ fun ChatBubble(message: ChatMessage, isMe: Boolean) {
             modifier = Modifier.widthIn(max = 280.dp)
         ) {
             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                Text(
-                    text = message.content,
+                MarkdownText(
+                    markdown = message.content,
                     color = if (isMe) TextPrimary else TextSecondary,
                     fontSize = 13.sp,
-                    lineHeight = 17.sp
+                    modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(4.dp))
                 Row(
