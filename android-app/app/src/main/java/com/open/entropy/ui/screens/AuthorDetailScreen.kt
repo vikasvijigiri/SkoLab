@@ -89,24 +89,16 @@ fun AuthorDetailScreen(
     Scaffold(
         containerColor = BgPrimary,
         topBar = {
-            TopAppBar(
-                title = {
-                    val parts = authorName.split("|")
-                    val displayName = parts.firstOrNull() ?: authorName
-                    Text(
-                        text = authorData?.display_name ?: displayName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = TextPrimary)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                }
+            }
         }
     ) { innerPadding ->
         Box(

@@ -73,6 +73,8 @@ import com.open.entropy.ui.screens.ProWorkspaceScreen
 import com.open.entropy.ui.screens.DailyDiscoveryScreen
 import com.open.entropy.ui.screens.CoLabWorkspaceScreen
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Lightbulb
+import com.open.entropy.ui.screens.BrainstormingScreen
 import com.open.entropy.ui.theme.ResQitTheme
 import kotlinx.coroutines.launch
 
@@ -118,7 +120,7 @@ fun ResQitMainApp() {
     val dockItems = listOf(
         DockItem("discover", Icons.Filled.Hub, "Home", badgeCount = 1),
         DockItem("collabs", Icons.Filled.Groups, "Collabs", hasBadgeDot = true),
-        DockItem("papers", Icons.AutoMirrored.Filled.MenuBook, "Papers"),
+        DockItem("brainstorm", Icons.Filled.Lightbulb, "Brainstorm"),
         DockItem("nexus", Icons.Filled.AutoGraph, "Network"),
         DockItem("profile", Icons.Outlined.Person, "You")
     )
@@ -318,6 +320,23 @@ fun ResQitMainApp() {
                                     restoreState = true
                                 }
                             }
+                        )
+                    }
+                }
+                composable(
+                    route = "brainstorm",
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                    }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .screenSafeArea(includeBottom = false)
+                            .padding(bottom = ScreenInsets.bottomNavClearance)
+                    ) {
+                        BrainstormingScreen(
+                            onSaveIdea = { /* To be implemented */ }
                         )
                     }
                 }

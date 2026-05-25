@@ -734,9 +734,13 @@ class ApiService {
             val response: OpenAlexResponse = httpClient.get("https://api.openalex.org/works") {
                 parameter("filter", "publication_year:$prevYear|$year")
                 if (!focus.isNullOrBlank()) {
+                    // OpenAlex semantic search: use search param and don't force cited_by sort
                     parameter("search", focus)
+                    parameter("sort", "relevance_score:desc")
+                } else {
+                    // Fallback to highest cited for global generic lists
+                    parameter("sort", "cited_by_count:desc")
                 }
-                parameter("sort", "cited_by_count:desc")
                 parameter("per_page", limit)
                 parameter("mailto", "vikki.4me@gmail.com")
             }.body()

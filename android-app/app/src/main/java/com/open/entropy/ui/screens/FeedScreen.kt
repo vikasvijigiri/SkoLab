@@ -421,6 +421,76 @@ fun FeedScreen(
                     }
                 }
 
+                // Semantic Feed: Trending Now
+                item {
+                    SectionHeader(
+                        title = "🔥 Trending Now",
+                        onSeeAll = {} // Hide "See all" since it's an infinite semantic feed
+                    )
+                }
+                
+                if (uiState.isLoading && uiState.trendingPapers.isEmpty()) {
+                    items(3) {
+                        Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+                            PaperShimmerCard()
+                        }
+                    }
+                } else {
+                    itemsIndexed(uiState.trendingPapers) { index, paper ->
+                        val animatedProgress = remember { Animatable(0f) }
+                        LaunchedEffect(Unit) {
+                            delay(index * 40L)
+                            animatedProgress.animateTo(1f, animationSpec = tween(300))
+                        }
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 20.dp)
+                                .graphicsLayer(
+                                    alpha = animatedProgress.value,
+                                    translationY = (1f - animatedProgress.value) * 20.dp.value
+                                )
+                        ) {
+                            val accentColor = when (index % 3) {
+                                0 -> EntropiColors.Gold1
+                                1 -> EntropiColors.Cyan
+                                else -> EntropiColors.Red
+                            }
+                            PaperFeedCard(
+                                paper = paper,
+                                accentColor = accentColor,
+                                onClick = { onPaperClick(paper.id) }
+                            )
+                        }
+                    }
+                }
+
+                // Continue Reading
+                if (uiState.continueReading.isNotEmpty()) {
+                    item {
+                        SectionHeader(
+                            title = "📖 Continue Reading",
+                            onSeeAll = {}
+                        )
+                    }
+                    item {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(horizontal = 20.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(uiState.continueReading) { progress ->
+                                ResumeCard(
+                                    progress = progress,
+                                    onClick = { onPaperClick(progress.paper.id) },
+                                    onResume = {
+                                        onNavigateToReader(progress.paper.title, progress.paper.pdfUrl ?: "https://arxiv.org/pdf/1706.03762.pdf")
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // Vertical Infinite Feed of Collaborators
                 
                 // NEW: People You May Know Header + Filter Chips

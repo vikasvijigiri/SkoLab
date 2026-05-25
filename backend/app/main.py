@@ -441,7 +441,7 @@ Only output the JSON object, do not wrap it in markdown or comments. Ensure it i
         return fallback_conjecture
         
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             res = await client.post(
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},

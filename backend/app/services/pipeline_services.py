@@ -149,7 +149,7 @@ class PipelineServices:
                     "max_tokens": 50
                 }
                 try:
-                    async with httpx.AsyncClient() as client:
+                    async with httpx.AsyncClient(timeout=30.0) as client:
                         res = await client.post(
                             self.base_url,
                             headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
@@ -292,7 +292,7 @@ class PipelineServices:
                     "max_tokens": 100
                 }
                 try:
-                    async with httpx.AsyncClient() as client:
+                    async with httpx.AsyncClient(timeout=30.0) as client:
                         res = await client.post(
                             self.base_url,
                             headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
@@ -404,7 +404,7 @@ Provide your response in this exact JSON format:
                 "max_tokens": 300
             }
             try:
-                async with httpx.AsyncClient() as client:
+                async with httpx.AsyncClient(timeout=30.0) as client:
                     res = await client.post(
                         self.base_url,
                         headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
@@ -571,7 +571,7 @@ Provide your response in this exact JSON format:
                 "max_tokens": 400
             }
             try:
-                async with httpx.AsyncClient() as client:
+                async with httpx.AsyncClient(timeout=30.0) as client:
                     res = await client.post(
                         self.base_url,
                         headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
@@ -890,7 +890,7 @@ Guidelines:
                 "max_tokens": 150
             }
             try:
-                async with httpx.AsyncClient() as client:
+                async with httpx.AsyncClient(timeout=30.0) as client:
                     res = await client.post(
                         self.base_url,
                         headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
