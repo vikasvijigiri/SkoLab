@@ -15,12 +15,82 @@ function Find-ProjectRoot {
     }
     $docs = Join-Path $env:USERPROFILE "Documents"
     $match = Get-ChildItem $docs -Directory -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -like "Entro*" -or $_.Name -eq "QyRus" } |
+        Where-Object { $_.Name -eq "ResQit" -or $_.Name -like "Entro*" -or $_.Name -eq "QyRus" } |
         Select-Object -First 1
     if (-not $match) {
-        throw "Could not find QyRus or Entro* project folder under $docs"
+        throw "Could not find ResQit, QyRus, or Entro* project folder under $docs"
     }
     return $match.FullName
+}
+
+function Stop-GradleDaemons {
+    param(
+        [string]$GradleProjectDir
+    )
+
+    $wrapper = Join-Path $GradleProjectDir "gradlew.bat"
+    if (Test-Path $wrapper) {
+        Write-Host "Stopping Gradle daemons..."
+        Push-Location $GradleProjectDir
+        try {
+            & .\gradlew.bat --stop | Out-Null
+        } catch {
+            Write-Warning "Gradle daemon stop failed: $($_.Exception.Message)"
+        } finally {
+            Pop-Location
+        }
+    }
+}
+
+function Remove-BuildArtifacts {
+    param(
+        [string]$GradleProjectDir
+    )
+
+    foreach ($path in @(
+        (Join-Path $GradleProjectDir ".gradle"),
+        (Join-Path $GradleProjectDir "build"),
+        (Join-Path $GradleProjectDir "app\build")
+    )) {
+        if (Test-Path $path) {
+            Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Invoke-DebugBuild {
+    param(
+        [string]$GradleProjectDir
+    )
+
+    $env:KOTLIN_COMPILER_EXECUTION_STRATEGY = "in-process"
+    $gradleArgs = @(
+        "clean",
+        ":app:assembleDebug",
+        "--no-daemon",
+        "--rerun-tasks",
+        "--no-build-cache"
+    )
+
+    Push-Location $GradleProjectDir
+    try {
+        & .\gradlew.bat @gradleArgs
+        if ($LASTEXITCODE -eq 0) {
+            return
+        }
+
+        Write-Warning "Initial Gradle build failed; clearing copied caches and retrying once."
+        Stop-GradleDaemons -GradleProjectDir $GradleProjectDir
+        Remove-BuildArtifacts -GradleProjectDir $GradleProjectDir
+
+        & .\gradlew.bat @gradleArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "Gradle build failed (exit $LASTEXITCODE)"
+        }
+    } finally {
+        $env:KOTLIN_COMPILER_EXECUTION_STRATEGY = $null
+        Pop-Location
+    }
 }
 
 $projectRoot = Find-ProjectRoot
@@ -29,6 +99,7 @@ $buildRoot = Join-Path $env:LOCALAPPDATA "ResQit-build"
 $androidDst = Join-Path $buildRoot "android-app"
 
 if (-not $InstallOnly) {
+    Stop-GradleDaemons -GradleProjectDir $androidDst
 
     if (Test-Path $buildRoot) {
         Write-Host "Removing old build cache at $buildRoot ..."
@@ -51,13 +122,7 @@ if (-not $InstallOnly) {
     }
 
     Write-Host "Building debug APK..."
-    Push-Location $androidDst
-    try {
-        & .\gradlew.bat :app:assembleDebug --no-daemon
-        if ($LASTEXITCODE -ne 0) { throw "Gradle build failed (exit $LASTEXITCODE)" }
-    } finally {
-        Pop-Location
-    }
+    Invoke-DebugBuild -GradleProjectDir $androidDst
 }
 
 $apk = Join-Path $androidDst "app\build\outputs\apk\debug\app-debug.apk"

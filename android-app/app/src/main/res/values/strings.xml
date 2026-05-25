@@ -5,14 +5,14 @@
     <string name="brand_mark_prefix">Res</string>
     <string name="brand_mark_accent">Q</string>
     <string name="brand_mark_suffix">it</string>
-    <string name="brand_tagline">Research quality, quantified</string>
-    <string name="brand_auth_subtitle">Quantify research quality with OpenAlex-powered metrics</string>
+    <string name="brand_tagline">Navigate Science</string>
+    <string name="brand_auth_subtitle">Navigate research quality with OpenAlex-powered metrics</string>
     <string name="brand_intel_label">ResQit Intelligence Brief</string>
     <string name="brand_index_label">ResQit Impact Index</string>
     <string name="brand_footer">ResQit Research Labs</string>
     <string name="brand_onboarding_signal">Most of it is noise. ResQit finds the signal.</string>
     <string name="brand_website_url">https://resqit.app</string>
-    <string name="brand_contact_email">labs@resqit.app</string>
+    <string name="brand_contact_email">hello@resqit.app</string>
     <!-- Web client ID from Firebase Console → Authentication → Sign-in method → Google -->
     <string name="default_web_client_id" translatable="false"></string>
 </resources>

@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -116,7 +117,7 @@ data class PulseMetric(val label: String, val value: Int, val icon: ImageVector,
 fun DailyPulseCard() {
     val metrics = listOf(
         PulseMetric("Citations Today",  3,  Icons.Default.FormatQuote,   AccentTeal),
-        PulseMetric("New in Field",      12, Icons.Default.Article,        AccentIndigo),
+        PulseMetric("New in Field",      12, Icons.AutoMirrored.Filled.Article,        AccentIndigo),
         PulseMetric("Trending Topics",   5,  Icons.AutoMirrored.Filled.TrendingUp, AccentAmber),
     )
 

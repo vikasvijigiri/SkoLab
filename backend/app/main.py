@@ -22,6 +22,15 @@ from zeroconf.asyncio import AsyncZeroconf
 import socket
 import time
 
+def _get_openalex_headers() -> dict:
+    headers = {
+        "User-Agent": "ResQitApp/1.0 (mailto:vikki.4me@gmail.com)",
+        "Accept": "application/json"
+    }
+    if settings.openalex_api_key:
+        headers["api_key"] = settings.openalex_api_key
+    return headers
+
 class SimpleAsyncCache:
     def __init__(self, ttl_seconds: float, max_size: int = 200):
         self.ttl = ttl_seconds
@@ -30,17 +39,7 @@ class SimpleAsyncCache:
         self.lock = asyncio.Lock()
 
     async def get(self, key: str):
-        async with self.lock:
-            exists = key in self.cache
-            print(f"[SimpleAsyncCache] get: '{key}', exists: {exists}", flush=True)
-            if not exists:
-                return None
-            val, expiry = self.cache[key]
-            if time.time() > expiry:
-                print(f"[SimpleAsyncCache] get: '{key}' expired", flush=True)
-                del self.cache[key]
-                return None
-            return val
+        return None
 
     async def set(self, key: str, value):
         async with self.lock:
@@ -336,57 +335,159 @@ class ConjectureResponse(BaseModel):
     explanation: str
 
 @app.get("/daily_conjecture", response_model=ConjectureResponse)
-async def get_daily_conjecture(focus: str = Query("Quantum Topology")):
-    focus_lower = focus.lower()
-    if "quantum" in focus_lower or "physics" in focus_lower or "topology" in focus_lower:
-        return ConjectureResponse(
-            id="1",
-            category="Quantum Computing",
-            title="The Twisted Superlattice Invariant",
-            hypothesis="Consider a 2D topological insulator under twist angle $\\theta$. The Chern number $C$ is claimed to be non-zero and calculated using: $$C = \\frac{1}{2\\pi} \\int_{BZ} \\Omega(k) d^2k$$ where $\\Omega(k) = \\nabla_k \\times \\mathbf{A}(k)$ is the Berry curvature. The researcher assumes a single-valued, globally smooth gauge field $\\mathbf{A}(k)$ defined over the entire Brillouin Zone torus (BZ). Find the mathematical fallacy.",
-            options=[
-                "Chern numbers can only be defined for open manifolds.",
-                "A globally smooth gauge field on a closed manifold implies Chern number must be zero.",
-                "Berry curvature integration requires non-orthogonal coordinates.",
-                "The Brillouin Zone torus must have boundary genus $g > 1$."
-            ],
-            correctOptionIndex=1,
-            explanation="By Stokes' Theorem, integrating the curl of a globally smooth, single-valued 1-form gauge field $\\mathbf{A}(k)$ over a closed manifold without boundary (the 2D torus BZ) must yield exactly zero. A non-zero Chern number topologically requires at least two overlapping gauge patches with non-trivial transition functions."
-        )
-    elif "ai" in focus_lower or "ml" in focus_lower or "learn" in focus_lower or "intelligence" in focus_lower or "neural" in focus_lower or "model" in focus_lower:
-        return ConjectureResponse(
-            id="2",
-            category="Artificial Intelligence",
-            title="Attention Entropy Collapse",
-            hypothesis="A researcher trains a standard Decoder-only Transformer. They notice that the entropy of the attention distribution $H(A_i) = -\\sum_j A_{ij} \\log A_{ij}$ collapses to zero at deep layers ($L > 32$) for long sequences. They attempt to resolve this by adding a scaling factor: $$A_{ij} = \\text{softmax}\\left(\\frac{Q_i K_j^T}{\\sqrt{d_k}} \\cdot \\log(\\text{seq\\_len})\\right)_j$$ Explain why this scaling factor actually exacerbates attention entropy collapse instead of fixing it.",
-            options=[
-                "It increases the query-key dot products, making softmax sharper.",
-                "It scales down query-key variance, leading to a uniform distribution.",
-                "Attention weight sum becomes larger than 1.",
-                "Logarithm is undefined for sequence lengths less than 2."
-            ],
-            correctOptionIndex=0,
-            explanation="Multiplying by $\\log(\\text{seq\\_len})$ increases the magnitude of the logits before the softmax operation. Higher logit scale amplifies the differences between query-key dot products, driving the softmax probabilities closer to one-hot vectors, which minimizes attention entropy and accelerates collapse."
-        )
-    else:
-        return ConjectureResponse(
-            id="3",
-            category="Genomics",
-            title="CRISPR Off-Target Cleavage",
-            hypothesis="To model Cas9 off-target cleavage probability $P_c$, a researcher proposes the thermodynamic partition model: $$P_c = \\frac{e^{-\\Delta G_{off}/RT}}{e^{-\\Delta G_{on}/RT} + e^{-\\Delta G_{off}/RT}}$$ where $\\Delta G_{off}$ is the hybridization energy of the mismatched gRNA-DNA loop. If a mismatch occurs in the 'seed region' (first 8-10bp adjacent to PAM), $\\Delta G_{off}$ increases by $4.5 \\text{ kcal/mol}$. What biological factor is omitted in this equilibrium thermodynamic formulation of Cas9 cleavage?",
-            options=[
-                "Hybridization enthalpy is always negative.",
-                "Cas9 conformational activation is a kinetically controlled non-equilibrium gate.",
-                "DNA mismatch repair occurs faster than Cas9 binding.",
-                "Thermodynamic partition functions do not apply to cellular volumes."
-            ],
-            correctOptionIndex=1,
-            explanation="Cas9 cleavage is not purely determined by equilibrium target binding. Seed region mismatches dynamically lock Cas9 in a non-cleaving conformational state. This kinetic activation barrier prevents cleavage even if target binding transiently occurs, making equilibrium thermodynamics insufficient to predict off-target rates."
-        )
+async def get_daily_conjecture(author_id: Optional[str] = Query(None), name: Optional[str] = Query(None)):
+    BASE_URL = "https://api.openalex.org"
+    headers = _get_openalex_headers()
+    author_data = None
+    resolved_id = None
+    
+    clean_id = author_id.split("/")[-1] if author_id else None
+    from fastapi import HTTPException
+    
+    try:
+        async with httpx.AsyncClient(timeout=15.0, headers=headers) as client:
+            if clean_id:
+                res = await client.get(f"{BASE_URL}/authors/{clean_id}", params={"mailto": "vikki.4me@gmail.com"})
+                if res.status_code == 200:
+                    author_data = res.json()
+                    resolved_id = clean_id
+            elif name:
+                res = await client.get(f"{BASE_URL}/authors", params={"search": name, "per_page": 1, "mailto": "vikki.4me@gmail.com"})
+                if res.status_code == 200:
+                    results = res.json().get("results", [])
+                    if results:
+                        author_data = results[0]
+                        resolved_id = author_data["id"].split("/")[-1]
+            
+            if not author_data or not resolved_id:
+                raise HTTPException(status_code=404, detail="Author not found to generate conjecture.")
+
+            # Fetch recent works of the author
+            works_res = await client.get(
+                f"{BASE_URL}/works",
+                params={
+                    "filter": f"authorships.author.id:{resolved_id}",
+                    "per_page": 5,
+                    "sort": "publication_year:desc",
+                    "mailto": "vikki.4me@gmail.com"
+                }
+            )
+            works = works_res.json().get("results", []) if works_res.status_code == 200 else []
+            if not works:
+                raise HTTPException(status_code=404, detail="No publications found for this author to generate conjecture.")
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=f"Failed to fetch profile: {str(e)}")
+
+    # Build works context for LLM
+    works_context = "\n".join([
+        f"- Paper: {w.get('title')}\n  Abstract: {w.get('abstract_inverted_index') or ''}"
+        for w in works[:3]
+    ])
+    
+    prompt = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [
+            {
+                "role": "system",
+                "content": """You are an elite scientific advisor. Your task is to generate a highly academic, rigorous scientific "conjecture/puzzle" grounded in the research areas of the provided publications.
+The conjecture should describe a specific hypothetical scenario or calculation, present a mathematical or conceptual fallacy, and ask the user to identify the correct explanation or fallacy.
+Format your output as a raw JSON object matching this schema:
+{
+  "id": "1",
+  "category": "High-level discipline name (e.g. Quantum Computing, Genomics, Condensed Matter Physics)",
+  "title": "A short, catchy, professional title",
+  "hypothesis": "The technical scenario description, including equations in LaTeX format using $$...$$ for block or $...$ for inline equations.",
+  "options": [
+    "Option A description",
+    "Option B description",
+    "Option C description",
+    "Option D description"
+  ],
+  "correctOptionIndex": 0,
+  "explanation": "A detailed 1-2 sentence explanation of why this option is correct, including any relevant scientific theory."
+}
+Only output the JSON object, do not wrap it in markdown or comments. Ensure it is valid JSON."""
+            },
+            {
+                "role": "user",
+                "content": f"Researcher Name: {author_data.get('display_name')}\nSelected Publications:\n{works_context}"
+            }
+        ],
+        "temperature": 0.3,
+        "response_format": {"type": "json_object"}
+    }
+
+    from app.services.summarization_service import is_llm_working
+    if not is_llm_working():
+        raise HTTPException(status_code=503, detail="LLM service is currently unavailable.")
+        
+    groq_key = os.getenv("GROQ_API")
+    if not groq_key:
+        raise HTTPException(status_code=500, detail="Groq API key not configured on backend.")
+        
+    try:
+        async with httpx.AsyncClient() as client:
+            res = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+                json=prompt,
+                timeout=20.0
+            )
+            if res.status_code == 200:
+                import json
+                raw_content = res.json()["choices"][0]["message"]["content"].strip()
+                conjecture_data = json.loads(raw_content)
+                return ConjectureResponse(**conjecture_data)
+            else:
+                raise HTTPException(status_code=502, detail=f"LLM service error: {res.text}")
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=f"Conjecture generation failed: {str(e)}")
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to the Entroπ API!"}
+    return {"message": "Welcome to the ResQit API!"}
+
+
+class Quest(BaseModel):
+    id: str
+    title: str
+    reward_entropy: int
+    is_completed: bool
+
+@app.get("/users/quests", response_model=List[Quest])
+async def get_user_quests(user_id: str = Query(..., description="The user ID")):
+    # Mocking daily quests for the researcher gamification loop
+    return [
+        Quest(id="discovery", title="Review 5 papers", reward_entropy=15, is_completed=False),
+        Quest(id="logic", title="Solve a Conjecture", reward_entropy=50, is_completed=False),
+        Quest(id="profile", title="Endorse a Colleague", reward_entropy=10, is_completed=True)
+    ]
+
+@app.post("/users/quests/complete")
+async def complete_quest(user_id: str = Query(...), quest_id: str = Query(...)):
+    # In a real implementation, this would verify the completion and add to the user's Entropy Score in Firestore
+    return {"status": "success", "message": f"Quest {quest_id} completed", "entropy_awarded": 15}
+
+class LeaderboardEntry(BaseModel):
+    rank: int
+    user_name: str
+    institution: str
+    entropy_score: int
+
+@app.get("/leaderboard/{field}", response_model=List[LeaderboardEntry])
+async def get_leaderboard(field: str):
+    # Mock leaderboard data
+    return [
+        LeaderboardEntry(rank=1, user_name="Dr. Sarah Chen", institution="MIT", entropy_score=9450),
+        LeaderboardEntry(rank=2, user_name="Prof. Marcus V", institution="Stanford", entropy_score=8120),
+        LeaderboardEntry(rank=3, user_name="Vikas Vijigiri", institution="Independent Researcher", entropy_score=7890),
+        LeaderboardEntry(rank=4, user_name="Dr. Elena Rostova", institution="CERN", entropy_score=6400),
+        LeaderboardEntry(rank=5, user_name="James Wu", institution="Caltech", entropy_score=5210)
+    ]
 
 
 @app.get("/author_suggestions", response_model=List[AuthorSuggestion])
@@ -398,8 +499,8 @@ async def get_author_suggestions(query: str = Query(...)):
         return cached
 
     # 1. Search Firestore for suggestions first (Fast)
-    from researcher_worker import FIRESTORE_AVAILABLE
-    if FIRESTORE_AVAILABLE:
+    # from researcher_worker import FIRESTORE_AVAILABLE
+    if False:
         try:
             db = firestore.client()
             # Use the 'filter' keyword argument to avoid UserWarnings and follow modern Firestore API
@@ -432,10 +533,7 @@ async def get_author_suggestions(query: str = Query(...)):
     # 2. Fallback to OpenAlex
     BASE_URL = "https://api.openalex.org"
     timeout = httpx.Timeout(15.0, connect=5.0)
-    headers = {
-        "User-Agent": "ResQitApp/1.0 (mailto:vikki.4me@gmail.com)",
-        "Accept": "application/json"
-    }
+    headers = _get_openalex_headers()
     
     import re
     non_person_keywords = re.compile(
@@ -542,10 +640,7 @@ async def refresh_author(name: str = Query(...), background_tasks: BackgroundTas
 
         # Search OpenAlex for the ID first
         BASE_URL = "https://api.openalex.org"
-        headers = {
-            "User-Agent": "ResQitApp/1.0 (mailto:vikki.4me@gmail.com)",
-            "Accept": "application/json"
-        }
+        headers = _get_openalex_headers()
         async with httpx.AsyncClient(timeout=20.0) as client:
             res = await client.get(
                 f"{BASE_URL}/authors", 
@@ -559,9 +654,11 @@ async def refresh_author(name: str = Query(...), background_tasks: BackgroundTas
                     # Trigger worker
                     background_tasks.add_task(teleport_researcher, author_id)
                     return {"status": "Refresh started", "author_id": author_id}
-        return {"error": "Author not found for refresh"}
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Author not found for refresh")
     except Exception as e:
-        return {"error": str(e)}
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(e))
 
 async def fetch_similar_authors(query_term: str, exclude_id: str) -> List[AuthorSuggestion]:
     if not query_term or query_term == "Multidisciplinary":
@@ -569,10 +666,7 @@ async def fetch_similar_authors(query_term: str, exclude_id: str) -> List[Author
         
     BASE_URL = "https://api.openalex.org"
     timeout = httpx.Timeout(10.0, connect=3.0)
-    headers = {
-        "User-Agent": "ResQitApp/1.0 (mailto:vikki.4me@gmail.com)",
-        "Accept": "application/json"
-    }
+    headers = _get_openalex_headers()
     
     async with httpx.AsyncClient(timeout=timeout) as client:
         params = {
@@ -634,6 +728,8 @@ async def search_author(
     """
     from app.services.summarization_service import is_llm_working
     print(f"[search_author] name='{name}', id='{id}'", flush=True)
+    if name.strip().lower() in ["vikas", "user_vikas"]:
+        name = "Vikas Vijigiri"
     clean_id = id.split("/")[-1] if id else None
     cache_key = f"id:{clean_id}" if clean_id else name.strip().lower()
 
@@ -644,8 +740,8 @@ async def search_author(
         return cached
 
     # ── 2. Check Firestore (pre-computed by teleport_researcher) ──────────────
-    from researcher_worker import FIRESTORE_AVAILABLE
-    if FIRESTORE_AVAILABLE:
+    # from researcher_worker import FIRESTORE_AVAILABLE
+    if False:
         try:
             db = firestore.client()
             if clean_id:
@@ -707,10 +803,7 @@ async def search_author(
 
     # ── 3. Fetch directly from OpenAlex — source of truth ────────────────────
     BASE_URL = "https://api.openalex.org"
-    headers = {
-        "User-Agent": "ResQitApp/1.0 (mailto:vikki.4me@gmail.com)",
-        "Accept": "application/json"
-    }
+    headers = _get_openalex_headers()
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=8.0), headers=headers) as client:
             # ── 3a. Resolve author ──────────────────────────────────────────
@@ -734,7 +827,8 @@ async def search_author(
                         resolved_id = author_data["id"].split("/")[-1]
 
             if not author_data or not resolved_id:
-                return {"error": "Author not found on OpenAlex"}
+                from fastapi import HTTPException
+                raise HTTPException(status_code=404, detail="Author not found on OpenAlex")
 
             # ── 3b. Fetch recent works (pure OpenAlex, no LLM) ──────────────
             works_res = await client.get(
@@ -869,69 +963,69 @@ async def search_author(
 
     except Exception as e:
         print(f"[search_author] OpenAlex fetch error: {e}", flush=True)
-        return {"error": f"Search failed: {str(e)}"}
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 @app.get("/daily_feed")
-async def get_daily_feed(author_id: Optional[str] = None, query_fallback: Optional[str] = None):
-    cache_key = f"daily_feed:{author_id or ''}:{query_fallback or ''}"
-    cached = await daily_feed_cache.get(cache_key)
-    if cached is not None:
-        return cached
-    data = await pipeline_services.get_daily_feed(author_id, query_fallback)
-    await daily_feed_cache.set(cache_key, data)
-    return data
+async def get_daily_feed(author_id: Optional[str] = None):
+    # Caching bypassed as per complete cache removal requirement
+    from fastapi import HTTPException
+    try:
+        data = await pipeline_services.get_daily_feed(author_id)
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/match_grants")
 async def match_grants(author_id: str = Query(...)):
-    cache_key = f"match_grants:{author_id}"
-    cached = await match_grants_cache.get(cache_key)
-    if cached is not None:
-        return cached
-    data = await pipeline_services.match_grants(author_id)
-    await match_grants_cache.set(cache_key, data)
-    return data
+    # Caching bypassed as per complete cache removal requirement
+    from fastapi import HTTPException
+    try:
+        data = await pipeline_services.match_grants(author_id)
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/collaborator_synergy")
 async def get_collaborator_synergy(author_id: str = Query(...), collaborator_id: str = Query(...)):
-    ids = sorted([author_id, collaborator_id])
-    cache_key = f"synergy:{ids[0]}:{ids[1]}"
-    cached = await collaborator_synergy_cache.get(cache_key)
-    if cached is not None:
-        return cached
-    data = await pipeline_services.get_collaborator_synergy(author_id, collaborator_id)
-    await collaborator_synergy_cache.set(cache_key, data)
-    return data
+    # Caching bypassed
+    from fastapi import HTTPException
+    try:
+        data = await pipeline_services.get_collaborator_synergy(author_id, collaborator_id)
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/citation_heatmap")
 async def get_citation_heatmap(author_id: str = Query(...)):
-    cache_key = f"citation_heatmap:{author_id}"
-    cached = await citation_heatmap_cache.get(cache_key)
-    if cached is not None:
-        return cached
-    data = await pipeline_services.get_citation_heatmap(author_id)
-    await citation_heatmap_cache.set(cache_key, data)
-    return data
+    # Caching bypassed
+    from fastapi import HTTPException
+    try:
+        data = await pipeline_services.get_citation_heatmap(author_id)
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/journal_advisor")
 async def get_journal_advisor(author_id: str = Query(...)):
-    cache_key = f"journal_advisor:{author_id}"
-    cached = await journal_advisor_cache.get(cache_key)
-    if cached is not None:
-        return cached
-    data = await pipeline_services.get_journal_advisor(author_id)
-    await journal_advisor_cache.set(cache_key, data)
-    return data
+    # Caching bypassed
+    from fastapi import HTTPException
+    try:
+        data = await pipeline_services.get_journal_advisor(author_id)
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/network_collaborators")
-async def get_network_collaborators(author_id: str = Query(...), limit: int = Query(50), exclude_ids: str = Query("")):
-    cache_key = f"network_collaborators:{author_id}:{limit}:{exclude_ids}"
-    cached = await network_collaborators_cache.get(cache_key)
-    if cached is not None:
-        return cached
+async def get_network_collaborators(author_id: str = Query(...), limit: int = Query(10), offset: int = Query(0), exclude_ids: str = Query(""), field: str = Query("")):
+    # Caching bypassed
+    from fastapi import HTTPException
     excl_list = [x.strip() for x in exclude_ids.split(",")] if exclude_ids else []
-    data = await pipeline_services.get_network_collaborators(author_id, limit, excl_list)
-    await network_collaborators_cache.set(cache_key, data)
-    return data
+    try:
+        data = await pipeline_services.get_network_collaborators(author_id, limit, offset, excl_list, field)
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/chat_with_author")
 async def chat_with_author(req: ChatRequest):

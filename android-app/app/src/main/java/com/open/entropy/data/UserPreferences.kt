@@ -23,6 +23,17 @@ class UserPreferences(private val context: Context) {
     private val connectionsKey = stringPreferencesKey("user_connections_json")
     private val streakCountKey = intPreferencesKey("streak_count")
     private val lastCheckedInDateKey = stringPreferencesKey("last_checked_in_date")
+    private val subscriptionTypeKey = stringPreferencesKey("subscription_type")
+
+    val subscriptionType: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[subscriptionTypeKey] ?: "Basic"
+    }
+
+    suspend fun setSubscriptionType(type: String) {
+        context.dataStore.edit { prefs ->
+            prefs[subscriptionTypeKey] = type
+        }
+    }
 
     val streakCount: Flow<Int> = context.dataStore.data.map { prefs ->
         prefs[streakCountKey] ?: 5
@@ -61,7 +72,7 @@ class UserPreferences(private val context: Context) {
                 uid = uid,
                 name = prefs[userNameKey] ?: "",
                 email = prefs[userEmailKey] ?: "",
-                researchFocus = prefs[userResearchFocusKey] ?: "General Physics",
+                researchFocus = prefs[userResearchFocusKey] ?: "",
                 complexityScore = prefs[userComplexityScoreKey] ?: 0f,
                 savedPapers = parseSavedPaperIds(prefs[savedPaperIdsKey])
             )

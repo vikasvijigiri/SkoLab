@@ -36,6 +36,9 @@ class Settings:
     openalex_email: str = field(
         default_factory=lambda: os.environ.get("OPENALEX_EMAIL", "")
     )
+    openalex_api_key: str = field(
+        default_factory=lambda: os.environ.get("openalex_api", "")
+    )
 
     # ── Firebase ─────────────────────────────────────────────────────────────
     google_credentials_path: str = field(

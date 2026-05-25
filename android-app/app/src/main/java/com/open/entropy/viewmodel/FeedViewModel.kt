@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import android.util.Log
 import com.open.entropy.model.Paper
 import com.open.entropy.model.Author
-import com.open.entropy.model.MockData
+
 import com.open.entropy.network.ApiService
 import com.open.entropy.network.NetworkCollaborator
 import com.open.entropy.network.AuthorSuggestion
@@ -14,6 +14,7 @@ import com.open.entropy.network.OpenAlexWork
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.async
@@ -92,7 +93,7 @@ data class ReadingProgress(
 )
 
 data class FeedUiState(
-    val user: User = User("user_vikas", "Vikas Vijigiri", "VV", "Quantum Topology"),
+    val user: User = User("", "Researcher", "R", "Research"),
     val frontierMetrics: FrontierMetrics = FrontierMetrics(0.85f, 0.79f, 24, 0.06f, 0.04f, 3),
     val aiBriefText: String = "",
     val selectedFilter: ResearchFilter = ResearchFilter.ALL,
@@ -110,12 +111,21 @@ data class FeedUiState(
     val suggestedPeersArticles: List<Paper> = emptyList(),
     val isLoading: Boolean = true,
     val isLoadingMoreConnections: Boolean = false,
+    val hasMoreConnections: Boolean = true,
     val error: String? = null
 )
 
 class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewModel() {
     private val _uiState = MutableStateFlow(FeedUiState())
     val uiState: StateFlow<FeedUiState> = _uiState.asStateFlow()
+    private var userAuthorProfile: com.open.entropy.network.AuthorResponse? = null
+
+    private fun appendError(msg: String) {
+        val currentErr = _uiState.value.error
+        _uiState.value = _uiState.value.copy(
+            error = if (currentErr.isNullOrBlank()) msg else "$currentErr\n$msg"
+        )
+    }
 
     init {
         loadAllFeedData()
@@ -129,40 +139,43 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
         }
     }
 
-    fun setUserContext(name: String, focus: String) {
+    fun setUserContext(uid: String, name: String, focus: String) {
         val current = _uiState.value.user
-        if (current.name == name && current.researchFocus == focus) {
+        val validFocus = if (focus.isNotBlank()) focus else "Researcher"
+        if (current.id == uid && current.name == name && current.researchFocus == validFocus) {
             return
         }
         viewModelScope.launch {
+            val initials = name.split(" ").mapNotNull { it.firstOrNull()?.uppercaseChar() }.joinToString("").take(2)
             _uiState.value = _uiState.value.copy(
-                user = User("user_vikas", name, name.take(2).uppercase(), focus)
+                user = User(uid, name, initials, validFocus)
             )
             loadAllFeedData()
         }
     }
 
     fun setResearchFilter(filter: ResearchFilter) {
+        if (_uiState.value.selectedFilter == filter) return
         _uiState.value = _uiState.value.copy(selectedFilter = filter)
+        loadAllFeedData()
     }
 
     fun loadMoreConnections() {
-        if (_uiState.value.isLoadingMoreConnections) return
-        
         val currentState = _uiState.value
+        if (currentState.isLoadingMoreConnections || !currentState.hasMoreConnections) return
+        
         val connections = currentState.suggestedConnections
-        if (connections.isEmpty()) return
+        if (connections.isEmpty() || currentState.user.id.isEmpty()) return
 
-        // Pick the last connection to expand from
-        val lastConnection = connections.last()
-        val expandId = lastConnection.author.id
+        val expandId = userAuthorProfile?.id ?: return
+
 
         _uiState.value = currentState.copy(isLoadingMoreConnections = true)
 
         viewModelScope.launch {
             try {
-                val excludeIds = connections.map { it.author.id }
-                val newNetwork = apiService.getNetworkCollaborators(expandId, limit = 10, excludeIds = excludeIds)
+                val currentOffset = connections.size
+                val newNetwork = apiService.getNetworkCollaborators(expandId, limit = 10, offset = currentOffset, excludeIds = emptyList())
                 
                 if (newNetwork.isNotEmpty()) {
                     val focus = currentState.user.researchFocus
@@ -174,15 +187,15 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                                 institution = collab.institution,
                                 country = "US",
                                 orcidId = null,
-                                fingerprintType = collab.field ?: focus,
-                                radarScores = mapOf("Disruption" to 0.85f, "Novelty" to 0.72f),
+                                fingerprintType = collab.field.ifBlank { focus },
+                                radarScores = mapOf("Disruption" to (collab.relevance_score / 100f), "Novelty" to (collab.relevance_score / 100f * 0.9f)),
                                 careerArc = emptyList(),
                                 topPapers = emptyList(),
                                 collaborators = emptyList(),
-                                totalPapers = 18,
-                                avgDisruptionScore = 0.75f
+                                totalPapers = collab.total_publications ?: 10,
+                                avgDisruptionScore = collab.relevance_score / 100f
                             ),
-                            depth = lastConnection.depth + 1,
+                            depth = if (collab.connection_path.contains("Co-authored")) 1 else 2,
                             mutualCount = (collab.relevance_score / 10),
                             sharedAreas = listOf(focus)
                         )
@@ -210,10 +223,14 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                     
                     _uiState.value = currentState.copy(
                         suggestedConnections = finalConnections,
-                        isLoadingMoreConnections = false
+                        isLoadingMoreConnections = false,
+                        hasMoreConnections = newNetwork.size == 10
                     )
                 } else {
-                    _uiState.value = currentState.copy(isLoadingMoreConnections = false)
+                    _uiState.value = currentState.copy(
+                        isLoadingMoreConnections = false,
+                        hasMoreConnections = false
+                    )
                 }
             } catch (e: Exception) {
                 Log.e("FeedViewModel", "Failed to load more connections", e)
@@ -243,33 +260,70 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                     Country("BR", "Brazil", "🇧🇷", 115)
                 )
 
-                val disciplines = listOf(
-                    Discipline("AI/ML", "🤖", "840 papers", "#1D4ED8", "#7C3AED"),
-                    Discipline("Biology", "🧬", "562 papers", "#065F46", "#0284C7"),
-                    Discipline("Physics", "⚛️", "420 papers", "#0F172A", "#3D6FFF"),
-                    Discipline("Chemistry", "🧪", "315 papers", "#7C2D12", "#DC2626"),
-                    Discipline("Neuroscience", "🧠", "290 papers", "#581C87", "#EC4899"),
-                    Discipline("Climate", "🌍", "245 papers", "#14532D", "#0369A1"),
-                    Discipline("Medicine", "💊", "180 papers", "#BE123C", "#7C3AED"),
-                    Discipline("Mathematics", "📐", "165 papers", "#1E1B4B", "#4F46E5"),
-                    Discipline("Astronomy", "🔭", "110 papers", "#0C1020", "#2563EB"),
-                    Discipline("Computing", "💻", "95 papers", "#052E16", "#0EA5E9")
-                )
+                // 2. Search for the logged-in user profile to extract actual collaborators (co-authors)
+                try {
+                    Log.i("FeedViewModel", "Pre-searching author profile for name: $name")
+                    userAuthorProfile = apiService.searchAuthor(name)
+                } catch (e: Exception) {
+                    Log.e("FeedViewModel", "Pre-search failed", e)
+                    appendError("Author Profile Search: ${e.localizedMessage ?: e.toString()}")
+                }
 
-                val researchAreas = listOf(
-                    ResearchArea("Protein Folding", androidx.compose.ui.graphics.Color(0xFF22D3EE)),
-                    ResearchArea("Large Language Models", androidx.compose.ui.graphics.Color(0xFF3D6FFF)),
-                    ResearchArea("Gene Editing", androidx.compose.ui.graphics.Color(0xFF00E676)),
-                    ResearchArea("Dark Matter", androidx.compose.ui.graphics.Color(0xFFA78BFA)),
-                    ResearchArea("Quantum Computing", androidx.compose.ui.graphics.Color(0xFF3D6FFF)),
-                    ResearchArea("Cancer Immunotherapy", androidx.compose.ui.graphics.Color(0xFFFF4757)),
-                    ResearchArea("Climate Modeling", androidx.compose.ui.graphics.Color(0xFF00E5FF)),
-                    ResearchArea("Brain-Computer Interface", androidx.compose.ui.graphics.Color(0xFFEC4899)),
-                    ResearchArea("Materials Science", androidx.compose.ui.graphics.Color(0xFFFBBF24)),
-                    ResearchArea("Fusion Energy", androidx.compose.ui.graphics.Color(0xFFFB923C)),
-                    ResearchArea("Neuromorphic AI", androidx.compose.ui.graphics.Color(0xFFA78BFA)),
-                    ResearchArea("Synthetic Biology", androidx.compose.ui.graphics.Color(0xFF34D399))
-                )
+                val profile = userAuthorProfile
+                val dynamicDisciplines = mutableListOf<Discipline>()
+                if (profile != null && profile.expertise.isNotEmpty()) {
+                    profile.expertise.take(6).forEachIndexed { idx, exp ->
+                        val emoji = when {
+                            exp.contains("physics", ignoreCase = true) || exp.contains("quantum", ignoreCase = true) -> "⚛️"
+                            exp.contains("chemistry", ignoreCase = true) -> "🧪"
+                            exp.contains("biology", ignoreCase = true) || exp.contains("gen", ignoreCase = true) -> "🧬"
+                            exp.contains("computer", ignoreCase = true) || exp.contains("machine", ignoreCase = true) || exp.contains("ai", ignoreCase = true) -> "🤖"
+                            exp.contains("math", ignoreCase = true) -> "📐"
+                            else -> "🔬"
+                        }
+                        val color1 = when (idx % 3) {
+                            0 -> "#0F172A"
+                            1 -> "#1E1B4B"
+                            else -> "#052E16"
+                        }
+                        val color2 = when (idx % 3) {
+                            0 -> "#3D6FFF"
+                            1 -> "#7C3AED"
+                            else -> "#0EA5E9"
+                        }
+                        dynamicDisciplines.add(
+                            Discipline(
+                                name = exp,
+                                emoji = emoji,
+                                subCount = "${kotlin.random.Random.nextInt(100, 500)} papers",
+                                gradientStart = color1,
+                                gradientEnd = color2
+                            )
+                        )
+                    }
+                }
+                if (dynamicDisciplines.isEmpty()) {
+                    dynamicDisciplines.add(Discipline(focus.ifBlank { "Physics" }, "⚛️", "420 papers", "#0F172A", "#3D6FFF"))
+                }
+                val disciplines = dynamicDisciplines
+
+                val dynamicResearchAreas = mutableListOf<ResearchArea>()
+                if (profile != null && profile.expertise.isNotEmpty()) {
+                    val colors = listOf(
+                        androidx.compose.ui.graphics.Color(0xFF22D3EE), 
+                        androidx.compose.ui.graphics.Color(0xFF3D6FFF), 
+                        androidx.compose.ui.graphics.Color(0xFF00E676), 
+                        androidx.compose.ui.graphics.Color(0xFFA78BFA), 
+                        androidx.compose.ui.graphics.Color(0xFFFF4757), 
+                        androidx.compose.ui.graphics.Color(0xFFFBBF24)
+                    )
+                    profile.expertise.forEachIndexed { index, exp ->
+                        dynamicResearchAreas.add(ResearchArea(exp, colors[index % colors.size]))
+                    }
+                } else {
+                    dynamicResearchAreas.add(ResearchArea(focus.ifBlank { "Physics" }, androidx.compose.ui.graphics.Color(0xFF3D6FFF)))
+                }
+                val researchAreas = dynamicResearchAreas
 
                 val institutions = listOf(
                     Institution("MIT", "MIT", androidx.compose.ui.graphics.Color(0xFFFF4757)),
@@ -283,72 +337,144 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                     Institution("CERN", "CRN", androidx.compose.ui.graphics.Color(0xFF34D399)),
                     Institution("NASA", "NSA", androidx.compose.ui.graphics.Color(0xFF3D6FFF))
                 )
-
-                // 2. Search for the logged-in user profile to extract actual collaborators (co-authors)
-                var userAuthorProfile: com.open.entropy.network.AuthorResponse? = null
-                var connections = emptyList<Connection>()
+                var connections: List<Connection> = emptyList()
                 try {
-                    Log.i("FeedViewModel", "Searching author profile for name: $name")
-                    userAuthorProfile = apiService.searchAuthor(name)
-                    if (userAuthorProfile != null) {
-                        Log.i("FeedViewModel", "Fetching network collaborators for id: ${userAuthorProfile.id}")
-                        val networkList = apiService.getNetworkCollaborators(userAuthorProfile.id, limit = 10)
-                        if (networkList.isEmpty()) {
-                            Log.w("FeedViewModel", "Network list from OpenAlex was empty, falling back to mock")
-                            connections = getMockConnections(focus)
-                        } else {
-                            connections = networkList.map { collab ->
-                                val isDepth1 = collab.connection_path.contains("Co-authored")
-                                Connection(
-                                    author = Author(
-                                        id = collab.id,
-                                        name = collab.name,
-                                        institution = collab.institution,
-                                        country = "US",
-                                        orcidId = null,
-                                        fingerprintType = collab.field ?: focus,
-                                        radarScores = mapOf("Disruption" to 0.85f, "Novelty" to 0.72f),
-                                        careerArc = emptyList(),
-                                        topPapers = emptyList(),
-                                        collaborators = emptyList(),
-                                        totalPapers = 18,
-                                        avgDisruptionScore = 0.75f
-                                    ),
-                                    depth = if (isDepth1) 1 else 2,
-                                    mutualCount = collab.relevance_score,
-                                    tags = listOf(collab.field ?: "Collaborator"),
-                                    connectionPath = collab.connection_path,
-                                    openStatus = "Available for Collaboration",
-                                    papersCollaborated = collab.papers_collaborated ?: 0,
-                                    totalPublications = collab.total_publications ?: 0,
-                                    hIndex = collab.h_index ?: 0
-                                )
-                            }
+                    val targetId = profile?.id ?: "fallback_seed"
+                    Log.i("FeedViewModel", "Fetching network collaborators for id: $targetId")
+                    val networkList = apiService.getNetworkCollaborators(targetId, limit = 10, offset = 0)
+                    if (networkList.isNotEmpty()) {
+                        val initialConnections = networkList.map { collab ->
+                            val isDepth1 = collab.connection_path.contains("Co-authored")
+                            Connection(
+                                author = Author(
+                                    id = collab.id,
+                                    name = collab.name,
+                                    institution = collab.institution,
+                                    country = "US",
+                                    orcidId = null,
+                                    fingerprintType = collab.field.ifBlank { focus },
+                                    radarScores = mapOf("Disruption" to (collab.relevance_score / 100f), "Novelty" to (collab.relevance_score / 100f * 0.9f)),
+                                    careerArc = emptyList(),
+                                    topPapers = emptyList(),
+                                    collaborators = emptyList(),
+                                    totalPapers = collab.total_publications ?: 10,
+                                    avgDisruptionScore = collab.relevance_score / 100f
+                                ),
+                                depth = if (isDepth1) 1 else 2,
+                                mutualCount = collab.relevance_score,
+                                tags = listOf(collab.field.ifBlank { "Collaborator" }),
+                                connectionPath = collab.connection_path,
+                                openStatus = "Available for Collaboration",
+                                papersCollaborated = collab.papers_collaborated ?: 0,
+                                totalPublications = collab.total_publications ?: 0,
+                                hIndex = collab.h_index ?: 0
+                            )
                         }
-                    } else {
-                        Log.w("FeedViewModel", "Failed to find author profile for $name, falling back to mock")
-                        connections = getMockConnections(focus)
+
+                        // Concurrently fetch works for initial connections
+                        connections = initialConnections.map { conn ->
+                            async(kotlinx.coroutines.Dispatchers.IO) {
+                                try {
+                                    val rawWorks = apiService.getAuthorWorks(conn.author.id, limit = 2)
+                                    val papers = rawWorks.map { mapOpenAlexToPaper(it) }
+                                    if (papers.isNotEmpty()) {
+                                        conn.copy(author = conn.author.copy(topPapers = papers))
+                                    } else {
+                                        conn
+                                    }
+                                } catch (e: Exception) {
+                                    conn
+                                }
+                            }
+                        }.awaitAll()
                     }
                 } catch (e: Exception) {
                     Log.e("FeedViewModel", "Error fetching connections from OpenAlex API", e)
-                    connections = getMockConnections(focus)
+                    appendError("Collaborators: ${e.localizedMessage ?: e.toString()}")
                 }
 
                 // AI Daily Brief Text - Fetches from live backend Daily Feed
-                var aiText = "Emerging Quantum Topology node convergence shows a **24% increase** in Disruption metric driven by Moire superlattice protected states. Coherence maps show **12 stable states** across twist domains."
+                var aiText = "Based on your research focus in **$focus**, our agents are scanning the latest preprints for disruptive insights. Check back soon as new data streams are ingested."
                 try {
-                    val dailyFeed = apiService.getDailyFeed(userAuthorProfile?.id, focus)
+                    val dailyFeed = apiService.getDailyFeed(profile?.id, focus)
                     if (dailyFeed.isNotEmpty()) {
                         val first = dailyFeed.first()
                         aiText = "Based on your focus in **$focus**, we recommend the new breakthrough paper **${first.title}** published in *${first.journal}* (${first.year}) by ${first.authors.firstOrNull() ?: "Unknown"}. Recommendation: **${first.recommendation_reason}**"
                     }
                 } catch (e: Exception) {
                     Log.e("FeedViewModel", "Failed to load live AI daily feed", e)
+                    appendError("AI Daily Brief: ${e.localizedMessage ?: e.toString()}")
                 }
 
-                val finalDIndex = if (userAuthorProfile != null && userAuthorProfile.disruption_score > 0.0) userAuthorProfile.disruption_score.toFloat() else 0.85f
-                val finalSIndex = if (userAuthorProfile != null && userAuthorProfile.average_skill_score > 0.0) userAuthorProfile.average_skill_score.toFloat() else 0.79f
-                val finalPapersCount = if (userAuthorProfile != null && userAuthorProfile.works_count > 0) userAuthorProfile.works_count else 24
+                                // Fetch trending, hot, and open access papers, and rising researchers concurrently
+                val trendingDeferred = async(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        apiService.getTrendingPapers(focus, limit = 5).map { mapOpenAlexToPaper(it) }
+                    } catch (e: Exception) {
+                        Log.e("FeedViewModel", "Failed to fetch trending papers", e)
+                        appendError("Trending Papers: ${e.localizedMessage ?: e.toString()}")
+                        emptyList<Paper>()
+                    }
+                }
+
+                val hotDeferred = async(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        apiService.getTrendingPapers(null, limit = 6).map { mapOpenAlexToPaper(it) }
+                    } catch (e: Exception) {
+                        Log.e("FeedViewModel", "Failed to fetch hot papers", e)
+                        appendError("Hot Papers: ${e.localizedMessage ?: e.toString()}")
+                        emptyList<Paper>()
+                    }
+                }
+
+                val openAccessDeferred = async(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        apiService.getTrendingPapers(focus.ifBlank { "physics" }, limit = 8)
+                            .filter { !it.primary_location?.pdf_url.isNullOrBlank() }
+                            .map { mapOpenAlexToPaper(it) }
+                            .map { it.copy(pdfUrl = it.pdfUrl ?: "https://arxiv.org/pdf/1706.03762.pdf") }
+                            .take(5)
+                    } catch (e: Exception) {
+                        Log.e("FeedViewModel", "Failed to fetch open access papers", e)
+                        appendError("Open Access Papers: ${e.localizedMessage ?: e.toString()}")
+                        emptyList<Paper>()
+                    }
+                }
+
+                val risingDeferred = async(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        apiService.getSimilarAuthors(focus.ifBlank { "physics" }, limit = 6).map { collab ->
+                            Author(
+                                id = collab.id,
+                                name = collab.display_name,
+                                institution = collab.institution,
+                                country = "US",
+                                orcidId = null,
+                                fingerprintType = collab.field_of_study ?: focus.ifBlank { "physics" },
+                                radarScores = mapOf("Disruption" to 0.85f, "Novelty" to 0.72f),
+                                careerArc = emptyList(),
+                                topPapers = emptyList(),
+                                collaborators = emptyList(),
+                                totalPapers = collab.h_index ?: 24,
+                                avgDisruptionScore = (collab.innovation_score ?: 80) / 100f
+                            )
+                        }
+                    } catch (e: Exception) {
+                        Log.e("FeedViewModel", "Failed to fetch rising researchers", e)
+                        appendError("Rising Researchers: ${e.localizedMessage ?: e.toString()}")
+                        emptyList<Author>()
+                    }
+                }
+
+                val trending = trendingDeferred.await()
+                val hot = hotDeferred.await()
+                val openAccess = openAccessDeferred.await()
+                val rising = risingDeferred.await()
+                val continueReadingList = emptyList<ReadingProgress>()
+
+                val finalDIndex = if (profile != null && profile.disruption_score > 0.0) profile.disruption_score.toFloat() else 0.85f
+                val finalSIndex = if (profile != null && profile.average_skill_score > 0.0) profile.average_skill_score.toFloat() else 0.79f
+                val finalPapersCount = if (profile != null && profile.works_count > 0) profile.works_count else 24
 
                 _uiState.value = FeedUiState(
                     user = User("user_vikas", name, name.take(2).uppercase(), focus),
@@ -361,19 +487,20 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                         papersDelta = 2
                     ),
                     aiBriefText = aiText,
-                    selectedFilter = ResearchFilter.ALL,
+                    selectedFilter = _uiState.value.selectedFilter,
                     topCountries = countries,
                     disciplines = disciplines,
                     researchAreas = researchAreas,
-                    suggestedConnections = connections,
-                    suggestedResearchers = emptyList(),
-                    trendingPapers = emptyList(),
-                    hotPapers = emptyList(),
-                    openAccessPapers = emptyList(),
-                    continueReading = emptyList(),
+                    suggestedConnections = connections.shuffled(),
+                    suggestedResearchers = rising,
+                    trendingPapers = trending,
+                    hotPapers = hot,
+                    openAccessPapers = openAccess,
+                    continueReading = continueReadingList,
                     collaboratorsArticles = emptyList(),
                     suggestedPeersArticles = emptyList(),
                     topInstitutions = institutions,
+                    hasMoreConnections = connections.size == 10,
                     isLoading = false,
                     error = null
                 )
@@ -450,23 +577,6 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
             totalPapers = 28,
             avgDisruptionScore = collab.relevance_score / 100f
         )
-    }
-
-    private fun getMockConnections(focus: String): List<Connection> {
-        return MockData.authors.take(4).mapIndexed { i, author ->
-            Connection(
-                author = author,
-                depth = (i % 3) + 1,
-                mutualCount = 75 + (i * 5),
-                tags = listOf(focus, "Basic Science"),
-                connectionPath = "Fallback Connection",
-                openStatus = "Available",
-                papersCollaborated = (i + 1) * 3,
-                totalPublications = 42 + (i * 15),
-                hIndex = 12 + (i * 4),
-                sharedAreas = listOf(focus)
-            )
-        }
     }
 
     private fun mapOpenAlexToPaper(work: OpenAlexWork): Paper {

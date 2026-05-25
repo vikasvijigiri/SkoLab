@@ -165,7 +165,7 @@ class AuthManager(private val context: Context) {
                     uid = user.uid,
                     name = user.displayName ?: "",
                     email = user.email ?: "",
-                    researchFocus = "General Physics"
+                    researchFocus = ""
                 )
                 // Use set() with merge — queued offline and synced when reconnected
                 db.collection("researchers").document(user.uid).set(newUserData).await()
@@ -181,7 +181,7 @@ class AuthManager(private val context: Context) {
                 uid = user.uid,
                 name = user.displayName ?: "",
                 email = user.email ?: "",
-                researchFocus = "General Physics"
+                researchFocus = ""
             )
             userPrefs.cacheUser(fallback)
         }
@@ -207,6 +207,21 @@ class AuthManager(private val context: Context) {
         } catch (e: Exception) {
             Log.w("AuthManager", "Error getting user data (offline?), returning cached if available", e)
             userPrefs.cachedUser.firstOrNull() // return local cache rather than null
+        }
+    }
+
+    suspend fun updateUserResearchFocus(focus: String) {
+        val user = currentUser ?: return
+        try {
+            // Update Firestore
+            db.collection("researchers").document(user.uid).update("researchFocus", focus).await()
+            // Update local cache
+            val cached = userPrefs.cachedUser.firstOrNull()
+            if (cached != null) {
+                userPrefs.cacheUser(cached.copy(researchFocus = focus))
+            }
+        } catch (e: Exception) {
+            Log.w("AuthManager", "Failed to update research focus", e)
         }
     }
 

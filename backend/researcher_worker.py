@@ -102,6 +102,9 @@ async def teleport_researcher(author_id: str, teleport_coauthors: bool = True):
         "User-Agent": "ResQitApp/1.0 (mailto:vikki.4me@gmail.com)",
         "Accept": "application/json"
     }
+    from app.config import settings
+    if settings.openalex_api_key:
+        headers["api_key"] = settings.openalex_api_key
 
     async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
         # 1. Fetch Author Profile
@@ -302,49 +305,10 @@ async def teleport_researcher(author_id: str, teleport_coauthors: bool = True):
         extracted_techniques = []
         extracted_core_concepts = []
         
-        if recent_works:
-            print(f"[teleport_researcher] Analyzing {len(recent_works)} papers concurrently...", flush=True)
-            tasks = [
-                summarization_service.analyze_paper(
-                    title=w.get("title", ""),
-                    doi=w.get("doi"),
-                    openalex_id=w.get("id"),
-                )
-                for w in recent_works
-            ]
-            summaries = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            for w, summary in zip(recent_works, summaries):
-                if isinstance(summary, Exception) or not summary or not isinstance(summary, dict):
-                    continue
-                
-                key = w.get("id") or w.get("doi") or w.get("title")
-                if key:
-                    summary_by_id[key] = summary
+        # We do not download PDFs or analyze papers during profile sync to keep it fast and metadata-driven.
+        # Paper analysis happens on-demand when the user views the paper.
+        summaries = []
                     
-                # Extract tools
-                for tool in summary.get("tools_and_software", []):
-                    if isinstance(tool, str):
-                        t_clean = tool.strip()
-                        t_lower = t_clean.lower()
-                        if t_clean and t_lower not in ["not specified", "not mentioned in paper", "none", "n/a", "not mentioned", "not specified."]:
-                            extracted_tools.append(t_clean)
-                
-                # Extract techniques
-                for tech in summary.get("techniques", []):
-                    if isinstance(tech, str):
-                        tech_clean = tech.strip()
-                        tech_lower = tech_clean.lower()
-                        if tech_clean and tech_lower not in ["not specified", "not mentioned in paper", "none", "n/a", "not mentioned", "not specified."]:
-                            extracted_techniques.append(tech_clean)
-                            
-                # Extract core concepts
-                for concept in summary.get("core_concepts", []):
-                    if isinstance(concept, str):
-                        c_clean = concept.strip()
-                        c_lower = c_clean.lower()
-                        if c_clean and c_lower not in ["not specified", "not mentioned in paper", "none", "n/a", "not mentioned", "not specified."]:
-                            extracted_core_concepts.append(c_clean)
 
         # 4. Innovation Score & Prediction
         # Expertise/Interests: Quality-Weighted top areas from paper-level concepts
@@ -448,11 +412,14 @@ async def teleport_researcher(author_id: str, teleport_coauthors: bool = True):
                 
             prediction_works.append(work_item)
             
-        next_prediction = await prediction_service.predict_next_problem(
-            author_name=data.get("display_name", "Author"),
-            expertise=expertise,
-            works=prediction_works
-        )
+        if teleport_coauthors:
+            next_prediction = await prediction_service.predict_next_problem(
+                author_name=data.get("display_name", "Author"),
+                expertise=expertise,
+                works=prediction_works
+            )
+        else:
+            next_prediction = "Frontier prediction is available on direct profile sync."
 
         affiliations = data.get("affiliations", [])
         history_map = {}

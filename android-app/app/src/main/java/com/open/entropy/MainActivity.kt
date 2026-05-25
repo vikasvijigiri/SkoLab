@@ -8,8 +8,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.background
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
@@ -20,6 +24,7 @@ import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.automirrored.filled.MenuBook
@@ -34,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -56,11 +62,17 @@ import com.open.entropy.ui.screens.LibraryScreen
 import com.open.entropy.ui.screens.NexusScreen
 import com.open.entropy.ui.screens.OnboardingScreen
 import com.open.entropy.ui.screens.PaperDetailScreen
+import com.open.entropy.ui.screens.PapersScreen
 import com.open.entropy.ui.screens.SearchScreen
+import com.open.entropy.ui.screens.PaperCollabsScreen
 import com.open.entropy.ui.screens.SplashScreen
 import com.open.entropy.ui.screens.ChatRoomScreen
 import com.open.entropy.ui.screens.ChatListScreen
 import com.open.entropy.ui.screens.LogicEngineScreen
+import com.open.entropy.ui.screens.ProWorkspaceScreen
+import com.open.entropy.ui.screens.DailyDiscoveryScreen
+import com.open.entropy.ui.screens.CoLabWorkspaceScreen
+import androidx.compose.material.icons.filled.Groups
 import com.open.entropy.ui.theme.ResQitTheme
 import kotlinx.coroutines.launch
 
@@ -92,40 +104,79 @@ fun ResQitMainApp() {
 
     val hasSeenOnboarding by userPrefs.hasSeenOnboarding.collectAsStateWithLifecycle(initialValue = false)
     var isFeedLoading by remember { mutableStateOf(true) }
+    var isLlmActive by remember { mutableStateOf(true) }
+    val apiService = remember { com.open.entropy.network.ApiService() }
 
-    val mainTabs = listOf("discover", "search", "library", "nexus")
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while(true) {
+            isLlmActive = apiService.checkAiStatus()
+            kotlinx.coroutines.delay(30000)
+        }
+    }
+
+    val mainTabs = listOf("discover", "collabs", "papers", "nexus", "profile")
     val dockItems = listOf(
-        DockItem("discover", Icons.Filled.Hub, "Network", badgeCount = 1),
-        DockItem("search", Icons.Filled.Search, "Search", hasBadgeDot = true),
-        DockItem("library", Icons.AutoMirrored.Filled.MenuBook, "Library"),
-        DockItem("nexus", Icons.Filled.AutoGraph, "Nexus")
+        DockItem("discover", Icons.Filled.Hub, "Home", badgeCount = 1),
+        DockItem("collabs", Icons.Filled.Groups, "Collabs", hasBadgeDot = true),
+        DockItem("papers", Icons.AutoMirrored.Filled.MenuBook, "Papers"),
+        DockItem("nexus", Icons.Filled.AutoGraph, "Network"),
+        DockItem("profile", Icons.Outlined.Person, "You")
     )
 
     ResQitScaffold { innerPadding ->
-        Scaffold(
-            containerColor = Color.Transparent,
-            bottomBar = {
-                val showBottomBar = currentRoute in mainTabs && (!isFeedLoading || currentRoute != "discover")
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = showBottomBar,
-                    enter = fadeIn(animationSpec = tween(350, easing = EaseOutCubic)),
-                    exit = fadeOut(animationSpec = tween(250, easing = EaseOutCubic))
+        androidx.compose.foundation.layout.Column(modifier = Modifier.fillMaxSize()) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = !isLlmActive,
+                enter = androidx.compose.animation.expandVertically(),
+                exit = androidx.compose.animation.shrinkVertically()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFFE53935))
+                        .statusBarsPadding()
+                        .padding(top = 8.dp, bottom = 8.dp),
+                    contentAlignment = androidx.compose.ui.Alignment.Center
                 ) {
-                    BottomNavDock(
-                        items = dockItems,
-                        currentRoute = currentRoute,
-                        onItemClick = { item ->
-                            navController.navigate(item.route) {
-                                popUpTo("discover") { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        }
-                    )
+                    androidx.compose.foundation.layout.Row(
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center
+                    ) {
+                        androidx.compose.material3.Icon(
+                            imageVector = Icons.Outlined.AutoAwesome,
+                            contentDescription = "AI Offline",
+                            tint = Color.White,
+                            modifier = Modifier.padding(end = 8.dp).size(16.dp)
+                        )
+                        androidx.compose.material3.Text(
+                            text = "AI Services Offline (Credits Exhausted)",
+                            color = Color.White,
+                            style = androidx.compose.material3.MaterialTheme.typography.labelMedium
+                        )
+                    }
                 }
             }
-        ) { scaffoldPadding ->
-            NavHost(
+            Box(modifier = Modifier.weight(1f)) {
+                Scaffold(
+                    containerColor = Color.Transparent,
+                    bottomBar = {
+                        val showBottomBar = currentRoute in mainTabs
+                        if (showBottomBar) {
+                            BottomNavDock(
+                                items = dockItems,
+                                currentRoute = currentRoute,
+                                onItemClick = { item ->
+                                    navController.navigate(item.route) {
+                                        popUpTo("discover") { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            )
+                        }
+                    }
+                ) { scaffoldPadding ->
+                    NavHost(
                 navController = navController,
                 startDestination = "splash",
                 modifier = Modifier.fillMaxSize()
@@ -239,6 +290,38 @@ fun ResQitMainApp() {
                     }
                 }
                 composable(
+                    route = "papers",
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                    }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .screenSafeArea(includeBottom = false)
+                            .padding(bottom = ScreenInsets.bottomNavClearance)
+                    ) {
+                        PapersScreen(
+                            onPaperClick = { paperId ->
+                                navController.navigate("paper_detail/${paperId.encodeForRoute()}")
+                            },
+                            onProfileClick = {
+                                navController.navigate("profile")
+                            },
+                            onNavigateToReader = { title, doi ->
+                                navController.navigate("reader/${title.encodeForRoute()}/${doi.encodeForRoute()}")
+                            },
+                            onTabNavigate = { route ->
+                                navController.navigate(route) {
+                                    popUpTo("discover") { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            }
+                        )
+                    }
+                }
+                composable(
                     route = "profile",
                     enterTransition = {
                         fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
@@ -253,12 +336,34 @@ fun ResQitMainApp() {
                         ProfileScreen(
                             onBack = {
                                 navController.popBackStack()
+                            },
+                            onNavigateToProWorkspace = {
+                                navController.navigate("pro_workspace")
                             }
                         )
                     }
                 }
                 composable(
-                    route = "search",
+                    route = "pro_workspace",
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                    }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .screenSafeArea(includeBottom = true)
+                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
+                    ) {
+                        ProWorkspaceScreen(
+                            onBack = {
+                                navController.popBackStack()
+                            }
+                        )
+                    }
+                }
+                composable(
+                    route = "collabs",
                     enterTransition = {
                         fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
                     }
@@ -269,9 +374,13 @@ fun ResQitMainApp() {
                             .screenSafeArea(includeBottom = false)
                             .padding(bottom = ScreenInsets.bottomNavClearance)
                     ) {
-                        SearchScreen(
-                            onPaperClick = { paperId -> navController.navigate("paper_detail/${paperId.encodeForRoute()}") },
-                            onAuthorClick = { authorName -> navController.navigate("author_detail/${authorName.encodeForRoute()}") }
+                        PaperCollabsScreen(
+                            onNavigateToChat = { peerName, peerId ->
+                                navController.navigate("chat/${peerName.encodeForRoute()}/${peerId.encodeForRoute()}")
+                            },
+                            onNavigateToWorkspace = { projectName ->
+                                navController.navigate("colab_workspace/${projectName.encodeForRoute()}")
+                            }
                         )
                     }
                 }
@@ -404,6 +513,28 @@ fun ResQitMainApp() {
                             onChatClick = { peerName, peerId ->
                                 navController.navigate("chat/${peerName.encodeForRoute()}/${peerId.encodeForRoute()}")
                             },
+                            onCoLabClick = { projectName ->
+                                navController.navigate("colab_workspace/${projectName.encodeForRoute()}")
+                            },
+                            onBack = { navController.popBackStack() }
+                        )
+                    }
+                }
+                composable(
+                    route = "colab_workspace/{projectName}",
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                    }
+                ) { backStackEntry ->
+                    val projectName = backStackEntry.arguments?.getString("projectName")?.decodeFromRoute() ?: "Project Nexus"
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .screenSafeArea(includeBottom = true)
+                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
+                    ) {
+                        CoLabWorkspaceScreen(
+                            projectName = projectName,
                             onBack = { navController.popBackStack() }
                         )
                     }
@@ -423,6 +554,28 @@ fun ResQitMainApp() {
                         LogicEngineScreen(
                             onBack = { navController.popBackStack() }
                         )
+                    }
+                }
+                composable(
+                    route = "daily_discovery",
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                    }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .screenSafeArea(includeBottom = true)
+                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
+                    ) {
+                        DailyDiscoveryScreen(
+                            onBack = { navController.popBackStack() },
+                            onPaperSaved = { paperId ->
+                                // no-op for now, would typically save to Vault
+                            }
+                        )
+                    }
+                }
                     }
                 }
             }

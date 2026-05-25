@@ -12,8 +12,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.automirrored.filled.Feed
 import androidx.compose.material3.*
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,7 +54,7 @@ fun LibraryScreen(onPaperClick: (String) -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(BgCard)
+                .background(BgPrimary)
                 .padding(horizontal = 16.dp)
                 .padding(top = 16.dp)
         ) {
@@ -74,20 +74,11 @@ fun LibraryScreen(onPaperClick: (String) -> Unit) {
             Spacer(Modifier.height(12.dp))
 
             // Tabs
-            ScrollableTabRow(
+            SecondaryScrollableTabRow(
                 selectedTabIndex = selectedTab,
                 containerColor = Color.Transparent,
                 contentColor = AccentTeal,
                 edgePadding = 0.dp,
-                indicator = { tabPositions ->
-                    if (selectedTab < tabPositions.size) {
-                        TabRowDefaults.SecondaryIndicator(
-                            modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                            color = AccentTeal,
-                            height = 2.dp
-                        )
-                    }
-                },
                 divider = {}
             ) {
                 tabs.forEachIndexed { index, title ->
@@ -468,7 +459,7 @@ fun GrantCard(grant: com.open.entropy.network.GrantMatch) {
                 }
 
                 Spacer(Modifier.height(8.dp))
-                Divider(color = BorderLight)
+                HorizontalDivider(color = BorderLight)
                 Spacer(Modifier.height(8.dp))
 
                 Row(
@@ -586,7 +577,7 @@ fun DailyFeedTab(
 
     if (feedItems.isEmpty()) {
         EmptyStateView(
-            Icons.Default.Feed,
+            Icons.AutoMirrored.Filled.Feed,
             "No recommendations yet",
             "Try selecting a researcher to build customized recommendations"
         )
@@ -695,7 +686,7 @@ fun DailyFeedTab(
                     )
 
                     Spacer(Modifier.height(8.dp))
-                    Divider(color = BorderLight)
+                    HorizontalDivider(color = BorderLight)
                     Spacer(Modifier.height(8.dp))
 
                     Row(

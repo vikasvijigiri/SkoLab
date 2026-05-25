@@ -44,7 +44,7 @@ object ServerLocator {
     private var resolveListener: NsdManager.ResolveListener? = null
     private var resolveInProgress = false
     private var probeThread: Thread? = null
-    private var appContext: Context? = null
+    internal var appContext: Context? = null
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -69,14 +69,9 @@ object ServerLocator {
         appContext = context.applicationContext
         
         val isEmulator = Build.FINGERPRINT.contains("generic") || Build.MODEL.contains("Emulator")
-        if (com.open.entropy.BuildConfig.DEBUG) {
-            if (isEmulator) {
-                _baseUrl.value = "http://10.0.2.2:8000"
-                Log.i(TAG, "Emulator detected. Forcing baseUrl to http://10.0.2.2:8000")
-            } else {
-                _baseUrl.value = "http://127.0.0.1:8000"
-                Log.i(TAG, "Physical device in debug mode. Forcing baseUrl to http://127.0.0.1:8000 (Requires adb reverse tcp:8000 tcp:8000)")
-            }
+        if (com.open.entropy.BuildConfig.DEBUG && isEmulator) {
+            _baseUrl.value = "http://10.0.2.2:8000"
+            Log.i(TAG, "Emulator detected. Forcing baseUrl to http://10.0.2.2:8000")
             return
         }
 
@@ -114,6 +109,10 @@ object ServerLocator {
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to read cached URL in probe thread: ${e.message}")
                 }
+            }
+            if (com.open.entropy.BuildConfig.DEBUG && !isEmulator) {
+                // Prioritize local debugging address for physical devices
+                candidates.add("http://127.0.0.1:8000")
             }
             candidates.addAll(listOf(
                 "http://10.0.2.2:8000",
@@ -170,8 +169,9 @@ object ServerLocator {
      * If this matches the current baseUrl, we reset it to null to trigger rediscovery.
      */
     fun reportFailure(url: String) {
-        if (com.open.entropy.BuildConfig.DEBUG) {
-            Log.d(TAG, "Failure reported in debug mode for $url, keeping forced debug URL active.")
+        val isEmulator = Build.FINGERPRINT.contains("generic") || Build.MODEL.contains("Emulator")
+        if (com.open.entropy.BuildConfig.DEBUG && isEmulator) {
+            Log.d(TAG, "Failure reported in debug mode for emulator, keeping forced debug URL active.")
             return
         }
         val current = _baseUrl.value ?: return

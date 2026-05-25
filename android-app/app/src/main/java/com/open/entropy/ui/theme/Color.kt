@@ -2,25 +2,20 @@ package com.open.entropy.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// ═══════════════════════════════════════════════════════════════
-// ReQit — Professional Corporate Grade Design System
-// Inspired by Flipkart & Professional Corporate Dashboards
-// ═══════════════════════════════════════════════════════════════
-
 // ── Backgrounds ──────────────────────────────────────────────────
-val BgPrimary         = Color(0xFF131F24)  // Duolingo Dark Slate background
-val BgCard            = Color(0xFF202F36)  // Duolingo Dark Slate card
-val BgElevated        = Color(0xFF202F36)  // Duolingo Dark Slate elevated
-val BgSubtle          = Color(0xFF1B282F)  // Subtle section
+val BgPrimary         = Color(0xFF111B21)  // WhatsApp dark background
+val BgCard            = Color(0xFF202C33)  // WhatsApp card/bubble background
+val BgElevated        = Color(0xFF222E35)  // WhatsApp elevated background
+val BgSubtle          = Color(0xFF182229)  // WhatsApp subtle background
 
-// ── Accent Colors — Professional Flipkart Blue & Gold ─────────────────────
-val AccentTeal        = Color(0xFF2874F0)  // Peaceful corporate Flipkart Blue
-val AccentTealDark    = Color(0xFF1B59C4)  // Pressed state Flipkart Blue
-val AccentTealLight   = Color(0x262874F0)  // 15% opacity Blue tint
+// ── Accent Colors ────────────────────────────────────────────────
+val AccentTeal        = Color(0xFF00A884)  // WhatsApp Teal/Green accent
+val AccentTealDark    = Color(0xFF005C4B)  // WhatsApp Dark Green bubble/accent
+val AccentTealLight   = Color(0x2600A884)  // 15% opacity Teal tint
 val AccentIndigo      = Color(0xFF5B78C2)  // Peaceful soft blue-slate — AI
 val AccentIndigoLight = Color(0x1A5B78C2)  // Soft Indigo tint
-val AccentEmerald     = Color(0xFF4CAF50)  // Peaceful soft success green
-val AccentEmeraldLight= Color(0x1A4CAF50)  // Emerald tint
+val AccentEmerald     = Color(0xFF25D366)  // WhatsApp Bright Green
+val AccentEmeraldLight= Color(0x1A25D366)  // Emerald tint
 val AccentAmber       = Color(0xFFF4B400)  // Flipkart Gold/Yellow highlight
 val AccentAmberLight  = Color(0x26F4B400)  // Amber/Gold tint
 val AccentRose        = Color(0xFFE53935)  // Peaceful soft red
@@ -34,14 +29,14 @@ val AccentCyanLight   = Color(0x1A00ACC1)  // Cyan tint
 val AccentSlate       = Color(0xFF607D8B)  // Neutral slate
 
 // ── Text ─────────────────────────────────────────────────────────
-val TextPrimary       = Color(0xFFF1F5F9)  // Crisp white/slate headlines
-val TextSecondary     = Color(0xFF94A3B8)  // Peaceful slate secondary text
-val TextMuted         = Color(0xFF475569)  // Muted slate captions
+val TextPrimary       = Color(0xFFE9EDEF)  // WhatsApp Primary text
+val TextSecondary     = Color(0xFF8696A0)  // WhatsApp Secondary text
+val TextMuted         = Color(0xFF667781)  // WhatsApp Muted text
 val TextOnAccent      = Color(0xFFFFFFFF)  // High contrast white text on accent badges
 
 // ── Borders & Dividers ────────────────────────────────────────────
-val BorderLight       = Color(0xFF1E293B)  // Slate hairline borders
-val BorderMedium      = Color(0xFF334155)  // Slate dividers
+val BorderLight       = Color(0xFF222E35)  // WhatsApp Dark border
+val BorderMedium      = Color(0xFF2F3B43)  // Dark divider
 
 // ── Shadows (used as overlay tints) ───────────────────────────────
 val ShadowColor       = Color(0xFF020617)  // Deep dark for elevation shadows
@@ -112,3 +107,23 @@ val DiscoveryEmerald      = AccentEmerald
 val QuantumPurple         = AccentViolet
 val ProGradientSurface    = listOf(BgCard, BgElevated)
 val ProGradientPrimary    = TealGradient
+
+object EntropiColors {
+    val Background = BgPrimary
+    val Card = BgPrimary
+    val Card2 = BgPrimary
+    val Border = Color(0xFF222E35)
+    val Text1 = Color(0xFFE8ECFF)
+    val Text = Color(0xFFE8ECFF)
+    val Text2 = Color(0xFF8696A0)
+    val Text3 = Color(0xFF667781)
+    val Gold1 = Color(0xFFC9A84C)
+    val Gold2 = Color(0xFFE8C76A)
+    val Blue1 = Color(0xFF00A884)
+    val Blue2 = Color(0xFF25D366)
+    val Purple1 = Color(0xFF7C3AED)
+    val Purple2 = Color(0xFF9D5FFF)
+    val Cyan = Color(0xFF00D4FF)
+    val Green = Color(0xFF25D366)
+    val Red = Color(0xFFFF4757)
+}
