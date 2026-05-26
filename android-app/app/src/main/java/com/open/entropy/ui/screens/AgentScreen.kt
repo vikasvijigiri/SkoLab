@@ -72,6 +72,7 @@ fun AgentScreen() {
     }
 
     Scaffold(
+        modifier = Modifier.imePadding(),
         containerColor = EntropiColors.Background, // Deep Navy Background
         topBar = {
             AgentTopBar(

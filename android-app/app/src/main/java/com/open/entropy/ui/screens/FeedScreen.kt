@@ -149,20 +149,7 @@ fun FeedScreen(
         android.util.Log.d("FeedScreen", "isLoading is now: ${uiState.isLoading}")
     }
 
-    // Scroll depth tracker for load more
-    val shouldLoadMore by remember {
-        derivedStateOf {
-            val totalItems = listState.layoutInfo.totalItemsCount
-            val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            totalItems > 0 && lastVisibleItem >= totalItems - 3
-        }
-    }
-
-    LaunchedEffect(shouldLoadMore) {
-        if (shouldLoadMore && !uiState.isLoadingMoreConnections && !uiState.isLoading) {
-            viewModel.loadMoreConnections()
-        }
-    }
+    // Scroll tracking moved directly to the items list below
 
     Box(
         modifier = Modifier
@@ -563,7 +550,14 @@ fun FeedScreen(
                         }
                     }
                 } else {
-                    items(filteredConnections.chunked(2)) { rowItems ->
+                    val chunkedList = filteredConnections.chunked(2)
+                    itemsIndexed(chunkedList) { index, rowItems ->
+                        // Trigger load more when reaching the end of the connections list
+                        if (index >= chunkedList.size - 1 && !uiState.isLoadingMoreConnections && !uiState.isLoading) {
+                            LaunchedEffect(index) {
+                                viewModel.loadMoreConnections()
+                            }
+                        }
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                             horizontalArrangement = Arrangement.spacedBy(16.dp)
