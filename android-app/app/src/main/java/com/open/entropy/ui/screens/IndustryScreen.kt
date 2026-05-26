@@ -28,6 +28,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.open.entropy.ui.theme.EntropiColors
 import com.open.entropy.viewmodel.IndustryViewModel
 import com.open.entropy.viewmodel.OpportunityType
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.platform.LocalContext
+import com.open.entropy.data.UserPreferences
 
 @Composable
 fun IndustryScreen(
@@ -35,6 +40,15 @@ fun IndustryScreen(
     onNavigateToReader: (String, String) -> Unit = { _, _ -> }
 ) {
     val opportunities by viewModel.opportunities.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val context = LocalContext.current
+    val userPrefs = remember { UserPreferences(context) }
+    val cachedUser by userPrefs.cachedUser.collectAsState(initial = null)
+
+    LaunchedEffect(cachedUser) {
+        val focus = cachedUser?.researchFocus ?: "AI"
+        viewModel.loadOpportunities(focus)
+    }
 
     Scaffold(
         containerColor = EntropiColors.Background,
@@ -55,17 +69,22 @@ fun IndustryScreen(
                             endY = 300f
                         )
                     )
-                }
+                },
+            contentAlignment = Alignment.Center
         ) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(vertical = 16.dp)
-            ) {
-                items(opportunities) { opp ->
-                    IndustryOpportunityCard(opp)
+            if (isLoading && opportunities.isEmpty()) {
+                CircularProgressIndicator(color = EntropiColors.Blue1)
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(vertical = 16.dp)
+                ) {
+                    items(opportunities) { opp ->
+                        IndustryOpportunityCard(opp)
+                    }
                 }
             }
         }
@@ -111,6 +130,7 @@ fun IndustryTopBar() {
 
 @Composable
 fun IndustryOpportunityCard(opp: com.open.entropy.viewmodel.IndustryOpportunity) {
+    val context = LocalContext.current
     val (icon, tintColor) = when (opp.type) {
         OpportunityType.JOB -> Icons.Filled.Work to Color(0xFF42A5F5)
         OpportunityType.FUNDING -> Icons.Filled.AttachMoney to Color(0xFF66BB6A)
@@ -120,7 +140,13 @@ fun IndustryOpportunityCard(opp: com.open.entropy.viewmodel.IndustryOpportunity)
     Surface(
         color = EntropiColors.Card,
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, EntropiColors.Border)
+        border = BorderStroke(1.dp, EntropiColors.Border),
+        modifier = Modifier.clickable {
+            if (opp.url.isNotBlank()) {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(opp.url))
+                context.startActivity(intent)
+            }
+        }
     ) {
         Column(
             modifier = Modifier
