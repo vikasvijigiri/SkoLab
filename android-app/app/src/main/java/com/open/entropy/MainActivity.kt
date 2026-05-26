@@ -60,7 +60,7 @@ import com.open.entropy.ui.screens.DiscoveryScreen
 import com.open.entropy.ui.screens.FeedScreen
 import com.open.entropy.ui.screens.ProfileScreen
 import com.open.entropy.ui.screens.LibraryScreen
-import com.open.entropy.ui.screens.NexusScreen
+import com.open.entropy.ui.screens.MetricsScreen
 import com.open.entropy.ui.screens.OnboardingScreen
 import com.open.entropy.ui.screens.PaperDetailScreen
 import com.open.entropy.ui.screens.PapersScreen
@@ -117,12 +117,12 @@ fun ResQitMainApp() {
         }
     }
 
-    val mainTabs = listOf("discover", "collabs", "agent", "nexus", "industry")
+    val mainTabs = listOf("discover", "collabs", "agent", "metrics", "industry")
     val dockItems = listOf(
         DockItem("discover", Icons.Filled.Hub, "Home", badgeCount = 1),
         DockItem("collabs", Icons.Filled.Groups, "Collabs", hasBadgeDot = true),
         DockItem("agent", Icons.Filled.AutoAwesome, "Agent"),
-        DockItem("nexus", Icons.Filled.AutoGraph, "Network"),
+        DockItem("metrics", Icons.Filled.AutoGraph, "Metrics"),
         DockItem("industry", Icons.Filled.BusinessCenter, "Industry")
     )
 
@@ -440,7 +440,7 @@ fun ResQitMainApp() {
                     }
                 }
                 composable(
-                    route = "nexus",
+                    route = "metrics",
                     enterTransition = {
                         fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
                     }
@@ -451,7 +451,7 @@ fun ResQitMainApp() {
                             .screenSafeArea(includeBottom = false)
                             .padding(bottom = ScreenInsets.bottomNavClearance)
                     ) {
-                        NexusScreen()
+                        MetricsScreen()
                     }
                 }
                 composable(

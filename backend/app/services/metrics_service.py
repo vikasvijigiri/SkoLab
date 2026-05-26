@@ -207,3 +207,101 @@ class MetricsService:
         # Sort by relevance score if possible (though OpenAlex usually sorts by score)
         # Limit to top 6 specific skills
         return list(dict.fromkeys(skills))[:6]
+
+import httpx
+import logging
+logger = logging.getLogger(__name__)
+
+async def compute_author_metrics(author_id: str) -> dict:
+    url = f"https://api.openalex.org/works?filter=author.id:{author_id}&per_page=10&sort=publication_year:desc"
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(url, timeout=15.0)
+            resp.raise_for_status()
+            data = resp.json()
+            results = data.get("results", [])
+    except Exception as e:
+        logger.error(f"Failed to fetch works for {author_id}: {e}")
+        results = []
+
+    if not results:
+        return {
+            "overall_score": 50,
+            "topic_toughness": 50,
+            "velocity": 50,
+            "skills": ["Research"],
+            "tools": ["Literature Review"],
+            "analysis": "Not enough recent papers to analyze comprehensively."
+        }
+
+    abstracts = []
+    for work in results:
+        title = work.get("title", "")
+        concepts = [c.get("display_name") for c in work.get("concepts", [])]
+        abstracts.append(f"Title: {title}. Concepts: {', '.join(concepts)}")
+
+    context = "\n".join(abstracts)
+    
+    prompt = f"""
+    Analyze the following recent research works of an author:
+    {context}
+    
+    Based on the density of the terminology, concepts, and titles, extract:
+    1. topic_toughness (an integer 0-100 indicating the complexity and niche of their topics)
+    2. velocity (an integer 0-100 indicating how rapidly they are producing complex work)
+    3. skills (a list of 3-5 high-level research skills implied by their work, e.g., 'Quantum Computing', 'Clinical Trials')
+    4. tools (a list of 3-5 tools/frameworks/datasets implied, e.g., 'PyTorch', 'fMRI', 'Census Data')
+    5. analysis (a short 2 sentence explanation of why they got this score)
+
+    Return ONLY a valid JSON object matching this schema exactly:
+    {{
+      "topic_toughness": 85,
+      "velocity": 70,
+      "skills": ["Skill1", "Skill2"],
+      "tools": ["Tool1", "Tool2"],
+      "analysis": "..."
+    }}
+    """
+    
+    try:
+        api_key = os.environ.get("GROQ_API_KEY")
+        if not api_key:
+            raise Exception("GROQ_API_KEY not found")
+
+        payload = {
+            "model": "llama-3.3-70b-versatile",
+            "messages": [
+                {"role": "system", "content": "You are a Research Analyst. Return only JSON."},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.2,
+            "response_format": {"type": "json_object"},
+        }
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        async with httpx.AsyncClient() as client:
+            res = await client.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=30.0)
+            res.raise_for_status()
+            res_json = res.json()
+            content = res_json["choices"][0]["message"]["content"]
+            
+        parsed = json.loads(content)
+        
+        # Calculate an overall composite score
+        tt = int(parsed.get("topic_toughness", 50))
+        vel = int(parsed.get("velocity", 50))
+        parsed["overall_score"] = int((tt + vel) / 2)
+        return parsed
+    except Exception as e:
+        logger.error(f"Error analyzing metrics with LLM: {e}")
+        return {
+            "overall_score": 65,
+            "topic_toughness": 60,
+            "velocity": 70,
+            "skills": ["Data Analysis", "Scientific Writing"],
+            "tools": ["OpenAlex", "Statistical Software"],
+            "analysis": "Fallback metrics applied due to processing error."
+        }

@@ -1110,3 +1110,16 @@ async def agent_chat(req: AgentChatRequest):
     except Exception as e:
         print(f"Agent chat failed: {e}")
         return {"reply": "An error occurred while processing your query. Please try again."}
+
+
+@app.get("/author_metrics")
+async def get_author_metrics(author_id: str = Query(...)):
+    from app.services.metrics_service import compute_author_metrics
+    data = await compute_author_metrics(author_id)
+    return data
+
+@app.get("/industry_opportunities")
+async def get_industry_opportunities(focus: str = Query("AI")):
+    from app.services.industry_service import fetch_industry_opportunities
+    opportunities = await fetch_industry_opportunities(focus)
+    return opportunities

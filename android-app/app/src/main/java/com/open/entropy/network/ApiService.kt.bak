@@ -16,7 +16,6 @@ import kotlinx.coroutines.*
 import android.content.Context
 import android.net.Uri
 import io.ktor.client.request.forms.*
-import com.open.entropy.viewmodel.IndustryOpportunity
 
 // ── Data models ───────────────────────────────────────────────────────────────
 
@@ -32,16 +31,6 @@ data class AiStatusResponse(
 data class UploadDocumentResponse(
     val filename: String,
     val extracted_text: String
-)
-
-@Serializable
-data class AuthorMetrics(
-    val overall_score: Int = 0,
-    val topic_toughness: Int = 0,
-    val velocity: Int = 0,
-    val skills: List<String> = emptyList(),
-    val tools: List<String> = emptyList(),
-    val analysis: String = ""
 )
 
 @Serializable
@@ -1300,50 +1289,6 @@ class ApiService {
                 Log.e("ApiService", "Error in uploadDocument: ${e.message}")
                 null
             }
-        }
-    }
-
-    suspend fun getAuthorMetrics(authorId: String): AuthorMetrics? {
-        return try {
-            val baseUrl = ServerLocator.baseUrl.value
-            if (baseUrl == null) {
-                Log.e("ApiService", "Server base URL is not discovered yet")
-                return null
-            }
-            val response: io.ktor.client.statement.HttpResponse = httpClient.get("$baseUrl/author_metrics") {
-                parameter("author_id", authorId)
-            }
-            if (response.status == HttpStatusCode.OK) {
-                response.body()
-            } else {
-                Log.e("ApiService", "Failed to fetch author metrics: ${response.status}")
-                null
-            }
-        } catch (e: Exception) {
-            Log.e("ApiService", "Error fetching author metrics: ${e.message}")
-            null
-        }
-    }
-
-    suspend fun getIndustryOpportunities(focus: String): List<IndustryOpportunity> {
-        return try {
-            val baseUrl = ServerLocator.baseUrl.value
-            if (baseUrl == null) {
-                Log.e("ApiService", "Server base URL is not discovered yet")
-                return emptyList()
-            }
-            val response: io.ktor.client.statement.HttpResponse = httpClient.get("$baseUrl/industry_opportunities") {
-                parameter("focus", focus)
-            }
-            if (response.status == HttpStatusCode.OK) {
-                response.body()
-            } else {
-                Log.e("ApiService", "Failed to fetch industry opportunities: ${response.status}")
-                emptyList()
-            }
-        } catch (e: Exception) {
-            Log.e("ApiService", "Error fetching industry opportunities: ${e.message}")
-            emptyList()
         }
     }
 }
