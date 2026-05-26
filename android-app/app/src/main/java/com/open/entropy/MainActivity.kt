@@ -75,8 +75,10 @@ import com.open.entropy.ui.screens.DailyDiscoveryScreen
 import com.open.entropy.ui.screens.CoLabWorkspaceScreen
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.foundation.layout.ime
 import com.open.entropy.ui.screens.AgentScreen
 import com.open.entropy.ui.theme.ResQitTheme
+import com.open.entropy.ui.theme.EntropiColors
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -105,7 +107,7 @@ fun ResQitMainApp() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    val hasSeenOnboarding by userPrefs.hasSeenOnboarding.collectAsStateWithLifecycle(initialValue = false)
+    val hasSeenOnboardingState by userPrefs.hasSeenOnboarding.collectAsStateWithLifecycle(initialValue = null)
     var isFeedLoading by remember { mutableStateOf(true) }
     var isLlmActive by remember { mutableStateOf(true) }
     val apiService = remember { com.open.entropy.network.ApiService() }
@@ -190,18 +192,27 @@ fun ResQitMainApp() {
                         fadeOut(animationSpec = tween(400, easing = EaseOutCubic))
                     }
                 ) {
-                    SplashScreen(
-                        onAnimationFinished = {
-                            val next = when {
-                                !hasSeenOnboarding -> "onboarding"
-                                !authManager.isSignedIn -> "auth"
-                                else -> "discover"
-                            }
+                    if (hasSeenOnboardingState == null) {
+                        // Wait for DataStore to load
+                        Box(modifier = Modifier.fillMaxSize().background(EntropiColors.Background))
+                    } else if (hasSeenOnboardingState == true) {
+                        // Skip splash animation if onboarding is already completed
+                        androidx.compose.runtime.LaunchedEffect(Unit) {
+                            val next = if (!authManager.isSignedIn) "auth" else "discover"
                             navController.navigate(next) {
                                 popUpTo("splash") { inclusive = true }
                             }
                         }
-                    )
+                        Box(modifier = Modifier.fillMaxSize().background(EntropiColors.Background))
+                    } else {
+                        SplashScreen(
+                            onAnimationFinished = {
+                                navController.navigate("onboarding") {
+                                    popUpTo("splash") { inclusive = true }
+                                }
+                            }
+                        )
+                    }
                 }
                 composable(
                     route = "onboarding",
@@ -333,11 +344,14 @@ fun ResQitMainApp() {
                         fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
                     }
                 ) {
+                    val imeBottom = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current)
+                    val isKeyboardVisible = imeBottom > 0
+                    val bottomPadding = if (isKeyboardVisible) 0.dp else ScreenInsets.bottomNavClearance
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .screenSafeArea(includeBottom = false)
-                            .padding(bottom = ScreenInsets.bottomNavClearance)
+                            .padding(bottom = bottomPadding)
                     ) {
                         AgentScreen()
                     }
@@ -484,7 +498,7 @@ fun ResQitMainApp() {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .screenSafeArea(includeBottom = true)
+                            .screenSafeArea(includeBottom = false)
                             .padding(bottom = scaffoldPadding.calculateBottomPadding())
                     ) {
                         AuthorDetailScreen(

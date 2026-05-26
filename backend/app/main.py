@@ -95,6 +95,16 @@ _mdns_info: ServiceInfo | None = None
 
 
 @app.on_event("startup")
+async def init_postgres() -> None:
+    from app.database import init_db
+    print("[Postgres] Initializing local database schema...", flush=True)
+    try:
+        await init_db()
+        print("[Postgres] Database initialization successful.", flush=True)
+    except Exception as e:
+        print(f"[Postgres] Database initialization failed: {e}", flush=True)
+
+@app.on_event("startup")
 async def verify_firestore() -> None:
     """Check if Firestore connection is responsive. If not, bypass to fallback."""
     from researcher_worker import check_connection_sync, set_firestore_available
@@ -844,10 +854,15 @@ async def search_author(
                 raise HTTPException(status_code=404, detail="Author not found on OpenAlex")
 
             # ── 3b. Fetch recent works (pure OpenAlex, no LLM) ──────────────
+            filter_str = f"authorships.author.id:{resolved_id}"
+            author_orcid = author_data.get("orcid")
+            if author_orcid:
+                filter_str = f"authorships.author.orcid:{author_orcid}"
+
             works_res = await client.get(
                 f"{BASE_URL}/works",
                 params={
-                    "filter": f"authorships.author.id:{resolved_id}",
+                    "filter": filter_str,
                     "per_page": 50,
                     "sort": "publication_year:desc",
                     "mailto": "vikki.4me@gmail.com"

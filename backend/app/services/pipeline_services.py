@@ -5,9 +5,11 @@ import random
 import asyncio
 import re
 from typing import List, Dict, Optional, Any
-import firebase_admin
-from firebase_admin import firestore
 from app.services.summarization_service import is_llm_working, set_llm_limit_exceeded
+from sqlalchemy.future import select
+import json
+from app.database import AsyncSessionLocal
+from app.models import CacheEntry, AgentChatHistory
 
 class PipelineServices:
     def __init__(self):
@@ -23,7 +25,31 @@ class PipelineServices:
         if settings.openalex_api_key:
             self.headers["api_key"] = settings.openalex_api_key
 
-    def _get_firestore_db(self) -> Optional[Any]:
+    async def _save_to_postgres(self, cache_key: str, data: Dict[str, Any]):
+        async with AsyncSessionLocal() as session:
+            try:
+                stmt = select(CacheEntry).where(CacheEntry.cache_key == cache_key)
+                result = await session.execute(stmt)
+                entry = result.scalars().first()
+                if entry:
+                    entry.data = data
+                else:
+                    entry = CacheEntry(cache_key=cache_key, data=data)
+                    session.add(entry)
+                await session.commit()
+            except Exception as e:
+                print(f"[Postgres Cache Error] write failed: {e}", flush=True)
+
+    async def _load_from_postgres(self, cache_key: str) -> Optional[Dict[str, Any]]:
+        async with AsyncSessionLocal() as session:
+            try:
+                stmt = select(CacheEntry).where(CacheEntry.cache_key == cache_key)
+                result = await session.execute(stmt)
+                entry = result.scalars().first()
+                if entry:
+                    return entry.data
+            except Exception as e:
+                print(f"[Postgres Cache Error] read failed: {e}", flush=True)
         return None
 
     async def _fetch_author_profile(self, author_id: str) -> Optional[Dict[str, Any]]:
@@ -770,7 +796,8 @@ Provide your response in this exact JSON format:
                         )
                         if res.status_code == 200:
                             for a in res.json().get("results", []):
-                                real_stats[a["id"]] = {
+                                author_id_short = a["id"].split("/")[-1]
+                                real_stats[author_id_short] = {
                                     "works_count": a.get("works_count", 0),
                                     "h_index": a.get("summary_stats", {}).get("h_index", 0)
                                 }
@@ -855,18 +882,22 @@ Provide your response in this exact JSON format:
         sanitized_title = re.sub(r'[^a-zA-Z0-9]', '_', paper_title.lower())[:100]
         doc_id = f"chat_{clean_author}_{sanitized_title}"
 
-        db = self._get_firestore_db()
-
-        if not history and db:
-            try:
-                doc = db.collection("chat_history").document(doc_id).get(timeout=2.0)
-                if doc.exists:
-                    cached_data = doc.to_dict()
-                    if cached_data and "messages" in cached_data:
-                        history = cached_data["messages"]
-                        print(f"[Firestore Chat Load] Loaded {len(history)} messages for doc_id={doc_id}", flush=True)
-            except Exception as e:
-                print(f"[Firestore Chat Load Error] failed: {e}", flush=True)
+        user_id = "default_local_user"
+        
+        async with AsyncSessionLocal() as session:
+            if not history:
+                try:
+                    stmt = select(AgentChatHistory).where(
+                        AgentChatHistory.user_id == user_id, 
+                        AgentChatHistory.context_id == doc_id
+                    ).order_by(AgentChatHistory.timestamp.asc())
+                    result = await session.execute(stmt)
+                    db_msgs = result.scalars().all()
+                    if db_msgs:
+                        history = [{"role": msg.role, "content": msg.content} for msg in db_msgs]
+                        print(f"[Postgres Chat Load] Loaded {len(history)} messages for doc_id={doc_id}", flush=True)
+                except Exception as e:
+                    print(f"[Postgres Chat Load Error] failed: {e}", flush=True)
 
         profile = await self._fetch_author_profile(author_id)
         author_name = "Researcher"
@@ -924,20 +955,26 @@ Guidelines:
             except Exception as e:
                 print(f"Groq author chat simulation failed: {e}")
 
-        if db:
+        async with AsyncSessionLocal() as session:
             try:
-                db.collection("chat_history").document(doc_id).set({
-                    "author_id": author_id,
-                    "paper_title": paper_title,
-                    "messages": firestore.ArrayUnion([
-                        {"role": "user", "content": user_message},
-                        {"role": "assistant", "content": reply}
-                    ]),
-                    "last_updated": firestore.SERVER_TIMESTAMP
-                }, merge=True, timeout=2.0)
-                print(f"[Firestore Chat Save] Saved to chat_history for doc_id={doc_id}", flush=True)
+                user_msg = AgentChatHistory(
+                    user_id=user_id,
+                    context_id=doc_id,
+                    role="user",
+                    content=user_message
+                )
+                asst_msg = AgentChatHistory(
+                    user_id=user_id,
+                    context_id=doc_id,
+                    role="assistant",
+                    content=reply
+                )
+                session.add(user_msg)
+                session.add(asst_msg)
+                await session.commit()
+                print(f"[Postgres Chat Save] Saved to chat_history for doc_id={doc_id}", flush=True)
             except Exception as e:
-                print(f"[Firestore Chat Save Error] failed: {e}", flush=True)
+                print(f"[Postgres Chat Save Error] failed: {e}", flush=True)
 
         return {
             "author_id": author_id,

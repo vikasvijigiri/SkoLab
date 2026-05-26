@@ -874,7 +874,7 @@ fun ResearcherProfileView(
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().background(BgPrimary),
-                contentPadding = PaddingValues(bottom = 32.dp)
+                contentPadding = PaddingValues(bottom = 0.dp)
             ) {
                 // ── Hero Header ──────────────────────────────────────
                 item { ResearcherHeroCard(author = author, apiService = apiService, scope = scope, onUpdateData = onUpdateData) }
@@ -1035,7 +1035,7 @@ fun ResearcherHeroCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(horizontal = 16.dp, vertical = 4.dp)
         ) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
