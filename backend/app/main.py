@@ -1087,25 +1087,85 @@ class AgentChatRequest(BaseModel):
 @app.post("/agent/chat")
 async def agent_chat(req: AgentChatRequest):
     try:
-        system_prompt = f"You are ResQit Copilot, an expert AI {req.mode} assistant for a senior researcher. Be concise and professional."
+        system_prompt = f"You are ResQit Copilot, an expert AI {req.mode} assistant for a senior researcher. Be concise and professional. You have access to tools that can fetch data from arXiv, local folders, Gmail, and WhatsApp."
         messages = [{"role": "system", "content": system_prompt}]
         for h in req.history[-10:]:
-            if h.get("role") in ["user", "assistant"]:
+            if h.get("role") in ["user", "assistant", "tool"]:
                 messages.append({"role": h["role"], "content": h.get("content", "")})
         messages.append({"role": "user", "content": req.message})
         
         from app.services.pipeline_services import is_llm_working
+        from app.services.connectors import TOOLS_SCHEMA, execute_tool_call
+        import json
         if is_llm_working():
             async with httpx.AsyncClient(timeout=30.0) as client:
+                # Initial call with tools
                 res = await client.post(
                     pipeline_services.base_url,
                     headers={"Authorization": f"Bearer {pipeline_services.api_key}", "Content-Type": "application/json"},
-                    json={"model": pipeline_services.model, "messages": messages, "temperature": 0.5, "max_tokens": 1024},
+                    json={
+                        "model": pipeline_services.model, 
+                        "messages": messages, 
+                        "temperature": 0.5, 
+                        "max_tokens": 1024,
+                        "tools": TOOLS_SCHEMA,
+                        "tool_choice": "auto"
+                    },
                     timeout=20.0
                 )
                 if res.status_code == 200:
-                    reply = res.json()['choices'][0]['message']['content'].strip()
-                    return {"reply": reply}
+                    response_msg = res.json()['choices'][0]['message']
+                    tool_calls = response_msg.get("tool_calls")
+                    
+                    # Groq sometimes returns tools as text instead of tool_calls array
+                    if not tool_calls and "content" in response_msg and "<function=" in response_msg["content"]:
+                        import re
+                        content = response_msg["content"]
+                        match = re.search(r'<function=(\w+)>(.*?)</function>', content)
+                        if match:
+                            func_name = match.group(1)
+                            try:
+                                args = json.loads(match.group(2))
+                                tool_calls = [{
+                                    "id": "call_" + func_name,
+                                    "function": {"name": func_name, "arguments": json.dumps(args)}
+                                }]
+                            except:
+                                pass
+                    
+                    if tool_calls:
+                        messages.append(response_msg) # Assistant's tool_call message
+                        for tc in tool_calls:
+                            func_name = tc["function"]["name"]
+                            args = json.loads(tc["function"]["arguments"])
+                            tool_result = await execute_tool_call(func_name, args)
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tc["id"],
+                                "name": func_name,
+                                "content": str(tool_result)
+                            })
+                        
+                        # Second call after tools
+                        res2 = await client.post(
+                            pipeline_services.base_url,
+                            headers={"Authorization": f"Bearer {pipeline_services.api_key}", "Content-Type": "application/json"},
+                            json={
+                                "model": pipeline_services.model, 
+                                "messages": messages, 
+                                "temperature": 0.5, 
+                                "max_tokens": 1024
+                            },
+                            timeout=20.0
+                        )
+                        if res2.status_code == 200:
+                            reply = res2.json()['choices'][0]['message']['content'].strip()
+                            return {"reply": reply}
+                        else:
+                            return {"reply": f"Agent failed after tool call: {res2.text}"}
+                    else:
+                        reply = response_msg.get('content', '').strip()
+                        return {"reply": reply}
         return {"reply": "I am currently offline or rate-limited. Your query has been noted."}
     except Exception as e:
         print(f"Agent chat failed: {e}")

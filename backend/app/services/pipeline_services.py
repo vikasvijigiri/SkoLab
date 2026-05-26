@@ -785,13 +785,13 @@ Provide your response in this exact JSON format:
         collaborators_pool = []
         for auth_id, d1 in depth1_authors.items():
             stats = real_stats.get(auth_id, {})
-            total_pubs = stats.get("works_count") or max(10, d1["joint_count"] + random.randint(5, 50))
-            h_idx = stats.get("h_index") or max(2, int(total_pubs * 0.2))
+            total_pubs = stats.get("works_count", 0)
+            h_idx = stats.get("h_index", 0)
             collaborators_pool.append({
                 "id": auth_id,
                 "name": d1["name"],
                 "institution": d1["institution"],
-                "field": d1.get("field") or "Research Associate",
+                "field": d1.get("field") or "Researcher",
                 "connection_path": f"Co-authored '{d1['shared_paper']}' with {primary_name}",
                 "relevance_score": min(99, 70 + (d1["joint_count"] * 5)),
                 "papers_collaborated": d1["joint_count"],
@@ -801,15 +801,15 @@ Provide your response in this exact JSON format:
 
         for auth_id, d2 in depth2_authors.items():
             stats = real_stats.get(auth_id, {})
-            total_pubs = stats.get("works_count") or random.randint(10, 50)
-            h_idx = stats.get("h_index") or max(1, int(total_pubs * 0.1))
+            total_pubs = stats.get("works_count", 0)
+            h_idx = stats.get("h_index", 0)
             collaborators_pool.append({
                 "id": auth_id,
                 "name": d2["name"],
                 "institution": d2["institution"],
                 "field": d2["field"],
                 "connection_path": d2["connection_path"],
-                "relevance_score": random.randint(60, 75),
+                "relevance_score": 75,
                 "papers_collaborated": 1,
                 "total_publications": total_pubs,
                 "h_index": h_idx
@@ -817,15 +817,15 @@ Provide your response in this exact JSON format:
             
         for auth_id, d3 in depth3_authors.items():
             stats = real_stats.get(auth_id, {})
-            total_pubs = stats.get("works_count") or random.randint(5, 30)
-            h_idx = stats.get("h_index") or max(1, int(total_pubs * 0.1))
+            total_pubs = stats.get("works_count", 0)
+            h_idx = stats.get("h_index", 0)
             collaborators_pool.append({
                 "id": auth_id,
                 "name": d3["name"],
                 "institution": d3["institution"],
                 "field": d3["field"],
                 "connection_path": d3["connection_path"],
-                "relevance_score": random.randint(45, 60),
+                "relevance_score": 60,
                 "papers_collaborated": 1,
                 "total_publications": total_pubs,
                 "h_index": h_idx
