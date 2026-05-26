@@ -309,7 +309,7 @@ fun AgentInputBar(
     onClearAttachment: () -> Unit = {}
 ) {
     Surface(color = EntropiColors.Background, border = BorderStroke(1.dp, EntropiColors.Border)) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
             if (isAttachingFile || attachedFileName != null) {
                 Row(
                     modifier = Modifier.padding(start = 12.dp, bottom = 4.dp, end = 12.dp)
@@ -341,8 +341,8 @@ fun AgentInputBar(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 48.dp, max = 120.dp)
-                    .clip(RoundedCornerShape(24.dp))
+                    .heightIn(min = 42.dp, max = 120.dp)
+                    .clip(RoundedCornerShape(21.dp))
                     .background(EntropiColors.Card)
                     .padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically

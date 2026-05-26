@@ -89,11 +89,10 @@ fun AuthorDetailScreen(
                 }
             }
         }
-    ) { innerPadding ->
+    ) { _ ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
         ) {
             when {
                 isLoading -> {
