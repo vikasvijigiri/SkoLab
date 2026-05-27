@@ -484,7 +484,7 @@ Only output the JSON object, do not wrap it in markdown or comments. Ensure it i
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to the Skolab API!"}
+    return {"message": "Welcome to the SkoLab API!"}
 
 
 class Quest(BaseModel):
@@ -1251,28 +1251,53 @@ async def agent_chat(req: AgentChatRequest):
         from app.services.pipeline_services import is_llm_working
         from app.services.connectors import TOOLS_SCHEMA, execute_tool_call
         import json
-        if is_llm_working():
+        
+        # Candidate models in sequence for instant failover (active Groq models only)
+        models = [
+            "llama-3.3-70b-versatile",
+            "llama-3.1-8b-instant",
+            "llama-3.2-11b-vision-preview",
+            "llama-3.2-3b-preview",
+            "llama-3.2-1b-preview"
+        ]
+
+        if pipeline_services.api_key:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                # Initial call with tools
-                res = await client.post(
-                    pipeline_services.base_url,
-                    headers={"Authorization": f"Bearer {pipeline_services.api_key}", "Content-Type": "application/json"},
-                    json={
-                        "model": pipeline_services.model, 
-                        "messages": messages, 
-                        "temperature": 0.5, 
-                        "max_tokens": 1024,
-                        "tools": TOOLS_SCHEMA,
-                        "tool_choice": "auto"
-                    },
-                    timeout=20.0
-                )
-                if res.status_code == 200:
-                    response_msg = res.json()['choices'][0]['message']
+                chosen_model = None
+                response_msg = None
+                
+                # Loop through candidate models to find one that succeeds for tool call / initial prompt
+                for model in models:
+                    try:
+                        print(f"[AgentChat] Attempting initial tool call with model: {model}", flush=True)
+                        res = await client.post(
+                            pipeline_services.base_url,
+                            headers={"Authorization": f"Bearer {pipeline_services.api_key}", "Content-Type": "application/json"},
+                            json={
+                                "model": model, 
+                                "messages": messages, 
+                                "temperature": 0.5, 
+                                "max_tokens": 1024,
+                                "tools": TOOLS_SCHEMA,
+                                "tool_choice": "auto"
+                            },
+                            timeout=20.0
+                        )
+                        if res.status_code == 200:
+                            response_msg = res.json()['choices'][0]['message']
+                            chosen_model = model
+                            print(f"[AgentChat] Initial call succeeded with model: {model}", flush=True)
+                            break
+                        else:
+                            print(f"[AgentChat] Model {model} failed with status {res.status_code}: {res.text}. Trying next model...", flush=True)
+                    except Exception as e:
+                        print(f"[AgentChat] Model {model} raised exception: {e}. Trying next model...", flush=True)
+
+                if chosen_model is not None:
                     tool_calls = response_msg.get("tool_calls")
                     
                     # Groq sometimes returns tools as text instead of tool_calls array
-                    if not tool_calls and "content" in response_msg and "<function=" in response_msg["content"]:
+                    if not tool_calls and "content" in response_msg and response_msg["content"] and "<function=" in response_msg["content"]:
                         import re
                         content = response_msg["content"]
                         match = re.search(r'<function=(\w+)>(.*?)</function>', content)
@@ -1300,25 +1325,50 @@ async def agent_chat(req: AgentChatRequest):
                                 "content": str(tool_result)
                             })
                         
-                        # Second call after tools
-                        res2 = await client.post(
-                            pipeline_services.base_url,
-                            headers={"Authorization": f"Bearer {pipeline_services.api_key}", "Content-Type": "application/json"},
-                            json={
-                                "model": pipeline_services.model, 
-                                "messages": messages, 
-                                "temperature": 0.5, 
-                                "max_tokens": 1024
-                            },
-                            timeout=20.0
-                        )
-                        if res2.status_code == 200:
-                            reply = res2.json()['choices'][0]['message']['content'].strip()
+                        # Second call after tools: prioritise the chosen model, but fall back if needed
+                        second_call_models = [chosen_model] + [m for m in models if m != chosen_model]
+                        reply = None
+                        for model in second_call_models:
+                            try:
+                                print(f"[AgentChat] Attempting second call with model: {model}", flush=True)
+                                res2 = await client.post(
+                                    pipeline_services.base_url,
+                                    headers={"Authorization": f"Bearer {pipeline_services.api_key}", "Content-Type": "application/json"},
+                                    json={
+                                        "model": model, 
+                                        "messages": messages, 
+                                        "temperature": 0.5, 
+                                        "max_tokens": 1024
+                                    },
+                                    timeout=20.0
+                                )
+                                if res2.status_code == 200:
+                                    reply = res2.json()['choices'][0]['message']['content'].strip()
+                                    print(f"[AgentChat] Second call succeeded with model: {model}", flush=True)
+                                    break
+                                else:
+                                    print(f"[AgentChat] Second call model {model} failed with status {res2.status_code}: {res2.text}. Trying next model...", flush=True)
+                            except Exception as e:
+                                print(f"[AgentChat] Second call model {model} raised exception: {e}. Trying next model...", flush=True)
+                        
+                        if reply is not None:
+                            # Clean up any stray XML function tags from the reply
+                            import re
+                            reply = re.sub(r'<function=.*?>.*?</function>', '', reply, flags=re.DOTALL)
+                            reply = re.sub(r'<function=.*?>', '', reply)
+                            reply = re.sub(r'</function>', '', reply)
+                            reply = reply.strip()
                             return {"reply": reply}
                         else:
-                            return {"reply": f"Agent failed after tool call: {res2.text}"}
+                            return {"reply": "Agent failed to generate a response after executing tools. All fallback models exhausted."}
                     else:
                         reply = response_msg.get('content', '').strip()
+                        # Clean up any stray XML function tags from the reply
+                        import re
+                        reply = re.sub(r'<function=.*?>.*?</function>', '', reply, flags=re.DOTALL)
+                        reply = re.sub(r'<function=.*?>', '', reply)
+                        reply = re.sub(r'</function>', '', reply)
+                        reply = reply.strip()
                         return {"reply": reply}
         return {"reply": "I am currently offline or rate-limited. Your query has been noted."}
     except Exception as e:

@@ -334,12 +334,13 @@ object ServerLocator {
             val url = URL(urlString)
             connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
-            connection.connectTimeout = 800
-            connection.readTimeout = 800
+            connection.connectTimeout = 3000
+            connection.readTimeout = 3000
             val responseCode = connection.responseCode
             if (responseCode == 200) {
                 val text = connection.inputStream.bufferedReader().use { it.readText() }
-                text.contains("API!") || text.contains("SkoLab") || text.contains("Entro")
+                val lowerText = text.lowercase()
+                lowerText.contains("api") || lowerText.contains("skolab") || lowerText.contains("entro")
             } else {
                 false
             }
