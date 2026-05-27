@@ -25,8 +25,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.open.entropy.ui.components.ScoreArcMeter
 import com.open.entropy.ui.layout.rememberMetricMeterSize
-import com.open.entropy.ui.theme.ResQitMotion
-import com.open.entropy.ui.theme.ResQitTextSecondary
+import com.open.entropy.ui.theme.SkoLabMotion
+import com.open.entropy.ui.theme.SkoLabTextSecondary
 import com.open.entropy.ui.theme.MonoFontFamily
 import com.open.entropy.ui.theme.Typography
 
@@ -43,7 +43,7 @@ fun MetricOrb(
     LaunchedEffect(score) { target = score.coerceIn(0f, 1f) }
     val animated by animateFloatAsState(
         targetValue = target,
-        animationSpec = tween(ResQitMotion.slow),
+        animationSpec = tween(SkoLabMotion.slow),
         label = "metricOrb"
     )
 

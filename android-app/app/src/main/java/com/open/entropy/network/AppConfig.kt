@@ -15,7 +15,7 @@ object AppConfig {
      * mDNS service name — must match backend MDNS_SERVICE_NAME env var.
      * The Android NsdManager finds the backend by this name on the LAN.
      */
-    const val MDNS_SERVICE_NAME = "ResQitBackend"
+    const val MDNS_SERVICE_NAME = "SkoLabBackend"
 
     /**
      * How long (ms) the app will wait for mDNS discovery before showing

@@ -15,7 +15,7 @@ class MetricsService:
 
     def _load_taxonomy(self):
         try:
-            path = os.path.join(os.path.dirname(__file__), "..", "..", "arxiv_taxonomy.json")
+            path = os.path.join(os.path.dirname(__file__), "..", "data", "arxiv_taxonomy.json")
             if os.path.exists(path):
                 with open(path, 'r') as f:
                     return json.load(f)
@@ -213,7 +213,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 async def compute_author_metrics(author_id: str) -> dict:
-    url = f"https://api.openalex.org/works?filter=author.id:{author_id}&per_page=10&sort=publication_year:desc"
+    clean_id = author_id.split("/")[-1]
+    url = f"https://api.openalex.org/works?filter=author.id:{clean_id}&per_page=10&sort=publication_year:desc"
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.get(url, timeout=15.0)
@@ -221,7 +222,7 @@ async def compute_author_metrics(author_id: str) -> dict:
             data = resp.json()
             results = data.get("results", [])
     except Exception as e:
-        logger.error(f"Failed to fetch works for {author_id}: {e}")
+        logger.error(f"Failed to fetch works for clean_id {clean_id} (original: {author_id}): {e}")
         results = []
 
     if not results:
@@ -264,7 +265,7 @@ async def compute_author_metrics(author_id: str) -> dict:
     """
     
     try:
-        api_key = os.environ.get("GROQ_API_KEY")
+        api_key = os.environ.get("GROQ_API")
         if not api_key:
             raise Exception("GROQ_API_KEY not found")
 
@@ -290,9 +291,11 @@ async def compute_author_metrics(author_id: str) -> dict:
             
         parsed = json.loads(content)
         
-        # Calculate an overall composite score
+        # Calculate an overall composite score and guarantee integer types for Ktor
         tt = int(parsed.get("topic_toughness", 50))
         vel = int(parsed.get("velocity", 50))
+        parsed["topic_toughness"] = tt
+        parsed["velocity"] = vel
         parsed["overall_score"] = int((tt + vel) / 2)
         return parsed
     except Exception as e:

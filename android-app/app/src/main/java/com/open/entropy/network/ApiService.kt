@@ -323,7 +323,50 @@ data class ChatResponse(
 data class AgentChatRequest(
     val message: String,
     val history: List<Map<String, String>>,
-    val mode: String
+    val mode: String,
+    val user_memory: Map<String, kotlinx.serialization.json.JsonElement>? = null
+)
+
+// ── User Memory Models ────────────────────────────────────────────────────────
+
+@Serializable
+data class ActivityEventRequest(
+    val type: String,
+    val timestamp: Long = System.currentTimeMillis(),
+    val hourOfDay: Int = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY),
+    val paperTitle: String? = null,
+    val paperDomain: String? = null,
+    val paperJournal: String? = null,
+    val durationSeconds: Int? = null,
+    val authorName: String? = null,
+    val authorInstitution: String? = null,
+    val query: String? = null,
+    val filterValue: String? = null,
+    val collaboratorName: String? = null,
+    val collaboratorField: String? = null
+)
+
+@Serializable
+data class UserMemoryEventsPayload(
+    val user_id: String,
+    val events: List<ActivityEventRequest>
+)
+
+@Serializable
+data class UserMemoryProfileResponse(
+    val user_id: String = "",
+    val top_topics: List<String> = emptyList(),
+    val active_hours: List<Int> = emptyList(),
+    val reading_pace: String = "unknown",
+    val research_style: String = "unknown",
+    val avg_read_minutes: Float = 0f,
+    val unfinished_papers: List<String> = emptyList(),
+    val recently_read_papers: List<String> = emptyList(),
+    val frequent_collaborators: List<String> = emptyList(),
+    val frequent_search_terms: List<String> = emptyList(),
+    val last_active_topic: String = "",
+    val total_papers_read: Int = 0,
+    val last_updated: Long = 0
 )
 
 @Serializable
@@ -337,7 +380,7 @@ data class AgentChatResponse(
 // ── Service ───────────────────────────────────────────────────────────────────
 
 /**
- * ApiService — all network calls to the ResQit backend.
+ * ApiService — all network calls to the SkoLab backend.
  *
  * The backend URL is never hardcoded here.  It is read from [ServerLocator.baseUrl]
  * on every request.  If the server has not been discovered yet, calls return a
@@ -468,7 +511,7 @@ class ApiService {
 
     suspend fun getAuthorSuggestions(query: String): List<AuthorSuggestion> {
         if (query.length < 3) return emptyList()
-        val base = baseUrl() ?: throw Exception("ResQit backend services are currently unreachable.")
+        val base = baseUrl() ?: throw Exception("SkoLab backend services are currently unreachable.")
         try {
             return httpClient.get("$base/author_suggestions") {
                 parameter("query", query)
@@ -803,7 +846,7 @@ class ApiService {
     }
 
     suspend fun getDailyConjecture(authorId: String, name: String): com.open.entropy.model.Conjecture? {
-        val base = baseUrl() ?: throw Exception("ResQit backend services are currently unreachable.")
+        val base = baseUrl() ?: throw Exception("SkoLab backend services are currently unreachable.")
         try {
             Log.d(tag, "Fetching daily conjecture from backend for name: $name, id: $authorId")
             val response = httpClient.get("$base/daily_conjecture") {
@@ -828,7 +871,7 @@ class ApiService {
      * Used to populate the Nexus Collaboration Radar card.
      */
     suspend fun getSimilarAuthors(fieldQuery: String, limit: Int = 5): List<AuthorSuggestion> {
-        val base = baseUrl() ?: throw Exception("ResQit backend services are currently unreachable.")
+        val base = baseUrl() ?: throw Exception("SkoLab backend services are currently unreachable.")
         try {
             val list: List<AuthorSuggestion> = httpClient.get("$base/author_suggestions") {
                 parameter("query", fieldQuery)
@@ -1247,29 +1290,100 @@ class ApiService {
     }
 
     // ── Agent Integration ──────────────────────────────────────────────────────────
-    suspend fun chatWithAgent(message: String, history: List<ChatMessage>, mode: String = "RESEARCH"): String {
+    suspend fun chatWithAgent(
+        message: String,
+        history: List<ChatMessage>,
+        mode: String = "RESEARCH",
+        userMemory: com.open.entropy.data.UserMemoryProfile? = null
+    ): String {
         return withContext(Dispatchers.IO) {
             val base = baseUrl() ?: return@withContext "API is not configured."
             try {
                 val histMaps = history.map { mapOf("role" to it.role, "content" to it.content) }
+                // Serialize memory profile to a flat JSON map if present
+                val memoryMap: Map<String, kotlinx.serialization.json.JsonElement>? = userMemory?.let { mem ->
+                    try {
+                        val encoded = kotlinx.serialization.json.Json.encodeToString(
+                            com.open.entropy.data.UserMemoryProfile.serializer(), mem
+                        )
+                        kotlinx.serialization.json.Json.decodeFromString(
+                            kotlinx.serialization.json.MapSerializer(
+                                kotlinx.serialization.builtins.serializer(),
+                                kotlinx.serialization.json.JsonElement.serializer()
+                            ), encoded
+                        )
+                    } catch (_: Exception) { null }
+                }
                 val request = AgentChatRequest(
                     message = message,
                     history = histMaps,
-                    mode = mode
+                    mode = mode,
+                    user_memory = memoryMap
                 )
-                
                 val chatResp = httpClient.post("$base/agent/chat") {
                     contentType(ContentType.Application.Json)
                     setBody(request)
-                    timeout {
-                        requestTimeoutMillis = 60000
-                    }
+                    timeout { requestTimeoutMillis = 60000 }
                 }.body<AgentChatResponse>()
-
                 chatResp.reply
             } catch (e: Exception) {
                 Log.e("ApiService", "Error in chatWithAgent: ${e.message}")
                 throw e
+            }
+        }
+    }
+
+    /** Syncs a batch of local activity events to the backend memory engine. Fire-and-forget safe. */
+    suspend fun syncMemoryEvents(
+        userId: String,
+        events: List<com.open.entropy.data.ActivityEvent>
+    ): Boolean {
+        return withContext(Dispatchers.IO) {
+            val base = baseUrl() ?: return@withContext false
+            try {
+                val payload = UserMemoryEventsPayload(
+                    user_id = userId,
+                    events = events.map { e ->
+                        ActivityEventRequest(
+                            type = e.type,
+                            timestamp = e.timestamp,
+                            hourOfDay = e.hourOfDay,
+                            paperTitle = e.paperTitle,
+                            paperDomain = e.paperDomain,
+                            paperJournal = e.paperJournal,
+                            durationSeconds = e.durationSeconds,
+                            authorName = e.authorName,
+                            authorInstitution = e.authorInstitution,
+                            query = e.query,
+                            filterValue = e.filterValue,
+                            collaboratorName = e.collaboratorName,
+                            collaboratorField = e.collaboratorField
+                        )
+                    }
+                )
+                httpClient.post("$base/user_memory/events") {
+                    contentType(ContentType.Application.Json)
+                    setBody(payload)
+                }.status == io.ktor.http.HttpStatusCode.OK
+            } catch (e: Exception) {
+                Log.e("ApiService", "syncMemoryEvents failed: ${e.message}")
+                false
+            }
+        }
+    }
+
+    /** Fetches the server-side memory profile for a user. Returns null if not yet created. */
+    suspend fun getUserMemory(userId: String): UserMemoryProfileResponse? {
+        return withContext(Dispatchers.IO) {
+            val base = baseUrl() ?: return@withContext null
+            try {
+                val resp: io.ktor.client.statement.HttpResponse =
+                    httpClient.get("$base/user_memory/$userId")
+                if (resp.status == io.ktor.http.HttpStatusCode.OK) resp.body()
+                else null
+            } catch (e: Exception) {
+                Log.e("ApiService", "getUserMemory failed: ${e.message}")
+                null
             }
         }
     }
@@ -1303,25 +1417,17 @@ class ApiService {
         }
     }
 
-    suspend fun getAuthorMetrics(authorId: String): AuthorMetrics? {
-        return try {
-            val baseUrl = ServerLocator.baseUrl.value
-            if (baseUrl == null) {
-                Log.e("ApiService", "Server base URL is not discovered yet")
-                return null
-            }
-            val response: io.ktor.client.statement.HttpResponse = httpClient.get("$baseUrl/author_metrics") {
-                parameter("author_id", authorId)
-            }
-            if (response.status == HttpStatusCode.OK) {
-                response.body()
-            } else {
-                Log.e("ApiService", "Failed to fetch author metrics: ${response.status}")
-                null
-            }
-        } catch (e: Exception) {
-            Log.e("ApiService", "Error fetching author metrics: ${e.message}")
-            null
+    suspend fun getAuthorMetrics(authorId: String): AuthorMetrics {
+        val baseUrl = ServerLocator.baseUrl.value
+            ?: throw Exception("Backend server not discovered. Make sure the SkoLab server is running and the device is on the same network.")
+        val response: io.ktor.client.statement.HttpResponse = httpClient.get("$baseUrl/author_metrics") {
+            parameter("author_id", authorId)
+        }
+        if (response.status == HttpStatusCode.OK) {
+            return response.body()
+        } else {
+            val body = try { response.bodyAsText() } catch (_: Exception) { "" }
+            throw Exception("Server returned ${response.status.value}: ${body.take(200).ifBlank { "No details" }}")
         }
     }
 

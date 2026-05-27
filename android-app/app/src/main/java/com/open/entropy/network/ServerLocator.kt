@@ -13,7 +13,7 @@ import java.net.URL
 import java.util.concurrent.Executors
 
 /**
- * ServerLocator — discovers the ResQit backend on the local network automatically
+ * ServerLocator — discovers the SkoLab backend on the local network automatically
  * using Android's built-in Network Service Discovery (NSD / mDNS).
  *
  * No IP address or port is ever hardcoded here.  The backend advertises itself
@@ -62,7 +62,7 @@ object ServerLocator {
         }
     }
 
-    /** Begin scanning the LAN for the ResQit backend service. */
+    /** Begin scanning the LAN for the SkoLab backend service. */
     fun start(context: Context) {
         if (nsdManager != null) return  // already started
 
@@ -339,7 +339,7 @@ object ServerLocator {
             val responseCode = connection.responseCode
             if (responseCode == 200) {
                 val text = connection.inputStream.bufferedReader().use { it.readText() }
-                text.contains("API!") || text.contains("ResQit") || text.contains("Entro")
+                text.contains("API!") || text.contains("SkoLab") || text.contains("Entro")
             } else {
                 false
             }

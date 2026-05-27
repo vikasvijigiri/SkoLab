@@ -22,7 +22,7 @@ fun PaperCard(
     ScientificCard(
         modifier = modifier,
         onClick = onClick,
-        glowColor = if (paper.disruptionScore > 0.9f) ResQitPrimary.copy(alpha = 0.1f) else Color.Transparent
+        glowColor = if (paper.disruptionScore > 0.9f) SkoLabPrimary.copy(alpha = 0.1f) else Color.Transparent
     ) {
         Column {
             Row(
@@ -32,12 +32,12 @@ fun PaperCard(
             ) {
                 ScientificBadge(
                     text = paper.journal,
-                    color = ResQitDisruption
+                    color = SkoLabDisruption
                 )
                 Text(
                     text = paper.year.toString(),
                     style = Typography.labelSmall,
-                    color = ResQitTextSecondary,
+                    color = SkoLabTextSecondary,
                     fontFamily = MonoFontFamily
                 )
             }
@@ -46,7 +46,7 @@ fun PaperCard(
 
             MarkdownText(
                 markdown = paper.title,
-                color = ResQitTextPrimary,
+                color = SkoLabTextPrimary,
                 fontSize = if (compact) 15.sp else 16.sp,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -56,7 +56,7 @@ fun PaperCard(
             Text(
                 text = paper.authors.joinToString(", "),
                 style = Typography.labelSmall,
-                color = ResQitTextSecondary,
+                color = SkoLabTextSecondary,
                 maxLines = 1
             )
 
@@ -69,20 +69,20 @@ fun PaperCard(
                     MetricHighlight(
                         label = "D-INDEX",
                         value = String.format(Locale.US, "%.2f", paper.disruptionScore),
-                        color = ResQitDisruption,
+                        color = SkoLabDisruption,
                         modifier = Modifier.weight(1f)
                     )
                     MetricHighlight(
                         label = "S-INDEX",
                         value = String.format(Locale.US, "%.2f", paper.noveltyScore),
-                        color = ResQitNovelty,
+                        color = SkoLabNovelty,
                         modifier = Modifier.weight(1f)
                     )
                     ScoreArcMeter(
                         score = paper.disruptionScore,
                         label = "",
                         size = 40.dp,
-                        color = ResQitDisruption
+                        color = SkoLabDisruption
                     )
                 }
             } else {
@@ -94,13 +94,13 @@ fun PaperCard(
                     Text(
                         text = "D: ${String.format(Locale.US, "%.2f", paper.disruptionScore)}",
                         style = Typography.labelSmall,
-                        color = ResQitDisruption,
+                        color = SkoLabDisruption,
                         fontFamily = MonoFontFamily
                     )
                     Text(
                         text = "S: ${String.format(Locale.US, "%.2f", paper.noveltyScore)}",
                         style = Typography.labelSmall,
-                        color = ResQitNovelty,
+                        color = SkoLabNovelty,
                         fontFamily = MonoFontFamily
                     )
                 }

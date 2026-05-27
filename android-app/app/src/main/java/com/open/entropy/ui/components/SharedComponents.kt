@@ -149,7 +149,7 @@ fun ScientificTag(
         text = "#$text",
         modifier = modifier,
         style = Typography.labelSmall,
-        color = ResQitTextSecondary,
+        color = SkoLabTextSecondary,
         fontFamily = MonoFontFamily
     )
 }
@@ -165,7 +165,7 @@ fun MetricHighlight(
         Text(
             text = label.uppercase(),
             style = Typography.labelSmall,
-            color = ResQitTextSecondary,
+            color = SkoLabTextSecondary,
             letterSpacing = 1.sp
         )
         Text(
@@ -190,11 +190,11 @@ fun AIInsightBullet(
             modifier = Modifier
                 .padding(top = 6.dp, end = 8.dp)
                 .size(4.dp)
-                .background(ResQitAiInsight, RoundedCornerShape(50))
+                .background(SkoLabAiInsight, RoundedCornerShape(50))
         )
         MarkdownText(
             markdown = text,
-            color = ResQitTextPrimary,
+            color = SkoLabTextPrimary,
             fontSize = 14.sp,
             modifier = Modifier.weight(1f)
         )
@@ -205,7 +205,7 @@ fun AIInsightBullet(
 fun MarkdownText(
     markdown: String,
     modifier: Modifier = Modifier,
-    color: Color = ResQitTextPrimary,
+    color: Color = SkoLabTextPrimary,
     fontSize: TextUnit = 13.sp
 ) {
     val context = LocalContext.current

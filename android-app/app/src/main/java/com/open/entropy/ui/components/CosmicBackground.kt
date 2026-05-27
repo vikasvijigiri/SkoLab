@@ -44,7 +44,7 @@ fun CosmicBackground(
         val tileWidth = 130.dp.toPx()
         val tileHeight = 130.dp.toPx()
         val strokeWidth = 1.dp.toPx()
-        val doodleColor = ResQitDisruption.copy(alpha = 0.03f) // Subtler textured green
+        val doodleColor = SkoLabDisruption.copy(alpha = 0.03f) // Subtler textured green
         
         val cols = (size.width / tileWidth).toInt() + 1
         val rows = (size.height / tileHeight).toInt() + 1
@@ -231,11 +231,11 @@ private class CosmicParticle {
     private var initialized = false
 
     private val palette = listOf(
-        ResQitDisruption,
-        ResQitNovelty,
-        ResQitVelocity,
-        ResQitCitations,
-        ResQitAiInsight
+        SkoLabDisruption,
+        SkoLabNovelty,
+        SkoLabVelocity,
+        SkoLabCitations,
+        SkoLabAiInsight
     )
 
     fun update(width: Float, height: Float) {

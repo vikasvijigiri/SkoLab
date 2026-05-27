@@ -57,7 +57,7 @@ fun ProWorkspaceScreen(onBack: () -> Unit = {}) {
     var showPaymentDialog by remember { mutableStateOf(false) }
     var targetUpgradeTier by remember { mutableStateOf("Pro") } // "Pro" or "Labs"
 
-    // Background Gradient matching ResQit Pro Theme
+    // Background Gradient matching SkoLab Pro Theme
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -91,7 +91,7 @@ fun ProWorkspaceScreen(onBack: () -> Unit = {}) {
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "ResQit ",
+                            text = "SkoLab ",
                             style = MaterialTheme.typography.titleLarge,
                             color = TextPrimary,
                             fontWeight = FontWeight.ExtraBold
@@ -244,9 +244,9 @@ fun BillingPortalTab(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = when (currentTier) {
-                            "Labs" -> "ResQit Labs Workspace"
-                            "Pro" -> "ResQit Professional"
-                            else -> "ResQit Basic (Free Tier)"
+                            "Labs" -> "SkoLab Labs Workspace"
+                            "Pro" -> "SkoLab Professional"
+                            else -> "SkoLab Basic (Free Tier)"
                         },
                         style = MaterialTheme.typography.headlineSmall,
                         color = TextPrimary,
@@ -303,10 +303,10 @@ fun BillingPortalTab(
             )
         }
 
-        // Tier Option: ResQit Pro
+        // Tier Option: SkoLab Pro
         item {
             SubscriptionTierCard(
-                title = "ResQit Pro",
+                title = "SkoLab Pro",
                 price = "$29/mo",
                 features = listOf(
                     "Real-time Scoop Shield for Overleaf & Github",
@@ -320,10 +320,10 @@ fun BillingPortalTab(
             )
         }
 
-        // Tier Option: ResQit Labs
+        // Tier Option: SkoLab Labs
         item {
             SubscriptionTierCard(
-                title = "ResQit Labs",
+                title = "SkoLab Labs",
                 price = "$99/mo",
                 features = listOf(
                     "All Pro features included",
@@ -429,7 +429,7 @@ fun SubscriptionTierCard(
 fun ScoopShieldTab(isEnabled: Boolean) {
     if (!isEnabled) {
         PremiumPlaceholderCard(
-            requiredTier = "ResQit Pro",
+            requiredTier = "SkoLab Pro",
             featureDesc = "Scoop Shield monitors your active manuscript drafts on Overleaf and code projects on GitHub to proactively alert you the instant a conflicting preprint is uploaded on arXiv, bioRxiv, or OpenAlex."
         )
         return
@@ -679,8 +679,8 @@ data class LinkedDraft(val title: String, val url: String, val status: String)
 fun LabsWorkspaceTab(isEnabled: Boolean) {
     if (!isEnabled) {
         PremiumPlaceholderCard(
-            requiredTier = "ResQit Labs",
-            featureDesc = "ResQit Labs is the unified workspace for research groups and departments. Create shared paper vaults, invite lab collaborators, leave annotations on papers, and build automatic synergy matrices."
+            requiredTier = "SkoLab Labs",
+            featureDesc = "SkoLab Labs is the unified workspace for research groups and departments. Create shared paper vaults, invite lab collaborators, leave annotations on papers, and build automatic synergy matrices."
         )
         return
     }
@@ -1133,7 +1133,7 @@ data class AcademicEvent(val title: String, val time: String, val type: String, 
 fun SchedulerTab(isEnabled: Boolean) {
     if (!isEnabled) {
         PremiumPlaceholderCard(
-            requiredTier = "ResQit Pro",
+            requiredTier = "SkoLab Pro",
             featureDesc = "Meetings Scheduler & Conference Calendar permits scheduling advisor meetings, booking 1-on-1 lab consults, and tracking upcoming conference abstract countdowns with automated LaTeX schedule exports."
         )
         return
@@ -1327,10 +1327,10 @@ fun SchedulerTab(isEnabled: Boolean) {
                 TextButton(
                     onClick = {
                         val latexString = StringBuilder().apply {
-                            append("% ResQit Academic Agenda\n")
+                            append("% SkoLab Academic Agenda\n")
                             append("\\begin{table}[h]\n")
                             append("\\centering\n")
-                            append("\\caption{ResQit Scholar Agenda - May 2026}\n")
+                            append("\\caption{SkoLab Scholar Agenda - May 2026}\n")
                             append("\\begin{tabular}{lll}\n")
                             append("\\hline\n")
                             append("Date & Time & Scheduled Event (Host/Invitee) \\\\\n")
@@ -1724,7 +1724,7 @@ fun PaymentFormDialog(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("ResQit Premium", color = Color(0xFF818CF8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("SkoLab Premium", color = Color(0xFF818CF8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 Icon(Icons.Default.CreditCard, contentDescription = null, tint = Color.White)
                             }
                             

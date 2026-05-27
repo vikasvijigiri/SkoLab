@@ -14,11 +14,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional, Union
 from pydantic import BaseModel
 from firebase_admin import firestore
-from app.config import settings          # ← single source of truth
+from app.core.config import settings          # ← single source of truth
 from app.services.prediction_service import PredictionService
 from app.services.summarization_service import SummarizationService
 from app.services.pipeline_services import PipelineServices
-from researcher_worker import teleport_researcher
+try:
+    from app.services.researcher_worker import teleport_researcher, FIRESTORE_AVAILABLE
+except ImportError:
+    teleport_researcher = None
+    FIRESTORE_AVAILABLE = False
 from zeroconf import ServiceInfo
 from zeroconf.asyncio import AsyncZeroconf
 import socket
@@ -26,7 +30,7 @@ import time
 
 def _get_openalex_headers() -> dict:
     headers = {
-        "User-Agent": "ResQitApp/1.0 (mailto:vikki.4me@gmail.com)",
+        "User-Agent": "SkolabApp/1.0 (mailto:vikki.4me@gmail.com)",
         "Accept": "application/json"
     }
     if settings.openalex_api_key:
@@ -41,7 +45,15 @@ class SimpleAsyncCache:
         self.lock = asyncio.Lock()
 
     async def get(self, key: str):
-        return None
+        async with self.lock:
+            entry = self.cache.get(key)
+            if entry is None:
+                return None
+            value, expiry = entry
+            if time.time() > expiry:
+                del self.cache[key]
+                return None
+            return value
 
     async def set(self, key: str, value):
         async with self.lock:
@@ -82,8 +94,8 @@ journal_advisor_cache = SimpleAsyncCache(ttl_seconds=7200, max_size=100)
 network_collaborators_cache = SimpleAsyncCache(ttl_seconds=3600, max_size=100)
 
 app = FastAPI(
-    title="ResQit API",
-    description="The backend API for the ResQit platform",
+    title="Skolab API",
+    description="The backend API for the Skolab platform",
     version="1.0.0",
 )
 
@@ -96,7 +108,7 @@ _mdns_info: ServiceInfo | None = None
 
 @app.on_event("startup")
 async def init_postgres() -> None:
-    from app.database import init_db
+    from app.db.database import init_db
     print("[Postgres] Initializing local database schema...", flush=True)
     try:
         await init_db()
@@ -107,7 +119,7 @@ async def init_postgres() -> None:
 @app.on_event("startup")
 async def verify_firestore() -> None:
     """Check if Firestore connection is responsive. If not, bypass to fallback."""
-    from researcher_worker import check_connection_sync, set_firestore_available
+    from app.services.researcher_worker import check_connection_sync, set_firestore_available
     import concurrent.futures
     
     print("[Firestore] Verifying Firestore connection on startup...", flush=True)
@@ -472,7 +484,7 @@ Only output the JSON object, do not wrap it in markdown or comments. Ensure it i
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to the ResQit API!"}
+    return {"message": "Welcome to the Skolab API!"}
 
 
 class Quest(BaseModel):
@@ -483,17 +495,85 @@ class Quest(BaseModel):
 
 @app.get("/users/quests", response_model=List[Quest])
 async def get_user_quests(user_id: str = Query(..., description="The user ID")):
-    # Mocking daily quests for the researcher gamification loop
-    return [
-        Quest(id="discovery", title="Review 5 papers", reward_entropy=15, is_completed=False),
-        Quest(id="logic", title="Solve a Conjecture", reward_entropy=50, is_completed=False),
-        Quest(id="profile", title="Endorse a Colleague", reward_entropy=10, is_completed=True)
-    ]
+    from sqlalchemy.future import select
+    from app.db.database import AsyncSessionLocal
+    from app.models.user_models import UserPreference, User
+
+    async with AsyncSessionLocal() as session:
+        # Check if quests preference exists for the user
+        stmt = select(UserPreference).where(
+            UserPreference.user_id == user_id,
+            UserPreference.preference_key == "quests"
+        )
+        result = await session.execute(stmt)
+        pref = result.scalars().first()
+        
+        default_quests = [
+            {"id": "discovery", "title": "Review 5 papers", "reward_entropy": 15, "is_completed": False},
+            {"id": "logic", "title": "Solve a Conjecture", "reward_entropy": 50, "is_completed": False},
+            {"id": "profile", "title": "Endorse a Colleague", "reward_entropy": 10, "is_completed": False}
+        ]
+        
+        if not pref:
+            # Let's ensure the user exists first
+            user_stmt = select(User).where(User.id == user_id)
+            user_result = await session.execute(user_stmt)
+            user = user_result.scalars().first()
+            if not user:
+                user = User(id=user_id, display_name=f"User_{user_id[:8]}" if len(user_id) > 8 else user_id)
+                session.add(user)
+                await session.flush()
+                
+            pref = UserPreference(
+                user_id=user_id,
+                preference_key="quests",
+                preference_value=default_quests
+            )
+            session.add(pref)
+            await session.commit()
+            quests_data = default_quests
+        else:
+            quests_data = pref.preference_value or default_quests
+            
+        return [Quest(**q) for q in quests_data]
 
 @app.post("/users/quests/complete")
 async def complete_quest(user_id: str = Query(...), quest_id: str = Query(...)):
-    # In a real implementation, this would verify the completion and add to the user's Entropy Score in Firestore
-    return {"status": "success", "message": f"Quest {quest_id} completed", "entropy_awarded": 15}
+    from sqlalchemy.future import select
+    from app.db.database import AsyncSessionLocal
+    from app.models.user_models import UserPreference
+    from sqlalchemy.orm.attributes import flag_modified
+
+    async with AsyncSessionLocal() as session:
+        stmt = select(UserPreference).where(
+            UserPreference.user_id == user_id,
+            UserPreference.preference_key == "quests"
+        )
+        result = await session.execute(stmt)
+        pref = result.scalars().first()
+        
+        if not pref:
+            await get_user_quests(user_id)
+            result = await session.execute(stmt)
+            pref = result.scalars().first()
+            
+        if pref:
+            quests = list(pref.preference_value) if pref.preference_value else []
+            updated = False
+            reward = 0
+            for q in quests:
+                if q["id"] == quest_id:
+                    q["is_completed"] = True
+                    reward = q["reward_entropy"]
+                    updated = True
+                    break
+            if updated:
+                pref.preference_value = quests
+                flag_modified(pref, "preference_value")
+                await session.commit()
+                return {"status": "success", "message": f"Quest {quest_id} completed", "entropy_awarded": reward}
+                
+        return {"status": "error", "message": f"Quest {quest_id} not found or initialization failed"}
 
 class LeaderboardEntry(BaseModel):
     rank: int
@@ -503,14 +583,36 @@ class LeaderboardEntry(BaseModel):
 
 @app.get("/leaderboard/{field}", response_model=List[LeaderboardEntry])
 async def get_leaderboard(field: str):
-    # Mock leaderboard data
-    return [
-        LeaderboardEntry(rank=1, user_name="Dr. Sarah Chen", institution="MIT", entropy_score=9450),
-        LeaderboardEntry(rank=2, user_name="Prof. Marcus V", institution="Stanford", entropy_score=8120),
-        LeaderboardEntry(rank=3, user_name="Vikas Vijigiri", institution="Independent Researcher", entropy_score=7890),
-        LeaderboardEntry(rank=4, user_name="Dr. Elena Rostova", institution="CERN", entropy_score=6400),
-        LeaderboardEntry(rank=5, user_name="James Wu", institution="Caltech", entropy_score=5210)
-    ]
+    try:
+        from app.services.researcher_worker import FIRESTORE_AVAILABLE
+        if FIRESTORE_AVAILABLE:
+            db = firestore.client()
+            from google.cloud.firestore_v1.base_query import FieldFilter
+            
+            # Query Firestore for top researchers in the field
+            query_ref = db.collection("global_researchers")
+            if field and field != "All Fields" and field != "all":
+                query_ref = query_ref.where(filter=FieldFilter("field_of_study", "==", field))
+            
+            docs = query_ref.order_by("innovation_score", direction=firestore.Query.DESCENDING).limit(10).stream()
+            
+            results = []
+            for idx, doc in enumerate(docs):
+                d = doc.to_dict()
+                results.append(
+                    LeaderboardEntry(
+                        rank=idx + 1,
+                        user_name=d.get("display_name") or "Unknown Researcher",
+                        institution=d.get("current_institution") or "Independent",
+                        entropy_score=int(d.get("innovation_score") or 0)
+                    )
+                )
+            if results:
+                return results
+    except Exception as e:
+        print(f"[Leaderboard] Error fetching real data: {e}", flush=True)
+    
+    return []
 
 
 @app.get("/author_suggestions", response_model=List[AuthorSuggestion])
@@ -675,7 +777,8 @@ async def refresh_author(name: str = Query(...), background_tasks: BackgroundTas
                 if results:
                     author_id = results[0]["id"]
                     # Trigger worker
-                    background_tasks.add_task(teleport_researcher, author_id)
+                    if teleport_researcher is not None:
+                        background_tasks.add_task(teleport_researcher, author_id)
                     return {"status": "Refresh started", "author_id": author_id}
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Author not found for refresh")
@@ -780,7 +883,8 @@ async def search_author(
                 works_data = []
                 for w in d.get("works", []):
                     try:
-                        works_data.append(Work(**{k: v for k, v in w.items() if k in Work.__fields__}))
+                        _work_fields = set(getattr(Work, 'model_fields', None) or Work.__fields__)
+                        works_data.append(Work(**{k: v for k, v in w.items() if k in _work_fields}))
                     except Exception:
                         pass
                 field = d.get("field_of_study") or (d.get("expertise", [""])[0] if d.get("expertise") else "")
@@ -980,7 +1084,7 @@ async def search_author(
             await profile_cache.set(cache_key, response_data)
 
             # ── 3e. Queue LLM enrichment in the background (NEVER blocks response)
-            if is_llm_working():
+            if is_llm_working() and teleport_researcher is not None:
                 author_full_id = author_data.get("id", resolved_id)
                 background_tasks.add_task(teleport_researcher, author_full_id)
                 print(f"[search_author] Queued background teleport for: {author_data.get('display_name')}", flush=True)
@@ -1098,11 +1202,46 @@ class AgentChatRequest(BaseModel):
     message: str
     history: list[dict[str, str]] = []
     mode: str = "RESEARCH"
+    user_memory: Optional[dict] = None  # Injected by Android from UserMemoryProfile
 
 @app.post("/agent/chat")
 async def agent_chat(req: AgentChatRequest):
     try:
-        system_prompt = f"You are ResQit Copilot, an expert AI {req.mode} assistant for a senior researcher. Be concise and professional. You have access to tools that can fetch data from arXiv, local folders, Gmail, and WhatsApp."
+        base_prompt = f"You are SkoLab Copilot, an expert AI {req.mode} assistant for a senior researcher. Be concise, sharp, and proactive. You have access to tools that can fetch data from arXiv, papers, and the researcher's network."
+
+        # Inject user memory block if present
+        memory_block = ""
+        if req.user_memory:
+            m = req.user_memory
+            parts = []
+            top_topics = m.get("topTopics") or m.get("top_topics") or []
+            last_topic = m.get("lastActiveTopic") or m.get("last_active_topic") or ""
+            reading_pace = m.get("readingPace") or m.get("reading_pace") or ""
+            collaborators = m.get("frequentCollaborators") or m.get("frequent_collaborators") or []
+            unfinished = m.get("unfinishedPapers") or m.get("unfinished_papers") or []
+            searches = m.get("frequentSearchTerms") or m.get("frequent_search_terms") or []
+            streak = m.get("streakDays") or m.get("streak_days") or 0
+            avg_read = m.get("avgReadMinutes") or m.get("avg_read_minutes") or 0
+
+            if top_topics:
+                parts.append(f"Research focus: {', '.join(top_topics[:4])}")
+            if last_topic:
+                parts.append(f"Currently exploring: {last_topic}")
+            if reading_pace:
+                parts.append(f"Reading style: {reading_pace} (~{int(avg_read)} min/paper avg)")
+            if collaborators:
+                parts.append(f"Key collaborators: {', '.join(collaborators[:3])}")
+            if unfinished:
+                parts.append(f"Unfinished papers: {'; '.join(unfinished[:2])}")
+            if searches:
+                parts.append(f"Recent searches: {', '.join(searches[:3])}")
+            if streak:
+                parts.append(f"Research streak: {streak} days")
+
+            if parts:
+                memory_block = "\n\n[RESEARCHER PROFILE]\n" + "\n".join(parts) + "\n[END PROFILE]\n\nUse this profile to personalise your responses. Reference unfinished work or relevant topics proactively when natural."
+
+        system_prompt = base_prompt + memory_block
         messages = [{"role": "system", "content": system_prompt}]
         for h in req.history[-10:]:
             if h.get("role") in ["user", "assistant", "tool"]:
@@ -1193,8 +1332,334 @@ async def get_author_metrics(author_id: str = Query(...)):
     data = await compute_author_metrics(author_id)
     return data
 
+
 @app.get("/industry_opportunities")
 async def get_industry_opportunities(focus: str = Query("AI")):
     from app.services.industry_service import fetch_industry_opportunities
     opportunities = await fetch_industry_opportunities(focus)
     return opportunities
+
+
+# ── Semantic Trending Engine ──────────────────────────────────────────────────
+# Cache: per-author, 4-hour TTL (OpenAlex calls are expensive)
+_semantic_trending_cache = SimpleAsyncCache(ttl_seconds=14400, max_size=200)
+
+@app.get("/semantic_trending")
+async def get_semantic_trending(
+    author_id: str = Query(..., description="Full OpenAlex author URI or short ID"),
+    limit: int = Query(10, ge=1, le=30)
+):
+    """
+    Returns papers trending specifically in the author's research field.
+
+    Algorithm:
+      1. Fetch author record from OpenAlex → extract top concept/topic IDs & display names.
+      2. For each top concept (up to 4), query OpenAlex works from the last 2 years
+         filtered by that concept, sorted by cited_by_count:desc.
+      3. Merge & deduplicate all results.
+      4. Score each paper:
+            velocity   = cited_by_count / max(1, months_since_publication)
+            overlap    = count of author concepts that match paper concepts
+            oa_bonus   = 0.1 if open access
+            final      = velocity * 0.5 + overlap * 3.0 + oa_bonus
+      5. Sort descending, return top `limit` papers.
+      6. Cache per-author for 4 hours in both memory and Postgres.
+    """
+    import calendar
+
+    cache_key = f"semantic_trending_{author_id}_{limit}"
+    cached = await _semantic_trending_cache.get(cache_key)
+    if cached is not None:
+        print(f"[SemanticTrending] Cache hit for author={author_id}", flush=True)
+        return cached
+
+    # ── also check Postgres long-term cache ──────────────────────────────────
+    try:
+        pg_cached = await pipeline_services._load_from_postgres("semantic_trending", cache_key)
+        if pg_cached is not None:
+            await _semantic_trending_cache.set(cache_key, pg_cached)
+            print(f"[SemanticTrending] Postgres cache hit for author={author_id}", flush=True)
+            return pg_cached
+    except Exception as e:
+        print(f"[SemanticTrending] Postgres cache read error: {e}", flush=True)
+
+    headers = _get_openalex_headers()
+    now = __import__("datetime").datetime.utcnow()
+    now_year = now.year
+    now_month = now.month
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        # ── Step 1: Fetch author record ───────────────────────────────────────
+        clean_id = author_id.split("/")[-1]
+        author_resp = await client.get(
+            f"https://api.openalex.org/authors/{clean_id}",
+            headers=headers
+        )
+        if author_resp.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"OpenAlex author fetch failed: {author_resp.status_code}")
+
+        author_data = author_resp.json()
+
+        # Extract top concepts/topics (prefer x_concepts, fall back to topics)
+        raw_concepts = author_data.get("x_concepts") or author_data.get("topics") or []
+        # Sort by score descending, take top 5
+        top_concepts = sorted(raw_concepts, key=lambda c: c.get("score", 0), reverse=True)[:5]
+        author_concept_ids = {c.get("id", "").split("/")[-1] for c in top_concepts}
+        author_concept_names = [c.get("display_name", "") for c in top_concepts if c.get("display_name")]
+
+        if not top_concepts:
+            raise HTTPException(status_code=404, detail="Author has no resolvable research concepts in OpenAlex.")
+
+        print(f"[SemanticTrending] Author concepts: {author_concept_names}", flush=True)
+
+        # ── Step 2: Fetch works per concept ──────────────────────────────────
+        prev_year = now_year - 1
+        all_works: list[dict] = []
+        seen_ids: set[str] = set()
+
+        for concept in top_concepts[:4]:
+            concept_id = concept.get("id", "").split("/")[-1]
+            if not concept_id:
+                continue
+            try:
+                works_resp = await client.get(
+                    "https://api.openalex.org/works",
+                    params={
+                        "filter": f"concepts.id:{concept_id},publication_year:{prev_year}|{now_year}",
+                        "sort": "cited_by_count:desc",
+                        "per_page": 15,
+                        "mailto": "vikki.4me@gmail.com",
+                    },
+                    headers=headers
+                )
+                if works_resp.status_code == 200:
+                    works_data = works_resp.json().get("results", [])
+                    for w in works_data:
+                        wid = w.get("id", "")
+                        if wid and wid not in seen_ids:
+                            seen_ids.add(wid)
+                            # tag which concept sourced this paper (for overlap scoring)
+                            w["_source_concept_id"] = concept_id
+                            all_works.append(w)
+            except Exception as e:
+                print(f"[SemanticTrending] Concept {concept_id} fetch error: {e}", flush=True)
+                continue
+
+        if not all_works:
+            raise HTTPException(status_code=404, detail="No relevant trending papers found for this author's research area.")
+
+        # ── Step 3: Score each paper ──────────────────────────────────────────
+        def score_paper(w: dict) -> float:
+            pub_year = w.get("publication_year") or now_year
+            # Estimate month (OpenAlex often has publication_date YYYY-MM-DD)
+            pub_date = w.get("publication_date") or f"{pub_year}-01-01"
+            try:
+                parts = pub_date.split("-")
+                pub_month = int(parts[1]) if len(parts) > 1 else 1
+                pub_year_int = int(parts[0])
+            except Exception:
+                pub_month = 1
+                pub_year_int = pub_year
+
+            months_alive = max(1, (now_year - pub_year_int) * 12 + (now_month - pub_month))
+            cited = w.get("cited_by_count") or 0
+            velocity = cited / months_alive  # citations per month
+
+            # Concept overlap: how many author concepts appear in paper's concepts
+            paper_concepts = w.get("concepts") or w.get("topics") or []
+            paper_concept_ids = {c.get("id", "").split("/")[-1] for c in paper_concepts}
+            overlap = len(paper_concept_ids & author_concept_ids)
+
+            oa_bonus = 0.1 if w.get("open_access", {}).get("is_oa") else 0.0
+
+            return velocity * 0.5 + overlap * 3.0 + oa_bonus
+
+        scored = sorted(all_works, key=score_paper, reverse=True)
+        top_papers = scored[:limit]
+
+        # ── Step 4: Build response ────────────────────────────────────────────
+        result_items = []
+        for w in top_papers:
+            pub_year = w.get("publication_year") or 0
+            pub_date = w.get("publication_date") or f"{pub_year}-01-01"
+            try:
+                parts = pub_date.split("-")
+                pub_year_int = int(parts[0])
+                pub_month_int = int(parts[1]) if len(parts) > 1 else 1
+            except Exception:
+                pub_year_int = pub_year
+                pub_month_int = 1
+
+            months_alive = max(1, (now_year - pub_year_int) * 12 + (now_month - pub_month_int))
+            cited = w.get("cited_by_count") or 0
+            velocity = round(cited / months_alive, 2)
+
+            # Concept tags: paper concepts that match author concepts
+            paper_concepts = w.get("concepts") or w.get("topics") or []
+            matched_tags = [
+                c.get("display_name", "")
+                for c in paper_concepts
+                if c.get("id", "").split("/")[-1] in author_concept_ids and c.get("display_name")
+            ][:3]
+            if not matched_tags and author_concept_names:
+                matched_tags = [author_concept_names[0]]
+
+            loc = w.get("primary_location") or {}
+            source = loc.get("source") or {}
+            result_items.append({
+                "id": w.get("id", ""),
+                "title": w.get("title") or "Untitled",
+                "journal": source.get("display_name") or "Unknown Journal",
+                "year": pub_year_int,
+                "cited_by_count": cited,
+                "velocity_score": velocity,
+                "is_open_access": (w.get("open_access") or {}).get("is_oa", False),
+                "concept_tags": matched_tags,
+                "doi": w.get("doi") or "",
+            })
+
+        response = {
+            "author_concepts": author_concept_names[:5],
+            "papers": result_items,
+        }
+
+        # ── Step 5: Cache ─────────────────────────────────────────────────────
+        await _semantic_trending_cache.set(cache_key, response)
+        try:
+            await pipeline_services._save_to_postgres("semantic_trending", cache_key, response)
+        except Exception as e:
+            print(f"[SemanticTrending] Postgres cache write error: {e}", flush=True)
+
+        print(f"[SemanticTrending] Returning {len(result_items)} personalized papers for author={author_id}", flush=True)
+        return response
+
+
+# ── User Memory & Activity Engine ────────────────────────────────────────────
+
+class ActivityEventPayload(BaseModel):
+    type: str
+    timestamp: Optional[int] = None
+    hourOfDay: Optional[int] = None
+    paperTitle: Optional[str] = None
+    paperDomain: Optional[str] = None
+    paperJournal: Optional[str] = None
+    durationSeconds: Optional[int] = None
+    authorName: Optional[str] = None
+    authorInstitution: Optional[str] = None
+    query: Optional[str] = None
+    filterValue: Optional[str] = None
+    collaboratorName: Optional[str] = None
+    collaboratorField: Optional[str] = None
+
+class UserMemoryEventsRequest(BaseModel):
+    user_id: str
+    events: List[ActivityEventPayload]
+
+_user_memory_cache = SimpleAsyncCache(ttl_seconds=3600, max_size=500)
+
+@app.post("/user_memory/events")
+async def post_user_memory_events(req: UserMemoryEventsRequest):
+    """
+    Accepts a batch of activity events from the Android app.
+    Derives a memory profile and stores it in Postgres.
+    """
+    import json as _json
+    from datetime import datetime
+    from collections import Counter
+
+    events = req.events
+    user_id = req.user_id
+
+    if not events:
+        return {"status": "no_events"}
+
+    # Load existing profile from Postgres
+    existing_raw = await pipeline_services._load_from_postgres("user_memory", user_id)
+    existing = existing_raw or {}
+
+    # ── Derive topics ────────────────────────────────────────────────────────
+    topic_sources = []
+    for e in events:
+        if e.paperDomain: topic_sources.append(e.paperDomain.strip().title())
+        if e.query and len(e.query) > 3: topic_sources.append(e.query.strip().title())
+        if e.filterValue and e.filterValue not in ("Global", "All"): topic_sources.append(e.filterValue.strip().title())
+    topic_freq = Counter(topic_sources)
+    top_topics = [t for t, _ in topic_freq.most_common(6)]
+
+    # ── Active hours ─────────────────────────────────────────────────────────
+    hours = [e.hourOfDay for e in events if e.hourOfDay is not None]
+    hour_freq = Counter(hours)
+    active_hours = [h for h, _ in hour_freq.most_common(4)]
+
+    # ── Reading pace ─────────────────────────────────────────────────────────
+    paper_sessions = [(e.paperTitle, e.durationSeconds) for e in events
+                      if e.type == "PAPER_CLOSED" and e.paperTitle and e.durationSeconds]
+    avg_read_sec = (sum(s for _, s in paper_sessions) / len(paper_sessions)) if paper_sessions else 0
+    avg_read_min = avg_read_sec / 60.0
+    reading_pace = (
+        "deep_reader" if avg_read_min >= 5 else
+        "moderate_reader" if avg_read_min >= 2 else
+        "quick_scanner" if avg_read_min > 0 else
+        existing.get("reading_pace", "unknown")
+    )
+
+    # ── Unfinished / recent ───────────────────────────────────────────────────
+    unfinished = [t for t, s in paper_sessions if 0 < s < 90]
+    recently_read = [t for t, s in paper_sessions if s >= 90]
+
+    # ── Research style ───────────────────────────────────────────────────────
+    domains = list({e.paperDomain for e in events if e.paperDomain})
+    research_style = (
+        "interdisciplinary" if len(domains) >= 4 else
+        "focused" if len(domains) >= 2 else "exploratory"
+    )
+
+    # ── Collaborators ─────────────────────────────────────────────────────────
+    collab_names = [e.collaboratorName or e.authorName for e in events
+                    if e.type in ("COLLAB_CONNECTED", "AUTHOR_VISITED") and (e.collaboratorName or e.authorName)]
+    collaborators = [n for n, _ in Counter(collab_names).most_common(5)]
+
+    # ── Searches ──────────────────────────────────────────────────────────────
+    searches = [e.query for e in events
+                if e.type in ("SEARCH_QUERY", "AGENT_QUERY") and e.query]
+    freq_searches = [q for q, _ in Counter(searches).most_common(5)]
+
+    profile = {
+        "user_id": user_id,
+        "top_topics": top_topics or existing.get("top_topics", []),
+        "active_hours": active_hours or existing.get("active_hours", []),
+        "reading_pace": reading_pace,
+        "research_style": research_style,
+        "avg_read_minutes": round(avg_read_min, 2),
+        "unfinished_papers": list(dict.fromkeys(unfinished))[:3],
+        "recently_read_papers": list(dict.fromkeys(recently_read))[:5],
+        "frequent_collaborators": collaborators or existing.get("frequent_collaborators", []),
+        "frequent_search_terms": freq_searches or existing.get("frequent_search_terms", []),
+        "last_active_topic": top_topics[0] if top_topics else existing.get("last_active_topic", ""),
+        "total_papers_read": len([e for e in events if e.type == "PAPER_CLOSED" and (e.durationSeconds or 0) > 30]),
+        "last_updated": int(datetime.utcnow().timestamp() * 1000),
+    }
+
+    await pipeline_services._save_to_postgres("user_memory", user_id, profile)
+    await _user_memory_cache.set(user_id, profile)
+
+    print(f"[UserMemory] Saved profile for user={user_id}: topics={top_topics[:3]}", flush=True)
+    return {"status": "ok", "profile": profile}
+
+
+@app.get("/user_memory/{user_id}")
+async def get_user_memory(user_id: str):
+    """
+    Returns the current memory profile for a user.
+    Used by the Android app on Copilot init.
+    """
+    cached = await _user_memory_cache.get(user_id)
+    if cached:
+        return cached
+
+    pg = await pipeline_services._load_from_postgres("user_memory", user_id)
+    if pg:
+        await _user_memory_cache.set(user_id, pg)
+        return pg
+
+    raise HTTPException(status_code=404, detail="No memory profile found for this user yet.")

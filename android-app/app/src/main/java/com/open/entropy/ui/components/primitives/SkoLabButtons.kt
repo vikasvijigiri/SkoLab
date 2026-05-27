@@ -12,15 +12,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.open.entropy.ui.theme.ResQitDisruption
-import com.open.entropy.ui.theme.ResQitShapes
-import com.open.entropy.ui.theme.ResQitTextPrimary
+import com.open.entropy.ui.theme.SkoLabDisruption
+import com.open.entropy.ui.theme.SkoLabShapes
+import com.open.entropy.ui.theme.SkoLabTextPrimary
 import com.open.entropy.ui.theme.GlassBorder
 import com.open.entropy.ui.theme.ObsidianBlack
 import com.open.entropy.ui.theme.Typography
 
 @Composable
-fun ResQitPrimaryButton(
+fun SkoLabPrimaryButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -32,11 +32,11 @@ fun ResQitPrimaryButton(
             .fillMaxWidth()
             .height(52.dp),
         enabled = enabled,
-        shape = ResQitShapes.md,
+        shape = SkoLabShapes.md,
         colors = ButtonDefaults.buttonColors(
-            containerColor = ResQitDisruption,
+            containerColor = SkoLabDisruption,
             contentColor = ObsidianBlack,
-            disabledContainerColor = ResQitDisruption.copy(alpha = 0.3f)
+            disabledContainerColor = SkoLabDisruption.copy(alpha = 0.3f)
         )
     ) {
         Text(text = text, style = Typography.labelLarge)
@@ -44,7 +44,7 @@ fun ResQitPrimaryButton(
 }
 
 @Composable
-fun ResQitOutlinedButton(
+fun SkoLabOutlinedButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -52,12 +52,12 @@ fun ResQitOutlinedButton(
     OutlinedButton(
         onClick = onClick,
         modifier = modifier.height(44.dp),
-        shape = ResQitShapes.md,
+        shape = SkoLabShapes.md,
         border = BorderStroke(
             1.dp,
-            Brush.horizontalGradient(listOf(ResQitDisruption.copy(alpha = 0.6f), GlassBorder))
+            Brush.horizontalGradient(listOf(SkoLabDisruption.copy(alpha = 0.6f), GlassBorder))
         ),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = ResQitTextPrimary)
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = SkoLabTextPrimary)
     ) {
         Text(text = text, style = Typography.labelMedium)
     }
@@ -76,7 +76,7 @@ fun GoogleSignInButton(
             .fillMaxWidth()
             .height(52.dp),
         enabled = enabled && !isLoading,
-        shape = ResQitShapes.md,
+        shape = SkoLabShapes.md,
         colors = ButtonDefaults.buttonColors(
             containerColor = Color.White,
             contentColor = Color(0xFF1F1F1F)

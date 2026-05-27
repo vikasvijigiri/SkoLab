@@ -50,7 +50,7 @@ import com.open.entropy.auth.AuthManager
 import com.open.entropy.data.UserPreferences
 import com.open.entropy.ui.components.primitives.BottomNavDock
 import com.open.entropy.ui.components.primitives.DockItem
-import com.open.entropy.ui.components.primitives.ResQitScaffold
+import com.open.entropy.ui.components.primitives.SkoLabScaffold
 import com.open.entropy.ui.layout.ScreenInsets
 import com.open.entropy.ui.layout.screenSafeArea
 import com.open.entropy.ui.screens.ArticleReaderScreen
@@ -77,7 +77,7 @@ import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.foundation.layout.ime
 import com.open.entropy.ui.screens.AgentScreen
-import com.open.entropy.ui.theme.ResQitTheme
+import com.open.entropy.ui.theme.SkoLabTheme
 import com.open.entropy.ui.theme.EntropiColors
 import kotlinx.coroutines.launch
 
@@ -90,15 +90,15 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
         setContent {
-            ResQitTheme {
-                ResQitMainApp()
+            SkoLabTheme {
+                SkoLabMainApp()
             }
         }
     }
 }
 
 @Composable
-fun ResQitMainApp() {
+fun SkoLabMainApp() {
     val context = LocalContext.current
     val authManager = remember { AuthManager(context) }
     val userPrefs = remember { UserPreferences(context) }
@@ -123,12 +123,12 @@ fun ResQitMainApp() {
     val dockItems = listOf(
         DockItem("discover", Icons.Filled.Hub, "Home", badgeCount = 1),
         DockItem("collabs", Icons.Filled.Groups, "Collabs", hasBadgeDot = true),
-        DockItem("agent", Icons.Filled.AutoAwesome, "Agent"),
+        DockItem("agent", Icons.Filled.AutoAwesome, "Copilot"),
         DockItem("metrics", Icons.Filled.AutoGraph, "Metrics"),
         DockItem("industry", Icons.Filled.BusinessCenter, "Industry")
     )
 
-    ResQitScaffold { innerPadding ->
+    SkoLabScaffold { innerPadding ->
         androidx.compose.foundation.layout.Column(modifier = Modifier.fillMaxSize()) {
             androidx.compose.animation.AnimatedVisibility(
                 visible = !isLlmActive,

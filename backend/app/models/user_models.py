@@ -1,7 +1,7 @@
 import datetime
 from sqlalchemy import Column, String, Integer, DateTime, Boolean, ForeignKey, JSON
 from sqlalchemy.orm import relationship
-from app.database import Base
+from app.db.database import Base
 
 class User(Base):
     __tablename__ = "users"
@@ -51,7 +51,7 @@ class AgentChatHistory(Base):
     __tablename__ = "agent_chat_history"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    user_id = Column(String, index=True, nullable=True)  # No FK — allows local/anonymous users
     context_id = Column(String, index=True, nullable=True) # E.g., paper ID or author ID to scope the chat
     role = Column(String, nullable=False) # "user" or "assistant" or "system"
     content = Column(String, nullable=False)

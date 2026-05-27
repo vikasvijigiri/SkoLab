@@ -11,7 +11,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
-import com.open.entropy.ui.theme.ResQitPrimary
+import com.open.entropy.ui.theme.SkoLabPrimary
 
 @Composable
 fun CareerArcChart(
@@ -47,7 +47,7 @@ fun CareerArcChart(
         drawPath(
             path = fillPath,
             brush = Brush.verticalGradient(
-                colors = listOf(ResQitPrimary.copy(alpha = 0.2f), Color.Transparent)
+                colors = listOf(SkoLabPrimary.copy(alpha = 0.2f), Color.Transparent)
             )
         )
 
@@ -61,14 +61,14 @@ fun CareerArcChart(
 
         drawPath(
             path = linePath,
-            color = ResQitPrimary,
+            color = SkoLabPrimary,
             style = Stroke(width = 2.dp.toPx())
         )
         
         // Data points
         points.forEach { point ->
             drawCircle(
-                color = ResQitPrimary,
+                color = SkoLabPrimary,
                 radius = 3.dp.toPx(),
                 center = point
             )

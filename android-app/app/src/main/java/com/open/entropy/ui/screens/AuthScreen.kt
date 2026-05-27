@@ -28,7 +28,7 @@ import com.open.entropy.R
 import com.open.entropy.auth.AuthManager
 import com.open.entropy.ui.components.BrandMark
 import com.open.entropy.ui.components.BrandTagline
-import com.open.entropy.ui.components.primitives.ResQitPrimaryButton
+import com.open.entropy.ui.components.primitives.SkoLabPrimaryButton
 import com.open.entropy.ui.components.primitives.GoogleSignInButton
 import com.open.entropy.ui.layout.screenHorizontalPadding
 import com.open.entropy.ui.layout.screenSafeArea
@@ -70,7 +70,7 @@ fun AuthScreen(onAuthSuccess: () -> Unit) {
 
             BrandMark(
                 style = Typography.displayLarge,
-                accentColor = ResQitDisruption.copy(alpha = glowAlpha)
+                accentColor = SkoLabDisruption.copy(alpha = glowAlpha)
             )
             BrandTagline(modifier = Modifier.padding(top = 8.dp))
 
@@ -79,7 +79,7 @@ fun AuthScreen(onAuthSuccess: () -> Unit) {
                 text = androidx.compose.ui.platform.LocalContext.current
                     .getString(R.string.brand_auth_subtitle),
                 style = Typography.bodyLarge,
-                color = ResQitTextSecondary,
+                color = SkoLabTextSecondary,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -108,14 +108,14 @@ fun AuthScreen(onAuthSuccess: () -> Unit) {
                 Text(
                     text = message,
                     style = Typography.bodySmall,
-                    color = ResQitWarning,
+                    color = SkoLabWarning,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
 
             Spacer(modifier = Modifier.height(28.dp))
-            Text("— or use email —", style = Typography.labelMedium, color = ResQitTextSecondary)
+            Text("— or use email —", style = Typography.labelMedium, color = SkoLabTextSecondary)
             Spacer(modifier = Modifier.height(20.dp))
 
             Row(modifier = Modifier.fillMaxWidth()) {
@@ -146,7 +146,7 @@ private fun AuthTabItem(text: String, isSelected: Boolean, modifier: Modifier = 
         Text(
             text = text,
             style = Typography.titleMedium,
-            color = if (isSelected) ResQitTextPrimary else ResQitTextSecondary,
+            color = if (isSelected) SkoLabTextPrimary else SkoLabTextSecondary,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -157,7 +157,7 @@ private fun AuthTabItem(text: String, isSelected: Boolean, modifier: Modifier = 
             modifier = Modifier
                 .height(2.dp)
                 .width(indicatorWidth)
-                .background(ResQitDisruption)
+                .background(SkoLabDisruption)
         )
     }
 }
@@ -169,9 +169,9 @@ fun SignInForm(onAuthSuccess: () -> Unit) {
     var showPassword by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        ResQitTextField(value = email, onValueChange = { email = it }, label = "Email")
+        SkoLabTextField(value = email, onValueChange = { email = it }, label = "Email")
         Spacer(modifier = Modifier.height(16.dp))
-        ResQitTextField(
+        SkoLabTextField(
             value = password,
             onValueChange = { password = it },
             label = "Password",
@@ -183,11 +183,11 @@ fun SignInForm(onAuthSuccess: () -> Unit) {
         Text(
             text = "Forgot Password?",
             modifier = Modifier.align(Alignment.End),
-            color = ResQitDisruption,
+            color = SkoLabDisruption,
             style = Typography.labelMedium
         )
         Spacer(modifier = Modifier.height(24.dp))
-        ResQitPrimaryButton(text = "Sign In", onClick = onAuthSuccess)
+        SkoLabPrimaryButton(text = "Sign In", onClick = onAuthSuccess)
     }
 }
 
@@ -202,33 +202,33 @@ fun RegisterForm(onAuthSuccess: () -> Unit) {
     val domains = listOf("Physics", "Biology", "Computer Science", "AI", "Genetics", "Neuroscience", "Economics")
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        ResQitTextField(value = fullName, onValueChange = { fullName = it }, label = "Full Name")
+        SkoLabTextField(value = fullName, onValueChange = { fullName = it }, label = "Full Name")
         Spacer(modifier = Modifier.height(16.dp))
-        ResQitTextField(value = email, onValueChange = { email = it }, label = "Email")
+        SkoLabTextField(value = email, onValueChange = { email = it }, label = "Email")
         Spacer(modifier = Modifier.height(16.dp))
-        ResQitTextField(value = password, onValueChange = { password = it }, label = "Password", isPassword = true)
+        SkoLabTextField(value = password, onValueChange = { password = it }, label = "Password", isPassword = true)
         Spacer(modifier = Modifier.height(24.dp))
-        Text("Research Domain", style = Typography.labelMedium, color = ResQitTextSecondary)
+        Text("Research Domain", style = Typography.labelMedium, color = SkoLabTextSecondary)
         Spacer(modifier = Modifier.height(8.dp))
         Surface(
             modifier = Modifier.fillMaxWidth().clickable { showDomainSheet = true },
-            color = ResQitSurface,
-            shape = ResQitShapes.md,
-            border = androidx.compose.foundation.BorderStroke(1.dp, ResQitDivider)
+            color = SkoLabSurface,
+            shape = SkoLabShapes.md,
+            border = androidx.compose.foundation.BorderStroke(1.dp, SkoLabDivider)
         ) {
-            Text(text = selectedDomain, modifier = Modifier.padding(16.dp), color = ResQitTextPrimary)
+            Text(text = selectedDomain, modifier = Modifier.padding(16.dp), color = SkoLabTextPrimary)
         }
         Spacer(modifier = Modifier.height(24.dp))
-        ResQitPrimaryButton(text = "Create Account", onClick = onAuthSuccess)
+        SkoLabPrimaryButton(text = "Create Account", onClick = onAuthSuccess)
     }
 
     if (showDomainSheet) {
         ModalBottomSheet(
             onDismissRequest = { showDomainSheet = false },
-            containerColor = ResQitSurfaceElevated
+            containerColor = SkoLabSurfaceElevated
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Select Research Domain", style = Typography.titleLarge, color = ResQitTextPrimary)
+                Text("Select Research Domain", style = Typography.titleLarge, color = SkoLabTextPrimary)
                 Spacer(modifier = Modifier.height(16.dp))
                 domains.forEach { domain ->
                     Text(
@@ -240,7 +240,7 @@ fun RegisterForm(onAuthSuccess: () -> Unit) {
                                 showDomainSheet = false
                             }
                             .padding(vertical = 12.dp),
-                        color = ResQitTextPrimary
+                        color = SkoLabTextPrimary
                     )
                 }
             }
@@ -249,7 +249,7 @@ fun RegisterForm(onAuthSuccess: () -> Unit) {
 }
 
 @Composable
-fun ResQitTextField(
+fun SkoLabTextField(
     value: String,
     onValueChange: (String) -> Unit,
     label: String,
@@ -262,14 +262,14 @@ fun ResQitTextField(
         onValueChange = onValueChange,
         label = { Text(label, style = Typography.labelMedium) },
         modifier = Modifier.fillMaxWidth(),
-        shape = ResQitShapes.md,
+        shape = SkoLabShapes.md,
         colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = ResQitSurface,
-            unfocusedContainerColor = ResQitSurface,
-            focusedBorderColor = ResQitDisruption,
-            unfocusedBorderColor = ResQitDivider,
-            focusedTextColor = ResQitTextPrimary,
-            unfocusedTextColor = ResQitTextPrimary
+            focusedContainerColor = SkoLabSurface,
+            unfocusedContainerColor = SkoLabSurface,
+            focusedBorderColor = SkoLabDisruption,
+            unfocusedBorderColor = SkoLabDivider,
+            focusedTextColor = SkoLabTextPrimary,
+            unfocusedTextColor = SkoLabTextPrimary
         ),
         visualTransformation = if (isPassword && !showPassword) PasswordVisualTransformation() else VisualTransformation.None,
         trailingIcon = {
@@ -278,7 +278,7 @@ fun ResQitTextField(
                     Icon(
                         if (showPassword) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                         contentDescription = if (showPassword) "Hide password" else "Show password",
-                        tint = ResQitTextSecondary
+                        tint = SkoLabTextSecondary
                     )
                 }
             }

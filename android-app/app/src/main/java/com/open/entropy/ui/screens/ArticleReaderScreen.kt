@@ -65,7 +65,7 @@ fun ArticleReaderScreen(
                         Text(
                             text = title,
                             style = Typography.titleMedium,
-                            color = ResQitTextPrimary,
+                            color = SkoLabTextPrimary,
                             maxLines = 1,
                             fontWeight = FontWeight.Bold,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
@@ -74,7 +74,7 @@ fun ArticleReaderScreen(
                             Text(
                                 text = paper.authors.joinToString(", ") { it.substringBefore("|") },
                                 style = Typography.labelSmall,
-                                color = ResQitTextSecondary,
+                                color = SkoLabTextSecondary,
                                 maxLines = 1
                             )
                         }
@@ -82,7 +82,7 @@ fun ArticleReaderScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onClose) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = ResQitTextPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = SkoLabTextPrimary)
                     }
                 },
                 actions = {
@@ -90,26 +90,26 @@ fun ArticleReaderScreen(
                         Icon(
                             imageVector = if (showCockpit) Icons.Default.AutoAwesome else Icons.Default.Science,
                             contentDescription = "Intelligence",
-                            tint = if (showCockpit) ResQitAiInsight else ResQitTextPrimary
+                            tint = if (showCockpit) SkoLabAiInsight else SkoLabTextPrimary
                         )
                     }
                     IconButton(onClick = { webViewInstance?.reload() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = ResQitPrimary)
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = SkoLabPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = ResQitBg.copy(alpha = 0.9f),
-                    titleContentColor = ResQitTextPrimary
+                    containerColor = SkoLabBg.copy(alpha = 0.9f),
+                    titleContentColor = SkoLabTextPrimary
                 )
             )
         },
-        containerColor = ResQitBg
+        containerColor = SkoLabBg
     ) { paddingValues ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(ResQitBg)
+                .background(SkoLabBg)
         ) {
             AndroidView(
                 factory = { context ->
@@ -145,8 +145,8 @@ fun ArticleReaderScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.TopCenter),
-                    color = ResQitPrimary,
-                    trackColor = ResQitDivider
+                    color = SkoLabPrimary,
+                    trackColor = SkoLabDivider
                 )
             }
 
@@ -161,7 +161,7 @@ fun ArticleReaderScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .fillMaxHeight(0.6f),
-                    color = ResQitBg.copy(alpha = 0.95f),
+                    color = SkoLabBg.copy(alpha = 0.95f),
                     shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
                 ) {
@@ -175,7 +175,7 @@ fun ArticleReaderScreen(
                             modifier = Modifier
                                 .width(40.dp)
                                 .height(4.dp)
-                                .background(ResQitDivider, RoundedCornerShape(50))
+                                .background(SkoLabDivider, RoundedCornerShape(50))
                                 .align(Alignment.CenterHorizontally)
                         )
                         
@@ -190,7 +190,7 @@ fun ArticleReaderScreen(
                                 Text(
                                     text = "SCIENTIFIC COCKPIT",
                                     style = Typography.labelSmall,
-                                    color = ResQitTextSecondary,
+                                    color = SkoLabTextSecondary,
                                     fontWeight = FontWeight.Black,
                                     letterSpacing = 1.5.sp
                                 )
@@ -198,7 +198,7 @@ fun ArticleReaderScreen(
                                 Text(
                                     text = "Intelligence active for: $title",
                                     style = Typography.bodyMedium,
-                                    color = ResQitTextPrimary,
+                                    color = SkoLabTextPrimary,
                                     fontSize = 12.sp,
                                     maxLines = 2
                                 )
@@ -214,7 +214,7 @@ fun ArticleReaderScreen(
                         
                         if (isSummarizing) {
                             Box(modifier = Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(color = ResQitAiInsight)
+                                CircularProgressIndicator(color = SkoLabAiInsight)
                             }
                         } else {
                             summaryData?.let { summary ->
@@ -225,7 +225,7 @@ fun ArticleReaderScreen(
                                 Text(
                                     text = "METRICS",
                                     style = Typography.labelSmall,
-                                    color = ResQitTextSecondary,
+                                    color = SkoLabTextSecondary,
                                     fontWeight = FontWeight.Black,
                                     letterSpacing = 1.sp
                                 )
@@ -241,13 +241,13 @@ fun ArticleReaderScreen(
                                     AnalyticBox(
                                         label = "Creativity",
                                         value = creativityVal,
-                                        color = ResQitNovelty,
+                                        color = SkoLabNovelty,
                                         modifier = Modifier.weight(1f)
                                     )
                                     AnalyticBox(
                                         label = "Complexity",
                                         value = complexityVal,
-                                        color = ResQitDisruption,
+                                        color = SkoLabDisruption,
                                         modifier = Modifier.weight(1f)
                                     )
                                 }

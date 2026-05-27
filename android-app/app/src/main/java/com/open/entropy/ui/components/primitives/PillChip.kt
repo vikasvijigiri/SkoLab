@@ -15,10 +15,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.open.entropy.ui.theme.ResQitDisruption
-import com.open.entropy.ui.theme.ResQitMotion
-import com.open.entropy.ui.theme.ResQitShapes
-import com.open.entropy.ui.theme.ResQitTextSecondary
+import com.open.entropy.ui.theme.SkoLabDisruption
+import com.open.entropy.ui.theme.SkoLabMotion
+import com.open.entropy.ui.theme.SkoLabShapes
+import com.open.entropy.ui.theme.SkoLabTextSecondary
 import com.open.entropy.ui.theme.ObsidianBlack
 import com.open.entropy.ui.theme.Typography
 
@@ -31,21 +31,21 @@ fun PillChip(
     modifier: Modifier = Modifier
 ) {
     val containerColor by animateColorAsState(
-        targetValue = if (selected) ResQitDisruption else Color.Transparent,
-        animationSpec = tween(ResQitMotion.fast),
+        targetValue = if (selected) SkoLabDisruption else Color.Transparent,
+        animationSpec = tween(SkoLabMotion.fast),
         label = "chipBg"
     )
     val textColor by animateColorAsState(
-        targetValue = if (selected) ObsidianBlack else ResQitTextSecondary,
-        animationSpec = tween(ResQitMotion.fast),
+        targetValue = if (selected) ObsidianBlack else SkoLabTextSecondary,
+        animationSpec = tween(SkoLabMotion.fast),
         label = "chipText"
     )
     Surface(
         onClick = onClick,
         modifier = modifier,
         color = containerColor,
-        shape = ResQitShapes.orb,
-        border = if (selected) null else BorderStroke(1.dp, ResQitTextSecondary.copy(alpha = 0.3f))
+        shape = SkoLabShapes.orb,
+        border = if (selected) null else BorderStroke(1.dp, SkoLabTextSecondary.copy(alpha = 0.3f))
     ) {
         Text(
             text = text,

@@ -30,6 +30,10 @@ class MetricsViewModel : ViewModel() {
         fetchMetrics()
     }
 
+    fun retry() {
+        fetchMetrics()
+    }
+
     private fun fetchMetrics() {
         val name = currentAuthorName ?: return
         viewModelScope.launch {
@@ -38,24 +42,28 @@ class MetricsViewModel : ViewModel() {
                 // 1. Resolve OpenAlex ID
                 val authorProfile = apiService.searchAuthor(name)
                 val targetId = authorProfile?.id
-                
+
                 if (targetId == null) {
-                    _uiState.value = _uiState.value.copy(isLoading = false, error = "Could not find OpenAlex profile for $name")
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        error = "Could not find OpenAlex profile for \"$name\". Check your profile name in settings."
+                    )
                     return@launch
                 }
-                
+
                 openAlexId = targetId
 
-                // 2. Fetch Metrics
+                // 2. Fetch Metrics — throws on any failure, which we surface to the user
                 val metrics = apiService.getAuthorMetrics(targetId)
-                if (metrics != null) {
-                    _uiState.value = _uiState.value.copy(isLoading = false, metrics = metrics)
-                } else {
-                    _uiState.value = _uiState.value.copy(isLoading = false, error = "Failed to load metrics")
-                }
+                _uiState.value = _uiState.value.copy(isLoading = false, metrics = metrics)
+
             } catch (e: Exception) {
-                Log.e("MetricsViewModel", "Exception: ${e.message}")
-                _uiState.value = _uiState.value.copy(isLoading = false, error = e.message ?: "Unknown error")
+                val message = e.message ?: "An unexpected error occurred"
+                Log.e("MetricsViewModel", "fetchMetrics failed: $message", e)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = message
+                )
             }
         }
     }

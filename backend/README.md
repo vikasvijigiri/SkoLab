@@ -1,6 +1,6 @@
-﻿# ResQit Backend
+# Skolab Backend
 
-This is the Python (FastAPI) backend for the ResQit project.
+This is the Python (FastAPI) backend for the Skolab project.
 
 ## Architecture
 

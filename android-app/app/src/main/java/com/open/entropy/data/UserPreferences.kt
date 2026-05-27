@@ -4,12 +4,12 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
-import com.open.entropy.model.ResQitUser
+import com.open.entropy.model.SkoLabUser
 import com.open.entropy.model.UserConnection
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "resqit_prefs")
+private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "skolab_prefs")
 
 class UserPreferences(private val context: Context) {
     private val hasSeenOnboardingKey = booleanPreferencesKey("has_seen_onboarding")
@@ -65,10 +65,10 @@ class UserPreferences(private val context: Context) {
         }
     }
 
-    val cachedUser: Flow<ResQitUser?> = context.dataStore.data.map { prefs ->
+    val cachedUser: Flow<SkoLabUser?> = context.dataStore.data.map { prefs ->
         val uid = prefs[userUidKey]
         if (uid != null) {
-            ResQitUser(
+            SkoLabUser(
                 uid = uid,
                 name = prefs[userNameKey] ?: "",
                 email = prefs[userEmailKey] ?: "",
@@ -81,7 +81,7 @@ class UserPreferences(private val context: Context) {
         }
     }
 
-    suspend fun cacheUser(user: ResQitUser) {
+    suspend fun cacheUser(user: SkoLabUser) {
         context.dataStore.edit { prefs ->
             prefs[userUidKey] = user.uid
             prefs[userNameKey] = user.name

@@ -37,6 +37,9 @@ import kotlinx.coroutines.launch
 import com.open.entropy.ui.components.MarkdownText
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,6 +93,7 @@ fun ChatRoomScreen(
     }
 
     Scaffold(
+        modifier = Modifier.imePadding(),
         containerColor = BgPrimary,
         topBar = {
             Surface(
@@ -100,17 +104,13 @@ fun ChatRoomScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .padding(horizontal = 8.dp, vertical = 10.dp),
+                        .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = TextPrimary)
-                    }
-                    
                     // Avatar
                     Box(
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(34.dp)
                             .clip(CircleShape)
                             .background(color.copy(alpha = 0.12f))
                             .background(color.copy(alpha = 0.08f)),
@@ -120,7 +120,7 @@ fun ChatRoomScreen(
                             text = peerName.take(1).uppercase(),
                             color = color,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
+                            fontSize = 14.sp,
                             fontFamily = DisplayFontFamily
                         )
                     }
@@ -200,7 +200,7 @@ fun ChatRoomScreen(
                     Row(
                         modifier = Modifier
                             .weight(1f)
-                            .heightIn(min = 40.dp, max = 100.dp)
+                            .heightIn(min = 36.dp, max = 100.dp)
                             .clip(RoundedCornerShape(24.dp))
                             .background(BgElevated)
                             .padding(horizontal = 12.dp),
@@ -210,27 +210,36 @@ fun ChatRoomScreen(
                             Icon(Icons.Default.SentimentSatisfiedAlt, null, tint = TextMuted)
                         }
                         
-                        TextField(
+                        Spacer(Modifier.width(4.dp))
+                        
+                        BasicTextField(
                             value = messageText,
                             onValueChange = { messageText = it },
-                            placeholder = { Text("Message", color = TextMuted, fontSize = 14.sp) },
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                disabledContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary
+                            textStyle = TextStyle(
+                                color = TextPrimary, 
+                                fontSize = 14.sp,
+                                fontFamily = DisplayFontFamily
                             ),
+                            cursorBrush = SolidColor(TextPrimary),
                             modifier = Modifier
                                 .weight(1f)
-                                .padding(vertical = 2.dp)
+                                .padding(vertical = 8.dp),
+                            decorationBox = { innerTextField ->
+                                Box(contentAlignment = Alignment.CenterStart) {
+                                    if (messageText.isEmpty()) {
+                                        Text("Message", color = TextMuted, fontSize = 14.sp)
+                                    }
+                                    innerTextField()
+                                }
+                            }
                         )
+                        
+                        Spacer(Modifier.width(4.dp))
                         
                         IconButton(onClick = {}, modifier = Modifier.size(24.dp)) {
                             Icon(Icons.Default.AttachFile, null, tint = TextMuted)
                         }
+                        Spacer(Modifier.width(4.dp))
                         IconButton(onClick = {}, modifier = Modifier.size(24.dp)) {
                             Icon(Icons.Default.CameraAlt, null, tint = TextMuted)
                         }

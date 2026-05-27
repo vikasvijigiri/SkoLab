@@ -1,4 +1,4 @@
-﻿package com.open.entropy.ui.components
+package com.open.entropy.ui.components
 
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -8,16 +8,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import com.open.entropy.R
-import com.open.entropy.ui.theme.ResQitDisruption
-import com.open.entropy.ui.theme.ResQitTextPrimary
+import com.open.entropy.ui.theme.SkoLabDisruption
+import com.open.entropy.ui.theme.SkoLabTextPrimary
 import com.open.entropy.ui.theme.Typography
 
 @Composable
 fun BrandMark(
     modifier: Modifier = Modifier,
     style: TextStyle = Typography.displayLarge,
-    primaryColor: Color = ResQitTextPrimary,
-    accentColor: Color = ResQitDisruption
+    primaryColor: Color = com.open.entropy.ui.theme.AccentViolet,
+    accentColor: Color = com.open.entropy.ui.theme.AccentCyan
 ) {
     val context = LocalContext.current
     val prefix = context.getString(R.string.brand_mark_prefix)
@@ -34,7 +34,7 @@ fun BrandMark(
 @Composable
 fun BrandTagline(
     modifier: Modifier = Modifier,
-    color: Color = com.open.entropy.ui.theme.ResQitTextSecondary
+    color: Color = com.open.entropy.ui.theme.SkoLabTextSecondary
 ) {
     val context = LocalContext.current
     Text(

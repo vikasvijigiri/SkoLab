@@ -2948,7 +2948,7 @@ fun TagLabel(text: String, color: Color) {
 @Composable
 fun CompanyFooter() {
     Surface(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp), shape = RoundedCornerShape(16.dp), color = BgCard, shadowElevation = 1.dp) {
-        Text("Powered by ResQit", modifier = Modifier.padding(16.dp).fillMaxWidth(), textAlign = TextAlign.Center, color = TextMuted, fontSize = 12.sp)
+        Text("Powered by SkoLab", modifier = Modifier.padding(16.dp).fillMaxWidth(), textAlign = TextAlign.Center, color = TextMuted, fontSize = 12.sp)
     }
 }
 

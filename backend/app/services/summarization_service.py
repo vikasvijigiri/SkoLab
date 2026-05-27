@@ -1,5 +1,5 @@
 """
-ResQit Paper Intelligence Engine
+Skolab Paper Intelligence Engine
 ================================
 Reads the FULL text of scientific papers (via open-access PDF) and runs a
 Research Intelligence Agent to extract 9 structured insight dimensions.
@@ -21,8 +21,6 @@ import io
 import asyncio
 import time
 from typing import Optional, List, Dict, Any, Tuple
-import firebase_admin
-from firebase_admin import firestore
 from .metrics_service import MetricsService
 
 
@@ -280,7 +278,7 @@ class SummarizationService:
         try:
             headers = {
                 "User-Agent": (
-                    "ResQitApp/1.0 (mailto:vikki.4me@gmail.com) "
+                    "SkolabApp/1.0 (mailto:vikki.4me@gmail.com) "
                     "Academic research tool - reading open-access papers"
                 ),
                 "Accept": "application/pdf,*/*",
@@ -431,10 +429,10 @@ class SummarizationService:
                 return {}
 
             headers = {
-                "User-Agent": "ResQitApp/1.0 (mailto:vikki.4me@gmail.com)",
+                "User-Agent": "SkolabApp/1.0 (mailto:vikki.4me@gmail.com)",
                 "Accept": "application/json",
             }
-            from app.config import settings
+            from app.core.config import settings
             if settings.openalex_api_key:
                 headers["api_key"] = settings.openalex_api_key
             async with httpx.AsyncClient(headers=headers, timeout=15.0) as client:

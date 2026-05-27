@@ -1,6 +1,6 @@
 package com.open.entropy.model
 
-data class ResQitUser(
+data class SkoLabUser(
     val uid: String = "",
     val name: String = "",
     val email: String = "",

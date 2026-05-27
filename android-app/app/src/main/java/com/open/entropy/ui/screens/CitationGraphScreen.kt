@@ -48,7 +48,7 @@ fun CitationGraphScreen(paperId: String, onBack: () -> Unit) {
             val centerY = size.height / 2
             
             // Center Node (Current Paper)
-            drawCircle(ResQitSecondary, radius = 24f, center = Offset(centerX, centerY))
+            drawCircle(SkoLabSecondary, radius = 24f, center = Offset(centerX, centerY))
             
             // Surrounding Nodes (Citations)
             val nodes = 12
@@ -58,11 +58,11 @@ fun CitationGraphScreen(paperId: String, onBack: () -> Unit) {
                 val nodeX = centerX + radius * cos(angle)
                 val nodeY = centerY + radius * sin(angle)
                 
-                val color = if (i % 3 == 0) ResQitPrimary else ResQitTextSecondary.copy(alpha = 0.5f)
+                val color = if (i % 3 == 0) SkoLabPrimary else SkoLabTextSecondary.copy(alpha = 0.5f)
                 
                 // Edge
                 drawLine(
-                    color = ResQitDivider,
+                    color = SkoLabDivider,
                     start = Offset(centerX, centerY),
                     end = Offset(nodeX, nodeY),
                     strokeWidth = 2f
@@ -79,18 +79,18 @@ fun CitationGraphScreen(paperId: String, onBack: () -> Unit) {
                     val subX = nodeX + subRadius * cos(subAngle)
                     val subY = nodeY + subRadius * sin(subAngle)
                     
-                    drawLine(ResQitDivider, start = Offset(nodeX, nodeY), end = Offset(subX, subY), strokeWidth = 1f)
-                    drawCircle(ResQitTextSecondary.copy(alpha = 0.3f), radius = 8f, center = Offset(subX, subY))
+                    drawLine(SkoLabDivider, start = Offset(nodeX, nodeY), end = Offset(subX, subY), strokeWidth = 1f)
+                    drawCircle(SkoLabTextSecondary.copy(alpha = 0.3f), radius = 8f, center = Offset(subX, subY))
                 }
             }
         }
         
         // UI Overlays
         TopAppBar(
-            title = { Text("CITATION GRAPH", style = Typography.labelSmall, color = ResQitTextSecondary) },
+            title = { Text("CITATION GRAPH", style = Typography.labelSmall, color = SkoLabTextSecondary) },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = ResQitTextPrimary)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = SkoLabTextPrimary)
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -99,14 +99,14 @@ fun CitationGraphScreen(paperId: String, onBack: () -> Unit) {
         // Legend
         Surface(
             modifier = Modifier.align(Alignment.BottomCenter).padding(24.dp),
-            color = ResQitSurfaceElevated.copy(alpha = 0.9f),
+            color = SkoLabSurfaceElevated.copy(alpha = 0.9f),
             shape = RoundedCornerShape(50),
-            border = androidx.compose.foundation.BorderStroke(1.dp, ResQitDivider)
+            border = androidx.compose.foundation.BorderStroke(1.dp, SkoLabDivider)
         ) {
             Row(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                LegendItem("Disruptive", ResQitPrimary)
-                LegendItem("Developmental", ResQitTextSecondary.copy(alpha = 0.5f))
-                LegendItem("Current", ResQitSecondary)
+                LegendItem("Disruptive", SkoLabPrimary)
+                LegendItem("Developmental", SkoLabTextSecondary.copy(alpha = 0.5f))
+                LegendItem("Current", SkoLabSecondary)
             }
         }
     }
@@ -117,6 +117,6 @@ fun LegendItem(label: String, color: Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(modifier = Modifier.size(8.dp).background(color, androidx.compose.foundation.shape.CircleShape))
         Spacer(modifier = Modifier.width(8.dp))
-        Text(label, style = Typography.labelSmall, color = ResQitTextSecondary, fontSize = 10.sp)
+        Text(label, style = Typography.labelSmall, color = SkoLabTextSecondary, fontSize = 10.sp)
     }
 }
