@@ -34,20 +34,7 @@ async def fetch_similar_authors(
     openalex_service: OpenAlexService
 ) -> List[AuthorSuggestion]:
     if not query_term or query_term.lower() in ["multidisciplinary", "researcher", "general research"]:
-        try:
-            hot_works = await openalex_service.search_works(query="science", per_page=10)
-            seen_concepts = []
-            for w in hot_works:
-                for c in w.get("concepts", []):
-                    if c.get("level") == 1 and c.get("display_name"):
-                        seen_concepts.append(c.get("display_name"))
-            if seen_concepts:
-                from collections import Counter
-                query_term = Counter(seen_concepts).most_common(1)[0][0]
-            else:
-                query_term = "science"
-        except Exception:
-            query_term = "science"
+        query_term = "physics"
 
     try:
         results = await openalex_service.search_authors(query_term, per_page=8)

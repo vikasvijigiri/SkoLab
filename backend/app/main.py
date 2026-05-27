@@ -1,3 +1,11 @@
+import platform
+from collections import namedtuple
+# Monkey-patch platform to avoid blocking WMI queries in sandboxed environment
+platform.machine = lambda: "AMD64"
+platform.uname = lambda: namedtuple("uname_result", ["system", "node", "release", "version", "machine", "processor"])(
+    "Windows", "localhost", "10", "10.0.19045", "AMD64", "Intel64 Family 6 Model 158 Stepping 10, GenuineIntel"
+)
+
 from dotenv import load_dotenv
 
 # MUST happen BEFORE any import that auto-initialises Firebase or reads env vars

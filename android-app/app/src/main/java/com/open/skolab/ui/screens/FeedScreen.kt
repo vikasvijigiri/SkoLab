@@ -139,8 +139,8 @@ fun FeedScreen(
 
     LaunchedEffect(cachedUser) {
         val uid = cachedUser?.uid ?: "user_vikas"
-        val userName = cachedUser?.name ?: "Vikas Vijigiri"
-        val researchFocus = cachedUser?.researchFocus ?: "Researcher"
+        val userName = if (!cachedUser?.name.isNullOrBlank()) cachedUser?.name!! else "Vikas Vijigiri"
+        val researchFocus = if (!cachedUser?.researchFocus.isNullOrBlank() && cachedUser?.researchFocus != "Researcher" && cachedUser?.researchFocus != "General Research") cachedUser?.researchFocus!! else "Physics"
         viewModel.setUserContext(uid, userName, researchFocus)
 
         if (cachedUser != null && (cachedUser?.researchFocus.isNullOrBlank() || cachedUser?.researchFocus == "Researcher" || cachedUser?.researchFocus == "General Research")) {

@@ -41,6 +41,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.open.skolab.auth.AuthManager
 import com.open.skolab.network.ChatMessage
 import com.open.skolab.ui.components.MarkdownText
+import com.open.skolab.ui.components.MessageBubbleWrapper
+import com.open.skolab.ui.components.ReactionBadge
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import com.open.skolab.ui.theme.*
 import com.open.skolab.viewmodel.AgentMode
 import com.open.skolab.viewmodel.AgentViewModel
@@ -70,6 +74,8 @@ fun AgentScreen() {
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
     var messageText by remember { mutableStateOf("") }
+    val clipboardManager = LocalClipboardManager.current
+    var replyingToMessage by remember { mutableStateOf<ChatMessage?>(null) }
     val isConversationEmpty = uiState.messages.isEmpty() && !uiState.isTyping
 
     var showHistoryBottomSheet by remember { mutableStateOf(false) }
@@ -118,7 +124,13 @@ fun AgentScreen() {
                 onTextChanged = { messageText = it },
                 onSend = {
                     if (messageText.isNotBlank()) {
-                        viewModel.sendMessage(messageText)
+                        val userMsg = if (replyingToMessage != null) {
+                            "> ${replyingToMessage!!.content.replace("\n", "\n> ")}\n\n${messageText.trim()}"
+                        } else {
+                            messageText.trim()
+                        }
+                        replyingToMessage = null
+                        viewModel.sendMessage(userMsg)
                         messageText = ""
                     }
                 },
@@ -131,8 +143,16 @@ fun AgentScreen() {
                     listOf("Summarise my recent papers", "What should I read next?", "Find collaborators in my field")
                 },
                 onQuickPrompt = { prompt ->
-                    viewModel.sendMessage(prompt)
-                }
+                    val userMsg = if (replyingToMessage != null) {
+                        "> ${replyingToMessage!!.content.replace("\n", "\n> ")}\n\n$prompt"
+                    } else {
+                        prompt
+                    }
+                    replyingToMessage = null
+                    viewModel.sendMessage(userMsg)
+                },
+                replyingToMessage = replyingToMessage,
+                onClearReply = { replyingToMessage = null }
             )
         }
     ) { innerPadding ->
@@ -305,7 +325,25 @@ fun AgentScreen() {
                 ) {
                     items(uiState.messages) { msg ->
                         val isMe = msg.role == "user"
-                        AgentMessageBubble(message = msg, isMe = isMe)
+                        AgentMessageBubble(
+                            message = msg,
+                            isMe = isMe,
+                            onReact = { emoji ->
+                                viewModel.reactToMessage(msg, if (msg.reaction == emoji) null else emoji)
+                            },
+                            onReply = {
+                                replyingToMessage = msg
+                            },
+                            onCopy = {
+                                clipboardManager.setText(AnnotatedString(msg.content))
+                            },
+                            onToggleStar = {
+                                viewModel.toggleStarMessage(msg)
+                            },
+                            onDelete = {
+                                viewModel.deleteMessage(msg)
+                            }
+                        )
                     }
                     if (uiState.isTyping) {
                         item { AgentTypingIndicator() }
@@ -481,7 +519,15 @@ fun AgentTopBar(
 
 // ── MESSAGE BUBBLE ────────────────────────────────────────────────────────────
 @Composable
-fun AgentMessageBubble(message: ChatMessage, isMe: Boolean) {
+fun AgentMessageBubble(
+    message: ChatMessage,
+    isMe: Boolean,
+    onReact: (String) -> Unit,
+    onReply: () -> Unit,
+    onCopy: () -> Unit,
+    onToggleStar: () -> Unit,
+    onDelete: () -> Unit
+) {
     val timestamp = remember(message.timestamp) {
         SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp))
     }
@@ -510,77 +556,108 @@ fun AgentMessageBubble(message: ChatMessage, isMe: Boolean) {
             Spacer(Modifier.width(6.dp))
         }
 
-        Column(
-            modifier = Modifier.widthIn(max = 290.dp),
-            horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
+        MessageBubbleWrapper(
+            message = message,
+            onReact = onReact,
+            onReply = onReply,
+            onCopy = onCopy,
+            onToggleStar = onToggleStar,
+            onDelete = onDelete
         ) {
-            // Bubble
-            Box(
-                modifier = Modifier
-                    .clip(
-                        if (isMe) RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp)
-                        else RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp)
-                    )
-                    .then(
-                        if (isMe) {
-                            Modifier.background(
-                                Brush.linearGradient(
-                                    colors = listOf(Color(0xFF2A2010), Color(0xFF1A1500)),
-                                    start = Offset(0f, 0f),
-                                    end = Offset(300f, 100f)
-                                )
+            Column(
+                modifier = Modifier.widthIn(max = 290.dp),
+                horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
+            ) {
+                Box {
+                    // Bubble
+                    Box(
+                        modifier = Modifier
+                            .clip(
+                                if (isMe) RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp)
+                                else RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp)
                             )
-                        } else {
-                            Modifier.background(EntropiColors.Card)
-                        }
-                    )
-                    .then(
-                        // Left accent bar for AI messages
-                        if (!isMe) {
-                            Modifier.drawBehind {
-                                drawRect(
-                                    brush = Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color(0xFFFFCA28),
-                                            Color(0xFFFF8F00)
+                            .then(
+                                if (isMe) {
+                                    Modifier.background(
+                                        Brush.linearGradient(
+                                            colors = listOf(Color(0xFF2A2010), Color(0xFF1A1500)),
+                                            start = Offset(0f, 0f),
+                                            end = Offset(300f, 100f)
                                         )
-                                    ),
-                                    size = androidx.compose.ui.geometry.Size(2.5.dp.toPx(), size.height)
-                                )
-                            }
-                        } else Modifier
-                    )
-                    .padding(
-                        start = if (!isMe) 12.dp else 10.dp,
-                        end = 12.dp,
-                        top = 9.dp,
-                        bottom = 7.dp
-                    )
-            ) {
-                Column {
-                    MarkdownText(
-                        markdown = message.content,
-                        color = if (isMe) EntropiColors.Text else EntropiColors.Text2,
-                        fontSize = 14.sp,
-                        modifier = Modifier.widthIn(max = 280.dp)
-                    )
-                }
-            }
+                                    )
+                                } else {
+                                    Modifier.background(EntropiColors.Card)
+                                }
+                            )
+                            .then(
+                                // Left accent bar for AI messages
+                                if (!isMe) {
+                                    Modifier.drawBehind {
+                                        drawRect(
+                                            brush = Brush.verticalGradient(
+                                                colors = listOf(
+                                                    Color(0xFFFFCA28),
+                                                    Color(0xFFFF8F00)
+                                                )
+                                            ),
+                                            size = androidx.compose.ui.geometry.Size(2.5.dp.toPx(), size.height)
+                                        )
+                                    }
+                                } else Modifier
+                            )
+                            .padding(
+                                start = if (!isMe) 12.dp else 10.dp,
+                                end = 12.dp,
+                                top = 9.dp,
+                                bottom = 7.dp
+                            )
+                    ) {
+                        Column {
+                            MarkdownText(
+                                markdown = message.content,
+                                color = if (isMe) EntropiColors.Text else EntropiColors.Text2,
+                                fontSize = 14.sp,
+                                modifier = Modifier.widthIn(max = 280.dp)
+                            )
+                        }
+                    }
 
-            // Timestamp row
-            Spacer(Modifier.height(2.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(3.dp)
-            ) {
-                Text(timestamp, color = EntropiColors.Text3, fontSize = 9.sp)
-                if (isMe) {
-                    Icon(
-                        imageVector = Icons.Default.DoneAll,
-                        contentDescription = null,
-                        tint = EntropiColors.Gold1.copy(alpha = 0.7f),
-                        modifier = Modifier.size(11.dp)
-                    )
+                    // Render reaction badge if present
+                    if (!message.reaction.isNullOrEmpty()) {
+                        val badgeAlignment = if (isMe) Alignment.BottomStart else Alignment.BottomEnd
+                        Box(
+                            modifier = Modifier
+                                .align(badgeAlignment)
+                                .offset(y = 10.dp, x = if (isMe) (-4).dp else 4.dp)
+                        ) {
+                            ReactionBadge(reaction = message.reaction)
+                        }
+                    }
+                }
+
+                // Timestamp row
+                Spacer(Modifier.height(2.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    if (message.isStarred) {
+                        Icon(
+                            imageVector = Icons.Default.Star,
+                            contentDescription = "Starred",
+                            tint = EntropiColors.Gold1,
+                            modifier = Modifier.size(10.dp)
+                        )
+                    }
+                    Text(timestamp, color = EntropiColors.Text3, fontSize = 9.sp)
+                    if (isMe) {
+                        Icon(
+                            imageVector = Icons.Default.DoneAll,
+                            contentDescription = null,
+                            tint = EntropiColors.Gold1.copy(alpha = 0.7f),
+                            modifier = Modifier.size(11.dp)
+                        )
+                    }
                 }
             }
         }
@@ -656,7 +733,9 @@ fun AgentInputBar(
     onClearAttachment: () -> Unit = {},
     showQuickPrompts: Boolean = false,
     quickPrompts: List<String> = emptyList(),
-    onQuickPrompt: (String) -> Unit = {}
+    onQuickPrompt: (String) -> Unit = {},
+    replyingToMessage: ChatMessage? = null,
+    onClearReply: () -> Unit = {}
 ) {
     Surface(
         color = EntropiColors.Background,
@@ -668,6 +747,46 @@ fun AgentInputBar(
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
+            // ── Replying to preview ──────────────────────────────────────────
+            AnimatedVisibility(visible = replyingToMessage != null) {
+                if (replyingToMessage != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(EntropiColors.Card)
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(3.dp)
+                                .height(28.dp)
+                                .background(EntropiColors.Gold1, RoundedCornerShape(2.dp))
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (replyingToMessage.role == "user") "You" else "Skolar",
+                                color = EntropiColors.Gold1,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = replyingToMessage.content,
+                                color = EntropiColors.Text2,
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        IconButton(onClick = onClearReply, modifier = Modifier.size(16.dp)) {
+                            Icon(Icons.Default.Close, null, tint = EntropiColors.Text3, modifier = Modifier.size(11.dp))
+                        }
+                    }
+                }
+            }
+
             // ── Quick prompt chips (only when conversation is empty) ───────────
             AnimatedVisibility(
                 visible = showQuickPrompts,

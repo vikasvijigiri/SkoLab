@@ -2,6 +2,7 @@ package com.open.skolab.ui.components
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -41,6 +42,17 @@ import android.graphics.Typeface
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Reply
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.Delete
+import com.open.skolab.network.ChatMessage
 
 @Composable
 fun ScientificCard(
@@ -236,7 +248,12 @@ fun MarkdownText(
     }
 
     AndroidView(
-        factory = { ctx -> TextView(ctx).apply { setLayerType(View.LAYER_TYPE_SOFTWARE, null) } },
+        factory = { ctx -> 
+            TextView(ctx).apply {
+                setTextIsSelectable(true)
+                movementMethod = android.text.method.LinkMovementMethod.getInstance()
+            }
+        },
         update = { textView ->
             textView.setTextColor(color.toArgb())
             textView.setTextSize(TypedValue.COMPLEX_UNIT_PX, fontSizePx)
@@ -254,7 +271,18 @@ fun MarkdownText(
             // 2. Double all backslashes so CommonMark parser doesn't eat LaTeX command prefixes
             // processed = processed.replace("\\", "\\\\")
             
+            // 3. Dynamically configure layer type to avoid software layer cache limit for long texts
+            val hasMath = processed.contains("$$") || processed.contains("$")
+            if (hasMath && processed.length < 1000) {
+                textView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+            } else {
+                textView.setLayerType(View.LAYER_TYPE_NONE, null)
+            }
+            
             markwon.setMarkdown(textView, processed)
+            try {
+                android.text.util.Linkify.addLinks(textView, android.text.util.Linkify.WEB_URLS)
+            } catch (_: Exception) {}
         },
         modifier = modifier
     )
@@ -591,4 +619,157 @@ fun cleanScientificText(text: String): String {
     }
     
     return result.toString()
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun MessageBubbleWrapper(
+    message: ChatMessage,
+    onReact: (String) -> Unit,
+    onReply: () -> Unit,
+    onCopy: () -> Unit,
+    onToggleStar: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = modifier
+            .combinedClickable(
+                onLongClick = {
+                    showMenu = true
+                },
+                onClick = {
+                    // Tap does nothing, click/selection inside TextView is handled by AndroidView
+                }
+            )
+    ) {
+        content()
+
+        DropdownMenu(
+            expanded = showMenu,
+            onDismissRequest = { showMenu = false },
+            modifier = Modifier
+                .background(BgCard, RoundedCornerShape(16.dp))
+                .border(androidx.compose.foundation.BorderStroke(1.dp, BorderLight), RoundedCornerShape(16.dp))
+                .width(220.dp)
+        ) {
+            // Emojis row at top
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val emojis = listOf("👍", "❤️", "😂", "😮", "😢", "🙏")
+                emojis.forEach { emoji ->
+                    Text(
+                        text = emoji,
+                        fontSize = 22.sp,
+                        modifier = Modifier
+                            .clickable {
+                                onReact(emoji)
+                                showMenu = false
+                            }
+                            .padding(4.dp)
+                    )
+                }
+            }
+
+            HorizontalDivider(color = BorderLight, thickness = 1.dp)
+
+            // Reply
+            DropdownMenuItem(
+                text = { Text("Reply", color = TextPrimary, fontWeight = FontWeight.Medium) },
+                onClick = {
+                    onReply()
+                    showMenu = false
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Reply,
+                        contentDescription = "Reply",
+                        tint = AccentTeal,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            )
+
+            // Copy
+            DropdownMenuItem(
+                text = { Text("Copy Text", color = TextPrimary, fontWeight = FontWeight.Medium) },
+                onClick = {
+                    onCopy()
+                    showMenu = false
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.ContentCopy,
+                        contentDescription = "Copy",
+                        tint = AccentIndigo,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            )
+
+            // Star/Unstar
+            val starText = if (message.isStarred) "Unstar" else "Star"
+            val starIcon = if (message.isStarred) Icons.Default.Star else Icons.Default.StarBorder
+            DropdownMenuItem(
+                text = { Text(starText, color = TextPrimary, fontWeight = FontWeight.Medium) },
+                onClick = {
+                    onToggleStar()
+                    showMenu = false
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = starIcon,
+                        contentDescription = "Star",
+                        tint = AccentAmber,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            )
+
+            // Delete
+            DropdownMenuItem(
+                text = { Text("Delete", color = AccentRose, fontWeight = FontWeight.Bold) },
+                onClick = {
+                    onDelete()
+                    showMenu = false
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = AccentRose,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun ReactionBadge(
+    reaction: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = BgElevated,
+        shape = RoundedCornerShape(12.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BorderLight),
+        shadowElevation = 2.dp,
+        modifier = modifier
+    ) {
+        Text(
+            text = reaction,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            fontSize = 12.sp
+        )
+    }
 }
