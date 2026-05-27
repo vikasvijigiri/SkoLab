@@ -26,6 +26,8 @@ data class AgentUiState(
     val attachedContext: String? = null,
     val attachedFileName: String? = null,
     val isAttachingFile: Boolean = false,
+    val currentSessionId: String = "",
+    val pastSessions: List<Pair<String, String>> = emptyList(),
     // ── Memory fields ─────────────────────────────────────────────────────────
     val memoryProfile: UserMemoryProfile = UserMemoryProfile(),
     val proactiveReminders: List<String> = emptyList(),
@@ -44,7 +46,7 @@ class AgentViewModel(private val context: Context, private val userUid: String) 
 
     private val apiService = ApiService()
     private val chatStorage = ChatStorage(context, userUid)
-    private val agentId = "jarvis_agent_001"
+    private var activeSessionId = "jarvis_agent_001"
 
     init {
         loadHistory()
@@ -53,11 +55,38 @@ class AgentViewModel(private val context: Context, private val userUid: String) 
         schedulePeriodicalSync()
     }
 
-    // ── Init: load chat history ───────────────────────────────────────────────
+    // ── Init: load chat history and sessions ──────────────────────────────────
     private fun loadHistory() {
-        val history = chatStorage.getChatHistory(agentId)
-        _uiState.update { it.copy(messages = history) }
+        val sessions = chatStorage.getAgentChats()
+        activeSessionId = if (sessions.isNotEmpty()) {
+            sessions.first()
+        } else {
+            "jarvis_agent_" + System.currentTimeMillis()
+        }
+        val history = chatStorage.getChatHistory(activeSessionId)
+        _uiState.update {
+            it.copy(
+                messages = history,
+                currentSessionId = activeSessionId
+            )
+        }
+        loadPastSessions()
     }
+
+    private fun loadPastSessions() {
+        val sessionIds = chatStorage.getAgentChats()
+        val sessions = sessionIds.map { sId ->
+            val history = chatStorage.getChatHistory(sId)
+            val title = history.firstOrNull { it.role == "user" }?.content
+                ?.substringBefore("\n")
+                ?.take(30)
+                ?.let { if (it.length >= 30) "$it..." else it }
+                ?: "Empty Chat"
+            sId to title
+        }
+        _uiState.update { it.copy(pastSessions = sessions) }
+    }
+
 
     // ── Init: load memory profile (local first, then backend) ─────────────────
     private fun loadMemoryProfile() {
@@ -218,7 +247,7 @@ class AgentViewModel(private val context: Context, private val userUid: String) 
                 attachedFileName = null
             )
         }
-        chatStorage.saveChatHistory(agentId, updatedMessages)
+        chatStorage.saveChatHistory(activeSessionId, updatedMessages)
 
         viewModelScope.launch {
             try {
@@ -233,7 +262,8 @@ class AgentViewModel(private val context: Context, private val userUid: String) 
                     content = responseText
                 )
                 _uiState.update { it.copy(messages = finalMessages, isTyping = false) }
-                chatStorage.saveChatHistory(agentId, finalMessages)
+                chatStorage.saveChatHistory(activeSessionId, finalMessages)
+                loadPastSessions() // Reload to update chat title snippet
             } catch (e: Exception) {
                 val errMsg = when {
                     e.message?.contains("timeout", ignoreCase = true) == true ->
@@ -249,8 +279,47 @@ class AgentViewModel(private val context: Context, private val userUid: String) 
                     content = errMsg
                 )
                 _uiState.update { it.copy(messages = fallbackMessages, isTyping = false) }
-                chatStorage.saveChatHistory(agentId, fallbackMessages)
+                chatStorage.saveChatHistory(activeSessionId, fallbackMessages)
             }
         }
     }
+
+    fun startNewChat() {
+        activeSessionId = "jarvis_agent_" + System.currentTimeMillis()
+        _uiState.update {
+            it.copy(
+                messages = emptyList(),
+                currentSessionId = activeSessionId
+            )
+        }
+        loadPastSessions()
+    }
+
+    fun deleteSession(sessionId: String) {
+        chatStorage.deleteChatHistory(sessionId)
+        if (sessionId == activeSessionId) {
+            loadHistory()
+        } else {
+            loadPastSessions()
+        }
+    }
+
+    fun switchSession(sessionId: String) {
+        activeSessionId = sessionId
+        val history = chatStorage.getChatHistory(activeSessionId)
+        _uiState.update {
+            it.copy(
+                messages = history,
+                currentSessionId = activeSessionId
+            )
+        }
+        loadPastSessions()
+    }
+
+    fun clearCurrentHistory() {
+        chatStorage.deleteChatHistory(activeSessionId)
+        _uiState.update { it.copy(messages = emptyList()) }
+        loadPastSessions()
+    }
 }
+

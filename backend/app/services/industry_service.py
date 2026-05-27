@@ -1,46 +1,39 @@
-import httpx
 import logging
-from typing import List, Dict
+from typing import List, Dict, Optional
+from app.services.openalex_service import OpenAlexService
 
 logger = logging.getLogger(__name__)
 
-async def fetch_industry_opportunities(focus: str) -> List[Dict]:
+async def fetch_industry_opportunities(focus: str, openalex_service: Optional[OpenAlexService] = None) -> List[Dict]:
     opportunities = []
+
+    if not openalex_service:
+        openalex_service = OpenAlexService()
 
     # 1. Fetch Real Funders from OpenAlex
     try:
-        url = "https://api.openalex.org/funders"
-        params = {
-            "search": focus,
-            "per_page": 5,
-            "sort": "cited_by_count:desc"
-        }
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(url, params=params, timeout=15.0)
-            resp.raise_for_status()
-            data = resp.json()
-            results = data.get("results", [])
-
-            for funder in results:
-                name = funder.get("display_name", "Unknown Funder")
-                homepage = funder.get("homepage_url")
-                if not homepage:
-                    continue  # We only want 100% working links
-                
-                desc = funder.get("description", f"Major funding organization for {focus} research.")
-                
-                opportunities.append({
-                    "id": funder.get("id", ""),
-                    "type": "FUNDING",
-                    "title": f"Grant Application: {name}",
-                    "companyOrFunder": name,
-                    "tags": [focus, "Grant", "Research Funding"],
-                    "description": desc,
-                    "postedAgo": "Open Now",
-                    "url": homepage
-                })
+        results = await openalex_service.search_funders(focus, per_page=5)
+        for funder in results:
+            name = funder.get("display_name", "Unknown Funder")
+            homepage = funder.get("homepage_url")
+            if not homepage:
+                continue  # We only want 100% working links
+            
+            desc = funder.get("description", f"Major funding organization for {focus} research.")
+            
+            opportunities.append({
+                "id": funder.get("id", ""),
+                "type": "FUNDING",
+                "title": f"Grant Application: {name}",
+                "companyOrFunder": name,
+                "tags": [focus, "Grant", "Research Funding"],
+                "description": desc,
+                "postedAgo": "Open Now",
+                "url": homepage
+            })
     except Exception as e:
         logger.error(f"Error fetching OpenAlex funders: {e}")
+
 
     # 2. Add Curated, High-Profile Real Industry Jobs (with 100% working links)
     curated_jobs = [

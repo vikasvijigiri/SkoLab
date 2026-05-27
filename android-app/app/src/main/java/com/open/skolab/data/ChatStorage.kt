@@ -35,8 +35,23 @@ class ChatStorage(private val context: Context, private val userUid: String) {
         return getChatHistory(peerId).lastOrNull()
     }
 
+    fun deleteChatHistory(peerId: String) {
+        val cleanId = peerId.substringAfterLast("/")
+        val file = File(chatDir, "chat_$cleanId.json")
+        if (file.exists()) {
+            file.delete()
+        }
+    }
+
+    fun getAgentChats(): List<String> {
+        val files = chatDir.listFiles { _, name -> name.startsWith("chat_jarvis_agent_") && name.endsWith(".json") }
+        return files?.sortedByDescending { it.lastModified() }?.map { it.name.removePrefix("chat_").removeSuffix(".json") } ?: emptyList()
+    }
+
     fun getActiveChatPartners(): List<String> {
         val files = chatDir.listFiles { _, name -> name.startsWith("chat_") && name.endsWith(".json") }
-        return files?.map { it.name.removePrefix("chat_").removeSuffix(".json") } ?: emptyList()
+        // Exclude jarvis agent session chats from connections list so they don't pollute Direct Messages
+        return files?.filter { !it.name.startsWith("chat_jarvis_agent_") }?.map { it.name.removePrefix("chat_").removeSuffix(".json") } ?: emptyList()
     }
 }
+

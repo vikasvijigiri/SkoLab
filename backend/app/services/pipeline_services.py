@@ -9,12 +9,14 @@ from app.services.summarization_service import is_llm_working, set_llm_limit_exc
 from sqlalchemy.future import select
 from app.db.database import AsyncSessionLocal
 from app.models.user_models import CacheEntry, AgentChatHistory
+from app.services.openalex_service import OpenAlexService
 
 class PipelineServices:
     def __init__(self):
         self.api_key = os.getenv("GROQ_API")
         self.base_url = "https://api.groq.com/openai/v1/chat/completions"
         self.model = "llama-3.3-70b-versatile"
+        self.openalex_service = OpenAlexService()
         self.openalex_base = "https://api.openalex.org"
         self.headers = {
             "User-Agent": "SkolabApp/1.0 (mailto:vikki.4me@gmail.com)",
@@ -65,15 +67,7 @@ class PipelineServices:
 
     async def _fetch_author_profile(self, author_id: str) -> Optional[Dict[str, Any]]:
         """Helper to fetch author profile from OpenAlex or database."""
-        clean_id = author_id.split("/")[-1]
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                res = await client.get(f"{self.openalex_base}/authors/{clean_id}", headers=self.headers)
-                if res.status_code == 200:
-                    return res.json()
-        except Exception as e:
-            print(f"Error fetching author profile: {e}")
-        return None
+        return await self.openalex_service.fetch_author_by_id(author_id)
 
     async def get_daily_feed(self, author_id: Optional[str], query_fallback: Optional[str] = None) -> List[Dict[str, Any]]:
         """
@@ -140,17 +134,14 @@ class PipelineServices:
 
         papers = []
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                res = await client.get(f"{self.openalex_base}/works", params=params, headers=self.headers)
-                if res.status_code == 200:
-                    results = res.json().get("results", [])
-                    # Filter papers with abstracts
-                    for w in results:
-                        abstract_index = w.get("abstract_inverted_index")
-                        if abstract_index and w.get("title"):
-                            papers.append(w)
-                        if len(papers) >= 3:
-                            break
+            results = await self.openalex_service.search_works(search_term, per_page=20)
+            # Filter papers with abstracts
+            for w in results:
+                abstract_index = w.get("abstract_inverted_index")
+                if abstract_index and w.get("title"):
+                    papers.append(w)
+                if len(papers) >= 3:
+                    break
         except Exception as e:
             print(f"Error fetching papers for daily feed: {e}")
             raise e
@@ -779,19 +770,10 @@ Provide your response in this exact JSON format:
             return False
             
         async def fetch_works_for_author(auth_clean_id, max_works=20):
-            filter_q = f"authorships.author.id:{auth_clean_id}"
             try:
-                async with httpx.AsyncClient(timeout=15.0) as client:
-                    res = await client.get(
-                        f"{self.openalex_base}/works",
-                        params={"filter": filter_q, "per_page": max_works},
-                        headers=self.headers
-                    )
-                    if res.status_code == 200:
-                        return res.json().get("results", [])
-            except Exception as e:
-                pass
-            return []
+                return await self.openalex_service.fetch_author_works(auth_clean_id, per_page=max_works)
+            except Exception:
+                return []
 
         d1_works = await fetch_works_for_author(clean_id, 100)
         if not d1_works:

@@ -3,17 +3,19 @@ import os
 import random
 from typing import List, Optional
 from app.services.summarization_service import is_llm_working, set_llm_limit_exceeded
+from app.core.prompts import PREDICTION_SYSTEM_PROMPT
 
 class PredictionService:
     def __init__(self):
         self.api_key = os.getenv("GROQ_API")
         self.base_url = "https://api.groq.com/openai/v1/chat/completions"
         self.models = [
-            "llama-3.3-70b-versatile",
-            "llama3-8b-8192",
-            "mixtral-8x7b-32768",
-            "gemma2-9b-it",
-            "llama-3.1-8b-instant"
+            # "llama-3.3-70b-versatile",
+            # "llama3-8b-8192",
+            "openai/gpt-oss-120b",
+            # "mixtral-8x7b-32768",
+            # "gemma2-9b-it",
+            # "llama-3.1-8b-instant"
         ]
 
     async def predict_next_problem(
@@ -78,21 +80,7 @@ class PredictionService:
                 "messages": [
                     {
                         "role": "system",
-                        "content": """You are an elite scientific research advisor and strategist. 
-Your task is to predict the next SPECIFIC, highly viable research paper the author is most likely to write.
-This prediction must be extremely meticulous, realistic, and strictly grounded in the author's existing skillset, mathematical/technical expertise, and the exact trajectory of their previous papers' findings/methods.
-
-CRITICAL INSTRUCTION for the Toolkit:
-- The Toolkit MUST only list highly specific technical tools, software packages, programming languages, mathematical frameworks, or laboratory/clinical methods that directly match the researcher's academic discipline (e.g. specialized medical tools for surgery/medicine, bioinformatics/sequencing software for biology, quantum tools only for quantum physics, chemical simulation tools for chemistry, qualitative coding software for humanities).
-- Forbid suggesting generic computer science or machine learning tools (such as Python, PyTorch, JAX, TensorFlow) to researchers in other domains (such as medicine, biology, psychology, chemistry, economics) unless their publications explicitly show a computational or cross-disciplinary focus in those areas.
-
-Provide your response in this exact format:
-**Next Frontier**: [A technical, specific 1-sentence title/problem statement for their next possible paper]
-**Toolkit**: [2-3 advanced, highly specific tools, programming languages, or mathematical/scientific frameworks needed, aligned with their skillset]
-**Logic**: [A concise 1-2 sentence explanation of why this is the logical next step, directly connecting their past findings/methods to this new frontier]
-
-Be precise, academic, and extremely professional. Do not use generic buzzwords.
-"""
+                        "content": PREDICTION_SYSTEM_PROMPT
                     },
                     {
                         "role": "user",

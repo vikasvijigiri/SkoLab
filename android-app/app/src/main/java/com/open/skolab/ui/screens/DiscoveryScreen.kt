@@ -93,6 +93,23 @@ fun DiscoveryScreen(
     val userName = cachedUser?.name ?: "Researcher"
     val researchFocus = cachedUser?.researchFocus ?: "General Research"
 
+    LaunchedEffect(cachedUser) {
+        val name = cachedUser?.name
+        if (cachedUser != null && name != null && (cachedUser?.researchFocus.isNullOrBlank() || cachedUser?.researchFocus == "General Research" || cachedUser?.researchFocus == "Researcher")) {
+            scope.launch {
+                try {
+                    val profile = apiService.searchAuthor(name)
+                    if (profile != null) {
+                        val focus = profile.field_of_study ?: profile.expertise.firstOrNull() ?: "Physics"
+                        authManager.updateUserResearchFocus(focus)
+                    }
+                } catch (e: Exception) {
+                    Log.e("DiscoveryScreen", "Failed to auto-update focus", e)
+                }
+            }
+        }
+    }
+
     var authorQuery by remember { mutableStateOf("") }
     var suggestions by remember { mutableStateOf<List<AuthorSuggestion>>(emptyList()) }
     var authorData by remember { mutableStateOf<AuthorResponse?>(null) }

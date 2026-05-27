@@ -142,6 +142,20 @@ fun FeedScreen(
         val userName = cachedUser?.name ?: "Vikas Vijigiri"
         val researchFocus = cachedUser?.researchFocus ?: "Researcher"
         viewModel.setUserContext(uid, userName, researchFocus)
+
+        if (cachedUser != null && (cachedUser?.researchFocus.isNullOrBlank() || cachedUser?.researchFocus == "Researcher" || cachedUser?.researchFocus == "General Research")) {
+            scope.launch {
+                try {
+                    val profile = apiService.searchAuthor(userName)
+                    if (profile != null) {
+                        val focus = profile.field_of_study ?: profile.expertise.firstOrNull() ?: "Physics"
+                        authManager.updateUserResearchFocus(focus)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("FeedScreen", "Failed to auto-update research focus", e)
+                }
+            }
+        }
     }
 
     LaunchedEffect(uiState.suggestedConnections.size) {
