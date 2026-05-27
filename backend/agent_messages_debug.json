@@ -1,110 +1,29 @@
 [
   {
     "role": "system",
-    "content": "You are Ask Skolar, an expert AI RESEARCH assistant for a senior researcher. Be concise, sharp, and proactive. You have access to tools that can fetch data from arXiv, Google Scholar, ResearchGate, OpenAlex, and search/scrape the live web. CRITICAL SEARCH HIERARCHY RULES:\n1. FIRST: You must try to fetch information from the OpenAlex API using 'search_openalex_author_and_works' or other OpenAlex tools. If results are returned, present the information immediately.\n2. SECOND (FALLBACK): If there are NO results from OpenAlex (e.g., the researcher is not indexed, the query fails, or the API is rate-limited/exhausted), you MUST immediately fall back to specific academic search tools:\n   - Use 'search_google_scholar_profile' to retrieve their Google Scholar name, affiliation, and publication list.\n   - Use 'search_researchgate_profile' to extract their ResearchGate matches, institution, and citation details.\n   - Use 'search_arxiv_publications' to search for preprints and abstracts.\n   - If these academic tools do not yield a complete profile, call 'search_web' to search LinkedIn, personal web pages, or general directories, scraping and parsing the results.\n3. TYPO RESOLUTION & SEMANTIC SEARCH: If the user types a query with incorrect spelling, typos, or unclear English, do not return empty results. Use academic tools or web search to search semantically, resolve the correct spelling, and if multiple ambiguous matches exist, list the top options and ask the user to clarify dynamically.\nAlways present the final gathered profile details and publications structured clearly in a table.\n\n[RESEARCHER PROFILE]\nResearch focus: Is there a person with lakshmi narayana kovuru? can you find?, Can you search p monalisha?, Hi can you fetch a research profile, p monalisha in physics, Vikas vijigiri?\nCurrently exploring: Is there a person with lakshmi narayana kovuru? can you find?\nRecent searches: Hi, ??, Is there a person with Lakshmi Narayana Kovuru? can you find?\n[END PROFILE]\n\nUse this profile to personalise your responses. Reference unfinished work or relevant topics proactively when natural."
-  },
-  {
-    "role": "assistant",
-    "content": "**Yes \u2013 OpenAlex returns three author profiles that match \u201cP\u202fMonalisha.\u201d**  \n\n| # | OpenAlex ID | Name (as listed) | Institution | Works (total) | H\u2011index | Primary research area (inferred from titles) |\n|---|-------------|------------------|------------|--------------|--------|----------------------------------------------|\n| 1 | https://openalex.org/A5025225622 | **P.\u202fMonalisha** | Universitat\u202fAut\u00f2noma\u202fde\u202fBarcelona (Spain) | 11 | 7 | Magneto\u2011ionic materials, neuromorphic\u2011computing devices (materials\u2011physics / applied\u2011physics) |\n| 2 | https://openalex.org/A5124460780 | **P\u202fMonalisha** | Universitat\u202fAut\u00f2noma\u202fde\u202fBarcelona | 1 | 0 | Data\u2011set for magneto\u2011ionic neuromorphic\u2011computing paper (supporting\u2011materials) |\n| 3 | https://openalex.org/A5120269773 | **P\u202fMonalisha** | Siksha\u202fO\u202fAnusandhan\u202fUniversity (India) | 1 | 0 | Agricultural\u2011science (weed\u2011nitrogen management) \u2013 **not physics** |\n\n### Quick take\u2011away\n* **Profile\u202f1** is the only one whose work lies in a physics\u2011adjacent field (magneto\u2011ionic phenomena and neuromorphic computing).  \n* The other two profiles are either a data\u2011deposit for the same research group (Profile\u202f2) or an agricultural study (Profile\u202f3), so they are not relevant to a physics discipline.\n\nIf you need a deeper dive into any of the listed publications (e.g., abstracts, citation counts, or PDF links), just let me know and I\u2019ll pull the details."
+    "content": "You are Ask Skolar, an expert AI RESEARCH assistant for a senior researcher. Be concise, sharp, and proactive. You have access to tools that can fetch data from arXiv, Google Scholar, ResearchGate, OpenAlex, and search/scrape the live web. CRITICAL SEARCH HIERARCHY RULES:\n1. FIRST: You must try to fetch information from the OpenAlex API using 'search_openalex_author_and_works' or other OpenAlex tools. If results are returned, present the information immediately.\n2. SECOND (FALLBACK): If there are NO results from OpenAlex (e.g., the researcher is not indexed, the query fails, or the API is rate-limited/exhausted), you MUST immediately fall back to specific academic search tools:\n   - Use 'search_google_scholar_profile' to retrieve their Google Scholar name, affiliation, and publication list.\n   - Use 'search_researchgate_profile' to extract their ResearchGate matches, institution, and citation details.\n   - Use 'search_arxiv_publications' to search for preprints and abstracts.\n   - If these academic tools do not yield a complete profile, call 'search_web' to search LinkedIn, personal web pages, or general directories, scraping and parsing the results.\n3. TYPO RESOLUTION & SEMANTIC SEARCH: If the user types a query with incorrect spelling, typos, or unclear English, do not return empty results. Use academic tools or web search to search semantically, resolve the correct spelling, and if multiple ambiguous matches exist, list the top options and ask the user to clarify dynamically.\nAlways present the final gathered profile details and publications structured clearly in a table."
   },
   {
     "role": "user",
-    "content": "For the physics related profile can you rate her research quality?"
+    "content": "Export a BibTeX file for the following publication: Title: 'Quantum entanglement', Authors: ['Vikas Vijigiri', 'Kush Saha'], Year: '2024', Journal: 'Physical Review Letters', DOI: '10.1103/PhysRevLett.132.012345'. Save it as 'test_refs.bib'."
   },
   {
     "role": "assistant",
-    "content": "**Research\u2011Quality Assessment \u2013\u202fP\u202fMonalisha (Physics\u2011focused profile, OpenAlex\u202fA5025225622)**  \n\n| Metric | Value | Interpretation |\n|--------|-------|----------------|\n| **Total works (2021\u20112025)** | 11 | Consistently productive (\u22482\u20113 papers\u202f/\u202fyr). |\n| **Cumulative citations (as of 2024\u201111\u201103)** | **126** | Solid citation record for a researcher who appears to be in the early\u2011mid career stage. |\n| **h\u2011index** | **7** | 7 papers have \u22657 citations each \u2013 a respectable figure for a researcher with ~10\u202fpublications. |\n| **Average citations per paper** | **\u224811.5** | Indicates that most papers are being noticed; a few high\u2011impact papers (e.g., 54 citations on the *ACS\u202fApplied Materials & Interfaces* article) lift the average. |\n| **Venue quality** | \u2022 *Advanced Electronic Materials* (Impact\u202f\u2248\u202f7)  <br>\u2022 *Applied Physics Letters* (Impact\u202f\u2248\u202f5)  <br>\u2022 *Materials Science & Engineering* (Impact\u202f\u2248\u202f4)  <br>\u2022 *Nanotechnology* (Impact\u202f\u2248\u202f5)  <br>\u2022 *arXiv* pre\u2011print | Publications are largely in well\u2011established, peer\u2011reviewed journals with moderate\u2011to\u2011high impact factors in the condensed\u2011matter / materials\u2011physics community. |\n| **Collaboration network** | Co\u2011authors span multiple institutions (Universitat\u202fAut\u00f2noma\u202fde\u202fBarcelona, other European labs, and several Asian groups). The author appears as a **co\u2011first/lead** on most papers, suggesting a leading role. |\n| **Research focus** | Magneto\u2011ionic materials for neuromorphic\u2011computing devices \u2013 an emerging, interdisciplinary niche that bridges condensed\u2011matter physics, materials science, and AI hardware. The field is currently \u201chot\u201d (large funding, high citation potential). |\n| **Citation trajectory** | Papers from 2022\u20112023 already have >10 citations each, while the 2025 pre\u2011print has 0 (expected). The 2024 review article already has 18 citations, showing rapid uptake. |\n| **Funding / visibility** | The 2024 review in *Sustainable Materials & Science* (high\u2011visibility) and the 2025 article in a *Nanotechnology* special issue suggest grant\u2011supported, high\u2011profile work. |\n\n### Overall Rating (1\u202f=\u202flow, 5\u202f=\u202fexceptional)\n\n| Rating | Reasoning |\n|-------|-----------|\n| **4.2\u202f/\u202f5** | \u2022 **Strong citation impact** for a relatively short publication list. <br>\u2022 **High\u2011quality venues** (APS & Elsevier journals with respectable impact factors). <br>\u2022 **Leadership role** in an emerging, interdisciplinary area (magneto\u2011ionic neuromorphic devices). <br>\u2022 **Consistent output** and growing collaboration network. <br>\u2022 The only limitation is the modest total number of papers (still early\u2011career) and a few works still in pre\u2011print stage. |\n\n### Quick \u201cpros\u2011cons\u201d snapshot\n\n| Strengths | Weaknesses / Gaps |\n|----------|-------------------|\n| \u2022 High citation per paper (\u224812) <br>\u2022 Presence in a fast\u2011growing niche <br>\u2022 Publications in reputable, peer\u2011reviewed journals <br>\u2022 Demonstrated ability to produce both experimental and review articles | \u2022 Limited number of first\u2011author solo papers (most are collaborative) <br>\u2022 No major \u201clandmark\u201d breakthrough (e.g., Nature/Science) yet \u2013 still building reputation <br>\u2022 Citation counts will need to be sustained as the field matures |\n\n### Recommendation for Stakeholders  \n\n* **For hiring / promotion committees:** The profile merits **\u201cstrong\u2011above\u2011average\u201d** rating; the candidate is on a trajectory toward senior\u2011level impact.  \n* **For collaborators / grant reviewers:** The researcher brings **cutting\u2011edge expertise** in magneto\u2011ionic neuromorphic materials and a proven ability to publish in solid\u2011impact venues\u2014highly attractive for interdisciplinary projects.  \n* **For citation\u2011trend monitoring:** Keep an eye on the 2025 pre\u2011print and any subsequent journal version; early citations are likely to rise quickly given the field\u2019s momentum.  \n\n*If you need deeper details (e.g., abstracts"
-  },
-  {
-    "role": "user",
-    "content": "Is there a person with Lakshmi Narayana Kovuru? can you find?"
-  },
-  {
-    "role": "assistant",
-    "content": "Agent failed to generate a response. All fallback models exhausted."
-  },
-  {
-    "role": "user",
-    "content": "Is there a person with Lakshmi Narayana Kovuru? can you find?"
-  },
-  {
-    "role": "assistant",
-    "content": "Agent failed to generate a response. All fallback models exhausted."
-  },
-  {
-    "role": "user",
-    "content": "Is there a person with Lakshmi Narayana Kovuru? can you find?"
-  },
-  {
-    "role": "assistant",
-    "content": "**Lakshmi Narayana Kovuru** has a profile on Google Scholar with the name **C V LAKSHMI NARAYANA**. The profile lists their affiliation as Assistant Professor, Department of AI&ML, Annmacharya University, Rajampet. \n\nHere is a list of their publications:\n\n1. **WOGRU-IDS\u2014An intelligent intrusion detection system for IoT assisted Wireless Sensor Networks** (2022) - 95 citations\n2. **IoT based smart farming using thingspeak and MATLAB** (2020) - 21 citations\n3. **Comparative analysis on cloud computing and service oriented architecture** (2011) - 8 citations\n4. **Detection of Multi-class Website URLs Using Machine Learning Algorithms** (2020) - 6 citations\n5. **Trust-Aware Federated Learning with Differential Privacy for Secure AIoT in Critical Infrastructures** (2024) - 3 citations\n6. **An Efficient Classification Algorithms for Prediction of Employee Performance Based on Mask Rcnn-Bilstm Technique** (2025) - 2 citations\n7. **Python Programming** (2025) - 1 citation\n8. **Personalized food nutrient recommendations for kids using AI and behavior analysis** (2024) - 1 citation\n9. **An Integrated Machine Learning Framework for Multi-Disease Prediction, Medication Reminders & Doctor-Patient Interaction** (2026) - 0 citations\n10. **An Intelligent Multimodal LSTM Framework for Enhancing Campus Shuttle Arrival Accuracy** (2026) - 0 citations\n11. **Enhancing Emergency Care Through Machine Learning-Based Admission Prioritization** (2026) - 0 citations\n12. **Al-Powered Financial Consultant for Secure and Intelligent Personal Finance Management** (2026) - 0 citations\n13. **Road and Pothole Segmentation Using an Attention-Based Coupled Framework** (2025) - 0 citations\n14. **Dynamic Anomaly Detection for Fire Alarm Fault Identification using a Fuzzy-CNN Based Approach** (2025) - 0 citations\n15. **Predicting Childhood Anemia Prevalence with Machine Learning: Evidence from Global Nutritional Data** (2025) - 0 citations\n\nThe profile suggests that Lakshmi Narayana Kovuru is an active researcher with a focus on AI, ML, and IoT, and has published papers in various journals and conferences."
-  },
-  {
-    "role": "user",
-    "content": "No. he is not a researcher.  See linkedIn"
-  },
-  {
-    "role": "user",
-    "content": "No. he is not a researcher.  See linkedIn"
-  },
-  {
-    "role": "assistant",
-    "reasoning": "We need to find LinkedIn profile for Lakshmi Narayana Kovuru. Use search_web.",
     "tool_calls": [
       {
-        "id": "fc_bcd12612-3bb3-493e-bc86-afc86c10cbdb",
+        "id": "z7j6j207b",
         "type": "function",
         "function": {
-          "name": "search_web",
-          "arguments": "{\"max_results\":10,\"query\":\"Lakshmi Narayana Kovuru LinkedIn\"}"
+          "name": "export_bibtex_file",
+          "arguments": "{\"filename\":\"test_refs.bib\",\"publications\":[{\"authors\":[\"Vikas Vijigiri\",\"Kush Saha\"],\"doi\":\"10.1103/PhysRevLett.132.012345\",\"journal\":\"Physical Review Letters\",\"title\":\"Quantum entanglement\",\"year\":\"2024\"}]}"
         }
       }
     ]
   },
   {
     "role": "tool",
-    "tool_call_id": "fc_bcd12612-3bb3-493e-bc86-afc86c10cbdb",
-    "name": "search_web",
-    "content": "Title: LAKSHMI NARAYANA KOVURU - LinkedIn India\nURL: https://in.linkedin.com/in/lakshmi-narayana-kovuru-078713307\nSnippet: Attended Kakinada Institute of Engineering and Technology \u00b7 Education: Kakinada Institute of Engineering and Technology \u00b7 Location: Nellore. View LAKSHMI NARAYANA KOVURU&#x27;s profile on...\n\nTitle: Lakshmi Narayana Kovuru Narayanakovuru - GitHub\nURL: https://github.com/Narayanakovuru?tab=repositories\nSnippet: Fake-jo-post-detection-using-NLP Public A machine learning project that identifies fraudulent job postings using Natural Language Processing (NLP) and classification algorithms. This project analyzes text-based job descriptions, company \u2026 Python MIT License Updated Nov 17, 2025\n\nTitle: kovuru Lakshmi narayana (@kovurulakshminarayana) - Instagram\nURL: https://www.instagram.com/kovurulakshminarayana/\nSnippet: 51 Followers, 32 Following, 48 Posts - kovuru Lakshmi narayana (@kovurulakshminarayana) on Instagram: &quot;Amma Nanna pawan kalyan &quot;\n\nTitle: 2 &quot;Lakshmi Narayana Kovvuri&quot; profiles | LinkedIn\nURL: https://www.linkedin.com/pub/dir/Lakshmi+Narayana/Kovvuri\nSnippet: View the profiles of professionals named &amp;quot;Lakshmi Narayana Kovvuri&amp;quot; on LinkedIn.\n\nTitle: 2500+ &quot;Lakshmi Narayana&quot; profiles | LinkedIn\nURL: https://www.linkedin.com/pub/dir/Lakshmi+/Narayana+\nSnippet: View the profiles of professionals named &amp;quot;Lakshmi Narayana&amp;quot; on LinkedIn.\n\nTitle: 2600+ &quot;Lakshmi Narayana&quot; profiles | LinkedIn\nURL: https://www.linkedin.com/pub/dir/Lakshmi/Narayana+\nSnippet: View the profiles of professionals named &quot;Lakshmi Narayana&quot; on LinkedIn. There are 2600+ professionals named &quot;Lakshmi Narayana&quot;, who use LinkedIn to exchange information, ideas, and...\n\nTitle: LAKSHMI N KOYYALAMUDI - PETRONAS | LinkedIn\nURL: https://my.linkedin.com/in/lakshmi-n-koyyalamudi-50065621\nSnippet: With over 30 years of experience, I look forward to contributing through freelance and advisory opportunities, continuing to serve Malaysia&#x27;s oil and gas sector in new ways. A heartfelt thank you...\n\nTitle: Lakshmi narayana U - Hyderabad, Telangana, India - LinkedIn India\nURL: https://in.linkedin.com/in/laksh\nSnippet: Lakshmi Narayana is a digital business leader, AI consultant, and technologist with a\u2026 \u00b7 Location: Hyderabad. 500+ connections on LinkedIn. View Lakshmi narayana U&#x27;s profile on...\n\nTitle: Lakshmi Narayana - -- | LinkedIn\nURL: https://in.linkedin.com/in/lakshmi-narayana-\nSnippet: View Lakshmi Narayana&#x27;s profile on LinkedIn, a professional community of 1 billion members.\n\nTitle: lakshmi narayana - VMware | LinkedIn\nURL: https://in.linkedin.com/in/lakshmi-narayana-34332b89\nSnippet: \u00b7 Experience: VMware \u00b7 Education: National Institute of Technology Karnataka \u00b7 Location: Bengaluru \u00b7 500+ connections on LinkedIn. View lakshmi narayana&#x27;s profile on LinkedIn, a..."
-  },
-  {
-    "role": "assistant",
-    "reasoning": "We need to provide answer: find person with Lakshmi Narayana Kovuru, not researcher, LinkedIn profile. Provide details from LinkedIn. Use web search results. We have a LinkedIn URL. We can open it to get more info.",
-    "tool_calls": [
-      {
-        "id": "fc_b3fea168-7a83-4cd5-b496-5e46a5c82f12",
-        "type": "function",
-        "function": {
-          "name": "search_web",
-          "arguments": "{\"max_results\":5,\"query\":\"Lakshmi Narayana Kovuru LinkedIn profile\"}"
-        }
-      }
-    ]
-  },
-  {
-    "role": "tool",
-    "tool_call_id": "fc_b3fea168-7a83-4cd5-b496-5e46a5c82f12",
-    "name": "search_web",
-    "content": "No web results found."
-  },
-  {
-    "role": "assistant",
-    "reasoning": "We have a LinkedIn result: \"LAKSHMI NARAYANA KOVURU - LinkedIn India\". Need to fetch details. Could open the link.",
-    "tool_calls": [
-      {
-        "id": "fc_32303151-e53d-46b4-b4f5-d5161070fe4b",
-        "type": "function",
-        "function": {
-          "name": "search_web",
-          "arguments": "{\"max_results\":1,\"query\":\"https://in.linkedin.com/in/lakshmi-narayana-kovuru-078713307\"}"
-        }
-      }
-    ]
-  },
-  {
-    "role": "tool",
-    "tool_call_id": "fc_32303151-e53d-46b4-b4f5-d5161070fe4b",
-    "name": "search_web",
-    "content": "No web results found."
+    "tool_call_id": "z7j6j207b",
+    "name": "export_bibtex_file",
+    "content": "[SUCCESS] Exported BibTeX successfully. Download URL: http://127.0.0.1:8000/downloads/test_refs.bib"
   }
 ]

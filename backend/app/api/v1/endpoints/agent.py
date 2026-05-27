@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
 from app.schemas.core import AgentChatRequest, ChatRequest
 from app.services.agent_service import AgentService
 from app.services.pipeline_services import PipelineServices
@@ -9,10 +9,12 @@ router = APIRouter()
 @router.post("/agent/chat")
 async def agent_chat(
     req: AgentChatRequest,
+    request: Request,
     agent_service: AgentService = Depends(get_agent_service)
 ):
     try:
-        return await agent_service.process_agent_chat(req)
+        base_url = str(request.base_url).rstrip("/")
+        return await agent_service.process_agent_chat(req, base_url=base_url)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

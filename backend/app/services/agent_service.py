@@ -23,7 +23,7 @@ class AgentService:
             cleaned.append(clean_msg)
         return cleaned
 
-    async def process_agent_chat(self, req) -> dict:
+    async def process_agent_chat(self, req, base_url: str = None) -> dict:
         try:
             base_prompt = (
                 f"You are Ask Skolar, an expert AI {req.mode} assistant for a senior researcher. Be concise, sharp, and proactive. "
@@ -255,7 +255,7 @@ class AgentService:
                                     print(f"[AgentChat] Error parsing tool arguments: {e}", flush=True)
                                     args = {}
                                     
-                                tool_result = await execute_tool_call(func_name, args)
+                                tool_result = await execute_tool_call(func_name, args, base_url=base_url)
                                 messages.append({
                                     "role": "tool",
                                     "tool_call_id": tc["id"],

@@ -5,6 +5,7 @@ import re
 import urllib.parse
 import xml.etree.ElementTree as ET
 from typing import Dict, Any, List
+import csv
 
 # --- Real Connectors ---
 
@@ -177,6 +178,218 @@ def search_whatsapp(contact: str = "") -> str:
     return f"""[SIMULATED WHATSAPP] Recent messages from '{contact}':
 - Yesterday, 4:30 PM: "Hey, did you see the new Nature preprint?"
 - Today, 9:15 AM: "I'll send over the datasets by noon." """
+
+
+def generate_downloadable_table(headers: List[str], rows: List[List[Any]], filename: str, base_url: str = None) -> str:
+    """Generates a downloadable CSV table file and returns its URL."""
+    try:
+        os.makedirs("downloads", exist_ok=True)
+        safe_filename = "".join(c for c in filename if c.isalnum() or c in (".", "_", "-")).strip()
+        if not safe_filename.endswith(".csv"):
+            safe_filename += ".csv"
+        
+        file_path = os.path.join("downloads", safe_filename)
+        with open(file_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(headers)
+            writer.writerows(rows)
+        
+        host = base_url or "http://127.0.0.1:8000"
+        download_url = f"{host}/downloads/{safe_filename}"
+        return f"[SUCCESS] Generated table successfully. Download URL: {download_url}"
+    except Exception as e:
+        return f"[ERROR] Failed to generate table: {e}"
+
+def generate_interactive_chart(chart_type: str, labels: List[str], datasets: List[Dict[str, Any]], title: str, filename: str, base_url: str = None) -> str:
+    """Generates a beautiful interactive Chart.js chart HTML page and returns its URL."""
+    try:
+        os.makedirs("downloads", exist_ok=True)
+        safe_filename = "".join(c for c in filename if c.isalnum() or c in (".", "_", "-")).strip()
+        if not safe_filename.endswith(".html"):
+            safe_filename += ".html"
+            
+        file_path = os.path.join("downloads", safe_filename)
+        
+        # Inject standard theme styling into datasets if background/border colors aren't defined
+        colors = [
+            {"bg": "rgba(255, 179, 0, 0.2)", "border": "rgba(255, 179, 0, 1)"},    # Gold/Amber
+            {"bg": "rgba(33, 150, 243, 0.2)", "border": "rgba(33, 150, 243, 1)"},   # Blue
+            {"bg": "rgba(0, 230, 118, 0.2)", "border": "rgba(0, 230, 118, 1)"},    # Green/Emerald
+            {"bg": "rgba(233, 30, 99, 0.2)", "border": "rgba(233, 30, 99, 1)"},     # Pink/Rose
+            {"bg": "rgba(156, 39, 176, 0.2)", "border": "rgba(156, 39, 176, 1)"},   # Purple
+        ]
+        for idx, dataset in enumerate(datasets):
+            if "backgroundColor" not in dataset:
+                dataset["backgroundColor"] = colors[idx % len(colors)]["bg"]
+            if "borderColor" not in dataset:
+                dataset["borderColor"] = colors[idx % len(colors)]["border"]
+            if "borderWidth" not in dataset:
+                dataset["borderWidth"] = 2
+                
+        labels_json = json.dumps(labels)
+        datasets_json = json.dumps(datasets)
+        
+        html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>{title}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #0b0c10;
+            color: #ffffff;
+            margin: 0;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }}
+        .chart-container {{
+            position: relative;
+            width: 100%;
+            max-width: 700px;
+            background: #1f2833;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            box-sizing: border-box;
+        }}
+        h2 {{
+            margin-top: 0;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #c5a059;
+            text-align: center;
+            margin-bottom: 20px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="chart-container">
+        <h2>{title}</h2>
+        <canvas id="myChart"></canvas>
+    </div>
+    <script>
+        const ctx = document.getElementById('myChart').getContext('2d');
+        new Chart(ctx, {{
+            type: '{chart_type}',
+            data: {{
+                labels: {labels_json},
+                datasets: {datasets_json}
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {{
+                    legend: {{
+                        labels: {{
+                            color: '#c5a059',
+                            font: {{ size: 12 }}
+                        }}
+                    }}
+                }},
+                scales: {{
+                    x: {{
+                        grid: {{ color: 'rgba(255, 255, 255, 0.05)' }},
+                        ticks: {{ color: '#c5c6c7' }}
+                    }},
+                    y: {{
+                        grid: {{ color: 'rgba(255, 255, 255, 0.05)' }},
+                        ticks: {{ color: '#c5c6c7' }}
+                    }}
+                }}
+            }}
+        }});
+    </script>
+</body>
+</html>"""
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+            
+        host = base_url or "http://127.0.0.1:8000"
+        download_url = f"{host}/downloads/{safe_filename}"
+        return f"[SUCCESS] Generated chart successfully. View URL: {download_url}"
+    except Exception as e:
+        return f"[ERROR] Failed to generate chart: {e}"
+
+def export_bibtex_file(publications: List[Dict[str, Any]], filename: str, base_url: str = None) -> str:
+    """Exports a list of publications to a LaTeX-compatible .bib file and returns its URL."""
+    try:
+        os.makedirs("downloads", exist_ok=True)
+        safe_filename = "".join(c for c in filename if c.isalnum() or c in (".", "_", "-")).strip()
+        if not safe_filename.endswith(".bib"):
+            safe_filename += ".bib"
+            
+        file_path = os.path.join("downloads", safe_filename)
+        bib_entries = []
+        for idx, pub in enumerate(publications):
+            title = pub.get("title", "Untitled Work")
+            authors = pub.get("authors") or pub.get("author") or "Unknown"
+            if isinstance(authors, list):
+                authors = " and ".join(authors)
+            year = pub.get("year") or pub.get("publication_year") or "2025"
+            journal = pub.get("journal") or pub.get("venue") or "Scientific Journal"
+            doi = pub.get("doi") or ""
+            
+            # Generate a key
+            first_author = authors.split(" and ")[0].split()[-1] if authors else "author"
+            clean_first_author = "".join(c for c in first_author if c.isalnum()).lower()
+            clean_title_first_word = "".join(c for c in title.split()[0] if c.isalnum()).lower() if title.split() else "work"
+            citation_key = f"{clean_first_author}{year}{clean_title_first_word}"
+            
+            entry = f"@article{{{citation_key},\n"
+            entry += f"  author = {{{authors}}},\n"
+            entry += f"  title = {{{title}}},\n"
+            entry += f"  journal = {{{journal}}},\n"
+            entry += f"  year = {{{year}}}"
+            if doi:
+                entry += f",\n  doi = {{{doi}}}"
+            entry += "\n}"
+            bib_entries.append(entry)
+            
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write("\n\n".join(bib_entries))
+            
+        host = base_url or "http://127.0.0.1:8000"
+        download_url = f"{host}/downloads/{safe_filename}"
+        return f"[SUCCESS] Exported BibTeX successfully. Download URL: {download_url}"
+    except Exception as e:
+        return f"[ERROR] Failed to export BibTeX: {e}"
+
+def generate_research_report(title: str, sections: List[Dict[str, Any]], filename: str, base_url: str = None) -> str:
+    """Generates a styled Markdown research report and returns its URL."""
+    try:
+        os.makedirs("downloads", exist_ok=True)
+        safe_filename = "".join(c for c in filename if c.isalnum() or c in (".", "_", "-")).strip()
+        if not safe_filename.endswith(".md"):
+            safe_filename += ".md"
+            
+        file_path = os.path.join("downloads", safe_filename)
+        md_content = []
+        md_content.append(f"# {title}\n")
+        md_content.append(f"*Generated by Ask Skolar*\n")
+        md_content.append("---")
+        
+        for section in sections:
+            heading = section.get("heading", "Section")
+            content = section.get("content", "")
+            md_content.append(f"\n## {heading}\n")
+            md_content.append(content)
+            
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(md_content))
+            
+        host = base_url or "http://127.0.0.1:8000"
+        download_url = f"{host}/downloads/{safe_filename}"
+        return f"[SUCCESS] Generated research report successfully. Download URL: {download_url}"
+    except Exception as e:
+        return f"[ERROR] Failed to generate report: {e}"
 
 
 # These definitions are passed to the Groq LLM API
@@ -367,14 +580,186 @@ TOOLS_SCHEMA = [
                 "required": ["query"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_downloadable_table",
+            "description": "Generates a downloadable CSV table file from data rows and headers, returning the download URL. Use this whenever the user asks for a table to download, export, or save.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "headers": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of column headers for the table."
+                    },
+                    "rows": {
+                        "type": "array",
+                        "items": {
+                            "type": "array",
+                            "items": {"type": "string"}
+                        },
+                        "description": "List of rows, where each row is an array of cell values matching the headers."
+                    },
+                    "filename": {
+                        "type": "string",
+                        "description": "The desired name for the generated CSV file, e.g., 'publications.csv'."
+                    }
+                },
+                "required": ["headers", "rows", "filename"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_interactive_chart",
+            "description": "Generates a beautiful, interactive HTML bar, line, or pie chart using Chart.js, returning the view/download URL. Use this to plot citation trends, publication years, or metrics.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "chart_type": {
+                        "type": "string",
+                        "enum": ["bar", "line", "pie"],
+                        "description": "The type of chart to generate."
+                    },
+                    "labels": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of X-axis labels, e.g., years ['2020', '2021', '2022']."
+                    },
+                    "datasets": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "label": {"type": "string", "description": "The name of the dataset."},
+                                "data": {
+                                    "type": "array",
+                                    "items": {"type": "number"},
+                                    "description": "Numeric data points."
+                                }
+                            },
+                            "required": ["label", "data"]
+                        },
+                        "description": "List of datasets to plot."
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "The title of the chart, e.g. 'Citation Counts Over Time'."
+                    },
+                    "filename": {
+                        "type": "string",
+                        "description": "The name of the HTML file, e.g., 'citation_chart.html'."
+                    }
+                },
+                "required": ["chart_type", "labels", "datasets", "title", "filename"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "export_bibtex_file",
+            "description": "Compiles a list of academic publications into a downloadable .bib file for LaTeX citation. Use this when the user asks for references in BibTeX, LaTeX, or citation file formats.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "publications": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "title": {"type": "string"},
+                                "authors": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "List of author names."
+                                },
+                                "year": {"type": "string"},
+                                "journal": {"type": "string", "description": "Journal or conference name."},
+                                "doi": {"type": "string", "description": "Digital Object Identifier if available."}
+                            },
+                            "required": ["title", "authors", "year"]
+                        },
+                        "description": "List of publications to export."
+                    },
+                    "filename": {
+                        "type": "string",
+                        "description": "The name of the .bib file, e.g., 'my_citations.bib'."
+                    }
+                },
+                "required": ["publications", "filename"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_research_report",
+            "description": "Creates a structured Markdown report from a list of sections and headings, returning the download/view URL. Use this when the user asks for a written report, compilation, or summary doc.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "The title of the research report."},
+                    "sections": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "heading": {"type": "string", "description": "Heading of the section."},
+                                "content": {"type": "string", "description": "Markdown formatted content of the section."}
+                            },
+                            "required": ["heading", "content"]
+                        },
+                        "description": "The sections comprising the report."
+                    },
+                    "filename": {
+                        "type": "string",
+                        "description": "The name of the report file, e.g., 'quantum_mechanics_report.md'."
+                    }
+                },
+                "required": ["title", "sections", "filename"]
+            }
+        }
     }
 ]
 
-async def execute_tool_call(tool_name: str, arguments: dict) -> str:
+async def execute_tool_call(tool_name: str, arguments: dict, base_url: str = None) -> str:
     """Routes the LLM's tool call to the actual Python function."""
     print(f"[Agent Tool Execution] Calling {tool_name} with {arguments}", flush=True)
     try:
-        if tool_name == "search_arxiv_publications":
+        if tool_name == "generate_downloadable_table":
+            return generate_downloadable_table(
+                arguments.get("headers", []),
+                arguments.get("rows", []),
+                arguments.get("filename", "table.csv"),
+                base_url=base_url
+            )
+        elif tool_name == "generate_interactive_chart":
+            return generate_interactive_chart(
+                arguments.get("chart_type", "bar"),
+                arguments.get("labels", []),
+                arguments.get("datasets", []),
+                arguments.get("title", "Chart"),
+                arguments.get("filename", "chart.html"),
+                base_url=base_url
+            )
+        elif tool_name == "export_bibtex_file":
+            return export_bibtex_file(
+                arguments.get("publications", []),
+                arguments.get("filename", "references.bib"),
+                base_url=base_url
+            )
+        elif tool_name == "generate_research_report":
+            return generate_research_report(
+                arguments.get("title", "Research Report"),
+                arguments.get("sections", []),
+                arguments.get("filename", "report.md"),
+                base_url=base_url
+            )
+        elif tool_name == "search_arxiv_publications":
             return await search_arxiv_publications(arguments.get("query", ""), arguments.get("max_results", 5))
         elif tool_name == "search_google_scholar_profile":
             return await search_google_scholar_profile(arguments.get("query", ""))

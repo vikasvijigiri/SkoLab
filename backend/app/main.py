@@ -1,3 +1,18 @@
+import sys
+import io
+
+# Force stdout/stderr to use UTF-8 on Windows to avoid 'charmap' codec errors
+if sys.stdout and getattr(sys.stdout, "encoding", None) != 'utf-8':
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+if sys.stderr and getattr(sys.stderr, "encoding", None) != 'utf-8':
+    try:
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 import platform
 from collections import namedtuple
 # Monkey-patch platform to avoid blocking WMI queries in sandboxed environment
@@ -42,6 +57,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve static downloads folder
+from fastapi.staticfiles import StaticFiles
+os.makedirs("downloads", exist_ok=True)
+app.mount("/downloads", StaticFiles(directory="downloads"), name="downloads")
 
 # Include aggregate router
 app.include_router(api_router)
