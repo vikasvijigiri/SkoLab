@@ -4,7 +4,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-data class ResQitSpacing(
+data class SkoLabSpacing(
     val xs: Dp = 4.dp,
     val sm: Dp = 8.dp,
     val md: Dp = 12.dp,
@@ -13,4 +13,4 @@ data class ResQitSpacing(
     val xxl: Dp = 32.dp,
 )
 
-val LocalResQitSpacing = staticCompositionLocalOf { ResQitSpacing() }
+val LocalSkoLabSpacing = staticCompositionLocalOf { SkoLabSpacing() }

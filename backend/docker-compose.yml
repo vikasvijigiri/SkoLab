@@ -3,12 +3,12 @@ version: '3.8'
 services:
   db:
     image: postgres:15-alpine
-    container_name: resqit_postgres
+    container_name: skolab_postgres
     restart: always
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgrespassword
-      POSTGRES_DB: resqit
+      POSTGRES_DB: skolab
     ports:
       - "5432:5432"
     volumes:

@@ -15,9 +15,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.open.entropy.ui.theme.ResQitDisruption
-import com.open.entropy.ui.theme.ResQitTextPrimary
-import com.open.entropy.ui.theme.ResQitTextSecondary
+import com.open.entropy.ui.theme.SkoLabDisruption
+import com.open.entropy.ui.theme.SkoLabTextPrimary
+import com.open.entropy.ui.theme.SkoLabTextSecondary
 import com.open.entropy.ui.theme.Typography
 
 @Composable
@@ -35,9 +35,9 @@ fun EmptyState(
     ) {
         ConstellationIcon(modifier = Modifier.size(80.dp))
         Spacer(modifier = Modifier.height(20.dp))
-        Text(text = title, style = Typography.titleLarge, color = ResQitTextPrimary, textAlign = TextAlign.Center)
+        Text(text = title, style = Typography.titleLarge, color = SkoLabTextPrimary, textAlign = TextAlign.Center)
         Spacer(modifier = Modifier.height(8.dp))
-        Text(text = message, style = Typography.bodyMedium, color = ResQitTextSecondary, textAlign = TextAlign.Center)
+        Text(text = message, style = Typography.bodyMedium, color = SkoLabTextSecondary, textAlign = TextAlign.Center)
         if (action != null) {
             Spacer(modifier = Modifier.height(20.dp))
             action()
@@ -57,12 +57,12 @@ fun ErrorState(
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(text = "Something went wrong", style = Typography.titleMedium, color = ResQitTextPrimary)
+        Text(text = "Something went wrong", style = Typography.titleMedium, color = SkoLabTextPrimary)
         Spacer(modifier = Modifier.height(8.dp))
-        Text(text = message, style = Typography.bodyMedium, color = ResQitTextSecondary, textAlign = TextAlign.Center)
+        Text(text = message, style = Typography.bodyMedium, color = SkoLabTextSecondary, textAlign = TextAlign.Center)
         if (onRetry != null) {
             Spacer(modifier = Modifier.height(16.dp))
-            ResQitOutlinedButton(text = "Try again", onClick = onRetry)
+            SkoLabOutlinedButton(text = "Try again", onClick = onRetry)
         }
     }
 }
@@ -70,11 +70,11 @@ fun ErrorState(
 @Composable
 private fun ConstellationIcon(modifier: Modifier = Modifier) {
     val dots = listOf(
-        Offset(0.2f, 0.3f) to ResQitDisruption,
-        Offset(0.5f, 0.15f) to ResQitDisruption.copy(alpha = 0.6f),
-        Offset(0.75f, 0.4f) to ResQitDisruption.copy(alpha = 0.8f),
-        Offset(0.35f, 0.65f) to ResQitDisruption.copy(alpha = 0.5f),
-        Offset(0.6f, 0.8f) to ResQitDisruption.copy(alpha = 0.7f),
+        Offset(0.2f, 0.3f) to SkoLabDisruption,
+        Offset(0.5f, 0.15f) to SkoLabDisruption.copy(alpha = 0.6f),
+        Offset(0.75f, 0.4f) to SkoLabDisruption.copy(alpha = 0.8f),
+        Offset(0.35f, 0.65f) to SkoLabDisruption.copy(alpha = 0.5f),
+        Offset(0.6f, 0.8f) to SkoLabDisruption.copy(alpha = 0.7f),
     )
     Canvas(modifier = modifier) {
         dots.forEach { (rel, color) ->
@@ -88,7 +88,7 @@ private fun ConstellationIcon(modifier: Modifier = Modifier) {
             val a = Offset(dots[i].first.x * size.width, dots[i].first.y * size.height)
             val b = Offset(dots[i + 1].first.x * size.width, dots[i + 1].first.y * size.height)
             drawLine(
-                color = ResQitDisruption.copy(alpha = 0.2f),
+                color = SkoLabDisruption.copy(alpha = 0.2f),
                 start = a,
                 end = b,
                 strokeWidth = 1.dp.toPx()

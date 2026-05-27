@@ -10,8 +10,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.open.entropy.ui.theme.ResQitDivider
-import com.open.entropy.ui.theme.ResQitSurface
+import com.open.entropy.ui.theme.SkoLabDivider
+import com.open.entropy.ui.theme.SkoLabSurface
 
 @Composable
 fun SkeletonShimmer(
@@ -19,9 +19,9 @@ fun SkeletonShimmer(
     shape: RoundedCornerShape = RoundedCornerShape(8.dp)
 ) {
     val shimmerColors = listOf(
-        ResQitSurface,
-        ResQitDivider,
-        ResQitSurface
+        SkoLabSurface,
+        SkoLabDivider,
+        SkoLabSurface
     )
 
     val transition = rememberInfiniteTransition(label = "shimmer")

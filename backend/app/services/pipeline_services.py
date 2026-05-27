@@ -7,9 +7,8 @@ import re
 from typing import List, Dict, Optional, Any
 from app.services.summarization_service import is_llm_working, set_llm_limit_exceeded
 from sqlalchemy.future import select
-import json
-from app.database import AsyncSessionLocal
-from app.models import CacheEntry, AgentChatHistory
+from app.db.database import AsyncSessionLocal
+from app.models.user_models import CacheEntry, AgentChatHistory
 
 class PipelineServices:
     def __init__(self):
@@ -18,12 +17,24 @@ class PipelineServices:
         self.model = "llama-3.3-70b-versatile"
         self.openalex_base = "https://api.openalex.org"
         self.headers = {
-            "User-Agent": "ResQitApp/1.0 (mailto:vikki.4me@gmail.com)",
+            "User-Agent": "SkolabApp/1.0 (mailto:vikki.4me@gmail.com)",
             "Accept": "application/json"
         }
-        from app.config import settings
+        from app.core.config import settings
         if settings.openalex_api_key:
             self.headers["api_key"] = settings.openalex_api_key
+
+    def _get_firestore_db(self):
+        """Returns a Firestore client if available, else None."""
+        try:
+            from app.services.researcher_worker import FIRESTORE_AVAILABLE
+            if not FIRESTORE_AVAILABLE:
+                return None
+            from firebase_admin import firestore as _firestore
+            return _firestore.client()
+        except Exception as exc:
+            print(f"[PipelineServices] Firestore unavailable: {exc}", flush=True)
+            return None
 
     async def _save_to_postgres(self, cache_key: str, data: Dict[str, Any]):
         async with AsyncSessionLocal() as session:
@@ -76,14 +87,21 @@ class PipelineServices:
         else:
             doc_id = "default_feed"
 
+        cache_key = f"daily_feed_{doc_id}"
+        cached_data = await self._load_from_postgres(cache_key)
+        if cached_data and "items" in cached_data:
+            print(f"[Postgres Cache Hit] daily_feeds for doc_id={doc_id}", flush=True)
+            return cached_data["items"]
+
         db = self._get_firestore_db()
         if db:
             try:
-                doc = db.collection("daily_feeds").document(doc_id).get(timeout=2.0)
+                doc = db.collection("daily_feeds").document(doc_id).get()
                 if doc.exists:
                     cached_data = doc.to_dict()
                     if cached_data and "items" in cached_data:
                         print(f"[Firestore Cache Hit] daily_feeds for doc_id={doc_id}", flush=True)
+                        await self._save_to_postgres(cache_key, {"items": cached_data["items"]})
                         return cached_data["items"]
             except Exception as e:
                 print(f"[Firestore Cache Error] daily_feeds lookup failed: {e}", flush=True)
@@ -111,6 +129,8 @@ class PipelineServices:
             search_term = " OR ".join([f'"{c}"' for c in concepts[:3]])
         elif query_fallback:
             search_term = query_fallback
+        else:
+            search_term = "science"
         params = {
             "search": search_term,
             "per_page": 20,
@@ -206,12 +226,20 @@ class PipelineServices:
                 "doi": doi
             })
 
+        if feed_items:
+            try:
+                await self._save_to_postgres(cache_key, {"items": feed_items})
+                print(f"[Postgres Cache Save] daily_feeds for doc_id={doc_id}", flush=True)
+            except Exception as e:
+                print(f"[Postgres Cache Error] daily_feeds write failed: {e}", flush=True)
+
         if db and feed_items:
             try:
+                from firebase_admin import firestore as _fs
                 db.collection("daily_feeds").document(doc_id).set({
                     "items": feed_items,
-                    "last_synced": firestore.SERVER_TIMESTAMP
-                }, timeout=2.0)
+                    "last_synced": _fs.SERVER_TIMESTAMP
+                })
                 print(f"[Firestore Cache Save] daily_feeds for doc_id={doc_id}", flush=True)
             except Exception as e:
                 print(f"[Firestore Cache Error] daily_feeds write failed: {e}", flush=True)
@@ -224,14 +252,21 @@ class PipelineServices:
         """
         clean_id = author_id.split("/")[-1]
         
+        cache_key = f"match_grants_{clean_id}"
+        cached_data = await self._load_from_postgres(cache_key)
+        if cached_data and "items" in cached_data:
+            print(f"[Postgres Cache Hit] match_grants for author_id={clean_id}", flush=True)
+            return cached_data["items"]
+
         db = self._get_firestore_db()
         if db:
             try:
-                doc = db.collection("match_grants").document(clean_id).get(timeout=2.0)
+                doc = db.collection("match_grants").document(clean_id).get()
                 if doc.exists:
                     cached_data = doc.to_dict()
                     if cached_data and "items" in cached_data:
                         print(f"[Firestore Cache Hit] match_grants for author_id={clean_id}", flush=True)
+                        await self._save_to_postgres(cache_key, {"items": cached_data["items"]})
                         return cached_data["items"]
             except Exception as e:
                 print(f"[Firestore Cache Error] match_grants lookup failed: {e}", flush=True)
@@ -350,12 +385,20 @@ class PipelineServices:
                 "rationale": rationale
             })
 
+        if scored_grants:
+            try:
+                await self._save_to_postgres(cache_key, {"items": scored_grants})
+                print(f"[Postgres Cache Save] match_grants for author_id={clean_id}", flush=True)
+            except Exception as e:
+                print(f"[Postgres Cache Error] match_grants write failed: {e}", flush=True)
+
         if db and scored_grants:
             try:
+                from firebase_admin import firestore as _fs
                 db.collection("match_grants").document(clean_id).set({
                     "items": scored_grants,
-                    "last_synced": firestore.SERVER_TIMESTAMP
-                }, timeout=2.0)
+                    "last_synced": _fs.SERVER_TIMESTAMP
+                })
                 print(f"[Firestore Cache Save] match_grants for author_id={clean_id}", flush=True)
             except Exception as e:
                 print(f"[Firestore Cache Error] match_grants write failed: {e}", flush=True)
@@ -370,16 +413,23 @@ class PipelineServices:
         clean_collab = collaborator_id.split("/")[-1]
         doc_id = f"{clean_author}_{clean_collab}"
 
+        cache_key = f"collaborator_synergy_{doc_id}"
+        cached_data = await self._load_from_postgres(cache_key)
+        if cached_data:
+            print(f"[Postgres Cache Hit] collaborator_synergy for doc_id={doc_id}", flush=True)
+            return cached_data
+
         db = self._get_firestore_db()
         if db:
             try:
-                doc = db.collection("collaborator_synergies").document(doc_id).get(timeout=2.0)
+                doc = db.collection("collaborator_synergies").document(doc_id).get()
                 if doc.exists:
                     print(f"[Firestore Cache Hit] collaborator_synergies for doc_id={doc_id}", flush=True)
                     cached_data = doc.to_dict()
                     if cached_data:
                         # Clean metadata if present before returning
                         cached_data.pop("last_synced", None)
+                        await self._save_to_postgres(cache_key, cached_data)
                         return cached_data
             except Exception as e:
                 print(f"[Firestore Cache Error] collaborator_synergies lookup failed: {e}", flush=True)
@@ -460,12 +510,19 @@ Provide your response in this exact JSON format:
             "strategic_action_plan": strategic_action_plan
         }
 
+        try:
+            await self._save_to_postgres(cache_key, result)
+            print(f"[Postgres Cache Save] collaborator_synergy for doc_id={doc_id}", flush=True)
+        except Exception as e:
+            print(f"[Postgres Cache Error] collaborator_synergy write failed: {e}", flush=True)
+
         if db:
             try:
+                from firebase_admin import firestore as _fs
                 db.collection("collaborator_synergies").document(doc_id).set({
                     **result,
-                    "last_synced": firestore.SERVER_TIMESTAMP
-                }, timeout=2.0)
+                    "last_synced": _fs.SERVER_TIMESTAMP
+                })
                 print(f"[Firestore Cache Save] collaborator_synergies for doc_id={doc_id}", flush=True)
             except Exception as e:
                 print(f"[Firestore Cache Error] collaborator_synergies write failed: {e}", flush=True)
@@ -478,15 +535,22 @@ Provide your response in this exact JSON format:
         """
         clean_id = author_id.split("/")[-1]
 
+        cache_key = f"citation_heatmap_{clean_id}"
+        cached_data = await self._load_from_postgres(cache_key)
+        if cached_data:
+            print(f"[Postgres Cache Hit] citation_heatmap for author_id={clean_id}", flush=True)
+            return cached_data
+
         db = self._get_firestore_db()
         if db:
             try:
-                doc = db.collection("citation_heatmaps").document(clean_id).get(timeout=2.0)
+                doc = db.collection("citation_heatmaps").document(clean_id).get()
                 if doc.exists:
                     print(f"[Firestore Cache Hit] citation_heatmaps for author_id={clean_id}", flush=True)
                     cached_data = doc.to_dict()
                     if cached_data:
                         cached_data.pop("last_synced", None)
+                        await self._save_to_postgres(cache_key, cached_data)
                         return cached_data
             except Exception as e:
                 print(f"[Firestore Cache Error] citation_heatmaps lookup failed: {e}", flush=True)
@@ -525,12 +589,19 @@ Provide your response in this exact JSON format:
             "h_index": h_index
         }
 
+        try:
+            await self._save_to_postgres(cache_key, result)
+            print(f"[Postgres Cache Save] citation_heatmap for author_id={clean_id}", flush=True)
+        except Exception as e:
+            print(f"[Postgres Cache Error] citation_heatmap write failed: {e}", flush=True)
+
         if db:
             try:
+                from firebase_admin import firestore as _fs
                 db.collection("citation_heatmaps").document(clean_id).set({
                     **result,
-                    "last_synced": firestore.SERVER_TIMESTAMP
-                }, timeout=2.0)
+                    "last_synced": _fs.SERVER_TIMESTAMP
+                })
                 print(f"[Firestore Cache Save] citation_heatmaps for author_id={clean_id}", flush=True)
             except Exception as e:
                 print(f"[Firestore Cache Error] citation_heatmaps write failed: {e}", flush=True)
@@ -543,14 +614,21 @@ Provide your response in this exact JSON format:
         """
         clean_id = author_id.split("/")[-1]
 
+        cache_key = f"journal_advisor_{clean_id}"
+        cached_data = await self._load_from_postgres(cache_key)
+        if cached_data and "venues" in cached_data:
+            print(f"[Postgres Cache Hit] journal_advisor for author_id={clean_id}", flush=True)
+            return cached_data["venues"]
+
         db = self._get_firestore_db()
         if db:
             try:
-                doc = db.collection("journal_advisor_recommendations").document(clean_id).get(timeout=2.0)
+                doc = db.collection("journal_advisor_recommendations").document(clean_id).get()
                 if doc.exists:
                     cached_data = doc.to_dict()
                     if cached_data and "venues" in cached_data:
                         print(f"[Firestore Cache Hit] journal_advisor_recommendations for author_id={clean_id}", flush=True)
+                        await self._save_to_postgres(cache_key, {"venues": cached_data["venues"]})
                         return cached_data["venues"]
             except Exception as e:
                 print(f"[Firestore Cache Error] journal_advisor_recommendations lookup failed: {e}", flush=True)
@@ -627,12 +705,20 @@ Provide your response in this exact JSON format:
             except Exception as e:
                 print(f"Groq journal advisor generation failed: {e}")
 
+        if venues:
+            try:
+                await self._save_to_postgres(cache_key, {"venues": venues[:3]})
+                print(f"[Postgres Cache Save] journal_advisor for author_id={clean_id}", flush=True)
+            except Exception as e:
+                print(f"[Postgres Cache Error] journal_advisor write failed: {e}", flush=True)
+
         if db and venues:
             try:
+                from firebase_admin import firestore as _fs
                 db.collection("journal_advisor_recommendations").document(clean_id).set({
                     "venues": venues[:3],
-                    "last_synced": firestore.SERVER_TIMESTAMP
-                }, timeout=2.0)
+                    "last_synced": _fs.SERVER_TIMESTAMP
+                        })
                 print(f"[Firestore Cache Save] journal_advisor_recommendations for author_id={clean_id}", flush=True)
             except Exception as e:
                 print(f"[Firestore Cache Error] journal_advisor_recommendations write failed: {e}", flush=True)
@@ -650,22 +736,17 @@ Provide your response in this exact JSON format:
         if not clean_id or clean_id == "fallback_seed":
             raise ValueError("No valid author ID provided for collaborator network extraction.")
 
-        db = self._get_firestore_db()
-        if db:
-            try:
-                doc = db.collection("network_collaborators").document(f"{clean_id}_{field}").get(timeout=2.0)
-                if doc.exists:
-                    print(f"[Firestore Cache Hit] network_collaborators for author_id={clean_id}", flush=True)
-                    cached_data = doc.to_dict()
-                    if cached_data and "collaborators" in cached_data:
-                        collaborators = cached_data["collaborators"]
-                        # Filter by exclude_set if necessary
-                        if exclude_ids:
-                            exclude_set = set(exclude_ids)
-                            collaborators = [c for c in collaborators if c["id"].split("/")[-1] not in exclude_set]
-                        return collaborators[offset:offset+limit]
-            except Exception as e:
-                print(f"[Firestore Cache Error] network_collaborators lookup failed: {e}", flush=True)
+        cache_key = f"network_collaborators_{clean_id}_{field}"
+        cached_data = await self._load_from_postgres(cache_key)
+        if cached_data:
+            print(f"[Postgres Cache Hit] network_collaborators for author_id={clean_id}, field={field}", flush=True)
+            if "collaborators" in cached_data:
+                collaborators = cached_data["collaborators"]
+                # Filter by exclude_set if necessary
+                if exclude_ids:
+                    exclude_set = set(exclude_ids)
+                    collaborators = [c for c in collaborators if c["id"].split("/")[-1] not in exclude_set]
+                return collaborators[offset:offset+limit]
 
         exclude_set = set(exclude_ids) if exclude_ids else set()
         exclude_set.add(clean_id)
@@ -675,6 +756,27 @@ Provide your response in this exact JSON format:
         if not profile:
             raise ValueError(f"Author with ID '{author_id}' not found on OpenAlex.")
         primary_name = profile.get("display_name", "Main Author")
+
+        # Determine the user's area of interest (target_fields)
+        target_fields = []
+        if field:
+            target_fields = [f.strip().lower() for f in field.split(",") if f.strip()]
+        else:
+            concepts_list = profile.get("x_concepts", [])
+            target_fields = [c.get("display_name").lower() for c in concepts_list if c.get("display_name")]
+
+        def is_relevant_collaborator(candidate_fields: List[str]) -> bool:
+            if not target_fields:
+                return True
+            for tf in target_fields:
+                tf_clean = tf.strip().lower()
+                if not tf_clean:
+                    continue
+                for cf in candidate_fields:
+                    cf_clean = cf.strip().lower()
+                    if tf_clean in cf_clean or cf_clean in tf_clean:
+                        return True
+            return False
             
         async def fetch_works_for_author(auth_clean_id, max_works=20):
             filter_q = f"authorships.author.id:{auth_clean_id}"
@@ -699,7 +801,8 @@ Provide your response in this exact JSON format:
         for work in d1_works:
             work_title = work.get("title", "Research Paper")
             concepts = work.get("concepts", [])
-            work_field = concepts[0].get("display_name", "Researcher") if concepts else "Researcher"
+            work_concepts = [c.get("display_name") for c in concepts if c.get("display_name")]
+            work_field = work_concepts[0] if work_concepts else "Researcher"
             for auth_ship in work.get("authorships", []):
                 author_meta = auth_ship.get("author", {})
                 auth_id = author_meta.get("id")
@@ -716,7 +819,8 @@ Provide your response in this exact JSON format:
                                 "institution": inst_name,
                                 "field": work_field,
                                 "shared_paper": work_title,
-                                "joint_count": 1
+                                "joint_count": 1,
+                                "work_concepts": work_concepts
                             }
                         else:
                             depth1_authors[auth_id]["joint_count"] += 1
@@ -731,12 +835,13 @@ Provide your response in this exact JSON format:
             if isinstance(works, list):
                 for work in works:
                     concepts = work.get("concepts", [])
-                    work_field = concepts[0].get("display_name", "Expert Collaborator") if concepts else "Expert Collaborator"
+                    work_concepts = [c.get("display_name") for c in concepts if c.get("display_name")]
+                    work_field = work_concepts[0] if work_concepts else "Expert Collaborator"
                     for auth_ship in work.get("authorships", []):
                         author_meta = auth_ship.get("author", {})
                         auth_id = author_meta.get("id")
                         if auth_id:
-                            auth_clean = auth_id.split("/")[-1]
+                            auth_clean = author_meta.get("id").split("/")[-1]
                             if auth_clean not in exclude_set and auth_id not in depth1_authors:
                                 name = author_meta.get("display_name", "Unknown")
                                 insts = auth_ship.get("institutions", [])
@@ -749,7 +854,8 @@ Provide your response in this exact JSON format:
                                         "field": work_field,
                                         "connection_path": f"Collaborates with {d1['name']} (connected via {primary_name})",
                                         "joint_count": 1,
-                                        "d1_parent_name": d1['name']
+                                        "d1_parent_name": d1['name'],
+                                        "work_concepts": work_concepts
                                     }
 
         depth3_authors = {}
@@ -761,12 +867,13 @@ Provide your response in this exact JSON format:
             if isinstance(works, list):
                 for work in works:
                     concepts = work.get("concepts", [])
-                    work_field = concepts[0].get("display_name", "Network Connection") if concepts else "Network Connection"
+                    work_concepts = [c.get("display_name") for c in concepts if c.get("display_name")]
+                    work_field = work_concepts[0] if work_concepts else "Network Connection"
                     for auth_ship in work.get("authorships", []):
                         author_meta = auth_ship.get("author", {})
                         auth_id = author_meta.get("id")
                         if auth_id:
-                            auth_clean = auth_id.split("/")[-1]
+                            auth_clean = author_meta.get("id").split("/")[-1]
                             if auth_clean not in exclude_set and auth_id not in depth1_authors and auth_id not in depth2_authors:
                                 name = author_meta.get("display_name", "Unknown")
                                 insts = auth_ship.get("institutions", [])
@@ -778,7 +885,8 @@ Provide your response in this exact JSON format:
                                         "institution": inst_name,
                                         "field": work_field,
                                         "connection_path": f"Collaborates with {d2['name']} (connected via {d2.get('d1_parent_name', 'network')})",
-                                        "joint_count": 1
+                                        "joint_count": 1,
+                                        "work_concepts": work_concepts
                                     }
 
         all_ids = [v["id"].split("/")[-1] for v in list(depth1_authors.values()) + list(depth2_authors.values()) + list(depth3_authors.values())]
@@ -799,7 +907,8 @@ Provide your response in this exact JSON format:
                                 author_id_short = a["id"].split("/")[-1]
                                 real_stats[author_id_short] = {
                                     "works_count": a.get("works_count", 0),
-                                    "h_index": a.get("summary_stats", {}).get("h_index", 0)
+                                    "h_index": a.get("summary_stats", {}).get("h_index", 0),
+                                    "concepts": [c.get("display_name", "") for c in a.get("x_concepts", []) if c.get("display_name")]
                                 }
                 
                 for i in range(0, len(all_ids), 50):
@@ -811,9 +920,16 @@ Provide your response in this exact JSON format:
 
         collaborators_pool = []
         for auth_id, d1 in depth1_authors.items():
-            stats = real_stats.get(auth_id, {})
+            auth_id_short = auth_id.split("/")[-1]
+            stats = real_stats.get(auth_id_short, {})
             total_pubs = stats.get("works_count", 0)
             h_idx = stats.get("h_index", 0)
+            author_profile_concepts = stats.get("concepts", [])
+            
+            cand_concepts = d1.get("work_concepts", []) + author_profile_concepts
+            if not is_relevant_collaborator(cand_concepts):
+                continue
+
             collaborators_pool.append({
                 "id": auth_id,
                 "name": d1["name"],
@@ -827,9 +943,16 @@ Provide your response in this exact JSON format:
             })
 
         for auth_id, d2 in depth2_authors.items():
-            stats = real_stats.get(auth_id, {})
+            auth_id_short = auth_id.split("/")[-1]
+            stats = real_stats.get(auth_id_short, {})
             total_pubs = stats.get("works_count", 0)
             h_idx = stats.get("h_index", 0)
+            author_profile_concepts = stats.get("concepts", [])
+
+            cand_concepts = d2.get("work_concepts", []) + author_profile_concepts
+            if not is_relevant_collaborator(cand_concepts):
+                continue
+
             collaborators_pool.append({
                 "id": auth_id,
                 "name": d2["name"],
@@ -843,9 +966,16 @@ Provide your response in this exact JSON format:
             })
             
         for auth_id, d3 in depth3_authors.items():
-            stats = real_stats.get(auth_id, {})
+            auth_id_short = auth_id.split("/")[-1]
+            stats = real_stats.get(auth_id_short, {})
             total_pubs = stats.get("works_count", 0)
             h_idx = stats.get("h_index", 0)
+            author_profile_concepts = stats.get("concepts", [])
+
+            cand_concepts = d3.get("work_concepts", []) + author_profile_concepts
+            if not is_relevant_collaborator(cand_concepts):
+                continue
+
             collaborators_pool.append({
                 "id": auth_id,
                 "name": d3["name"],
@@ -861,15 +991,11 @@ Provide your response in this exact JSON format:
         # Return unique sorted by relevance score
         collaborators_pool.sort(key=lambda x: x["relevance_score"], reverse=True)
 
-        if db and collaborators_pool:
-            try:
-                db.collection("network_collaborators").document(f"{clean_id}_{field}").set({
-                    "collaborators": collaborators_pool,
-                    "last_synced": firestore.SERVER_TIMESTAMP
-                }, timeout=2.0)
-                print(f"[Firestore Cache Save] network_collaborators for author_id={clean_id}", flush=True)
-            except Exception as e:
-                print(f"[Firestore Cache Error] network_collaborators write failed: {e}", flush=True)
+        if collaborators_pool:
+            await self._save_to_postgres(cache_key, {
+                "collaborators": collaborators_pool
+            })
+            print(f"[Postgres Cache Save] network_collaborators for author_id={clean_id}, field={field}", flush=True)
 
         filtered_final = [c for c in collaborators_pool if c["id"].split("/")[-1] not in exclude_set]
         return filtered_final[offset:offset+limit]

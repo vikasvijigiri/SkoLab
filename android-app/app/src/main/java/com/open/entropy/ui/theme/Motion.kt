@@ -6,7 +6,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.staticCompositionLocalOf
 
-object ResQitMotion {
+object SkoLabMotion {
     const val fast = 150
     const val normal = 300
     const val slow = 500
@@ -23,4 +23,4 @@ object ResQitMotion {
     val listStaggerMs = 60L
 }
 
-val LocalResQitMotion = staticCompositionLocalOf { ResQitMotion }
+val LocalSkoLabMotion = staticCompositionLocalOf { SkoLabMotion }

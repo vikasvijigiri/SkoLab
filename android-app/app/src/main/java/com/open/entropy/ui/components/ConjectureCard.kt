@@ -331,14 +331,14 @@ fun ConjectureCard(
                                     else -> "🟥 🟥 🟥 🟩"
                                 }
                                 val shareText = """
-                                    ResQit Conjecture Proven! 🧠⚡
+                                    SkoLab Conjecture Proven! 🧠⚡
                                     Conjecture: ${conjecture.title}
                                     Result: $emojiGrid (Attempts: $attempts)
-                                    Solve the daily scientific duels on ResQit!
+                                    Solve the daily scientific duels on SkoLab!
                                 """.trimIndent()
 
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val clip = ClipData.newPlainText("ResQit Conjecture", shareText)
+                                val clip = ClipData.newPlainText("SkoLab Conjecture", shareText)
                                 clipboard.setPrimaryClip(clip)
 
                                 Toast.makeText(context, "Results copied to clipboard!", Toast.LENGTH_SHORT).show()

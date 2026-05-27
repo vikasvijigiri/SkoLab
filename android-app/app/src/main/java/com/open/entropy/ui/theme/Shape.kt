@@ -3,7 +3,7 @@
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 
-object ResQitShapes {
+object SkoLabShapes {
     val sm = RoundedCornerShape(8.dp)
     val md = RoundedCornerShape(12.dp)
     val lg = RoundedCornerShape(16.dp)

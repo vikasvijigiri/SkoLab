@@ -24,13 +24,13 @@ fun ComparePapersScreen(paperIds: List<String>, onBack: () -> Unit) {
     val papers = paperIds.mapNotNull { id -> MockData.papers.find { it.id == id } }
     
     Scaffold(
-        containerColor = ResQitBg,
+        containerColor = SkoLabBg,
         topBar = {
             TopAppBar(
-                title = { Text("COMPARE PAPERS", style = Typography.labelSmall, color = ResQitTextSecondary) },
+                title = { Text("COMPARE PAPERS", style = Typography.labelSmall, color = SkoLabTextSecondary) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = ResQitTextPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = SkoLabTextPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -46,23 +46,23 @@ fun ComparePapersScreen(paperIds: List<String>, onBack: () -> Unit) {
         ) {
             item {
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    RadarChart(scores = papers.firstOrNull()?.let { mapOf("Disruption" to it.disruptionScore, "Novelty" to it.noveltyScore, "Velocity" to it.citationVelocity/500f, "Depth" to 0.8f, "Influence" to 0.7f, "Breadth" to 0.6f) } ?: emptyMap(), color = ResQitPrimary)
+                    RadarChart(scores = papers.firstOrNull()?.let { mapOf("Disruption" to it.disruptionScore, "Novelty" to it.noveltyScore, "Velocity" to it.citationVelocity/500f, "Depth" to 0.8f, "Influence" to 0.7f, "Breadth" to 0.6f) } ?: emptyMap(), color = SkoLabPrimary)
                 }
             }
             
             item {
                 Surface(
-                    color = ResQitSurfaceElevated,
+                    color = SkoLabSurfaceElevated,
                     shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, ResQitDivider)
+                    border = androidx.compose.foundation.BorderStroke(1.dp, SkoLabDivider)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("AI INSIGHT SUMMARY", style = Typography.labelSmall, color = ResQitSecondary)
+                        Text("AI INSIGHT SUMMARY", style = Typography.labelSmall, color = SkoLabSecondary)
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
                             "Paper A shows 40% higher disruption but lower novelty compared to Paper B. This indicates a more paradigm-shifting approach versus a purely conceptual expansion.",
                             style = Typography.bodyMedium,
-                            color = ResQitTextPrimary
+                            color = SkoLabTextPrimary
                         )
                     }
                 }
@@ -82,17 +82,17 @@ fun ComparePapersScreen(paperIds: List<String>, onBack: () -> Unit) {
 @Composable
 fun CompareRow(paper: com.open.entropy.model.Paper) {
     Surface(
-        color = ResQitSurface,
+        color = SkoLabSurface,
         shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, ResQitDivider)
+        border = androidx.compose.foundation.BorderStroke(1.dp, SkoLabDivider)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(paper.title, style = Typography.titleLarge, fontSize = 14.sp, color = ResQitTextPrimary, maxLines = 1)
+            Text(paper.title, style = Typography.titleLarge, fontSize = 14.sp, color = SkoLabTextPrimary, maxLines = 1)
             Spacer(modifier = Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                MetricSmall("D-INDEX", paper.disruptionScore, ResQitPrimary)
-                MetricSmall("S-INDEX", paper.noveltyScore, ResQitSecondary)
-                MetricSmall("V-INDEX", paper.citationVelocity/500f, ResQitGold)
+                MetricSmall("D-INDEX", paper.disruptionScore, SkoLabPrimary)
+                MetricSmall("S-INDEX", paper.noveltyScore, SkoLabSecondary)
+                MetricSmall("V-INDEX", paper.citationVelocity/500f, SkoLabGold)
             }
         }
     }
@@ -101,7 +101,7 @@ fun CompareRow(paper: com.open.entropy.model.Paper) {
 @Composable
 fun MetricSmall(label: String, value: Float, color: Color) {
     Column {
-        Text(label, style = Typography.labelSmall, color = ResQitTextSecondary, fontSize = 9.sp)
+        Text(label, style = Typography.labelSmall, color = SkoLabTextSecondary, fontSize = 9.sp)
         Text(String.format("%.2f", value), style = Typography.labelMedium, color = color, fontWeight = FontWeight.Bold)
     }
 }

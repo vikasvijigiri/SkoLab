@@ -10,9 +10,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.open.entropy.ui.theme.ResQitDisruption
-import com.open.entropy.ui.theme.ResQitTextPrimary
-import com.open.entropy.ui.theme.ResQitTextSecondary
+import com.open.entropy.ui.theme.SkoLabDisruption
+import com.open.entropy.ui.theme.SkoLabTextPrimary
+import com.open.entropy.ui.theme.SkoLabTextSecondary
 import com.open.entropy.ui.theme.Typography
 
 @Composable
@@ -20,7 +20,7 @@ fun SectionHeader(
     title: String,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
-    accentColor: androidx.compose.ui.graphics.Color = ResQitDisruption
+    accentColor: androidx.compose.ui.graphics.Color = SkoLabDisruption
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
@@ -35,7 +35,7 @@ fun SectionHeader(
             Text(
                 text = subtitle,
                 style = Typography.headlineLarge,
-                color = ResQitTextPrimary
+                color = SkoLabTextPrimary
             )
         }
     }
@@ -50,7 +50,7 @@ fun SectionCaption(
         text = text.uppercase(),
         modifier = modifier,
         style = Typography.labelSmall,
-        color = ResQitTextSecondary,
+        color = SkoLabTextSecondary,
         letterSpacing = 1.5.sp
     )
 }

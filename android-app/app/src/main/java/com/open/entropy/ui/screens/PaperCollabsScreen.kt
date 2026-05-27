@@ -1168,7 +1168,7 @@ fun PaperCollabsScreen(
                                             isSearchingMember = false
                                             val doc = querySnapshot.documents.firstOrNull()
                                             if (doc != null) {
-                                                val researcher = doc.toObject(com.open.entropy.model.ResQitUser::class.java)
+                                                val researcher = doc.toObject(com.open.entropy.model.SkoLabUser::class.java)
                                                 if (researcher != null) {
                                                     if (researcher.uid == currentUserId) {
                                                         Toast.makeText(context, "You are automatically added as the owner.", Toast.LENGTH_SHORT).show()
@@ -1344,7 +1344,7 @@ fun PaperCollabsScreen(
                                 .addOnSuccessListener { querySnapshot ->
                                     val doc = querySnapshot.documents.firstOrNull()
                                     if (doc != null) {
-                                        val researcher = doc.toObject(com.open.entropy.model.ResQitUser::class.java)
+                                        val researcher = doc.toObject(com.open.entropy.model.SkoLabUser::class.java)
                                         if (researcher != null) {
                                             val newMember = CollabMember(
                                                 uid = researcher.uid,

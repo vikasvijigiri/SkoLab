@@ -38,6 +38,9 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 
 enum class MessageStatus {
     SENT, DELIVERED, READ
@@ -102,13 +105,13 @@ fun AuthorChatBottomSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(BgCard)
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Author Avatar Circle
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(34.dp)
                         .clip(CircleShape)
                         .background(AccentTeal.copy(alpha = 0.1f)),
                     contentAlignment = Alignment.Center
@@ -270,28 +273,26 @@ fun AuthorChatBottomSheet(
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        TextField(
+                        BasicTextField(
                             value = textInput,
                             onValueChange = { textInput = it },
-                            placeholder = {
-                                Text(
-                                    text = "Ask about this paper...",
-                                    color = TextMuted,
-                                    fontSize = 14.sp
-                                )
-                            },
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                disabledContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                disabledIndicatorColor = Color.Transparent
-                            ),
                             textStyle = Typography.bodyMedium.copy(color = TextPrimary),
+                            cursorBrush = SolidColor(TextPrimary),
                             modifier = Modifier
                                 .weight(1f)
-                                .heightIn(max = 120.dp),
+                                .padding(vertical = 8.dp),
+                            decorationBox = { innerTextField ->
+                                Box(contentAlignment = Alignment.CenterStart) {
+                                    if (textInput.isEmpty()) {
+                                        Text(
+                                            text = "Ask about this paper...",
+                                            color = TextMuted,
+                                            fontSize = 14.sp
+                                        )
+                                    }
+                                    innerTextField()
+                                }
+                            },
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                             keyboardActions = KeyboardActions(onSend = {
                                 if (textInput.isNotBlank() && !isAuthorTyping) {

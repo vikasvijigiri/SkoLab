@@ -2,8 +2,6 @@ package com.open.entropy.ui.screens
 
 import android.util.Log
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -61,7 +59,7 @@ fun AuthorDetailScreen(
                 
                 if (data == null && cached == null) {
                     // Stop falling back to MockData (dummy profiles)
-                    android.widget.Toast.makeText(context, "ResQit server unreachable. Please try again later.", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(context, "SkoLab server unreachable. Please try again later.", android.widget.Toast.LENGTH_LONG).show()
                 }
                 
                 if (data != null) {
@@ -76,19 +74,7 @@ fun AuthorDetailScreen(
     }
 
     Scaffold(
-        containerColor = BgPrimary,
-        topBar = {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = 4.dp, vertical = 4.dp)
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
-                }
-            }
-        }
+        containerColor = BgPrimary
     ) { _ ->
         Box(
             modifier = Modifier
@@ -117,7 +103,7 @@ fun AuthorDetailScreen(
                                     Log.e("AuthorDetailScreen", "onSelectResearcher API searchAuthor failed", e)
                                 }
                                 if (newData == null) {
-                                    android.widget.Toast.makeText(context, "ResQit server unreachable. Please try again later.", android.widget.Toast.LENGTH_LONG).show()
+                                    android.widget.Toast.makeText(context, "SkoLab server unreachable. Please try again later.", android.widget.Toast.LENGTH_LONG).show()
                                 }
                                 authorData = newData
                                 isLoading = false

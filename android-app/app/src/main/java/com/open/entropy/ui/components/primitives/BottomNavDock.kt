@@ -36,13 +36,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.view.HapticFeedbackConstants
-import com.open.entropy.ui.theme.ResQitDisruption
-import com.open.entropy.ui.theme.ResQitMotion
-import com.open.entropy.ui.theme.ResQitShapes
-import com.open.entropy.ui.theme.ResQitTextSecondary
+import com.open.entropy.ui.theme.SkoLabDisruption
+import com.open.entropy.ui.theme.SkoLabMotion
+import com.open.entropy.ui.theme.SkoLabShapes
+import com.open.entropy.ui.theme.SkoLabTextSecondary
 import com.open.entropy.ui.theme.GlassBorder
 import com.open.entropy.ui.theme.GlassSurface
-import com.open.entropy.ui.theme.LocalResQitSpacing
+import com.open.entropy.ui.theme.LocalSkoLabSpacing
 import com.open.entropy.ui.theme.BgPrimary
 import com.open.entropy.ui.theme.BorderLight
 
@@ -61,7 +61,7 @@ fun BottomNavDock(
     onItemClick: (DockItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val spacing = LocalResQitSpacing.current
+    val spacing = LocalSkoLabSpacing.current
     val view = LocalView.current
 
     Surface(
@@ -88,7 +88,7 @@ fun BottomNavDock(
                     val selected = currentRoute == item.route
                     val tint by animateColorAsState(
                         targetValue = if (selected) Color(0xFF00A884) else Color(0xFF8696A0),
-                        animationSpec = tween(ResQitMotion.fast),
+                        animationSpec = tween(SkoLabMotion.fast),
                         label = "navTint"
                     )
     

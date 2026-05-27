@@ -17,7 +17,7 @@ import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.open.entropy.BuildConfig
 import com.open.entropy.R
-import com.open.entropy.model.ResQitUser
+import com.open.entropy.model.SkoLabUser
 import com.open.entropy.model.UserConnection
 import kotlinx.coroutines.tasks.await
 
@@ -159,9 +159,9 @@ class AuthManager(private val context: Context) {
             }
 
             val userData = if (userDoc.exists()) {
-                userDoc.toObject(ResQitUser::class.java)
+                userDoc.toObject(SkoLabUser::class.java)
             } else {
-                val newUserData = ResQitUser(
+                val newUserData = SkoLabUser(
                     uid = user.uid,
                     name = user.displayName ?: "",
                     email = user.email ?: "",
@@ -177,7 +177,7 @@ class AuthManager(private val context: Context) {
         } catch (e: Exception) {
             // Firestore offline — not fatal. Cache basic user info from Firebase Auth instead
             Log.w("AuthManager", "Firestore unavailable during sign-in, using Auth data as fallback", e)
-            val fallback = ResQitUser(
+            val fallback = SkoLabUser(
                 uid = user.uid,
                 name = user.displayName ?: "",
                 email = user.email ?: "",
@@ -187,7 +187,7 @@ class AuthManager(private val context: Context) {
         }
     }
 
-    suspend fun getUserData(uid: String): ResQitUser? {
+    suspend fun getUserData(uid: String): SkoLabUser? {
         // Return cached data immediately if available — avoids Firestore offline error in UI
         val cached = userPrefs.cachedUser.firstOrNull()
         if (cached != null && cached.uid == uid) return cached
@@ -199,7 +199,7 @@ class AuthManager(private val context: Context) {
             } catch (cacheEx: Exception) {
                 db.collection("researchers").document(uid).get(Source.SERVER).await()
             }
-            val userData = doc.toObject(ResQitUser::class.java)
+            val userData = doc.toObject(SkoLabUser::class.java)
             if (userData != null) {
                 userPrefs.cacheUser(userData)
             }

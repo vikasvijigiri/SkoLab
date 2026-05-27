@@ -76,7 +76,7 @@ fun PaperDetailScreen(
                 title = { },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = ResQitTextPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = SkoLabTextPrimary)
                     }
                 },
                 actions = {
@@ -85,7 +85,7 @@ fun PaperDetailScreen(
                         scope.launch { libraryViewModel.toggleSaved(paperId) }
                     }) {
                         val bookmarkIcon = if (isSaved) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder
-                        val bookmarkTint = if (isSaved) AccentTeal else ResQitTextPrimary
+                        val bookmarkTint = if (isSaved) AccentTeal else SkoLabTextPrimary
                         Icon(
                             bookmarkIcon, null,
                             tint = bookmarkTint,
@@ -95,7 +95,7 @@ fun PaperDetailScreen(
                             }
                         )
                     }
-                    IconButton(onClick = { }) { Icon(Icons.Default.Share, null, tint = ResQitTextPrimary) }
+                    IconButton(onClick = { }) { Icon(Icons.Default.Share, null, tint = SkoLabTextPrimary) }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
@@ -112,7 +112,7 @@ fun PaperDetailScreen(
                 }
                 is PaperUiState.Error -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(text = state.message, color = ResQitWarning, style = Typography.bodyLarge)
+                        Text(text = state.message, color = SkoLabWarning, style = Typography.bodyLarge)
                     }
                 }
                 is PaperUiState.Success -> {
@@ -145,14 +145,14 @@ fun PaperDetailScreen(
                                             Icon(
                                                 imageVector = Icons.Default.AutoAwesome,
                                                 contentDescription = null,
-                                                tint = ResQitAiInsight,
+                                                tint = SkoLabAiInsight,
                                                 modifier = Modifier.size(20.dp)
                                             )
                                             Spacer(modifier = Modifier.width(10.dp))
                                             Text(
                                                 text = "ANALYZING FULL RESEARCH PAPER...",
                                                 style = Typography.labelMedium,
-                                                color = ResQitTextPrimary,
+                                                color = SkoLabTextPrimary,
                                                 fontWeight = FontWeight.Bold,
                                                 letterSpacing = 1.sp
                                             )
@@ -249,11 +249,11 @@ fun PaperDetailScreen(
 @Composable
 fun PaperHero(paper: com.open.entropy.model.Paper, onAuthorClick: (String) -> Unit) {
     Column {
-        ScientificBadge(text = paper.journal, color = ResQitDisruption)
+        ScientificBadge(text = paper.journal, color = SkoLabDisruption)
         Spacer(modifier = Modifier.height(16.dp))
         MarkdownText(
             markdown = paper.title,
-            color = ResQitTextPrimary,
+            color = SkoLabTextPrimary,
             fontSize = 26.sp,
             modifier = Modifier.fillMaxWidth()
         )
@@ -268,19 +268,19 @@ fun PaperHero(paper: com.open.entropy.model.Paper, onAuthorClick: (String) -> Un
                 Text(
                     text = name,
                     style = Typography.labelMedium,
-                    color = ResQitDisruption,
+                    color = SkoLabDisruption,
                     modifier = Modifier.clickable { onAuthorClick(authorCombined) }
                 )
             }
             if (paper.authors.size > 4) {
-                Text(text = "+${paper.authors.size - 4} more", style = Typography.labelSmall, color = ResQitTextMuted)
+                Text(text = "+${paper.authors.size - 4} more", style = Typography.labelSmall, color = SkoLabTextMuted)
             }
         }
         Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = "YEAR: ${paper.year} • CITATION VELOCITY: ${paper.citationVelocity.toInt()}",
             style = Typography.labelSmall,
-            color = ResQitTextSecondary,
+            color = SkoLabTextSecondary,
             fontFamily = MonoFontFamily,
             letterSpacing = 1.sp
         )
@@ -301,7 +301,7 @@ fun MetricCockpit(paper: com.open.entropy.model.Paper) {
         Text(
             text = "${paper.citationCount} citations • IF ${paper.journalImpactFactor}",
             style = Typography.labelSmall,
-            color = ResQitTextSecondary,
+            color = SkoLabTextSecondary,
             fontFamily = MonoFontFamily
         )
     }
@@ -320,14 +320,14 @@ fun ResearchIntelligenceHeader(intelligence: PaperIntelligence) {
             Icon(
                 imageVector = Icons.Default.AutoAwesome,
                 contentDescription = null,
-                tint = ResQitAiInsight,
+                tint = SkoLabAiInsight,
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(10.dp))
             Text(
                 text = "RESEARCH INTELLIGENCE REPORT",
                 style = Typography.labelMedium,
-                color = ResQitTextPrimary,
+                color = SkoLabTextPrimary,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.sp
             )
@@ -371,8 +371,8 @@ fun TldrHeroCard(data: PaperIntelligence) {
     }
 
     ScientificCard(
-        glowColor = ResQitAiInsight.copy(alpha = 0.12f),
-        accentColor = ResQitAiInsight,
+        glowColor = SkoLabAiInsight.copy(alpha = 0.12f),
+        accentColor = SkoLabAiInsight,
         borderWidth = 1.dp
     ) {
         Row(
@@ -386,7 +386,7 @@ fun TldrHeroCard(data: PaperIntelligence) {
                 Text(
                     text = "EXECUTIVE TL;DR",
                     style = Typography.labelSmall,
-                    color = ResQitAiInsight,
+                    color = SkoLabAiInsight,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp
                 )
@@ -416,7 +416,7 @@ fun TldrHeroCard(data: PaperIntelligence) {
         
         MarkdownText(
             markdown = "*${data.tldr}*",
-            color = ResQitTextPrimary,
+            color = SkoLabTextPrimary,
             fontSize = 16.sp,
             modifier = Modifier.fillMaxWidth()
         )
@@ -429,7 +429,7 @@ fun KeyFindingsBlock(keyFindings: List<String>) {
         Text(
             text = "🔬 KEY FINDINGS",
             style = Typography.labelSmall,
-            color = ResQitTextSecondary,
+            color = SkoLabTextSecondary,
             letterSpacing = 2.sp,
             fontWeight = FontWeight.Bold
         )
@@ -452,7 +452,7 @@ fun TechniquesBlock(techniques: List<String>) {
         Text(
             text = "⚙️ TECHNIQUES & METHODS",
             style = Typography.labelSmall,
-            color = ResQitTextSecondary,
+            color = SkoLabTextSecondary,
             letterSpacing = 2.sp,
             fontWeight = FontWeight.Bold
         )
@@ -476,7 +476,7 @@ fun ToolsAndSoftwareBlock(tools: List<String>) {
         Text(
             text = "🧰 TOOLS, SOFTWARE & DATASETS",
             style = Typography.labelSmall,
-            color = ResQitTextSecondary,
+            color = SkoLabTextSecondary,
             letterSpacing = 2.sp,
             fontWeight = FontWeight.Bold
         )
@@ -500,7 +500,7 @@ fun CoreConceptsBlock(concepts: List<String>) {
         Text(
             text = "💡 CORE CONCEPTS",
             style = Typography.labelSmall,
-            color = ResQitTextSecondary,
+            color = SkoLabTextSecondary,
             letterSpacing = 2.sp,
             fontWeight = FontWeight.Bold
         )
@@ -523,7 +523,7 @@ fun IntelligenceFormulasBlock(formulas: List<String>) {
         Text(
             text = "∑ MATHEMATICAL MODEL",
             style = Typography.labelSmall,
-            color = ResQitTextSecondary,
+            color = SkoLabTextSecondary,
             letterSpacing = 2.sp,
             fontWeight = FontWeight.Bold
         )
@@ -541,7 +541,7 @@ fun IntelligenceFormulasBlock(formulas: List<String>) {
                 ) {
                     MarkdownText(
                         markdown = formula,
-                        color = ResQitPrimary,
+                        color = SkoLabPrimary,
                         fontSize = 13.sp
                     )
                 }
@@ -556,14 +556,14 @@ fun LimitationsBlock(limitations: List<String>) {
         Text(
             text = "⚠️ HONEST LIMITATIONS",
             style = Typography.labelSmall,
-            color = ResQitTextSecondary,
+            color = SkoLabTextSecondary,
             letterSpacing = 2.sp,
             fontWeight = FontWeight.Bold
         )
         Spacer(modifier = Modifier.height(12.dp))
         ScientificCard(
-            borderColor = ResQitWarning.copy(alpha = 0.2f),
-            glowColor = ResQitWarning.copy(alpha = 0.03f)
+            borderColor = SkoLabWarning.copy(alpha = 0.2f),
+            glowColor = SkoLabWarning.copy(alpha = 0.03f)
         ) {
             limitations.forEachIndexed { index, limitation ->
                 LimitationsBullet(text = limitation)
@@ -592,7 +592,7 @@ fun LimitationsBullet(
         )
         MarkdownText(
             markdown = text,
-            color = ResQitTextPrimary,
+            color = SkoLabTextPrimary,
             fontSize = 14.sp,
             modifier = Modifier.weight(1f)
         )
@@ -605,7 +605,7 @@ fun RealWorldImpactBlock(text: String) {
         Text(
             text = "🌍 REAL-WORLD IMPACT",
             style = Typography.labelSmall,
-            color = ResQitTextSecondary,
+            color = SkoLabTextSecondary,
             letterSpacing = 2.sp,
             fontWeight = FontWeight.Bold
         )
@@ -616,7 +616,7 @@ fun RealWorldImpactBlock(text: String) {
         ) {
             MarkdownText(
                 markdown = text,
-                color = ResQitTextPrimary,
+                color = SkoLabTextPrimary,
                 fontSize = 14.sp,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -630,7 +630,7 @@ fun FutureDirectionsBlock(futureDirections: List<String>) {
         Text(
             text = "🚀 FUTURE DIRECTIONS",
             style = Typography.labelSmall,
-            color = ResQitTextSecondary,
+            color = SkoLabTextSecondary,
             letterSpacing = 2.sp,
             fontWeight = FontWeight.Bold
         )
@@ -663,7 +663,7 @@ fun FutureBullet(
         )
         MarkdownText(
             markdown = text,
-            color = ResQitTextPrimary,
+            color = SkoLabTextPrimary,
             fontSize = 14.sp,
             modifier = Modifier.weight(1f)
         )
@@ -709,7 +709,7 @@ fun IntelligenceShimmerBlock() {
         }
 
         // TL;DR Hero Card Shimmer
-        ScientificCard(glowColor = ResQitAiInsight.copy(alpha = 0.05f)) {
+        ScientificCard(glowColor = SkoLabAiInsight.copy(alpha = 0.05f)) {
             SkeletonShimmer(Modifier.size(80.dp, 12.dp))
             Spacer(modifier = Modifier.height(12.dp))
             SkeletonShimmer(Modifier.fillMaxWidth().height(18.dp))
@@ -743,8 +743,8 @@ fun IntelligenceShimmerBlock() {
 @Composable
 fun IntelligenceUnavailableBlock(onRetry: () -> Unit, reason: String) {
     ScientificCard(
-        borderColor = ResQitWarning.copy(alpha = 0.3f),
-        glowColor = ResQitWarning.copy(alpha = 0.05f)
+        borderColor = SkoLabWarning.copy(alpha = 0.3f),
+        glowColor = SkoLabWarning.copy(alpha = 0.05f)
     ) {
         Column(
             modifier = Modifier
@@ -760,21 +760,21 @@ fun IntelligenceUnavailableBlock(onRetry: () -> Unit, reason: String) {
             Text(
                 text = "Deep AI Analysis Unavailable",
                 style = Typography.titleMedium,
-                color = ResQitTextPrimary,
+                color = SkoLabTextPrimary,
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = if (reason.contains("not reachable")) "Check your network or restart the server." else "This work cannot be fetched in full text.",
                 style = Typography.bodyMedium,
-                color = ResQitTextSecondary,
+                color = SkoLabTextSecondary,
                 modifier = Modifier.padding(horizontal = 16.dp),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
             Spacer(modifier = Modifier.height(16.dp))
             Button(
                 onClick = onRetry,
-                colors = ButtonDefaults.buttonColors(containerColor = ResQitPrimary)
+                colors = ButtonDefaults.buttonColors(containerColor = SkoLabPrimary)
             ) {
                 Text("Retry Analysis", color = Color.White)
             }
@@ -788,7 +788,7 @@ fun CitationNetworkGalaxy() {
         Text(
             text = "CITATION NETWORK GALAXY",
             style = Typography.labelSmall,
-            color = ResQitTextSecondary,
+            color = SkoLabTextSecondary,
             letterSpacing = 2.sp
         )
         Spacer(modifier = Modifier.height(20.dp))
@@ -808,13 +808,13 @@ fun CitationNetworkGalaxy() {
                 for (i in 1..nodeCount) {
                     val x = i * spacing
                     val y = centerY + (Math.sin(i.toDouble() * 0.7 + i.toDouble()) * 40).toFloat()
-                    val color = if (i % 4 == 0) ResQitDisruption else ResQitTextMuted
+                    val color = if (i % 4 == 0) SkoLabDisruption else SkoLabTextMuted
                     
                     if (i < nodeCount) {
                         val nextX = (i + 1) * spacing
                         val nextY = centerY + (Math.sin((i + 1).toDouble() * 0.7 + (i + 1).toDouble()) * 40).toFloat()
                         drawLine(
-                            color = ResQitDivider.copy(alpha = 0.2f),
+                            color = SkoLabDivider.copy(alpha = 0.2f),
                             start = Offset(x, y),
                             end = Offset(nextX, nextY),
                             strokeWidth = 1f

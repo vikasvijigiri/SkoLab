@@ -1,4 +1,4 @@
-# Builds ResQit Android app from an ASCII-only copy (fixes Gradle when project path contains π).
+# Builds Skolab Android app from an ASCII-only copy (fixes Gradle when project path contains π).
 # Usage: powershell -ExecutionPolicy Bypass -File scripts/build-and-install.ps1
 # Optional: -InstallOnly if build folder already synced
 
@@ -15,10 +15,10 @@ function Find-ProjectRoot {
     }
     $docs = Join-Path $env:USERPROFILE "Documents"
     $match = Get-ChildItem $docs -Directory -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -eq "ResQit" -or $_.Name -like "Entro*" -or $_.Name -eq "QyRus" } |
+        Where-Object { $_.Name -eq "Skolab" -or $_.Name -like "Entro*" -or $_.Name -eq "SkoLab" } |
         Select-Object -First 1
     if (-not $match) {
-        throw "Could not find ResQit, QyRus, or Entro* project folder under $docs"
+        throw "Could not find Skolab, SkoLab, or Entro* project folder under $docs"
     }
     return $match.FullName
 }
@@ -95,7 +95,7 @@ function Invoke-DebugBuild {
 
 $projectRoot = Find-ProjectRoot
 $androidSrc = Join-Path $projectRoot "android-app"
-$buildRoot = Join-Path $env:LOCALAPPDATA "ResQit-build"
+$buildRoot = Join-Path $env:LOCALAPPDATA "Skolab-build"
 $androidDst = Join-Path $buildRoot "android-app"
 
 if (-not $InstallOnly) {
@@ -166,9 +166,9 @@ if (-not $hasDevice) {
         if (-not $SkipLaunch) {
             Write-Host "Setting up USB port forwarding for backend access..."
             adb reverse tcp:8000 tcp:8000
-            Write-Host "Launching ResQit..."
+            Write-Host "Launching SkoLab..."
             adb shell am start -n com.company.ResQit/com.open.entropy.MainActivity
         }
-        Write-Host "Done. Launcher name should show as ResQit after install." -ForegroundColor Green
+        Write-Host "Done. Launcher name should show as SkoLab after install." -ForegroundColor Green
     }
 }

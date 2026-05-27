@@ -6,7 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 
-private val ResQitColorScheme = lightColorScheme(
+private val SkoLabColorScheme = lightColorScheme(
     primary              = AccentTeal,
     onPrimary            = TextOnAccent,
     primaryContainer     = AccentTealLight,
@@ -39,13 +39,13 @@ private val ResQitColorScheme = lightColorScheme(
 )
 
 @Composable
-fun ResQitTheme(content: @Composable () -> Unit) {
+fun SkoLabTheme(content: @Composable () -> Unit) {
     CompositionLocalProvider(
-        LocalResQitSpacing provides ResQitSpacing(),
-        LocalResQitMotion provides ResQitMotion,
+        LocalSkoLabSpacing provides SkoLabSpacing(),
+        LocalSkoLabMotion provides SkoLabMotion,
     ) {
         MaterialTheme(
-            colorScheme = ResQitColorScheme,
+            colorScheme = SkoLabColorScheme,
             typography  = Typography,
             content     = content
         )

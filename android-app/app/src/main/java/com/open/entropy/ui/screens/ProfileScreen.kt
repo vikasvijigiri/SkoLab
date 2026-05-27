@@ -48,7 +48,7 @@ fun ProfileScreen(
     val scope = rememberCoroutineScope()
     val authManager = remember { AuthManager(context) }
     var currentUser by remember { mutableStateOf(authManager.currentUser) }
-    var resQitUser by remember { mutableStateOf<com.open.entropy.model.ResQitUser?>(null) }
+    var resQitUser by remember { mutableStateOf<com.open.entropy.model.SkoLabUser?>(null) }
     val credentialManager = remember { CredentialManager.create(context) }
 
     LaunchedEffect(currentUser) {
@@ -180,7 +180,7 @@ fun LoginContent(onSignInClick: () -> Unit, onBack: () -> Unit) {
 @Composable
 fun ProfileContent(
     firebaseUser: FirebaseUser,
-    resQitUser: com.open.entropy.model.ResQitUser?,
+    resQitUser: com.open.entropy.model.SkoLabUser?,
     onNavigateToProWorkspace: () -> Unit,
     onSignOut: () -> Unit,
     onBack: () -> Unit
@@ -312,7 +312,7 @@ fun ProfileContent(
                     Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "ResQit Pro & Labs Workspace",
+                                text = "SkoLab Pro & Labs Workspace",
                                 color = TextPrimary,
                                 fontWeight = FontWeight.Bold
                             )
@@ -359,7 +359,7 @@ fun ProfileContent(
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            ResQitScoreCard(
+            SkoLabScoreCard(
                 mastery = mastery,
                 complexity = complexity,
                 savedCount = savedCount,
@@ -397,7 +397,7 @@ fun ProfileContent(
 }
 
 @Composable
-fun ResQitScoreRing(progress: Float, score: Int) {
+fun SkoLabScoreRing(progress: Float, score: Int) {
     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(160.dp)) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val strokeWidth = 14.dp.toPx()
@@ -429,7 +429,7 @@ fun ResQitScoreRing(progress: Float, score: Int) {
                 fontFamily = DisplayFontFamily
             )
             Text(
-                text = "ResQit Score",
+                text = "SkoLab Score",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextMuted,
@@ -440,7 +440,7 @@ fun ResQitScoreRing(progress: Float, score: Int) {
 }
 
 @Composable
-fun ResQitScoreCard(
+fun SkoLabScoreCard(
     mastery: Float,
     complexity: Float,
     savedCount: Int,
@@ -458,7 +458,7 @@ fun ResQitScoreCard(
             modifier = Modifier.padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            ResQitScoreRing(progress = animatedProgress, score = (animatedProgress * 1000).toInt())
+            SkoLabScoreRing(progress = animatedProgress, score = (animatedProgress * 1000).toInt())
             
             Spacer(modifier = Modifier.height(16.dp))
             
@@ -522,15 +522,15 @@ fun ShareProfileButton(displayName: String, score: Int, mastery: Float, complexi
     Button(
         onClick = {
             val shareText = """
-                ResQit Scholar Profile: $displayName
+                SkoLab Scholar Profile: $displayName
                 -----------------------------------
-                ResQit Score: $score/1000 (Top 12%)
+                SkoLab Score: $score/1000 (Top 12%)
                 Field Mastery: ${mastery.toInt()}%
                 Complexity Index: ${complexity.toInt()}%
                 h-index (estimated): $hIndex
                 Total Papers Saved: $savedCount
                 
-                Explore my research on ResQit app!
+                Explore my research on SkoLab app!
             """.trimIndent()
             
             val sendIntent = Intent().apply {

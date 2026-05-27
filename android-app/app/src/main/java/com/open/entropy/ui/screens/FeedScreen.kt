@@ -680,18 +680,18 @@ fun TopBar(
             // Brand Logo
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "Res",
+                    text = "Sko",
                     fontFamily = SyneFontFamily,
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 22.sp,
-                    color = EntropiColors.Blue1
+                    color = EntropiColors.Purple2
                 )
                 Text(
-                    text = "Qit",
+                    text = "Lab",
                     fontFamily = SyneFontFamily,
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 22.sp,
-                    color = EntropiColors.Gold1
+                    color = EntropiColors.Cyan
                 )
             }
 
@@ -1546,6 +1546,7 @@ fun ConnectionCard(
     isConnectedExternal: Boolean,
     onConnect: () -> Unit,
     onChatClick: () -> Unit = {},
+    onInvite: () -> Unit = {},
     onAuthorClick: () -> Unit
 ) {
 
@@ -1564,21 +1565,71 @@ fun ConnectionCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
-                // Avatar Left
+                // ── SkoLab Status Avatar ──────────────────────────────────
                 Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(EntropiColors.Card2),
+                    modifier = Modifier.size(40.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = connection.author.name.take(1).uppercase(),
-                        color = EntropiColors.Text2,
-                        fontFamily = SyneFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
+                    if (connection.isOnSkoLab) {
+                        // Verified SkoLab member: green ring + logo mark
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.radialGradient(
+                                        colors = listOf(
+                                            Color(0xFF00E676).copy(alpha = 0.18f),
+                                            Color(0xFF1DE9B6).copy(alpha = 0.10f)
+                                        )
+                                    )
+                                )
+                                .border(1.5.dp, Color(0xFF00E676).copy(alpha = 0.6f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Sk",
+                                color = Color(0xFF00E676),
+                                fontFamily = SyneFontFamily,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 12.sp
+                            )
+                        }
+                        // Green verified dot bottom-right
+                        Box(
+                            modifier = Modifier
+                                .size(11.dp)
+                                .align(Alignment.BottomEnd)
+                                .clip(CircleShape)
+                                .background(Color(0xFF00E676))
+                                .border(1.5.dp, EntropiColors.Card, CircleShape)
+                        )
+                    } else {
+                        // Not on SkoLab: grey dashed circle + person icon
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(EntropiColors.Card2),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PersonOutline,
+                                contentDescription = null,
+                                tint = EntropiColors.Text3,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        // Grey dot bottom-right
+                        Box(
+                            modifier = Modifier
+                                .size(11.dp)
+                                .align(Alignment.BottomEnd)
+                                .clip(CircleShape)
+                                .background(EntropiColors.Text3)
+                                .border(1.5.dp, EntropiColors.Card, CircleShape)
+                        )
+                    }
                 }
 
                 // Depth Badge
@@ -1694,38 +1745,151 @@ fun ConnectionCard(
                 }
             }
 
-            // Blue-Purple Gradient Connect Button
-            Surface(
-                onClick = {
-                    if (!isConnectedExternal) {
-                        onConnect()
-                    }
-                    onChatClick()
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(32.dp),
-                shape = RoundedCornerShape(8.dp),
-                color = if (isConnectedExternal) EntropiColors.Card2 else Color.Transparent,
-                border = BorderStroke(1.dp, if (isConnectedExternal) EntropiColors.Border else Color.Transparent)
+            // ── SkoLab label under relevance match ───────────────────────────
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
             ) {
-                Box(
-                    modifier = if (isConnectedExternal) {
-                        Modifier.fillMaxSize()
-                    } else {
-                        Modifier
-                            .fillMaxSize()
-                            .background(Color(0xFF2E7D32)) // Dark Green for Connect
-                    },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (isConnectedExternal) "Message" else "+ Connect",
-                        fontFamily = SpaceGroteskFontFamily,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isConnectedExternal) EntropiColors.Gold2 else Color.White
+                if (connection.isOnSkoLab) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF00E676))
                     )
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        text = "On SkoLab",
+                        color = Color(0xFF00E676),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = SpaceGroteskFontFamily
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(EntropiColors.Text3)
+                    )
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        text = "Not on SkoLab",
+                        color = EntropiColors.Text3,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = SpaceGroteskFontFamily
+                    )
+                }
+            }
+
+            // ── Action Buttons ────────────────────────────────────────────────
+            if (connection.isOnSkoLab) {
+                if (isConnectedExternal) {
+                    // Already connected → show Message button
+                    Surface(
+                        onClick = onChatClick,
+                        modifier = Modifier.fillMaxWidth().height(32.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        color = EntropiColors.Card2,
+                        border = BorderStroke(1.dp, EntropiColors.Border)
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "💬 Message",
+                                fontFamily = SpaceGroteskFontFamily,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = EntropiColors.Gold2
+                            )
+                        }
+                    }
+                } else {
+                    // On SkoLab, not yet connected → Connect + Collab
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Connect
+                        Surface(
+                            onClick = {
+                                onConnect()
+                            },
+                            modifier = Modifier.weight(1f).height(32.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color.Transparent
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            listOf(Color(0xFF1565C0), Color(0xFF6A1B9A))
+                                        ),
+                                        RoundedCornerShape(8.dp)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "+ Connect",
+                                    fontFamily = SpaceGroteskFontFamily,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                        // Collab
+                        Surface(
+                            onClick = onChatClick,
+                            modifier = Modifier.weight(1f).height(32.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF1B5E20).copy(alpha = 0.9f)
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "🤝 Collab",
+                                    fontFamily = SpaceGroteskFontFamily,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                // NOT on SkoLab → Invite button
+                Surface(
+                    onClick = onInvite,
+                    modifier = Modifier.fillMaxWidth().height(32.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.Transparent,
+                    border = BorderStroke(1.dp, EntropiColors.Gold1.copy(alpha = 0.6f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(
+                                        EntropiColors.Gold1.copy(alpha = 0.12f),
+                                        EntropiColors.Gold2.copy(alpha = 0.08f)
+                                    )
+                                ),
+                                RoundedCornerShape(8.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "📨 Invite to SkoLab",
+                            fontFamily = SpaceGroteskFontFamily,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = EntropiColors.Gold1
+                        )
+                    }
                 }
             }
         }

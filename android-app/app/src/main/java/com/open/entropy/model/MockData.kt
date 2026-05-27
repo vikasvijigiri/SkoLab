@@ -269,7 +269,7 @@ object MockData {
         )
     )
 
-    val fieldResQites = listOf(
+    val fieldSkoLabes = listOf(
         FieldEntropy(
             field = "Quantum Computing",
             subFields = listOf("Error Correction", "Topological Qubits", "Quantum Algorithms"),

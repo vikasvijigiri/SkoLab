@@ -59,7 +59,7 @@ fun HomeScreen(
 
     Scaffold(
         containerColor = BgPrimary,
-        topBar = { ResQitTopBar("Vikas") }
+        topBar = { SkoLabTopBar("Vikas") }
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -483,7 +483,7 @@ fun HotPaperCard(
 // ─────────────────────────────────────────────────────────────────
 
 @Composable
-fun ResQitTopBar(userName: String) {
+fun SkoLabTopBar(userName: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -498,7 +498,7 @@ fun ResQitTopBar(userName: String) {
             BrandMark(style = Typography.titleLarge)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = {}) {
-                    Icon(Icons.Default.Notifications, null, tint = ResQitTextSecondary)
+                    Icon(Icons.Default.Notifications, null, tint = SkoLabTextSecondary)
                 }
                 Box(
                     modifier = Modifier.size(32.dp).clip(CircleShape).background(AccentTealLight),
@@ -511,7 +511,7 @@ fun ResQitTopBar(userName: String) {
         Text(
             text = "Good ${greetingPart()}, $userName",
             style = Typography.bodySmall,
-            color = ResQitTextSecondary,
+            color = SkoLabTextSecondary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

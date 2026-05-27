@@ -10,7 +10,7 @@ import com.open.entropy.ui.components.CosmicBackground
 import com.open.entropy.ui.theme.ObsidianBlack
 
 @Composable
-fun ResQitScaffold(
+fun SkoLabScaffold(
     modifier: Modifier = Modifier,
     particleCount: Int = 40,
     content: @Composable (PaddingValues) -> Unit

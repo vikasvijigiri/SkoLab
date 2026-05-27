@@ -41,7 +41,7 @@ import kotlin.random.Random
 fun OnboardingScreen(onFinish: () -> Unit) {
     val pagerState = rememberPagerState(pageCount = { 3 })
 
-    Box(modifier = Modifier.fillMaxSize().background(ResQitBg).systemBarsPadding()) {
+    Box(modifier = Modifier.fillMaxSize().background(SkoLabBg).systemBarsPadding()) {
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize()
@@ -61,7 +61,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                     .align(Alignment.TopEnd)
                     .padding(8.dp) // Adjusted padding
             ) {
-                Text("Skip", color = ResQitTextSecondary, style = Typography.labelMedium)
+                Text("Skip", color = SkoLabTextSecondary, style = Typography.labelMedium)
             }
         }
 
@@ -78,7 +78,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                     modifier = Modifier
                         .size(if (isSelected) 10.dp else 8.dp)
                         .clip(CircleShape)
-                        .background(if (isSelected) ResQitPrimary else ResQitDivider)
+                        .background(if (isSelected) SkoLabPrimary else SkoLabDivider)
                 )
             }
         }
@@ -114,7 +114,7 @@ fun ProblemPage() {
             modifier = Modifier.fillMaxSize().background(
                 Brush.radialGradient(
                     0f to Color(0xFF1A1030),
-                    1f to ResQitBg,
+                    1f to SkoLabBg,
                     center = Offset.Zero
                 )
             )
@@ -139,13 +139,13 @@ fun ProblemPage() {
             Text(
                 text = String.format(Locale.US, "%,d", animatedCount),
                 style = Typography.displayLarge,
-                color = ResQitTextPrimary,
+                color = SkoLabTextPrimary,
                 fontSize = 48.sp
             )
             Text(
                 text = "papers published every year",
                 style = Typography.titleLarge,
-                color = ResQitTextSecondary
+                color = SkoLabTextSecondary
             )
             Spacer(modifier = Modifier.height(24.dp))
             Text(
@@ -153,7 +153,7 @@ fun ProblemPage() {
                     .getString(com.open.entropy.R.string.brand_onboarding_signal),
                 style = Typography.bodyLarge,
                 textAlign = TextAlign.Center,
-                color = ResQitTextPrimary
+                color = SkoLabTextPrimary
             )
         }
     }
@@ -172,7 +172,7 @@ fun SolutionPage() {
         ScoreArcMeter(
             score = 0.82f,
             label = "IMPACT SCORE",
-            color = ResQitPrimary,
+            color = SkoLabPrimary,
             modifier = Modifier.size(200.dp)
         )
         
@@ -181,7 +181,7 @@ fun SolutionPage() {
         Text(
             text = "Frontier Intelligence",
             style = Typography.displaySmall,
-            color = ResQitTextPrimary
+            color = SkoLabTextPrimary
         )
         
         Spacer(modifier = Modifier.height(32.dp))
@@ -209,18 +209,18 @@ fun FeatureRow(icon: ImageVector, title: String, body: String, delayMillis: Int)
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                color = ResQitSurfaceElevated,
+                color = SkoLabSurfaceElevated,
                 shape = CircleShape,
                 modifier = Modifier.size(48.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, null, tint = ResQitSecondary, modifier = Modifier.size(24.dp))
+                    Icon(icon, null, tint = SkoLabSecondary, modifier = Modifier.size(24.dp))
                 }
             }
             Spacer(modifier = Modifier.width(16.dp))
             Column {
-                Text(text = title, style = Typography.labelLarge, color = ResQitTextPrimary)
-                Text(text = body, style = Typography.labelSmall, color = ResQitTextSecondary)
+                Text(text = title, style = Typography.labelLarge, color = SkoLabTextPrimary)
+                Text(text = body, style = Typography.labelSmall, color = SkoLabTextSecondary)
             }
         }
     }
@@ -248,7 +248,7 @@ fun ValuePage(onFinish: () -> Unit) {
         Text(
             text = "See through the fog.",
             style = Typography.displayMedium,
-            color = ResQitTextPrimary,
+            color = SkoLabTextPrimary,
             textAlign = TextAlign.Center
         )
         
@@ -257,7 +257,7 @@ fun ValuePage(onFinish: () -> Unit) {
         Button(
             onClick = onFinish,
             modifier = Modifier.fillMaxWidth().height(56.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = ResQitPrimary),
+            colors = ButtonDefaults.buttonColors(containerColor = SkoLabPrimary),
             shape = RoundedCornerShape(12.dp)
         ) {
             Text("Get Started", style = Typography.titleLarge, color = Color.White)

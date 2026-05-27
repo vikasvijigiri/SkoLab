@@ -78,7 +78,12 @@ data class Connection(
     val sharedAreas: List<String> = emptyList(),
     val papersCollaborated: Int = 0,
     val totalPublications: Int = 0,
-    val hIndex: Int = 0
+    val hIndex: Int = 0,
+    /** True if this researcher has a verified SkoLab account.
+     *  Heuristic: authors sourced from OpenAlex with a non-blank real ID are treated
+     *  as SkoLab members. Mock/local authors are treated as "Not on SkoLab".
+     *  Replace with a real DB lookup once a user registry is available. */
+    val isOnSkoLab: Boolean = author.id.startsWith("https://openalex.org/")
 )
 
 data class Institution(

@@ -26,7 +26,7 @@ fun FrontierScoreOrb(
     ScoreArcMeter(
         score = score,
         label = "FRONTIER",
-        color = ResQitAiInsight,
+        color = SkoLabAiInsight,
         modifier = modifier
     )
 }
@@ -39,20 +39,20 @@ fun IntelligenceBriefCard(
 ) {
     ScientificCard(
         modifier = modifier,
-        glowColor = ResQitAiInsight.copy(alpha = 0.15f)
+        glowColor = SkoLabAiInsight.copy(alpha = 0.15f)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 imageVector = Icons.Default.AutoAwesome,
                 contentDescription = null,
-                tint = ResQitAiInsight,
+                tint = SkoLabAiInsight,
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = "AI INTELLIGENCE BRIEF",
                 style = Typography.labelSmall,
-                color = ResQitAiInsight,
+                color = SkoLabAiInsight,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.sp
             )
@@ -69,7 +69,7 @@ fun IntelligenceBriefCard(
             Text(
                 text = "TOP KEYWORDS",
                 style = Typography.labelSmall,
-                color = ResQitTextSecondary,
+                color = SkoLabTextSecondary,
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -78,7 +78,7 @@ fun IntelligenceBriefCard(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 summary.top_skills.forEach { skill ->
-                    ScientificBadge(text = skill, color = ResQitPrimary)
+                    ScientificBadge(text = skill, color = SkoLabPrimary)
                 }
             }
         }
@@ -101,7 +101,7 @@ fun AnalyticBox(
         Text(
             text = label.uppercase(),
             style = Typography.labelSmall,
-            color = ResQitTextSecondary,
+            color = SkoLabTextSecondary,
             fontSize = 9.sp,
             fontWeight = FontWeight.Black,
             letterSpacing = 1.sp

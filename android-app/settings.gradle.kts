@@ -16,6 +16,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ResQit"
+rootProject.name = "SkoLab"
 include(":app")
 project(":app").projectDir = file("app")

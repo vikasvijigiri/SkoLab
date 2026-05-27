@@ -10,7 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import com.open.entropy.ui.theme.ResQitMotion
+import com.open.entropy.ui.theme.SkoLabMotion
 
 @Composable
 fun StaggeredVisibility(
@@ -20,13 +20,13 @@ fun StaggeredVisibility(
 ) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(index * ResQitMotion.listStaggerMs)
+        kotlinx.coroutines.delay(index * SkoLabMotion.listStaggerMs)
         visible = true
     }
     AnimatedVisibility(
         visible = visible,
         modifier = modifier,
-        enter = fadeIn(tween(ResQitMotion.normal)) + slideInVertically(tween(ResQitMotion.normal)) { it / 4 }
+        enter = fadeIn(tween(SkoLabMotion.normal)) + slideInVertically(tween(SkoLabMotion.normal)) { it / 4 }
     ) {
         content()
     }

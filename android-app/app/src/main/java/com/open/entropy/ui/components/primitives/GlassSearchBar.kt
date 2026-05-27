@@ -49,9 +49,9 @@ fun GlassSearchBar(
         modifier = modifier
             .fillMaxWidth()
             .height(52.dp)
-            .border(width = if (isFocused || value.isNotEmpty()) 1.5.dp else 1.dp, color = borderColor, shape = ResQitShapes.md),
+            .border(width = if (isFocused || value.isNotEmpty()) 1.5.dp else 1.dp, color = borderColor, shape = SkoLabShapes.md),
         color = containerColor,
-        shape = ResQitShapes.md,
+        shape = SkoLabShapes.md,
         shadowElevation = if (isFocused) 4.dp else 1.dp,
         tonalElevation = 0.dp
     ) {

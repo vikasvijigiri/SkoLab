@@ -4,7 +4,7 @@ import android.content.Context
 import com.open.entropy.R
 
 /**
- * Single entry point for ResQit user-facing brand strings.
+ * Single entry point for SkoLab user-facing brand strings.
  * Prefer these over hardcoded names in Compose screens.
  */
 object Brand {

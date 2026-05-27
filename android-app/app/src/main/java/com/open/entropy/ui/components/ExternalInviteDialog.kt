@@ -47,7 +47,7 @@ fun ExternalInviteDialog(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Not on ResQit Yet",
+                    text = "Not on SkoLab Yet",
                     color = TextPrimary,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold

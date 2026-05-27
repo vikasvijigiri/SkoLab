@@ -13,15 +13,15 @@ object InviteIntentManager {
      * @param researcherEmail Optional. The target email if known, otherwise blank for the user to fill in.
      */
     fun sendCollabEmailInvite(context: Context, researcherName: String, researcherEmail: String = "") {
-        val subject = "Collaboration Inquiry via ResQit"
+        val subject = "Collaboration Inquiry via SkoLab"
         val body = """
             Dear Dr. $researcherName,
 
             I have been reading your recent research and am very interested in exploring potential synergies. 
-            I'm currently working on a related project on ResQit, a platform for academic collaboration and research intelligence.
+            I'm currently working on a related project on SkoLab, a platform for academic collaboration and research intelligence.
 
             I would love for you to join my workspace so we can discuss potential collaboration. 
-            You can access the platform and connect with my profile here: https://resqit.app/join
+            You can access the platform and connect with my profile here: https://skolab.app/join
 
             Looking forward to hearing from you.
 
