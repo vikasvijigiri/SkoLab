@@ -1,32 +1,125 @@
 import os
 import json
 import httpx
+import re
+import urllib.parse
+import xml.etree.ElementTree as ET
 from typing import Dict, Any, List
 
 # --- Real Connectors ---
 
-async def search_arxiv(query: str, max_results: int = 5) -> str:
-    """Real connector to search arXiv."""
-    url = f"http://export.arxiv.org/api/query?search_query=all:{query}&start=0&max_results={max_results}"
+async def search_arxiv_publications(query: str, max_results: int = 5) -> str:
+    """Searches the official arXiv API using HTTPS and safe URL-encoding, returning parsed publications."""
+    safe_query = urllib.parse.quote(query)
+    url = f"https://export.arxiv.org/api/query?search_query=all:{safe_query}&start=0&max_results={max_results}"
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
             res = await client.get(url)
             if res.status_code == 200:
-                # Basic parsing (arXiv returns XML, we will just return a summary of it or mock the parsing)
-                # For a robust connector, we'd use xml.etree.ElementTree. Here we do a fast substring extract.
-                text = res.text
-                entries = text.split("<entry>")
+                root = ET.fromstring(res.content)
+                ns = {'atom': 'http://www.w3.org/2005/Atom'}
                 results = []
-                for entry in entries[1:]:
-                    title = entry.split("<title>")[1].split("</title>")[0].strip().replace("\n", "")
-                    summary = entry.split("<summary>")[1].split("</summary>")[0].strip().replace("\n", " ")
-                    results.append(f"Title: {title}\nSummary: {summary[:200]}...")
+                for entry in root.findall('atom:entry', ns):
+                    title = entry.find('atom:title', ns)
+                    summary = entry.find('atom:summary', ns)
+                    published = entry.find('atom:published', ns)
+                    link = entry.find("atom:link[@rel='alternate']", ns)
+                    
+                    title_text = title.text.strip().replace('\n', ' ') if title is not None else "Untitled"
+                    summary_text = summary.text.strip().replace('\n', ' ') if summary is not None else ""
+                    date_text = published.text.split('-')[0] if published is not None else "Unknown"
+                    link_href = link.attrib.get('href', '') if link is not None else ""
+                    
+                    results.append(f"Title: {title_text}\nYear: {date_text}\nURL: {link_href}\nAbstract: {summary_text[:300]}...")
+                
                 if results:
-                    return "\n\n".join(results)
-                return "No arXiv results found."
+                    return f"[arXiv PUBLICATIONS FOUND]\n\n" + "\n\n---\n\n".join(results)
+                return "No publications found on arXiv matching this query."
+            return f"arXiv API error. Status code: {res.status_code}"
     except Exception as e:
         return f"Failed to connect to arXiv: {e}"
-    return "No results."
+
+async def search_google_scholar_profile(query: str) -> str:
+    """Searches for a researcher's Google Scholar citation page and returns their profile details and publications list."""
+    from app.services.scraping_service import ScrapingService
+    scraper = ScrapingService()
+    try:
+        results = await scraper.search_web(f"{query} Google Scholar", max_results=3)
+        profile_url = None
+        for r in results:
+            url = r.get("url", "")
+            if "citations?user=" in url:
+                profile_url = url
+                break
+        
+        if not profile_url:
+            res_str = []
+            for r in results:
+                res_str.append(f"Title: {r['title']}\nURL: {r['url']}\nSnippet: {r['snippet']}")
+            return "No Google Scholar citations profile found. Here are relevant publications matches:\n\n" + "\n\n".join(res_str)
+        
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+        }
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            res = await client.get(profile_url, headers=headers)
+            if res.status_code == 200:
+                html = res.text
+                name_match = re.search(r'id="gsc_prf_in"[^>]*>(.*?)</div>', html)
+                author_name = name_match.group(1).strip() if name_match else query
+                
+                aff_match = re.search(r'class="gsc_prf_il"[^>]*>(.*?)</div>', html)
+                affiliation = re.sub('<[^>]+>', '', aff_match.group(1)).strip() if aff_match else "Unknown"
+                
+                rows = re.findall(r'<tr class="gsc_a_tr".*?</tr>', html, re.DOTALL)
+                pub_list = []
+                for idx, row in enumerate(rows[:15]):
+                    t_match = re.search(r'class="gsc_a_at"[^>]*>(.*?)</a>', row)
+                    title = re.sub('<[^>]+>', '', t_match.group(1)).strip() if t_match else "Untitled"
+                    
+                    authors_match = re.search(r'<div class="gs_gray"[^>]*>(.*?)</div>', row)
+                    authors = re.sub('<[^>]+>', '', authors_match.group(1)).strip() if authors_match else "Unknown"
+                    
+                    cite_match = re.search(r'class="gsc_a_ac gs_ibl"[^>]*>(.*?)</a>', row)
+                    citations = cite_match.group(1).strip() if cite_match else "0"
+                    citations = citations if citations else "0"
+                    
+                    year_match = re.search(r'class="gsc_a_h gsc_a_hc gs_ibl"[^>]*>(.*?)</span>', row)
+                    year = year_match.group(1).strip() if year_match else "Unknown"
+                    
+                    pub_list.append(f"  - Title: {title} ({year}) | Citations: {citations} | Authors: {authors}")
+                
+                pubs_str = "\n".join(pub_list) if pub_list else "  - No publication works found on profile."
+                return f"[GOOGLE SCHOLAR PROFILE]\nAuthor: {author_name}\nAffiliation: {affiliation}\nProfile URL: {profile_url}\nPublications:\n{pubs_str}"
+            else:
+                return f"Failed to retrieve Google Scholar profile page. Status code: {res.status_code}"
+    except Exception as e:
+        return f"Error searching Google Scholar: {e}"
+
+async def search_researchgate_profile(query: str) -> str:
+    """Searches for a researcher's profile on ResearchGate using DuckDuckGo snippets."""
+    from app.services.scraping_service import ScrapingService
+    scraper = ScrapingService()
+    try:
+        results = await scraper.search_web(f"{query} ResearchGate", max_results=4)
+        if not results:
+            return f"No ResearchGate profiles found for query: {query}"
+        
+        matches = []
+        for r in results:
+            url = r.get("url", "")
+            if "researchgate.net" in url:
+                matches.append(f"Title: {r['title']}\nProfile URL: {url}\nSummary: {r['snippet']}")
+        
+        if matches:
+            return "[RESEARCHGATE PROFILE MATCHES]\n\n" + "\n\n---\n\n".join(matches)
+        
+        res_str = []
+        for r in results:
+            res_str.append(f"Title: {r['title']}\nURL: {r['url']}\nSnippet: {r['snippet']}")
+        return "No direct ResearchGate links found in top matches. Here are relevant search results:\n\n" + "\n\n".join(res_str)
+    except Exception as e:
+        return f"Error searching ResearchGate: {e}"
 
 def list_local_files(directory_path: str = ".") -> str:
     """Real connector to list local files in a directory."""
@@ -53,81 +146,21 @@ def read_local_file(file_path: str) -> str:
         return f"Error reading file: {e}"
 
 async def search_web(query: str, max_results: int = 5) -> str:
-    """Real connector to search the web using DuckDuckGo HTML with Instant Answer fallback."""
-    url = f"https://html.duckduckgo.com/html/?q={query}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
-    }
+    """Real connector to search the web using ScrapingService."""
+    from app.services.scraping_service import ScrapingService
+    scraping_service = ScrapingService()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            res = await client.get(url, headers=headers)
-            if res.status_code == 200 and "result__a" in res.text:
-                html = res.text
-                parts = html.split('class="result results_links results_links_deep web-result')
-                if len(parts) <= 1:
-                    parts = html.split('class="web-result')
-                results = []
-                import re
-                for part in parts[1:max_results + 1]:
-                    try:
-                        title_part = part.split('class="result__a"')
-                        if len(title_part) > 1:
-                            link = title_part[1].split('href="')[1].split('"')[0]
-                            if "uddg=" in link:
-                                from urllib.parse import unquote
-                                link = unquote(link.split("uddg=")[1].split("&")[0])
-                            
-                            first_gt = title_part[1].find('>')
-                            if first_gt != -1:
-                                title = title_part[1][first_gt + 1:].split('</a')[0]
-                                title = re.sub('<[^>]+?>', '', title).strip()
-                            else:
-                                title = "Unknown"
-                        else:
-                            continue
-                        
-                        snippet_part = part.split('class="result__snippet"')
-                        if len(snippet_part) > 1:
-                            first_gt = snippet_part[1].find('>')
-                            if first_gt != -1:
-                                snippet = snippet_part[1][first_gt + 1:].split('</a')[0]
-                                snippet = re.sub('<[^>]+?>', '', snippet).strip()
-                            else:
-                                snippet = ""
-                        else:
-                            snippet = ""
-                        
-                        results.append(f"Title: {title}\nURL: {link}\nSnippet: {snippet}")
-                    except Exception:
-                        continue
-                if results:
-                    return "\n\n".join(results)
-    except Exception:
-        pass
-
-    # Fallback to DDG Instant Answer API
-    try:
-        api_url = f"https://api.duckduckgo.com/?q={query}&format=json&no_html=1&skip_disambig=1"
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            res = await client.get(api_url, headers=headers)
-            if res.status_code == 200:
-                data = res.json()
-                results = []
-                abstract = data.get("AbstractText", "")
-                abstract_url = data.get("AbstractURL", "")
-                if abstract:
-                    results.append(f"Abstract: {abstract}\nURL: {abstract_url}")
-                
-                topics = data.get("RelatedTopics", [])
-                for topic in topics[:max_results]:
-                    if "Text" in topic and "FirstURL" in topic:
-                        results.append(f"Topic: {topic['Text']}\nURL: {topic['FirstURL']}")
-                if results:
-                    return "\n\n".join(results)
+        results = await scraping_service.search_web(query, max_results)
+        if results:
+            formatted = []
+            for r in results:
+                formatted.append(f"Title: {r['title']}\nURL: {r['url']}\nSnippet: {r['snippet']}")
+            return "\n\n".join(formatted)
     except Exception as e:
         return f"Failed to search the web: {e}"
 
     return "No web results found."
+
 
 # --- Simulated Connectors ---
 
@@ -146,10 +179,51 @@ def search_whatsapp(contact: str = "") -> str:
 - Today, 9:15 AM: "I'll send over the datasets by noon." """
 
 
-# --- Tool Execution Engine ---
-
 # These definitions are passed to the Groq LLM API
 TOOLS_SCHEMA = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_arxiv_publications",
+            "description": "Queries the arXiv API over HTTPS to fetch publication preprints and abstracts matching a researcher name or topic.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The search query (author name or keyword), e.g. 'Vikas Vijigiri' or 'quantum entanglement'"},
+                    "max_results": {"type": "integer", "description": "Max results to return (default 5)"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_google_scholar_profile",
+            "description": "Searches for a researcher's official Google Scholar citations profile page, extracting their affiliation and detailed publication list.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The author's name, e.g. 'Vikas Vijigiri'"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_researchgate_profile",
+            "description": "Searches for a researcher's profile on ResearchGate using general search engine queries to extract their institution, publications count, and citations.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The author's name, e.g. 'Kush Saha'"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
     {
         "type": "function",
         "function": {
@@ -235,6 +309,64 @@ TOOLS_SCHEMA = [
                 "required": ["query"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_openalex_authors",
+            "description": "Searches for academic authors/profiles on OpenAlex by name or query term.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The author's name, e.g. 'Vikas Vijigiri' or 'Kush Saha'"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "fetch_openalex_author_works",
+            "description": "Fetches publication works (papers) of a given author by their OpenAlex author ID.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "author_id": {"type": "string", "description": "The OpenAlex author ID, e.g. 'https://openalex.org/A5020214245' or just 'A5020214245'"},
+                    "limit": {"type": "integer", "description": "Max results to return (default 10)"}
+                },
+                "required": ["author_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_openalex_works",
+            "description": "Searches for academic papers on OpenAlex by keywords, title, or topic.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The search query/keywords"},
+                    "limit": {"type": "integer", "description": "Max results to return (default 10)"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_openalex_author_and_works",
+            "description": "Searches for a researcher's academic profile and retrieves their recent publication works in a single call.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The author's name, e.g. 'Vikas Vijigiri'"}
+                },
+                "required": ["query"]
+            }
+        }
     }
 ]
 
@@ -242,8 +374,15 @@ async def execute_tool_call(tool_name: str, arguments: dict) -> str:
     """Routes the LLM's tool call to the actual Python function."""
     print(f"[Agent Tool Execution] Calling {tool_name} with {arguments}", flush=True)
     try:
-        if tool_name == "search_arxiv":
-            return await search_arxiv(arguments.get("query", ""), arguments.get("max_results", 5))
+        if tool_name == "search_arxiv_publications":
+            return await search_arxiv_publications(arguments.get("query", ""), arguments.get("max_results", 5))
+        elif tool_name == "search_google_scholar_profile":
+            return await search_google_scholar_profile(arguments.get("query", ""))
+        elif tool_name == "search_researchgate_profile":
+            return await search_researchgate_profile(arguments.get("query", ""))
+        elif tool_name == "search_arxiv":
+            # For backward compatibility
+            return await search_arxiv_publications(arguments.get("query", ""), arguments.get("max_results", 5))
         elif tool_name == "list_local_files":
             return list_local_files(arguments.get("directory_path", "."))
         elif tool_name == "read_local_file":
@@ -254,6 +393,79 @@ async def execute_tool_call(tool_name: str, arguments: dict) -> str:
             return search_whatsapp(arguments.get("contact", ""))
         elif tool_name == "search_web":
             return await search_web(arguments.get("query", ""), arguments.get("max_results", 5))
+        elif tool_name == "search_openalex_authors":
+            from app.services.openalex_service import OpenAlexService
+            openalex = OpenAlexService()
+            authors = await openalex.search_authors(arguments.get("query", ""), per_page=10)
+            if not authors:
+                return "No authors found on OpenAlex."
+            res_list = []
+            for a in authors:
+                last_known_insts = a.get("last_known_institutions") or []
+                insts = ", ".join([inst.get("display_name", "") for inst in last_known_insts if inst and inst.get("display_name")])
+                stats = a.get("summary_stats") or {}
+                h_index = stats.get("h_index", 0) if stats else 0
+                res_list.append(f"Name: {a.get('display_name')}\nOpenAlex ID: {a.get('id')}\nInstitution: {insts or 'Unknown'}\nWorks Count: {a.get('works_count')}\nH-Index: {h_index}")
+            return "\n\n".join(res_list)
+        elif tool_name == "fetch_openalex_author_works":
+            from app.services.openalex_service import OpenAlexService
+            openalex = OpenAlexService()
+            works = await openalex.fetch_author_works(arguments.get("author_id", ""), per_page=arguments.get("limit", 10))
+            if not works:
+                return "No works found for this author on OpenAlex."
+            res_list = []
+            for w in works:
+                title = w.get("title", "Untitled")
+                year = w.get("publication_year", "Unknown")
+                doi = w.get("doi", "No DOI")
+                citations = w.get("cited_by_count", 0)
+                res_list.append(f"Title: {title}\nYear: {year}\nDOI: {doi}\nCitations: {citations}")
+            return "\n\n".join(res_list)
+        elif tool_name == "search_openalex_works":
+            from app.services.openalex_service import OpenAlexService
+            openalex = OpenAlexService()
+            works = await openalex.search_works(arguments.get("query", ""), per_page=arguments.get("limit", 10))
+            if not works:
+                return "No works found on OpenAlex."
+            res_list = []
+            for w in works:
+                title = w.get("title", "Untitled")
+                year = w.get("publication_year", "Unknown")
+                doi = w.get("doi", "No DOI")
+                citations = w.get("cited_by_count", 0)
+                res_list.append(f"Title: {title}\nYear: {year}\nDOI: {doi}\nCitations: {citations}")
+            return "\n\n".join(res_list)
+        elif tool_name == "search_openalex_author_and_works":
+            from app.services.openalex_service import OpenAlexService
+            openalex = OpenAlexService()
+            authors = await openalex.search_authors(arguments.get("query", ""), per_page=5)
+            if not authors:
+                return f"No authors found on OpenAlex for query: {arguments.get('query')}"
+            
+            res_list = []
+            for idx, a in enumerate(authors[:3]): # take top 3 matches
+                author_id = a.get("id", "")
+                clean_id = author_id.split("/")[-1]
+                last_known_insts = a.get("last_known_institutions") or []
+                insts = ", ".join([inst.get("display_name", "") for inst in last_known_insts if inst and inst.get("display_name")])
+                stats = a.get("summary_stats") or {}
+                h_index = stats.get("h_index", 0) if stats else 0
+                profile_info = f"Match {idx+1}:\nName: {a.get('display_name')}\nOpenAlex ID: {author_id}\nInstitution: {insts or 'Unknown'}\nWorks Count: {a.get('works_count')}\nH-Index: {h_index}"
+                
+                # Fetch works for this match
+                works = await openalex.fetch_author_works(clean_id, per_page=10)
+                works_list = []
+                for w in works:
+                    title = w.get("title", "Untitled")
+                    year = w.get("publication_year", "Unknown")
+                    doi = w.get("doi", "No DOI")
+                    citations = w.get("cited_by_count", 0)
+                    works_list.append(f"  - Title: {title} ({year}) | Citations: {citations} | DOI: {doi}")
+                
+                works_str = "\n".join(works_list) if works_list else "  - No publication works found."
+                res_list.append(f"{profile_info}\nPublications:\n{works_str}")
+            
+            return "\n\n---\n\n".join(res_list)
         else:
             return f"Unknown tool: {tool_name}"
     except Exception as e:

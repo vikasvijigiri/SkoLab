@@ -1,9 +1,11 @@
 import numpy as np
 import networkx as nx
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 import math
 import json
 import os
+from app.services.openalex_service import OpenAlexService
+from app.services.scraping_service import ScrapingService
 
 class MetricsService:
     """
@@ -208,21 +210,24 @@ class MetricsService:
         # Limit to top 6 specific skills
         return list(dict.fromkeys(skills))[:6]
 
-import httpx
 import logging
 logger = logging.getLogger(__name__)
 
-async def compute_author_metrics(author_id: str) -> dict:
+async def compute_author_metrics(
+    author_id: str,
+    openalex_service: Optional[OpenAlexService] = None,
+    scraping_service: Optional[ScrapingService] = None
+) -> dict:
+    if not openalex_service:
+        openalex_service = OpenAlexService()
+    if not scraping_service:
+        scraping_service = ScrapingService()
+
     clean_id = author_id.split("/")[-1]
-    url = f"https://api.openalex.org/works?filter=author.id:{clean_id}&per_page=10&sort=publication_year:desc"
     try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(url, timeout=15.0)
-            resp.raise_for_status()
-            data = resp.json()
-            results = data.get("results", [])
+        results = await openalex_service.fetch_author_works(author_id=clean_id, per_page=10)
     except Exception as e:
-        logger.error(f"Failed to fetch works for clean_id {clean_id} (original: {author_id}): {e}")
+        logger.error(f"Failed to fetch works for clean_id {clean_id} (original: {author_id}) via OpenAlexService: {e}")
         results = []
 
     if not results:
@@ -238,58 +243,25 @@ async def compute_author_metrics(author_id: str) -> dict:
     abstracts = []
     for work in results:
         title = work.get("title", "")
-        concepts = [c.get("display_name") for c in work.get("concepts", [])]
+        concepts = [c.get("display_name") for c in work.get("concepts", []) if c.get("display_name")]
         abstracts.append(f"Title: {title}. Concepts: {', '.join(concepts)}")
 
     context = "\n".join(abstracts)
     
-    prompt = f"""
-    Analyze the following recent research works of an author:
-    {context}
-    
-    Based on the density of the terminology, concepts, and titles, extract:
-    1. topic_toughness (an integer 0-100 indicating the complexity and niche of their topics)
-    2. velocity (an integer 0-100 indicating how rapidly they are producing complex work)
-    3. skills (a list of 3-5 high-level research skills implied by their work, e.g., 'Quantum Computing', 'Clinical Trials')
-    4. tools (a list of 3-5 tools/frameworks/datasets implied, e.g., 'PyTorch', 'fMRI', 'Census Data')
-    5. analysis (a short 2 sentence explanation of why they got this score)
-
-    Return ONLY a valid JSON object matching this schema exactly:
-    {{
-      "topic_toughness": 85,
-      "velocity": 70,
-      "skills": ["Skill1", "Skill2"],
-      "tools": ["Tool1", "Tool2"],
-      "analysis": "..."
-    }}
-    """
+    schema = {
+        "topic_toughness": "integer (0-100 indicating the complexity and niche of their topics)",
+        "velocity": "integer (0-100 indicating how rapidly they are producing complex work)",
+        "skills": "array of strings (3-5 high-level research skills implied by their work)",
+        "tools": "array of strings (3-5 tools/frameworks/datasets implied by their work)",
+        "analysis": "string (a short 2 sentence explanation of why they got this score)"
+    }
     
     try:
-        api_key = os.environ.get("GROQ_API")
-        if not api_key:
-            raise Exception("GROQ_API_KEY not found")
-
-        payload = {
-            "model": "llama-3.3-70b-versatile",
-            "messages": [
-                {"role": "system", "content": "You are a Research Analyst. Return only JSON."},
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.2,
-            "response_format": {"type": "json_object"},
-        }
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        async with httpx.AsyncClient() as client:
-            res = await client.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=30.0)
-            res.raise_for_status()
-            res_json = res.json()
-            content = res_json["choices"][0]["message"]["content"]
-            
-        parsed = json.loads(content)
+        parsed = await scraping_service.parse_content_to_json(
+            raw_content=context,
+            response_schema=schema,
+            instruction="Analyze the recent research works of the author based on the density of the terminology, concepts, and titles, and evaluate their topic toughness and research velocity, along with identifying key skills, tools, and a brief analytical explanation."
+        )
         
         # Calculate an overall composite score and guarantee integer types for Ktor
         tt = int(parsed.get("topic_toughness", 50))
@@ -308,3 +280,4 @@ async def compute_author_metrics(author_id: str) -> dict:
             "tools": ["OpenAlex", "Statistical Software"],
             "analysis": "Fallback metrics applied due to processing error."
         }
+

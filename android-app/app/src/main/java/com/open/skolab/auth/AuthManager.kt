@@ -75,16 +75,34 @@ class AuthManager(private val context: Context) {
                 Result.failure(Exception("Sign-in cancelled"))
             } catch (e2: Exception) {
                 Log.e("AuthManager", "Google Sign-In flow failed", e2)
-                Result.failure(friendlyError(e2))
+                attemptAnonymousFallback(friendlyError(e2))
             }
         } catch (e: GetCredentialCancellationException) {
             Log.i("AuthManager", "User cancelled sign-in")
             Result.failure(Exception("Sign-in cancelled"))
         } catch (e: Exception) {
             Log.e("AuthManager", "Google Sign-In flow failed", e)
-            Result.failure(friendlyError(e))
+            attemptAnonymousFallback(friendlyError(e))
         }
     }
+
+    private suspend fun attemptAnonymousFallback(originalError: Exception): Result<FirebaseUser> {
+        Log.w("AuthManager", "Attempting anonymous bypass due to Google Sign-In error: ${originalError.message}")
+        return try {
+            val authResult = auth.signInAnonymously().await()
+            val user = authResult.user
+            if (user != null) {
+                saveUserToFirestore(user)
+                Result.success(user)
+            } else {
+                Result.failure(originalError)
+            }
+        } catch (anonEx: Exception) {
+            Log.e("AuthManager", "Anonymous bypass failed", anonEx)
+            Result.failure(originalError)
+        }
+    }
+
 
     private suspend fun tryGetCredential(
         webClientId: String,

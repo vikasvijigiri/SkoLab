@@ -72,6 +72,9 @@ fun AgentScreen() {
     var messageText by remember { mutableStateOf("") }
     val isConversationEmpty = uiState.messages.isEmpty() && !uiState.isTyping
 
+    var showHistoryBottomSheet by remember { mutableStateOf(false) }
+    var showClearConfirmDialog by remember { mutableStateOf(false) }
+
     // Auto-scroll to latest message
     LaunchedEffect(uiState.messages.size, uiState.isTyping) {
         if (uiState.messages.isNotEmpty()) {
@@ -89,7 +92,9 @@ fun AgentScreen() {
                 onModeToggle = {
                     val newMode = if (uiState.activeMode == AgentMode.RESEARCH) AgentMode.CODING else AgentMode.RESEARCH
                     viewModel.setMode(newMode)
-                }
+                },
+                onHistoryClick = { showHistoryBottomSheet = true },
+                onNewChatClick = { viewModel.startNewChat() }
             )
         },
         bottomBar = {
@@ -309,11 +314,58 @@ fun AgentScreen() {
             }
         }
     }
+
+    if (showHistoryBottomSheet) {
+        AgentHistoryBottomSheet(
+            onDismissRequest = { showHistoryBottomSheet = false },
+            sessions = uiState.pastSessions,
+            currentSessionId = uiState.currentSessionId,
+            onSessionSelected = { viewModel.switchSession(it) },
+            onDeleteSession = { viewModel.deleteSession(it) },
+            onClearAllClick = {
+                showClearConfirmDialog = true
+            }
+        )
+    }
+
+    if (showClearConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirmDialog = false },
+            containerColor = EntropiColors.Card,
+            title = { Text("Wipe All Conversations?", color = EntropiColors.Text, fontWeight = FontWeight.Bold) },
+            text = { Text("This will permanently delete all Ask Skolar chat sessions. You cannot undo this.", color = EntropiColors.Text2) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.clearCurrentHistory()
+                        uiState.pastSessions.forEach { (sId, _) ->
+                            viewModel.deleteSession(sId)
+                        }
+                        showClearConfirmDialog = false
+                        showHistoryBottomSheet = false
+                    }
+                ) {
+                    Text("Delete All", color = Color(0xFFEF5350), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirmDialog = false }) {
+                    Text("Cancel", color = EntropiColors.Text3)
+                }
+            }
+        )
+    }
 }
 
 // ── TOP BAR ──────────────────────────────────────────────────────────────────
 @Composable
-fun AgentTopBar(currentProject: String, activeMode: AgentMode, onModeToggle: () -> Unit) {
+fun AgentTopBar(
+    currentProject: String,
+    activeMode: AgentMode,
+    onModeToggle: () -> Unit,
+    onHistoryClick: () -> Unit,
+    onNewChatClick: () -> Unit
+) {
     Surface(
         color = EntropiColors.Background,
         border = BorderStroke(0.5.dp, EntropiColors.Border.copy(alpha = 0.5f))
@@ -398,6 +450,30 @@ fun AgentTopBar(currentProject: String, activeMode: AgentMode, onModeToggle: () 
                         letterSpacing = 0.5.sp
                     )
                 }
+            }
+
+            IconButton(
+                onClick = onNewChatClick,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "New Chat",
+                    tint = EntropiColors.Gold1,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            IconButton(
+                onClick = onHistoryClick,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.History,
+                    contentDescription = "History",
+                    tint = EntropiColors.Text2,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
     }
@@ -753,3 +829,119 @@ fun AgentInputBar(
         }
     }
 }
+
+// ── HISTORY BOTTOM SHEET ──────────────────────────────────────────────────────
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AgentHistoryBottomSheet(
+    onDismissRequest: () -> Unit,
+    sessions: List<Pair<String, String>>,
+    currentSessionId: String,
+    onSessionSelected: (String) -> Unit,
+    onDeleteSession: (String) -> Unit,
+    onClearAllClick: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        containerColor = EntropiColors.Background,
+        dragHandle = { BottomSheetDefaults.DragHandle(color = EntropiColors.Border) }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Conversation History",
+                    color = EntropiColors.Text,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = SyneFontFamily
+                )
+                TextButton(onClick = onClearAllClick) {
+                    Text("Clear All", color = Color(0xFFEF5350), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            if (sessions.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 40.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No past conversations found.",
+                        color = EntropiColors.Text3,
+                        fontSize = 14.sp
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 400.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(sessions) { (sId, title) ->
+                        val isCurrent = sId == currentSessionId
+                        Surface(
+                            onClick = {
+                                onSessionSelected(sId)
+                                onDismissRequest()
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isCurrent) EntropiColors.Gold1.copy(alpha = 0.12f) else EntropiColors.Card,
+                            border = if (isCurrent) BorderStroke(1.dp, EntropiColors.Gold1.copy(alpha = 0.6f)) else BorderStroke(0.5.dp, EntropiColors.Border),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Chat,
+                                    contentDescription = null,
+                                    tint = if (isCurrent) EntropiColors.Gold1 else EntropiColors.Text3,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    text = title,
+                                    color = if (isCurrent) EntropiColors.Gold1 else EntropiColors.Text,
+                                    fontSize = 14.sp,
+                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                IconButton(
+                                    onClick = { onDeleteSession(sId) },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Delete chat",
+                                        tint = Color(0xFFEF5350).copy(alpha = 0.8f),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+        }
+    }
+}
+

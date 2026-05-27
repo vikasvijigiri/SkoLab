@@ -21,7 +21,7 @@ import os
 import time
 from typing import Any, Dict, List, Optional
 
-import httpx
+
 
 logger = logging.getLogger(__name__)
 
@@ -80,33 +80,14 @@ def _get_firestore_client() -> Optional[Any]:
         return None
 
 
-def _openalex_headers() -> Dict[str, str]:
-    """Standard headers for OpenAlex API calls."""
-    from app.core.config import settings
-    hdrs: Dict[str, str] = {
-        "User-Agent": "SkolabApp/1.0 (mailto:vikki.4me@gmail.com)",
-        "Accept": "application/json",
-    }
-    if getattr(settings, "openalex_api_key", None):
-        hdrs["api_key"] = settings.openalex_api_key
-    return hdrs
-
-
 async def _fetch_author_from_openalex(author_id: str) -> Optional[Dict[str, Any]]:
     """Fetches the full author record from OpenAlex."""
-    clean_id = author_id.split("/")[-1]
-    url = f"https://api.openalex.org/authors/{clean_id}"
+    from app.services.openalex_service import OpenAlexService
     try:
-        async with httpx.AsyncClient(
-            headers=_openalex_headers(),
-            timeout=httpx.Timeout(15.0, connect=5.0),
-        ) as client:
-            resp = await client.get(url, params={"mailto": "vikki.4me@gmail.com"})
-            if resp.status_code == 200:
-                return resp.json()
-            logger.warning("[researcher_worker] OpenAlex author %s → HTTP %s", clean_id, resp.status_code)
+        service = OpenAlexService()
+        return await service.fetch_author_by_id(author_id)
     except Exception as exc:
-        logger.error("[researcher_worker] Failed to fetch author %s: %s", clean_id, exc)
+        logger.error("[researcher_worker] Failed to fetch author %s: %s", author_id, exc)
     return None
 
 
@@ -114,29 +95,14 @@ async def _fetch_works_from_openalex(
     author_id: str, orcid: Optional[str] = None, max_results: int = 50
 ) -> List[Dict[str, Any]]:
     """Fetches the author's recent works from OpenAlex."""
-    clean_id = author_id.split("/")[-1]
-    filter_str = (
-        f"authorships.author.orcid:{orcid}"
-        if orcid
-        else f"authorships.author.id:{clean_id}"
-    )
-    params = {
-        "filter": filter_str,
-        "per_page": max_results,
-        "sort": "publication_year:desc",
-        "mailto": "vikki.4me@gmail.com",
-    }
+    from app.services.openalex_service import OpenAlexService
     try:
-        async with httpx.AsyncClient(
-            headers=_openalex_headers(),
-            timeout=httpx.Timeout(20.0, connect=5.0),
-        ) as client:
-            resp = await client.get("https://api.openalex.org/works", params=params)
-            if resp.status_code == 200:
-                return resp.json().get("results", [])
+        service = OpenAlexService()
+        return await service.fetch_author_works(author_id=author_id, orcid=orcid, per_page=max_results)
     except Exception as exc:
-        logger.error("[researcher_worker] Failed to fetch works for %s: %s", clean_id, exc)
+        logger.error("[researcher_worker] Failed to fetch works for %s: %s", author_id, exc)
     return []
+
 
 
 def _reconstruct_abstract(inv_idx: Optional[Dict[str, List[int]]]) -> str:

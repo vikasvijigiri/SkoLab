@@ -248,9 +248,8 @@ fun MarkdownText(
             var processed = cleaned
                 .replace("\\[", "$$")
                 .replace("\\]", "$$")
-                .replace("\\(", "$$")
-                .replace("\\)", "$$")
-                .replace(Regex("(?<!\\$)\\$(?!\\$)"), "\\$\\$")
+                .replace("\\(", "$")
+                .replace("\\)", "$")
             
             // 2. Double all backslashes so CommonMark parser doesn't eat LaTeX command prefixes
             // processed = processed.replace("\\", "\\\\")
@@ -533,29 +532,63 @@ fun cleanScientificText(text: String): String {
         .replace("&gt;", ">")
         .replace("&amp;", "&")
         
-    if (!cleaned.contains("<")) {
+    val hasMath = cleaned.contains("<math", ignoreCase = true) || cleaned.contains(":math", ignoreCase = true)
+    if (!hasMath) {
         return cleaned
     }
-    val tokens = tokenize(cleaned)
-    val roots = parseTokens(tokens)
-    
-    val mathTags = setOf(
-        "math", "mrow", "mi", "mn", "mo", "mtext", "msub", "msup", "msubsup",
-        "mfrac", "msqrt", "mroot", "mover", "munder", "munderover"
-    )
-    
-    val resultParts = mutableListOf<String>()
-    for (root in roots) {
-        if (root.name == "text") {
-            resultParts.add(root.textContent)
-        } else if (mathTags.contains(root.name)) {
-            val latex = nodeToLatex(root).trim().replace("$", "")
-            if (latex.isNotEmpty()) {
-                resultParts.add("$$" + latex + "$$")
-            }
-        } else {
-            resultParts.add(reconstructNonMathNode(root))
+
+    val mathStartRegex = Regex("""<(?:[a-zA-Z0-9_]+:)?math(?:\s|>|/|$)""", RegexOption.IGNORE_CASE)
+    val result = StringBuilder()
+    var currentIndex = 0
+
+    while (currentIndex < cleaned.length) {
+        val startMatch = mathStartRegex.find(cleaned, currentIndex)
+        if (startMatch == null) {
+            result.append(cleaned.substring(currentIndex))
+            break
         }
+        
+        val startPos = startMatch.range.first
+        result.append(cleaned.substring(currentIndex, startPos))
+        
+        val matchValue = startMatch.value
+        val rawTagName = matchValue.substring(1).trimEnd { it == '>' || it == '/' || it.isWhitespace() }
+        val endTag = "</$rawTagName>"
+        
+        val endTagPos = cleaned.indexOf(endTag, startPos + matchValue.length, ignoreCase = true)
+        if (endTagPos == -1) {
+            result.append(cleaned.substring(startPos))
+            break
+        }
+        
+        val mathBlockEnd = endTagPos + endTag.length
+        val mathBlock = cleaned.substring(startPos, mathBlockEnd)
+        
+        val tokens = tokenize(mathBlock)
+        val roots = parseTokens(tokens)
+        
+        val mathTags = setOf(
+            "math", "mrow", "mi", "mn", "mo", "mtext", "msub", "msup", "msubsup",
+            "mfrac", "msqrt", "mroot", "mover", "munder", "munderover"
+        )
+        
+        val mathBlockConverted = StringBuilder()
+        for (root in roots) {
+            if (root.name == "text") {
+                mathBlockConverted.append(root.textContent)
+            } else if (mathTags.contains(root.name)) {
+                val latex = nodeToLatex(root).trim().replace("$", "")
+                if (latex.isNotEmpty()) {
+                    mathBlockConverted.append("$$").append(latex).append("$$")
+                }
+            } else {
+                mathBlockConverted.append(reconstructNonMathNode(root))
+            }
+        }
+        
+        result.append(mathBlockConverted.toString())
+        currentIndex = mathBlockEnd
     }
-    return resultParts.joinToString("")
+    
+    return result.toString()
 }
