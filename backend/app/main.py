@@ -1207,7 +1207,7 @@ class AgentChatRequest(BaseModel):
 @app.post("/agent/chat")
 async def agent_chat(req: AgentChatRequest):
     try:
-        base_prompt = f"You are SkoLab Copilot, an expert AI {req.mode} assistant for a senior researcher. Be concise, sharp, and proactive. You have access to tools that can fetch data from arXiv, papers, and the researcher's network."
+        base_prompt = f"You are Ask Skolar, an expert AI {req.mode} assistant for a senior researcher. Be concise, sharp, and proactive. You have access to tools that can fetch data from arXiv, papers, the researcher's network, and search the live web. Use web search whenever you need dynamic, recent, or real-time information outside academic databases."
 
         # Inject user memory block if present
         memory_block = ""
@@ -1651,7 +1651,7 @@ async def post_user_memory_events(req: UserMemoryEventsRequest):
 async def get_user_memory(user_id: str):
     """
     Returns the current memory profile for a user.
-    Used by the Android app on Copilot init.
+    Used by the Android app on Ask Skolar init.
     """
     cached = await _user_memory_cache.get(user_id)
     if cached:
