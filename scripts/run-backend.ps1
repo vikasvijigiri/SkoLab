@@ -11,6 +11,7 @@ Push-Location $backendDir
 try {
     Write-Host "Starting SkoLab backend server..."
     $env:PYTHONUNBUFFERED = "1"
+    $env:PYTHONIOENCODING = "utf-8"
     & .\venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 } finally {
     Pop-Location
