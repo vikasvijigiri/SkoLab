@@ -9,6 +9,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -43,15 +45,7 @@ import com.open.entropy.viewmodel.AgentViewModel
 import java.text.SimpleDateFormat
 import java.util.*
 
-// ── Quick prompts shown above input when conversation is empty ──────────────
-private val QUICK_PROMPTS = listOf(
-    "Summarize my latest papers",
-    "Find grant opportunities",
-    "Who should I collaborate with?",
-    "Analyze citation trends",
-    "Write an abstract",
-    "Compare methodologies"
-)
+// Note: quick prompts are now driven by UserMemoryProfile — see AgentViewModel.personalizedQuickPrompts
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -126,6 +120,9 @@ fun AgentScreen() {
                 onAttachClick = { filePickerLauncher.launch("*/*") },
                 onClearAttachment = { viewModel.clearAttachment() },
                 showQuickPrompts = isConversationEmpty,
+                quickPrompts = uiState.personalizedQuickPrompts.ifEmpty {
+                    listOf("Summarise my recent papers", "What should I read next?", "Find collaborators in my field")
+                },
                 onQuickPrompt = { prompt ->
                     viewModel.sendMessage(prompt)
                 }
@@ -142,10 +139,13 @@ fun AgentScreen() {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 32.dp),
+                        .padding(horizontal = 28.dp)
+                        .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
+                    Spacer(Modifier.height(40.dp))
+
                     // Glowing icon
                     Box(
                         modifier = Modifier
@@ -168,22 +168,124 @@ fun AgentScreen() {
                             modifier = Modifier.size(36.dp)
                         )
                     }
-                    Spacer(Modifier.height(20.dp))
+
+                    Spacer(Modifier.height(18.dp))
+
+                    // Personalized greeting
+                    val greeting = uiState.personalizedGreeting
                     Text(
-                        text = "SkoLab Copilot",
+                        text = if (greeting.isNotEmpty()) greeting else "SkoLab Copilot",
                         color = EntropiColors.Text,
-                        fontSize = 22.sp,
+                        fontSize = if (greeting.length > 40) 16.sp else 20.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        fontFamily = SyneFontFamily
+                        fontFamily = SyneFontFamily,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        lineHeight = 26.sp
                     )
-                    Spacer(Modifier.height(8.dp))
+
+                    Spacer(Modifier.height(6.dp))
+
                     Text(
-                        text = "Your AI research partner.\nAsk anything about your field.",
+                        text = if (uiState.memoryProfile.topTopics.isNotEmpty())
+                            "Personalised to your research in ${uiState.memoryProfile.topTopics.take(2).joinToString(" · ")}"
+                        else
+                            "Your AI research partner. Ask anything.",
                         color = EntropiColors.Text3,
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp,
+                        fontSize = 13.sp,
+                        lineHeight = 19.sp,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
+
+                    // ── Proactive reminder chips ────────────────────────────────
+                    if (uiState.proactiveReminders.isNotEmpty()) {
+                        Spacer(Modifier.height(20.dp))
+                        Text(
+                            text = "REMINDERS",
+                            color = EntropiColors.Text3,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.5.sp,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Start
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            uiState.proactiveReminders.forEach { reminder ->
+                                Surface(
+                                    onClick = {
+                                        // Tap reminder to ask Copilot about it
+                                        val clean = reminder.replace(Regex("^[^a-zA-Z]+"), "").trim()
+                                        viewModel.sendMessage("Tell me more: $clean")
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = EntropiColors.Card,
+                                    border = BorderStroke(0.5.dp, EntropiColors.Gold1.copy(alpha = 0.25f)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = reminder,
+                                            color = EntropiColors.Text2,
+                                            fontSize = 13.sp,
+                                            modifier = Modifier.weight(1f),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Icon(
+                                            Icons.Default.ChevronRight,
+                                            contentDescription = null,
+                                            tint = EntropiColors.Gold1.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // ── Memory stats row ────────────────────────────────────────
+                    val mem = uiState.memoryProfile
+                    if (mem.totalPapersRead > 0 || mem.streakDays > 0) {
+                        Spacer(Modifier.height(20.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(EntropiColors.Card)
+                                .padding(vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            if (mem.totalPapersRead > 0) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(mem.totalPapersRead.toString(), color = EntropiColors.Gold1, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                                    Text("Papers Read", color = EntropiColors.Text3, fontSize = 10.sp)
+                                }
+                            }
+                            if (mem.streakDays > 0) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("${mem.streakDays}🔥", color = EntropiColors.Gold1, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                                    Text("Day Streak", color = EntropiColors.Text3, fontSize = 10.sp)
+                                }
+                            }
+                            if (mem.avgReadMinutes > 0f) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("${mem.avgReadMinutes.toInt()}m", color = EntropiColors.Blue2, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                                    Text("Avg Read", color = EntropiColors.Text3, fontSize = 10.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(40.dp))
                 }
             } else {
                 // ── Message list ──────────────────────────────────────────────
@@ -475,6 +577,7 @@ fun AgentInputBar(
     onAttachClick: () -> Unit = {},
     onClearAttachment: () -> Unit = {},
     showQuickPrompts: Boolean = false,
+    quickPrompts: List<String> = emptyList(),
     onQuickPrompt: (String) -> Unit = {}
 ) {
     Surface(
@@ -498,7 +601,7 @@ fun AgentInputBar(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     contentPadding = PaddingValues(horizontal = 2.dp)
                 ) {
-                    items(QUICK_PROMPTS) { prompt ->
+                    items(quickPrompts) { prompt ->
                         Surface(
                             onClick = { onQuickPrompt(prompt) },
                             shape = RoundedCornerShape(16.dp),

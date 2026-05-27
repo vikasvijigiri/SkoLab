@@ -80,9 +80,10 @@ fun BottomNavDock(
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding()
-                    .height(64.dp),
+                    .height(64.dp)
+                    .padding(top = 8.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
                 items.forEach { item ->
                     val selected = currentRoute == item.route
@@ -104,7 +105,7 @@ fun BottomNavDock(
                             }
                             .semantics { contentDescription = item.label },
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                        verticalArrangement = Arrangement.Top
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Box {

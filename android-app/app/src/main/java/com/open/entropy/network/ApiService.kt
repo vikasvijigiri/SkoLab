@@ -1303,15 +1303,11 @@ class ApiService {
                 // Serialize memory profile to a flat JSON map if present
                 val memoryMap: Map<String, kotlinx.serialization.json.JsonElement>? = userMemory?.let { mem ->
                     try {
-                        val encoded = kotlinx.serialization.json.Json.encodeToString(
+                        val json = kotlinx.serialization.json.Json
+                        val jsonObj = json.encodeToJsonElement(
                             com.open.entropy.data.UserMemoryProfile.serializer(), mem
                         )
-                        kotlinx.serialization.json.Json.decodeFromString(
-                            kotlinx.serialization.json.MapSerializer(
-                                kotlinx.serialization.builtins.serializer(),
-                                kotlinx.serialization.json.JsonElement.serializer()
-                            ), encoded
-                        )
+                        (jsonObj as? kotlinx.serialization.json.JsonObject)?.toMap()
                     } catch (_: Exception) { null }
                 }
                 val request = AgentChatRequest(
