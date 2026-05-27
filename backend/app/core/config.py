@@ -28,7 +28,7 @@ class Settings:
         default_factory=lambda: os.environ.get("MDNS_SERVICE_TYPE", "_http._tcp.local.")
     )
     mdns_service_name: str = field(
-        default_factory=lambda: os.environ.get("MDNS_SERVICE_NAME", "SkolabBackend")
+        default_factory=lambda: os.environ.get("MDNS_SERVICE_NAME", "SkoLabBackend")
     )
 
     # ── External API keys ────────────────────────────────────────────────────
