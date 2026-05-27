@@ -8,7 +8,7 @@ plugins {
 }
 
 android {
-    namespace = "com.open.entropy"
+    namespace = "com.open.skolab"
     compileSdk = 36
 
     defaultConfig {
