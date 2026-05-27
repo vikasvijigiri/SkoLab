@@ -159,7 +159,8 @@ class AgentService:
             models = [
                 "openai/gpt-oss-120b",
                 "llama-3.3-70b-versatile",
-                "llama-3.1-8b-instant"
+                "llama-3.1-8b-instant",
+                "qwen/qwen3-32b"
             ]
 
             if pipeline_services.api_key:
@@ -282,6 +283,8 @@ class AgentService:
                                 print(f"Failed to write agent messages log: {ex}")
                                 
                             return {"reply": reply}
+            else:
+                return {"reply": "⚠️ The Groq API key is not configured on the backend. Please set GROQ_API in your backend/.env file."}
         except Exception as e:
             print(f"Agent chat failed: {e}")
             return {"reply": "An error occurred while processing your query. Please try again."}

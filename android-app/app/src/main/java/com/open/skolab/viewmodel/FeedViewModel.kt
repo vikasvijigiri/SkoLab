@@ -146,7 +146,7 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
 
     fun setUserContext(uid: String, name: String, focus: String) {
         val current = _uiState.value.user
-        val validFocus = if (focus.isNotBlank()) focus else "Researcher"
+        val validFocus = if (focus.isNotBlank() && focus != "Researcher" && focus != "General Research") focus else "Physics"
         if (current.id == uid && current.name == name && current.researchFocus == validFocus) {
             return
         }

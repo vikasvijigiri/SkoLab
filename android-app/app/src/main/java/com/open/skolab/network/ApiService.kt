@@ -301,7 +301,9 @@ data class NetworkCollaborator(
 data class ChatMessage(
     val role: String,
     val content: String,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val reaction: String? = null,
+    val isStarred: Boolean = false
 )
 
 @Serializable
@@ -1297,7 +1299,7 @@ class ApiService {
         userMemory: com.open.skolab.data.UserMemoryProfile? = null
     ): String {
         return withContext(Dispatchers.IO) {
-            val base = baseUrl() ?: return@withContext "API is not configured."
+            val base = baseUrl() ?: throw Exception("SkoLab backend services are currently unreachable.")
             try {
                 val histMaps = history.map { mapOf("role" to it.role, "content" to it.content) }
                 // Serialize memory profile to a flat JSON map if present

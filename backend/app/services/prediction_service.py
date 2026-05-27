@@ -10,10 +10,10 @@ class PredictionService:
         self.api_key = os.getenv("GROQ_API")
         self.base_url = "https://api.groq.com/openai/v1/chat/completions"
         self.models = [
-            # "llama-3.3-70b-versatile",
-            # "llama3-8b-8192",
+            "llama-3.3-70b-versatile",
+            "llama-3.1-8b-instant",
             "openai/gpt-oss-120b",
-            # "mixtral-8x7b-32768",
+            "qwen/qwen3-32b"
             # "gemma2-9b-it",
             # "llama-3.1-8b-instant"
         ]

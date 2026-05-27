@@ -321,5 +321,27 @@ class AgentViewModel(private val context: Context, private val userUid: String) 
         _uiState.update { it.copy(messages = emptyList()) }
         loadPastSessions()
     }
+
+    fun deleteMessage(message: ChatMessage) {
+        val updated = _uiState.value.messages.filter { it != message }
+        _uiState.update { it.copy(messages = updated) }
+        chatStorage.saveChatHistory(activeSessionId, updated)
+    }
+
+    fun toggleStarMessage(message: ChatMessage) {
+        val updated = _uiState.value.messages.map {
+            if (it == message) it.copy(isStarred = !it.isStarred) else it
+        }
+        _uiState.update { it.copy(messages = updated) }
+        chatStorage.saveChatHistory(activeSessionId, updated)
+    }
+
+    fun reactToMessage(message: ChatMessage, reaction: String?) {
+        val updated = _uiState.value.messages.map {
+            if (it == message) it.copy(reaction = reaction) else it
+        }
+        _uiState.update { it.copy(messages = updated) }
+        chatStorage.saveChatHistory(activeSessionId, updated)
+    }
 }
 
