@@ -219,6 +219,17 @@ object UserActivityTracker {
         File(context.filesDir, BUFFER_FILE).delete()
     }
 
+    /** Clear all memory and activity buffers locally. */
+    fun clearMemory(context: Context) {
+        try {
+            File(context.filesDir, BUFFER_FILE).delete()
+            File(context.filesDir, MEMORY_FILE).delete()
+            Log.d(TAG, "Memory and activity buffer cleared successfully.")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to clear memory: ${e.message}")
+        }
+    }
+
     /** Read last derived memory profile (fast, no network). */
     fun readMemory(context: Context): UserMemoryProfile {
         val file = File(context.filesDir, MEMORY_FILE)
