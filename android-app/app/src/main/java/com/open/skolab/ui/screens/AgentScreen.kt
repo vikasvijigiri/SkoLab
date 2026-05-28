@@ -5,6 +5,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -316,14 +317,12 @@ fun AgentScreen() {
                     Spacer(Modifier.height(40.dp))
                 }
             } else {
-                // ── Message list ──────────────────────────────────────────────
+                // ── Message list (ChatGPT-style: no bubbles for AI, pill for user) ──
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                    contentPadding = PaddingValues(top = 16.dp, bottom = 12.dp)
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(0.dp),
+                    contentPadding = PaddingValues(top = 16.dp, bottom = 8.dp)
                 ) {
                     items(uiState.messages) { msg ->
                         val isMe = msg.role == "user"
@@ -333,18 +332,10 @@ fun AgentScreen() {
                             onReact = { emoji ->
                                 viewModel.reactToMessage(msg, if (msg.reaction == emoji) null else emoji)
                             },
-                            onReply = {
-                                replyingToMessage = msg
-                            },
-                            onCopy = {
-                                clipboardManager.setText(AnnotatedString(msg.content))
-                            },
-                            onToggleStar = {
-                                viewModel.toggleStarMessage(msg)
-                            },
-                            onDelete = {
-                                viewModel.deleteMessage(msg)
-                            }
+                            onReply = { replyingToMessage = msg },
+                            onCopy  = { clipboardManager.setText(AnnotatedString(msg.content)) },
+                            onToggleStar = { viewModel.toggleStarMessage(msg) },
+                            onDelete = { viewModel.deleteMessage(msg) }
                         )
                     }
                     if (uiState.isTyping) {
@@ -534,30 +525,10 @@ fun AgentMessageBubble(
         SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp))
     }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 1.dp),
-        horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start,
-        verticalAlignment = Alignment.Bottom
-    ) {
-        // AI avatar on the left (Logo)
-        if (!isMe) {
-            Box(
-                modifier = Modifier
-                    .size(26.dp)
-                    .clip(CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Image(
-                    painter = painterResource(id = com.open.skolab.R.drawable.logo),
-                    contentDescription = "Skolar Logo",
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-            Spacer(Modifier.width(6.dp))
-        }
-
+    if (isMe) {
+        // ────────────────────────────────────────────────────────
+        // USER: right-aligned compact pill
+        // ────────────────────────────────────────────────────────
         MessageBubbleWrapper(
             message = message,
             onReact = onReact,
@@ -567,104 +538,102 @@ fun AgentMessageBubble(
             onDelete = onDelete
         ) {
             Column(
-                modifier = Modifier.widthIn(max = 290.dp),
-                horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 56.dp, end = 16.dp, top = 6.dp, bottom = 2.dp),
+                horizontalAlignment = Alignment.End
             ) {
-                Box {
-                    // Bubble
-                    Box(
-                        modifier = Modifier
-                            .clip(
-                                if (isMe) RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp)
-                                else RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp)
-                            )
-                            .then(
-                                if (isMe) {
-                                    Modifier.background(
-                                        Brush.linearGradient(
-                                            colors = listOf(Color(0xFF2A2010), Color(0xFF1A1500)),
-                                            start = Offset(0f, 0f),
-                                            end = Offset(300f, 100f)
-                                        )
-                                    )
-                                } else {
-                                    Modifier.background(EntropiColors.Card)
-                                }
-                            )
-                            .then(
-                                // Left accent bar for AI messages
-                                if (!isMe) {
-                                    Modifier.drawBehind {
-                                        drawRect(
-                                            brush = Brush.verticalGradient(
-                                                colors = listOf(
-                                                    Color(0xFFFFCA28),
-                                                    Color(0xFFFF8F00)
-                                                )
-                                            ),
-                                            size = androidx.compose.ui.geometry.Size(2.5.dp.toPx(), size.height)
-                                        )
-                                    }
-                                } else Modifier
-                            )
-                            .padding(
-                                start = if (!isMe) 12.dp else 10.dp,
-                                end = 12.dp,
-                                top = 9.dp,
-                                bottom = 7.dp
-                            )
-                    ) {
-                        Column {
-                            MarkdownText(
-                                markdown = message.content,
-                                color = if (isMe) EntropiColors.Text else EntropiColors.Text2,
-                                fontSize = 14.sp,
-                                modifier = Modifier.widthIn(max = 280.dp)
-                            )
-                        }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp))
+                        .background(Color(0xFF2A3942))
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                ) {
+                    MarkdownText(
+                        markdown = message.content,
+                        color = EntropiColors.Text,
+                        fontSize = 15.sp
+                    )
+                }
+                // Reaction + timestamp
+                if (!message.reaction.isNullOrEmpty()) {
+                    Spacer(Modifier.height(2.dp))
+                    ReactionBadge(reaction = message.reaction)
+                }
+                Spacer(Modifier.height(2.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (message.isStarred) {
+                        Icon(Icons.Default.Star, null, tint = EntropiColors.Gold1, modifier = Modifier.size(9.dp))
                     }
-
-                    // Render reaction badge if present
-                    if (!message.reaction.isNullOrEmpty()) {
-                        val badgeAlignment = if (isMe) Alignment.BottomStart else Alignment.BottomEnd
-                        Box(
-                            modifier = Modifier
-                                .align(badgeAlignment)
-                                .offset(y = 10.dp, x = if (isMe) (-4).dp else 4.dp)
-                        ) {
+                    Text(timestamp, color = EntropiColors.Text3, fontSize = 10.sp)
+                    Icon(Icons.Default.DoneAll, null, tint = AccentTeal.copy(alpha = 0.8f), modifier = Modifier.size(12.dp))
+                }
+            }
+        }
+    } else {
+        // ────────────────────────────────────────────────────────
+        // AI: no bubble — full-width text on bare background
+        // ────────────────────────────────────────────────────────
+        MessageBubbleWrapper(
+            message = message,
+            onReact = onReact,
+            onReply = onReply,
+            onCopy = onCopy,
+            onToggleStar = onToggleStar,
+            onDelete = onDelete
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                // Small logo avatar aligned to top of text
+                Box(
+                    modifier = Modifier
+                        .padding(top = 2.dp)
+                        .size(22.dp)
+                        .background(
+                            Brush.radialGradient(
+                                listOf(AccentTeal.copy(alpha = 0.18f), Color.Transparent)
+                            ),
+                            CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(
+                        painter = painterResource(id = com.open.skolab.R.drawable.logo),
+                        contentDescription = "Skolar",
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    MarkdownText(
+                        markdown = message.content,
+                        color = EntropiColors.Text,
+                        fontSize = 15.sp,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (message.isStarred) {
+                            Icon(Icons.Default.Star, null, tint = EntropiColors.Gold1, modifier = Modifier.size(9.dp))
+                        }
+                        Text(timestamp, color = EntropiColors.Text3, fontSize = 10.sp)
+                        if (!message.reaction.isNullOrEmpty()) {
                             ReactionBadge(reaction = message.reaction)
                         }
                     }
                 }
-
-                // Timestamp row
-                Spacer(Modifier.height(2.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(3.dp)
-                ) {
-                    if (message.isStarred) {
-                        Icon(
-                            imageVector = Icons.Default.Star,
-                            contentDescription = "Starred",
-                            tint = EntropiColors.Gold1,
-                            modifier = Modifier.size(10.dp)
-                        )
-                    }
-                    Text(timestamp, color = EntropiColors.Text3, fontSize = 9.sp)
-                    if (isMe) {
-                        Icon(
-                            imageVector = Icons.Default.DoneAll,
-                            contentDescription = null,
-                            tint = EntropiColors.Gold1.copy(alpha = 0.7f),
-                            modifier = Modifier.size(11.dp)
-                        )
-                    }
-                }
             }
         }
-
-        if (isMe) Spacer(Modifier.width(4.dp))
     }
 }
 
@@ -672,51 +641,51 @@ fun AgentMessageBubble(
 @Composable
 fun AgentTypingIndicator() {
     Row(
-        verticalAlignment = Alignment.Bottom,
-        modifier = Modifier.padding(vertical = 1.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, top = 6.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        // AI avatar
+        // Same avatar as AI messages
         Box(
             modifier = Modifier
-                .size(26.dp)
-                .clip(CircleShape),
+                .size(22.dp)
+                .background(
+                    Brush.radialGradient(listOf(AccentTeal.copy(alpha = 0.18f), Color.Transparent)),
+                    CircleShape
+                ),
             contentAlignment = Alignment.Center
         ) {
             Image(
                 painter = painterResource(id = com.open.skolab.R.drawable.logo),
-                contentDescription = "Skolar Logo",
-                modifier = Modifier.size(24.dp)
+                contentDescription = "Skolar",
+                modifier = Modifier.size(18.dp)
             )
         }
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(10.dp))
 
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp))
-                .background(EntropiColors.Card)
-                .padding(horizontal = 14.dp, vertical = 10.dp)
+        // Inline 3-dot pulse (no bubble)
+        val infiniteTransition = rememberInfiniteTransition(label = "typing")
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            val infiniteTransition = rememberInfiniteTransition(label = "typing")
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                listOf(0, 150, 300).forEach { delay ->
-                    val scale by infiniteTransition.animateFloat(
-                        initialValue = 0.5f,
-                        targetValue = 1f,
-                        animationSpec = infiniteRepeatable(
-                            tween(500, delayMillis = delay, easing = FastOutSlowInEasing),
-                            RepeatMode.Reverse
-                        ),
-                        label = "dot_$delay"
-                    )
-                    Box(
-                        modifier = Modifier
-                            .size((5 * scale).dp)
-                            .background(EntropiColors.Gold1.copy(alpha = 0.6f + 0.4f * scale), CircleShape)
-                    )
-                }
+            listOf(0, 160, 320).forEachIndexed { idx, delay ->
+                val alpha by infiniteTransition.animateFloat(
+                    initialValue = 0.2f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        tween(500, delayMillis = delay, easing = FastOutSlowInEasing),
+                        RepeatMode.Reverse
+                    ),
+                    label = "dot_$idx"
+                )
+                val dotColors = listOf(AccentTeal, AccentViolet, AccentAmber)
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .background(dotColors[idx].copy(alpha = alpha), CircleShape)
+                )
             }
         }
     }
@@ -741,55 +710,55 @@ fun AgentInputBar(
 ) {
     Surface(
         color = EntropiColors.Background,
-        border = BorderStroke(0.5.dp, EntropiColors.Border.copy(alpha = 0.5f))
+        shadowElevation = 8.dp,
+        tonalElevation = 0.dp
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+                .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // ── Replying to preview ──────────────────────────────────────────
+            // ── Reply preview ─────────────────────────────────────────────
             AnimatedVisibility(visible = replyingToMessage != null) {
                 if (replyingToMessage != null) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(EntropiColors.Card)
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF1E2D35))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
                             modifier = Modifier
-                                .width(3.dp)
-                                .height(28.dp)
-                                .background(EntropiColors.Gold1, RoundedCornerShape(2.dp))
+                                .width(2.5.dp).height(32.dp)
+                                .background(AccentTeal, RoundedCornerShape(2.dp))
                         )
-                        Spacer(Modifier.width(6.dp))
+                        Spacer(Modifier.width(8.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = if (replyingToMessage.role == "user") "You" else "Skolar",
-                                color = EntropiColors.Gold1,
+                                text = if (replyingToMessage.role == "user") "You" else "Ask Skolar",
+                                color = AccentTeal,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
                                 text = replyingToMessage.content,
                                 color = EntropiColors.Text2,
-                                fontSize = 11.sp,
+                                fontSize = 12.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
-                        IconButton(onClick = onClearReply, modifier = Modifier.size(16.dp)) {
-                            Icon(Icons.Default.Close, null, tint = EntropiColors.Text3, modifier = Modifier.size(11.dp))
+                        IconButton(onClick = onClearReply, modifier = Modifier.size(20.dp)) {
+                            Icon(Icons.Default.Close, null, tint = EntropiColors.Text3, modifier = Modifier.size(14.dp))
                         }
                     }
                 }
             }
 
-            // ── Quick prompt chips (only when conversation is empty) ───────────
+            // ── Quick prompt chips ───────────────────────────────────
             AnimatedVisibility(
                 visible = showQuickPrompts,
                 enter = fadeIn(tween(300)) + expandVertically(),
@@ -803,15 +772,15 @@ fun AgentInputBar(
                     items(quickPrompts) { prompt ->
                         Surface(
                             onClick = { onQuickPrompt(prompt) },
-                            shape = RoundedCornerShape(16.dp),
-                            color = EntropiColors.Card,
-                            border = BorderStroke(0.5.dp, EntropiColors.Border)
+                            shape = RoundedCornerShape(20.dp),
+                            color = Color(0xFF1E2D35),
+                            border = BorderStroke(0.5.dp, AccentTeal.copy(alpha = 0.25f))
                         ) {
                             Text(
                                 text = prompt,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                                 color = EntropiColors.Text2,
-                                fontSize = 11.sp,
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -821,57 +790,65 @@ fun AgentInputBar(
                 }
             }
 
-            // ── Attached file chip ────────────────────────────────────────────
+            // ── Attached file chip ──────────────────────────────────
             AnimatedVisibility(visible = isAttachingFile || attachedFileName != null) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(EntropiColors.Card)
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF1E2D35))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.AttachFile, null, tint = EntropiColors.Gold1, modifier = Modifier.size(13.dp))
-                    Spacer(Modifier.width(6.dp))
+                    Icon(Icons.Default.AttachFile, null, tint = AccentTeal, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         text = if (isAttachingFile) "Extracting…" else attachedFileName ?: "",
                         color = EntropiColors.Text2,
-                        fontSize = 11.sp,
+                        fontSize = 12.sp,
                         modifier = Modifier.weight(1f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     if (isAttachingFile) {
                         CircularProgressIndicator(
-                            color = EntropiColors.Gold1,
-                            modifier = Modifier.size(11.dp),
+                            color = AccentTeal,
+                            modifier = Modifier.size(12.dp),
                             strokeWidth = 1.5.dp
                         )
                     } else {
-                        IconButton(onClick = onClearAttachment, modifier = Modifier.size(16.dp)) {
-                            Icon(Icons.Default.Close, null, tint = EntropiColors.Text3, modifier = Modifier.size(11.dp))
+                        IconButton(onClick = onClearAttachment, modifier = Modifier.size(20.dp)) {
+                            Icon(Icons.Default.Close, null, tint = EntropiColors.Text3, modifier = Modifier.size(13.dp))
                         }
                     }
                 }
             }
 
-            // ── Main input row ────────────────────────────────────────────────
+            // ── Main input row (ChatGPT style) ─────────────────────────
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 40.dp, max = 120.dp)
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(EntropiColors.Card)
-                    .padding(horizontal = 4.dp),
+                    .heightIn(min = 48.dp, max = 140.dp)
+                    .clip(RoundedCornerShape(26.dp))
+                    .background(Color(0xFF1E2D35))
+                    .border(
+                        width = if (text.isNotBlank()) 1.dp else 0.5.dp,
+                        brush = if (text.isNotBlank())
+                            Brush.horizontalGradient(listOf(AccentTeal, AccentViolet))
+                        else
+                            Brush.horizontalGradient(listOf(EntropiColors.Border, EntropiColors.Border)),
+                        shape = RoundedCornerShape(26.dp)
+                    )
+                    .padding(start = 6.dp, end = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Attach button
-                IconButton(onClick = onAttachClick, modifier = Modifier.size(36.dp)) {
+                // Attach
+                IconButton(onClick = onAttachClick, modifier = Modifier.size(38.dp)) {
                     Icon(
                         Icons.Default.Add,
                         contentDescription = "Attach",
                         tint = EntropiColors.Text3,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
@@ -881,20 +858,20 @@ fun AgentInputBar(
                     onValueChange = onTextChanged,
                     textStyle = TextStyle(
                         color = EntropiColors.Text,
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp
+                        fontSize = 15.sp,
+                        lineHeight = 22.sp
                     ),
-                    cursorBrush = SolidColor(EntropiColors.Gold1),
+                    cursorBrush = SolidColor(AccentTeal),
                     modifier = Modifier
                         .weight(1f)
-                        .padding(vertical = 8.dp),
+                        .padding(vertical = 10.dp),
                     decorationBox = { innerTextField ->
                         Box(contentAlignment = Alignment.CenterStart) {
                             if (text.isEmpty()) {
                                 Text(
-                                    "Ask Skolar…",
+                                    "Message Ask Skolar…",
                                     color = EntropiColors.Text3,
-                                    fontSize = 14.sp
+                                    fontSize = 15.sp
                                 )
                             }
                             innerTextField()
@@ -902,7 +879,7 @@ fun AgentInputBar(
                     }
                 )
 
-                // Send / Mic button — animated swap
+                // Send / Mic
                 AnimatedContent(
                     targetState = text.isNotBlank(),
                     transitionSpec = {
@@ -911,20 +888,22 @@ fun AgentInputBar(
                         )
                     },
                     label = "send_mic"
-                ) { hasTex ->
-                    if (hasTex) {
+                ) { hasText ->
+                    if (hasText) {
                         IconButton(
                             onClick = onSend,
                             modifier = Modifier
-                                .size(36.dp)
-                                .background(EntropiColors.Gold1, CircleShape)
-                                .padding(end = 2.dp)
+                                .size(38.dp)
+                                .background(
+                                    Brush.linearGradient(listOf(AccentTeal, AccentViolet)),
+                                    CircleShape
+                                )
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.Send,
                                 contentDescription = "Send",
-                                tint = EntropiColors.Background,
-                                modifier = Modifier.size(16.dp)
+                                tint = Color.White,
+                                modifier = Modifier.size(17.dp)
                             )
                         }
                     } else {
@@ -933,13 +912,13 @@ fun AgentInputBar(
                             onClick = {
                                 android.widget.Toast.makeText(localCtx, "Voice coming soon", android.widget.Toast.LENGTH_SHORT).show()
                             },
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
                                 Icons.Default.Mic,
                                 contentDescription = "Voice",
                                 tint = EntropiColors.Text3,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }

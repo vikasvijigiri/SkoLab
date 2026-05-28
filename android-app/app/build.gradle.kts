@@ -12,11 +12,11 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.company.ResQit"
+        applicationId = "com.open.skolab"
         minSdk = 26
         targetSdk = 35
         versionCode = 2
-        versionName = "1.1.0-resqit"
+        versionName = "1.1.0-skolab"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

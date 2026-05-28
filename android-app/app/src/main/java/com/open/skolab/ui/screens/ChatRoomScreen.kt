@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -44,6 +45,18 @@ import java.util.*
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.tasks.await
+import android.media.ToneGenerator
+import android.media.AudioManager
+import android.widget.Toast
+import androidx.compose.ui.draw.blur
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalView
+import android.view.HapticFeedbackConstants
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material.icons.automirrored.filled.ScreenShare
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,6 +72,99 @@ fun ChatRoomScreen(
     var messageText by remember { mutableStateOf("") }
     var chatHistory by remember { mutableStateOf<List<ChatMessage>>(emptyList()) }
     var isPeerTyping by remember { mutableStateOf(false) }
+    
+    var isPeerSkoLab by remember { mutableStateOf(false) }
+    var checkingSkoLabStatus by remember { mutableStateOf(true) }
+
+    LaunchedEffect(peerId) {
+        if (peerId.isNotEmpty() &&
+            !peerId.startsWith("https://openalex.org/") &&
+            peerId != "sumiran_uid" &&
+            peerId != "nisheeta_uid" &&
+            peerId != "paulson_uid" &&
+            peerId != "saptarshi_uid" &&
+            peerId != "you_uid" &&
+            peerId != "default_owner"
+        ) {
+            checkingSkoLabStatus = true
+            try {
+                val db = FirebaseFirestore.getInstance()
+                val doc = db.collection("researchers").document(peerId).get().await()
+                isPeerSkoLab = doc.exists()
+            } catch (e: Exception) {
+                isPeerSkoLab = false
+            } finally {
+                checkingSkoLabStatus = false
+            }
+        } else {
+            isPeerSkoLab = false
+            checkingSkoLabStatus = false
+        }
+    }
+
+    // Video Call simulation
+    var showCallingOverlay by remember { mutableStateOf(false) }
+    var callingOverlayMode by remember { mutableStateOf("voice") } // "voice" or "video"
+    var callConnectedTime by remember { mutableStateOf(0) }
+    var callState by remember { mutableStateOf("calling") } // "calling", "ringing", "connected", "disconnected"
+    var micMuted by remember { mutableStateOf(false) }
+    var cameraOn by remember { mutableStateOf(true) }
+    var speakerOn by remember { mutableStateOf(false) }
+
+    // Ringing sound simulation using ToneGenerator
+    LaunchedEffect(showCallingOverlay, callState) {
+        if (showCallingOverlay && (callState == "calling" || callState == "ringing")) {
+            val toneGenerator = try {
+                ToneGenerator(AudioManager.STREAM_VOICE_CALL, 80)
+            } catch (e: Exception) {
+                null
+            }
+            if (toneGenerator != null) {
+                scope.launch {
+                    try {
+                        while (showCallingOverlay && (callState == "calling" || callState == "ringing")) {
+                            toneGenerator.startTone(ToneGenerator.TONE_SUP_RINGTONE)
+                            delay(2000)
+                            toneGenerator.stopTone()
+                            delay(3000)
+                        }
+                    } catch (e: Exception) {
+                        // ignore
+                    } finally {
+                        toneGenerator.release()
+                    }
+                }
+            }
+        }
+    }
+
+    // Auto-connect call simulation after a few seconds
+    LaunchedEffect(showCallingOverlay, callState) {
+        if (showCallingOverlay) {
+            if (callState == "calling") {
+                delay(2000)
+                callState = "ringing"
+            }
+            if (callState == "ringing") {
+                delay(3000)
+                callState = "connected"
+                callConnectedTime = 0
+            }
+        }
+    }
+
+    // Call active timer
+    LaunchedEffect(showCallingOverlay, callState) {
+        if (showCallingOverlay && callState == "connected") {
+            while (showCallingOverlay && callState == "connected") {
+                delay(1000)
+                callConnectedTime++
+            }
+        }
+    }
+
+    var showNonSkoLabDialog by remember { mutableStateOf(false) }
+    var selectedCallTypeForDialog by remember { mutableStateOf("voice") }
     @Suppress("DEPRECATION")
     val clipboardManager = LocalClipboardManager.current
     var replyingToMessage by remember { mutableStateOf<ChatMessage?>(null) }
@@ -99,7 +205,8 @@ fun ChatRoomScreen(
         }
     }
 
-    Scaffold(
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
         modifier = Modifier.imePadding(),
         containerColor = BgPrimary,
         topBar = {
@@ -154,11 +261,41 @@ fun ChatRoomScreen(
                     }
                     
                     // Action icons
-                    IconButton(onClick = {}) {
-                        Icon(Icons.Default.Videocam, null, tint = TextSecondary)
+                    IconButton(
+                        onClick = {
+                            if (isPeerSkoLab) {
+                                callingOverlayMode = "video"
+                                callState = "calling"
+                                showCallingOverlay = true
+                            } else {
+                                selectedCallTypeForDialog = "video"
+                                showNonSkoLabDialog = true
+                            }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Videocam,
+                            contentDescription = "Video Call",
+                            tint = if (isPeerSkoLab) AccentTeal else TextSecondary.copy(alpha = 0.38f)
+                        )
                     }
-                    IconButton(onClick = {}) {
-                        Icon(Icons.Default.Call, null, tint = TextSecondary)
+                    IconButton(
+                        onClick = {
+                            if (isPeerSkoLab) {
+                                callingOverlayMode = "voice"
+                                callState = "calling"
+                                showCallingOverlay = true
+                            } else {
+                                selectedCallTypeForDialog = "voice"
+                                showNonSkoLabDialog = true
+                            }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Call,
+                            contentDescription = "Voice Call",
+                            tint = if (isPeerSkoLab) AccentTeal else TextSecondary.copy(alpha = 0.38f)
+                        )
                     }
                 }
             }
@@ -380,8 +517,86 @@ fun ChatRoomScreen(
             }
         }
     }
+
+    if (showNonSkoLabDialog) {
+        AlertDialog(
+            onDismissRequest = { showNonSkoLabDialog = false },
+            title = {
+                Text(
+                    text = "Profile Unclaimed",
+                    fontFamily = SyneFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = AccentTeal
+                )
+            },
+            text = {
+                Text(
+                    text = "$peerName hasn't claimed their SkoLab profile yet. Invite them to join and activate secure encrypted audio/video calling!\n\nFor evaluation, you can launch a simulated demo call.",
+                    color = TextSecondary,
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showNonSkoLabDialog = false
+                        callingOverlayMode = selectedCallTypeForDialog
+                        callState = "calling"
+                        showCallingOverlay = true
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = AccentTeal)
+                ) {
+                    Text("Start Demo Call", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNonSkoLabDialog = false }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            },
+            containerColor = BgCard,
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
+
+    AnimatedVisibility(
+        visible = showCallingOverlay,
+        enter = fadeIn(animationSpec = tween(500)) + expandIn(expandFrom = Alignment.Center),
+        exit = fadeOut(animationSpec = tween(500)) + shrinkOut(shrinkTowards = Alignment.Center)
+    ) {
+        SkoLabCallingOverlay(
+            peerName = peerName,
+            mode = callingOverlayMode,
+            callState = callState,
+            callConnectedTime = callConnectedTime,
+            micMuted = micMuted,
+            cameraOn = cameraOn,
+            speakerOn = speakerOn,
+            color = color,
+            onMuteToggle = { micMuted = !micMuted },
+            onCameraToggle = { cameraOn = !cameraOn },
+            onSpeakerToggle = { speakerOn = !speakerOn },
+            onEndCall = {
+                callState = "disconnected"
+                scope.launch {
+                    delay(500)
+                    showCallingOverlay = false
+                }
+            },
+            onJoinRealJitsi = {
+                val roomName = "SkoLabSecure_" + peerId.hashCode().toString()
+                val jitsiUrl = "https://meet.jit.si/$roomName"
+                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(jitsiUrl))
+                context.startActivity(intent)
+            }
+        )
+    }
 }
 }
+}
+
+
 
 @Composable
 fun ChatBubble(
@@ -516,3 +731,245 @@ fun TypingIndicator(peerName: String) {
 
 private fun Modifier.scale(scale: Float) = this.scale(scale, scale)
 private fun Modifier.scale(scaleX: Float, scaleY: Float) = this.graphicsLayer(scaleX = scaleX, scaleY = scaleY)
+
+@Composable
+fun SkoLabCallingOverlay(
+    peerName: String,
+    mode: String,
+    callState: String,
+    callConnectedTime: Int,
+    micMuted: Boolean,
+    cameraOn: Boolean,
+    speakerOn: Boolean,
+    color: Color,
+    onMuteToggle: () -> Unit,
+    onCameraToggle: () -> Unit,
+    onSpeakerToggle: () -> Unit,
+    onEndCall: () -> Unit,
+    onJoinRealJitsi: () -> Unit
+) {
+    val initials = peerName.split(" ").map { it.take(1) }.joinToString("").uppercase()
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = EaseInOutQuad),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale"
+    )
+
+    Surface(
+        color = Color(0xFF0C1013).copy(alpha = 0.96f),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Secure Indicator
+            Surface(
+                color = Color(0xFF1B3B2B),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "Secure",
+                        tint = Color(0xFF25D366),
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "End-to-End Encrypted SkoLab Call",
+                        color = Color(0xFF25D366),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // Peer info & Ringing / Calling state
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.weight(1f)
+            ) {
+                // Pulsating Avatar
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.size(180.dp)
+                ) {
+                    if (callState == "calling" || callState == "ringing") {
+                        Box(
+                            modifier = Modifier
+                                .size((120 * pulseScale).dp)
+                                .clip(CircleShape)
+                                .background(color.copy(alpha = 0.15f))
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size((140 * pulseScale).dp)
+                                .clip(CircleShape)
+                                .border(1.dp, color.copy(alpha = 0.25f), CircleShape)
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(100.dp)
+                            .clip(CircleShape)
+                            .background(color.copy(alpha = 0.25f))
+                            .border(2.dp, color, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = initials,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 32.sp
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                Text(
+                    text = peerName,
+                    color = Color.White,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    textAlign = TextAlign.Center
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Text(
+                    text = when (callState) {
+                        "calling" -> "SkoLab secure calling..."
+                        "ringing" -> "Ringing..."
+                        "connected" -> "Connected"
+                        else -> "Disconnected"
+                    },
+                    color = if (callState == "connected") Color(0xFF25D366) else Color.LightGray,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                if (callState == "connected") {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = String.format("%02d:%02d", callConnectedTime / 60, callConnectedTime % 60),
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            // Real Voice/Video Jitsi transition trigger
+            if (callState == "connected") {
+                Button(
+                    onClick = onJoinRealJitsi,
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
+                    shape = RoundedCornerShape(14.dp),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
+                    modifier = Modifier.padding(bottom = 24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Groups,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Join Real Voice/Video Room",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // Controls Panel
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 24.dp)
+            ) {
+                // Mic Button
+                IconButton(
+                    onClick = onMuteToggle,
+                    modifier = Modifier
+                        .size(54.dp)
+                        .clip(CircleShape)
+                        .background(if (micMuted) Color(0xFFEA0038) else Color(0xFF2E3B43))
+                ) {
+                    Icon(
+                        imageVector = if (micMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                        contentDescription = "Mute",
+                        tint = Color.White
+                    )
+                }
+
+                // Video/Camera Button
+                if (mode == "video") {
+                    IconButton(
+                        onClick = onCameraToggle,
+                        modifier = Modifier
+                            .size(54.dp)
+                            .clip(CircleShape)
+                            .background(if (!cameraOn) Color(0xFFEA0038) else Color(0xFF2E3B43))
+                    ) {
+                        Icon(
+                            imageVector = if (cameraOn) Icons.Default.Videocam else Icons.Default.VideocamOff,
+                            contentDescription = "Camera",
+                            tint = Color.White
+                        )
+                    }
+                }
+
+                // Speaker Button
+                IconButton(
+                    onClick = onSpeakerToggle,
+                    modifier = Modifier
+                        .size(54.dp)
+                        .clip(CircleShape)
+                        .background(if (speakerOn) AccentTeal else Color(0xFF2E3B43))
+                ) {
+                    Icon(
+                        imageVector = if (speakerOn) Icons.Default.VolumeUp else Icons.Default.VolumeDown,
+                        contentDescription = "Speaker",
+                        tint = Color.White
+                    )
+                }
+
+                // Red Hang-up button
+                IconButton(
+                    onClick = onEndCall,
+                    modifier = Modifier
+                        .size(60.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFEA0038))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CallEnd,
+                        contentDescription = "Hang Up",
+                        tint = Color.White,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+            }
+        }
+    }
+}
