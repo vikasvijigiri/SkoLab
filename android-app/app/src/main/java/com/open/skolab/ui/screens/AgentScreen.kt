@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -74,6 +75,7 @@ fun AgentScreen() {
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
     var messageText by remember { mutableStateOf("") }
+    @Suppress("DEPRECATION")
     val clipboardManager = LocalClipboardManager.current
     var replyingToMessage by remember { mutableStateOf<ChatMessage?>(null) }
     val isConversationEmpty = uiState.messages.isEmpty() && !uiState.isTyping
@@ -1028,7 +1030,7 @@ fun AgentHistoryBottomSheet(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Chat,
+                                    imageVector = Icons.AutoMirrored.Filled.Chat,
                                     contentDescription = null,
                                     tint = if (isCurrent) EntropiColors.Gold1 else EntropiColors.Text3,
                                     modifier = Modifier.size(18.dp)

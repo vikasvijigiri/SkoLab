@@ -1,37 +1,47 @@
 package com.open.skolab.ui.screens
 
-import android.util.Log
 import android.content.Intent
-import androidx.compose.animation.core.animate
+import android.util.Log
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.material.icons.outlined.Business
+import androidx.compose.material.icons.outlined.EmojiEvents
+import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import com.google.firebase.auth.FirebaseUser
@@ -103,9 +113,7 @@ fun ProfileScreen(
 
 @Composable
 fun LoginContent(onSignInClick: () -> Unit, onBack: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize()
-    ) {
+    Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -145,9 +153,9 @@ fun LoginContent(onSignInClick: () -> Unit, onBack: () -> Unit) {
                     )
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(32.dp))
-            
+
             Text(
                 text = "Join the Frontier",
                 style = MaterialTheme.typography.headlineMedium,
@@ -162,12 +170,12 @@ fun LoginContent(onSignInClick: () -> Unit, onBack: () -> Unit) {
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 12.dp)
             )
-            
+
             Spacer(modifier = Modifier.height(48.dp))
-            
+
             Button(
                 onClick = onSignInClick,
-                colors = ButtonDefaults.buttonColors(containerColor = TextPrimary),
+                colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth().height(52.dp)
             ) {
@@ -189,6 +197,7 @@ fun ProfileContent(
     val complexity = resQitUser?.complexityScore ?: 0f
     val mastery = (kotlin.math.ln(savedCount.toFloat() + 1f) * 20f + complexity * 0.3f).coerceIn(0f, 100f)
     val resQitScore = (mastery * 6.5f + complexity * 3.5f).toInt().coerceIn(100, 1000)
+    val hIndex = maxOf(1, savedCount / 3)
 
     val context = LocalContext.current
     val authManager = remember { AuthManager(context) }
@@ -220,197 +229,557 @@ fun ProfileContent(
             initialValue = 0f,
             targetValue = resQitScore / 1000f,
             animationSpec = tween(1500, easing = FastOutSlowInEasing)
-        ) { value, _ ->
-            animatedProgress = value
-        }
+        ) { value, _ -> animatedProgress = value }
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize()
-    ) {
-        Row(
+    val scrollState = rememberScrollState()
+    val displayName = firebaseUser.displayName ?: "Researcher"
+    val fieldOfStudy = aiProfile?.field_of_study ?: resQitUser?.researchFocus ?: "Research Scholar"
+    val institution = aiProfile?.institution ?: "Independent Researcher"
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        // ── Back button overlaid on banner ────────────────────────────────────
+        IconButton(
+            onClick = onBack,
             modifier = Modifier
-                .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(8.dp)
+                .zIndex(10f)
         ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = TextPrimary
-                )
-            }
-            Spacer(modifier = Modifier.width(16.dp))
-            Text(
-                text = "SETTINGS",
-                style = MaterialTheme.typography.titleMedium,
-                color = TextPrimary,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+                tint = TextPrimary
             )
         }
 
-        val scrollState = rememberScrollState()
         Column(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
+                .fillMaxSize()
                 .verticalScroll(scrollState)
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Profile Header
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    modifier = Modifier.size(72.dp),
-                    shape = RoundedCornerShape(20.dp),
-                    color = BgCard,
-                    border = BorderStroke(1.dp, AccentTeal.copy(alpha = 0.3f))
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            text = firebaseUser.displayName?.take(1) ?: "U",
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Black,
-                            color = AccentTeal
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.width(20.dp))
-                
-                Column {
-                    Text(
-                        text = firebaseUser.displayName ?: "Researcher",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = TextPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = firebaseUser.email ?: "",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
-                    )
-                }
-            }
-        
-            // Pro Workspace Card
-            Spacer(modifier = Modifier.height(24.dp))
-            Surface(
-                onClick = onNavigateToProWorkspace,
-                color = BgCard,
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, Color(0xFFF4B400))
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "SkoLab Pro & Labs Workspace",
-                                color = TextPrimary,
-                                fontWeight = FontWeight.Bold
+            // ── 1. Banner + Avatar header ─────────────────────────────────────
+            Box(modifier = Modifier.fillMaxWidth()) {
+                // Banner
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp)
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFF005C4B),
+                                    Color(0xFF00A884),
+                                    Color(0xFF25D366).copy(alpha = 0.6f)
+                                ),
+                                start = Offset(0f, 0f),
+                                end = Offset(Float.MAX_VALUE, Float.MAX_VALUE)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = Color(0x33F4B400),
-                                border = BorderStroke(0.5.dp, Color(0xFFF4B400))
-                            ) {
-                                Text(
-                                    text = "PRO",
-                                    color = Color(0xFFF4B400),
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Black,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Manage subscription, scoop shield alerts, collaborative workspaces & job matching.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
+                        )
+                ) {
+                    // Decorative circles in banner
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        drawCircle(
+                            color = Color.White.copy(alpha = 0.04f),
+                            radius = 180f,
+                            center = Offset(size.width * 0.85f, size.height * 0.2f)
+                        )
+                        drawCircle(
+                            color = Color.White.copy(alpha = 0.03f),
+                            radius = 100f,
+                            center = Offset(size.width * 0.7f, size.height * 0.8f)
                         )
                     }
-                    Icon(
-                        imageVector = Icons.Outlined.AutoAwesome,
-                        contentDescription = "Access Pro",
-                        tint = Color(0xFFF4B400),
-                        modifier = Modifier.size(24.dp).padding(start = 8.dp)
-                    )
+                }
+
+                // Avatar — overlapping the banner
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 20.dp)
+                        .offset(y = 44.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(84.dp)
+                            .clip(CircleShape)
+                            .background(BgPrimary),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(78.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.radialGradient(
+                                        colors = listOf(AccentTeal, Color(0xFF005C4B))
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = displayName.take(1).uppercase(),
+                                fontSize = 30.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White
+                            )
+                        }
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
-            
-            Text(
-                text = "INTELLIGENCE PROFILE",
-                style = MaterialTheme.typography.labelSmall,
-                color = AccentTeal,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 2.sp
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            SkoLabScoreCard(
-                mastery = mastery,
-                complexity = complexity,
-                savedCount = savedCount,
-                resQitScore = resQitScore,
-                animatedProgress = animatedProgress
-            )
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            ExpertiseProfileCard(aiProfile = aiProfile, isLoading = isLoadingProfile)
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            ShareProfileButton(
-                displayName = firebaseUser.displayName ?: "Researcher",
-                score = resQitScore,
-                mastery = mastery,
-                complexity = complexity,
-                savedCount = savedCount
-            )
-            
-            Spacer(modifier = Modifier.height(32.dp))
-            
-            TextButton(
-                onClick = onSignOut,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
-                colors = ButtonDefaults.textButtonColors(contentColor = Color.Red.copy(alpha = 0.6f))
-            ) {
-                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Terminate Session", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            // Space below avatar overlap
+            Spacer(modifier = Modifier.height(56.dp))
+
+            // ── 2. Name + Title + Institution ────────────────────────────────
+            Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                Text(
+                    text = displayName,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = fieldOfStudy,
+                    fontSize = 14.sp,
+                    color = TextSecondary,
+                    lineHeight = 20.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                if (institution.isNotBlank() && institution != "Independent Researcher") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Outlined.Business,
+                            contentDescription = null,
+                            tint = TextMuted,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(institution, fontSize = 13.sp, color = TextSecondary)
+                    }
+                    Spacer(modifier = Modifier.height(3.dp))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Outlined.EmojiEvents,
+                        contentDescription = null,
+                        tint = AccentAmber,
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "$resQitScore SkoLab Score · Top 12% in field",
+                        fontSize = 13.sp,
+                        color = AccentAmber,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // ── 3. Action buttons ─────────────────────────────────────────
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Share button (primary)
+                    Button(
+                        onClick = {
+                            val shareText = """
+                                SkoLab Scholar Profile: $displayName
+                                -----------------------------------
+                                SkoLab Score: $resQitScore/1000 (Top 12%)
+                                Field: $fieldOfStudy
+                                Institution: $institution
+                                h-index (estimated): $hIndex
+                                
+                                Explore my research on SkoLab!
+                            """.trimIndent()
+                            val sendIntent = Intent().apply {
+                                action = Intent.ACTION_SEND
+                                putExtra(Intent.EXTRA_TEXT, shareText)
+                                type = "text/plain"
+                            }
+                            context.startActivity(Intent.createChooser(sendIntent, "Share Research Profile"))
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
+                        shape = RoundedCornerShape(50.dp),
+                        modifier = Modifier.weight(1f).height(40.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp)
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Share", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    }
+
+                    // Pro Workspace button (outlined)
+                    OutlinedButton(
+                        onClick = onNavigateToProWorkspace,
+                        border = BorderStroke(1.dp, AccentAmber),
+                        shape = RoundedCornerShape(50.dp),
+                        modifier = Modifier.weight(1f).height(40.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp)
+                    ) {
+                        Icon(Icons.Outlined.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp), tint = AccentAmber)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Pro Workspace", color = AccentAmber, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
             }
+
+            Spacer(modifier = Modifier.height(20.dp))
+            HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
+
+            // ── 4. About section ──────────────────────────────────────────────
+            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+                Text("About", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = if (aiProfile != null) {
+                        "${displayName} — ${fieldOfStudy} researcher at ${institution}. " +
+                        if (aiProfile!!.expertise.isNotEmpty()) "Areas of expertise include ${aiProfile!!.expertise.take(3).joinToString(", ")}." else ""
+                    } else {
+                        "${displayName} — Research scholar on the SkoLab platform. Sign in to populate your full academic profile."
+                    },
+                    fontSize = 14.sp,
+                    color = TextSecondary,
+                    lineHeight = 21.sp
+                )
+                if (isLoadingProfile) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(
+                            color = AccentTeal,
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Fetching academic profile...", fontSize = 12.sp, color = TextMuted)
+                    }
+                }
+            }
+
+            HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
+
+            // ── 5. Intelligence Profile metrics ───────────────────────────────
+            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = null,
+                        tint = AccentAmber,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Intelligence Profile",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Score ring + stats
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Compact score ring
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(90.dp)) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val strokeWidth = 9.dp.toPx()
+                            val radius = (size.minDimension - strokeWidth) / 2
+                            drawCircle(
+                                color = BorderMedium,
+                                radius = radius,
+                                style = Stroke(width = strokeWidth)
+                            )
+                            drawArc(
+                                brush = Brush.sweepGradient(listOf(AccentTeal, Color(0xFF25D366))),
+                                startAngle = -90f,
+                                sweepAngle = animatedProgress * 360f,
+                                useCenter = false,
+                                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = (animatedProgress * 1000).toInt().toString(),
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = "Score",
+                                fontSize = 9.sp,
+                                color = TextMuted,
+                                letterSpacing = 0.3.sp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(20.dp))
+
+                    // Stat grid (2×2)
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ProfileStatChip(
+                                label = "Field Mastery",
+                                value = "${mastery.toInt()}%",
+                                color = AccentTeal,
+                                modifier = Modifier.weight(1f)
+                            )
+                            ProfileStatChip(
+                                label = "Complexity",
+                                value = "${complexity.toInt()}%",
+                                color = AccentIndigo,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ProfileStatChip(
+                                label = "Saved Papers",
+                                value = savedCount.toString(),
+                                color = AccentViolet,
+                                modifier = Modifier.weight(1f)
+                            )
+                            ProfileStatChip(
+                                label = "h-index (est.)",
+                                value = hIndex.toString(),
+                                color = AccentAmber,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Top 12% badge
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = AccentTeal.copy(alpha = 0.12f),
+                    border = BorderStroke(1.dp, AccentTeal.copy(alpha = 0.25f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.EmojiEvents,
+                            contentDescription = null,
+                            tint = AccentTeal,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text("Top 12% in your research field", fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                            Text("Based on papers saved, complexity & mastery scores", fontSize = 11.sp, color = TextMuted)
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
+
+            // ── 6. Expertise / Skills section ────────────────────────────────
+            if (aiProfile != null && (aiProfile!!.expertise.isNotEmpty() || aiProfile!!.academic_history.isNotEmpty())) {
+                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Outlined.AutoAwesome,
+                            contentDescription = null,
+                            tint = AccentViolet,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "Research Expertise",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                    }
+
+                    if (aiProfile!!.expertise.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        // Skills rendered as compact rows
+                        aiProfile!!.expertise.take(8).forEachIndexed { index, skill ->
+                            if (index > 0) Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(AccentTeal)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(skill, fontSize = 14.sp, color = TextPrimary, modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+
+                    if (aiProfile!!.academic_history.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            "Academic Background",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextSecondary,
+                            letterSpacing = 0.5.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            aiProfile!!.academic_history.forEach { history ->
+                                Row(
+                                    verticalAlignment = Alignment.Top,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.School,
+                                        contentDescription = null,
+                                        tint = AccentIndigo,
+                                        modifier = Modifier.size(16.dp).padding(top = 2.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(history, color = TextSecondary, fontSize = 13.sp, lineHeight = 19.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+                HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
+            }
+
+            // ── 7. Featured publications preview ─────────────────────────────
+            if (aiProfile != null && aiProfile!!.works.isNotEmpty()) {
+                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.MenuBook,
+                            contentDescription = null,
+                            tint = AccentIndigo,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "Featured Publications",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    aiProfile!!.works.take(3).forEachIndexed { index, work ->
+                        if (index > 0) Spacer(modifier = Modifier.height(10.dp))
+                        Surface(
+                            color = BgCard,
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(0.5.dp, BorderMedium),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    text = work.title ?: "Untitled",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = TextPrimary,
+                                    lineHeight = 18.sp,
+                                    maxLines = 2
+                                )
+                                if (!work.journal.isNullOrBlank()) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "${work.journal} · ${work.year ?: ""}",
+                                        fontSize = 11.sp,
+                                        color = TextMuted
+                                    )
+                                }
+                                val citationCount = work.citations ?: 0
+                                if (citationCount > 0) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "$citationCount citations",
+                                        fontSize = 11.sp,
+                                        color = AccentTeal,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
+            }
+
+            // ── 8. Sign Out ───────────────────────────────────────────────────
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 20.dp, vertical = 24.dp)
+                    .fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                TextButton(
+                    onClick = onSignOut,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.textButtonColors(contentColor = AccentRose.copy(alpha = 0.75f))
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Terminate Session", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                }
+            }
+
+            Spacer(modifier = Modifier.navigationBarsPadding())
         }
     }
 }
 
+@Composable
+private fun ProfileStatChip(
+    label: String,
+    value: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(10.dp),
+        color = BgCard,
+        border = BorderStroke(0.5.dp, color.copy(alpha = 0.3f))
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+            Text(label, color = TextMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(value, color = color, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+        }
+    }
+}
+
+// Legacy exports — keep other screens compiling
 @Composable
 fun SkoLabScoreRing(progress: Float, score: Int) {
     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(160.dp)) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val strokeWidth = 14.dp.toPx()
             val radius = (size.minDimension - strokeWidth) / 2
-            
-            // Draw background track ring
-            drawCircle(
-                color = BorderLight,
-                radius = radius,
-                style = Stroke(width = strokeWidth)
-            )
-            
-            // Draw animated progress arc
+            drawCircle(color = BorderLight, radius = radius, style = Stroke(width = strokeWidth))
             drawArc(
                 brush = Brush.sweepGradient(HeroGradient),
                 startAngle = -90f,
@@ -419,215 +788,9 @@ fun SkoLabScoreRing(progress: Float, score: Int) {
                 style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
             )
         }
-        
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = score.toString(),
-                fontSize = 32.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = TextPrimary,
-                fontFamily = DisplayFontFamily
-            )
-            Text(
-                text = "SkoLab Score",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextMuted,
-                letterSpacing = 0.5.sp
-            )
-        }
-    }
-}
-
-@Composable
-fun SkoLabScoreCard(
-    mastery: Float,
-    complexity: Float,
-    savedCount: Int,
-    resQitScore: Int,
-    animatedProgress: Float
-) {
-    Surface(
-        color = BgCard,
-        shape = RoundedCornerShape(24.dp),
-        shadowElevation = 3.dp,
-        border = BorderStroke(1.dp, BorderLight),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            SkoLabScoreRing(progress = animatedProgress, score = (animatedProgress * 1000).toInt())
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Surface(
-                shape = RoundedCornerShape(50),
-                color = AccentTealLight,
-                border = BorderStroke(0.5.dp, AccentTeal.copy(alpha = 0.3f))
-            ) {
-                Text(
-                    text = "🏆 Top 12% in your field",
-                    color = AccentTealDark,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(20.dp))
-            HorizontalDivider(color = BorderLight)
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            val hIndex = maxOf(1, savedCount / 3)
-            val subMetrics = listOf(
-                Pair("Field Mastery", "${mastery.toInt()}%"),
-                Pair("Complexity", "${complexity.toInt()}%"),
-                Pair("Saved Papers", savedCount.toString()),
-                Pair("h-index (est)", hIndex.toString())
-            )
-            
-            val chunked = subMetrics.chunked(2)
-            chunked.forEach { rowItems ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    rowItems.forEach { (label, value) ->
-                        Surface(
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                            color = BgSubtle,
-                            border = BorderStroke(1.dp, BorderLight)
-                        ) {
-                            Column(modifier = Modifier.padding(10.dp)) {
-                                Text(label, color = TextMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(value, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ShareProfileButton(displayName: String, score: Int, mastery: Float, complexity: Float, savedCount: Int) {
-    val context = LocalContext.current
-    val hIndex = maxOf(1, savedCount / 3)
-    
-    Button(
-        onClick = {
-            val shareText = """
-                SkoLab Scholar Profile: $displayName
-                -----------------------------------
-                SkoLab Score: $score/1000 (Top 12%)
-                Field Mastery: ${mastery.toInt()}%
-                Complexity Index: ${complexity.toInt()}%
-                h-index (estimated): $hIndex
-                Total Papers Saved: $savedCount
-                
-                Explore my research on SkoLab app!
-            """.trimIndent()
-            
-            val sendIntent = Intent().apply {
-                action = Intent.ACTION_SEND
-                putExtra(Intent.EXTRA_TEXT, shareText)
-                type = "text/plain"
-            }
-            val shareIntent = Intent.createChooser(sendIntent, "Share Research Profile")
-            context.startActivity(shareIntent)
-        },
-        colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth().height(52.dp)
-    ) {
-        Icon(Icons.Default.Share, contentDescription = null, tint = TextOnAccent)
-        Spacer(modifier = Modifier.width(8.dp))
-        Text("Share My Research Card", color = TextOnAccent, fontWeight = FontWeight.Bold)
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-fun ExpertiseProfileCard(aiProfile: com.open.skolab.network.AuthorResponse?, isLoading: Boolean) {
-    Surface(
-        color = BgCard,
-        shape = RoundedCornerShape(24.dp),
-        shadowElevation = 3.dp,
-        border = BorderStroke(1.dp, BorderLight),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.AutoAwesome, contentDescription = "AI Extracted", tint = AccentViolet, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("AI EXTRACTED RESEARCH FOCUS", fontSize = 10.sp, color = AccentViolet, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-            }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-
-            if (isLoading) {
-                CircularProgressIndicator(color = AccentTeal, modifier = Modifier.size(24.dp))
-                Text("Analyzing publications...", fontSize = 12.sp, color = TextMuted, modifier = Modifier.padding(top = 8.dp))
-            } else if (aiProfile != null) {
-                Text(
-                    text = aiProfile.field_of_study ?: "Multi-disciplinary",
-                    color = TextPrimary,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Black
-                )
-
-                if (aiProfile.expertise.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("AREAS OF INTEREST & SKILLS", fontSize = 10.sp, color = TextSecondary, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        aiProfile.expertise.forEach { skill ->
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = AccentTeal.copy(alpha = 0.1f),
-                                border = BorderStroke(1.dp, AccentTeal.copy(alpha = 0.2f))
-                            ) {
-                                Text(
-                                    text = skill,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                    color = AccentTeal,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
-                    }
-                }
-
-                if (aiProfile.academic_history.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(20.dp))
-                    Text("ACADEMIC BACKGROUND", fontSize = 10.sp, color = TextSecondary, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        aiProfile.academic_history.forEach { history ->
-                            Row(verticalAlignment = Alignment.Top) {
-                                Text("•", color = AccentViolet, modifier = Modifier.padding(end = 8.dp))
-                                Text(history, color = TextPrimary, fontSize = 13.sp)
-                            }
-                        }
-                    }
-                }
-            } else {
-                Text(
-                    text = "No published works found to extract profile.",
-                    color = TextSecondary,
-                    fontSize = 13.sp
-                )
-            }
+            Text(score.toString(), fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary, fontFamily = DisplayFontFamily)
+            Text("SkoLab Score", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextMuted, letterSpacing = 0.5.sp)
         }
     }
 }

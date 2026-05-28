@@ -297,6 +297,9 @@ class AgentViewModel(private val context: Context, private val userUid: String) 
 
     fun deleteSession(sessionId: String) {
         chatStorage.deleteChatHistory(sessionId)
+        if (chatStorage.getAgentChats().isEmpty()) {
+            clearMemory()
+        }
         if (sessionId == activeSessionId) {
             loadHistory()
         } else {
@@ -316,8 +319,29 @@ class AgentViewModel(private val context: Context, private val userUid: String) 
         loadPastSessions()
     }
 
+    private fun clearMemory() {
+        UserActivityTracker.clearMemory(context)
+        _uiState.update {
+            it.copy(
+                memoryProfile = UserMemoryProfile(),
+                proactiveReminders = emptyList(),
+                personalizedGreeting = "Hello! What are we researching today?",
+                personalizedQuickPrompts = listOf(
+                    "Summarize my latest papers",
+                    "Find grant opportunities",
+                    "Who should I collaborate with?",
+                    "Analyze citation trends",
+                    "Write an abstract",
+                    "Compare methodologies"
+                ),
+                currentProject = "Research Skolar"
+            )
+        }
+    }
+
     fun clearCurrentHistory() {
         chatStorage.deleteChatHistory(activeSessionId)
+        clearMemory()
         _uiState.update { it.copy(messages = emptyList()) }
         loadPastSessions()
     }

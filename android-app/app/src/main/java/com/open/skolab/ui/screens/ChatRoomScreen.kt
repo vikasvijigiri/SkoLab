@@ -59,6 +59,7 @@ fun ChatRoomScreen(
     var messageText by remember { mutableStateOf("") }
     var chatHistory by remember { mutableStateOf<List<ChatMessage>>(emptyList()) }
     var isPeerTyping by remember { mutableStateOf(false) }
+    @Suppress("DEPRECATION")
     val clipboardManager = LocalClipboardManager.current
     var replyingToMessage by remember { mutableStateOf<ChatMessage?>(null) }
 

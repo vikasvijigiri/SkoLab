@@ -392,6 +392,252 @@ def generate_research_report(title: str, sections: List[Dict[str, Any]], filenam
         return f"[ERROR] Failed to generate report: {e}"
 
 
+async def fetch_and_summarize_paper(query: str, source: str = "auto") -> str:
+    """
+    Fetches full metadata and abstract for a research paper from multiple academic sources
+    and returns a rich content block for the LLM to summarize.
+    Priority order: OpenAlex → arXiv → Semantic Scholar → Web Scraping.
+    """
+    content_blocks = []
+    found_abstract = False
+
+    # ── Detect input type ────────────────────────────────────────────────────
+    is_doi  = bool(re.match(r'^10\.\d{4,}/', query.strip()))
+    is_arxiv_id = bool(re.match(r'^(\d{4}\.\d{4,5}|[a-z\-]+/\d{7})(v\d+)?$', query.strip().lower()))
+    is_url  = query.strip().startswith("http")
+    arxiv_id = None
+    if is_url and "arxiv.org" in query:
+        m = re.search(r'arxiv\.org/(abs|pdf)/(\S+?)(?:\.pdf)?$', query)
+        if m:
+            arxiv_id = m.group(2)
+    if is_arxiv_id:
+        arxiv_id = query.strip()
+
+    # ── 1. OpenAlex lookup ───────────────────────────────────────────────────
+    if source in ("auto", "openalex"):
+        try:
+            oa_headers = {"User-Agent": "SkolabApp/1.0 (mailto:vikki.4me@gmail.com)", "Accept": "application/json"}
+            if is_doi:
+                works_url = f"https://api.openalex.org/works/doi:{urllib.parse.quote(query.strip())}"
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    r = await client.get(works_url, headers=oa_headers)
+                    if r.status_code == 200:
+                        w = r.json()
+                        title     = w.get("title", "Untitled")
+                        year      = w.get("publication_year", "Unknown")
+                        doi_val   = w.get("doi", "")
+                        citations = w.get("cited_by_count", 0)
+                        oa_url    = (w.get("primary_location") or {}).get("landing_page_url", "")
+                        authors   = ", ".join([a["author"]["display_name"] for a in (w.get("authorships") or [])[:6] if a.get("author")])
+                        concepts  = ", ".join([c["display_name"] for c in (w.get("concepts") or [])[:8]])
+                        # Reconstruct abstract from inverted index
+                        aii = w.get("abstract_inverted_index") or {}
+                        abstract = ""
+                        if aii:
+                            positions = [(pos, word) for word, pos_list in aii.items() for pos in pos_list]
+                            positions.sort(key=lambda x: x[0])
+                            abstract = " ".join(word for _, word in positions)
+                        content_blocks.append(
+                            f"[OpenAlex Paper Record]\n"
+                            f"Title: {title}\nAuthors: {authors}\nYear: {year}\n"
+                            f"DOI: {doi_val}\nCitations: {citations}\nConcepts: {concepts}\n"
+                            f"URL: {oa_url}\n\nAbstract:\n{abstract}"
+                        )
+                        found_abstract = bool(abstract)
+            else:
+                # Use title.search filter for precise matching, sort by relevance
+                safe_title = urllib.parse.quote(query.strip())
+                oa_url_q = (
+                    f"https://api.openalex.org/works"
+                    f"?filter=title.search:{safe_title}"
+                    f"&sort=cited_by_count:desc"
+                    f"&per_page=5"
+                    f"&select=title,publication_year,doi,cited_by_count,authorships,concepts,abstract_inverted_index,primary_location"
+                    f"&mailto=vikki.4me@gmail.com"
+                )
+                async with httpx.AsyncClient(timeout=12.0) as client:
+                    r = await client.get(oa_url_q, headers=oa_headers)
+                    if r.status_code == 200:
+                        results = r.json().get("results", [])
+                        # Pick the best match: most cited with a non-empty abstract
+                        for w in results[:5]:
+                            title     = w.get("title", "Untitled")
+                            year      = w.get("publication_year", "Unknown")
+                            doi_val   = w.get("doi", "")
+                            citations = w.get("cited_by_count", 0)
+                            authors   = ", ".join([a["author"]["display_name"] for a in (w.get("authorships") or [])[:6] if a.get("author")])
+                            concepts  = ", ".join([c["display_name"] for c in (w.get("concepts") or [])[:8]])
+                            # Reconstruct abstract from inverted index
+                            aii = w.get("abstract_inverted_index") or {}
+                            abstract = ""
+                            if aii:
+                                positions = [(pos, word) for word, pos_list in aii.items() for pos in pos_list]
+                                positions.sort(key=lambda x: x[0])
+                                abstract = " ".join(word for _, word in positions)
+                            content_blocks.append(
+                                f"[OpenAlex Match]\n"
+                                f"Title: {title}\nAuthors: {authors}\nYear: {year}\n"
+                                f"DOI: {doi_val}\nCitations: {citations}\nConcepts: {concepts}\n\nAbstract:\n{abstract}"
+                            )
+                            if abstract:
+                                found_abstract = True
+                                break  # Stop after first result with abstract
+        except Exception as e:
+            content_blocks.append(f"[OpenAlex] Error: {e}")
+
+    # ── 2. arXiv lookup ──────────────────────────────────────────────────────
+    if source in ("auto", "arxiv") and (arxiv_id or not found_abstract):
+        try:
+            if arxiv_id:
+                arxiv_clean = re.sub(r'v\d+$', '', arxiv_id.strip())  # strip version suffix
+                url = f"https://export.arxiv.org/api/query?id_list={urllib.parse.quote(arxiv_clean)}&max_results=1"
+            else:
+                # Use ti: prefix to search by title specifically for better relevance
+                safe_title = urllib.parse.quote(f'ti:"{query}"')
+                url = f"https://export.arxiv.org/api/query?search_query={safe_title}&start=0&max_results=3"
+
+            async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+                r = await client.get(url)
+                if r.status_code != 200:
+                    content_blocks.append(f"[arXiv] HTTP {r.status_code} error")
+                else:
+                    raw = r.content
+                    if not raw.strip():
+                        content_blocks.append("[arXiv] Empty response received")
+                    else:
+                        root = ET.fromstring(raw)
+                        ns = {"atom": "http://www.w3.org/2005/Atom"}
+                        entries = root.findall("atom:entry", ns)
+                        if not entries:
+                            content_blocks.append("[arXiv] No matching papers found")
+                        for entry in entries:
+                            title_el   = entry.find("atom:title", ns)
+                            summary_el = entry.find("atom:summary", ns)
+                            pub_el     = entry.find("atom:published", ns)
+                            link_el    = entry.find("atom:link[@rel='alternate']", ns)
+                            title   = (title_el.text if title_el is not None else "").strip().replace("\n", " ")
+                            summary = (summary_el.text if summary_el is not None else "").strip().replace("\n", " ")
+                            pub     = (pub_el.text if pub_el is not None else "")[:10]
+                            link_href = link_el.attrib.get("href", "") if link_el is not None else ""
+                            authors_els = entry.findall("atom:author/atom:name", ns)
+                            authors_str = ", ".join([a.text or "" for a in authors_els[:6]])
+                            cats    = [c.attrib.get("term", "") for c in entry.findall("atom:category", ns)]
+                            content_blocks.append(
+                                f"[arXiv Paper]\n"
+                                f"Title: {title}\nAuthors: {authors_str}\nPublished: {pub}\n"
+                                f"Categories: {', '.join(cats[:5])}\nURL: {link_href}\n\nAbstract:\n{summary}"
+                            )
+                            if summary:
+                                found_abstract = True
+        except ET.ParseError as e:
+            content_blocks.append(f"[arXiv] XML parse error: {e}")
+        except Exception as e:
+            content_blocks.append(f"[arXiv] Error: {type(e).__name__}: {e}")
+
+    # ── 3. Semantic Scholar API ──────────────────────────────────────────────
+    if source in ("auto", "semantic_scholar") and not found_abstract:
+        try:
+            if is_doi:
+                ss_url = f"https://api.semanticscholar.org/graph/v1/paper/DOI:{urllib.parse.quote(query.strip())}?fields=title,abstract,year,authors,citationCount,externalIds,tldr,fieldsOfStudy"
+            else:
+                safe_q = urllib.parse.quote(query)
+                ss_url = f"https://api.semanticscholar.org/graph/v1/paper/search?query={safe_q}&fields=title,abstract,year,authors,citationCount,externalIds,tldr,fieldsOfStudy&limit=3"
+
+            async with httpx.AsyncClient(timeout=12.0) as client:
+                r = await client.get(ss_url, headers={"User-Agent": "AskSkolar/1.0"})
+                if r.status_code == 200:
+                    data = r.json()
+                    papers = data.get("data", [data]) if "data" in data else [data]
+                    for paper in papers[:2]:
+                        title     = paper.get("title", "Untitled")
+                        abstract  = paper.get("abstract") or ""
+                        year      = paper.get("year", "Unknown")
+                        citations = paper.get("citationCount", 0)
+                        authors   = ", ".join([a.get("name", "") for a in (paper.get("authors") or [])[:6]])
+                        fields    = ", ".join(paper.get("fieldsOfStudy") or [])
+                        tldr_obj  = paper.get("tldr")
+                        tldr      = tldr_obj.get("text", "") if tldr_obj else ""
+                        ext_ids   = paper.get("externalIds") or {}
+                        doi_val   = ext_ids.get("DOI", "")
+                        block = (
+                            f"[Semantic Scholar Paper]\n"
+                            f"Title: {title}\nAuthors: {authors}\nYear: {year}\n"
+                            f"Citations: {citations}\nFields: {fields}\nDOI: {doi_val}\n"
+                        )
+                        if tldr:
+                            block += f"\nAI TL;DR: {tldr}"
+                        if abstract:
+                            block += f"\n\nAbstract:\n{abstract}"
+                            found_abstract = True
+                        content_blocks.append(block)
+        except Exception as e:
+            content_blocks.append(f"[Semantic Scholar] Error: {e}")
+
+    # ── 4. Web-scraping fallback ─────────────────────────────────────────────
+    if source in ("auto", "web") and not found_abstract:
+        try:
+            from app.services.scraping_service import ScrapingService
+            scraper = ScrapingService()
+            # Search on multiple academic sites in sequence
+            search_queries = [
+                f'{query} abstract site:arxiv.org',
+                f'{query} abstract research paper',
+                f'{query} site:semanticscholar.org',
+                f'{query} site:researchgate.net abstract',
+            ]
+            for sq in search_queries:
+                results = await scraper.search_web(sq, max_results=2)
+                if results:
+                    for r in results:
+                        snippet = r.get("snippet", "")
+                        if len(snippet) > 80:  # meaningful snippet
+                            content_blocks.append(
+                                f"[Web Result]\nTitle: {r.get('title', '')}\n"
+                                f"URL: {r.get('url', '')}\nSnippet: {snippet}"
+                            )
+                            found_abstract = True
+                if found_abstract:
+                    break
+        except Exception as e:
+            content_blocks.append(f"[Web Scraping] Error: {e}")
+
+    # ── 5. Direct URL fetch ──────────────────────────────────────────────────
+    if is_url and source in ("auto", "url"):
+        try:
+            async with httpx.AsyncClient(timeout=12.0, follow_redirects=True) as client:
+                r = await client.get(query.strip(), headers={"User-Agent": "Mozilla/5.0"})
+                if r.status_code == 200:
+                    html = r.text
+                    # Strip HTML tags
+                    text = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL)
+                    text = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.DOTALL)
+                    text = re.sub(r'<[^>]+>', ' ', text)
+                    text = re.sub(r'\s+', ' ', text).strip()[:4000]
+                    content_blocks.append(f"[Direct URL Content]\nURL: {query}\n\n{text}")
+                    found_abstract = True
+        except Exception as e:
+            content_blocks.append(f"[Direct URL] Error: {e}")
+
+    if not content_blocks:
+        return (
+            f"[PAPER FETCH FAILED] Could not retrieve any content for query: '{query}'.\n"
+            "No results found on OpenAlex, arXiv, Semantic Scholar, or via web search.\n"
+            "Please try providing a DOI, arXiv ID, or direct URL."
+        )
+
+    joined = "\n\n" + "-" * 60 + "\n\n".join(content_blocks)
+    return (
+        f"[PAPER CONTENT RETRIEVED - PLEASE SUMMARIZE]\n"
+        f"Query: {query}\n"
+        f"Sources searched: OpenAlex, arXiv, Semantic Scholar, Web\n"
+        f"Abstract found: {'Yes' if found_abstract else 'Partial/No'}\n"
+        f"{joined}\n\n"
+        f"[END CONTENT]\n"
+        f"Now provide a structured summary with: Overview, Key Contributions, Methodology, "
+        f"Results & Findings, Limitations, and Why It Matters."
+    )
+
+
 # These definitions are passed to the Groq LLM API
 TOOLS_SCHEMA = [
     {
@@ -527,11 +773,12 @@ TOOLS_SCHEMA = [
         "type": "function",
         "function": {
             "name": "search_openalex_authors",
-            "description": "Searches for academic authors/profiles on OpenAlex by name or query term.",
+            "description": "Searches for academic authors/profiles on OpenAlex by name or query term. Optionally filter by research domain.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "The author's name, e.g. 'Vikas Vijigiri' or 'Kush Saha'"}
+                    "query": {"type": "string", "description": "The author's name, e.g. 'Vikas Vijigiri' or 'Kush Saha'"},
+                    "domain": {"type": "string", "description": "Optional research domain to filter by, e.g. 'Physics', 'Machine Learning'. Use the user's research focus by default."}
                 },
                 "required": ["query"]
             }
@@ -556,12 +803,13 @@ TOOLS_SCHEMA = [
         "type": "function",
         "function": {
             "name": "search_openalex_works",
-            "description": "Searches for academic papers on OpenAlex by keywords, title, or topic.",
+            "description": "Searches for academic papers on OpenAlex by keywords, title, or topic. Optionally filter by the user's research domain.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "The search query/keywords"},
-                    "limit": {"type": "integer", "description": "Max results to return (default 10)"}
+                    "limit": {"type": "integer", "description": "Max results to return (default 10)"},
+                    "domain": {"type": "string", "description": "Optional research domain to filter by, e.g. 'Physics'. Use the user's research focus by default."}
                 },
                 "required": ["query"]
             }
@@ -571,11 +819,12 @@ TOOLS_SCHEMA = [
         "type": "function",
         "function": {
             "name": "search_openalex_author_and_works",
-            "description": "Searches for a researcher's academic profile and retrieves their recent publication works in a single call.",
+            "description": "Searches for a researcher's academic profile and retrieves their recent publication works in a single call. Always pass the user's research domain as the domain parameter to find the right person when there are name ambiguities.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "The author's name, e.g. 'Vikas Vijigiri'"}
+                    "query": {"type": "string", "description": "The author's name, e.g. 'Vikas Vijigiri'"},
+                    "domain": {"type": "string", "description": "Research domain to disambiguate the author, e.g. 'Physics', 'Computer Science'. ALWAYS pass the user's domain here unless explicitly told otherwise."}
                 },
                 "required": ["query"]
             }
@@ -723,6 +972,35 @@ TOOLS_SCHEMA = [
                 "required": ["title", "sections", "filename"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "fetch_and_summarize_paper",
+            "description": (
+                "Fetches a research paper's full metadata, abstract, and content from OpenAlex, arXiv, "
+                "Semantic Scholar, and web scraping, then returns the collected content for summarization. "
+                "Use this tool WHENEVER the user asks to 'summarize a paper', 'explain a paper', "
+                "'give me an overview of [paper title]', 'what does [paper] say', or similar. "
+                "Works with: paper titles, DOIs (e.g. 10.1234/xyz), arXiv IDs (e.g. 2301.00001), "
+                "or full URLs (e.g. https://arxiv.org/abs/2301.00001)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The paper title, DOI, arXiv ID, or direct URL to the paper."
+                    },
+                    "source": {
+                        "type": "string",
+                        "enum": ["auto", "openalex", "arxiv", "semantic_scholar", "web", "url"],
+                        "description": "Which source to use. Default is 'auto' which tries all sources."
+                    }
+                },
+                "required": ["query"]
+            }
+        }
     }
 ]
 
@@ -759,6 +1037,11 @@ async def execute_tool_call(tool_name: str, arguments: dict, base_url: str = Non
                 arguments.get("filename", "report.md"),
                 base_url=base_url
             )
+        elif tool_name == "fetch_and_summarize_paper":
+            return await fetch_and_summarize_paper(
+                arguments.get("query", ""),
+                arguments.get("source", "auto")
+            )
         elif tool_name == "search_arxiv_publications":
             return await search_arxiv_publications(arguments.get("query", ""), arguments.get("max_results", 5))
         elif tool_name == "search_google_scholar_profile":
@@ -781,17 +1064,31 @@ async def execute_tool_call(tool_name: str, arguments: dict, base_url: str = Non
         elif tool_name == "search_openalex_authors":
             from app.services.openalex_service import OpenAlexService
             openalex = OpenAlexService()
-            authors = await openalex.search_authors(arguments.get("query", ""), per_page=10)
+            domain = arguments.get("domain", "").lower().strip()
+            authors = await openalex.search_authors(arguments.get("query", ""), per_page=20)
             if not authors:
                 return "No authors found on OpenAlex."
+            # Filter by domain if provided: check x_concepts for a match
+            if domain:
+                filtered = [
+                    a for a in authors
+                    if any(domain in (c.get("display_name") or "").lower() for c in (a.get("x_concepts") or []))
+                ]
+                authors = filtered if filtered else authors  # fallback to unfiltered if no match
             res_list = []
-            for a in authors:
+            for a in authors[:20]:
                 last_known_insts = a.get("last_known_institutions") or []
                 insts = ", ".join([inst.get("display_name", "") for inst in last_known_insts if inst and inst.get("display_name")])
                 stats = a.get("summary_stats") or {}
                 h_index = stats.get("h_index", 0) if stats else 0
-                res_list.append(f"Name: {a.get('display_name')}\nOpenAlex ID: {a.get('id')}\nInstitution: {insts or 'Unknown'}\nWorks Count: {a.get('works_count')}\nH-Index: {h_index}")
-            return "\n\n".join(res_list)
+                top_concepts = ", ".join([c.get("display_name", "") for c in (a.get("x_concepts") or [])[:4]])
+                res_list.append(
+                    f"Name: {a.get('display_name')}\nOpenAlex ID: {a.get('id')}\n"
+                    f"Institution: {insts or 'Unknown'}\nWorks Count: {a.get('works_count')}\n"
+                    f"H-Index: {h_index}\nTop Fields: {top_concepts or 'Unknown'}"
+                )
+            domain_note = f" (filtered by domain: {domain})'" if domain else ""
+            return f"[OpenAlex Authors{domain_note}]\n\n" + "\n\n".join(res_list)
         elif tool_name == "fetch_openalex_author_works":
             from app.services.openalex_service import OpenAlexService
             openalex = OpenAlexService()
@@ -809,7 +1106,12 @@ async def execute_tool_call(tool_name: str, arguments: dict, base_url: str = Non
         elif tool_name == "search_openalex_works":
             from app.services.openalex_service import OpenAlexService
             openalex = OpenAlexService()
-            works = await openalex.search_works(arguments.get("query", ""), per_page=arguments.get("limit", 10))
+            domain = arguments.get("domain", "").strip()
+            query = arguments.get("query", "")
+            # Append domain to query for better relevance if provided
+            if domain:
+                query = f"{query} {domain}"
+            works = await openalex.search_works(query, per_page=arguments.get("limit", 10))
             if not works:
                 return "No works found on OpenAlex."
             res_list = []
@@ -818,25 +1120,46 @@ async def execute_tool_call(tool_name: str, arguments: dict, base_url: str = Non
                 year = w.get("publication_year", "Unknown")
                 doi = w.get("doi", "No DOI")
                 citations = w.get("cited_by_count", 0)
-                res_list.append(f"Title: {title}\nYear: {year}\nDOI: {doi}\nCitations: {citations}")
+                concepts = ", ".join([c.get("display_name", "") for c in (w.get("concepts") or [])[:4]])
+                res_list.append(f"Title: {title}\nYear: {year}\nDOI: {doi}\nCitations: {citations}\nFields: {concepts}")
             return "\n\n".join(res_list)
         elif tool_name == "search_openalex_author_and_works":
             from app.services.openalex_service import OpenAlexService
             openalex = OpenAlexService()
-            authors = await openalex.search_authors(arguments.get("query", ""), per_page=5)
+            domain = arguments.get("domain", "").lower().strip()
+            authors = await openalex.search_authors(arguments.get("query", ""), per_page=15)
             if not authors:
                 return f"No authors found on OpenAlex for query: {arguments.get('query')}"
-            
+
+            # Domain-based ranking: score each author by how well their top concepts match the domain
+            def domain_score(author: dict) -> int:
+                if not domain:
+                    return 0
+                concepts = [c.get("display_name", "").lower() for c in (author.get("x_concepts") or [])]
+                return sum(1 for c in concepts if domain in c)
+
+            # Sort authors: domain-matched first, then by works_count
+            authors_sorted = sorted(
+                authors,
+                key=lambda a: (domain_score(a), a.get("works_count") or 0),
+                reverse=True
+            )
+
             res_list = []
-            for idx, a in enumerate(authors[:3]): # take top 3 matches
+            for idx, a in enumerate(authors_sorted[:3]):  # take top 3 domain-matched
                 author_id = a.get("id", "")
                 clean_id = author_id.split("/")[-1]
                 last_known_insts = a.get("last_known_institutions") or []
                 insts = ", ".join([inst.get("display_name", "") for inst in last_known_insts if inst and inst.get("display_name")])
                 stats = a.get("summary_stats") or {}
                 h_index = stats.get("h_index", 0) if stats else 0
-                profile_info = f"Match {idx+1}:\nName: {a.get('display_name')}\nOpenAlex ID: {author_id}\nInstitution: {insts or 'Unknown'}\nWorks Count: {a.get('works_count')}\nH-Index: {h_index}"
-                
+                top_concepts = ", ".join([c.get("display_name", "") for c in (a.get("x_concepts") or [])[:5]])
+                profile_info = (
+                    f"Match {idx+1}:\nName: {a.get('display_name')}\nOpenAlex ID: {author_id}\n"
+                    f"Institution: {insts or 'Unknown'}\nWorks Count: {a.get('works_count')}\n"
+                    f"H-Index: {h_index}\nResearch Fields: {top_concepts or 'Unknown'}"
+                )
+
                 # Fetch works for this match
                 works = await openalex.fetch_author_works(clean_id, per_page=10)
                 works_list = []
@@ -846,11 +1169,12 @@ async def execute_tool_call(tool_name: str, arguments: dict, base_url: str = Non
                     doi = w.get("doi", "No DOI")
                     citations = w.get("cited_by_count", 0)
                     works_list.append(f"  - Title: {title} ({year}) | Citations: {citations} | DOI: {doi}")
-                
+
                 works_str = "\n".join(works_list) if works_list else "  - No publication works found."
                 res_list.append(f"{profile_info}\nPublications:\n{works_str}")
-            
-            return "\n\n---\n\n".join(res_list)
+
+            domain_note = f" [domain-filtered: {domain}]" if domain else ""
+            return f"[OpenAlex Author Search{domain_note}]\n\n" + "\n\n---\n\n".join(res_list)
         else:
             return f"Unknown tool: {tool_name}"
     except Exception as e:
