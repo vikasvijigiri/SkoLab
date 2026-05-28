@@ -1,59 +1,43 @@
-import asyncio
-import time
+"""
+app/core/cache.py
+==================
+All application-level caches.
 
-class SimpleAsyncCache:
-    def __init__(self, ttl_seconds: float, max_size: int = 200):
-        self.ttl = ttl_seconds
-        self.max_size = max_size
-        self.cache = {}  # key -> (value, expiry_timestamp)
-        self.lock = asyncio.Lock()
+Every cache is a PgBackedCache (L1 in-memory 30 s  +  L2 PostgreSQL with TTL).
+Nothing is lost when the server restarts.
 
-    async def get(self, key: str):
-        async with self.lock:
-            entry = self.cache.get(key)
-            if entry is None:
-                return None
-            value, expiry = entry
-            if time.time() > expiry:
-                del self.cache[key]
-                return None
-            return value
+TTL reference
+-------------
+suggestions_cache           30 min  (author suggestion search results)
+profile_cache               1 hour  (full author profile + works)
+analyze_paper_cache         6 hours (paper analysis results)
+daily_feed_cache            1 hour  (daily paper feed per author)
+match_grants_cache          1 hour  (grant recommendations)
+collaborator_synergy_cache  2 hours (pairwise synergy scores)
+citation_heatmap_cache      1 hour  (citation heatmap data)
+journal_advisor_cache       2 hours (journal recommendation)
+network_collaborators_cache 1 hour  (co-author network — also in researcher_connections)
+history_summary_cache       12 hrs  (agent chat history summaries — also in PG table)
+_semantic_trending_cache    4 hours (trending papers / semantic search)
+_user_memory_cache          1 hour  (per-user research memory / context)
+"""
 
-    async def set(self, key: str, value):
-        async with self.lock:
-            print(f"[SimpleAsyncCache] set: '{key}'", flush=True)
-            now = time.time()
-            # Clean expired keys
-            expired_keys = [k for k, (_, exp) in self.cache.items() if now > exp]
-            for k in expired_keys:
-                del self.cache[k]
-            
-            # Evict oldest if full
-            if len(self.cache) >= self.max_size:
-                oldest_key = next(iter(self.cache))
-                del self.cache[oldest_key]
-                
-            self.cache[key] = (value, now + self.ttl)
+from app.db.pg_cache import PgBackedCache
 
-    async def delete(self, key: str):
-        async with self.lock:
-            print(f"[SimpleAsyncCache] delete: '{key}'", flush=True)
-            if key in self.cache:
-                del self.cache[key]
+# ── Author / Researcher caches ────────────────────────────────────────────────
+suggestions_cache           = PgBackedCache(ttl_seconds=1800,  name="suggestions")
+profile_cache               = PgBackedCache(ttl_seconds=3600,  name="profile")
+analyze_paper_cache         = PgBackedCache(ttl_seconds=21600, name="analyze_paper")
+network_collaborators_cache = PgBackedCache(ttl_seconds=3600,  name="network_collaborators")
+collaborator_synergy_cache  = PgBackedCache(ttl_seconds=7200,  name="collaborator_synergy")
+citation_heatmap_cache      = PgBackedCache(ttl_seconds=3600,  name="citation_heatmap")
+journal_advisor_cache       = PgBackedCache(ttl_seconds=7200,  name="journal_advisor")
 
-    async def clear(self):
-        async with self.lock:
-            self.cache.clear()
+# ── Feed / Content caches ─────────────────────────────────────────────────────
+daily_feed_cache            = PgBackedCache(ttl_seconds=3600,  name="daily_feed")
+match_grants_cache          = PgBackedCache(ttl_seconds=3600,  name="match_grants")
+_semantic_trending_cache    = PgBackedCache(ttl_seconds=14400, name="semantic_trending")
 
-suggestions_cache = SimpleAsyncCache(ttl_seconds=1800, max_size=300)
-profile_cache = SimpleAsyncCache(ttl_seconds=3600, max_size=100)
-analyze_paper_cache = SimpleAsyncCache(ttl_seconds=21600, max_size=200)
-daily_feed_cache = SimpleAsyncCache(ttl_seconds=3600, max_size=100)
-match_grants_cache = SimpleAsyncCache(ttl_seconds=3600, max_size=100)
-collaborator_synergy_cache = SimpleAsyncCache(ttl_seconds=7200, max_size=200)
-citation_heatmap_cache = SimpleAsyncCache(ttl_seconds=3600, max_size=100)
-journal_advisor_cache = SimpleAsyncCache(ttl_seconds=7200, max_size=100)
-network_collaborators_cache = SimpleAsyncCache(ttl_seconds=3600, max_size=100)
-history_summary_cache = SimpleAsyncCache(ttl_seconds=43200, max_size=500)
-_semantic_trending_cache = SimpleAsyncCache(ttl_seconds=14400, max_size=200)
-_user_memory_cache = SimpleAsyncCache(ttl_seconds=3600, max_size=500)
+# ── Agent caches ──────────────────────────────────────────────────────────────
+history_summary_cache       = PgBackedCache(ttl_seconds=43200, name="history_summary")
+_user_memory_cache          = PgBackedCache(ttl_seconds=3600,  name="user_memory")

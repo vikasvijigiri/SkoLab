@@ -1,30 +1,34 @@
 import os
+import datetime
 import httpx
 import json
 import random
 import asyncio
 import re
 from typing import List, Dict, Optional, Any
-from app.services.summarization_service import is_llm_working, set_llm_limit_exceeded
+from app.services.llm_service import is_llm_working, set_llm_limit_exceeded
 from sqlalchemy.future import select
 from app.db.database import AsyncSessionLocal
 from app.models.user_models import CacheEntry, AgentChatHistory
 from app.services.openalex_service import OpenAlexService
+from app.prompts import DAILY_FEED_ADVISOR_PROMPT_TEMPLATE
+from app.db.pg_cache import PgBackedCache
+
+# Per-feature PG caches with appropriate TTLs
+# These are the local fast layer; Firestore backs the large enriched docs.
+_pg_daily_feed_cache       = PgBackedCache(ttl_seconds=3600,  name="pipeline_daily_feed")
+_pg_match_grants_cache     = PgBackedCache(ttl_seconds=3600,  name="pipeline_match_grants")
+_pg_synergy_cache          = PgBackedCache(ttl_seconds=7200,  name="pipeline_synergy")
+_pg_heatmap_cache          = PgBackedCache(ttl_seconds=3600,  name="pipeline_heatmap")
+_pg_journal_advisor_cache  = PgBackedCache(ttl_seconds=7200,  name="pipeline_journal_advisor")
+_pg_network_collab_cache   = PgBackedCache(ttl_seconds=3600,  name="pipeline_network_collab")
 
 class PipelineServices:
     def __init__(self):
-        self.api_key = os.getenv("GROQ_API")
-        self.base_url = "https://api.groq.com/openai/v1/chat/completions"
+        from app.services.llm_service import LLMService
+        self.llm_service = LLMService()
         self.model = "llama-3.3-70b-versatile"
         self.openalex_service = OpenAlexService()
-        self.openalex_base = "https://api.openalex.org"
-        self.headers = {
-            "User-Agent": "SkolabApp/1.0 (mailto:vikki.4me@gmail.com)",
-            "Accept": "application/json"
-        }
-        from app.core.config import settings
-        if settings.openalex_api_key:
-            self.headers["api_key"] = settings.openalex_api_key
 
     def _get_firestore_db(self):
         """Returns a Firestore client if available, else None."""
@@ -38,32 +42,15 @@ class PipelineServices:
             print(f"[PipelineServices] Firestore unavailable: {exc}", flush=True)
             return None
 
-    async def _save_to_postgres(self, cache_key: str, data: Dict[str, Any]):
-        async with AsyncSessionLocal() as session:
-            try:
-                stmt = select(CacheEntry).where(CacheEntry.cache_key == cache_key)
-                result = await session.execute(stmt)
-                entry = result.scalars().first()
-                if entry:
-                    entry.data = data
-                else:
-                    entry = CacheEntry(cache_key=cache_key, data=data)
-                    session.add(entry)
-                await session.commit()
-            except Exception as e:
-                print(f"[Postgres Cache Error] write failed: {e}", flush=True)
+    async def _save_to_postgres(self, cache_key: str, data: Dict[str, Any], ttl_seconds: int = 3600):
+        """Save data to PostgreSQL cache_entries with TTL via PgBackedCache."""
+        cache = PgBackedCache(ttl_seconds=ttl_seconds, name="pipeline")
+        await cache.set(cache_key, data)
 
-    async def _load_from_postgres(self, cache_key: str) -> Optional[Dict[str, Any]]:
-        async with AsyncSessionLocal() as session:
-            try:
-                stmt = select(CacheEntry).where(CacheEntry.cache_key == cache_key)
-                result = await session.execute(stmt)
-                entry = result.scalars().first()
-                if entry:
-                    return entry.data
-            except Exception as e:
-                print(f"[Postgres Cache Error] read failed: {e}", flush=True)
-        return None
+    async def _load_from_postgres(self, cache_key: str, ttl_seconds: int = 3600) -> Optional[Dict[str, Any]]:
+        """Load data from PostgreSQL cache_entries with TTL check."""
+        cache = PgBackedCache(ttl_seconds=ttl_seconds, name="pipeline")
+        return await cache.get(cache_key)
 
     async def _fetch_author_profile(self, author_id: str) -> Optional[Dict[str, Any]]:
         """Helper to fetch author profile from OpenAlex or database."""
@@ -125,12 +112,7 @@ class PipelineServices:
             search_term = query_fallback
         else:
             search_term = "science"
-        params = {
-            "search": search_term,
-            "per_page": 20,
-            "sort": "publication_year:desc,cited_by_count:desc",
-            "mailto": "vikki.4me@gmail.com"
-        }
+
 
         papers = []
         try:
@@ -179,32 +161,27 @@ class PipelineServices:
 
             if is_llm_working():  # Decoupled: LLM moved to background addon to unblock core app
                 # Ask LLM to write a personalized reason
-                prompt = {
-                    "model": self.model,
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": f"You are a scientific feed advisor. Write a single sentence explaining why the paper '{title}' is recommended for researcher '{author_name}' who works in '{', '.join(concepts)}'. Keep it professional, and strictly under 25 words."
-                        }
-                    ],
-                    "temperature": 0.5,
-                    "max_tokens": 50
-                }
-                try:
-                    async with httpx.AsyncClient(timeout=30.0) as client:
-                        res = await client.post(
-                            self.base_url,
-                            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-                            json=prompt,
-                            timeout=10.0
+                messages = [
+                    {
+                        "role": "system",
+                        "content": DAILY_FEED_ADVISOR_PROMPT_TEMPLATE.format(
+                            title=title,
+                            author_name=author_name,
+                            concepts=', '.join(concepts)
                         )
-                        if res.status_code == 200:
-                            recommendation_reason = res.json()['choices'][0]['message']['content'].strip()
-                        elif res.status_code in [401, 403, 429]:
-                            print(f"[PipelineServices] Groq API returned status {res.status_code}. Setting LLM limit exceeded.", flush=True)
-                            set_llm_limit_exceeded(True)
+                    }
+                ]
+                try:
+                    response = await self.llm_service.query(
+                        messages=messages,
+                        models=[self.model],
+                        temperature=0.5,
+                        max_tokens=50
+                    )
+                    if response.content:
+                        recommendation_reason = response.content.strip()
                 except Exception as e:
-                    print(f"Groq daily feed reason generation failed: {e}")
+                    print(f"Daily feed reason generation failed: {e}", flush=True)
 
             feed_items.append({
                 "id": openalex_id,
@@ -337,32 +314,23 @@ class PipelineServices:
             rationale = f"Aligned with your research track in {', '.join(concepts[:2])}."
             
             if is_llm_working():  # Decoupled: LLM moved to background addon to unblock core app
-                prompt = {
-                    "model": self.model,
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": f"You are a research grant advisor. Evaluate the grant opportunity '{grant['title']}' from agency '{grant['agency']}' for the researcher '{author_name}' with h-index {h_index} and expertise in '{', '.join(concepts)}'. Provide a concise 2-sentence rationale of why this is a good fit and how their profile aligns. Keep it under 40 words."
-                        }
-                    ],
-                    "temperature": 0.4,
-                    "max_tokens": 100
-                }
+                messages = [
+                    {
+                        "role": "system",
+                        "content": f"You are a research grant advisor. Evaluate the grant opportunity '{grant['title']}' from agency '{grant['agency']}' for the researcher '{author_name}' with h-index {h_index} and expertise in '{', '.join(concepts)}'. Provide a concise 2-sentence rationale of why this is a good fit and how their profile aligns. Keep it under 40 words."
+                    }
+                ]
                 try:
-                    async with httpx.AsyncClient(timeout=30.0) as client:
-                        res = await client.post(
-                            self.base_url,
-                            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-                            json=prompt,
-                            timeout=10.0
-                        )
-                        if res.status_code == 200:
-                            rationale = res.json()['choices'][0]['message']['content'].strip()
-                        elif res.status_code in [401, 403, 429]:
-                            print(f"[PipelineServices] Groq API returned status {res.status_code}. Setting LLM limit exceeded.", flush=True)
-                            set_llm_limit_exceeded(True)
+                    response = await self.llm_service.query(
+                        messages=messages,
+                        models=[self.model],
+                        temperature=0.4,
+                        max_tokens=100
+                    )
+                    if response.content:
+                        rationale = response.content.strip()
                 except Exception as e:
-                    print(f"Groq grant rationale generation failed: {e}")
+                    print(f"Grant rationale generation failed: {e}", flush=True)
 
             scored_grants.append({
                 "title": grant["title"],
@@ -405,7 +373,7 @@ class PipelineServices:
         doc_id = f"{clean_author}_{clean_collab}"
 
         cache_key = f"collaborator_synergy_{doc_id}"
-        cached_data = await self._load_from_postgres(cache_key)
+        cached_data = await self._load_from_postgres(cache_key, ttl_seconds=7200)
         if cached_data:
             print(f"[Postgres Cache Hit] collaborator_synergy for doc_id={doc_id}", flush=True)
             return cached_data
@@ -420,7 +388,7 @@ class PipelineServices:
                     if cached_data:
                         # Clean metadata if present before returning
                         cached_data.pop("last_synced", None)
-                        await self._save_to_postgres(cache_key, cached_data)
+                        await self._save_to_postgres(cache_key, cached_data, ttl_seconds=7200)
                         return cached_data
             except Exception as e:
                 print(f"[Firestore Cache Error] collaborator_synergies lookup failed: {e}", flush=True)
@@ -453,12 +421,10 @@ class PipelineServices:
         ]
 
         if is_llm_working():  # Decoupled: LLM moved to background addon to unblock core app
-            prompt = {
-                "model": self.model,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": f"""You are an elite academic synergy counselor. Analyze the collaborative potential between:
+            messages = [
+                {
+                    "role": "system",
+                    "content": f"""You are an elite academic synergy counselor. Analyze the collaborative potential between:
 Researcher A: {name1} (Expertise: {', '.join(concepts1[:4])})
 Researcher B: {name2} (Expertise: {', '.join(concepts2[:4])})
 
@@ -469,30 +435,23 @@ Provide your response in this exact JSON format:
   "strategic_action_plan": ["[Action 1]", "[Action 2]", "[Action 3]"]
 }}
 """
-                    }
-                ],
-                "response_format": {"type": "json_object"},
-                "temperature": 0.3,
-                "max_tokens": 300
-            }
+                }
+            ]
             try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    res = await client.post(
-                        self.base_url,
-                        headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-                        json=prompt,
-                        timeout=12.0
-                    )
-                    if res.status_code == 200:
-                        data = json.loads(res.json()['choices'][0]['message']['content'].strip())
-                        joint_proposal_title = data.get("joint_proposal_title", joint_proposal_title)
-                        co_authorship_direction = data.get("co_authorship_direction", co_authorship_direction)
-                        strategic_action_plan = data.get("strategic_action_plan", strategic_action_plan)
-                    elif res.status_code in [401, 403, 429]:
-                        print(f"[PipelineServices] Groq API returned status {res.status_code}. Setting LLM limit exceeded.", flush=True)
-                        set_llm_limit_exceeded(True)
+                response = await self.llm_service.query(
+                    messages=messages,
+                    models=[self.model],
+                    temperature=0.3,
+                    max_tokens=300,
+                    response_format={"type": "json_object"}
+                )
+                if response.content:
+                    data = json.loads(response.content.strip())
+                    joint_proposal_title = data.get("joint_proposal_title", joint_proposal_title)
+                    co_authorship_direction = data.get("co_authorship_direction", co_authorship_direction)
+                    strategic_action_plan = data.get("strategic_action_plan", strategic_action_plan)
             except Exception as e:
-                print(f"Groq collaborator synergy generation failed: {e}")
+                print(f"Collaborator synergy generation failed: {e}", flush=True)
 
         result = {
             "synergy_score": synergy_score,
@@ -502,7 +461,7 @@ Provide your response in this exact JSON format:
         }
 
         try:
-            await self._save_to_postgres(cache_key, result)
+            await self._save_to_postgres(cache_key, result, ttl_seconds=7200)
             print(f"[Postgres Cache Save] collaborator_synergy for doc_id={doc_id}", flush=True)
         except Exception as e:
             print(f"[Postgres Cache Error] collaborator_synergy write failed: {e}", flush=True)
@@ -606,7 +565,7 @@ Provide your response in this exact JSON format:
         clean_id = author_id.split("/")[-1]
 
         cache_key = f"journal_advisor_{clean_id}"
-        cached_data = await self._load_from_postgres(cache_key)
+        cached_data = await self._load_from_postgres(cache_key, ttl_seconds=7200)
         if cached_data and "venues" in cached_data:
             print(f"[Postgres Cache Hit] journal_advisor for author_id={clean_id}", flush=True)
             return cached_data["venues"]
@@ -619,7 +578,7 @@ Provide your response in this exact JSON format:
                     cached_data = doc.to_dict()
                     if cached_data and "venues" in cached_data:
                         print(f"[Firestore Cache Hit] journal_advisor_recommendations for author_id={clean_id}", flush=True)
-                        await self._save_to_postgres(cache_key, {"venues": cached_data["venues"]})
+                        await self._save_to_postgres(cache_key, {"venues": cached_data["venues"]}, ttl_seconds=7200)
                         return cached_data["venues"]
             except Exception as e:
                 print(f"[Firestore Cache Error] journal_advisor_recommendations lookup failed: {e}", flush=True)
@@ -642,12 +601,10 @@ Provide your response in this exact JSON format:
         ]
 
         if is_llm_working():  # Decoupled: LLM moved to background addon to unblock core app
-            prompt = {
-                "model": self.model,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": f"""You are an elite journal venue advisor. Recommend the top 3 best-fit peer-reviewed scientific journals for a researcher's next possible paper: '{next_prediction}'.
+            messages = [
+                {
+                    "role": "system",
+                    "content": f"""You are an elite journal venue advisor. Recommend the top 3 best-fit peer-reviewed scientific journals for a researcher's next possible paper: '{next_prediction}'.
 The researcher '{author_name}' works in '{', '.join(concepts)}'.
 
 For each journal, generate a match score (70-98%), estimated impact factor, and a specific submission tip.
@@ -664,41 +621,32 @@ Provide your response in this exact JSON format:
   ...
 ]
 """
-                    }
-                ],
-                "response_format": {"type": "json_object"},
-                "temperature": 0.4,
-                "max_tokens": 400
-            }
+                }
+            ]
             try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    res = await client.post(
-                        self.base_url,
-                        headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-                        json=prompt,
-                        timeout=12.0
-                    )
-                    if res.status_code == 200:
-                        content = res.json()['choices'][0]['message']['content'].strip()
-                        # Sometimes LLM outputs wrapping dict like {"journals": [...]} or raw array
-                        parsed = json.loads(content)
-                        if isinstance(parsed, list):
-                            venues = parsed
-                        elif isinstance(parsed, dict):
-                            # Try to find list inside
-                            for k, v in parsed.items():
-                                if isinstance(v, list):
-                                    venues = v
-                                    break
-                    elif res.status_code in [401, 403, 429]:
-                        print(f"[PipelineServices] Groq API returned status {res.status_code}. Setting LLM limit exceeded.", flush=True)
-                        set_llm_limit_exceeded(True)
+                response = await self.llm_service.query(
+                    messages=messages,
+                    models=[self.model],
+                    temperature=0.4,
+                    max_tokens=400,
+                    response_format={"type": "json_object"}
+                )
+                if response.content:
+                    parsed = json.loads(response.content.strip())
+                    if isinstance(parsed, list):
+                        venues = parsed
+                    elif isinstance(parsed, dict):
+                        # Try to find list inside
+                        for k, v in parsed.items():
+                            if isinstance(v, list):
+                                venues = v
+                                break
             except Exception as e:
-                print(f"Groq journal advisor generation failed: {e}")
+                print(f"Journal advisor generation failed: {e}", flush=True)
 
         if venues:
             try:
-                await self._save_to_postgres(cache_key, {"venues": venues[:3]})
+                await self._save_to_postgres(cache_key, {"venues": venues[:3]}, ttl_seconds=7200)
                 print(f"[Postgres Cache Save] journal_advisor for author_id={clean_id}", flush=True)
             except Exception as e:
                 print(f"[Postgres Cache Error] journal_advisor write failed: {e}", flush=True)
@@ -709,7 +657,7 @@ Provide your response in this exact JSON format:
                 db.collection("journal_advisor_recommendations").document(clean_id).set({
                     "venues": venues[:3],
                     "last_synced": _fs.SERVER_TIMESTAMP
-                        })
+                })
                 print(f"[Firestore Cache Save] journal_advisor_recommendations for author_id={clean_id}", flush=True)
             except Exception as e:
                 print(f"[Firestore Cache Error] journal_advisor_recommendations write failed: {e}", flush=True)
@@ -718,57 +666,105 @@ Provide your response in this exact JSON format:
 
     async def get_network_collaborators(self, author_id: str, limit: int = 10, offset: int = 0, exclude_ids: List[str] = None, field: str = "") -> List[Dict[str, Any]]:
         """
-        Fetches Depth-2 collaborators by:
-        1. Fetching the works of the primary author to extract Depth 1 co-authors.
-        2. Fetching works of primary co-authors to extract Depth 2 co-authors.
-        3. Assigning connection paths (e.g. "Co-authored 4 papers with main author") and dynamic scores.
+        Fetches Depth 1 and Depth 2 co-author connections.
+
+        Cache strategy (fastest-first):
+          1. ResearcherConnection table (PostgreSQL) — instant, with 24-hour TTL.
+          2. CacheEntry blob (legacy key) — retained for backwards compat.
+          3. Full OpenAlex computation — stores results in both above for next time.
         """
         clean_id = author_id.split("/")[-1]
         if not clean_id or clean_id == "fallback_seed":
             raise ValueError("No valid author ID provided for collaborator network extraction.")
 
-        cache_key = f"network_collaborators_{clean_id}_{field}"
-        cached_data = await self._load_from_postgres(cache_key)
-        if cached_data:
-            print(f"[Postgres Cache Hit] network_collaborators for author_id={clean_id}, field={field}", flush=True)
-            if "collaborators" in cached_data:
-                collaborators = cached_data["collaborators"]
-                # Filter by exclude_set if necessary
-                if exclude_ids:
-                    exclude_set = set(exclude_ids)
-                    collaborators = [c for c in collaborators if c["id"].split("/")[-1] not in exclude_set]
-                return collaborators[offset:offset+limit]
+        from app.models.user_models import ResearcherConnection, ResearcherProfile
+        from sqlalchemy import delete
 
-        exclude_set = set(exclude_ids) if exclude_ids else set()
+        now = datetime.datetime.utcnow()
+        CONNECTION_TTL_HOURS = 24
+        PROFILE_TTL_DAYS = 7
+
+        # ── 1. Fast path: read from ResearcherConnection table ────────────────
+        async with AsyncSessionLocal() as session:
+            try:
+                stmt = (
+                    select(ResearcherConnection)
+                    .where(
+                        ResearcherConnection.author_openalex_id == clean_id,
+                        ResearcherConnection.expires_at > now,
+                    )
+                    .order_by(ResearcherConnection.relevance_score.desc())
+                )
+                result = await session.execute(stmt)
+                cached_rows = result.scalars().all()
+                if cached_rows:
+                    print(f"[DB Fast Path] ResearcherConnection hit: {len(cached_rows)} rows for {clean_id}", flush=True)
+                    exclude_set_fast = set(exclude_ids or [])
+                    exclude_set_fast.add(clean_id)
+                    all_rows = [
+                        {
+                            "id": row.connection_openalex_id,
+                            "name": row.connection_name,
+                            "institution": row.connection_institution or "Independent Researcher",
+                            "field": row.connection_field or "Researcher",
+                            "connection_path": row.connection_path or "",
+                            "relevance_score": row.relevance_score,
+                            "papers_collaborated": row.papers_collaborated,
+                            "total_publications": row.total_publications,
+                            "h_index": row.h_index,
+                        }
+                        for row in cached_rows
+                        if row.connection_openalex_id.split("/")[-1] not in exclude_set_fast
+                    ]
+                    # Apply field filter if requested
+                    if field:
+                        field_lower = field.strip().lower()
+                        all_rows = [r for r in all_rows if field_lower in (r["field"] or "").lower() or field_lower in (r["connection_path"] or "").lower()] or all_rows
+                    return all_rows[offset:offset + limit]
+            except Exception as e:
+                print(f"[DB Fast Path Error] ResearcherConnection read failed: {e}", flush=True)
+
+        # ── 2. Legacy CacheEntry blob (cache_key fallback) ────────────────────
+        cache_key = f"network_collaborators_{clean_id}_{field}"
+        cached_blob = await self._load_from_postgres(cache_key)
+        if cached_blob and "collaborators" in cached_blob:
+            print(f"[Postgres Blob Hit] network_collaborators for author_id={clean_id}", flush=True)
+            collaborators = cached_blob["collaborators"]
+            if exclude_ids:
+                ex = set(exclude_ids)
+                collaborators = [c for c in collaborators if c["id"].split("/")[-1] not in ex]
+            return collaborators[offset:offset + limit]
+
+        # ── 3. Full OpenAlex computation ──────────────────────────────────────
+        exclude_set = set(exclude_ids or [])
         exclude_set.add(clean_id)
 
-        # Also fetch primary author profile to avoid including them in results
         profile = await self._fetch_author_profile(author_id)
         if not profile:
             raise ValueError(f"Author with ID '{author_id}' not found on OpenAlex.")
         primary_name = profile.get("display_name", "Main Author")
 
-        # Determine the user's area of interest (target_fields)
-        target_fields = []
+        # Persist the primary author's profile
+        await self._upsert_researcher_profile(profile, PROFILE_TTL_DAYS)
+
+        target_fields: List[str] = []
         if field:
             target_fields = [f.strip().lower() for f in field.split(",") if f.strip()]
         else:
-            concepts_list = profile.get("x_concepts", [])
-            target_fields = [c.get("display_name").lower() for c in concepts_list if c.get("display_name")]
+            target_fields = [c.get("display_name", "").lower() for c in profile.get("x_concepts", []) if c.get("display_name")]
 
         def is_relevant_collaborator(candidate_fields: List[str]) -> bool:
             if not target_fields:
                 return True
             for tf in target_fields:
-                tf_clean = tf.strip().lower()
-                if not tf_clean:
+                if not tf:
                     continue
                 for cf in candidate_fields:
-                    cf_clean = cf.strip().lower()
-                    if tf_clean in cf_clean or cf_clean in tf_clean:
+                    cf_lower = cf.strip().lower()
+                    if tf in cf_lower or cf_lower in tf:
                         return True
             return False
-            
+
         async def fetch_works_for_author(auth_clean_id, max_works=20):
             try:
                 return await self.openalex_service.fetch_author_works(auth_clean_id, per_page=max_works)
@@ -779,7 +775,14 @@ Provide your response in this exact JSON format:
         if not d1_works:
             raise ValueError(f"No publications found for author '{primary_name}' ({clean_id}) on OpenAlex.")
 
-        depth1_authors = {} # id -> (name, institution, field, papers_shared)
+        # Stably sort works by citations count, then by year
+        d1_works = sorted(
+            d1_works,
+            key=lambda w: (w.get("cited_by_count", 0), w.get("publication_year", 0)),
+            reverse=True
+        )
+
+        depth1_authors: Dict[str, Any] = {}
         for work in d1_works:
             work_title = work.get("title", "Research Paper")
             concepts = work.get("concepts", [])
@@ -802,17 +805,17 @@ Provide your response in this exact JSON format:
                                 "field": work_field,
                                 "shared_paper": work_title,
                                 "joint_count": 1,
-                                "work_concepts": work_concepts
+                                "work_concepts": work_concepts,
                             }
                         else:
                             depth1_authors[auth_id]["joint_count"] += 1
 
-        depth2_authors = {}
-        d1_list = list(depth1_authors.values())[:20]
-        
+        depth2_authors: Dict[str, Any] = {}
+        # Stably sort top direct co-authors by joint collaboration count descending first
+        d1_list = sorted(depth1_authors.values(), key=lambda x: x["joint_count"], reverse=True)[:10]
         d2_tasks = [fetch_works_for_author(d1["id"].split("/")[-1], 20) for d1 in d1_list]
         d2_results = await asyncio.gather(*d2_tasks, return_exceptions=True)
-        
+
         for d1, works in zip(d1_list, d2_results):
             if isinstance(works, list):
                 for work in works:
@@ -824,95 +827,108 @@ Provide your response in this exact JSON format:
                         auth_id = author_meta.get("id")
                         if auth_id:
                             auth_clean = author_meta.get("id").split("/")[-1]
-                            if auth_clean not in exclude_set and auth_id not in depth1_authors:
-                                name = author_meta.get("display_name", "Unknown")
-                                insts = auth_ship.get("institutions", [])
-                                inst_name = insts[0].get("display_name") if insts else "Independent Researcher"
-                                if auth_id not in depth2_authors:
-                                    depth2_authors[auth_id] = {
-                                        "id": auth_id,
-                                        "name": name,
-                                        "institution": inst_name,
-                                        "field": work_field,
-                                        "connection_path": f"Collaborates with {d1['name']} (connected via {primary_name})",
-                                        "joint_count": 1,
-                                        "d1_parent_name": d1['name'],
-                                        "work_concepts": work_concepts
-                                    }
-
-        depth3_authors = {}
-        d2_list = list(depth2_authors.values())[:15]
-        d3_tasks = [fetch_works_for_author(d2["id"].split("/")[-1], 15) for d2 in d2_list]
-        d3_results = await asyncio.gather(*d3_tasks, return_exceptions=True)
-        
-        for d2, works in zip(d2_list, d3_results):
-            if isinstance(works, list):
-                for work in works:
-                    concepts = work.get("concepts", [])
-                    work_concepts = [c.get("display_name") for c in concepts if c.get("display_name")]
-                    work_field = work_concepts[0] if work_concepts else "Network Connection"
-                    for auth_ship in work.get("authorships", []):
-                        author_meta = auth_ship.get("author", {})
-                        auth_id = author_meta.get("id")
-                        if auth_id:
-                            auth_clean = author_meta.get("id").split("/")[-1]
                             if auth_clean not in exclude_set and auth_id not in depth1_authors and auth_id not in depth2_authors:
                                 name = author_meta.get("display_name", "Unknown")
                                 insts = auth_ship.get("institutions", [])
                                 inst_name = insts[0].get("display_name") if insts else "Independent Researcher"
-                                if auth_id not in depth3_authors:
-                                    depth3_authors[auth_id] = {
-                                        "id": auth_id,
-                                        "name": name,
-                                        "institution": inst_name,
-                                        "field": work_field,
-                                        "connection_path": f"Collaborates with {d2['name']} (connected via {d2.get('d1_parent_name', 'network')})",
-                                        "joint_count": 1,
-                                        "work_concepts": work_concepts
-                                    }
+                                depth2_authors[auth_id] = {
+                                    "id": auth_id,
+                                    "name": name,
+                                    "institution": inst_name,
+                                    "field": work_field,
+                                    "connection_path": f"Collaborates with {d1['name']} (connected via {primary_name})",
+                                    "joint_count": 1,
+                                    "d1_parent_name": d1["name"],
+                                    "work_concepts": work_concepts,
+                                }
 
-        all_ids = [v["id"].split("/")[-1] for v in list(depth1_authors.values()) + list(depth2_authors.values()) + list(depth3_authors.values())]
-        real_stats = {}
+        # Batch-fetch h-index and works_count for all discovered authors
+        all_ids = [v["id"].split("/")[-1] for v in list(depth1_authors.values()) + list(depth2_authors.values())]
+        real_stats: Dict[str, Any] = {}
         if all_ids:
             try:
-                stat_tasks = []
                 async def fetch_stats_chunk(chunk):
                     filter_str = "openalex:" + "|".join(chunk)
                     async with httpx.AsyncClient(timeout=20.0) as client:
                         res = await client.get(
-                            f"{self.openalex_base}/authors",
-                            params={"filter": filter_str, "per_page": 50},
-                            headers=self.headers
+                            f"https://api.openalex.org/authors",
+                            params={"filter": filter_str, "per_page": 50, "mailto": "vikki.4me@gmail.com"},
                         )
                         if res.status_code == 200:
                             for a in res.json().get("results", []):
-                                author_id_short = a["id"].split("/")[-1]
-                                real_stats[author_id_short] = {
+                                aid_short = a["id"].split("/")[-1]
+                                real_stats[aid_short] = {
                                     "works_count": a.get("works_count", 0),
                                     "h_index": a.get("summary_stats", {}).get("h_index", 0),
-                                    "concepts": [c.get("display_name", "") for c in a.get("x_concepts", []) if c.get("display_name")]
+                                    "concepts": [c.get("display_name", "") for c in a.get("x_concepts", []) if c.get("display_name")],
+                                    "institution": (a.get("last_known_institutions") or [{}])[0].get("display_name", "Independent Researcher"),
+                                    "raw_profile": a,
                                 }
-                
-                for i in range(0, len(all_ids), 50):
-                    stat_tasks.append(fetch_stats_chunk(all_ids[i:i+50]))
-                
+                stat_tasks = [fetch_stats_chunk(all_ids[i:i + 50]) for i in range(0, len(all_ids), 50)]
                 await asyncio.gather(*stat_tasks, return_exceptions=True)
             except Exception as e:
-                print(f"Error fetching real stats: {e}")
+                print(f"[Stats Batch Error] {e}", flush=True)
 
-        collaborators_pool = []
+            # ── Fallback to database for missing stats ───────────────────────
+            # If any authors are missing from real_stats (due to OpenAlex rate limits/errors),
+            # check our local database for previously saved profile data so we don't overwrite with 0.
+            missing_ids = [aid for aid in all_ids if aid not in real_stats]
+            if missing_ids:
+                async with AsyncSessionLocal() as session:
+                    try:
+                        # Query both short/clean IDs and potential full URL IDs
+                        profile_ids = missing_ids + [f"https://openalex.org/{mid}" for mid in missing_ids]
+                        
+                        # 1. Check ResearcherProfile
+                        stmt_profile = select(ResearcherProfile).where(ResearcherProfile.openalex_id.in_(profile_ids))
+                        res_p = await session.execute(stmt_profile)
+                        for rp in res_p.scalars().all():
+                            aid_short = rp.openalex_id.split("/")[-1]
+                            real_stats[aid_short] = {
+                                "works_count": rp.works_count or 0,
+                                "h_index": rp.h_index or 0,
+                                "concepts": rp.concepts or [],
+                                "institution": rp.institution or "Independent Researcher",
+                                "raw_profile": rp.raw_profile,
+                            }
+                        
+                        # 2. Check ResearcherMetrics for any still missing
+                        still_missing = [aid for aid in missing_ids if aid not in real_stats]
+                        if still_missing:
+                            from app.models.researcher_models import ResearcherMetrics
+                            metrics_ids = still_missing + [f"https://openalex.org/{mid}" for mid in still_missing]
+                            stmt_metrics = select(ResearcherMetrics).where(ResearcherMetrics.openalex_id.in_(metrics_ids))
+                            res_m = await session.execute(stmt_metrics)
+                            for rm in res_m.scalars().all():
+                                aid_short = rm.openalex_id.split("/")[-1]
+                                real_stats[aid_short] = {
+                                    "works_count": rm.works_count or 0,
+                                    "h_index": rm.h_index or 0,
+                                    "concepts": rm.expertise or [],
+                                    "institution": rm.current_institution or "Independent Researcher",
+                                    "raw_profile": None,
+                                }
+                    except Exception as db_exc:
+                        print(f"[DB Stats Fallback Error] {db_exc}", flush=True)
+
+        collaborators_pool: List[Dict[str, Any]] = []
+
         for auth_id, d1 in depth1_authors.items():
             auth_id_short = auth_id.split("/")[-1]
             stats = real_stats.get(auth_id_short, {})
             total_pubs = stats.get("works_count", 0)
             h_idx = stats.get("h_index", 0)
-            author_profile_concepts = stats.get("concepts", [])
-            
-            cand_concepts = d1.get("work_concepts", []) + author_profile_concepts
+            author_concepts = stats.get("concepts", [])
+
+            cand_concepts = d1.get("work_concepts", []) + author_concepts
             if not is_relevant_collaborator(cand_concepts):
                 continue
 
-            collaborators_pool.append({
+            # Persist profile for this co-author
+            if stats.get("raw_profile"):
+                await self._upsert_researcher_profile(stats["raw_profile"], PROFILE_TTL_DAYS)
+
+            rec = {
                 "id": auth_id,
                 "name": d1["name"],
                 "institution": d1["institution"],
@@ -921,21 +937,26 @@ Provide your response in this exact JSON format:
                 "relevance_score": min(99, 70 + (d1["joint_count"] * 5)),
                 "papers_collaborated": d1["joint_count"],
                 "total_publications": total_pubs,
-                "h_index": h_idx
-            })
+                "h_index": h_idx,
+                "depth": 1,
+            }
+            collaborators_pool.append(rec)
 
         for auth_id, d2 in depth2_authors.items():
             auth_id_short = auth_id.split("/")[-1]
             stats = real_stats.get(auth_id_short, {})
             total_pubs = stats.get("works_count", 0)
             h_idx = stats.get("h_index", 0)
-            author_profile_concepts = stats.get("concepts", [])
+            author_concepts = stats.get("concepts", [])
 
-            cand_concepts = d2.get("work_concepts", []) + author_profile_concepts
+            cand_concepts = d2.get("work_concepts", []) + author_concepts
             if not is_relevant_collaborator(cand_concepts):
                 continue
 
-            collaborators_pool.append({
+            if stats.get("raw_profile"):
+                await self._upsert_researcher_profile(stats["raw_profile"], PROFILE_TTL_DAYS)
+
+            rec = {
                 "id": auth_id,
                 "name": d2["name"],
                 "institution": d2["institution"],
@@ -944,43 +965,105 @@ Provide your response in this exact JSON format:
                 "relevance_score": 75,
                 "papers_collaborated": 1,
                 "total_publications": total_pubs,
-                "h_index": h_idx
-            })
-            
-        for auth_id, d3 in depth3_authors.items():
-            auth_id_short = auth_id.split("/")[-1]
-            stats = real_stats.get(auth_id_short, {})
-            total_pubs = stats.get("works_count", 0)
-            h_idx = stats.get("h_index", 0)
-            author_profile_concepts = stats.get("concepts", [])
+                "h_index": h_idx,
+                "depth": 2,
+            }
+            collaborators_pool.append(rec)
 
-            cand_concepts = d3.get("work_concepts", []) + author_profile_concepts
-            if not is_relevant_collaborator(cand_concepts):
-                continue
-
-            collaborators_pool.append({
-                "id": auth_id,
-                "name": d3["name"],
-                "institution": d3["institution"],
-                "field": d3["field"],
-                "connection_path": d3["connection_path"],
-                "relevance_score": 60,
-                "papers_collaborated": 1,
-                "total_publications": total_pubs,
-                "h_index": h_idx
-            })
-
-        # Return unique sorted by relevance score
         collaborators_pool.sort(key=lambda x: x["relevance_score"], reverse=True)
 
         if collaborators_pool:
-            await self._save_to_postgres(cache_key, {
-                "collaborators": collaborators_pool
-            })
-            print(f"[Postgres Cache Save] network_collaborators for author_id={clean_id}, field={field}", flush=True)
+            # ── Persist to ResearcherConnection table ─────────────────────────
+            expires_at = now + datetime.timedelta(hours=CONNECTION_TTL_HOURS)
+            async with AsyncSessionLocal() as session:
+                try:
+                    # Delete stale rows for this author first
+                    await session.execute(
+                        delete(ResearcherConnection).where(
+                            ResearcherConnection.author_openalex_id == clean_id
+                        )
+                    )
+                    for rec in collaborators_pool:
+                        row = ResearcherConnection(
+                            author_openalex_id=clean_id,
+                            connection_openalex_id=rec["id"],
+                            connection_name=rec["name"],
+                            connection_institution=rec["institution"],
+                            connection_field=rec["field"],
+                            depth=rec.get("depth", 2),
+                            connection_path=rec["connection_path"],
+                            relevance_score=rec["relevance_score"],
+                            papers_collaborated=rec.get("papers_collaborated", 1),
+                            total_publications=rec.get("total_publications"),
+                            h_index=rec.get("h_index"),
+                            last_synced=now,
+                            expires_at=expires_at,
+                        )
+                        session.add(row)
+                    await session.commit()
+                    print(f"[DB Save] {len(collaborators_pool)} ResearcherConnection rows saved for {clean_id}", flush=True)
+                except Exception as e:
+                    print(f"[DB Save Error] ResearcherConnection write failed: {e}", flush=True)
+                    await session.rollback()
+
+            # ── Also persist to legacy CacheEntry blob for safety ─────────────
+            await self._save_to_postgres(cache_key, {"collaborators": collaborators_pool})
+            print(f"[Postgres Blob Save] network_collaborators cached for {clean_id}", flush=True)
 
         filtered_final = [c for c in collaborators_pool if c["id"].split("/")[-1] not in exclude_set]
-        return filtered_final[offset:offset+limit]
+        return filtered_final[offset:offset + limit]
+
+    async def _upsert_researcher_profile(self, openalex_author: Dict[str, Any], ttl_days: int = 7):
+        """
+        Upsert a researcher's profile into the ResearcherProfile table.
+        Skips gracefully if the author dict is missing the 'id' key.
+        """
+        from app.models.user_models import ResearcherProfile
+        auth_id = openalex_author.get("id")
+        if not auth_id:
+            return
+        clean = auth_id.split("/")[-1]
+        insts = openalex_author.get("last_known_institutions") or []
+        inst_name = insts[0].get("display_name", "Independent Researcher") if insts else "Independent Researcher"
+        concepts = [c.get("display_name") for c in openalex_author.get("x_concepts", []) if c.get("display_name")]
+        field = concepts[0] if concepts else "Researcher"
+        stats = openalex_author.get("summary_stats") or {}
+        now = datetime.datetime.utcnow()
+        expires_at = now + datetime.timedelta(days=ttl_days)
+
+        async with AsyncSessionLocal() as session:
+            try:
+                stmt = select(ResearcherProfile).where(ResearcherProfile.openalex_id == clean)
+                result = await session.execute(stmt)
+                row = result.scalars().first()
+                if row:
+                    row.display_name = openalex_author.get("display_name", row.display_name)
+                    row.institution = inst_name
+                    row.field_of_study = field
+                    row.h_index = stats.get("h_index")
+                    row.works_count = openalex_author.get("works_count")
+                    row.concepts = concepts
+                    row.raw_profile = openalex_author
+                    row.last_synced = now
+                    row.expires_at = expires_at
+                else:
+                    row = ResearcherProfile(
+                        openalex_id=clean,
+                        display_name=openalex_author.get("display_name", "Unknown"),
+                        institution=inst_name,
+                        field_of_study=field,
+                        h_index=stats.get("h_index"),
+                        works_count=openalex_author.get("works_count"),
+                        concepts=concepts,
+                        raw_profile=openalex_author,
+                        last_synced=now,
+                        expires_at=expires_at,
+                    )
+                    session.add(row)
+                await session.commit()
+            except Exception as e:
+                print(f"[DB Upsert Error] ResearcherProfile for {clean}: {e}", flush=True)
+                await session.rollback()
 
     async def chat_with_author(self, author_id: str, paper_title: str, user_message: str, history: List[Dict[str, str]]) -> Dict[str, Any]:
         """
@@ -1041,27 +1124,17 @@ Guidelines:
         reply = f"Thank you for your question about my work. I believe the principles discussed in '{paper_title}' outline a strong foundation for this domain."
 
         if is_llm_working():  # Decoupled: LLM moved to background addon to unblock core app
-            prompt = {
-                "model": self.model,
-                "messages": messages,
-                "temperature": 0.6,
-                "max_tokens": 150
-            }
             try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    res = await client.post(
-                        self.base_url,
-                        headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-                        json=prompt,
-                        timeout=12.0
-                    )
-                    if res.status_code == 200:
-                        reply = res.json()['choices'][0]['message']['content'].strip()
-                    elif res.status_code in [401, 403, 429]:
-                        print(f"[PipelineServices] Groq API returned status {res.status_code}. Setting LLM limit exceeded.", flush=True)
-                        set_llm_limit_exceeded(True)
+                response = await self.llm_service.query(
+                    messages=messages,
+                    models=[self.model],
+                    temperature=0.6,
+                    max_tokens=150
+                )
+                if response.content:
+                    reply = response.content.strip()
             except Exception as e:
-                print(f"Groq author chat simulation failed: {e}")
+                print(f"Author chat simulation failed: {e}", flush=True)
 
         async with AsyncSessionLocal() as session:
             try:

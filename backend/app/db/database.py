@@ -58,10 +58,12 @@ async def init_db() -> None:
     Must be called after all model modules have been imported so that
     their Table objects are registered on Base.metadata.
     """
-    # Import all model modules here so their mappers register with Base
-    # before create_all is called.  This is the canonical pattern for
-    # SQLAlchemy applications.
-    import app.models.user_models  # noqa: F401 — side-effect import
+    # Each import is a side-effect import — it registers the ORM mappers with Base.
+    import app.models.user_models       # noqa: F401 — User, Connection, CacheEntry, ResearcherProfile, ResearcherConnection
+    import app.models.researcher_models # noqa: F401 — ResearcherWork, ResearcherMetrics
+    import app.models.agent_models      # noqa: F401 — AgentHistorySummary, AgentDocumentUpload
+    import app.models.analytics_models  # noqa: F401 — UserSettings, UserActivityLog, ApiRequestLog, AuthorSearchLog
+    import app.models.content_models    # noqa: F401 — DailyFeedItem, Conjecture
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

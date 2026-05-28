@@ -8,8 +8,9 @@ class OpenAlexService:
     """
     def __init__(self):
         self.base_url = "https://api.openalex.org"
+        self.email = settings.openalex_email or "vikki.4me@gmail.com"
         self.headers = {
-            "User-Agent": "SkolabApp/1.0 (mailto:vikki.4me@gmail.com)",
+            "User-Agent": f"SkolabApp/1.0 (mailto:{self.email})",
             "Accept": "application/json"
         }
         if settings.openalex_api_key:
@@ -27,7 +28,7 @@ class OpenAlexService:
         """
         clean_id = author_id.split("/")[-1]
         url = f"{self.base_url}/authors/{clean_id}"
-        params = {"mailto": "vikki.4me@gmail.com"}
+        params = {"mailto": self.email}
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
                 res = await client.get(url, params=params, headers=self.headers)
@@ -45,7 +46,7 @@ class OpenAlexService:
         params = {
             "search": query,
             "per_page": per_page,
-            "mailto": "vikki.4me@gmail.com"
+            "mailto": self.email
         }
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
@@ -76,7 +77,7 @@ class OpenAlexService:
             "filter": filter_str,
             "per_page": per_page,
             "sort": sort,
-            "mailto": "vikki.4me@gmail.com"
+            "mailto": self.email
         }
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
@@ -96,7 +97,7 @@ class OpenAlexService:
             "search": query,
             "per_page": per_page,
             "sort": "publication_year:desc,cited_by_count:desc",
-            "mailto": "vikki.4me@gmail.com"
+            "mailto": self.email
         }
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
@@ -123,7 +124,7 @@ class OpenAlexService:
             "filter": f"concepts.id:{concept_id},publication_year:{prev_year}|{now_year}",
             "sort": "cited_by_count:desc",
             "per_page": per_page,
-            "mailto": "vikki.4me@gmail.com"
+            "mailto": self.email
         }
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
@@ -143,7 +144,7 @@ class OpenAlexService:
             "search": query,
             "per_page": per_page,
             "sort": "cited_by_count:desc",
-            "mailto": "vikki.4me@gmail.com"
+            "mailto": self.email
         }
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:

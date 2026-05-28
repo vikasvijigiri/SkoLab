@@ -80,6 +80,10 @@ import com.open.skolab.ui.screens.AgentScreen
 import com.open.skolab.ui.theme.SkoLabTheme
 import com.open.skolab.ui.theme.EntropiColors
 import kotlinx.coroutines.launch
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.runtime.DisposableEffect
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -116,6 +120,25 @@ fun SkoLabMainApp() {
         while(true) {
             isLlmActive = apiService.checkAiStatus()
             kotlinx.coroutines.delay(30000)
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, authManager.currentUser) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (authManager.currentUser != null) {
+                scope.launch {
+                    if (event == Lifecycle.Event.ON_START) {
+                        authManager.setUserOnlineStatus(true)
+                    } else if (event == Lifecycle.Event.ON_STOP) {
+                        authManager.setUserOnlineStatus(false)
+                    }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -167,17 +190,23 @@ fun SkoLabMainApp() {
                     bottomBar = {
                         val showBottomBar = currentRoute in mainTabs
                         if (showBottomBar) {
-                            BottomNavDock(
-                                items = dockItems,
-                                currentRoute = currentRoute,
-                                onItemClick = { item ->
-                                    navController.navigate(item.route) {
-                                        popUpTo("discover") { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = showBottomBar,
+                                enter = androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.EaseOutCubic)) + androidx.compose.animation.slideInVertically(initialOffsetY = { it }, animationSpec = androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.EaseOutCubic)),
+                                exit = androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.EaseOutCubic)) + androidx.compose.animation.slideOutVertically(targetOffsetY = { it }, animationSpec = androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.EaseOutCubic))
+                            ) {
+                                BottomNavDock(
+                                    items = dockItems,
+                                    currentRoute = currentRoute,
+                                    onItemClick = { item ->
+                                        navController.navigate(item.route) {
+                                            popUpTo("discover") { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
                                     }
-                                }
-                            )
+                                )
+                            }
                         }
                     }
                 ) { scaffoldPadding ->
@@ -421,7 +450,7 @@ fun SkoLabMainApp() {
                     enterTransition = {
                         fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
                     }
-                ) {
+                ) { backStackEntry ->
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -429,12 +458,102 @@ fun SkoLabMainApp() {
                             .padding(bottom = ScreenInsets.bottomNavClearance)
                     ) {
                         PaperCollabsScreen(
+                            savedStateHandle = backStackEntry.savedStateHandle,
                             onNavigateToChat = { peerName, peerId ->
                                 navController.navigate("chat/${peerName.encodeForRoute()}/${peerId.encodeForRoute()}")
                             },
                             onNavigateToWorkspace = { projectName ->
                                 navController.navigate("colab_workspace/${projectName.encodeForRoute()}")
+                            },
+                            onNavigateToCreateProject = {
+                                navController.navigate("create_project")
+                            },
+                            onNavigateToInviteMember = { projectId ->
+                                navController.navigate("invite_member/${projectId.encodeForRoute()}")
+                            },
+                            onNavigateToCreateTask = { projectId ->
+                                navController.navigate("create_task/${projectId.encodeForRoute()}")
+                            },
+                            onNavigateToExternalInvite = { collaboratorName ->
+                                navController.navigate("external_invite/${collaboratorName.encodeForRoute()}")
                             }
+                        )
+                    }
+                }
+                composable(
+                    route = "create_project",
+                    enterTransition = {
+                        androidx.compose.animation.slideInVertically(initialOffsetY = { fullHeight -> fullHeight }, animationSpec = androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.EaseOutCubic))
+                    },
+                    exitTransition = {
+                        androidx.compose.animation.slideOutVertically(targetOffsetY = { fullHeight -> fullHeight }, animationSpec = androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.EaseOutCubic))
+                    }
+                ) {
+                    Box(modifier = Modifier.fillMaxSize().screenSafeArea(includeBottom = true).padding(bottom = scaffoldPadding.calculateBottomPadding())) {
+                        com.open.skolab.ui.screens.CreateProjectScreen(
+                            onBack = { navController.popBackStack() }
+                        )
+                    }
+                }
+                composable(
+                    route = "invite_member/{projectId}",
+                    enterTransition = {
+                        androidx.compose.animation.slideInVertically(initialOffsetY = { fullHeight -> fullHeight }, animationSpec = androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.EaseOutCubic))
+                    },
+                    exitTransition = {
+                        androidx.compose.animation.slideOutVertically(targetOffsetY = { fullHeight -> fullHeight }, animationSpec = androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.EaseOutCubic))
+                    }
+                ) { backStackEntry ->
+                    val projectId = backStackEntry.arguments?.getString("projectId")?.decodeFromRoute() ?: ""
+                    Box(modifier = Modifier.fillMaxSize().screenSafeArea(includeBottom = true).padding(bottom = scaffoldPadding.calculateBottomPadding())) {
+                        com.open.skolab.ui.screens.InviteMemberScreen(
+                            projectId = projectId,
+                            onBack = { navController.popBackStack() }
+                        )
+                    }
+                }
+                composable(
+                    route = "create_task/{projectId}",
+                    enterTransition = {
+                        androidx.compose.animation.slideInVertically(initialOffsetY = { fullHeight -> fullHeight }, animationSpec = androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.EaseOutCubic))
+                    },
+                    exitTransition = {
+                        androidx.compose.animation.slideOutVertically(targetOffsetY = { fullHeight -> fullHeight }, animationSpec = androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.EaseOutCubic))
+                    }
+                ) { backStackEntry ->
+                    val projectId = backStackEntry.arguments?.getString("projectId")?.decodeFromRoute() ?: ""
+                    Box(modifier = Modifier.fillMaxSize().screenSafeArea(includeBottom = true).padding(bottom = scaffoldPadding.calculateBottomPadding())) {
+                        com.open.skolab.ui.screens.CreateTaskScreen(
+                            projectId = projectId,
+                            onBack = { navController.popBackStack() },
+                            onTaskCreated = { title, assignee ->
+                                val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                val taskId = db.collection("collabs_groups").document(projectId).collection("tasks").document().id
+                                val taskData = hashMapOf(
+                                    "id" to taskId,
+                                    "title" to title,
+                                    "assignee" to assignee,
+                                    "isCompleted" to false
+                                )
+                                db.collection("collabs_groups").document(projectId).collection("tasks").document(taskId).set(taskData)
+                            }
+                        )
+                    }
+                }
+                composable(
+                    route = "external_invite/{collaboratorName}",
+                    enterTransition = {
+                        androidx.compose.animation.slideInVertically(initialOffsetY = { fullHeight -> fullHeight }, animationSpec = androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.EaseOutCubic))
+                    },
+                    exitTransition = {
+                        androidx.compose.animation.slideOutVertically(targetOffsetY = { fullHeight -> fullHeight }, animationSpec = androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.EaseOutCubic))
+                    }
+                ) { backStackEntry ->
+                    val collaboratorName = backStackEntry.arguments?.getString("collaboratorName")?.decodeFromRoute() ?: ""
+                    Box(modifier = Modifier.fillMaxSize().screenSafeArea(includeBottom = true).padding(bottom = scaffoldPadding.calculateBottomPadding())) {
+                        com.open.skolab.ui.screens.ExternalInviteScreen(
+                            collaboratorName = collaboratorName,
+                            onBack = { navController.popBackStack() }
                         )
                     }
                 }

@@ -6,5 +6,7 @@ data class SkoLabUser(
     val email: String = "",
     val researchFocus: String = "",
     val complexityScore: Float = 0f,
-    val savedPapers: List<String> = emptyList()
+    val savedPapers: List<String> = emptyList(),
+    val isOnline: Boolean = false,
+    val emailVerified: Boolean = false
 )

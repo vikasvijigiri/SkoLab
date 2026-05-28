@@ -1,6 +1,7 @@
 package com.open.skolab.ui.screens
 
 import androidx.compose.animation.*
+import androidx.lifecycle.SavedStateHandle
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -64,10 +65,10 @@ data class ProjectCollab(
 }
 
 data class CollabTask(
-    val id: Int,
-    val title: String,
-    val assignee: String,
-    val isCompleted: Boolean
+    val id: String = "",
+    val title: String = "",
+    val assignee: String = "",
+    @field:JvmField val isCompleted: Boolean = false
 )
 
 data class CollabEvent(
@@ -79,8 +80,13 @@ data class CollabEvent(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PaperCollabsScreen(
+    savedStateHandle: SavedStateHandle? = null,
     onNavigateToChat: (String, String) -> Unit,
     onNavigateToWorkspace: (String) -> Unit,
+    onNavigateToCreateProject: () -> Unit = {},
+    onNavigateToInviteMember: (String) -> Unit = {},
+    onNavigateToCreateTask: (String) -> Unit = {},
+    onNavigateToExternalInvite: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -92,21 +98,6 @@ fun PaperCollabsScreen(
 
     val db = remember { FirebaseFirestore.getInstance() }
     var dbProjects by remember { mutableStateOf<List<ProjectCollab>>(emptyList()) }
-
-    var showCreateDialog by remember { mutableStateOf(false) }
-    var showInviteMemberDialog by remember { mutableStateOf(false) }
-    
-    // Create Dialog fields
-    var newProjName by remember { mutableStateOf("") }
-    var newProjDesc by remember { mutableStateOf("") }
-    var newProjEq by remember { mutableStateOf("") }
-    var memberEmailInput by remember { mutableStateOf("") }
-    var membersList by remember { mutableStateOf<List<CollabMember>>(emptyList()) }
-    var isSearchingMember by remember { mutableStateOf(false) }
-
-    // Invite Member Dialog fields
-    var inviteEmailInput by remember { mutableStateOf("") }
-    var isInvitingMember by remember { mutableStateOf(false) }
 
     DisposableEffect(currentUserId) {
         if (currentUserId.isEmpty()) {
@@ -184,44 +175,116 @@ fun PaperCollabsScreen(
     }
 
     val projects = remember(dbProjects) {
-        defaultProjects + dbProjects
+        dbProjects.ifEmpty { defaultProjects }
     }
 
     var selectedProjectIndex by remember { mutableStateOf(0) }
     val currentProject = projects.getOrNull(selectedProjectIndex) ?: projects.firstOrNull() ?: defaultProjects.first()
     var showProjectDropdown by remember { mutableStateOf(false) }
 
-    // Dynamic state for task board
-    var tasks by remember(selectedProjectIndex) {
-        mutableStateOf(
-            listOf(
-                CollabTask(1, "Run square lattice DMRG simulation", "Nisheeta Desai", true),
-                CollabTask(2, "Calculate single-ion anisotropy term D", "Sumiran Pujari", true),
-                CollabTask(3, "Draft manuscript methodology section", "You", false),
-                CollabTask(4, "Compare perturbation theory results", "Sumiran Pujari", false),
-                CollabTask(5, "Format final figures for PRL submission", "You", false)
-            )
-        )
+    var membersPresence by remember { mutableStateOf<Map<String, com.open.skolab.model.SkoLabUser>>(emptyMap()) }
+
+    DisposableEffect(currentProject.id, currentProject.memberUids) {
+        val uids = currentProject.memberUids.filter { it != currentUserId && !it.startsWith("default_") && it != "you_uid" }
+        if (uids.isEmpty()) {
+            membersPresence = emptyMap()
+            onDispose {}
+        } else {
+            val listener = db.collection("researchers")
+                .whereIn("uid", uids)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        android.util.Log.e("PaperCollabsScreen", "Error listening to members presence", error)
+                        return@addSnapshotListener
+                    }
+                    if (snapshot != null) {
+                        val presenceMap = snapshot.toObjects(com.open.skolab.model.SkoLabUser::class.java)
+                            .associateBy { it.uid }
+                        membersPresence = presenceMap
+                    }
+                }
+            onDispose {
+                listener.remove()
+            }
+        }
     }
 
-    // Dynamic timeline logs
-    var timelineLogs by remember(selectedProjectIndex) {
-        mutableStateOf(
-            listOf(
+    var tasks by remember { mutableStateOf<List<CollabTask>>(emptyList()) }
+    var timelineLogs by remember { mutableStateOf<List<CollabEvent>>(emptyList()) }
+    val chatMessages = remember { mutableStateListOf<String>() }
+
+    DisposableEffect(currentProject.id) {
+        var tasksListener: com.google.firebase.firestore.ListenerRegistration? = null
+        var activityListener: com.google.firebase.firestore.ListenerRegistration? = null
+        var messagesListener: com.google.firebase.firestore.ListenerRegistration? = null
+
+        if (currentProject.id.startsWith("default_")) {
+            tasks = listOf(
+                CollabTask("1", "Run square lattice DMRG simulation", "Nisheeta Desai", true),
+                CollabTask("2", "Calculate single-ion anisotropy term D", "Sumiran Pujari", true),
+                CollabTask("3", "Draft manuscript methodology section", "You", false),
+                CollabTask("4", "Compare perturbation theory results", "Sumiran Pujari", false),
+                CollabTask("5", "Format final figures for PRL submission", "You", false)
+            )
+            timelineLogs = listOf(
                 CollabEvent("Sumiran Pujari", "updated the spin Hamiltonian equation", "2 hours ago"),
                 CollabEvent("Nisheeta Desai", "uploaded new square-lattice DMRG dataset", "5 hours ago"),
                 CollabEvent("You", "updated draft introduction manuscript", "1 day ago")
             )
-        )
-    }
+            chatMessages.clear()
+            chatMessages.addAll(listOf(
+                "Sumiran: Vikas, did you double check the spin-1 parameters?",
+                "Nisheeta: I finished the scaling checks, exponents look correct.",
+                "Sumiran: Excellent. Let's update the Blackboard layout."
+            ))
+        } else {
+            tasks = emptyList()
+            timelineLogs = emptyList()
+            chatMessages.clear()
 
-    // Simulation for chat messages
-    val chatMessages = remember(selectedProjectIndex) {
-        mutableStateListOf(
-            "Sumiran: Vikas, did you double check the spin-1 parameters?",
-            "Nisheeta: I finished the scaling checks, exponents look correct.",
-            "Sumiran: Excellent. Let's update the Blackboard layout."
-        )
+            tasksListener = db.collection("collabs_groups").document(currentProject.id)
+                .collection("tasks")
+                .addSnapshotListener { snapshot, error ->
+                    if (snapshot != null) {
+                        tasks = snapshot.toObjects(CollabTask::class.java)
+                    }
+                }
+            
+            activityListener = db.collection("collabs_groups").document(currentProject.id)
+                .collection("activity")
+                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .addSnapshotListener { snapshot, error ->
+                    if (snapshot != null) {
+                        timelineLogs = snapshot.documents.map { doc ->
+                            CollabEvent(
+                                author = doc.getString("author") ?: "",
+                                action = doc.getString("action") ?: "",
+                                time = doc.getString("time") ?: "just now"
+                            )
+                        }
+                    }
+                }
+
+            messagesListener = db.collection("collabs_groups").document(currentProject.id)
+                .collection("messages")
+                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.ASCENDING)
+                .addSnapshotListener { snapshot, error ->
+                    if (snapshot != null) {
+                        chatMessages.clear()
+                        snapshot.documents.forEach { doc ->
+                            val sender = doc.getString("senderName") ?: ""
+                            val text = doc.getString("text") ?: ""
+                            chatMessages.add("$sender: $text")
+                        }
+                    }
+                }
+        }
+
+        onDispose {
+            tasksListener?.remove()
+            activityListener?.remove()
+            messagesListener?.remove()
+        }
     }
     
     var groupMessageInput by remember { mutableStateOf("") }
@@ -257,7 +320,7 @@ fun PaperCollabsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .padding(horizontal = 20.dp, vertical = 14.dp)
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -269,7 +332,7 @@ fun PaperCollabsScreen(
                                 text = "PaperCollabs",
                                 fontFamily = SyneFontFamily,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
+                                fontSize = 13.sp,
                                 color = AccentTeal
                             )
                             Row(
@@ -278,17 +341,17 @@ fun PaperCollabsScreen(
                                         showProjectDropdown = !showProjectDropdown
                                         view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                                     }
-                                    .padding(vertical = 4.dp),
+                                    .padding(vertical = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
                                     text = currentProject.name,
                                     color = TextPrimary,
-                                    fontSize = 18.sp,
+                                    fontSize = 17.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.widthIn(max = 240.dp)
+                                    modifier = Modifier.widthIn(max = 180.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Icon(
@@ -301,13 +364,13 @@ fun PaperCollabsScreen(
 
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             // Create Project Button
                             IconButton(
                                 onClick = {
                                     view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                                    showCreateDialog = true
+                                    onNavigateToCreateProject()
                                 },
                                 modifier = Modifier
                                     .size(36.dp)
@@ -325,7 +388,7 @@ fun PaperCollabsScreen(
 
                             // Sync button (Virtual meeting room trigger)
                             val isDefaultProject = currentProject.id.startsWith("default_")
-                            Button(
+                            IconButton(
                                 onClick = {
                                     if (isDefaultProject) {
                                         Toast.makeText(context, "Start Sync is only available for registered SkoLab co-authors. Invite them to join to start call sync.", Toast.LENGTH_LONG).show()
@@ -335,25 +398,17 @@ fun PaperCollabsScreen(
                                         callConnectedTime = 0
                                     }
                                 },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isDefaultProject) Color(0xFF2E3B43).copy(alpha = 0.5f) else Color(0xFF00A884)
-                                ),
-                                shape = RoundedCornerShape(10.dp),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                modifier = Modifier.height(36.dp)
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (isDefaultProject) BgElevated else Color(0xFF00A884))
+                                    .border(BorderStroke(1.dp, BorderLight), RoundedCornerShape(10.dp))
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Videocam,
                                     contentDescription = "Sync Room",
-                                    tint = if (isDefaultProject) Color.White.copy(alpha = 0.38f) else Color.White,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Start Sync",
-                                    color = if (isDefaultProject) Color.White.copy(alpha = 0.38f) else Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
+                                    tint = if (isDefaultProject) TextMuted else Color.White,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
@@ -441,16 +496,23 @@ fun PaperCollabsScreen(
                         }
 
                         // Co-author Avatars
-                        currentProject.activeCoAuthors.forEach { author ->
-                            val initials = author.split(" ").map { it.take(1) }.joinToString("").uppercase()
+                        val otherMembers = currentProject.members.filter {
+                            it.uid != currentUserId &&
+                            it.name.lowercase() != "you" &&
+                            !it.name.equals("vikas vijigiri", ignoreCase = true)
+                        }
+
+                        otherMembers.forEach { member ->
+                            val initials = member.name.split(" ").map { it.take(1) }.joinToString("").uppercase()
+                            val presence = membersPresence[member.uid]
+                            val isOnline = presence?.isOnline == true && presence.emailVerified == true
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 modifier = Modifier
                                     .clickable {
                                         view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                                         // Open chat with co-author (id resolved mock-wise based on name)
-                                        val mockId = "https://openalex.org/" + author.hashCode().toString()
-                                        onNavigateToChat(author, mockId)
+                                        onNavigateToChat(member.name, member.uid)
                                     }
                             ) {
                                 Box(contentAlignment = Alignment.BottomEnd) {
@@ -468,24 +530,24 @@ fun PaperCollabsScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
-                                            text = initials,
+                                            text = initials.ifEmpty { "U" },
                                             color = TextPrimary,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 16.sp
                                         )
                                     }
-                                    // Online Indicator Dot
+                                    // Online / Offline Indicator Dot
                                     Box(
                                         modifier = Modifier
                                             .size(12.dp)
                                             .clip(CircleShape)
-                                            .background(Color(0xFF25D366))
+                                            .background(if (isOnline) Color(0xFF25D366) else Color.Gray)
                                             .border(1.5.dp, BgPrimary, CircleShape)
                                     )
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = author.split(" ").firstOrNull() ?: author,
+                                    text = member.name.split(" ").firstOrNull() ?: member.name,
                                     color = TextSecondary,
                                     fontSize = 11.sp
                                 )
@@ -505,7 +567,7 @@ fun PaperCollabsScreen(
                                         if (currentProject.id.startsWith("default_")) {
                                             Toast.makeText(context, "Cannot add members to default mock projects.", Toast.LENGTH_SHORT).show()
                                         } else {
-                                            showInviteMemberDialog = true
+                                            onNavigateToInviteMember(currentProject.id)
                                         }
                                     },
                                 contentAlignment = Alignment.Center
@@ -648,9 +710,12 @@ fun PaperCollabsScreen(
                         Surface(
                             onClick = {
                                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                                // Add task simulation
-                                val newId = tasks.size + 1
-                                tasks = tasks + CollabTask(newId, "Check boundary conditions", "You", false)
+                                if (currentProject.id.startsWith("default_")) {
+                                    val newId = (tasks.size + 1).toString()
+                                    tasks = tasks + CollabTask(newId, "Check boundary conditions", "You", false)
+                                } else {
+                                    onNavigateToCreateTask(currentProject.id)
+                                }
                             },
                             color = Color.Transparent
                         ) {
@@ -676,8 +741,14 @@ fun PaperCollabsScreen(
                                         .clickable {
                                             view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                                             // Toggle completion state
-                                            tasks = tasks.map {
-                                                if (it.id == task.id) it.copy(isCompleted = !it.isCompleted) else it
+                                            if (currentProject.id.startsWith("default_")) {
+                                                tasks = tasks.map {
+                                                    if (it.id == task.id) it.copy(isCompleted = !it.isCompleted) else it
+                                                }
+                                            } else {
+                                                db.collection("collabs_groups").document(currentProject.id)
+                                                    .collection("tasks").document(task.id)
+                                                    .update("isCompleted", !task.isCompleted)
                                             }
                                         }
                                         .padding(vertical = 8.dp),
@@ -841,11 +912,32 @@ fun PaperCollabsScreen(
                                     onClick = {
                                         if (groupMessageInput.isNotBlank()) {
                                             view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                                            chatMessages.add("You: $groupMessageInput")
-                                            timelineLogs = listOf(
-                                                CollabEvent("You", "posted update to project discussion", "just now")
-                                            ) + timelineLogs
+                                            val text = groupMessageInput.trim()
                                             groupMessageInput = ""
+                                            if (currentProject.id.startsWith("default_")) {
+                                                chatMessages.add("You: $text")
+                                                timelineLogs = listOf(
+                                                    CollabEvent("You", "posted update to project discussion", "just now")
+                                                ) + timelineLogs
+                                            } else {
+                                                val msgId = db.collection("collabs_groups").document(currentProject.id).collection("messages").document().id
+                                                val msgData = hashMapOf(
+                                                    "id" to msgId,
+                                                    "senderName" to currentUserName,
+                                                    "text" to text,
+                                                    "timestamp" to System.currentTimeMillis()
+                                                )
+                                                db.collection("collabs_groups").document(currentProject.id).collection("messages").document(msgId).set(msgData)
+                                                
+                                                val actId = db.collection("collabs_groups").document(currentProject.id).collection("activity").document().id
+                                                val actData = hashMapOf(
+                                                    "author" to currentUserName,
+                                                    "action" to "posted update to project discussion",
+                                                    "time" to "just now",
+                                                    "timestamp" to System.currentTimeMillis()
+                                                )
+                                                db.collection("collabs_groups").document(currentProject.id).collection("activity").document(actId).set(actData)
+                                            }
                                         }
                                     },
                                     modifier = Modifier
@@ -1092,348 +1184,5 @@ fun PaperCollabsScreen(
         }
 
         // --- Dialogs ---
-
-        if (showCreateDialog) {
-            AlertDialog(
-                onDismissRequest = { showCreateDialog = false },
-                title = {
-                    Text(
-                        text = "Create Project Group",
-                        fontFamily = SyneFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = AccentTeal
-                    )
-                },
-                text = {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        OutlinedTextField(
-                            value = newProjName,
-                            onValueChange = { newProjName = it },
-                            label = { Text("Project Name", color = TextMuted) },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary,
-                                focusedBorderColor = AccentTeal,
-                                unfocusedBorderColor = BorderLight,
-                                focusedContainerColor = BgElevated,
-                                unfocusedContainerColor = BgElevated
-                            ),
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        OutlinedTextField(
-                            value = newProjDesc,
-                            onValueChange = { newProjDesc = it },
-                            label = { Text("Description", color = TextMuted) },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary,
-                                focusedBorderColor = AccentTeal,
-                                unfocusedBorderColor = BorderLight,
-                                focusedContainerColor = BgElevated,
-                                unfocusedContainerColor = BgElevated
-                            ),
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        OutlinedTextField(
-                            value = newProjEq,
-                            onValueChange = { newProjEq = it },
-                            label = { Text("Recent Equations (LaTeX format)", color = TextMuted) },
-                            placeholder = { Text("e.g. \\mathcal{H} = J \\sum ...", color = TextMuted) },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary,
-                                focusedBorderColor = AccentTeal,
-                                unfocusedBorderColor = BorderLight,
-                                focusedContainerColor = BgElevated,
-                                unfocusedContainerColor = BgElevated
-                            ),
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp)
-                        )
-
-                        HorizontalDivider(color = BorderLight.copy(alpha = 0.5f), thickness = 0.5.dp)
-
-                        Text(
-                            text = "Invite Members (App Users only)",
-                            color = TextSecondary,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = memberEmailInput,
-                                onValueChange = { memberEmailInput = it },
-                                placeholder = { Text("user@example.com", color = TextMuted) },
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = TextPrimary,
-                                    unfocusedTextColor = TextPrimary,
-                                    focusedBorderColor = AccentTeal,
-                                    unfocusedBorderColor = BorderLight,
-                                    focusedContainerColor = BgElevated,
-                                    unfocusedContainerColor = BgElevated
-                                ),
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp),
-                                singleLine = true
-                            )
-                            Button(
-                                onClick = {
-                                    if (memberEmailInput.isBlank()) return@Button
-                                    isSearchingMember = true
-                                    db.collection("researchers")
-                                        .whereEqualTo("email", memberEmailInput.trim())
-                                        .get()
-                                        .addOnSuccessListener { querySnapshot ->
-                                            isSearchingMember = false
-                                            val doc = querySnapshot.documents.firstOrNull()
-                                            if (doc != null) {
-                                                val researcher = doc.toObject(com.open.skolab.model.SkoLabUser::class.java)
-                                                if (researcher != null) {
-                                                    if (researcher.uid == currentUserId) {
-                                                        Toast.makeText(context, "You are automatically added as the owner.", Toast.LENGTH_SHORT).show()
-                                                    } else if (membersList.none { it.uid == researcher.uid }) {
-                                                        membersList = membersList + CollabMember(
-                                                            uid = researcher.uid,
-                                                            name = researcher.name,
-                                                            email = researcher.email
-                                                        )
-                                                        memberEmailInput = ""
-                                                    } else {
-                                                        Toast.makeText(context, "User already added to the list", Toast.LENGTH_SHORT).show()
-                                                    }
-                                                }
-                                            } else {
-                                                Toast.makeText(context, "This user is not registered in the app.", Toast.LENGTH_SHORT).show()
-                                            }
-                                        }
-                                        .addOnFailureListener {
-                                            isSearchingMember = false
-                                            Toast.makeText(context, "Error looking up user: ${it.message}", Toast.LENGTH_SHORT).show()
-                                        }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
-                                shape = RoundedCornerShape(10.dp),
-                                enabled = !isSearchingMember,
-                                contentPadding = PaddingValues(horizontal = 12.dp)
-                            ) {
-                                if (isSearchingMember) {
-                                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                                } else {
-                                    Text("Add", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-
-                        if (membersList.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            membersList.forEach { member ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(BgElevated, RoundedCornerShape(8.dp))
-                                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(text = member.name, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                        Text(text = member.email, color = TextSecondary, fontSize = 10.sp)
-                                    }
-                                    IconButton(
-                                        onClick = { membersList = membersList.filter { it.uid != member.uid } },
-                                        modifier = Modifier.size(24.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Close,
-                                            contentDescription = "Remove",
-                                            tint = Color(0xFFEA0038),
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            if (newProjName.isBlank()) {
-                                Toast.makeText(context, "Project name cannot be empty.", Toast.LENGTH_SHORT).show()
-                                return@TextButton
-                            }
-                            val newId = db.collection("collabs_groups").document().id
-                            val newProject = ProjectCollab(
-                                id = newId,
-                                name = newProjName.trim(),
-                                description = newProjDesc.trim(),
-                                ownerUid = currentUserId,
-                                ownerName = currentUserName,
-                                members = listOf(CollabMember(uid = currentUserId, name = currentUserName, email = currentUserEmail)) + membersList,
-                                memberUids = listOf(currentUserId) + membersList.map { it.uid },
-                                recentEquations = newProjEq.trim().ifBlank { "\\mathcal{H} = J \\sum \\mathbf{S}_i \\cdot \\mathbf{S}_j" },
-                                manuscriptProgress = 0.0f,
-                                createdAt = System.currentTimeMillis()
-                            )
-                            db.collection("collabs_groups").document(newId).set(newProject)
-                                .addOnSuccessListener {
-                                    Toast.makeText(context, "Project group created!", Toast.LENGTH_SHORT).show()
-                                    showCreateDialog = false
-                                    newProjName = ""
-                                    newProjDesc = ""
-                                    newProjEq = ""
-                                    membersList = emptyList()
-                                }
-                                .addOnFailureListener {
-                                    Toast.makeText(context, "Failed to create: ${it.message}", Toast.LENGTH_SHORT).show()
-                                }
-                        },
-                        colors = ButtonDefaults.textButtonColors(contentColor = AccentTeal)
-                    ) {
-                        Text("Save", fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showCreateDialog = false }) {
-                        Text("Cancel", color = TextSecondary)
-                    }
-                },
-                containerColor = BgCard,
-                shape = RoundedCornerShape(16.dp)
-            )
-        }
-
-        if (showInviteMemberDialog) {
-            AlertDialog(
-                onDismissRequest = { showInviteMemberDialog = false },
-                title = {
-                    Text(
-                        text = "Invite to Project",
-                        fontFamily = SyneFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = AccentTeal
-                    )
-                },
-                text = {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = "Add collaborators to '${currentProject.name}' by their email. They must be registered in the app.",
-                            color = TextSecondary,
-                            fontSize = 13.sp
-                        )
-
-                        OutlinedTextField(
-                            value = inviteEmailInput,
-                            onValueChange = { inviteEmailInput = it },
-                            placeholder = { Text("collaborator@example.com", color = TextMuted) },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary,
-                                focusedBorderColor = AccentTeal,
-                                unfocusedBorderColor = BorderLight,
-                                focusedContainerColor = BgElevated,
-                                unfocusedContainerColor = BgElevated
-                            ),
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp),
-                            singleLine = true
-                        )
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            if (inviteEmailInput.isBlank()) return@Button
-                            val emailToSearch = inviteEmailInput.trim()
-                            
-                            // Check if already a member
-                            if (currentProject.members.any { it.email.equals(emailToSearch, ignoreCase = true) }) {
-                                Toast.makeText(context, "User is already a member of this project.", Toast.LENGTH_SHORT).show()
-                                return@Button
-                            }
-
-                            isInvitingMember = true
-                            db.collection("researchers")
-                                .whereEqualTo("email", emailToSearch)
-                                .get()
-                                .addOnSuccessListener { querySnapshot ->
-                                    val doc = querySnapshot.documents.firstOrNull()
-                                    if (doc != null) {
-                                        val researcher = doc.toObject(com.open.skolab.model.SkoLabUser::class.java)
-                                        if (researcher != null) {
-                                            val newMember = CollabMember(
-                                                uid = researcher.uid,
-                                                name = researcher.name,
-                                                email = researcher.email
-                                            )
-                                            val updatedMembers = currentProject.members + newMember
-                                            val updatedUids = currentProject.memberUids + researcher.uid
-
-                                            db.collection("collabs_groups").document(currentProject.id)
-                                                .update(
-                                                    "members", updatedMembers,
-                                                    "memberUids", updatedUids
-                                                )
-                                                .addOnSuccessListener {
-                                                    isInvitingMember = false
-                                                    Toast.makeText(context, "${researcher.name} added to project!", Toast.LENGTH_SHORT).show()
-                                                    showInviteMemberDialog = false
-                                                    inviteEmailInput = ""
-                                                }
-                                                .addOnFailureListener { e ->
-                                                    isInvitingMember = false
-                                                    Toast.makeText(context, "Failed to update project: ${e.message}", Toast.LENGTH_SHORT).show()
-                                                }
-                                        } else {
-                                            isInvitingMember = false
-                                            Toast.makeText(context, "Error parsing user data.", Toast.LENGTH_SHORT).show()
-                                        }
-                                    } else {
-                                        isInvitingMember = false
-                                        Toast.makeText(context, "This user is not registered in the app.", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                                .addOnFailureListener { e ->
-                                    isInvitingMember = false
-                                    Toast.makeText(context, "Error looking up user: ${e.message}", Toast.LENGTH_SHORT).show()
-                                }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
-                        shape = RoundedCornerShape(10.dp),
-                        enabled = !isInvitingMember && inviteEmailInput.isNotBlank()
-                    ) {
-                        if (isInvitingMember) {
-                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        } else {
-                            Text("Add Member", color = Color.White, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showInviteMemberDialog = false }) {
-                        Text("Cancel", color = TextSecondary)
-                    }
-                },
-                containerColor = BgCard,
-                shape = RoundedCornerShape(16.dp)
-            )
-        }
     }
 }

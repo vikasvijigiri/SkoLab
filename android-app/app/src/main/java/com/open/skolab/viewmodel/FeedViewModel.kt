@@ -5,11 +5,14 @@ import androidx.lifecycle.viewModelScope
 import android.util.Log
 import com.open.skolab.model.Paper
 import com.open.skolab.model.Author
+import com.open.skolab.model.Conjecture
 
 import com.open.skolab.network.ApiService
+import com.open.skolab.network.DailyFeedItem
+import com.open.skolab.network.GrantMatch
 import com.open.skolab.network.NetworkCollaborator
 import com.open.skolab.network.AuthorSuggestion
-import com.open.skolab.network.DailyFeedItem
+import com.open.skolab.network.JournalRecommendation
 import com.open.skolab.network.OpenAlexWork
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -108,6 +111,11 @@ data class FeedUiState(
     val trendingPapers: List<Paper> = emptyList(),
     val suggestedResearchers: List<Author> = emptyList(),
     val suggestedConnections: List<Connection> = emptyList(),
+    val dailyFeedItems: List<DailyFeedItem> = emptyList(),
+    val grantMatches: List<GrantMatch> = emptyList(),
+    val industryOpportunities: List<IndustryOpportunity> = emptyList(),
+    val journalRecommendations: List<JournalRecommendation> = emptyList(),
+    val dailyConjecture: Conjecture? = null,
     val hotPapers: List<Paper> = emptyList(),
     val topInstitutions: List<Institution> = emptyList(),
     val openAccessPapers: List<Paper> = emptyList(),
@@ -427,12 +435,74 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                 }
 
                 // AI Daily Brief Text - Fetches from live backend Daily Feed
-                var aiText = "Based on your research focus in **$displayFocus**, our agents are scanning the latest preprints for disruptive insights. Check back soon as new data streams are ingested."
+                var aiText = "Your research brief is live for **$displayFocus**."
+                var dailyFeedItems: List<DailyFeedItem> = emptyList()
+                var grantMatches: List<GrantMatch> = emptyList()
+                var industryOpportunities: List<IndustryOpportunity> = emptyList()
+                var journalRecommendations: List<JournalRecommendation> = emptyList()
+                var dailyConjecture: Conjecture? = null
                 try {
-                    val dailyFeed = apiService.getDailyFeed(profile?.id, displayFocus)
+                    val authorId = profile?.id?.takeIf { it.isNotBlank() }
+                    val dailyFeedDeferred = async(kotlinx.coroutines.Dispatchers.IO) {
+                        runCatching { apiService.getDailyFeed(authorId, displayFocus) }.getOrElse { emptyList() }
+                    }
+                    val grantsDeferred = async(kotlinx.coroutines.Dispatchers.IO) {
+                        runCatching { authorId?.let { apiService.matchGrants(it) }.orEmpty() }.getOrElse { emptyList() }
+                    }
+                    val industryDeferred = async(kotlinx.coroutines.Dispatchers.IO) {
+                        runCatching { apiService.getIndustryOpportunities(displayFocus) }.getOrElse { emptyList() }
+                    }
+                    val journalsDeferred = async(kotlinx.coroutines.Dispatchers.IO) {
+                        runCatching { authorId?.let { apiService.getJournalAdvisor(it) }.orEmpty() }.getOrElse { emptyList() }
+                    }
+                    val conjectureDeferred = async(kotlinx.coroutines.Dispatchers.IO) {
+                        runCatching { if (authorId != null) apiService.getDailyConjecture(authorId, name) else null }.getOrNull()
+                    }
+
+                    val dailyFeed = dailyFeedDeferred.await()
+                    grantMatches = grantsDeferred.await()
+                    industryOpportunities = industryDeferred.await()
+                    journalRecommendations = journalsDeferred.await()
+                    dailyConjecture = conjectureDeferred.await()
+                    dailyFeedItems = dailyFeed
+
                     if (dailyFeed.isNotEmpty()) {
                         val first = dailyFeed.first()
-                        aiText = "Based on your focus in **$displayFocus**, we recommend the new breakthrough paper **${first.title}** published in *${first.journal}* (${first.year}) by ${first.authors.firstOrNull() ?: "Unknown"}. Recommendation: **${first.recommendation_reason}**"
+                        val briefLines = mutableListOf<String>()
+                        briefLines.add("Based on your focus in **$displayFocus**, the strongest live lead is **${first.title}** in *${first.journal}* (${first.year}).")
+                        briefLines.add("Why it matters: **${first.recommendation_reason}**")
+                        val topGrant = grantMatches.firstOrNull()
+                        if (topGrant != null) {
+                            briefLines.add("Funding radar: **${topGrant.title}** from ${topGrant.agency} closes in ${topGrant.days_left} days.")
+                        }
+                        val topIndustry = industryOpportunities.firstOrNull()
+                        if (topIndustry != null) {
+                            briefLines.add("Industry pulse: **${topIndustry.title}** at ${topIndustry.companyOrFunder}.")
+                        }
+                        val topJournal = journalRecommendations.firstOrNull()
+                        if (topJournal != null) {
+                            briefLines.add("Best journal fit: **${topJournal.journal_name}** (${topJournal.match_score}% match).")
+                        }
+                        dailyConjecture?.let {
+                            briefLines.add("Today's challenge: **${it.title}**.")
+                        }
+                        aiText = briefLines.joinToString("\n\n")
+                    } else {
+                        val fallbackLines = mutableListOf<String>()
+                        fallbackLines.add("Your live signals for **$displayFocus** are syncing now.")
+                        grantMatches.firstOrNull()?.let {
+                            fallbackLines.add("Funding radar: **${it.title}** from ${it.agency} closes in ${it.days_left} days.")
+                        }
+                        industryOpportunities.firstOrNull()?.let {
+                            fallbackLines.add("Industry pulse: **${it.title}** at ${it.companyOrFunder}.")
+                        }
+                        journalRecommendations.firstOrNull()?.let {
+                            fallbackLines.add("Best journal fit: **${it.journal_name}** (${it.match_score}% match).")
+                        }
+                        dailyConjecture?.let {
+                            fallbackLines.add("Today's challenge: **${it.title}**.")
+                        }
+                        aiText = fallbackLines.joinToString("\n\n")
                     }
                 } catch (e: Exception) {
                     Log.e("FeedViewModel", "Failed to load live AI daily feed", e)
@@ -526,6 +596,11 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                     researchAreas = researchAreas,
                     suggestedConnections = connections.shuffled(),
                     suggestedResearchers = rising,
+                    dailyFeedItems = dailyFeedItems,
+                    grantMatches = grantMatches,
+                    industryOpportunities = industryOpportunities,
+                    journalRecommendations = journalRecommendations,
+                    dailyConjecture = dailyConjecture,
                     trendingPapers = trending,
                     hotPapers = hot,
                     openAccessPapers = openAccess,

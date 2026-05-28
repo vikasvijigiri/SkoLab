@@ -413,6 +413,52 @@ fun FeedScreen(
                     }
                 }
 
+                // Daily mission control: brief, pace, and quick actions
+                item {
+                    AIDailyBriefCard(
+                        briefText = uiState.aiBriefText,
+                        isLoading = uiState.isLoading && uiState.aiBriefText.isBlank(),
+                        userId = uiState.user.id
+                    )
+                }
+
+                item {
+                    Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+                        FrontierPulseCard(metrics = uiState.frontierMetrics)
+                    }
+                }
+
+                item {
+                    ResearchActionRail(
+                        onNavigateToAgent = { onTabNavigate("agent") },
+                        onNavigateToCollabs = { onTabNavigate("collabs") },
+                        onNavigateToMetrics = { onTabNavigate("metrics") },
+                        onNavigateToIndustry = { onTabNavigate("industry") },
+                        onNavigateToPapers = { onTabNavigate("papers") },
+                        onNavigateToDailyDiscovery = onNavigateToDailyDiscovery
+                    )
+                }
+
+                if (uiState.dailyConjecture != null) {
+                    item {
+                        Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+                            DailyChallengeCard(
+                                conjecture = uiState.dailyConjecture!!,
+                                onOpenChallenge = onNavigateToLogicEngine
+                            )
+                        }
+                    }
+                }
+
+                if (uiState.suggestedConnections.isNotEmpty()) {
+                    item {
+                        PeerMomentumStrip(
+                            peers = uiState.suggestedConnections.take(4),
+                            onAuthorClick = onAuthorClick
+                        )
+                    }
+                }
+
                 // Gamified Streak Check-In Touchpoint
                 item {
                     Box(modifier = Modifier.padding(horizontal = 20.dp)) {
@@ -822,6 +868,7 @@ fun FrontierPulseCard(metrics: FrontierMetrics) {
         animationSpec = tween(800, easing = FastOutSlowInEasing),
         label = "sProgress"
     )
+    val influenceScore = ((dProgress + sProgress) / 2f).coerceIn(0f, 1f)
 
     Surface(
         shape = RoundedCornerShape(20.dp),
@@ -965,7 +1012,7 @@ fun FrontierPulseCard(metrics: FrontierMetrics) {
                             .padding(vertical = 10.dp, horizontal = 4.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        ScoreArcMeter(score = 0.82f, label = "Influence", size = 52.dp, color = EntropiColors.Purple2)
+                        ScoreArcMeter(score = influenceScore, label = "Influence", size = 52.dp, color = EntropiColors.Purple2)
                     }
                 }
             }
@@ -1563,6 +1610,10 @@ fun ConnectionCard(
     onInvite: () -> Unit = {},
     onAuthorClick: () -> Unit
 ) {
+    var showEmailInviteDialog by remember { mutableStateOf(false) }
+    var showSMSInviteDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = EntropiColors.Card,
@@ -1755,23 +1806,195 @@ fun ConnectionCard(
                     }
                 }
             } else {
-                Surface(
-                    onClick = onInvite,
-                    modifier = Modifier.fillMaxWidth().height(30.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color.Transparent,
-                    border = BorderStroke(1.dp, EntropiColors.Gold1.copy(alpha = 0.5f))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize().background(
-                            Brush.horizontalGradient(listOf(EntropiColors.Gold1.copy(alpha = 0.10f), EntropiColors.Gold2.copy(alpha = 0.06f))),
-                            RoundedCornerShape(8.dp)
-                        ),
-                        contentAlignment = Alignment.Center
+                    // Invite via Email button
+                    Surface(
+                        onClick = { showEmailInviteDialog = true },
+                        modifier = Modifier.weight(1f).height(30.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color.Transparent,
+                        border = BorderStroke(1.dp, EntropiColors.Gold1.copy(alpha = 0.4f))
                     ) {
-                        Text("Invite to SkoLab", fontFamily = SpaceGroteskFontFamily, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = EntropiColors.Gold1)
+                        Box(
+                            modifier = Modifier.fillMaxSize().background(
+                                Brush.horizontalGradient(listOf(EntropiColors.Gold1.copy(alpha = 0.10f), EntropiColors.Gold2.copy(alpha = 0.06f))),
+                                RoundedCornerShape(8.dp)
+                            ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("✉️ Email Invite", fontFamily = SpaceGroteskFontFamily, fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = EntropiColors.Gold1)
+                        }
+                    }
+
+                    // Invite via SMS button
+                    Surface(
+                        onClick = { showSMSInviteDialog = true },
+                        modifier = Modifier.weight(1f).height(30.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color.Transparent,
+                        border = BorderStroke(1.dp, EntropiColors.Cyan.copy(alpha = 0.4f))
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize().background(
+                                Brush.horizontalGradient(listOf(EntropiColors.Cyan.copy(alpha = 0.10f), EntropiColors.Cyan.copy(alpha = 0.06f))),
+                                RoundedCornerShape(8.dp)
+                            ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("💬 SMS Invite", fontFamily = SpaceGroteskFontFamily, fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = EntropiColors.Cyan)
+                        }
                     }
                 }
+            }
+
+            if (showEmailInviteDialog) {
+                val suggestedEmail = remember { connection.author.name.lowercase().replace(" ", "") + "@university.edu" }
+                var emailInput by remember { mutableStateOf(suggestedEmail) }
+                
+                AlertDialog(
+                    onDismissRequest = { showEmailInviteDialog = false },
+                    title = {
+                        Text(
+                            text = "Email Invitation",
+                            fontFamily = SyneFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = EntropiColors.Gold1
+                        )
+                    },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = "Send a secure SkoLab invite to ${connection.author.name}:",
+                                color = EntropiColors.Text2,
+                                fontSize = 13.sp
+                            )
+                            OutlinedTextField(
+                                value = emailInput,
+                                onValueChange = { emailInput = it },
+                                label = { Text("Collaborator's Email", color = EntropiColors.Text3) },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = EntropiColors.Text,
+                                    unfocusedTextColor = EntropiColors.Text,
+                                    focusedBorderColor = EntropiColors.Gold1,
+                                    unfocusedBorderColor = EntropiColors.Border,
+                                    focusedContainerColor = EntropiColors.Card2,
+                                    unfocusedContainerColor = EntropiColors.Card2
+                                ),
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                singleLine = true
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                if (emailInput.isNotBlank()) {
+                                    showEmailInviteDialog = false
+                                    val subject = "Invitation to collaborate on SkoLab"
+                                    val body = "Hi ${connection.author.name},\n\nI would love to collaborate with you on our research papers using SkoLab. SkoLab offers secure, encrypted voice/video synchronization, real-time LaTeX blackboards, and joint manuscript editing.\n\nJoin me on SkoLab here: https://skolab.open/invite\n\nBest regards,\nResearcher"
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_SENDTO).apply {
+                                        data = android.net.Uri.parse("mailto:")
+                                        putExtra(android.content.Intent.EXTRA_EMAIL, arrayOf(emailInput.trim()))
+                                        putExtra(android.content.Intent.EXTRA_SUBJECT, subject)
+                                        putExtra(android.content.Intent.EXTRA_TEXT, body)
+                                    }
+                                    try {
+                                        context.startActivity(android.content.Intent.createChooser(intent, "Send email via..."))
+                                    } catch (e: Exception) {
+                                        android.widget.Toast.makeText(context, "No email client found.", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                            colors = ButtonDefaults.textButtonColors(contentColor = EntropiColors.Gold1)
+                        ) {
+                            Text("Send Email", fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showEmailInviteDialog = false }) {
+                            Text("Cancel", color = EntropiColors.Text3)
+                        }
+                    },
+                    containerColor = EntropiColors.Card,
+                    shape = RoundedCornerShape(16.dp)
+                )
+            }
+
+            if (showSMSInviteDialog) {
+                var phoneInput by remember { mutableStateOf("") }
+                
+                AlertDialog(
+                    onDismissRequest = { showSMSInviteDialog = false },
+                    title = {
+                        Text(
+                            text = "SMS Invitation",
+                            fontFamily = SyneFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = EntropiColors.Cyan
+                        )
+                    },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = "Send an SMS invite to ${connection.author.name}:",
+                                color = EntropiColors.Text2,
+                                fontSize = 13.sp
+                            )
+                            OutlinedTextField(
+                                value = phoneInput,
+                                onValueChange = { phoneInput = it },
+                                label = { Text("Mobile Number", color = EntropiColors.Text3) },
+                                placeholder = { Text("e.g. +1234567890", color = EntropiColors.Text3) },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = EntropiColors.Text,
+                                    unfocusedTextColor = EntropiColors.Text,
+                                    focusedBorderColor = EntropiColors.Cyan,
+                                    unfocusedBorderColor = EntropiColors.Border,
+                                    focusedContainerColor = EntropiColors.Card2,
+                                    unfocusedContainerColor = EntropiColors.Card2
+                                ),
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                singleLine = true
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                if (phoneInput.isNotBlank()) {
+                                    showSMSInviteDialog = false
+                                    val smsText = "Hi ${connection.author.name}, join me on SkoLab for secure, encrypted audio/video calling, real-time LaTeX blackboards, and joint manuscript editing: https://skolab.open/invite"
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_SENDTO).apply {
+                                        data = android.net.Uri.parse("smsto:${phoneInput.trim()}")
+                                        putExtra("sms_body", smsText)
+                                    }
+                                    try {
+                                        context.startActivity(intent)
+                                    } catch (e: Exception) {
+                                        android.widget.Toast.makeText(context, "No SMS application found.", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                            colors = ButtonDefaults.textButtonColors(contentColor = EntropiColors.Cyan)
+                        ) {
+                            Text("Send SMS", fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showSMSInviteDialog = false }) {
+                            Text("Cancel", color = EntropiColors.Text3)
+                        }
+                    },
+                    containerColor = EntropiColors.Card,
+                    shape = RoundedCornerShape(16.dp)
+                )
             }
         }
     }
@@ -2190,4 +2413,292 @@ private fun getCountdownText(): String {
     val dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK)
     val daysLeft = if (dayOfWeek == Calendar.SUNDAY) 0 else 8 - dayOfWeek
     return "Resets in $daysLeft days"
+}
+
+private data class HomeAction(
+    val label: String,
+    val icon: ImageVector,
+    val tint: Color,
+    val onClick: () -> Unit
+)
+
+@Composable
+fun ResearchActionRail(
+    onNavigateToAgent: () -> Unit,
+    onNavigateToCollabs: () -> Unit,
+    onNavigateToMetrics: () -> Unit,
+    onNavigateToIndustry: () -> Unit,
+    onNavigateToPapers: () -> Unit,
+    onNavigateToDailyDiscovery: () -> Unit
+) {
+    val actions = listOf(
+        HomeAction("Ask Agent", Icons.Default.AutoAwesome, AccentViolet, onNavigateToAgent),
+        HomeAction("Team Pulse", Icons.Default.People, AccentTeal, onNavigateToCollabs),
+        HomeAction("Metrics", Icons.Default.AutoGraph, AccentAmber, onNavigateToMetrics),
+        HomeAction("Industry", Icons.Default.BusinessCenter, AccentEmerald, onNavigateToIndustry),
+        HomeAction("Papers", Icons.AutoMirrored.Filled.Article, AccentRose, onNavigateToPapers),
+        HomeAction("Discovery", Icons.Default.Search, AccentIndigo, onNavigateToDailyDiscovery)
+    )
+
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        items(actions) { action ->
+            Surface(
+                onClick = action.onClick,
+                shape = RoundedCornerShape(16.dp),
+                color = BgCard,
+                border = BorderStroke(1.dp, action.tint.copy(alpha = 0.25f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(26.dp)
+                            .background(action.tint.copy(alpha = 0.12f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = action.icon,
+                            contentDescription = action.label,
+                            tint = action.tint,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                    Text(
+                        text = action.label,
+                        color = TextPrimary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DailyChallengeCard(
+    conjecture: Conjecture,
+    onOpenChallenge: () -> Unit
+) {
+    Surface(
+        onClick = onOpenChallenge,
+        shape = RoundedCornerShape(18.dp),
+        color = BgCard,
+        border = BorderStroke(1.dp, AccentAmber.copy(alpha = 0.25f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(26.dp)
+                        .background(AccentAmber.copy(alpha = 0.12f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.School,
+                        contentDescription = "Daily challenge",
+                        tint = AccentAmber,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Today's challenge",
+                        color = AccentAmber,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        text = conjecture.category,
+                        color = TextMuted,
+                        fontSize = 10.sp
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = AccentAmber.copy(alpha = 0.12f)
+                ) {
+                    Text(
+                        text = "Open",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        color = AccentAmber,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Text(
+                text = conjecture.title,
+                color = TextPrimary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                lineHeight = 18.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = conjecture.hypothesis,
+                color = TextMuted,
+                fontSize = 11.sp,
+                lineHeight = 15.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                conjecture.options.take(2).forEach { option ->
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = AccentTeal.copy(alpha = 0.08f)
+                    ) {
+                        Text(
+                            text = option,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            color = AccentTeal,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PeerMomentumStrip(
+    peers: List<Connection>,
+    onAuthorClick: (String) -> Unit
+) {
+    if (peers.isEmpty()) return
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Default.People, null, tint = AccentTeal, modifier = Modifier.size(16.dp))
+                Text(
+                    text = "Peers moving fast",
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+            }
+            Text(
+                text = "Tap to inspect",
+                color = TextMuted,
+                fontSize = 11.sp
+            )
+        }
+
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            items(peers) { peer ->
+                Surface(
+                    onClick = { onAuthorClick("${peer.author.name}|${peer.author.id}") },
+                    shape = RoundedCornerShape(16.dp),
+                    color = BgCard,
+                    border = BorderStroke(1.dp, AccentTeal.copy(alpha = 0.22f)),
+                    modifier = Modifier.width(190.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = peer.author.name,
+                                    color = TextPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = peer.author.institution,
+                                    color = TextMuted,
+                                    fontSize = 10.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = AccentTeal.copy(alpha = 0.1f)
+                            ) {
+                                Text(
+                                    text = "H ${peer.hIndex}",
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    color = AccentTeal,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = peer.connectionPath.ifBlank { "Suggested collaborator" },
+                            color = AccentTeal,
+                            fontSize = 10.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = AccentAmber.copy(alpha = 0.08f)
+                            ) {
+                                Text(
+                                    text = "${peer.totalPublications} papers",
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    color = AccentAmber,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = AccentRose.copy(alpha = 0.08f)
+                            ) {
+                                Text(
+                                    text = "${peer.papersCollaborated} joint",
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    color = AccentRose,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

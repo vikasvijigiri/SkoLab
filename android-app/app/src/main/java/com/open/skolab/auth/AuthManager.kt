@@ -177,15 +177,21 @@ class AuthManager(private val context: Context) {
             }
 
             val userData = if (userDoc.exists()) {
-                userDoc.toObject(SkoLabUser::class.java)
+                val existing = userDoc.toObject(SkoLabUser::class.java)
+                db.collection("researchers").document(user.uid).update(
+                    "isOnline", true,
+                    "emailVerified", user.isEmailVerified
+                )
+                existing?.copy(isOnline = true, emailVerified = user.isEmailVerified)
             } else {
                 val newUserData = SkoLabUser(
                     uid = user.uid,
                     name = user.displayName ?: "",
                     email = user.email ?: "",
-                    researchFocus = ""
+                    researchFocus = "",
+                    isOnline = true,
+                    emailVerified = user.isEmailVerified
                 )
-                // Use set() with merge — queued offline and synced when reconnected
                 db.collection("researchers").document(user.uid).set(newUserData).await()
                 newUserData
             }
@@ -199,9 +205,20 @@ class AuthManager(private val context: Context) {
                 uid = user.uid,
                 name = user.displayName ?: "",
                 email = user.email ?: "",
-                researchFocus = ""
+                researchFocus = "",
+                isOnline = true,
+                emailVerified = user.isEmailVerified
             )
             userPrefs.cacheUser(fallback)
+        }
+    }
+
+    suspend fun setUserOnlineStatus(online: Boolean) {
+        val user = currentUser ?: return
+        try {
+            db.collection("researchers").document(user.uid).update("isOnline", online)
+        } catch (e: Exception) {
+            Log.w("AuthManager", "Failed to update online status", e)
         }
     }
 
@@ -274,6 +291,14 @@ class AuthManager(private val context: Context) {
     }
 
     suspend fun signOut() {
+        val user = currentUser
+        if (user != null) {
+            try {
+                db.collection("researchers").document(user.uid).update("isOnline", false)
+            } catch (e: Exception) {
+                Log.w("AuthManager", "Failed to set status offline on signout", e)
+            }
+        }
         auth.signOut()
         userPrefs.clearCachedUser()
     }
