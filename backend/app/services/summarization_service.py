@@ -22,6 +22,7 @@ import asyncio
 import time
 from typing import Optional, List, Dict, Any, Tuple
 from .metrics_service import MetricsService
+from app.prompts import RESEARCH_INTELLIGENCE_SYSTEM_PROMPT
 
 
 # ── LLM Context Budget ────────────────────────────────────────────────────────
@@ -39,121 +40,23 @@ NOISE_PATTERNS = re.compile(
 )
 
 
-# ── Master Prompt ─────────────────────────────────────────────────────────────
-RESEARCH_INTELLIGENCE_SYSTEM_PROMPT = r"""
-You are a **Research Intelligence Agent** — the world's most precise scientific paper analyst.
-Your task is to deeply read the FULL TEXT of a research paper provided by the user and extract
-structured intelligence across 9 dimensions. You have access to the actual paper content, not just
-the abstract — use this to be MAXIMALLY accurate and specific.
-
-━━━ WHAT TO EXTRACT (9 DIMENSIONS) ━━━
-
-1. **tldr** (string, ≤35 words)
-   Plain English. What was achieved? What's the core contribution? Write for a smart non-expert.
-   Base this on the paper's own conclusions section, not just the abstract.
-
-2. **key_findings** (list of 4–6 strings)
-   The most important discoveries, results, or contributions. For each:
-   - Include ACTUAL NUMBERS from the paper (accuracy %, speedup ratios, p-values, etc.)
-   - Use **bold** for key terms and concepts
-   - Use LaTeX ($$...$$) for formulas, metrics, and variables
-   - Start with a scientific emoji (⚛️🧬🔬🧠💡📊🔭🧪⚡🧲🔐🌡️)
-   - Be specific — "achieved 97.3% accuracy on ImageNet" not "improved accuracy"
-
-3. **techniques** (list of 4–8 strings)
-   Specific methods, algorithms, architectures, statistical tests used IN THIS PAPER.
-   Extract from the Methods/Methodology section primarily.
-   Examples: "Transformer Self-Attention", "ANOVA Statistical Test", "CRISPR-Cas9 HDR",
-   "Variational Autoencoder", "Monte Carlo Tree Search", "K-fold Cross-Validation"
-   Plain text, no markdown.
-
-4. **tools_and_software** (list of 2–6 strings)
-   Named frameworks, libraries, datasets, instruments, databases, or experimental equipment.
-   Examples: "PyTorch 2.0", "ImageNet-21K", "AlphaFold Database", "LIGO Interferometer",
-   "Python 3.11", "Jupyter Notebooks", "HuggingFace Transformers", "fMRI (3T Siemens)"
-   Extract from Implementation Details / Experimental Setup sections.
-   If none are named, write "Not specified".
-
-5. **core_concepts** (list of 3–6 strings)
-   Scientific concepts that UNDERPIN this paper — what the reader must know BEFORE reading it.
-   These are PREREQUISITES, not what the paper introduces.
-   Examples: "Quantum Entanglement", "Gradient Descent", "Hardy-Weinberg Equilibrium",
-   "Transformer Architecture", "Protein Folding Energy Landscape"
-
-6. **formulas** (list of 1–4 strings)
-   Key mathematical expressions CENTRAL to this paper's contribution.
-   CRITICAL JSON RULES FOR LATEX:
-   - Wrap in DOUBLE dollar signs: $$E = mc^2$$
-   - Use DOUBLE backslashes for ALL LaTeX commands in JSON: $$\\\\sigma$$, $$\\\\nabla L$$
-   - Example: "$$\\\\hat{y} = \\\\sigma(W^T x + b)$$"
-   If no significant formulas: return empty list.
-
-7. **limitations** (list of 3–4 strings)
-   Honest, specific limitations — assumptions made, constraints, things NOT tested.
-   Extract from the paper's own Discussion/Limitations section when available.
-   Don't be generic ("future work is needed") — be specific to THIS paper.
-
-8. **real_world_impact** (string, 2–4 sentences)
-   What concrete problem in the real world does this solve?
-   Name specific industries, diseases, engineering challenges, or societal impacts.
-   Be honest about timeline and readiness — if it's early-stage research, say so.
-
-9. **future_directions** (list of 3–4 strings)
-   Specific experiments, extensions, or open questions raised by THIS paper's findings.
-   Extract from the paper's Conclusion/Future Work section when available.
-
-━━━ ACCURACY RULES ━━━
-- Use ONLY information present in the paper text provided
-- Do NOT hallucinate numbers, results, or tool names not in the text
-- If a section is unclear or missing from the text, clearly note "Not mentioned in paper"
-- The confidence field reflects how complete the paper text was: High/Medium/Low
-
-━━━ JSON FORMATTING RULES ━━━
-- Return VALID JSON only — no markdown, no preamble, no text after the closing brace
-- All LaTeX backslashes MUST be DOUBLED inside JSON strings: \\ becomes \\\\
-- Wrap all math in double dollar signs $$...$$
-
-━━━ OUTPUT SCHEMA ━━━
-{
-  "tldr": "string",
-  "key_findings": ["string", ...],
-  "techniques": ["string", ...],
-  "tools_and_software": ["string", ...],
-  "core_concepts": ["string", ...],
-  "formulas": ["$$...$$", ...],
-  "limitations": ["string", ...],
-  "real_world_impact": "string",
-  "future_directions": ["string", ...],
-  "confidence": "High" | "Medium" | "Low"
-}
-"""
+# ── Master Prompt ──
+# Imported from app.prompts.summarization_prompts
 
 
 # Shared module-level in-memory cache
 _global_intelligence_cache: Dict[str, Dict[str, Any]] = {}
-LLM_LIMIT_EXCEEDED = False
-LLM_LIMIT_EXCEEDED_TIME = 0.0
-
-def is_llm_working() -> bool:
-    global LLM_LIMIT_EXCEEDED, LLM_LIMIT_EXCEEDED_TIME
-    if LLM_LIMIT_EXCEEDED:
-        # If 15 minutes have passed, attempt to reset and try again
-        if time.time() - LLM_LIMIT_EXCEEDED_TIME > 900:
-            LLM_LIMIT_EXCEEDED = False
-            print("[LLM] Attempting to reset LLM_LIMIT_EXCEEDED after 15-minute cooldown...", flush=True)
-    return bool(os.getenv("GROQ_API")) and not LLM_LIMIT_EXCEEDED
-
-def set_llm_limit_exceeded(exceeded: bool):
-    global LLM_LIMIT_EXCEEDED, LLM_LIMIT_EXCEEDED_TIME
-    LLM_LIMIT_EXCEEDED = exceeded
-    if exceeded:
-        LLM_LIMIT_EXCEEDED_TIME = time.time()
-    print(f"[LLM] LLM_LIMIT_EXCEEDED set to {exceeded}", flush=True)
+from app.services.llm_service import (
+    is_llm_working,
+    set_llm_limit_exceeded,
+    LLM_LIMIT_EXCEEDED,
+    LLM_LIMIT_EXCEEDED_TIME
+)
 
 class SummarizationService:
     def __init__(self):
-        self.api_key = os.getenv("GROQ_API")
-        self.base_url = "https://api.groq.com/openai/v1/chat/completions"
+        from app.services.llm_service import LLMService
+        self.llm_service = LLMService()
         self.models = [
             "llama-3.3-70b-versatile",
             "llama3-8b-8192",
@@ -570,48 +473,24 @@ class SummarizationService:
         meta: Dict[str, Any],
         text_source: str,
     ) -> Dict[str, Any]:
-        """Calls Groq with the Research Intelligence Agent prompt."""
-        for model in self.models:
-            payload = {
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": RESEARCH_INTELLIGENCE_SYSTEM_PROMPT},
-                    {"role": "user", "content": context},
-                ],
-                "temperature": 0.15,   # Very low — precision over creativity
-                "max_tokens": 2048,
-                "response_format": {"type": "json_object"},
-            }
-
-            try:
-                async with httpx.AsyncClient(
-                    timeout=httpx.Timeout(45.0, connect=8.0)
-                ) as client:
-                    resp = await client.post(
-                        self.base_url,
-                        headers={
-                            "Authorization": f"Bearer {self.api_key}",
-                            "Content-Type": "application/json",
-                        },
-                        json=payload,
-                    )
-
-                if resp.status_code == 200:
-                    raw = resp.json()["choices"][0]["message"]["content"]
-                    print(f"[LLM] Response received using {model} ({len(raw)} chars)", flush=True)
-                    return self._parse_and_normalise(raw, title, meta, text_source)
-                else:
-                    print(f"[LLM] Error {resp.status_code} with {model}: {resp.text[:300]}", flush=True)
-                    if resp.status_code in [401, 403]:
-                        set_llm_limit_exceeded(True)
-                        break
-
-            except httpx.TimeoutException:
-                print(f"[LLM] Groq request timed out for {model}", flush=True)
-            except Exception as e:
-                print(f"[LLM] Exception for {model}: {e}", flush=True)
-
-        raise Exception("Failed to analyze paper using any available LLM models.")
+        """Calls LLMService with the Research Intelligence Agent prompt."""
+        messages = [
+            {"role": "system", "content": RESEARCH_INTELLIGENCE_SYSTEM_PROMPT},
+            {"role": "user", "content": context},
+        ]
+        
+        response = await self.llm_service.query(
+            messages=messages,
+            models=self.models,
+            temperature=0.15,
+            max_tokens=2048,
+            response_format={"type": "json_object"}
+        )
+        
+        if not response.content:
+            raise Exception("LLM response was empty.")
+            
+        return self._parse_and_normalise(response.content, title, meta, text_source)
 
     def _parse_and_normalise(
         self,
@@ -693,10 +572,9 @@ class SummarizationService:
         if paper_data.get("concepts"):
             context += f"Concepts: {', '.join(paper_data['concepts'][:10])}\n"
 
-        for model in self.models:
-            payload = {
-                "model": model,
-                "messages": [
+        try:
+            response = await self.llm_service.query(
+                messages=[
                     {
                         "role": "system",
                         "content": r"""You are a world-class scientific communicator.
@@ -712,41 +590,31 @@ Return JSON: { "bullets": ["⚛️ ...", ...] }""",
                     },
                     {"role": "user", "content": context},
                 ],
-                "temperature": 0.3,
-                "response_format": {"type": "json_object"},
-            }
-
-            try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    resp = await client.post(
-                        self.base_url,
-                        headers={
-                            "Authorization": f"Bearer {self.api_key}",
-                            "Content-Type": "application/json",
-                        },
-                        json=payload,
-                        timeout=20.0,
+                models=self.models,
+                temperature=0.3,
+                response_format={"type": "json_object"},
+            )
+            
+            if response.content:
+                raw = response.content
+                try:
+                    content = json.loads(raw)
+                except json.JSONDecodeError:
+                    fixed = re.sub(
+                        r'(?<!\\)\\(?!["\\\/bfnrt]|u[0-9a-fA-F]{4})',
+                        r'\\\\',
+                        raw,
                     )
-                if resp.status_code == 200:
-                    raw = resp.json()["choices"][0]["message"]["content"]
-                    try:
-                        content = json.loads(raw)
-                    except json.JSONDecodeError:
-                        fixed = re.sub(
-                            r'(?<!\\)\\(?!["\\\/bfnrt]|u[0-9a-fA-F]{4})',
-                            r'\\\\',
-                            raw,
-                        )
-                        content = json.loads(fixed)
-                    if "bullets" in content:
-                        content["bullets"] = [
-                            b.replace("\\\\", "\\") for b in content["bullets"]
-                        ]
-                    content["metrics"] = metrics
-                    content["top_skills"] = top_skills
-                    return content
-            except Exception:
-                pass
+                    content = json.loads(fixed)
+                if "bullets" in content:
+                    content["bullets"] = [
+                        b.replace("\\\\", "\\") for b in content["bullets"]
+                    ]
+                content["metrics"] = metrics
+                content["top_skills"] = top_skills
+                return content
+        except Exception as e:
+            print(f"[summarize_paper] Query failed: {e}", flush=True)
 
         raise Exception("Failed to summarize paper using any available LLM models.")
 
@@ -761,10 +629,9 @@ Return JSON: { "bullets": ["⚛️ ...", ...] }""",
         if paper_data.get("concepts"):
             context += f"Concepts: {', '.join(paper_data['concepts'][:8])}\n"
 
-        for model in self.models:
-            payload = {
-                "model": model,
-                "messages": [
+        try:
+            response = await self.llm_service.query(
+                messages=[
                     {
                         "role": "system",
                         "content": r"""You are an expert academic presenter.
@@ -775,24 +642,15 @@ Return JSON: { "slides": [{ "title": "...", "bullets": ["..."] }] }""",
                     },
                     {"role": "user", "content": context},
                 ],
-                "temperature": 0.4,
-                "response_format": {"type": "json_object"},
-            }
-            try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    resp = await client.post(
-                        self.base_url,
-                        headers={
-                            "Authorization": f"Bearer {self.api_key}",
-                            "Content-Type": "application/json",
-                        },
-                        json=payload,
-                        timeout=30.0,
-                    )
-                if resp.status_code == 200:
-                    return json.loads(resp.json()["choices"][0]["message"]["content"])
-            except Exception:
-                pass
+                models=self.models,
+                temperature=0.4,
+                response_format={"type": "json_object"},
+            )
+            if response.content:
+                return json.loads(response.content)
+        except Exception as e:
+            print(f"[generate_presentation] Query failed: {e}", flush=True)
+            
         return {"slides": []}
 
     # ══════════════════════════════════════════════════════════════════════════

@@ -63,8 +63,13 @@ from fastapi.staticfiles import StaticFiles
 os.makedirs("downloads", exist_ok=True)
 app.mount("/downloads", StaticFiles(directory="downloads"), name="downloads")
 
-# Include aggregate router
-app.include_router(api_router)
+# Include aggregate router with version prefix
+app.include_router(api_router, prefix="/api/v1")
+
+@app.get("/health")
+async def health():
+    """Simple status check for container/host health monitoring."""
+    return {"status": "ok"}
 
 # ── mDNS service advertisement ───────────────────────────────────────────────
 # The Android app uses NSD (Network Service Discovery) to find this server
@@ -77,6 +82,9 @@ _mdns_info: ServiceInfo | None = None
 async def init_postgres() -> None:
     from app.db.database import init_db
     print("[Postgres] Initializing local database schema...", flush=True)
+    print("[Storage] Strategy:", flush=True)
+    print("  PostgreSQL → hot data: users, connections, caches, agent history, search metadata", flush=True)
+    print("  Firestore  → large docs: enriched profiles, works arrays, LLM outputs", flush=True)
     try:
         await init_db()
         print("[Postgres] Database initialization successful.", flush=True)
@@ -86,19 +94,19 @@ async def init_postgres() -> None:
 
 @app.on_event("startup")
 async def verify_firestore() -> None:
-    """Check if Firestore connection is responsive. If not, bypass to fallback."""
+    """Check if Firestore connection is responsive. Used for large-doc cloud storage."""
     from app.services.researcher_worker import check_connection_sync, set_firestore_available
     import concurrent.futures
-    
-    print("[Firestore] Verifying Firestore connection on startup...", flush=True)
-    
-    # Wipe stale caches on startup to force fresh loading of updated schemas/authors
+
+    print("[Firestore] Verifying cloud connection on startup...", flush=True)
+
+    # Clear all PgBackedCache entries on startup so stale in-mem L1 is wiped
     try:
         await suggestions_cache.clear()
         await profile_cache.clear()
         await daily_feed_cache.clear()
         await network_collaborators_cache.clear()
-        print("[Cache] All startup caches cleared successfully!", flush=True)
+        print("[Cache] Startup in-memory L1 caches cleared.", flush=True)
     except Exception as e:
         print(f"[Cache] Startup clear failed: {e}", flush=True)
 
@@ -109,11 +117,15 @@ async def verify_firestore() -> None:
         success = await asyncio.wait_for(future, timeout=3.0)
         set_firestore_available(success)
         executor.shutdown(wait=False)
+        if success:
+            print("[Firestore] Connected ✔ — large docs (enriched profiles, works) will be stored here.", flush=True)
+        else:
+            print("[Firestore] Unavailable — falling back to PostgreSQL-only mode.", flush=True)
     except asyncio.TimeoutError:
-        print("[Firestore] Connection check timed out after 3.0s. Firestore is disabled.", flush=True)
+        print("[Firestore] Connection timed out after 3s — Firestore disabled.", flush=True)
         set_firestore_available(False)
     except Exception as e:
-        print(f"[Firestore] Connection check failed: {e}. Firestore is disabled.", flush=True)
+        print(f"[Firestore] Connection check failed: {e} — Firestore disabled.", flush=True)
         set_firestore_available(False)
 
 

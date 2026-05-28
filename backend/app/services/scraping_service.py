@@ -4,7 +4,7 @@ import re
 import httpx
 from html.parser import HTMLParser
 from typing import List, Dict, Any, Optional
-from app.core.prompts import JSON_PARSER_SYSTEM_PROMPT
+from app.prompts import JSON_PARSER_SYSTEM_PROMPT
 
 class HTMLTextExtractor(HTMLParser):
     """
@@ -42,8 +42,8 @@ class ScrapingService:
     LLM-based parsing of unstructured content into validated JSON.
     """
     def __init__(self):
-        self.api_key = os.getenv("GROQ_API")
-        self.base_url = "https://api.groq.com/openai/v1/chat/completions"
+        from app.services.llm_service import LLMService
+        self.llm_service = LLMService()
         self.model = "llama-3.3-70b-versatile"
 
     async def scrape_url(self, url: str) -> str:
@@ -168,9 +168,6 @@ class ScrapingService:
         Parses unstructured text/HTML content into a structured JSON dictionary
         using Groq's json_object output format.
         """
-        if not self.api_key:
-            raise Exception("Groq API key not configured.")
-
         # Truncate content to avoid token overflow
         truncated_content = raw_content[:15000]
 
@@ -179,29 +176,19 @@ class ScrapingService:
             instruction=instruction or "Parse the document details logically."
         )
 
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                res = await client.post(
-                    self.base_url,
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json"
-                    },
-                    json={
-                        "model": self.model,
-                        "messages": [
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": f"Document content to parse:\n\n{truncated_content}"}
-                        ],
-                        "temperature": 0.1,
-                        "response_format": {"type": "json_object"}
-                    }
-                )
-                if res.status_code == 200:
-                    raw_res = res.json()["choices"][0]["message"]["content"].strip()
-                    return json.loads(raw_res)
-                else:
-                    raise Exception(f"Groq API returned error: {res.status_code} - {res.text}")
-        except Exception as e:
-            print(f"[ScrapingService] LLM parsing error: {e}", flush=True)
-            raise e
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Document content to parse:\n\n{truncated_content}"}
+        ]
+
+        response = await self.llm_service.query(
+            messages=messages,
+            models=[self.model],
+            temperature=0.1,
+            response_format={"type": "json_object"}
+        )
+
+        if not response.content:
+            raise Exception("LLM parsing failed to generate a response.")
+
+        return json.loads(response.content.strip())

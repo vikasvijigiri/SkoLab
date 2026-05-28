@@ -2,20 +2,18 @@ import httpx
 import os
 import random
 from typing import List, Optional
-from app.services.summarization_service import is_llm_working, set_llm_limit_exceeded
-from app.core.prompts import PREDICTION_SYSTEM_PROMPT
+from app.services.llm_service import is_llm_working, set_llm_limit_exceeded
+from app.prompts import PREDICTION_SYSTEM_PROMPT
 
 class PredictionService:
     def __init__(self):
-        self.api_key = os.getenv("GROQ_API")
-        self.base_url = "https://api.groq.com/openai/v1/chat/completions"
+        from app.services.llm_service import LLMService
+        self.llm_service = LLMService()
         self.models = [
             "llama-3.3-70b-versatile",
             "llama-3.1-8b-instant",
             "openai/gpt-oss-120b",
             "qwen/qwen3-32b"
-            # "gemma2-9b-it",
-            # "llama-3.1-8b-instant"
         ]
 
     async def predict_next_problem(
@@ -74,46 +72,28 @@ class PredictionService:
             f"Selected Publications (Latest/Top):\n{works_context}"
         )
         
-        for model in self.models:
-            prompt = {
-                "model": model,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": PREDICTION_SYSTEM_PROMPT
-                    },
-                    {
-                        "role": "user",
-                        "content": user_content
-                    }
-                ],
-                "temperature": 0.3,
-                "max_tokens": 250
+        messages = [
+            {
+                "role": "system",
+                "content": PREDICTION_SYSTEM_PROMPT
+            },
+            {
+                "role": "user",
+                "content": user_content
             }
+        ]
 
-            try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    response = await client.post(
-                        self.base_url,
-                        headers={
-                            "Authorization": f"Bearer {self.api_key}",
-                            "Content-Type": "application/json"
-                        },
-                        json=prompt,
-                        timeout=15.0
-                    )
-                    
-                    if response.status_code == 200:
-                        data = response.json()
-                        return data['choices'][0]['message']['content'].strip()
-                    elif response.status_code in [401, 403]:
-                        print(f"[PredictionService] Groq API returned status {response.status_code}. Setting LLM limit exceeded.", flush=True)
-                        set_llm_limit_exceeded(True)
-                        break
-            except Exception as e:
-                print(f"[PredictionService] Exception for {model}: {e}", flush=True)
+        response = await self.llm_service.query(
+            messages=messages,
+            models=self.models,
+            temperature=0.3,
+            max_tokens=250
+        )
 
-        raise Exception("Failed to predict next research problem using any available LLM models.")
+        if not response.content:
+            raise Exception("LLM prediction failed to generate a response.")
+
+        return response.content.strip()
 
     def _generate_fallback_prediction(
         self,

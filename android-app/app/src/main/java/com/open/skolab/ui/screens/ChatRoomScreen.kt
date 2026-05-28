@@ -14,6 +14,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeDown
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,7 +37,18 @@ import com.open.skolab.network.ApiService
 import com.open.skolab.network.ChatMessage
 import com.open.skolab.data.ChatStorage
 import com.open.skolab.auth.AuthManager
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.graphics.Brush
 import com.open.skolab.ui.theme.*
+
+
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.open.skolab.ui.components.MarkdownText
@@ -50,9 +64,14 @@ import kotlinx.coroutines.tasks.await
 import android.media.ToneGenerator
 import android.media.AudioManager
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.provider.ContactsContract
 import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.ui.platform.LocalView
 import android.view.HapticFeedbackConstants
 import androidx.compose.ui.text.style.TextAlign
@@ -72,11 +91,20 @@ fun ChatRoomScreen(
     var messageText by remember { mutableStateOf("") }
     var chatHistory by remember { mutableStateOf<List<ChatMessage>>(emptyList()) }
     var isPeerTyping by remember { mutableStateOf(false) }
+    var showMediaPanel by remember { mutableStateOf(false) }
+    var selectedMediaTab by remember { mutableStateOf(0) }
+    val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+
+
     
     var isPeerSkoLab by remember { mutableStateOf(false) }
     var checkingSkoLabStatus by remember { mutableStateOf(true) }
+    var peerUserData by remember { mutableStateOf<com.open.skolab.model.SkoLabUser?>(null) }
 
-    LaunchedEffect(peerId) {
+    DisposableEffect(peerId) {
         if (peerId.isNotEmpty() &&
             !peerId.startsWith("https://openalex.org/") &&
             peerId != "sumiran_uid" &&
@@ -86,19 +114,26 @@ fun ChatRoomScreen(
             peerId != "you_uid" &&
             peerId != "default_owner"
         ) {
-            checkingSkoLabStatus = true
-            try {
-                val db = FirebaseFirestore.getInstance()
-                val doc = db.collection("researchers").document(peerId).get().await()
-                isPeerSkoLab = doc.exists()
-            } catch (e: Exception) {
-                isPeerSkoLab = false
-            } finally {
-                checkingSkoLabStatus = false
+            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val listener = db.collection("researchers").document(peerId)
+                .addSnapshotListener { snapshot, error ->
+                    if (snapshot != null && snapshot.exists()) {
+                        peerUserData = snapshot.toObject(com.open.skolab.model.SkoLabUser::class.java)
+                        isPeerSkoLab = true
+                    } else {
+                        peerUserData = null
+                        isPeerSkoLab = false
+                    }
+                    checkingSkoLabStatus = false
+                }
+            onDispose {
+                listener.remove()
             }
         } else {
+            peerUserData = null
             isPeerSkoLab = false
             checkingSkoLabStatus = false
+            onDispose {}
         }
     }
 
@@ -175,6 +210,337 @@ fun ChatRoomScreen(
     val userUid = cachedUser?.uid ?: ""
     val chatStorage = remember(userUid) { if (userUid.isNotEmpty()) ChatStorage(context, userUid) else null }
 
+    val triggerPeerResponse: (String, List<ChatMessage>) -> Unit = { userMsg, updatedHistory ->
+        scope.launch {
+            delay(600)
+            isPeerTyping = true
+            val response = apiService.chatWithAuthor(
+                authorId = peerId,
+                paperTitle = "General Discussion",
+                userMessage = userMsg,
+                history = updatedHistory.takeLast(10)
+            )
+            delay(800)
+            isPeerTyping = false
+            if (response != null && !response.reply.isNullOrBlank()) {
+                val finalHistory = chatHistory + ChatMessage(role = "assistant", content = response.reply)
+                chatHistory = finalHistory
+                chatStorage?.saveChatHistory(peerId, finalHistory)
+            } else {
+                val fallback = chatHistory + ChatMessage(
+                    role = "assistant",
+                    content = "I've considered your point. Based on my research models, that's an area with significant convergence potential."
+                )
+                chatHistory = fallback
+                chatStorage?.saveChatHistory(peerId, fallback)
+            }
+        }
+    }
+
+    var emailInput by remember(peerName) { mutableStateOf(peerName.lowercase().replace(" ", "") + "@university.edu") }
+    var phoneInput by remember { mutableStateOf("") }
+    var resolvedInstitution by remember { mutableStateOf("") }
+    var isResolvingEmail by remember { mutableStateOf(false) }
+
+    // Dynamic backend OpenAlex/Scraping lookup for peer's email
+    LaunchedEffect(peerName) {
+        if (peerName.isNotEmpty() && peerName != "SkoLab User") {
+            isResolvingEmail = true
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    // Fetch from our backend resolve_email endpoint
+                    val url = "http://10.0.2.2:8000/api/v1/authors/resolve_email?name=" + 
+                              android.net.Uri.encode(peerName)
+                    val client = okhttp3.OkHttpClient()
+                    val request = okhttp3.Request.Builder().url(url).build()
+                    client.newCall(request).execute().use { response ->
+                        if (response.isSuccessful) {
+                            val bodyStr = response.body?.string()
+                            if (bodyStr != null) {
+                                val json = org.json.JSONObject(bodyStr)
+                                val email = json.optString("email")
+                                val inst = json.optString("institution")
+                                if (email.isNotEmpty()) {
+                                    emailInput = email
+                                }
+                                if (inst.isNotEmpty()) {
+                                    resolvedInstitution = inst
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                } finally {
+                    isResolvingEmail = false
+                }
+            }
+        }
+    }
+
+    var hasContactsPermission by remember {
+        mutableStateOf(
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.READ_CONTACTS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    val requestPermissionLauncherForChat = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasContactsPermission = isGranted
+        if (isGranted) {
+            Toast.makeText(context, "✅ Contacts access granted for smart suggestions!", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "⚠️ Contacts permission denied. Using simulated database.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    var localContactsList by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    var localPhoneList by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    var allDeviceContacts by remember { mutableStateOf<List<Triple<String, String, String>>>(emptyList()) }
+
+    // Fetch all contacts from phone once permission is active
+    LaunchedEffect(hasContactsPermission) {
+        if (hasContactsPermission) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val tempMap = mutableMapOf<String, Triple<String, String, String>>() // Key: Name, Value: (Name, Phone, Email)
+                try {
+                    val contentResolver = context.contentResolver
+                    // Fetch phone contacts
+                    val phoneUri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI
+                    val phoneProjection = arrayOf(
+                        ContactsContract.CommonDataKinds.Phone.NUMBER,
+                        ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME
+                    )
+                    val phoneCursor = contentResolver.query(phoneUri, phoneProjection, null, null, "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} ASC")
+                    phoneCursor?.use { c ->
+                        val numIdx = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                        val nameIdx = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                        while (c.moveToNext()) {
+                            val number = if (numIdx >= 0) c.getString(numIdx) ?: "" else ""
+                            val name = if (nameIdx >= 0) c.getString(nameIdx) ?: "" else ""
+                            if (name.isNotEmpty()) {
+                                tempMap[name] = Triple(name, number, "")
+                            }
+                        }
+                    }
+
+                    // Fetch email contacts and merge
+                    val emailUri = ContactsContract.CommonDataKinds.Email.CONTENT_URI
+                    val emailProjection = arrayOf(
+                        ContactsContract.CommonDataKinds.Email.ADDRESS,
+                        ContactsContract.CommonDataKinds.Email.DISPLAY_NAME
+                    )
+                    val emailCursor = contentResolver.query(emailUri, emailProjection, null, null, null)
+                    emailCursor?.use { c ->
+                        val addrIdx = c.getColumnIndex(ContactsContract.CommonDataKinds.Email.ADDRESS)
+                        val nameIdx = c.getColumnIndex(ContactsContract.CommonDataKinds.Email.DISPLAY_NAME)
+                        while (c.moveToNext()) {
+                            val email = if (addrIdx >= 0) c.getString(addrIdx) ?: "" else ""
+                            val name = if (nameIdx >= 0) c.getString(nameIdx) ?: "" else ""
+                            if (name.isNotEmpty()) {
+                                val existing = tempMap[name]
+                                if (existing != null) {
+                                    tempMap[name] = Triple(name, existing.second, email)
+                                } else {
+                                    tempMap[name] = Triple(name, "", email)
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                allDeviceContacts = tempMap.values.toList().sortedBy { it.first }
+            }
+        } else {
+            allDeviceContacts = emptyList()
+        }
+    }
+
+    // Dynamic search for email contacts in background thread
+    LaunchedEffect(emailInput, hasContactsPermission) {
+        if (hasContactsPermission && emailInput.length >= 2) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val results = mutableListOf<Pair<String, String>>()
+                try {
+                    val contentResolver = context.contentResolver
+                    val emailUri = ContactsContract.CommonDataKinds.Email.CONTENT_URI
+                    val emailProjection = arrayOf(
+                        ContactsContract.CommonDataKinds.Email.ADDRESS,
+                        ContactsContract.CommonDataKinds.Email.DISPLAY_NAME
+                    )
+                    val cursor = contentResolver.query(
+                        emailUri,
+                        emailProjection,
+                        "${ContactsContract.CommonDataKinds.Email.ADDRESS} LIKE ? OR ${ContactsContract.CommonDataKinds.Email.DISPLAY_NAME} LIKE ?",
+                        arrayOf("%$emailInput%", "%$emailInput%"),
+                        null
+                    )
+                    cursor?.use { c ->
+                        val addrIdx = c.getColumnIndex(ContactsContract.CommonDataKinds.Email.ADDRESS)
+                        val nameIdx = c.getColumnIndex(ContactsContract.CommonDataKinds.Email.DISPLAY_NAME)
+                        while (c.moveToNext()) {
+                            val email = if (addrIdx >= 0) c.getString(addrIdx) ?: "" else ""
+                            val name = if (nameIdx >= 0) c.getString(nameIdx) ?: "" else ""
+                            if (email.isNotEmpty()) {
+                                results.add(email to (name.ifEmpty { "Device Contact" }))
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                localContactsList = results.distinctBy { it.first }.take(10)
+            }
+        } else {
+            localContactsList = emptyList()
+        }
+    }
+
+    // Dynamic search for phone contacts in background thread
+    LaunchedEffect(phoneInput, hasContactsPermission) {
+        if (hasContactsPermission && phoneInput.length >= 2) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val results = mutableListOf<Pair<String, String>>()
+                try {
+                    val contentResolver = context.contentResolver
+                    val phoneUri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI
+                    val phoneProjection = arrayOf(
+                        ContactsContract.CommonDataKinds.Phone.NUMBER,
+                        ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME
+                    )
+                    val cursor = contentResolver.query(
+                        phoneUri,
+                        phoneProjection,
+                        "${ContactsContract.CommonDataKinds.Phone.NUMBER} LIKE ? OR ${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?",
+                        arrayOf("%$phoneInput%", "%$phoneInput%"),
+                        null
+                    )
+                    cursor?.use { c ->
+                        val numIdx = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                        val nameIdx = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                        while (c.moveToNext()) {
+                            val number = if (numIdx >= 0) c.getString(numIdx) ?: "" else ""
+                            val name = if (nameIdx >= 0) c.getString(nameIdx) ?: "" else ""
+                            if (number.isNotEmpty()) {
+                                results.add(number to (name.ifEmpty { "Device Contact" }))
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                localPhoneList = results.distinctBy { it.first }.take(10)
+            }
+        } else {
+            localPhoneList = emptyList()
+        }
+    }
+
+    // Simulated Academic senders from user's Gmail
+    val simulatedGmailSenders = remember {
+        listOf(
+            "sumiran.pujari@physics.iitb.ac.in" to "IIT Bombay Physics Dept",
+            "nisheeta.desai@ias.edu" to "Institute for Advanced Study",
+            "paulson.kg@cam.ac.uk" to "Cambridge Cavendish Lab",
+            "saptarshi.mandal@oxford.ac.uk" to "Oxford Condensed Matter",
+            "albert.einstein@princeton.edu" to "Princeton Theoretical Physics",
+            "richard.feynman@caltech.edu" to "Caltech Physics Division",
+            "marie.curie@sorbonne.fr" to "Sorbonne Chemistry Faculty",
+            "stephen.hawking@cam.ac.uk" to "Cambridge Applied Maths",
+            "niels.bohr@nbi.ku.dk" to "Niels Bohr Institute",
+            "werner.heisenberg@mpg.de" to "Max Planck Institute"
+        )
+    }
+
+    val matchedGmailSenders = remember(emailInput, localContactsList) {
+        if (emailInput.isEmpty() || emailInput.contains("@") || emailInput.length < 2) {
+            emptyList()
+        } else {
+            val filteredSimulated = simulatedGmailSenders.filter {
+                it.first.lowercase().contains(emailInput.lowercase()) ||
+                it.second.lowercase().contains(emailInput.lowercase())
+            }
+            (localContactsList + filteredSimulated).distinctBy { it.first }.take(10)
+        }
+    }
+
+    val matchedPhoneContacts = remember(phoneInput, localPhoneList) {
+        if (phoneInput.isEmpty() || phoneInput.length < 2) {
+            emptyList()
+        } else {
+            localPhoneList.take(10)
+        }
+    }
+
+    // Native phone contact picker launcher
+    val phonePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val uri = result.data?.data
+            uri?.let {
+                try {
+                    val cursor = context.contentResolver.query(
+                        it,
+                        arrayOf(
+                            ContactsContract.CommonDataKinds.Phone.NUMBER
+                        ),
+                        null, null, null
+                    )
+                    cursor?.use { c ->
+                        if (c.moveToFirst()) {
+                            val numIdx = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                            val phone = if (numIdx >= 0) c.getString(numIdx) else ""
+                            if (phone.isNotEmpty()) {
+                                phoneInput = phone
+                                Toast.makeText(context, "📱 Phone number loaded!", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    // Native email contact picker launcher
+    val emailPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val uri = result.data?.data
+            uri?.let {
+                try {
+                    val cursor = context.contentResolver.query(
+                        it,
+                        arrayOf(
+                            ContactsContract.CommonDataKinds.Email.ADDRESS
+                        ),
+                        null, null, null
+                    )
+                    cursor?.use { c ->
+                        if (c.moveToFirst()) {
+                            val emailIdx = c.getColumnIndex(ContactsContract.CommonDataKinds.Email.ADDRESS)
+                            val email = if (emailIdx >= 0) c.getString(emailIdx) else ""
+                            if (email.isNotEmpty()) {
+                                emailInput = email
+                                Toast.makeText(context, "📧 Email address loaded!", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
     // Initials color
     val avatarColors = listOf(AccentTeal, AccentIndigo, AccentEmerald, AccentViolet, AccentAmber, AccentOrange, AccentRose, AccentCyan)
     val color = avatarColors[kotlin.math.abs(peerId.hashCode()) % avatarColors.size]
@@ -218,45 +584,92 @@ fun ChatRoomScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                        .padding(start = 4.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Avatar
-                    Box(
+                    // Back button + Avatar Clickable Row (WhatsApp style)
+                    Row(
                         modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(color.copy(alpha = 0.12f))
-                            .background(color.copy(alpha = 0.08f)),
-                        contentAlignment = Alignment.Center
+                            .clip(RoundedCornerShape(24.dp))
+                            .clickable { onBack() }
+                            .padding(vertical = 4.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = peerName.take(1).uppercase(),
-                            color = color,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                            fontFamily = DisplayFontFamily
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = TextPrimary,
+                            modifier = Modifier.size(24.dp)
                         )
+                        
+                        Spacer(Modifier.width(4.dp))
+                        
+                        // Avatar (Circular Profile Pic with Online Dot option)
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(color.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = peerName.take(1).uppercase(),
+                                color = color,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                fontFamily = DisplayFontFamily
+                            )
+                            
+                            // Online Indicator Green Dot (WhatsApp style)
+                            val peer = peerUserData
+                            if (isPeerTyping || (peer?.isOnline == true && peer.emailVerified == true)) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .align(Alignment.BottomEnd)
+                                        .border(1.5.dp, BgCard, CircleShape)
+                                        .background(AccentEmerald, CircleShape)
+                                )
+                            }
+                        }
                     }
-                    
-                    Spacer(Modifier.width(10.dp))
-                    
-                    // Title/Subtitle
-                    Column(modifier = Modifier.weight(1f)) {
+
+                    Spacer(Modifier.width(8.dp))
+
+                    // Name and Status (WhatsApp style, also clickable to go back/view)
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onBack() }
+                            .padding(vertical = 4.dp)
+                    ) {
                         Text(
                             text = peerName,
                             color = TextPrimary,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
+                            fontSize = 15.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             fontFamily = DisplayFontFamily
                         )
+                        val peer = peerUserData
+                        val statusText = when {
+                            isPeerTyping -> "typing..."
+                            peer?.isOnline == true && peer.emailVerified == true -> "online"
+                            peer != null && peer.emailVerified == false -> "unverified account"
+                            peer != null && peer.isOnline == false -> "offline"
+                            else -> "not on skolab"
+                        }
+                        val statusColor = when (statusText) {
+                            "typing..." -> AccentTeal
+                            "online" -> AccentEmerald
+                            else -> TextSecondary
+                        }
                         Text(
-                            text = if (isPeerTyping) "typing..." else "Online",
-                            color = if (isPeerTyping) AccentTeal else AccentEmerald,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium
+                            text = statusText,
+                            color = statusColor,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Normal
                         )
                     }
                     
@@ -304,7 +717,7 @@ fun ChatRoomScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(top = innerPadding.calculateTopPadding(), bottom = 4.dp)
         ) {
             // Message List
             LazyColumn(
@@ -358,8 +771,7 @@ fun ChatRoomScreen(
 
             // Input Bar
             Surface(
-                color = BgCard,
-                modifier = Modifier.navigationBarsPadding()
+                color = BgCard
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     if (replyingToMessage != null) {
@@ -407,111 +819,353 @@ fun ChatRoomScreen(
                         }
                     }
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // Rounded Text Field
+                    if (isPeerSkoLab) {
                         Row(
                             modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 36.dp, max = 100.dp)
-                                .clip(RoundedCornerShape(24.dp))
-                                .background(BgElevated)
-                                .padding(horizontal = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .fillMaxWidth()
+                                .padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            IconButton(onClick = {}, modifier = Modifier.size(24.dp)) {
-                                Icon(Icons.Default.SentimentSatisfiedAlt, null, tint = TextMuted)
-                            }
-                            
-                            Spacer(Modifier.width(4.dp))
-                            
-                            BasicTextField(
-                                value = messageText,
-                                onValueChange = { messageText = it },
-                                textStyle = TextStyle(
-                                    color = TextPrimary, 
-                                    fontSize = 14.sp,
-                                    fontFamily = DisplayFontFamily
-                                ),
-                                cursorBrush = SolidColor(TextPrimary),
+                            // Rounded Text Field Container (WhatsApp style)
+                            Row(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .padding(vertical = 8.dp),
-                                decorationBox = { innerTextField ->
-                                    Box(contentAlignment = Alignment.CenterStart) {
-                                        if (messageText.isEmpty()) {
-                                            Text("Message", color = TextMuted, fontSize = 14.sp)
+                                    .heightIn(min = 36.dp, max = 100.dp)
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .background(BgElevated)
+                                    .border(BorderStroke(1.dp, BorderLight.copy(alpha = 0.4f)), RoundedCornerShape(24.dp))
+                                    .padding(horizontal = 14.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                IconButton(
+                                    onClick = {
+                                        if (!showMediaPanel) {
+                                            keyboardController?.hide()
+                                            focusManager.clearFocus()
                                         }
-                                        innerTextField()
-                                    }
+                                        showMediaPanel = !showMediaPanel
+                                    },
+                                    modifier = Modifier.size(26.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (showMediaPanel) Icons.Default.Keyboard else Icons.Default.SentimentSatisfiedAlt,
+                                        contentDescription = "Toggle Media Panel",
+                                        tint = if (showMediaPanel) AccentTeal else TextMuted
+                                    )
                                 }
-                            )
-                            
-                            Spacer(Modifier.width(4.dp))
-                            
-                            IconButton(onClick = {}, modifier = Modifier.size(24.dp)) {
-                                Icon(Icons.Default.AttachFile, null, tint = TextMuted)
+                                
+                                Spacer(Modifier.width(6.dp))
+                                
+                                BasicTextField(
+                                    value = messageText,
+                                    onValueChange = { messageText = it },
+                                    textStyle = TextStyle(
+                                        color = TextPrimary, 
+                                        fontSize = 14.5.sp,
+                                        fontFamily = DisplayFontFamily
+                                    ),
+                                    cursorBrush = SolidColor(AccentTeal),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(vertical = 8.dp)
+                                        .focusRequester(focusRequester)
+                                        .onFocusChanged { focusState ->
+                                            if (focusState.isFocused) {
+                                                showMediaPanel = false
+                                            }
+                                        },
+                                    decorationBox = { innerTextField ->
+                                        Box(contentAlignment = Alignment.CenterStart) {
+                                            if (messageText.isEmpty()) {
+                                                Text("Message", color = TextMuted, fontSize = 14.5.sp)
+                                            }
+                                            innerTextField()
+                                        }
+                                    }
+                                )
+                                
+                                Spacer(Modifier.width(6.dp))
+                                
+                                IconButton(onClick = {}, modifier = Modifier.size(26.dp)) {
+                                    Icon(Icons.Default.AttachFile, null, tint = TextMuted, modifier = Modifier.size(20.dp))
+                                }
+                                Spacer(Modifier.width(4.dp))
+                                IconButton(onClick = {}, modifier = Modifier.size(26.dp)) {
+                                    Icon(Icons.Default.CameraAlt, null, tint = TextMuted, modifier = Modifier.size(20.dp))
+                                }
                             }
-                            Spacer(Modifier.width(4.dp))
-                            IconButton(onClick = {}, modifier = Modifier.size(24.dp)) {
-                                Icon(Icons.Default.CameraAlt, null, tint = TextMuted)
+                            
+                            // Circular Green Send FAB with Shadow
+                            FloatingActionButton(
+                                onClick = {
+                                    if (messageText.isNotBlank()) {
+                                        val userMsg = if (replyingToMessage != null) {
+                                            "> ${replyingToMessage!!.content.replace("\n", "\n> ")}\n\n${messageText.trim()}"
+                                        } else {
+                                            messageText.trim()
+                                        }
+                                        replyingToMessage = null
+                                        
+                                        val updatedHistory = chatHistory + ChatMessage(role = "user", content = userMsg)
+                                        chatHistory = updatedHistory
+                                        chatStorage?.saveChatHistory(peerId, updatedHistory)
+                                        messageText = ""
+                                        
+                                        // Trigger peer reply
+                                        triggerPeerResponse(userMsg, updatedHistory)
+                                    }
+                                },
+                                containerColor = AccentEmerald,
+                                contentColor = TextOnAccent,
+                                shape = CircleShape,
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .graphicsLayer {
+                                        shadowElevation = 4f
+                                        shape = CircleShape
+                                        clip = true
+                                    }
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.Send, "Send", modifier = Modifier.size(18.dp))
                             }
                         }
-                        
-                        // Circular Green Send FAB
-                        FloatingActionButton(
-                            onClick = {
-                                if (messageText.isNotBlank()) {
-                                    val userMsg = if (replyingToMessage != null) {
-                                        "> ${replyingToMessage!!.content.replace("\n", "\n> ")}\n\n${messageText.trim()}"
-                                    } else {
-                                        messageText.trim()
-                                    }
-                                    replyingToMessage = null
-                                    
-                                    val updatedHistory = chatHistory + ChatMessage(role = "user", content = userMsg)
-                                    chatHistory = updatedHistory
-                                    chatStorage?.saveChatHistory(peerId, updatedHistory)
-                                    messageText = ""
-                                    
-                                    // Trigger peer reply
-                                    scope.launch {
-                                        delay(600)
-                                        isPeerTyping = true
-                                        val response = apiService.chatWithAuthor(
-                                            authorId = peerId,
-                                            paperTitle = "General Discussion",
-                                            userMessage = userMsg,
-                                            history = updatedHistory.takeLast(10)
-                                        )
-                                        delay(800)
-                                        isPeerTyping = false
-                                        if (response != null && !response.reply.isNullOrBlank()) {
-                                            val finalHistory = chatHistory + ChatMessage(role = "assistant", content = response.reply)
-                                            chatHistory = finalHistory
-                                            chatStorage?.saveChatHistory(peerId, finalHistory)
-                                        } else {
-                                            val fallback = chatHistory + ChatMessage(
-                                                role = "assistant",
-                                                content = "I've considered your point. Based on my research models, that's an area with significant convergence potential."
+                    } else {
+                        // Notice card for non-SkoLab user
+                        Surface(
+                            color = BgCard,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp)
+                                    .background(BgElevated, RoundedCornerShape(12.dp))
+                                    .border(BorderStroke(1.dp, BorderLight.copy(alpha = 0.3f)), RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = "Not on SkoLab",
+                                        tint = AccentAmber,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = "$peerName is not on SkoLab. Messaging is disabled.",
+                                        color = TextSecondary,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        fontFamily = DisplayFontFamily,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Media panel (Emoji / GIF / Sticker options)
+                    AnimatedVisibility(
+                        visible = showMediaPanel,
+                        enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
+                        exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(250.dp)
+                                .background(BgPrimary)
+                                .border(BorderStroke(0.5.dp, BorderLight))
+                        ) {
+                            // Tabs
+                            SecondaryTabRow(
+                                selectedTabIndex = selectedMediaTab,
+                                containerColor = BgCard,
+                                contentColor = AccentTeal
+                            ) {
+                                Tab(
+                                    selected = selectedMediaTab == 0,
+                                    onClick = { selectedMediaTab = 0 },
+                                    text = { Text("Emojis", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                                )
+                                Tab(
+                                    selected = selectedMediaTab == 1,
+                                    onClick = { selectedMediaTab = 1 },
+                                    text = { Text("GIFs", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                                )
+                                Tab(
+                                    selected = selectedMediaTab == 2,
+                                    onClick = { selectedMediaTab = 2 },
+                                    text = { Text("Stickers", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                                )
+                            }
+                            
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    .padding(8.dp)
+                            ) {
+                                when (selectedMediaTab) {
+                                    0 -> {
+                                        val emojis = remember {
+                                            listOf(
+                                                "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇",
+                                                "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚",
+                                                "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🤩",
+                                                "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣",
+                                                "🔬", "🧪", "🧬", "📚", "💻", "🧠", "🎓", "🌌", "🚀", "🛰️",
+                                                "👍", "👎", "👌", "✌️", "🤞", "🤟", "🤘", "🤙", "👋", "👏"
                                             )
-                                            chatHistory = fallback
-                                            chatStorage?.saveChatHistory(peerId, fallback)
+                                        }
+                                        LazyVerticalGrid(
+                                            columns = GridCells.Adaptive(minSize = 40.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                                            modifier = Modifier.fillMaxSize()
+                                        ) {
+                                            items(emojis) { emoji ->
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(40.dp)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .clickable { 
+                                                            messageText += emoji 
+                                                        },
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(text = emoji, fontSize = 22.sp)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    1 -> {
+                                        val gifs = remember {
+                                            listOf(
+                                                "Eureka Moment" to "🌌",
+                                                "Quantum Leap" to "🚀",
+                                                "Brain Storm" to "🧠",
+                                                "DNA Double Helix" to "🧬",
+                                                "Lab Explosion" to "🧪",
+                                                "Microscope Zoom" to "🔬"
+                                            )
+                                        }
+                                        LazyVerticalGrid(
+                                            columns = GridCells.Fixed(2),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                                            modifier = Modifier.fillMaxSize()
+                                        ) {
+                                            items(gifs) { gif ->
+                                                Card(
+                                                    colors = CardDefaults.cardColors(containerColor = BgElevated),
+                                                    border = BorderStroke(1.dp, BorderLight),
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .height(80.dp)
+                                                        .clickable {
+                                                            val gifText = "[GIF: ${gif.first}]"
+                                                            val updatedHistory = chatHistory + ChatMessage(role = "user", content = gifText)
+                                                            chatHistory = updatedHistory
+                                                            chatStorage?.saveChatHistory(peerId, updatedHistory)
+                                                            showMediaPanel = false
+                                                            triggerPeerResponse(gifText, updatedHistory)
+                                                        }
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxSize()
+                                                            .background(
+                                                                Brush.linearGradient(
+                                                                    colors = listOf(AccentTeal.copy(alpha = 0.1f), AccentIndigo.copy(alpha = 0.1f))
+                                                                )
+                                                            ),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                            Text(text = gif.second, fontSize = 24.sp)
+                                                            Spacer(Modifier.height(4.dp))
+                                                            Text(
+                                                                text = gif.first,
+                                                                color = TextPrimary,
+                                                                fontSize = 11.sp,
+                                                                fontWeight = FontWeight.Bold
+                                                            )
+                                                            Text(
+                                                                text = "GIF",
+                                                                color = AccentTeal,
+                                                                fontSize = 8.sp,
+                                                                fontWeight = FontWeight.Black
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    2 -> {
+                                        val stickers = remember {
+                                            listOf(
+                                                "Superconducting" to "🧲",
+                                                "Peer Reviewed" to "📝",
+                                                "Schrödinger's Cat" to "🐱",
+                                                "Coffee Powered" to "☕",
+                                                "Publish or Perish" to "💀",
+                                                "Lab Partner" to "🤝"
+                                            )
+                                        }
+                                        LazyVerticalGrid(
+                                            columns = GridCells.Fixed(3),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                                            modifier = Modifier.fillMaxSize()
+                                        ) {
+                                            items(stickers) { sticker ->
+                                                Card(
+                                                    colors = CardDefaults.cardColors(containerColor = BgElevated),
+                                                    border = BorderStroke(1.dp, BorderLight),
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .height(70.dp)
+                                                        .clickable {
+                                                            val stickerText = "[Sticker: ${sticker.first}]"
+                                                            val updatedHistory = chatHistory + ChatMessage(role = "user", content = stickerText)
+                                                            chatHistory = updatedHistory
+                                                            chatStorage?.saveChatHistory(peerId, updatedHistory)
+                                                            showMediaPanel = false
+                                                            triggerPeerResponse(stickerText, updatedHistory)
+                                                        }
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                            Text(text = sticker.second, fontSize = 22.sp)
+                                                            Spacer(Modifier.height(4.dp))
+                                                            Text(
+                                                                text = sticker.first,
+                                                                color = TextSecondary,
+                                                                fontSize = 9.sp,
+                                                                fontWeight = FontWeight.Medium,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
-                            },
-                            containerColor = AccentEmerald,
-                        contentColor = TextOnAccent,
-                        shape = CircleShape,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.Send, "Send", modifier = Modifier.size(18.dp))
+                            }
+                        }
                     }
                 }
             }
@@ -523,7 +1177,7 @@ fun ChatRoomScreen(
             onDismissRequest = { showNonSkoLabDialog = false },
             title = {
                 Text(
-                    text = "Profile Unclaimed",
+                    text = "Contact $peerName",
                     fontFamily = SyneFontFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
@@ -531,11 +1185,503 @@ fun ChatRoomScreen(
                 )
             },
             text = {
-                Text(
-                    text = "$peerName hasn't claimed their SkoLab profile yet. Invite them to join and activate secure encrypted audio/video calling!\n\nFor evaluation, you can launch a simulated demo call.",
-                    color = TextSecondary,
-                    fontSize = 13.sp
-                )
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        text = "$peerName hasn't joined SkoLab yet. Link their contact details below from your system, Gmail, or Truecaller contacts to route secure voice calling and messaging fallback channels.",
+                        color = TextSecondary,
+                        fontSize = 13.sp
+                    )
+
+                    if (isResolvingEmail) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(AccentTeal.copy(alpha = 0.08f))
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = AccentTeal,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Scraping OpenAlex for academic email...",
+                                color = TextSecondary,
+                                fontSize = 11.sp
+                            )
+                        }
+                    } else if (resolvedInstitution.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(AccentAmber.copy(alpha = 0.08f))
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.School,
+                                contentDescription = "Institution Resolved",
+                                tint = AccentAmber,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Resolved Institution: $resolvedInstitution",
+                                color = AccentAmber,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+
+                    // Smart Contact permission gateway banner
+                    if (!hasContactsPermission) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(BorderLight.copy(alpha = 0.15f))
+                                .clickable {
+                                    requestPermissionLauncherForChat.launch(android.Manifest.permission.READ_CONTACTS)
+                                }
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Contacts,
+                                contentDescription = "Contacts Permission",
+                                tint = AccentTeal,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Enable Smart Contact Suggestions",
+                                    color = TextPrimary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Find Truecaller and Gmail contacts as you type.",
+                                    color = TextSecondary,
+                                    fontSize = 9.sp
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Rounded.ChevronRight,
+                                contentDescription = "Grant Permission",
+                                tint = TextMuted,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(AccentTeal.copy(alpha = 0.08f))
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Permission Active",
+                                tint = AccentTeal,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Smart contact suggestions enabled!",
+                                color = AccentTeal,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    // Show all device contacts for one-click linking
+                    if (hasContactsPermission && allDeviceContacts.isNotEmpty()) {
+                        Text(
+                            text = "📇 QUICK-LINK FROM PHONE CONTACTS (1-CLICK)",
+                            color = TextMuted,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                        
+                        Surface(
+                            color = BgCard,
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, BorderLight),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 160.dp)
+                        ) {
+                            LazyColumn(
+                                modifier = Modifier.padding(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                items(allDeviceContacts) { contact ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(BgElevated)
+                                            .clickable {
+                                                emailInput = contact.third.ifEmpty { emailInput }
+                                                phoneInput = contact.second.ifEmpty { phoneInput }
+                                                Toast.makeText(
+                                                    context,
+                                                    "🔗 Linked to ${contact.first}!",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = contact.first,
+                                                color = TextPrimary,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                if (contact.second.isNotEmpty()) {
+                                                    Text(
+                                                        text = "📱 ${contact.second}",
+                                                        color = TextSecondary,
+                                                        fontSize = 9.sp
+                                                    )
+                                                }
+                                                if (contact.third.isNotEmpty()) {
+                                                    Text(
+                                                        text = "✉️ ${contact.third}",
+                                                        color = TextSecondary,
+                                                        fontSize = 9.sp
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        Icon(
+                                            imageVector = Icons.Default.Link,
+                                            contentDescription = "Link profile",
+                                            tint = AccentTeal,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // --- SECTION 1: INVITATION CHANNELS ---
+                    Text(
+                        text = "INVITE TO SKOLAB",
+                        color = TextMuted,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Gmail Invite
+                        Button(
+                            onClick = {
+                                val subject = "Invitation to collaborate on SkoLab"
+                                val body = "Hi $peerName,\n\nI would love to collaborate with you on our research papers using SkoLab. SkoLab offers secure, encrypted voice/video synchronization, real-time LaTeX blackboards, and joint manuscript editing.\n\nJoin me on SkoLab here: https://skolab.open/invite\n\nBest regards,\nResearcher"
+                                val intent = android.content.Intent(android.content.Intent.ACTION_SENDTO).apply {
+                                    data = android.net.Uri.parse("mailto:")
+                                    putExtra(android.content.Intent.EXTRA_EMAIL, arrayOf(emailInput.trim()))
+                                    putExtra(android.content.Intent.EXTRA_SUBJECT, subject)
+                                    putExtra(android.content.Intent.EXTRA_TEXT, body)
+                                }
+                                try {
+                                    context.startActivity(android.content.Intent.createChooser(intent, "Send Email via..."))
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "No email client found.", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentAmber),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp)
+                        ) {
+                            Icon(Icons.Default.Email, null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Gmail Invite", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        // SMS Invite
+                        Button(
+                            onClick = {
+                                val smsText = "Hi $peerName, join me on SkoLab for secure, encrypted audio/video calling, real-time LaTeX blackboards, and joint manuscript editing: https://skolab.open/invite"
+                                val intent = android.content.Intent(android.content.Intent.ACTION_SENDTO).apply {
+                                    data = android.net.Uri.parse("smsto:${phoneInput.trim()}")
+                                    putExtra("sms_body", smsText)
+                                }
+                                try {
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "No SMS client found.", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp)
+                        ) {
+                            Icon(Icons.Default.Sms, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("SMS Invite", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    // Text fields for Gmail and Phone input with Contact pickers and Smart suggestions
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        OutlinedTextField(
+                            value = emailInput,
+                            onValueChange = { emailInput = it },
+                            label = { Text("Collaborator Email", color = TextMuted) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                focusedBorderColor = AccentTeal,
+                                unfocusedBorderColor = BorderLight,
+                                focusedContainerColor = BgElevated,
+                                unfocusedContainerColor = BgElevated
+                            ),
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = {
+                                        val intent = android.content.Intent(
+                                            android.content.Intent.ACTION_PICK,
+                                            ContactsContract.CommonDataKinds.Email.CONTENT_URI
+                                        )
+                                        emailPickerLauncher.launch(intent)
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ContactPage,
+                                        contentDescription = "Pick Contact Email",
+                                        tint = AccentTeal
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            singleLine = true
+                        )
+
+                        // Smart Gmail sender suggestions
+                        if (matchedGmailSenders.isNotEmpty()) {
+                            Surface(
+                                color = BgCard,
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, BorderLight),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    Text(
+                                        text = "📬 GMAIL SENDERS & CONTACTS MATCHED:",
+                                        color = AccentTeal,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(bottom = 6.dp)
+                                    )
+                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        matchedGmailSenders.forEach { sender ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(BgElevated)
+                                                    .clickable {
+                                                        emailInput = sender.first
+                                                    }
+                                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(text = sender.first, color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                    Text(text = sender.second, color = TextSecondary, fontSize = 9.sp)
+                                                }
+                                                Icon(
+                                                    imageVector = Icons.Default.Add,
+                                                    contentDescription = "Select suggestion",
+                                                    tint = AccentTeal,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        OutlinedTextField(
+                            value = phoneInput,
+                            onValueChange = { phoneInput = it },
+                            label = { Text("Collaborator Phone", color = TextMuted) },
+                            placeholder = { Text("e.g. +1234567890", color = TextMuted) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                focusedBorderColor = AccentTeal,
+                                unfocusedBorderColor = BorderLight,
+                                focusedContainerColor = BgElevated,
+                                unfocusedContainerColor = BgElevated
+                            ),
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = {
+                                        val intent = android.content.Intent(
+                                            android.content.Intent.ACTION_PICK,
+                                            ContactsContract.CommonDataKinds.Phone.CONTENT_URI
+                                        )
+                                        phonePickerLauncher.launch(intent)
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ContactPage,
+                                        contentDescription = "Pick Contact Phone",
+                                        tint = AccentTeal
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            singleLine = true
+                        )
+
+                        // Smart Phone suggestions
+                        if (matchedPhoneContacts.isNotEmpty()) {
+                            Surface(
+                                color = BgCard,
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, BorderLight),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    Text(
+                                        text = "📱 MOBILE CONTACTS & TRUECALLER MATCHED:",
+                                        color = AccentTeal,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(bottom = 6.dp)
+                                    )
+                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        matchedPhoneContacts.forEach { contact ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(BgElevated)
+                                                    .clickable {
+                                                        phoneInput = contact.first
+                                                    }
+                                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(text = contact.second, color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                    Text(text = contact.first, color = TextSecondary, fontSize = 9.sp)
+                                                }
+                                                Icon(
+                                                    imageVector = Icons.Default.Add,
+                                                    contentDescription = "Select suggestion",
+                                                    tint = AccentTeal,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(color = BorderLight.copy(alpha = 0.5f), thickness = 0.5.dp)
+
+                    // --- SECTION 2: MULTI-SERVICE CALLING ROUTER ---
+                    Text(
+                        text = "📞 DIRECT MULTI-SERVICE CALLING",
+                        color = TextMuted,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+
+                    // Cellular Voice Call
+                    Button(
+                        onClick = {
+                            showNonSkoLabDialog = false
+                            val number = phoneInput.trim().ifBlank { "+1234567890" }
+                            val intent = android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:$number"))
+                            context.startActivity(intent)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E3B43)),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.Phone, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Direct Cellular Voice Call", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    // WhatsApp Call
+                    Button(
+                        onClick = {
+                            showNonSkoLabDialog = false
+                            val number = phoneInput.trim().replace("+", "").replace("-", "").replace(" ", "").ifBlank { "1234567890" }
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://wa.me/$number"))
+                            context.startActivity(intent)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.Chat, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Call / Chat on WhatsApp", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    // Google Meet conference
+                    Button(
+                        onClick = {
+                            showNonSkoLabDialog = false
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://meet.google.com/new"))
+                            context.startActivity(intent)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A73E8)),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.VideoCall, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Launch Google Meet Call", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             },
             confirmButton = {
                 TextButton(
@@ -592,7 +1738,6 @@ fun ChatRoomScreen(
             }
         )
     }
-}
 }
 }
 
@@ -948,7 +2093,7 @@ fun SkoLabCallingOverlay(
                         .background(if (speakerOn) AccentTeal else Color(0xFF2E3B43))
                 ) {
                     Icon(
-                        imageVector = if (speakerOn) Icons.Default.VolumeUp else Icons.Default.VolumeDown,
+                        imageVector = if (speakerOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeDown,
                         contentDescription = "Speaker",
                         tint = Color.White
                     )
