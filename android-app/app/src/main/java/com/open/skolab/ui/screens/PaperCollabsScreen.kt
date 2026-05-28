@@ -324,14 +324,19 @@ fun PaperCollabsScreen(
                             }
 
                             // Sync button (Virtual meeting room trigger)
+                            val isDefaultProject = currentProject.id.startsWith("default_")
                             Button(
                                 onClick = {
-                                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                                    showVideoSync = true
-                                    callConnectedTime = 0
+                                    if (isDefaultProject) {
+                                        Toast.makeText(context, "Start Sync is only available for registered SkoLab co-authors. Invite them to join to start call sync.", Toast.LENGTH_LONG).show()
+                                    } else {
+                                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                        showVideoSync = true
+                                        callConnectedTime = 0
+                                    }
                                 },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF00A884) // Premium WhatsApp Green
+                                    containerColor = if (isDefaultProject) Color(0xFF2E3B43).copy(alpha = 0.5f) else Color(0xFF00A884)
                                 ),
                                 shape = RoundedCornerShape(10.dp),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
@@ -340,13 +345,13 @@ fun PaperCollabsScreen(
                                 Icon(
                                     imageVector = Icons.Default.Videocam,
                                     contentDescription = "Sync Room",
-                                    tint = Color.White,
+                                    tint = if (isDefaultProject) Color.White.copy(alpha = 0.38f) else Color.White,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = "Start Sync",
-                                    color = Color.White,
+                                    color = if (isDefaultProject) Color.White.copy(alpha = 0.38f) else Color.White,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -1000,6 +1005,33 @@ fun PaperCollabsScreen(
                                 }
                             }
                         }
+                    }
+
+                    // Real voice/video Jitsi room transition
+                    Button(
+                        onClick = {
+                            val roomName = "SkoLabSecure_Group_" + currentProject.id.hashCode().toString()
+                            val jitsiUrl = "https://meet.jit.si/$roomName"
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(jitsiUrl))
+                            context.startActivity(intent)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Groups,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Launch Live Group Meeting",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
 
                     // Call control panel buttons

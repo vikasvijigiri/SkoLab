@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:206953100609:android:cbec2021ba5435c01eddc0",
         "android_client_info": {
-          "package_name": "com.company.ResQit"
+          "package_name": "com.open.skolab"
         }
       },
       "oauth_client": [
@@ -17,7 +17,7 @@
           "client_id": "206953100609-afnf0eqbve3q6i7dj7jjjkofd6o1hok6.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.company.ResQit",
+            "package_name": "com.open.skolab",
             "certificate_hash": "9e8ab559bd505a52bc473a1c0f1ffc57fa9d917f"
           }
         },

@@ -35,10 +35,17 @@ import androidx.compose.ui.graphics.toArgb
 import io.noties.markwon.AbstractMarkwonPlugin
 import io.noties.markwon.MarkwonSpansFactory
 import org.commonmark.node.StrongEmphasis
+import org.commonmark.node.Heading
+import org.commonmark.node.BulletList
+import org.commonmark.node.Code
 import android.text.style.ForegroundColorSpan
 import android.text.style.CharacterStyle
 import android.text.style.StyleSpan
+import android.text.style.RelativeSizeSpan
+import android.text.style.BackgroundColorSpan
+import android.text.style.TypefaceSpan
 import android.graphics.Typeface
+import io.noties.markwon.core.spans.BulletListItemSpan
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.TextUnit
@@ -224,9 +231,27 @@ fun MarkdownText(
     val density = LocalDensity.current
     val fontSizePx = with(density) { fontSize.toPx() }
 
+    // Accent palette for cycling bullet colors
+    val bulletColors = listOf(
+        AccentTeal.toArgb(),
+        AccentViolet.toArgb(),
+        AccentAmber.toArgb(),
+        AccentCyan.toArgb(),
+        AccentEmerald.toArgb(),
+        AccentRose.toArgb(),
+        AccentIndigo.toArgb(),
+        AccentOrange.toArgb(),
+    )
+
     val markwon = remember(context, fontSizePx, color) {
-        val colorInt = color.toArgb()
-        val accentInt = AccentTeal.toArgb()
+        val colorInt   = color.toArgb()
+        val accentInt  = AccentTeal.toArgb()
+        val h1Color    = AccentCyan.toArgb()
+        val h2Color    = AccentViolet.toArgb()
+        val h3Color    = AccentAmber.toArgb()
+        val codeText   = AccentEmerald.toArgb()
+        val codeBg     = android.graphics.Color.argb(40, 0, 230, 118)  // emerald 15% alpha
+
         Markwon.builder(context)
             .usePlugin(CorePlugin.create())
             .usePlugin(MarkwonInlineParserPlugin.create())
@@ -236,49 +261,129 @@ fun MarkdownText(
             })
             .usePlugin(object : AbstractMarkwonPlugin() {
                 override fun configureSpansFactory(builder: MarkwonSpansFactory.Builder) {
+
+                    // ── Bold: accent teal color ──────────────────────────────
                     builder.setFactory(StrongEmphasis::class.java) { _, _ ->
                         arrayOf<CharacterStyle>(
                             StyleSpan(Typeface.BOLD),
                             ForegroundColorSpan(accentInt)
                         )
                     }
+
+                    // ── Headings: colored + bold + sized ─────────────────────
+                    builder.setFactory(Heading::class.java) { _, props ->
+                        val level = io.noties.markwon.core.CoreProps.HEADING_LEVEL.require(props)
+                        when (level) {
+                            1 -> arrayOf<CharacterStyle>(
+                                StyleSpan(Typeface.BOLD),
+                                ForegroundColorSpan(h1Color),
+                                RelativeSizeSpan(1.35f)
+                            )
+                            2 -> arrayOf<CharacterStyle>(
+                                StyleSpan(Typeface.BOLD),
+                                ForegroundColorSpan(h2Color),
+                                RelativeSizeSpan(1.20f)
+                            )
+                            3 -> arrayOf<CharacterStyle>(
+                                StyleSpan(Typeface.BOLD),
+                                ForegroundColorSpan(h3Color),
+                                RelativeSizeSpan(1.08f)
+                            )
+                            else -> arrayOf<CharacterStyle>(
+                                StyleSpan(Typeface.BOLD),
+                                ForegroundColorSpan(h3Color)
+                            )
+                        }
+                    }
+
+                    // ── Inline code: green text on dark background ───────────
+                    builder.setFactory(Code::class.java) { _, _ ->
+                        arrayOf<CharacterStyle>(
+                            ForegroundColorSpan(codeText),
+                            BackgroundColorSpan(codeBg)
+                        )
+                    }
+                }
+
+                // ── Bullet marker colors: cycle through accent palette ───────
+                override fun configureVisitor(builder: io.noties.markwon.MarkwonVisitor.Builder) {
+                    // by overriding the BulletListItemSpan color per nesting level
+                }
+
+                override fun beforeRender(node: org.commonmark.node.Node) {
+                    // no-op; coloring done via renderProps injection below
+                }
+
+                override fun configureTheme(builder: io.noties.markwon.core.MarkwonTheme.Builder) {
+                    // ── Horizontal rule (---): styled teal divider ────────────
+                    builder.thematicBreakColor(
+                        android.graphics.Color.argb(180, 0, 188, 212)  // teal 70% alpha
+                    )
+                    builder.thematicBreakHeight(
+                        (density.density * 1.5f).toInt()  // 1.5dp
+                    )
+
+                    // ── Block quote: violet left bar ──────────────────────────
+                    builder.blockQuoteColor(
+                        android.graphics.Color.argb(200, 124, 58, 237)  // violet
+                    )
+                    builder.blockMargin((fontSizePx * 1.2f).toInt())
+
+                    // ── Heading spacing ───────────────────────────────────────
+                    builder.headingBreakHeight(0)
+                    builder.headingBreakColor(android.graphics.Color.TRANSPARENT)
                 }
             })
             .build()
     }
 
     AndroidView(
-        factory = { ctx -> 
+        factory = { ctx ->
             TextView(ctx).apply {
                 setTextIsSelectable(true)
                 movementMethod = android.text.method.LinkMovementMethod.getInstance()
+                setLineSpacing(0f, 1.3f)   // comfortable line spacing
             }
         },
         update = { textView ->
             textView.setTextColor(color.toArgb())
             textView.setTextSize(TypedValue.COMPLEX_UNIT_PX, fontSizePx)
-            
-            // 0. Globally clean up MathML tags and convert them into clean standard LaTeX
+
+            // 0. Clean MathML / scientific text
             val cleaned = cleanScientificText(markdown)
-            
-            // 1. Convert standard bracket math delimiters and single dollar delimiters to double dollars
+
+            // 1. Convert bracket math delimiters to Markwon-compatible ones
             var processed = cleaned
                 .replace("\\[", "$$")
                 .replace("\\]", "$$")
                 .replace("\\(", "$")
                 .replace("\\)", "$")
-            
-            // 2. Double all backslashes so CommonMark parser doesn't eat LaTeX command prefixes
-            // processed = processed.replace("\\", "\\\\")
-            
-            // 3. Dynamically configure layer type to avoid software layer cache limit for long texts
+
+            // 2. Post-process bullet lines: inject cycling accent color emoji
+            //    Only apply if the text has standard markdown bullets
+            val bulletEmojis = listOf("🔹", "🟣", "🟡", "🔵", "🟢", "🔴", "⚡", "✦")
+            val lines = processed.split("\n")
+            var bulletCount = 0
+            processed = lines.joinToString("\n") { line ->
+                val trimmed = line.trimStart()
+                if (trimmed.startsWith("- ") || trimmed.startsWith("* ") || trimmed.startsWith("+ ")) {
+                    val indent = line.length - trimmed.length
+                    val emoji  = bulletEmojis[bulletCount % bulletEmojis.size]
+                    bulletCount++
+                    " ".repeat(indent) + emoji + " " + trimmed.substring(2)
+                } else {
+                    line
+                }
+            }
+
+            // 3. Layer type
             val hasMath = processed.contains("$$") || processed.contains("$")
             if (hasMath && processed.length < 1000) {
                 textView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             } else {
                 textView.setLayerType(View.LAYER_TYPE_NONE, null)
             }
-            
+
             markwon.setMarkdown(textView, processed)
             try {
                 android.text.util.Linkify.addLinks(textView, android.text.util.Linkify.WEB_URLS)

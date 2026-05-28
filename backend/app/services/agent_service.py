@@ -46,11 +46,19 @@ class AgentService:
                 "3. TYPO RESOLUTION & SEMANTIC SEARCH: If the user types a query with incorrect spelling, typos, or unclear English, "
                 "do not return empty results. Use academic tools or web search to search semantically, resolve the correct spelling, "
                 "and if multiple ambiguous matches exist, list the top options and ask the user to clarify dynamically.\n"
+                "4. DOMAIN SCOPING (VERY IMPORTANT): The user has a primary research domain (stated in [RESEARCHER PROFILE] below). "
+                "For ALL searches — whether for people, papers, topics, or works — you MUST automatically scope results to the user's domain "
+                "by passing the user's primary research field as the 'domain' argument to tools like 'search_openalex_author_and_works', "
+                "'search_openalex_authors', and 'search_openalex_works'. "
+                "Only deviate from this if the user EXPLICITLY mentions a different field or domain in their message. "
+                "Example: if the user's domain is 'Physics' and they search for 'John Smith', "
+                "pass domain='Physics' so the agent finds the physicist named John Smith, not a psychologist or engineer with the same name.\n"
                 "Always present the final gathered profile details and publications structured clearly in a table."
             )
 
             # Inject user memory block if present
             memory_block = ""
+            domain_directive = ""  # injected as a high-priority scoping instruction
             if req.user_memory:
                 m = req.user_memory
                 parts = []
@@ -62,6 +70,21 @@ class AgentService:
                 searches = m.get("frequentSearchTerms") or m.get("frequent_search_terms") or []
                 streak = m.get("streakDays") or m.get("streak_days") or 0
                 avg_read = m.get("avgReadMinutes") or m.get("avg_read_minutes") or 0
+
+                # Build a prominent domain directive that forces domain-scoped searches
+                if top_topics:
+                    primary_domain = top_topics[0]  # most prominent research field
+                    all_domains = ", ".join(top_topics[:4])
+                    domain_directive = (
+                        f"\n\n[DOMAIN SCOPING DIRECTIVE]\n"
+                        f"This researcher works in: {all_domains}. "
+                        f"PRIMARY domain: {primary_domain}. "
+                        f"MANDATORY: For EVERY tool call that searches for a person or paper, you MUST pass "
+                        f"domain='{primary_domain}' (or the closest matching field) unless the user explicitly "
+                        f"asks about a different field. This ensures correct disambiguation of common names "
+                        f"and domain-relevant results. Never search without a domain unless told otherwise."
+                        f"\n[END DOMAIN DIRECTIVE]\n"
+                    )
 
                 if top_topics:
                     parts.append(f"Research focus: {', '.join(top_topics[:4])}")
@@ -81,7 +104,7 @@ class AgentService:
                 if parts:
                     memory_block = "\n\n[RESEARCHER PROFILE]\n" + "\n".join(parts) + "\n[END PROFILE]\n\nUse this profile to personalise your responses. Reference unfinished work or relevant topics proactively when natural."
 
-            system_prompt = base_prompt + memory_block
+            system_prompt = base_prompt + domain_directive + memory_block
 
             # Calculate estimated total tokens in raw chat history
             total_history_tokens = sum(self.estimate_tokens(h.get("content") or "") for h in req.history)

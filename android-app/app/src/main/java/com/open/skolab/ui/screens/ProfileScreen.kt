@@ -58,12 +58,12 @@ fun ProfileScreen(
     val scope = rememberCoroutineScope()
     val authManager = remember { AuthManager(context) }
     var currentUser by remember { mutableStateOf(authManager.currentUser) }
-    var resQitUser by remember { mutableStateOf<com.open.skolab.model.SkoLabUser?>(null) }
+    var skolabUser by remember { mutableStateOf<com.open.skolab.model.SkoLabUser?>(null) }
     val credentialManager = remember { CredentialManager.create(context) }
 
     LaunchedEffect(currentUser) {
         currentUser?.let {
-            resQitUser = authManager.getUserData(it.uid)
+            skolabUser = authManager.getUserData(it.uid)
         }
     }
 
@@ -95,7 +95,7 @@ fun ProfileScreen(
         } else {
             ProfileContent(
                 firebaseUser = currentUser!!,
-                resQitUser = resQitUser,
+                skolabUser = skolabUser,
                 onNavigateToProWorkspace = onNavigateToProWorkspace,
                 onSignOut = {
                     scope.launch {
@@ -103,7 +103,7 @@ fun ProfileScreen(
                         credentialManager.clearCredentialState(ClearCredentialStateRequest())
                     }
                     currentUser = null
-                    resQitUser = null
+                    skolabUser = null
                 },
                 onBack = onBack
             )
@@ -188,15 +188,15 @@ fun LoginContent(onSignInClick: () -> Unit, onBack: () -> Unit) {
 @Composable
 fun ProfileContent(
     firebaseUser: FirebaseUser,
-    resQitUser: com.open.skolab.model.SkoLabUser?,
+    skolabUser: com.open.skolab.model.SkoLabUser?,
     onNavigateToProWorkspace: () -> Unit,
     onSignOut: () -> Unit,
     onBack: () -> Unit
 ) {
-    val savedCount = resQitUser?.savedPapers?.size ?: 0
-    val complexity = resQitUser?.complexityScore ?: 0f
+    val savedCount = skolabUser?.savedPapers?.size ?: 0
+    val complexity = skolabUser?.complexityScore ?: 0f
     val mastery = (kotlin.math.ln(savedCount.toFloat() + 1f) * 20f + complexity * 0.3f).coerceIn(0f, 100f)
-    val resQitScore = (mastery * 6.5f + complexity * 3.5f).toInt().coerceIn(100, 1000)
+    val skolabScore = (mastery * 6.5f + complexity * 3.5f).toInt().coerceIn(100, 1000)
     val hIndex = maxOf(1, savedCount / 3)
 
     val context = LocalContext.current
@@ -224,17 +224,17 @@ fun ProfileContent(
     }
 
     var animatedProgress by remember { mutableStateOf(0f) }
-    LaunchedEffect(resQitScore) {
+    LaunchedEffect(skolabScore) {
         animate(
             initialValue = 0f,
-            targetValue = resQitScore / 1000f,
+            targetValue = skolabScore / 1000f,
             animationSpec = tween(1500, easing = FastOutSlowInEasing)
         ) { value, _ -> animatedProgress = value }
     }
 
     val scrollState = rememberScrollState()
     val displayName = firebaseUser.displayName ?: "Researcher"
-    val fieldOfStudy = aiProfile?.field_of_study ?: resQitUser?.researchFocus ?: "Research Scholar"
+    val fieldOfStudy = aiProfile?.field_of_study ?: skolabUser?.researchFocus ?: "Research Scholar"
     val institution = aiProfile?.institution ?: "Independent Researcher"
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -369,7 +369,7 @@ fun ProfileContent(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "$resQitScore SkoLab Score · Top 12% in field",
+                        text = "$skolabScore SkoLab Score · Top 12% in field",
                         fontSize = 13.sp,
                         color = AccentAmber,
                         fontWeight = FontWeight.SemiBold
@@ -389,7 +389,7 @@ fun ProfileContent(
                             val shareText = """
                                 SkoLab Scholar Profile: $displayName
                                 -----------------------------------
-                                SkoLab Score: $resQitScore/1000 (Top 12%)
+                                SkoLab Score: $skolabScore/1000 (Top 12%)
                                 Field: $fieldOfStudy
                                 Institution: $institution
                                 h-index (estimated): $hIndex
