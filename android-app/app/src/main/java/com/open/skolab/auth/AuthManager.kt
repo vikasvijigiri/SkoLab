@@ -33,10 +33,20 @@ class AuthManager(private val context: Context) {
     val currentUser: FirebaseUser?
         get() = auth.currentUser
 
+    /**
+     * True when the user is authenticated via Firebase (synchronous, no blocking).
+     * For guest sign-in state, use [isSignedInAsync] or observe [userPrefs.isGuestSignedIn].
+     */
     val isSignedIn: Boolean
-        get() = currentUser != null || kotlinx.coroutines.runBlocking {
-            userPrefs.isGuestSignedIn.firstOrNull() ?: false
-        }
+        get() = currentUser != null
+
+    /**
+     * Async version that also checks the guest flag in DataStore.
+     * Use this at app startup where a coroutine context is available.
+     */
+    suspend fun isSignedInAsync(): Boolean {
+        return currentUser != null || (userPrefs.isGuestSignedIn.firstOrNull() ?: false)
+    }
 
     val cachedUser = userPrefs.cachedUser
 

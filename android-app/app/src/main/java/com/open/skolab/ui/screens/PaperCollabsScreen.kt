@@ -1,4 +1,4 @@
-package com.open.skolab.ui.screens
+﻿package com.open.skolab.ui.screens
 
 import android.content.Intent
 import android.net.Uri
@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.SavedStateHandle
 import com.google.firebase.firestore.FirebaseFirestore
 import com.open.skolab.auth.AuthManager
+import com.open.skolab.di.AppDependencies
 import com.open.skolab.ui.components.MarkdownText
 import com.open.skolab.ui.theme.*
 import kotlinx.coroutines.delay
@@ -97,7 +98,7 @@ fun PaperCollabsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val authManager = remember { AuthManager(context) }
+    val authManager = AppDependencies.authManager
     val cachedUser by authManager.cachedUser.collectAsState(initial = null)
     val currentUser = authManager.currentUser
     val currentUserId = currentUser?.uid ?: ""
@@ -1464,3 +1465,4 @@ fun OrbitRisingResearcherCard(
         }
     }
 }
+

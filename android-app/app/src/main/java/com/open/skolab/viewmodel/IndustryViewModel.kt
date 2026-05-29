@@ -6,30 +6,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
-import com.open.skolab.network.ApiService
+import com.open.skolab.di.AppDependencies
+import com.open.skolab.model.IndustryOpportunity
 
-import kotlinx.serialization.Serializable
-
-@Serializable
-data class IndustryOpportunity(
-    val id: String = "",
-    val type: OpportunityType = OpportunityType.JOB,
-    val title: String = "",
-    val companyOrFunder: String = "",
-    val tags: List<String> = emptyList(),
-    val description: String = "",
-    val postedAgo: String = "",
-    val url: String = ""
-)
-
-@Serializable
-enum class OpportunityType {
-    JOB, FUNDING, REQUIREMENT
-}
 
 class IndustryViewModel : ViewModel() {
 
-    private val apiService = ApiService()
+    private val apiService = AppDependencies.apiService
     
     private val _opportunities = MutableStateFlow<List<IndustryOpportunity>>(emptyList())
     val opportunities: StateFlow<List<IndustryOpportunity>> = _opportunities.asStateFlow()

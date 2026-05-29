@@ -1,4 +1,4 @@
-package com.open.skolab.ui.screens
+﻿package com.open.skolab.ui.screens
 
 import android.content.Intent
 import android.net.Uri
@@ -31,9 +31,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.open.skolab.data.UserPreferences
 import com.open.skolab.ui.theme.*
-import com.open.skolab.viewmodel.IndustryOpportunity
+import com.open.skolab.model.IndustryOpportunity
 import com.open.skolab.viewmodel.IndustryViewModel
-import com.open.skolab.viewmodel.OpportunityType
+import com.open.skolab.model.OpportunityType
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

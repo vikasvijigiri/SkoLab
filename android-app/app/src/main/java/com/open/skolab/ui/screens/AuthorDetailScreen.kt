@@ -1,4 +1,4 @@
-package com.open.skolab.ui.screens
+﻿package com.open.skolab.ui.screens
 
 import android.util.Log
 import androidx.compose.foundation.layout.*
@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import com.open.skolab.model.Author
 import com.open.skolab.model.MockData
 import com.open.skolab.network.ApiService
+import com.open.skolab.di.AppDependencies
 import com.open.skolab.network.AuthorResponse
 import com.open.skolab.network.AuthorSuggestion
 import com.open.skolab.network.ToolUsage
@@ -25,7 +26,7 @@ fun AuthorDetailScreen(
     authorName: String,
     onBack: () -> Unit,
     onPaperClick: (String) -> Unit,
-    apiService: ApiService = remember { ApiService() }
+    apiService: ApiService = AppDependencies.apiService
 ) {
     var authorData by remember { mutableStateOf<AuthorResponse?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -182,3 +183,4 @@ fun Author.toAuthorResponse(): AuthorResponse {
         similar_researchers = emptyList()
     )
 }
+

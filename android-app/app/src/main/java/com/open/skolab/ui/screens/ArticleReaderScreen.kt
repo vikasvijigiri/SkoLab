@@ -1,4 +1,4 @@
-package com.open.skolab.ui.screens
+﻿package com.open.skolab.ui.screens
 
 import android.annotation.SuppressLint
 import android.webkit.WebView
@@ -26,6 +26,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.open.skolab.model.MockData
 import com.open.skolab.model.Paper
 import com.open.skolab.network.ApiService
+import com.open.skolab.di.AppDependencies
 import com.open.skolab.network.SummaryResponse
 import com.open.skolab.ui.components.*
 import com.open.skolab.ui.theme.*
@@ -39,7 +40,7 @@ fun ArticleReaderScreen(
     title: String,
     onClose: () -> Unit
 ) {
-    val apiService = remember { ApiService() }
+    val apiService = AppDependencies.apiService
     val scope = rememberCoroutineScope()
     var isLoading by remember { mutableStateOf(true) }
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
@@ -261,3 +262,4 @@ fun ArticleReaderScreen(
         }
     }
 }
+

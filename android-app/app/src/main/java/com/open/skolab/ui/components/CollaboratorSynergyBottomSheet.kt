@@ -1,4 +1,4 @@
-package com.open.skolab.ui.components
+﻿package com.open.skolab.ui.components
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.open.skolab.network.ApiService
+import com.open.skolab.di.AppDependencies
 import com.open.skolab.network.CollaboratorSynergy
 import com.open.skolab.state.ActiveResearcherState
 import com.open.skolab.ui.theme.*
@@ -35,7 +36,7 @@ fun CollaboratorSynergyBottomSheet(
     collaboratorId: String,
     collaboratorName: String,
     onDismissRequest: () -> Unit,
-    apiService: ApiService = remember { ApiService() }
+    apiService: ApiService = AppDependencies.apiService
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val activeAuthor by ActiveResearcherState.activeAuthor.collectAsState()
@@ -285,3 +286,4 @@ fun CollaboratorSynergyBottomSheet(
         }
     }
 }
+

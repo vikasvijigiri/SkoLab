@@ -1,4 +1,4 @@
-package com.open.skolab.ui.screens
+﻿package com.open.skolab.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.open.skolab.auth.AuthManager
+import com.open.skolab.di.AppDependencies
 import com.open.skolab.ui.components.StreakCard
 import com.open.skolab.ui.components.ConjectureCard
 import com.open.skolab.ui.theme.*
@@ -36,7 +37,7 @@ import kotlin.math.floor
 @Composable
 fun LogicEngineScreen(onBack: () -> Unit = {}) {
     val context = LocalContext.current
-    val authManager = remember { AuthManager(context) }
+    val authManager = AppDependencies.authManager
     
     val apiService = remember { com.open.skolab.network.ApiService() }
     val userPrefs = remember { com.open.skolab.data.UserPreferences(context) }
@@ -431,3 +432,4 @@ fun WeekHeader(text: String, color: Color) {
         )
     }
 }
+

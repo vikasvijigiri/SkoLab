@@ -1,4 +1,4 @@
-package com.open.skolab.ui.screens
+﻿package com.open.skolab.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -42,6 +42,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.open.skolab.auth.AuthManager
+import com.open.skolab.di.AppDependencies
 import com.open.skolab.network.ChatMessage
 import com.open.skolab.ui.components.MarkdownText
 import com.open.skolab.ui.components.MessageBubbleWrapper
@@ -60,7 +61,7 @@ import java.util.*
 @Composable
 fun AgentScreen() {
     val context = LocalContext.current
-    val authManager = remember { AuthManager(context) }
+    val authManager = AppDependencies.authManager
     val cachedUser by authManager.cachedUser.collectAsState(initial = null)
     val userUid = cachedUser?.uid ?: authManager.currentUser?.uid ?: "guest_user"
 
@@ -1128,4 +1129,5 @@ fun AgentHistoryBottomSheet(
         }
     }
 }
+
 

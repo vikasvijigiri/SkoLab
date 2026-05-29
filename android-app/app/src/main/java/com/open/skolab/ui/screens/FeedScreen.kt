@@ -55,6 +55,16 @@ import com.open.skolab.model.Paper
 import com.open.skolab.model.Author
 import com.open.skolab.model.UserConnection
 import com.open.skolab.model.Conjecture
+import com.open.skolab.model.Connection
+import com.open.skolab.model.Country
+import com.open.skolab.model.Discipline
+import com.open.skolab.model.FeedUiState
+import com.open.skolab.model.FrontierMetrics
+import com.open.skolab.model.Institution
+import com.open.skolab.model.ReadingProgress
+import com.open.skolab.model.ResearchArea
+import com.open.skolab.model.ResearchFilter
+import com.open.skolab.model.User
 import androidx.compose.material.icons.automirrored.filled.Article
 import com.open.skolab.ui.components.ScoreArcMeter
 import com.open.skolab.ui.components.MarkdownText

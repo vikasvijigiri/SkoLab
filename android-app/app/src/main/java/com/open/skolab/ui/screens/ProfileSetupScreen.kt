@@ -1,4 +1,4 @@
-package com.open.skolab.ui.screens
+﻿package com.open.skolab.ui.screens
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -14,6 +14,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.open.skolab.auth.AuthManager
+import com.open.skolab.di.AppDependencies
 import com.open.skolab.data.UserPreferences
 import com.open.skolab.model.SkoLabUser
 import com.open.skolab.ui.theme.*
@@ -42,7 +43,7 @@ fun ProfileSetupScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val authManager = remember { AuthManager(context) }
+    val authManager = AppDependencies.authManager
     val userPrefs = remember { UserPreferences(context) }
     val cachedUser by authManager.cachedUser.collectAsState(initial = null)
 
@@ -270,3 +271,4 @@ fun ProfileSetupScreen(
         }
     }
 }
+

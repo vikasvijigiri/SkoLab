@@ -48,6 +48,7 @@ import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import com.google.firebase.auth.FirebaseUser
 import com.open.skolab.auth.AuthManager
+import com.open.skolab.di.AppDependencies
 import android.app.Activity
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -65,7 +66,8 @@ fun ProfileScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val authManager = remember { AuthManager(context) }
+    // Use application-scoped singleton — same instance as everywhere else in the app.
+    val authManager = AppDependencies.authManager
     val cachedUser by authManager.cachedUser.collectAsState(initial = null)
     val credentialManager = remember { CredentialManager.create(context) }
     val activity = context as? ComponentActivity ?: context as Activity
@@ -256,8 +258,9 @@ fun ProfileContent(
     val hIndex = maxOf(1, savedCount / 3)
 
     val context = LocalContext.current
-    val authManager = remember { AuthManager(context) }
-    val apiService = remember { com.open.skolab.network.ApiService() }
+    // Use application-scoped singletons — do NOT create new instances per composable.
+    val authManager = AppDependencies.authManager
+    val apiService = AppDependencies.apiService
     var aiProfile by remember { mutableStateOf<com.open.skolab.network.AuthorResponse?>(null) }
     var isLoadingProfile by remember { mutableStateOf(false) }
     var showEditFocusDialog by remember { mutableStateOf(false) }

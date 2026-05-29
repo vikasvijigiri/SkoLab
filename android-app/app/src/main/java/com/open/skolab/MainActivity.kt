@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AutoGraph
 import androidx.compose.material.icons.filled.BusinessCenter
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -49,6 +50,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.open.skolab.auth.AuthManager
 import com.open.skolab.data.UserPreferences
+import com.open.skolab.di.AppDependencies
 import com.open.skolab.ui.components.primitives.BottomNavDock
 import com.open.skolab.ui.components.primitives.DockItem
 import com.open.skolab.ui.components.primitives.SkoLabScaffold
@@ -128,7 +130,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun SkoLabMainApp() {
     val context = LocalContext.current
-    val authManager = remember { AuthManager(context) }
+    // Use application-scoped singletons — do NOT construct new instances here.
+    val authManager = AppDependencies.authManager
     val userPrefs = remember { UserPreferences(context) }
     val scope = rememberCoroutineScope()
     val navController = rememberNavController()
@@ -167,7 +170,8 @@ fun SkoLabMainApp() {
     }
     var isFeedLoading by remember { mutableStateOf(true) }
     var isLlmActive by remember { mutableStateOf(true) }
-    val apiService = remember { com.open.skolab.network.ApiService() }
+    // Use the application-scoped ApiService singleton
+    val apiService = AppDependencies.apiService
 
     androidx.compose.runtime.LaunchedEffect(Unit) {
         while(true) {
@@ -201,7 +205,7 @@ fun SkoLabMainApp() {
         DockItem(route = "collabs", icon = Icons.Filled.Groups, label = "Orbit", hasBadgeDot = true),
         DockItem(route = "agent", drawableResId = com.open.skolab.R.drawable.logo, label = "Skolar"),
         DockItem(route = "industry", icon = Icons.Filled.BusinessCenter, label = "Launchpad"),
-        DockItem(route = "collabs_ws", icon = Icons.Filled.Groups, label = "Collabs")
+        DockItem(route = "collabs_ws", icon = Icons.Filled.GridView, label = "Collabs")
     )
 
     SkoLabScaffold { innerPadding ->
@@ -296,7 +300,7 @@ fun SkoLabMainApp() {
                     } else if (hasSeenOnboardingState == true) {
                         // Skip splash animation if onboarding is already completed
                         androidx.compose.runtime.LaunchedEffect(Unit) {
-                            val next = if (!authManager.isSignedIn) "auth" else "discover"
+                            val next = if (!authManager.isSignedInAsync()) "auth" else "discover"
                             navController.navigate(next) {
                                 popUpTo("splash") { inclusive = true }
                             }

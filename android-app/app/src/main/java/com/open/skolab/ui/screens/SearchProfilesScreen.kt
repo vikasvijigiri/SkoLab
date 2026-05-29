@@ -1,4 +1,4 @@
-package com.open.skolab.ui.screens
+﻿package com.open.skolab.ui.screens
 
 import android.util.Log
 import androidx.compose.animation.*
@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.open.skolab.network.ApiService
+import com.open.skolab.di.AppDependencies
 import com.open.skolab.network.AuthorSuggestion
 import com.open.skolab.ui.components.StaggeredVisibility
 import com.open.skolab.ui.components.primitives.EmptyState
@@ -36,7 +37,7 @@ fun SearchProfilesScreen(
     searchQuery: String = "",
     showSearchBar: Boolean = true,
     modifier: Modifier = Modifier,
-    apiService: ApiService = remember { ApiService() }
+    apiService: ApiService = AppDependencies.apiService
 ) {
     var localQuery by remember { mutableStateOf("") }
     val query = if (showSearchBar) localQuery else searchQuery
@@ -293,3 +294,4 @@ fun ProfileShimmerLoader() {
         }
     }
 }
+

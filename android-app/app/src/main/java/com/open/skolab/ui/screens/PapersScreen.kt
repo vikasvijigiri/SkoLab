@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.open.skolab.model.ResearchFilter
 import com.open.skolab.ui.theme.*
 import com.open.skolab.viewmodel.FeedViewModel
 import kotlinx.coroutines.delay
@@ -84,20 +85,20 @@ fun PapersScreen(
                 val userFocus = uiState.user.researchFocus.lowercase()
                 val userDisciplines = remember(uiState.disciplines) { uiState.disciplines.map { it.name.lowercase() } }
                 val visibleFilters = remember(userFocus, userDisciplines) {
-                    val list = mutableListOf(com.open.skolab.viewmodel.ResearchFilter.ALL)
-                    com.open.skolab.viewmodel.ResearchFilter.values().forEach { filter ->
-                        if (filter != com.open.skolab.viewmodel.ResearchFilter.ALL) {
+                    val list = mutableListOf<ResearchFilter>(ResearchFilter.ALL)
+                    ResearchFilter.entries.forEach { filter ->
+                        if (filter != ResearchFilter.ALL) {
                             val matchesFocus = userFocus.isNotBlank() && (
                                 userFocus.contains(filter.label.lowercase()) ||
                                 filter.label.lowercase().contains(userFocus) ||
-                                (filter == com.open.skolab.viewmodel.ResearchFilter.PHYSICS && userFocus.contains("physic")) ||
-                                (filter == com.open.skolab.viewmodel.ResearchFilter.AI && (userFocus.contains("computer") || userFocus.contains("machine learning") || userFocus.contains("artificial intelligence")))
+                                (filter == ResearchFilter.PHYSICS && userFocus.contains("physic")) ||
+                                (filter == ResearchFilter.AI && (userFocus.contains("computer") || userFocus.contains("machine learning") || userFocus.contains("artificial intelligence")))
                             )
                             val matchesDiscipline = userDisciplines.any { disc ->
                                 disc.contains(filter.label.lowercase()) ||
                                 filter.label.lowercase().contains(disc) ||
-                                (filter == com.open.skolab.viewmodel.ResearchFilter.PHYSICS && disc.contains("physic")) ||
-                                (filter == com.open.skolab.viewmodel.ResearchFilter.AI && (disc.contains("computer") || disc.contains("machine learning") || disc.contains("artificial intelligence")))
+                                (filter == ResearchFilter.PHYSICS && disc.contains("physic")) ||
+                                (filter == ResearchFilter.AI && (disc.contains("computer") || disc.contains("machine learning") || disc.contains("artificial intelligence")))
                             }
                             if (matchesFocus || matchesDiscipline) {
                                 if (!list.contains(filter)) {
@@ -221,9 +222,9 @@ fun PapersScreen(
 
 @Composable
 fun PapersFilterRail(
-    selectedFilter: com.open.skolab.viewmodel.ResearchFilter,
-    visibleFilters: List<com.open.skolab.viewmodel.ResearchFilter>,
-    onFilterSelect: (com.open.skolab.viewmodel.ResearchFilter) -> Unit
+    selectedFilter: ResearchFilter,
+    visibleFilters: List<ResearchFilter>,
+    onFilterSelect: (ResearchFilter) -> Unit
 ) {
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
