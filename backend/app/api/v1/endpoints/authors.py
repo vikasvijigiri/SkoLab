@@ -176,15 +176,8 @@ async def fetch_similar_authors(
                 if first_inst and isinstance(first_inst, dict):
                     inst = first_inst.get("display_name") or "Independent Researcher"
             
-            concepts = author.get("x_concepts", []) or []
-            author_disp = author.get("display_name", "")
-            # Filter out concepts whose name matches the author's display name (OpenAlex quirk)
-            valid_concepts = [c for c in concepts if c.get("display_name") and c.get("display_name").strip().lower() != author_disp.strip().lower()]
-            if valid_concepts:
-                field = valid_concepts[0].get("display_name", "Multidisciplinary")
-            else:
-                topics = author.get("topics") or []
-                field = topics[0].get("display_name", "Multidisciplinary") if topics else "Multidisciplinary"
+            from app.services.openalex_service import extract_field_and_expertise
+            field, _ = extract_field_and_expertise(author, author.get("display_name", ""))
 
             stats = author.get("summary_stats") or {}
             h_idx = stats.get("h_index")
@@ -231,13 +224,20 @@ async def get_author_suggestions(
         try:
             db = _get_firestore_client()
             if db:
+                import asyncio
                 from google.cloud.firestore_v1.base_query import FieldFilter
-                docs = (
-                    db.collection("global_researchers")
-                    .where(filter=FieldFilter("display_name", ">=", query))
-                    .where(filter=FieldFilter("display_name", "<=", query + "\uf8ff"))
-                    .limit(10)
-                    .get()
+                def _blocking_query():
+                    return (
+                        db.collection("global_researchers")
+                        .where(filter=FieldFilter("display_name", ">=", query))
+                        .where(filter=FieldFilter("display_name", "<=", query + "\uf8ff"))
+                        .limit(10)
+                        .get()
+                    )
+                loop = asyncio.get_running_loop()
+                docs = await asyncio.wait_for(
+                    loop.run_in_executor(None, _blocking_query),
+                    timeout=3.0
                 )
                 if docs:
                     fs_suggestions = []
@@ -294,20 +294,8 @@ async def get_author_suggestions(
             stats = author.get("summary_stats") or {}
             h_idx = stats.get("h_index")
 
-            # Extract field_of_study from x_concepts (prefer level 1, fallback to topics)
-            concepts = author.get("x_concepts") or []
-            field_of_study = None
-            # Filter out concepts whose name is the author's own name (OpenAlex quirk)
-            valid_concepts = [c for c in concepts if c.get("display_name") and c.get("display_name").strip().lower() != disp_name.strip().lower()]
-            level1 = [c for c in valid_concepts if c.get("level") == 1]
-            if level1:
-                field_of_study = level1[0].get("display_name")
-            elif valid_concepts:
-                field_of_study = valid_concepts[0].get("display_name")
-            else:
-                topics = author.get("topics") or []
-                if topics:
-                    field_of_study = topics[0].get("display_name")
+            from app.services.openalex_service import extract_field_and_expertise
+            field_of_study, _ = extract_field_and_expertise(author, disp_name)
 
             suggestions.append(AuthorSuggestion(
                 id=author["id"],
@@ -416,9 +404,16 @@ async def search_author(
             try:
                 db = _get_firestore_client()
                 if db:
-                    doc = db.collection("global_researchers").document(clean_id).get()
-                    if doc.exists:
-                        d = doc.to_dict() or {}
+                    import asyncio
+                    def _blocking_works():
+                        doc = db.collection("global_researchers").document(clean_id).get()
+                        return doc.to_dict() if doc.exists else None
+                    loop = asyncio.get_running_loop()
+                    d = await asyncio.wait_for(
+                        loop.run_in_executor(None, _blocking_works),
+                        timeout=3.0
+                    )
+                    if d:
                         for w in d.get("works", []):
                             try:
                                 _work_fields = set(getattr(Work, 'model_fields', None) or Work.__fields__)
@@ -473,24 +468,32 @@ async def search_author(
         try:
             db = _get_firestore_client()
             if db:
-                if clean_id:
-                    doc = db.collection("global_researchers").document(clean_id).get()
-                    d = doc.to_dict() if doc.exists else None
-                else:
-                    docs = db.collection("global_researchers").where("display_name", "==", name).limit(10).get()
-                    d = None
-                    if docs:
-                        if focus:
-                            normalized_focus = focus.lower()
-                            for doc in docs:
-                                cand = doc.to_dict()
-                                field = (cand.get("field_of_study") or "").lower()
-                                expertise = [exp.lower() for exp in cand.get("expertise", [])]
-                                if normalized_focus in field or any(normalized_focus in exp or exp in normalized_focus for exp in expertise):
-                                    d = cand
-                                    break
-                        if not d:
-                            d = docs[0].to_dict()
+                import asyncio
+                def _blocking_fetch():
+                    if clean_id:
+                        doc = db.collection("global_researchers").document(clean_id).get()
+                        return doc.to_dict() if doc.exists else None
+                    else:
+                        docs = db.collection("global_researchers").where("display_name", "==", name).limit(10).get()
+                        d = None
+                        if docs:
+                            if focus:
+                                normalized_focus = focus.lower()
+                                for doc in docs:
+                                    cand = doc.to_dict()
+                                    field = (cand.get("field_of_study") or "").lower()
+                                    expertise = [exp.lower() for exp in cand.get("expertise", [])]
+                                    if normalized_focus in field or any(normalized_focus in exp or exp in normalized_focus for exp in expertise):
+                                        d = cand
+                                        break
+                            if not d:
+                                d = docs[0].to_dict()
+                        return d
+                loop = asyncio.get_running_loop()
+                d = await asyncio.wait_for(
+                    loop.run_in_executor(None, _blocking_fetch),
+                    timeout=3.0
+                )
 
                 if d:
                     print(f"[search_author] Firestore hit for: '{clean_id or name}'", flush=True)
@@ -637,23 +640,8 @@ async def search_author(
                 institution = first.get("display_name") or "Independent Researcher"
 
         stats = author_data.get("summary_stats") or {}
-        concepts = author_data.get("x_concepts") or []
-        display_name_lower = (author_data.get("display_name") or name or "").strip().lower()
-        # Filter out x_concepts whose name is the author's own name (OpenAlex quirk for historic researchers)
-        valid_concepts = [c for c in concepts if c.get("display_name") and c.get("display_name").strip().lower() != display_name_lower]
-        field = next((c.get("display_name") for c in valid_concepts if c.get("level") == 1), None)
-        if not field:
-            field = valid_concepts[0].get("display_name") if valid_concepts else None
-        if not field:
-            # Fall back to topics array (newer OpenAlex format)
-            topics = author_data.get("topics") or []
-            field = topics[0].get("display_name") if topics else "Multidisciplinary"
-        expertise = [c.get("display_name") for c in valid_concepts
-                     if c.get("level") in [1, 2] and c.get("display_name")][:6]
-        if not expertise:
-            # Try topics as expertise
-            topics = author_data.get("topics") or []
-            expertise = [t.get("display_name") for t in topics[:6] if t.get("display_name")]
+        from app.services.openalex_service import extract_field_and_expertise
+        field, expertise = extract_field_and_expertise(author_data, author_data.get("display_name", name))
 
         affiliations = author_data.get("affiliations") or []
         hist_map: dict = {}

@@ -2,6 +2,50 @@ import httpx
 from typing import List, Dict, Optional, Any
 from app.core.config import settings
 
+def extract_field_and_expertise(author_data: dict, default_name: str = "Researcher") -> tuple[str, list[str]]:
+    # Get topics first
+    topics = author_data.get("topics") or []
+    field = None
+    expertise = []
+    
+    if topics and isinstance(topics, list):
+        for t in topics:
+            if isinstance(t, dict) and t.get("display_name"):
+                expertise.append(t.get("display_name"))
+        # Try to get the field from topics[0]["field"]["display_name"]
+        if topics:
+            first_topic = topics[0]
+            if isinstance(first_topic, dict):
+                field_obj = first_topic.get("field") or first_topic.get("subfield") or first_topic.get("domain")
+                if isinstance(field_obj, dict):
+                    field = field_obj.get("display_name")
+                if not field:
+                    field = first_topic.get("display_name")
+                
+    # Fall back/clean up with concepts
+    concepts = author_data.get("x_concepts") or []
+    display_name = author_data.get("display_name") or default_name
+    a_words = {w.strip().lower() for w in display_name.split() if len(w.strip()) > 2}
+    
+    valid_concepts = []
+    for c in concepts:
+        c_name = c.get("display_name") or ""
+        c_words = {w.strip().lower() for w in c_name.split() if len(w.strip()) > 2}
+        if c_words and c_words.issubset(a_words):
+            continue
+        valid_concepts.append(c)
+        
+    if not field:
+        field = next(
+            (c.get("display_name") for c in valid_concepts if c.get("level") == 1),
+            valid_concepts[0].get("display_name") if valid_concepts else "Multidisciplinary"
+        )
+        
+    if not expertise:
+        expertise = [c.get("display_name") for c in valid_concepts][:6]
+        
+    return field, expertise
+
 class OpenAlexService:
     """
     Consolidated service mapping API calls and results from the OpenAlex database.
