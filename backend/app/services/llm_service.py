@@ -4,6 +4,7 @@ import time
 import httpx
 import asyncio
 from typing import List, Dict, Any, Optional
+from app.core.config import settings
 
 
 # Global rate limit / availability state
@@ -72,7 +73,7 @@ class LLMService:
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "http://localhost:8000",
+            "HTTP-Referer": settings.app_base_url,
             "X-Title": "SkoLab"
         }
 

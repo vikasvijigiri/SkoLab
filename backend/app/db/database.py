@@ -17,11 +17,15 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import declarative_base
 
 # ── Connection URL ────────────────────────────────────────────────────────────
-# Set DATABASE_URL in .env for dev, or inject it as a real env var in prod.
-DATABASE_URL: str = os.environ.get(
-    "DATABASE_URL",
-    "postgresql+asyncpg://postgres:SkoLab2025!@127.0.0.1:5432/skolab",
-)
+# Set DATABASE_URL in .env (see .env.example).  Never hard-code credentials here.
+_raw_db_url = os.environ.get("DATABASE_URL", "")
+if not _raw_db_url:
+    raise RuntimeError(
+        "DATABASE_URL is not set. "
+        "Copy backend/.env.example to backend/.env and fill in your credentials."
+    )
+DATABASE_URL: str = _raw_db_url
+
 
 # ── Engine ────────────────────────────────────────────────────────────────────
 engine = create_async_engine(

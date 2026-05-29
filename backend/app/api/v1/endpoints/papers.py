@@ -109,23 +109,50 @@ async def get_semantic_trending(
     author_concept_ids = set()
 
     if author_data:
-        author_name_lower = (author_data.get("display_name") or "").lower()
-        # Filter out author's own name from x_concepts (OpenAlex quirk for historic researchers)
-        x_concepts = author_data.get("x_concepts") or []
-        valid_concepts = [c for c in x_concepts
-                          if c.get("display_name") and c.get("display_name").lower() != author_name_lower]
-        if valid_concepts:
-            top_concepts = sorted(valid_concepts, key=lambda c: c.get("score", 0) or 0, reverse=True)[:5]
-        else:
-            # Fall back to topics array (newer OpenAlex format with real concept IDs)
-            topics = author_data.get("topics") or []
-            top_concepts = [{"id": t.get("id", ""), "display_name": t.get("display_name", ""), "score": t.get("score", 1.0)}
-                            for t in topics[:5] if t.get("display_name")]
-        author_concept_ids = {c.get("id", "").split("/")[-1] for c in top_concepts if c.get("id")}
-        author_concept_names = [c.get("display_name", "") for c in top_concepts if c.get("display_name")]
+        display_name = author_data.get("display_name") or ""
+        # Robust name filtering: remove any concept that is a word-subset of the author's name
+        a_words = {w.strip().lower() for w in display_name.split() if len(w.strip()) > 2}
 
+        # ── Priority 1: topics (new OpenAlex format — richer, better IDs) ────
+        topics = author_data.get("topics") or []
+        if topics:
+            topic_concepts = []
+            for t in topics[:5]:
+                name = t.get("display_name") or ""
+                if not name:
+                    continue
+                n_words = {w.strip().lower() for w in name.split() if len(w.strip()) > 2}
+                if n_words and n_words.issubset(a_words):
+                    continue  # author's own name masquerading as a concept
+                topic_concepts.append({
+                    "id": t.get("id", ""),
+                    "display_name": name,
+                    "score": float(t.get("count", 1) or 1)
+                })
+            if topic_concepts:
+                top_concepts = topic_concepts
+                author_concept_ids = {c["id"].split("/")[-1] for c in top_concepts if c.get("id")}
+                author_concept_names = [c["display_name"] for c in top_concepts]
+
+        # ── Priority 2: x_concepts fallback (old format) ─────────────────────
+        if not top_concepts:
+            x_concepts = author_data.get("x_concepts") or []
+            valid_concepts = []
+            for c in x_concepts:
+                name = c.get("display_name") or ""
+                if not name:
+                    continue
+                n_words = {w.strip().lower() for w in name.split() if len(w.strip()) > 2}
+                if n_words and n_words.issubset(a_words):
+                    continue
+                valid_concepts.append(c)
+            if valid_concepts:
+                top_concepts = sorted(valid_concepts, key=lambda c: c.get("score", 0) or 0, reverse=True)[:5]
+                author_concept_ids = {c.get("id", "").split("/")[-1] for c in top_concepts if c.get("id")}
+                author_concept_names = [c.get("display_name", "") for c in top_concepts if c.get("display_name")]
+
+    # ── Priority 3: Postgres DB fallback ─────────────────────────────────────
     if not top_concepts:
-        # Fallback database lookup
         try:
             from app.models.researcher_models import ResearcherMetrics
             from app.db.database import AsyncSessionLocal
@@ -150,6 +177,7 @@ async def get_semantic_trending(
         author_concept_ids = {c["id"].split("/")[-1] for c in top_concepts}
 
     print(f"[SemanticTrending] Author concepts: {author_concept_names}", flush=True)
+
 
     # ── Step 2: Fetch works per concept (in parallel) ─────────────────────
     prev_year = now_year - 1
