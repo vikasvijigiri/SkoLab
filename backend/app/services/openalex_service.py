@@ -116,12 +116,14 @@ class OpenAlexService:
         per_page: int = 15
     ) -> List[Dict[str, Any]]:
         """
-        Fetches works filtered by OpenAlex concept ID and publication year range,
+        Fetches works filtered by OpenAlex concept ID published since prev_year,
         sorted by citation count descending.
+        Uses `from_publication_date` for a continuous range instead of OR-filter.
         """
         url = f"{self.base_url}/works"
         params = {
-            "filter": f"concepts.id:{concept_id},publication_year:{prev_year}|{now_year}",
+            # from_publication_date gives a true '>= date' range filter in OpenAlex
+            "filter": f"concepts.id:{concept_id},from_publication_date:{prev_year}-01-01",
             "sort": "cited_by_count:desc",
             "per_page": per_page,
             "mailto": self.email
