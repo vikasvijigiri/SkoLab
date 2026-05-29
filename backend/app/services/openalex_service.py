@@ -8,7 +8,7 @@ class OpenAlexService:
     """
     def __init__(self):
         self.base_url = "https://api.openalex.org"
-        self.email = settings.openalex_email or "vikki.4me@gmail.com"
+        self.email = settings.openalex_email or "support@skolab.open"
         self.headers = {
             "User-Agent": f"SkolabApp/1.0 (mailto:{self.email})",
             "Accept": "application/json"

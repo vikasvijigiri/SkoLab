@@ -294,7 +294,7 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                 // ── Research Focus Resolution ──────────────────────────────────────
                 // Priority: (1) filter chip → (2) Firestore researchFocus → (3) OpenAlex expertise → (4) OpenAlex field_of_study → (5) fallback
                 // Firestore researchFocus is source-of-truth to prevent a mismatched OpenAlex profile
-                // (e.g. a different "Vikas Vijigiri" in OpenAlex returning Psychology as top concept)
+                // (e.g. a different researcher with the same name in OpenAlex returning a different top concept)
                 val focus = if (currentFilter.name != "ALL") {
                     currentFilter.label // User explicitly clicked a filter chip
                 } else if (baseFocus.isNotBlank() && baseFocus.lowercase() != "research"

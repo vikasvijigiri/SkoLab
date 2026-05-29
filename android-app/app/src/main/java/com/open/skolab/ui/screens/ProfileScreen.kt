@@ -48,6 +48,13 @@ import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import com.google.firebase.auth.FirebaseUser
 import com.open.skolab.auth.AuthManager
+import android.app.Activity
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 import com.open.skolab.ui.theme.*
 import kotlinx.coroutines.launch
 
@@ -59,13 +66,32 @@ fun ProfileScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val authManager = remember { AuthManager(context) }
-    var currentUser by remember { mutableStateOf(authManager.currentUser) }
-    var skolabUser by remember { mutableStateOf<com.open.skolab.model.SkoLabUser?>(null) }
+    val cachedUser by authManager.cachedUser.collectAsState(initial = null)
     val credentialManager = remember { CredentialManager.create(context) }
+    val activity = context as? ComponentActivity ?: context as Activity
 
-    LaunchedEffect(currentUser) {
-        currentUser?.let {
-            skolabUser = authManager.getUserData(it.uid)
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            try {
+                val account = task.getResult(ApiException::class.java)
+                val idToken = account.idToken
+                if (idToken != null) {
+                    scope.launch {
+                        val signInResult = authManager.signInWithGoogle(idToken)
+                        if (!signInResult.isSuccess) {
+                            val exception = signInResult.exceptionOrNull()
+                            Log.e("ProfileScreen", "Google Sign-In failed: ${exception?.message}", exception)
+                            android.widget.Toast.makeText(context, "Sign-In Error: ${exception?.message}", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+            } catch (e: ApiException) {
+                Log.e("ProfileScreen", "Google SDK Sign-In failed", e)
+                android.widget.Toast.makeText(context, "Sign-In Error: ${e.localizedMessage}", android.widget.Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -74,21 +100,31 @@ fun ProfileScreen(
             .fillMaxSize()
             .background(BgPrimary)
     ) {
-        if (currentUser == null) {
+        if (cachedUser == null) {
             LoginContent(
                 onSignInClick = {
-                    scope.launch {
-                        val signInResult = authManager.initiateGoogleSignIn()
-                        if (signInResult.isSuccess) {
-                            currentUser = signInResult.getOrNull()
-                        } else {
-                            val exception = signInResult.exceptionOrNull()
-                            Log.e("ProfileScreen", "Google Sign-In failed: ${exception?.message}", exception)
-                            android.widget.Toast.makeText(
-                                context,
-                                "Sign-In Error: ${exception?.message}",
-                                android.widget.Toast.LENGTH_LONG
-                            ).show()
+                    val webClientId = authManager.getWebClientId()
+                    if (webClientId != null) {
+                        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                            .requestIdToken(webClientId)
+                            .requestEmail()
+                            .build()
+                        val googleSignInClient = GoogleSignIn.getClient(activity, gso)
+                        googleSignInClient.signOut().addOnCompleteListener {
+                            googleSignInLauncher.launch(googleSignInClient.signInIntent)
+                        }
+                    } else {
+                        scope.launch {
+                            val signInResult = authManager.initiateGoogleSignIn()
+                            if (!signInResult.isSuccess) {
+                                val exception = signInResult.exceptionOrNull()
+                                Log.e("ProfileScreen", "Google Sign-In failed: ${exception?.message}", exception)
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Sign-In Error: ${exception?.message}",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
+                            }
                         }
                     }
                 },
@@ -96,16 +132,13 @@ fun ProfileScreen(
             )
         } else {
             ProfileContent(
-                firebaseUser = currentUser!!,
-                skolabUser = skolabUser,
+                skolabUser = cachedUser,
                 onNavigateToProWorkspace = onNavigateToProWorkspace,
                 onSignOut = {
                     scope.launch {
                         authManager.signOut()
                         credentialManager.clearCredentialState(ClearCredentialStateRequest())
                     }
-                    currentUser = null
-                    skolabUser = null
                 },
                 onBack = onBack
             )
@@ -189,7 +222,6 @@ fun LoginContent(onSignInClick: () -> Unit, onBack: () -> Unit) {
 
 @Composable
 fun ProfileContent(
-    firebaseUser: FirebaseUser,
     skolabUser: com.open.skolab.model.SkoLabUser?,
     onNavigateToProWorkspace: () -> Unit,
     onSignOut: () -> Unit,
@@ -215,8 +247,8 @@ fun ProfileContent(
     var editFocusText by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(firebaseUser.displayName, skolabUserMutable?.researchFocus) {
-        val name = firebaseUser.displayName
+    LaunchedEffect(activeUser?.name, skolabUserMutable?.researchFocus) {
+        val name = activeUser?.name
         val currentFocusVal = skolabUserMutable?.researchFocus ?: ""
         val hasValidFocusVal = currentFocusVal.isNotBlank() && currentFocusVal != "Researcher" && currentFocusVal != "General Research"
         if (name != null && aiProfile == null) {
@@ -246,7 +278,7 @@ fun ProfileContent(
     }
 
     val scrollState = rememberScrollState()
-    val displayName = firebaseUser.displayName ?: "Researcher"
+    val displayName = activeUser?.name ?: "Researcher"
     val currentFocus = skolabUserMutable?.researchFocus ?: ""
     val hasValidFocus = currentFocus.isNotBlank() && currentFocus != "Researcher" && currentFocus != "General Research"
     val fieldOfStudy = if (hasValidFocus) currentFocus else (aiProfile?.field_of_study ?: "Research Scholar")

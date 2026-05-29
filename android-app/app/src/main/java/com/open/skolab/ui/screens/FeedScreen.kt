@@ -23,6 +23,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -109,21 +110,10 @@ fun FeedScreen(
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val haptic = LocalHapticFeedback.current
-    val searchViewModel: SearchViewModel = viewModel()
-    val searchUiState by searchViewModel.uiState.collectAsState()
-    var isSearchExpanded by remember { mutableStateOf(false) }
-    var searchMode by remember { mutableStateOf(0) } // 0 = Papers, 1 = Profiles
-    var searchQuery by remember { mutableStateOf("") }
     var selectedCountryFilter by remember { mutableStateOf("Global") }
     var showSetupFocusDialog by remember { mutableStateOf(false) }
     var setupNameText by remember { mutableStateOf("") }
     var setupFocusText by remember { mutableStateOf("") }
-
-    BackHandler(enabled = isSearchExpanded) {
-        isSearchExpanded = false
-        searchQuery = ""
-        searchViewModel.onSearchQueryChanged("")
-    }
 
 
     val context = LocalContext.current
@@ -173,27 +163,7 @@ fun FeedScreen(
             .fillMaxSize()
             .background(EntropiColors.Background)
     ) {
-        // Cosmic Background Canvas
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            // Radial base glow top-right
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(EntropiColors.Purple1.copy(alpha = 0.08f), Color.Transparent),
-                    center = Offset(size.width * 0.8f, size.height * 0.2f),
-                    radius = size.width * 0.6f
-                ),
-                radius = size.width * 0.6f
-            )
-            // Radial base glow bottom-left
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(EntropiColors.Blue1.copy(alpha = 0.06f), Color.Transparent),
-                    center = Offset(size.width * 0.2f, size.height * 0.8f),
-                    radius = size.width * 0.6f
-                ),
-                radius = size.width * 0.6f
-            )
-        }
+
 
         // Main LazyColumn
         LazyColumn(
@@ -202,178 +172,6 @@ fun FeedScreen(
             contentPadding = PaddingValues(bottom = 90.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Sticky top header
-            stickyHeader {
-                if (isSearchExpanded) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = EntropiColors.Background.copy(alpha = 0.95f),
-                        tonalElevation = 0.dp
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .statusBarsPadding()
-                                .padding(horizontal = 20.dp, vertical = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                // Search Input field
-                                Box(modifier = Modifier.weight(1f)) {
-                                    GlassSearchBar(
-                                        value = searchQuery,
-                                        onValueChange = {
-                                            searchQuery = it
-                                            if (searchMode == 0) {
-                                                searchViewModel.onSearchQueryChanged(it)
-                                            }
-                                        },
-                                        placeholder = if (searchMode == 0) "Search papers, topics..." else "Search researchers...",
-                                        onClear = {
-                                            searchQuery = ""
-                                            if (searchMode == 0) {
-                                                searchViewModel.onSearchQueryChanged("")
-                                            }
-                                        }
-                                    )
-                                }
-                            }
-                            
-                            // Row selector for Papers / Profiles
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(36.dp),
-                                shape = RoundedCornerShape(8.dp),
-                                color = EntropiColors.Card2.copy(alpha = 0.8f),
-                                border = BorderStroke(0.5.dp, EntropiColors.Border)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxSize().padding(2.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    listOf("Papers", "Profiles").forEachIndexed { index, title ->
-                                        val isSelected = searchMode == index
-                                        Surface(
-                                            onClick = { 
-                                                searchMode = index 
-                                                searchQuery = ""
-                                                searchViewModel.onSearchQueryChanged("")
-                                            },
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .fillMaxHeight(),
-                                            shape = RoundedCornerShape(6.dp),
-                                            color = if (isSelected) EntropiColors.Blue1 else Color.Transparent
-                                        ) {
-                                            Box(
-                                                contentAlignment = Alignment.Center,
-                                                modifier = Modifier.fillMaxSize()
-                                            ) {
-                                                Text(
-                                                    text = title,
-                                                    color = if (isSelected) Color.White else EntropiColors.Text3,
-                                                    fontSize = 12.sp,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    TopBar(
-                        user = uiState.user,
-                        unreadCount = 3,
-                        onSearchClick = { isSearchExpanded = true },
-                        onProfileClick = onProfileClick,
-                        onChatClick = onNavigateToChatList
-                    )
-                }
-            }
-
-            if (isSearchExpanded) {
-                if (searchMode == 0) {
-                    when (val state = searchUiState) {
-                        is SearchUiState.Idle -> {
-                            item {
-                                EmptyState(
-                                    title = "Explore the literature",
-                                    message = "Search OpenAlex to surface papers and research quality signals.",
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 80.dp)
-                                )
-                            }
-                        }
-                        is SearchUiState.Loading -> {
-                            item {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 120.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator(color = EntropiColors.Blue1)
-                                }
-                            }
-                        }
-                        is SearchUiState.Error -> {
-                            item {
-                                ErrorState(
-                                    message = state.message,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 80.dp),
-                                    onRetry = { searchViewModel.onSearchQueryChanged(searchQuery) }
-                                )
-                            }
-                        }
-                        is SearchUiState.Success -> {
-                            if (state.results.isEmpty() && searchQuery.isNotBlank()) {
-                                item {
-                                    EmptyState(
-                                        title = "No matches",
-                                        message = "No results for \"$searchQuery\". Try a broader query.",
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(top = 80.dp)
-                                    )
-                                }
-                            } else if (state.results.isNotEmpty()) {
-                                items(state.results) { paper ->
-                                    Box(modifier = Modifier.padding(horizontal = 20.dp)) {
-                                        PaperCard(
-                                            paper = paper,
-                                            onClick = { onPaperClick(paper.id) },
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(580.dp)
-                        ) {
-                            SearchProfilesScreen(
-                                onAuthorClick = onAuthorClick,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                    }
-                }
-            } else {
                 if (uiState.error != null) {
                     item {
                         Surface(
@@ -416,42 +214,7 @@ fun FeedScreen(
                     }
                 }
 
-                // Daily mission control: brief, pace, and quick actions
-                item {
-                    AIDailyBriefCard(
-                        briefText = uiState.aiBriefText,
-                        isLoading = uiState.isLoading && uiState.aiBriefText.isBlank(),
-                        userId = uiState.user.id
-                    )
-                }
 
-                item {
-                    Box(modifier = Modifier.padding(horizontal = 20.dp)) {
-                        FrontierPulseCard(metrics = uiState.frontierMetrics)
-                    }
-                }
-
-                item {
-                    ResearchActionRail(
-                        onNavigateToAgent = { onTabNavigate("agent") },
-                        onNavigateToCollabs = { onTabNavigate("collabs") },
-                        onNavigateToMetrics = { onTabNavigate("metrics") },
-                        onNavigateToIndustry = { onTabNavigate("industry") },
-                        onNavigateToPapers = { onTabNavigate("papers") },
-                        onNavigateToDailyDiscovery = onNavigateToDailyDiscovery
-                    )
-                }
-
-                if (uiState.dailyConjecture != null) {
-                    item {
-                        Box(modifier = Modifier.padding(horizontal = 20.dp)) {
-                            DailyChallengeCard(
-                                conjecture = uiState.dailyConjecture!!,
-                                onOpenChallenge = onNavigateToLogicEngine
-                            )
-                        }
-                    }
-                }
 
                 if (uiState.suggestedConnections.isNotEmpty()) {
                     item {
@@ -471,48 +234,7 @@ fun FeedScreen(
                     }
                 }
 
-                // Semantic Feed: Trending Now
-                item {
-                    SectionHeader(
-                        title = "🔥 Trending Now",
-                        onSeeAll = {} // Hide "See all" since it's an infinite semantic feed
-                    )
-                }
-                
-                if (uiState.isLoading && uiState.trendingPapers.isEmpty()) {
-                    items(3) {
-                        Box(modifier = Modifier.padding(horizontal = 20.dp)) {
-                            PaperShimmerCard()
-                        }
-                    }
-                } else {
-                    itemsIndexed(uiState.trendingPapers) { index, paper ->
-                        val animatedProgress = remember { Animatable(0f) }
-                        LaunchedEffect(Unit) {
-                            delay(index * 40L)
-                            animatedProgress.animateTo(1f, animationSpec = tween(300))
-                        }
-                        Box(
-                            modifier = Modifier
-                                .padding(horizontal = 20.dp)
-                                .graphicsLayer(
-                                    alpha = animatedProgress.value,
-                                    translationY = (1f - animatedProgress.value) * 20.dp.value
-                                )
-                        ) {
-                            val accentColor = when (index % 3) {
-                                0 -> EntropiColors.Gold1
-                                1 -> EntropiColors.Cyan
-                                else -> EntropiColors.Red
-                            }
-                            PaperFeedCard(
-                                paper = paper,
-                                accentColor = accentColor,
-                                onClick = { onPaperClick(paper.id) }
-                            )
-                        }
-                    }
-                }
+
 
                 // Continue Reading
                 if (uiState.continueReading.isNotEmpty()) {
@@ -681,7 +403,6 @@ fun FeedScreen(
                         }
                     }
                 }
-            }
         }
 
         // Scroll to Top FAB (Section K)
@@ -833,145 +554,7 @@ fun FeedScreen(
     }
 }
 
-// ── COMPONENT 1: TopBar ──────────────────────────────────────────────────────
-@Composable
-fun TopBar(
-    user: User,
-    unreadCount: Int,
-    onSearchClick: () -> Unit,
-    onProfileClick: () -> Unit,
-    onChatClick: () -> Unit
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = EntropiColors.Background.copy(alpha = 0.92f),
-        tonalElevation = 0.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Brand Logo
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "Sko",
-                    fontFamily = SyneFontFamily,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 22.sp,
-                    color = EntropiColors.Purple2
-                )
-                Text(
-                    text = "Lab",
-                    fontFamily = SyneFontFamily,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 22.sp,
-                    color = EntropiColors.Cyan
-                )
-            }
 
-            Spacer(Modifier.weight(1f))
-
-            // Chat Icon Button
-            IconButton(
-                onClick = onChatClick,
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(EntropiColors.Card2)
-                    .border(BorderStroke(1.dp, EntropiColors.Border), RoundedCornerShape(8.dp))
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Chat,
-                    contentDescription = "Chats",
-                    tint = EntropiColors.Text2,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-
-            // Search Icon Button
-            IconButton(
-                onClick = onSearchClick,
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(EntropiColors.Card2)
-                    .border(BorderStroke(1.dp, EntropiColors.Border), RoundedCornerShape(8.dp))
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = "Search",
-                    tint = EntropiColors.Text2,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-
-            // Notification Bell with Badge
-            Box(contentAlignment = Alignment.TopEnd) {
-                IconButton(
-                    onClick = {},
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(EntropiColors.Card2)
-                        .border(BorderStroke(1.dp, EntropiColors.Border), RoundedCornerShape(8.dp))
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Notifications,
-                        contentDescription = "Notifications",
-                        tint = EntropiColors.Text2,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                if (unreadCount > 0) {
-                    Box(
-                        modifier = Modifier
-                            .offset(x = 2.dp, y = (-2).dp)
-                            .size(14.dp)
-                            .background(EntropiColors.Red, CircleShape)
-                            .border(1.dp, EntropiColors.Background, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = unreadCount.toString(),
-                            color = Color.White,
-                            fontSize = 8.sp,
-                            fontFamily = JetBrainsMonoFontFamily,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-
-            // User Profile Avatar
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.sweepGradient(
-                            colors = listOf(EntropiColors.Gold1, EntropiColors.Blue1, EntropiColors.Gold1)
-                        )
-                    )
-                    .clickable { onProfileClick() }
-                    .padding(1.5.dp)
-                    .background(EntropiColors.Background, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = user.initials,
-                    color = EntropiColors.Gold2,
-                    fontFamily = SpaceGroteskFontFamily,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-    }
-}
 
 // ── COMPONENT 2: FrontierPulseCard ───────────────────────────────────────────
 @Composable

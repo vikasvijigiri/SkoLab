@@ -132,13 +132,37 @@ if (-not (Test-Path $apk)) {
 
 Write-Host "Checking connected ADB devices..."
 $devices = adb devices 2>$null
-$hasDevice = $false
+$targetDevice = $null
+$deviceIds = @()
+
 if ($LASTEXITCODE -eq 0 -and $devices) {
     foreach ($line in $devices) {
-        if ($line -match "\bdevice\b") {
-            $hasDevice = $true
-            break
+        if ($line -match "^([^\s]+)\s+device\b") {
+            $id = $Matches[1]
+            $deviceIds += $id
+            # Prefer IP:port wireless connections
+            if ($id -like "*:*") {
+                $targetDevice = $id
+            }
         }
+    }
+}
+
+$hasDevice = $deviceIds.Count -gt 0
+
+if ($hasDevice) {
+    # If no IP:port device was found but we have mDNS wireless (_tcp), use that
+    if (-not $targetDevice) {
+        foreach ($id in $deviceIds) {
+            if ($id -like "*_tcp*") {
+                $targetDevice = $id
+                break
+            }
+        }
+    }
+    # Fallback to first device
+    if (-not $targetDevice) {
+        $targetDevice = $deviceIds[0]
     }
 }
 
@@ -158,16 +182,16 @@ if (-not $hasDevice) {
     Write-Host "=========================================================================" -ForegroundColor Yellow
     Write-Host ""
 } else {
-    Write-Host "Installing on device..."
-    adb install -r $apk
+    Write-Host "Installing on device ($targetDevice)..."
+    adb -s $targetDevice install -r $apk
     if ($LASTEXITCODE -ne 0) { 
         Write-Warning "adb install failed. Please ensure your device is unlocked and screen is on."
     } else {
         if (-not $SkipLaunch) {
             Write-Host "Setting up USB port forwarding for backend access..."
-            adb reverse tcp:8000 tcp:8000
+            adb -s $targetDevice reverse tcp:8000 tcp:8000
             Write-Host "Launching SkoLab..."
-            adb shell am start -n com.open.skolab/com.open.skolab.MainActivity
+            adb -s $targetDevice shell am start -n com.open.skolab/com.open.skolab.MainActivity
         }
         Write-Host "Done. Launcher name should show as SkoLab after install." -ForegroundColor Green
     }

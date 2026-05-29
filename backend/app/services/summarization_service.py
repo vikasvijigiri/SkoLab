@@ -183,7 +183,7 @@ class SummarizationService:
         try:
             headers = {
                 "User-Agent": (
-                    "SkolabApp/1.0 (mailto:vikki.4me@gmail.com) "
+                    "SkolabApp/1.0 (mailto:support@skolab.open) "
                     "Academic research tool - reading open-access papers"
                 ),
                 "Accept": "application/pdf,*/*",
@@ -288,7 +288,7 @@ class SummarizationService:
         """Queries Unpaywall to find a legal open-access PDF URL for a DOI."""
         try:
             clean_doi = self._clean_doi(doi)
-            url = f"https://api.unpaywall.org/v2/{clean_doi}?email=vikki.4me@gmail.com"
+            url = f"https://api.unpaywall.org/v2/{clean_doi}?email=support@skolab.open"
             async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
                 resp = await client.get(url)
                 if resp.status_code == 200:
@@ -334,7 +334,7 @@ class SummarizationService:
                 return {}
 
             headers = {
-                "User-Agent": "SkolabApp/1.0 (mailto:vikki.4me@gmail.com)",
+                "User-Agent": "SkolabApp/1.0 (mailto:support@skolab.open)",
                 "Accept": "application/json",
             }
             from app.core.config import settings

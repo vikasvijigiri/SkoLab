@@ -843,7 +843,7 @@ Provide your response in this exact JSON format:
                     async with httpx.AsyncClient(timeout=20.0) as client:
                         res = await client.get(
                             f"https://api.openalex.org/authors",
-                            params={"filter": filter_str, "per_page": 50, "mailto": "vikki.4me@gmail.com"},
+                            params={"filter": filter_str, "per_page": 50, "mailto": "support@skolab.open"},
                         )
                         if res.status_code == 200:
                             for a in res.json().get("results", []):

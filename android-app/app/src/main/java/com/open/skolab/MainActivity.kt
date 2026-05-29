@@ -145,6 +145,26 @@ fun SkoLabMainApp() {
     }
 
     val hasSeenOnboardingState by userPrefs.hasSeenOnboarding.collectAsStateWithLifecycle(initialValue = null)
+    val isGuestSignedIn by userPrefs.isGuestSignedIn.collectAsStateWithLifecycle(initialValue = false)
+    val isUserAuthenticated = authManager.currentUser != null || isGuestSignedIn
+
+    // Global Authentication & Navigation Guard
+    androidx.compose.runtime.LaunchedEffect(isUserAuthenticated, currentRoute) {
+        if (!isUserAuthenticated) {
+            if (currentRoute != null && currentRoute != "auth" && currentRoute != "splash" && currentRoute != "onboarding") {
+                navController.navigate("auth") {
+                    popUpTo(0) { inclusive = true }
+                }
+            }
+        } else {
+            // Logged-in users should bypass splash, onboarding, and login screens
+            if (currentRoute == "auth" || currentRoute == "splash" || currentRoute == "onboarding") {
+                navController.navigate("discover") {
+                    popUpTo(0) { inclusive = true }
+                }
+            }
+        }
+    }
     var isFeedLoading by remember { mutableStateOf(true) }
     var isLlmActive by remember { mutableStateOf(true) }
     val apiService = remember { com.open.skolab.network.ApiService() }
@@ -261,7 +281,7 @@ fun SkoLabMainApp() {
                     Box(modifier = Modifier.fillMaxSize()) {
                         NavHost(
                             navController = navController,
-                            startDestination = "splash",
+                            startDestination = "auth",
                             modifier = Modifier.fillMaxSize()
                         ) {
                 composable(

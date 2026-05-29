@@ -416,7 +416,7 @@ async def fetch_and_summarize_paper(query: str, source: str = "auto") -> str:
     # ── 1. OpenAlex lookup ───────────────────────────────────────────────────
     if source in ("auto", "openalex"):
         try:
-            oa_headers = {"User-Agent": "SkolabApp/1.0 (mailto:vikki.4me@gmail.com)", "Accept": "application/json"}
+            oa_headers = {"User-Agent": "SkolabApp/1.0 (mailto:support@skolab.open)", "Accept": "application/json"}
             if is_doi:
                 works_url = f"https://api.openalex.org/works/doi:{urllib.parse.quote(query.strip())}"
                 async with httpx.AsyncClient(timeout=10.0) as client:
@@ -453,7 +453,7 @@ async def fetch_and_summarize_paper(query: str, source: str = "auto") -> str:
                     f"&sort=cited_by_count:desc"
                     f"&per_page=5"
                     f"&select=title,publication_year,doi,cited_by_count,authorships,concepts,abstract_inverted_index,primary_location"
-                    f"&mailto=vikki.4me@gmail.com"
+                    f"&mailto=support@skolab.open"
                 )
                 async with httpx.AsyncClient(timeout=12.0) as client:
                     r = await client.get(oa_url_q, headers=oa_headers)
@@ -648,7 +648,7 @@ TOOLS_SCHEMA = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "The search query (author name or keyword), e.g. 'Vikas Vijigiri' or 'quantum entanglement'"},
+                    "query": {"type": "string", "description": "The search query (author name or keyword), e.g. 'Albert Einstein' or 'quantum entanglement'"},
                     "max_results": {"type": "integer", "description": "Max results to return (default 5)"}
                 },
                 "required": ["query"]
@@ -663,7 +663,7 @@ TOOLS_SCHEMA = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "The author's name, e.g. 'Vikas Vijigiri'"}
+                    "query": {"type": "string", "description": "The author's name, e.g. 'Albert Einstein'"}
                 },
                 "required": ["query"]
             }
@@ -777,7 +777,7 @@ TOOLS_SCHEMA = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "The author's name, e.g. 'Vikas Vijigiri' or 'Kush Saha'"},
+                    "query": {"type": "string", "description": "The author's name, e.g. 'Albert Einstein' or 'Kush Saha'"},
                     "domain": {"type": "string", "description": "Optional research domain to filter by, e.g. 'Physics', 'Machine Learning'. Use the user's research focus by default."}
                 },
                 "required": ["query"]
@@ -823,7 +823,7 @@ TOOLS_SCHEMA = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "The author's name, e.g. 'Vikas Vijigiri'"},
+                    "query": {"type": "string", "description": "The author's name, e.g. 'Albert Einstein'"},
                     "domain": {"type": "string", "description": "Research domain to disambiguate the author, e.g. 'Physics', 'Computer Science'. ALWAYS pass the user's domain here unless explicitly told otherwise."}
                 },
                 "required": ["query"]

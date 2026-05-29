@@ -52,7 +52,11 @@ class AuthManager(private val context: Context) {
         return null
     }
 
-    suspend fun initiateGoogleSignIn(): Result<FirebaseUser> {
+    fun getWebClientId(): String? {
+        return resolveWebClientId()
+    }
+
+    suspend fun initiateGoogleSignIn(): Result<FirebaseUser?> {
         val webClientId = resolveWebClientId()
         if (webClientId == null) {
             return attemptAnonymousFallback(IllegalStateException("Google Sign-In is not configured (missing client ID)."))
@@ -79,7 +83,7 @@ class AuthManager(private val context: Context) {
         }
     }
 
-    private suspend fun attemptAnonymousFallback(originalError: Exception): Result<FirebaseUser> {
+    suspend fun attemptAnonymousFallback(originalError: Exception): Result<FirebaseUser?> {
         Log.w("AuthManager", "Attempting anonymous bypass due to Google Sign-In error: ${originalError.message}")
         return try {
             val authResult = auth.signInAnonymously().await()
@@ -96,7 +100,7 @@ class AuthManager(private val context: Context) {
         }
     }
 
-    private suspend fun localBypass(): Result<FirebaseUser> {
+    private suspend fun localBypass(): Result<FirebaseUser?> {
         Log.i("AuthManager", "Executing local guest bypass: caching local guest credentials")
         userPrefs.setGuestSignedIn(true)
         userPrefs.cacheUser(
@@ -109,7 +113,7 @@ class AuthManager(private val context: Context) {
                 savedPapers = emptyList()
             )
         )
-        return Result.success(null as FirebaseUser)
+        return Result.success(null)
     }
 
 
@@ -143,7 +147,7 @@ class AuthManager(private val context: Context) {
         }
     }
 
-    private suspend fun handleSignInResult(credential: Credential): Result<FirebaseUser> {
+    private suspend fun handleSignInResult(credential: Credential): Result<FirebaseUser?> {
         return try {
             when (credential.type) {
                 GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL -> {
@@ -157,7 +161,7 @@ class AuthManager(private val context: Context) {
         }
     }
 
-    suspend fun signInWithGoogle(idToken: String): Result<FirebaseUser> {
+    suspend fun signInWithGoogle(idToken: String): Result<FirebaseUser?> {
         return try {
             val credential = GoogleAuthProvider.getCredential(idToken, null)
             val result = auth.signInWithCredential(credential).await()
@@ -312,6 +316,68 @@ class AuthManager(private val context: Context) {
                 .await()
         } catch (e: Exception) {
             Log.w("AuthManager", "Failed to sync connection deletion to Firestore", e)
+        }
+    }
+
+    suspend fun signInWithEmail(email: String, password: String): Result<FirebaseUser?> {
+        return try {
+            val result = auth.signInWithEmailAndPassword(email, password).await()
+            val user = result.user
+            if (user != null) {
+                // Fetch user data from Firestore and cache it
+                val userData = getUserData(user.uid)
+                if (userData == null) {
+                    val newUserData = SkoLabUser(
+                        uid = user.uid,
+                        name = user.displayName ?: email.substringBefore("@"),
+                        email = user.email ?: email,
+                        researchFocus = "",
+                        isOnline = true
+                    )
+                    db.collection("researchers").document(user.uid).set(newUserData).await()
+                    userPrefs.cacheUser(newUserData)
+                } else {
+                    db.collection("researchers").document(user.uid).update("isOnline", true).await()
+                }
+                Result.success(user)
+            } else {
+                Result.failure(Exception("Authentication succeeded but user is null"))
+            }
+        } catch (e: Exception) {
+            Log.e("AuthManager", "Email sign-in failed", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun registerWithEmail(email: String, password: String, name: String, discipline: String): Result<FirebaseUser?> {
+        return try {
+            val result = auth.createUserWithEmailAndPassword(email, password).await()
+            val user = result.user
+            if (user != null) {
+                // Update profile display name
+                val profileUpdates = com.google.firebase.auth.userProfileChangeRequest {
+                    displayName = name
+                }
+                user.updateProfile(profileUpdates).await()
+
+                // Create Firestore document
+                val newUserData = SkoLabUser(
+                    uid = user.uid,
+                    name = name,
+                    email = email,
+                    researchFocus = discipline,
+                    isOnline = true
+                )
+                db.collection("researchers").document(user.uid).set(newUserData).await()
+                userPrefs.cacheUser(newUserData)
+
+                Result.success(user)
+            } else {
+                Result.failure(Exception("Registration succeeded but user is null"))
+            }
+        } catch (e: Exception) {
+            Log.e("AuthManager", "Email registration failed", e)
+            Result.failure(e)
         }
     }
 
