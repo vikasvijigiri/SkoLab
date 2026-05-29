@@ -99,8 +99,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.parseColor("#0D2E6B")),
-            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.parseColor("#0D2E6B"))
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.parseColor("#000000")),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.parseColor("#000000"))
         )
         super.onCreate(savedInstanceState)
 
