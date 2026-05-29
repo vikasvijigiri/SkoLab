@@ -1,4 +1,4 @@
-﻿package com.open.skolab.ui.screens
+package com.open.skolab.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -39,7 +39,7 @@ fun LogicEngineScreen(onBack: () -> Unit = {}) {
     val context = LocalContext.current
     val authManager = AppDependencies.authManager
     
-    val apiService = remember { com.open.skolab.network.ApiService() }
+    val apiService = com.open.skolab.di.AppDependencies.apiService
     val userPrefs = remember { com.open.skolab.data.UserPreferences(context) }
     val scope = rememberCoroutineScope()
     

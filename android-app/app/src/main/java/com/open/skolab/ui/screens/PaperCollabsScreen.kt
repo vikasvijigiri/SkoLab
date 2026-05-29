@@ -1,4 +1,4 @@
-﻿package com.open.skolab.ui.screens
+package com.open.skolab.ui.screens
 
 import android.content.Intent
 import android.net.Uri
@@ -147,7 +147,7 @@ fun PaperCollabsScreen(
     var similarResearchers by remember { mutableStateOf<List<com.open.skolab.network.AuthorSuggestion>>(emptyList()) }
     var isLoadingSuggestions by remember { mutableStateOf(false) }
 
-    val apiService = remember { com.open.skolab.network.ApiService() }
+    val apiService = com.open.skolab.di.AppDependencies.apiService
     val userFocus = cachedUser?.researchFocus ?: ""
 
     LaunchedEffect(userFocus) {

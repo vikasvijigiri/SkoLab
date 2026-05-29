@@ -39,19 +39,12 @@ import kotlinx.coroutines.launch
 import android.app.Activity
 import android.util.Log
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.ApiException
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AuthScreen(onAuthSuccess: () -> Unit) {
     var isSignIn by remember { mutableStateOf(true) }
     val context = LocalContext.current
-    // GoogleSignIn.getClient() requires Activity context — cast once here, locally.
-    val activity = context as? ComponentActivity ?: context as Activity
     // Use application-scoped singleton — AppDependencies.authManager is initialized
     // with applicationContext in SkoLabApplication, safe to use here.
     val authManager = AppDependencies.authManager
@@ -59,58 +52,6 @@ fun AuthScreen(onAuthSuccess: () -> Unit) {
     var isGoogleLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    val googleSignInLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-            try {
-                val account = task.getResult(ApiException::class.java)
-                val idToken = account.idToken
-                if (idToken != null) {
-                    scope.launch {
-                        isGoogleLoading = true
-                        val signInResult = authManager.signInWithGoogle(idToken)
-                        isGoogleLoading = false
-                        if (signInResult.isSuccess) {
-                            onAuthSuccess()
-                        } else {
-                            // Fallback to guest bypass on sign-in error
-                            isGoogleLoading = true
-                            val ex = signInResult.exceptionOrNull()
-                            val exception = if (ex is Exception) ex else Exception(ex?.message ?: "Sign-in failed", ex)
-                            authManager.attemptAnonymousFallback(exception)
-                            isGoogleLoading = false
-                            onAuthSuccess()
-                        }
-                    }
-                } else {
-                    scope.launch {
-                        isGoogleLoading = true
-                        authManager.attemptAnonymousFallback(Exception("Google Sign-In failed: ID Token is null"))
-                        isGoogleLoading = false
-                        onAuthSuccess()
-                    }
-                }
-            } catch (e: ApiException) {
-                Log.e("AuthScreen", "Google SDK Sign-In failed, falling back to guest bypass", e)
-                scope.launch {
-                    isGoogleLoading = true
-                    authManager.attemptAnonymousFallback(e)
-                    isGoogleLoading = false
-                    onAuthSuccess()
-                }
-            }
-        } else {
-            Log.w("AuthScreen", "Google Sign-In cancelled or failed, falling back to guest bypass")
-            scope.launch {
-                isGoogleLoading = true
-                authManager.attemptAnonymousFallback(Exception("Google Sign-In chooser cancelled or failed"))
-                isGoogleLoading = false
-                onAuthSuccess()
-            }
-        }
-    }
 
     val infiniteTransition = rememberInfiniteTransition(label = "piGlow")
     val glowAlpha by infiniteTransition.animateFloat(
@@ -152,27 +93,14 @@ fun AuthScreen(onAuthSuccess: () -> Unit) {
             GoogleSignInButton(
                 onClick = {
                     authError = null
-                    val webClientId = authManager.getWebClientId()
-                    if (webClientId != null) {
+                    scope.launch {
                         isGoogleLoading = true
-                        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                            .requestIdToken(webClientId)
-                            .requestEmail()
-                            .build()
-                        val googleSignInClient = GoogleSignIn.getClient(activity, gso)
-                        googleSignInClient.signOut().addOnCompleteListener {
-                            googleSignInLauncher.launch(googleSignInClient.signInIntent)
-                        }
-                    } else {
-                        scope.launch {
-                            isGoogleLoading = true
-                            val result = authManager.initiateGoogleSignIn()
-                            isGoogleLoading = false
-                            if (result.isSuccess) {
-                                onAuthSuccess()
-                            } else {
-                                authError = result.exceptionOrNull()?.message ?: "Sign-in failed"
-                            }
+                        val result = authManager.initiateGoogleSignIn(context)
+                        isGoogleLoading = false
+                        if (result.isSuccess) {
+                            onAuthSuccess()
+                        } else {
+                            authError = result.exceptionOrNull()?.message ?: "Sign-in failed"
                         }
                     }
                 },

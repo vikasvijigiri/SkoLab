@@ -25,6 +25,10 @@ class UserPreferences(private val context: Context) {
     private val lastCheckedInDateKey = stringPreferencesKey("last_checked_in_date")
     private val subscriptionTypeKey = stringPreferencesKey("subscription_type")
     private val guestSignedInKey = booleanPreferencesKey("is_guest_signed_in")
+    private val userAcademicStatusKey = stringPreferencesKey("user_academic_status")
+    private val userCvUriKey = stringPreferencesKey("user_cv_uri")
+    private val userCvFileNameKey = stringPreferencesKey("user_cv_file_name")
+    private val userAboutKey = stringPreferencesKey("user_about")
 
     val isGuestSignedIn: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[guestSignedInKey] ?: false
@@ -85,7 +89,11 @@ class UserPreferences(private val context: Context) {
                 email = prefs[userEmailKey] ?: "",
                 researchFocus = prefs[userResearchFocusKey] ?: "",
                 complexityScore = prefs[userComplexityScoreKey] ?: 0f,
-                savedPapers = parseSavedPaperIds(prefs[savedPaperIdsKey])
+                savedPapers = parseSavedPaperIds(prefs[savedPaperIdsKey]),
+                academicStatus = prefs[userAcademicStatusKey] ?: "Researcher",
+                cvUri = prefs[userCvUriKey] ?: "",
+                cvFileName = prefs[userCvFileNameKey] ?: "",
+                about = prefs[userAboutKey] ?: ""
             )
         } else {
             null
@@ -99,6 +107,10 @@ class UserPreferences(private val context: Context) {
             prefs[userEmailKey] = user.email
             prefs[userResearchFocusKey] = user.researchFocus
             prefs[userComplexityScoreKey] = user.complexityScore
+            prefs[userAcademicStatusKey] = user.academicStatus
+            prefs[userCvUriKey] = user.cvUri
+            prefs[userCvFileNameKey] = user.cvFileName
+            prefs[userAboutKey] = user.about
         }
     }
 
@@ -111,6 +123,10 @@ class UserPreferences(private val context: Context) {
             prefs.remove(userComplexityScoreKey)
             prefs.remove(savedPaperIdsKey)
             prefs.remove(guestSignedInKey)
+            prefs.remove(userAcademicStatusKey)
+            prefs.remove(userCvUriKey)
+            prefs.remove(userCvFileNameKey)
+            prefs.remove(userAboutKey)
         }
     }
 

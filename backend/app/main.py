@@ -30,6 +30,7 @@ _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(_BACKEND_ROOT / ".env")
 load_dotenv()
 
+from contextlib import asynccontextmanager
 import asyncio
 import os
 import socket
@@ -47,43 +48,13 @@ from app.core.cache import (
 )
 from app.api.v1.router import api_router
 
-app = FastAPI(
-    title="Skolab API",
-    description="The backend API for the Skolab platform",
-    version="1.0.0",
-)
-
-# Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Serve static downloads folder
-from fastapi.staticfiles import StaticFiles
-os.makedirs("downloads", exist_ok=True)
-app.mount("/downloads", StaticFiles(directory="downloads"), name="downloads")
-
-# Include aggregate router with version prefix
-app.include_router(api_router, prefix="/api/v1")
-
-@app.get("/health")
-async def health():
-    """Simple status check for container/host health monitoring."""
-    return {"status": "ok"}
-
-# ── mDNS service advertisement ───────────────────────────────────────────────
-# The Android app uses NSD (Network Service Discovery) to find this server
-# automatically — no IP address is ever hardcoded on either side.
 _zeroconf: AsyncZeroconf | None = None
 _mdns_info: ServiceInfo | None = None
 
-
-@app.on_event("startup")
-async def init_postgres() -> None:
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ── [Startup] ──
+    # 1. Postgres Schema
     from app.db.database import init_db
     print("[Postgres] Initializing local database schema...", flush=True)
     print("[Storage] Strategy:", flush=True)
@@ -95,10 +66,7 @@ async def init_postgres() -> None:
     except Exception as e:
         print(f"[Postgres] Database initialization failed: {e}", flush=True)
 
-
-@app.on_event("startup")
-async def verify_firestore() -> None:
-    """Check if Firestore connection is responsive. Used for large-doc cloud storage."""
+    # 2. Verify Firestore & Clear Cache
     from app.services.researcher_worker import check_connection_sync, set_firestore_available
     import concurrent.futures
 
@@ -132,10 +100,7 @@ async def verify_firestore() -> None:
         print(f"[Firestore] Connection check failed: {e} — Firestore disabled.", flush=True)
         set_firestore_available(False)
 
-
-@app.on_event("startup")
-async def register_mdns() -> None:
-    """Advertise this server on the LAN so mobile clients can discover it."""
+    # 3. Register mDNS
     global _zeroconf, _mdns_info
     import traceback
     try:
@@ -157,7 +122,7 @@ async def register_mdns() -> None:
 
         _mdns_info = ServiceInfo(
             type_=settings.mdns_service_type,
-            name=settings.mdns_fqdn,
+            name=settings.mdns_service_name,
             addresses=addresses,
             port=settings.port,
             properties={"path": "/", "version": "1"},
@@ -172,12 +137,39 @@ async def register_mdns() -> None:
         print(f"[mDNS] Registration failed: {exc}")
         traceback.print_exc()
 
+    yield
 
-@app.on_event("shutdown")
-async def unregister_mdns() -> None:
-    """Clean up the mDNS advertisement on shutdown."""
-    global _zeroconf, _mdns_info
+    # ── [Shutdown] ──
     if _zeroconf and _mdns_info:
         await _zeroconf.async_unregister_service(_mdns_info)
         await _zeroconf.async_close()
         print(f"[mDNS] '{settings.mdns_service_name}' unregistered")
+
+app = FastAPI(
+    title="Skolab API",
+    description="The backend API for the Skolab platform",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Serve static downloads folder
+from fastapi.staticfiles import StaticFiles
+os.makedirs("downloads", exist_ok=True)
+app.mount("/downloads", StaticFiles(directory="downloads"), name="downloads")
+
+# Include aggregate router with version prefix
+app.include_router(api_router, prefix="/api/v1")
+
+@app.get("/health")
+async def health():
+    """Simple status check for container/host health monitoring."""
+    return {"status": "ok"}

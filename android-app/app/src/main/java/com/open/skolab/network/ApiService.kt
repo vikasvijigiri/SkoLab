@@ -1,4 +1,4 @@
-﻿package com.open.skolab.network
+package com.open.skolab.network
 
 import android.util.Log
 import io.ktor.client.*
@@ -93,7 +93,8 @@ data class OpenAlexAuthor(
     val display_name: String? = null,
     val last_known_institutions: List<OpenAlexInstitution>? = null,
     val summary_stats: OpenAlexSummaryStats? = null,
-    val works_count: Int? = null
+    val works_count: Int? = null,
+    val x_concepts: List<OpenAlexConcept>? = null
 )
 
 @Serializable
@@ -546,18 +547,19 @@ class ApiService {
         }
     }
 
-    suspend fun searchAuthor(name: String, id: String? = null, forceRefresh: Boolean = false): AuthorResponse? {
+    suspend fun searchAuthor(name: String, id: String? = null, forceRefresh: Boolean = false, focus: String? = null): AuthorResponse? {
         val mappedName = name
         val base = baseUrl()
         if (base == null) {
             Log.i(tag, "searchAuthor: backend base URL is null. Querying OpenAlex directly...")
-            return fetchAuthorFromOpenAlex(mappedName, id)
+            return fetchAuthorFromOpenAlex(mappedName, id, focus)
         }
         try {
             Log.d(tag, "Searching author via backend: $mappedName, id: $id @ $base")
             val response = httpClient.get("$base/search_author") {
                 parameter("name", mappedName)
                 if (id != null) parameter("id", id)
+                if (focus != null) parameter("focus", focus)
             }
             val bodyText = response.bodyAsText()
             Log.d(tag, "searchAuthor raw body: $bodyText")
@@ -575,7 +577,7 @@ class ApiService {
         } catch (e: Exception) {
             Log.e(tag, "searchAuthor backend failed, falling back to direct OpenAlex query", e)
             try {
-                return fetchAuthorFromOpenAlex(mappedName, id)
+                return fetchAuthorFromOpenAlex(mappedName, id, focus)
             } catch (ex: Exception) {
                 handleNetworkException(e, base)
                 throw e
@@ -587,7 +589,7 @@ class ApiService {
      * Fetches an author profile directly from OpenAlex when the backend is unreachable.
      * Returns real data (name, institution, works) with metrics_computed=false.
      */
-    private suspend fun fetchAuthorFromOpenAlex(name: String, id: String? = null): AuthorResponse? {
+    private suspend fun fetchAuthorFromOpenAlex(name: String, id: String? = null, focus: String? = null): AuthorResponse? {
         val mappedName = name
         return try {
             val authorData = if (id != null) {
@@ -598,30 +600,55 @@ class ApiService {
             } else {
                 val resp = httpClient.get("https://api.openalex.org/authors") {
                     parameter("search", mappedName)
-                    parameter("per_page", 1)
+                    parameter("per_page", 10)
                     parameter("mailto", "support@skolab.open")
                 }.body<OpenAlexAuthorsResponse>()
-                val first = resp.results.firstOrNull() ?: return null
                 
-                // Name Mismatch Collision Check
-                // Ensure the returned author name contains all distinct long tokens of the search query
+                var bestCandidate: OpenAlexAuthor? = null
                 val queryTokens = mappedName.lowercase().split(" ").map { it.trim() }.filter { it.length > 2 }
-                val returnedNameLower = (first.display_name ?: "").lowercase()
-                val matchValid = if (queryTokens.isNotEmpty()) {
-                    queryTokens.all { returnedNameLower.contains(it) }
-                } else {
-                    true
+                
+                if (focus != null && focus.isNotBlank()) {
+                    val normFocus = focus.lowercase()
+                    for (cand in resp.results) {
+                        val returnedNameLower = (cand.display_name ?: "").lowercase()
+                        val matchValid = if (queryTokens.isNotEmpty()) {
+                            queryTokens.all { returnedNameLower.contains(it) }
+                        } else {
+                            true
+                        }
+                        if (!matchValid) continue
+                        
+                        val concepts = cand.x_concepts ?: emptyList()
+                        val conceptNames = concepts.mapNotNull { it.display_name?.lowercase() }
+                        if (conceptNames.any { it.contains(normFocus) || normFocus.contains(it) }) {
+                            bestCandidate = cand
+                            break
+                        }
+                    }
                 }
                 
-                if (!matchValid) {
-                    Log.i(tag, "fetchAuthorFromOpenAlex: Name mismatch collision! Queried: $mappedName, Returned: ${first.display_name}. Ignoring profile.")
-                    return null
+                if (bestCandidate == null) {
+                    for (cand in resp.results) {
+                        val returnedNameLower = (cand.display_name ?: "").lowercase()
+                        val matchValid = if (queryTokens.isNotEmpty()) {
+                            queryTokens.all { returnedNameLower.contains(it) }
+                        } else {
+                            true
+                        }
+                        if (matchValid) {
+                            bestCandidate = cand
+                            break
+                        }
+                    }
                 }
+                
+                val first = bestCandidate ?: resp.results.firstOrNull() ?: return null
+                
                 // Re-fetch full detail by ID for complete data
                 val cleanId = first.id.substringAfterLast("/")
                 httpClient.get("https://api.openalex.org/authors/$cleanId") {
                     parameter("mailto", "support@skolab.open")
-                }.body()
+                }.body<OpenAlexAuthorDetail>()
             }
 
             // Fetch recent works
@@ -1067,6 +1094,24 @@ class ApiService {
         val cleanId = authorId.substringAfterLast("/")
         if (cleanId.isBlank() || cleanId == "fallback_seed") {
             return@coroutineScope emptyList<NetworkCollaborator>()
+        }
+
+        val base = baseUrl()
+        if (base != null) {
+            try {
+                val exclStr = excludeIds.joinToString(",")
+                val response = httpClient.get("$base/network_collaborators") {
+                    parameter("author_id", authorId)
+                    parameter("limit", limit)
+                    parameter("offset", offset)
+                    if (exclStr.isNotEmpty()) parameter("exclude_ids", exclStr)
+                }
+                if (response.status == HttpStatusCode.OK) {
+                    return@coroutineScope response.body<List<NetworkCollaborator>>()
+                }
+            } catch (e: Exception) {
+                Log.e("ApiService", "getNetworkCollaborators backend failed, falling back to direct OpenAlex query", e)
+            }
         }
 
         try {

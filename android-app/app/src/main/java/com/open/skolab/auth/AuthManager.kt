@@ -66,7 +66,18 @@ class AuthManager(private val context: Context) {
         return resolveWebClientId()
     }
 
-    suspend fun initiateGoogleSignIn(): Result<FirebaseUser?> {
+    private fun Context.findActivity(): Context {
+        var currentContext = this
+        while (currentContext is android.content.ContextWrapper) {
+            if (currentContext is android.app.Activity) {
+                return currentContext
+            }
+            currentContext = currentContext.baseContext
+        }
+        return this
+    }
+
+    suspend fun initiateGoogleSignIn(callerContext: Context): Result<FirebaseUser?> {
         val webClientId = resolveWebClientId()
         if (webClientId == null) {
             return attemptAnonymousFallback(IllegalStateException("Google Sign-In is not configured (missing client ID)."))
@@ -75,13 +86,13 @@ class AuthManager(private val context: Context) {
         // First try: filter by authorized accounts (fast, silent)
         // If that finds nothing, fall back to showing the full account picker
         return try {
-            val result = tryGetCredential(webClientId, filterByAuthorized = true)
+            val result = tryGetCredential(callerContext, webClientId, filterByAuthorized = true)
             handleSignInResult(result.credential)
         } catch (e: NoCredentialException) {
             // No previously authorized account — show full account picker
             Log.d("AuthManager", "No authorized account found, showing full picker")
             try {
-                val result = tryGetCredential(webClientId, filterByAuthorized = false)
+                val result = tryGetCredential(callerContext, webClientId, filterByAuthorized = false)
                 handleSignInResult(result.credential)
             } catch (e2: Exception) {
                 Log.e("AuthManager", "Google Sign-In account picker failed or cancelled", e2)
@@ -128,6 +139,7 @@ class AuthManager(private val context: Context) {
 
 
     private suspend fun tryGetCredential(
+        callerContext: Context,
         webClientId: String,
         filterByAuthorized: Boolean
     ): androidx.credentials.GetCredentialResponse {
@@ -141,7 +153,8 @@ class AuthManager(private val context: Context) {
             .addCredentialOption(googleIdOption)
             .build()
 
-        return credentialManager.getCredential(context = context, request = request)
+        val activityContext = callerContext.findActivity()
+        return credentialManager.getCredential(context = activityContext, request = request)
     }
 
     private fun friendlyError(e: Exception): Exception {
@@ -269,20 +282,66 @@ class AuthManager(private val context: Context) {
     }
 
     suspend fun updateUserProfile(name: String, focus: String) {
-        val user = currentUser ?: return
-        try {
-            db.collection("researchers").document(user.uid).update(
-                "name", name,
-                "researchFocus", focus
-            ).await()
-            val cached = userPrefs.cachedUser.firstOrNull()
-            if (cached != null) {
-                userPrefs.cacheUser(cached.copy(name = name, researchFocus = focus))
+        val user = currentUser
+        if (user != null) {
+            try {
+                db.collection("researchers").document(user.uid).update(
+                    "name", name,
+                    "researchFocus", focus
+                ).await()
+            } catch (e: Exception) {
+                Log.w("AuthManager", "Failed to update user profile on Firestore", e)
             }
-        } catch (e: Exception) {
-            Log.w("AuthManager", "Failed to update user profile", e)
+        }
+        val cached = userPrefs.cachedUser.firstOrNull()
+        if (cached != null) {
+            userPrefs.cacheUser(cached.copy(name = name, researchFocus = focus))
         }
     }
+
+    suspend fun updateAcademicProfile(name: String, focus: String, academicStatus: String, about: String) {
+        val user = currentUser
+        if (user != null) {
+            try {
+                db.collection("researchers").document(user.uid).update(
+                    "name", name,
+                    "researchFocus", focus,
+                    "academicStatus", academicStatus,
+                    "about", about
+                ).await()
+            } catch (e: Exception) {
+                Log.w("AuthManager", "Failed to update academic profile on Firestore", e)
+            }
+        }
+        val cached = userPrefs.cachedUser.firstOrNull()
+        if (cached != null) {
+            userPrefs.cacheUser(cached.copy(
+                name = name,
+                researchFocus = focus,
+                academicStatus = academicStatus,
+                about = about
+            ))
+        }
+    }
+
+    suspend fun updateCv(uri: String, fileName: String) {
+        val user = currentUser
+        if (user != null) {
+            try {
+                db.collection("researchers").document(user.uid).update(
+                    "cvUri", uri,
+                    "cvFileName", fileName
+                ).await()
+            } catch (e: Exception) {
+                Log.w("AuthManager", "Failed to update CV on Firestore", e)
+            }
+        }
+        val cached = userPrefs.cachedUser.firstOrNull()
+        if (cached != null) {
+            userPrefs.cacheUser(cached.copy(cvUri = uri, cvFileName = fileName))
+        }
+    }
+
 
     suspend fun updateUserResearchFocus(focus: String) {
         val user = currentUser ?: return

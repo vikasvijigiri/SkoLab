@@ -96,8 +96,6 @@ dependencies {
     implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 
-    // Google Sign-In (Legacy - kept for compatibility if needed, but Credential Manager is preferred)
-    implementation("com.google.android.gms:play-services-auth:21.3.0")
 
     // Ktor
     val ktorVersion = "3.4.2"

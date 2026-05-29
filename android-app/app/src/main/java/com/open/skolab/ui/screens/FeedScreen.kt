@@ -127,9 +127,9 @@ fun FeedScreen(
 
 
     val context = LocalContext.current
-    val authManager = remember { com.open.skolab.auth.AuthManager(context) }
+    val authManager = com.open.skolab.di.AppDependencies.authManager
     val userPrefs = remember { com.open.skolab.data.UserPreferences(context) }
-    val apiService = remember { com.open.skolab.network.ApiService() }
+    val apiService = com.open.skolab.di.AppDependencies.apiService
     val cachedUser by authManager.cachedUser.collectAsState(initial = null)
     val connectionsList by userPrefs.userConnections.collectAsState(initial = emptyList())
 
@@ -593,22 +593,20 @@ fun FrontierPulseCard(metrics: FrontierMetrics) {
             modifier = Modifier
                 .drawBehind {
                     // radial Gold glow top-right
-                    drawCircle(
+                    drawRect(
                         brush = Brush.radialGradient(
                             colors = listOf(EntropiColors.Gold1.copy(alpha = 0.08f), Color.Transparent),
                             center = Offset(size.width * 0.9f, size.height * 0.1f),
                             radius = size.width * 0.4f
-                        ),
-                        radius = size.width * 0.4f
+                        )
                     )
                     // radial Blue glow bottom-left
-                    drawCircle(
+                    drawRect(
                         brush = Brush.radialGradient(
                             colors = listOf(EntropiColors.Blue1.copy(alpha = 0.08f), Color.Transparent),
                             center = Offset(size.width * 0.1f, size.height * 0.9f),
                             radius = size.width * 0.4f
-                        ),
-                        radius = size.width * 0.4f
+                        )
                     )
                 }
                 .padding(16.dp)
@@ -750,13 +748,12 @@ fun AIDailyBriefCard(
             modifier = Modifier
                 .drawBehind {
                     // radial Purple glow top-right
-                    drawCircle(
+                    drawRect(
                         brush = Brush.radialGradient(
                             colors = listOf(EntropiColors.Purple1.copy(alpha = 0.1f), Color.Transparent),
                             center = Offset(size.width * 0.85f, size.height * 0.15f),
                             radius = size.width * 0.45f
-                        ),
-                        radius = size.width * 0.45f
+                        )
                     )
                 }
                 .padding(16.dp)

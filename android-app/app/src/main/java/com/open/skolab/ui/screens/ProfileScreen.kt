@@ -47,15 +47,18 @@ import androidx.compose.ui.zIndex
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import com.google.firebase.auth.FirebaseUser
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
 import com.open.skolab.auth.AuthManager
 import com.open.skolab.di.AppDependencies
 import android.app.Activity
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.ApiException
 import com.open.skolab.ui.theme.*
 import kotlinx.coroutines.launch
 
@@ -70,32 +73,7 @@ fun ProfileScreen(
     val authManager = AppDependencies.authManager
     val cachedUser by authManager.cachedUser.collectAsState(initial = null)
     val credentialManager = remember { CredentialManager.create(context) }
-    val activity = context as? ComponentActivity ?: context as Activity
 
-    val googleSignInLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-            try {
-                val account = task.getResult(ApiException::class.java)
-                val idToken = account.idToken
-                if (idToken != null) {
-                    scope.launch {
-                        val signInResult = authManager.signInWithGoogle(idToken)
-                        if (!signInResult.isSuccess) {
-                            val exception = signInResult.exceptionOrNull()
-                            Log.e("ProfileScreen", "Google Sign-In failed: ${exception?.message}", exception)
-                            android.widget.Toast.makeText(context, "Sign-In Error: ${exception?.message}", android.widget.Toast.LENGTH_LONG).show()
-                        }
-                    }
-                }
-            } catch (e: ApiException) {
-                Log.e("ProfileScreen", "Google SDK Sign-In failed", e)
-                android.widget.Toast.makeText(context, "Sign-In Error: ${e.localizedMessage}", android.widget.Toast.LENGTH_LONG).show()
-            }
-        }
-    }
 
     // Determine auth state: Firebase currentUser is the source of truth.
     // cachedUser may be null briefly (DataStore loading); we fall back to Firebase auth state
@@ -113,28 +91,16 @@ fun ProfileScreen(
         if (!showProfile) {
             LoginContent(
                 onSignInClick = {
-                    val webClientId = authManager.getWebClientId()
-                    if (webClientId != null) {
-                        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                            .requestIdToken(webClientId)
-                            .requestEmail()
-                            .build()
-                        val googleSignInClient = GoogleSignIn.getClient(activity, gso)
-                        googleSignInClient.signOut().addOnCompleteListener {
-                            googleSignInLauncher.launch(googleSignInClient.signInIntent)
-                        }
-                    } else {
-                        scope.launch {
-                            val signInResult = authManager.initiateGoogleSignIn()
-                            if (!signInResult.isSuccess) {
-                                val exception = signInResult.exceptionOrNull()
-                                Log.e("ProfileScreen", "Google Sign-In failed: ${exception?.message}", exception)
-                                android.widget.Toast.makeText(
-                                    context,
-                                    "Sign-In Error: ${exception?.message}",
-                                    android.widget.Toast.LENGTH_LONG
-                                ).show()
-                            }
+                    scope.launch {
+                        val signInResult = authManager.initiateGoogleSignIn(context)
+                        if (!signInResult.isSuccess) {
+                            val exception = signInResult.exceptionOrNull()
+                            Log.e("ProfileScreen", "Google Sign-In failed: ${exception?.message}", exception)
+                            android.widget.Toast.makeText(
+                                context,
+                                "Sign-In Error: ${exception?.message}",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
                         }
                     }
                 },
@@ -246,10 +212,7 @@ fun ProfileContent(
     onSignOut: () -> Unit,
     onBack: () -> Unit
 ) {
-    var skolabUserMutable by remember { mutableStateOf<com.open.skolab.model.SkoLabUser?>(null) }
-    LaunchedEffect(skolabUser) {
-        skolabUserMutable = skolabUser
-    }
+    var skolabUserMutable by remember(skolabUser) { mutableStateOf(skolabUser) }
     val activeUser = skolabUserMutable ?: skolabUser
     val savedCount = activeUser?.savedPapers?.size ?: 0
     val complexity = activeUser?.complexityScore ?: 0f
@@ -265,7 +228,23 @@ fun ProfileContent(
     var isLoadingProfile by remember { mutableStateOf(false) }
     var showEditFocusDialog by remember { mutableStateOf(false) }
     var editFocusText by remember { mutableStateOf("") }
+    var editNameText by remember { mutableStateOf("") }
+    var editStatusText by remember { mutableStateOf("") }
+    var editAboutText by remember { mutableStateOf("") }
+
     val scope = rememberCoroutineScope()
+
+    val pdfPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val fileName = getFileNameFromUri(context, uri)
+            scope.launch {
+                authManager.updateCv(uri.toString(), fileName)
+                skolabUserMutable = activeUser?.copy(cvUri = uri.toString(), cvFileName = fileName)
+            }
+        }
+    }
 
     LaunchedEffect(activeUser?.name, skolabUserMutable?.researchFocus) {
         val name = activeUser?.name
@@ -274,7 +253,7 @@ fun ProfileContent(
         if (name != null && aiProfile == null) {
             isLoadingProfile = true
             try {
-                val profile = apiService.searchAuthor(name)
+                val profile = apiService.searchAuthor(name, focus = currentFocusVal)
                 aiProfile = profile
                 if (profile != null && profile.field_of_study != null && !hasValidFocusVal) {
                     authManager.updateUserResearchFocus(profile.field_of_study)
@@ -338,9 +317,7 @@ fun ProfileContent(
                                     Color(0xFF005C4B),
                                     Color(0xFF00A884),
                                     Color(0xFF25D366).copy(alpha = 0.6f)
-                                ),
-                                start = Offset(0f, 0f),
-                                end = Offset(Float.MAX_VALUE, Float.MAX_VALUE)
+                                )
                             )
                         )
                 ) {
@@ -400,19 +377,43 @@ fun ProfileContent(
 
             // ── 2. Name + Title + Institution ────────────────────────────────
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                Text(
-                    text = displayName,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = displayName,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    val statusText = activeUser?.academicStatus ?: "Researcher"
+                    if (statusText.isNotBlank()) {
+                        Surface(
+                            color = AccentTeal.copy(alpha = 0.12f),
+                            shape = RoundedCornerShape(6.dp),
+                            border = BorderStroke(0.5.dp, AccentTeal.copy(alpha = 0.25f))
+                        ) {
+                            Text(
+                                text = statusText,
+                                color = AccentTeal,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .clickable {
+                            editNameText = activeUser?.name ?: ""
                             editFocusText = fieldOfStudy
+                            editStatusText = activeUser?.academicStatus ?: "Researcher"
+                            editAboutText = activeUser?.about ?: ""
                             showEditFocusDialog = true
                         }
                         .background(AccentTeal.copy(alpha = 0.08f))
@@ -429,7 +430,7 @@ fun ProfileContent(
                     Spacer(modifier = Modifier.width(6.dp))
                     Icon(
                         imageVector = Icons.Default.Edit,
-                        contentDescription = "Edit Research Focus",
+                        contentDescription = "Edit Profile",
                         tint = AccentTeal,
                         modifier = Modifier.size(13.dp)
                     )
@@ -472,15 +473,18 @@ fun ProfileContent(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     // Share button (primary)
+                    val cvFileNameVal = activeUser?.cvFileName ?: ""
                     Button(
                         onClick = {
+                            val cvNote = if (cvFileNameVal.isNotBlank()) "\nCV: $cvFileNameVal (available on request)" else ""
                             val shareText = """
                                 SkoLab Scholar Profile: $displayName
                                 -----------------------------------
+                                Academic Status: ${activeUser?.academicStatus ?: "Researcher"}
                                 SkoLab Score: $skolabScore/1000 (Top 12%)
                                 Field: $fieldOfStudy
                                 Institution: $institution
-                                h-index (estimated): $hIndex
+                                h-index (estimated): $hIndex$cvNote
                                 
                                 Explore my research on SkoLab!
                             """.trimIndent()
@@ -521,15 +525,36 @@ fun ProfileContent(
 
             // ── 4. About section ──────────────────────────────────────────────
             Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
-                Text("About", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("About", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit Profile",
+                        tint = AccentTeal,
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clickable {
+                                editNameText = activeUser?.name ?: ""
+                                editFocusText = fieldOfStudy
+                                editStatusText = activeUser?.academicStatus ?: "Researcher"
+                                editAboutText = activeUser?.about ?: ""
+                                showEditFocusDialog = true
+                            }
+                    )
+                }
                 Spacer(modifier = Modifier.height(8.dp))
+                val aboutText = activeUser?.about?.takeIf { it.isNotBlank() } ?: if (aiProfile != null) {
+                    "${displayName} — ${fieldOfStudy} researcher at ${institution}. " +
+                    if (aiProfile!!.expertise.isNotEmpty()) "Areas of expertise include ${aiProfile!!.expertise.take(3).joinToString(", ")}." else ""
+                } else {
+                    "${displayName} — Research scholar on the SkoLab platform. Click the edit icon to populate your full academic profile."
+                }
                 Text(
-                    text = if (aiProfile != null) {
-                        "${displayName} — ${fieldOfStudy} researcher at ${institution}. " +
-                        if (aiProfile!!.expertise.isNotEmpty()) "Areas of expertise include ${aiProfile!!.expertise.take(3).joinToString(", ")}." else ""
-                    } else {
-                        "${displayName} — Research scholar on the SkoLab platform. Sign in to populate your full academic profile."
-                    },
+                    text = aboutText,
                     fontSize = 14.sp,
                     color = TextSecondary,
                     lineHeight = 21.sp
@@ -544,6 +569,124 @@ fun ProfileContent(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Fetching academic profile...", fontSize = 12.sp, color = TextMuted)
+                    }
+                }
+            }
+
+            HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
+
+            // ── 4.5. CV / Resume section ─────────────────────────────────────────
+            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+                Text("CV & Resume", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Spacer(modifier = Modifier.height(10.dp))
+
+                val cvUri = activeUser?.cvUri ?: ""
+                val cvFileName = activeUser?.cvFileName ?: ""
+
+                if (cvUri.isNotBlank() && cvFileName.isNotBlank()) {
+                    Surface(
+                        color = BgCard,
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, AccentTeal.copy(alpha = 0.2f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                painter = painterResource(id = android.R.drawable.ic_menu_save),
+                                contentDescription = "CV File",
+                                tint = AccentTeal,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = cvFileName,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    text = "Ready for quick sharing",
+                                    fontSize = 11.sp,
+                                    color = TextMuted
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    try {
+                                        val uri = android.net.Uri.parse(cvUri)
+                                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "application/pdf"
+                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        context.startActivity(Intent.createChooser(shareIntent, "Share CV / Resume"))
+                                    } catch (e: Exception) {
+                                        Log.e("ProfileScreen", "Failed to share CV", e)
+                                        android.widget.Toast.makeText(context, "Could not share: ${e.localizedMessage}", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Share,
+                                    contentDescription = "Share CV",
+                                    tint = AccentTeal,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    pdfPickerLauncher.launch("application/pdf")
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Replace CV",
+                                    tint = TextSecondary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    Surface(
+                        color = BgCard,
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, BorderLight),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { pdfPickerLauncher.launch("application/pdf") }
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "No CV/Resume uploaded",
+                                fontSize = 14.sp,
+                                color = TextSecondary,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Upload a PDF to share it instantly with other scholars",
+                                fontSize = 11.sp,
+                                color = TextMuted,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Button(
+                                onClick = { pdfPickerLauncher.launch("application/pdf") },
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentTeal.copy(alpha = 0.08f), contentColor = AccentTeal),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                            ) {
+                                Text("Upload CV (PDF)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             }
@@ -842,7 +985,7 @@ fun ProfileContent(
                 onDismissRequest = { showEditFocusDialog = false },
                 title = {
                     Text(
-                        text = "Edit Research Focus",
+                        text = "Edit Academic Profile",
                         fontFamily = DisplayFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp,
@@ -850,17 +993,78 @@ fun ProfileContent(
                     )
                 },
                 text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(
-                            text = "SkoLab uses your research focus to personalize your Pulse feed, find collaborators, and recommend papers.",
-                            color = TextSecondary,
-                            fontSize = 13.sp,
-                            lineHeight = 18.sp
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = editNameText,
+                            onValueChange = { editNameText = it },
+                            label = { Text("Display Name", color = TextMuted) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                focusedBorderColor = AccentTeal,
+                                unfocusedBorderColor = BorderLight,
+                                focusedContainerColor = BgCard,
+                                unfocusedContainerColor = BgCard
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            singleLine = true
                         )
+
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = "Academic Status",
+                                color = TextSecondary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            
+                            val statusOptions = listOf(
+                                "PhD Candidate",
+                                "Postdoctoral Fellow",
+                                "Professor",
+                                "Researcher",
+                                "Student"
+                            )
+                            
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                statusOptions.forEach { statusOption ->
+                                    val isSelected = editStatusText.trim().equals(statusOption, ignoreCase = true)
+                                    Surface(
+                                        onClick = { editStatusText = statusOption },
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (isSelected) AccentTeal.copy(alpha = 0.15f) else BgSubtle.copy(alpha = 0.5f),
+                                        border = BorderStroke(
+                                            0.5.dp,
+                                            if (isSelected) AccentTeal else BorderLight
+                                        ),
+                                        modifier = Modifier.padding(1.dp)
+                                    ) {
+                                        Text(
+                                            text = statusOption,
+                                            color = if (isSelected) AccentTeal else TextSecondary,
+                                            fontSize = 11.sp,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         OutlinedTextField(
                             value = editFocusText,
                             onValueChange = { editFocusText = it },
-                            label = { Text("Research Focus", color = TextMuted) },
+                            label = { Text("Research Focus / Discipline", color = TextMuted) },
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = TextPrimary,
                                 unfocusedTextColor = TextPrimary,
@@ -917,16 +1121,47 @@ fun ProfileContent(
                                 }
                             }
                         }
+
+                        OutlinedTextField(
+                            value = editAboutText,
+                            onValueChange = { editAboutText = it },
+                            label = { Text("About / Bio", color = TextMuted) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                focusedBorderColor = AccentTeal,
+                                unfocusedBorderColor = BorderLight,
+                                focusedContainerColor = BgCard,
+                                unfocusedContainerColor = BgCard
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            minLines = 3,
+                            maxLines = 5
+                        )
                     }
                 },
                 confirmButton = {
                     TextButton(
                         onClick = {
-                            val trimmed = editFocusText.trim()
-                            if (trimmed.isNotBlank()) {
+                            val trimmedName = editNameText.trim()
+                            val trimmedFocus = editFocusText.trim()
+                            val trimmedStatus = editStatusText.trim()
+                            val trimmedAbout = editAboutText.trim()
+                            if (trimmedName.isNotBlank() && trimmedFocus.isNotBlank()) {
                                 scope.launch {
-                                    authManager.updateUserResearchFocus(trimmed)
-                                    skolabUserMutable = activeUser?.copy(researchFocus = trimmed)
+                                    authManager.updateAcademicProfile(
+                                        name = trimmedName,
+                                        focus = trimmedFocus,
+                                        academicStatus = trimmedStatus,
+                                        about = trimmedAbout
+                                    )
+                                    skolabUserMutable = activeUser?.copy(
+                                        name = trimmedName,
+                                        researchFocus = trimmedFocus,
+                                        academicStatus = trimmedStatus,
+                                        about = trimmedAbout
+                                    )
                                     showEditFocusDialog = false
                                 }
                             }
@@ -990,4 +1225,31 @@ fun SkoLabScoreRing(progress: Float, score: Int) {
             Text("SkoLab Score", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextMuted, letterSpacing = 0.5.sp)
         }
     }
+}
+
+private fun getFileNameFromUri(context: Context, uri: Uri): String {
+    var result: String? = null
+    if (uri.scheme == "content") {
+        val cursor = context.contentResolver.query(uri, null, null, null, null)
+        try {
+            if (cursor != null && cursor.moveToFirst()) {
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (nameIndex != -1) {
+                    result = cursor.getString(nameIndex)
+                }
+            }
+        } catch (e: java.lang.Exception) {
+            Log.e("ProfileScreen", "Error query filename", e)
+        } finally {
+            cursor?.close()
+        }
+    }
+    if (result == null) {
+        result = uri.path
+        val cut = result?.lastIndexOf('/') ?: -1
+        if (cut != -1) {
+            result = result?.substring(cut + 1)
+        }
+    }
+    return result ?: "Resume.pdf"
 }

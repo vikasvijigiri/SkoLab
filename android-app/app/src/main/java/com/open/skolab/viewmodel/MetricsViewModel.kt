@@ -17,7 +17,7 @@ data class MetricsUiState(
 )
 
 class MetricsViewModel : ViewModel() {
-    private val apiService = ApiService()
+    private val apiService = com.open.skolab.di.AppDependencies.apiService
     private val _uiState = MutableStateFlow(MetricsUiState())
     val uiState: StateFlow<MetricsUiState> = _uiState.asStateFlow()
 

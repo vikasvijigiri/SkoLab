@@ -1,4 +1,4 @@
-﻿package com.open.skolab.ui.screens
+package com.open.skolab.ui.screens
 
 import android.util.Log
 import androidx.compose.foundation.layout.*
@@ -94,12 +94,12 @@ fun AuthorDetailScreen(
                             onPaperClick(doi)
                         },
                         onUpdateData = { authorData = it },
-                        onSelectResearcher = { name, _ ->
+                        onSelectResearcher = { name, id ->
                             isLoading = true
                             scope.launch {
                                 var newData: com.open.skolab.network.AuthorResponse? = null
                                 try {
-                                    newData = apiService.searchAuthor(name)
+                                    newData = apiService.searchAuthor(name, id)
                                 } catch (e: Exception) {
                                     Log.e("AuthorDetailScreen", "onSelectResearcher API searchAuthor failed", e)
                                 }

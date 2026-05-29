@@ -365,12 +365,13 @@ async def refresh_author(
 async def search_author(
     name: str = Query(...),
     id: Optional[str] = Query(None),
+    focus: Optional[str] = Query(None),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     openalex_service: OpenAlexService = Depends(get_openalex_service)
 ):
-    print(f"[search_author] name='{name}', id='{id}'", flush=True)
+    print(f"[search_author] name='{name}', id='{id}', focus='{focus}'", flush=True)
     clean_id = id.split("/")[-1] if id else None
-    cache_key = f"id:{clean_id}" if clean_id else name.strip().lower()
+    cache_key = f"id:{clean_id}" if clean_id else f"{name.strip().lower()}:{focus.strip().lower() if focus else ''}"
 
     # 1. Check in-memory cache
     cached = await profile_cache.get(cache_key)
@@ -452,8 +453,20 @@ async def search_author(
                     doc = db.collection("global_researchers").document(clean_id).get()
                     d = doc.to_dict() if doc.exists else None
                 else:
-                    docs = db.collection("global_researchers").where("display_name", "==", name).limit(1).get()
-                    d = docs[0].to_dict() if docs else None
+                    docs = db.collection("global_researchers").where("display_name", "==", name).limit(10).get()
+                    d = None
+                    if docs:
+                        if focus:
+                            normalized_focus = focus.lower()
+                            for doc in docs:
+                                cand = doc.to_dict()
+                                field = (cand.get("field_of_study") or "").lower()
+                                expertise = [exp.lower() for exp in cand.get("expertise", [])]
+                                if normalized_focus in field or any(normalized_focus in exp or exp in normalized_focus for exp in expertise):
+                                    d = cand
+                                    break
+                        if not d:
+                            d = docs[0].to_dict()
 
                 if d:
                     print(f"[search_author] Firestore hit for: '{clean_id or name}'", flush=True)
@@ -515,9 +528,37 @@ async def search_author(
             if author_data:
                 resolved_id = clean_id
         else:
-            results = await openalex_service.search_authors(name, per_page=1)
+            results = await openalex_service.search_authors(name, per_page=10)
             if results:
-                author_data = results[0]
+                # Filter by name matching first (just in case) and then by focus
+                author_data = None
+                query_tokens = [tok for tok in name.lower().split() if len(tok) > 2]
+                
+                if focus:
+                    normalized_focus = focus.lower()
+                    for candidate in results:
+                        cand_name = candidate.get("display_name", "").lower()
+                        if query_tokens and not all(tok in cand_name for tok in query_tokens):
+                            continue
+                        
+                        concepts = candidate.get("x_concepts", [])
+                        concept_names = [c.get("display_name", "").lower() for c in concepts]
+                        if any(normalized_focus in c_name or c_name in normalized_focus for c_name in concept_names):
+                            author_data = candidate
+                            break
+                            
+                if not author_data:
+                    # Fallback to the first result that matches name tokens
+                    for candidate in results:
+                        cand_name = candidate.get("display_name", "").lower()
+                        if query_tokens and not all(tok in cand_name for tok in query_tokens):
+                            continue
+                        author_data = candidate
+                        break
+                        
+                if not author_data:
+                    author_data = results[0]
+                    
                 resolved_id = author_data["id"].split("/")[-1]
 
         if not author_data or not resolved_id:

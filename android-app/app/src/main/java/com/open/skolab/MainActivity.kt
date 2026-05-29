@@ -84,6 +84,7 @@ import com.open.skolab.ui.screens.AgentScreen
 import com.open.skolab.ui.theme.SkoLabTheme
 import com.open.skolab.ui.theme.EntropiColors
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -98,8 +99,13 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        var isInitializing = true
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        val splashScreen = installSplashScreen()
+        splashScreen.setKeepOnScreenCondition { isInitializing }
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.parseColor("#000000")),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.parseColor("#000000"))
@@ -147,12 +153,35 @@ fun SkoLabMainApp() {
         searchQuery = ""
     }
 
-    val hasSeenOnboardingState by userPrefs.hasSeenOnboarding.collectAsStateWithLifecycle(initialValue = null)
-    val isGuestSignedIn by userPrefs.isGuestSignedIn.collectAsStateWithLifecycle(initialValue = false)
+    var startRoute by remember { mutableStateOf<String?>(null) }
+    var initialGuestSignedIn by remember { mutableStateOf<Boolean?>(null) }
+    var initialHasSeenOnboarding by remember { mutableStateOf<Boolean?>(null) }
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        val hasSeen = userPrefs.hasSeenOnboarding.first()
+        val isGuest = userPrefs.isGuestSignedIn.first()
+        val isFirebaseAuthed = authManager.currentUser != null
+
+        initialHasSeenOnboarding = hasSeen
+        initialGuestSignedIn = isGuest
+
+        val route = when {
+            !isFirebaseAuthed && !isGuest -> {
+                if (hasSeen) "auth" else "onboarding"
+            }
+            else -> "discover"
+        }
+        startRoute = route
+        MainActivity.isInitializing = false
+    }
+
+    val hasSeenOnboardingState by userPrefs.hasSeenOnboarding.collectAsStateWithLifecycle(initialValue = initialHasSeenOnboarding)
+    val isGuestSignedIn by userPrefs.isGuestSignedIn.collectAsStateWithLifecycle(initialValue = initialGuestSignedIn ?: false)
     val isUserAuthenticated = authManager.currentUser != null || isGuestSignedIn
 
     // Global Authentication & Navigation Guard
-    androidx.compose.runtime.LaunchedEffect(isUserAuthenticated, currentRoute) {
+    androidx.compose.runtime.LaunchedEffect(isUserAuthenticated, currentRoute, startRoute) {
+        if (startRoute == null) return@LaunchedEffect
         if (!isUserAuthenticated) {
             if (currentRoute != null && currentRoute != "auth" && currentRoute != "splash" && currentRoute != "onboarding") {
                 navController.navigate("auth") {
@@ -283,11 +312,16 @@ fun SkoLabMainApp() {
                     }
                 ) { scaffoldPadding ->
                     Box(modifier = Modifier.fillMaxSize()) {
-                        NavHost(
-                            navController = navController,
-                            startDestination = "auth",
-                            modifier = Modifier.fillMaxSize()
-                        ) {
+                        if (startRoute != null) {
+                            NavHost(
+                                navController = navController,
+                                startDestination = startRoute!!,
+                                modifier = Modifier.fillMaxSize(),
+                                enterTransition = { fadeIn(animationSpec = tween(350, easing = EaseOutCubic)) },
+                                exitTransition = { fadeOut(animationSpec = tween(350, easing = EaseOutCubic)) },
+                                popEnterTransition = { fadeIn(animationSpec = tween(350, easing = EaseOutCubic)) },
+                                popExitTransition = { fadeOut(animationSpec = tween(350, easing = EaseOutCubic)) }
+                            ) {
                 composable(
                     route = "splash",
                     exitTransition = {
@@ -880,7 +914,14 @@ fun SkoLabMainApp() {
                         )
                     }
                 }
-                    }
+                            }
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(com.open.skolab.ui.theme.BgPrimary)
+                            )
+                        }
 
                     // Search Results Overlay
                     androidx.compose.animation.AnimatedVisibility(

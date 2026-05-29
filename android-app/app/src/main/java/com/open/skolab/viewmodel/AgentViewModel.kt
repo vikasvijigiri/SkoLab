@@ -44,7 +44,7 @@ class AgentViewModel(private val context: Context, private val userUid: String) 
     private val _uiState = MutableStateFlow(AgentUiState())
     val uiState: StateFlow<AgentUiState> = _uiState.asStateFlow()
 
-    private val apiService = ApiService()
+    private val apiService = com.open.skolab.di.AppDependencies.apiService
     private val chatStorage = ChatStorage(context, userUid)
     private var activeSessionId = "jarvis_agent_001"
 
