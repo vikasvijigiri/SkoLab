@@ -1093,7 +1093,7 @@ class ApiService {
         field: String? = null
     ): List<NetworkCollaborator> = coroutineScope {
         val cleanId = authorId.substringAfterLast("/")
-        if (cleanId.isBlank() || cleanId == "fallback_seed") {
+        if (cleanId.isBlank() || (cleanId == "fallback_seed" && excludeName.isNullOrBlank())) {
             return@coroutineScope emptyList<NetworkCollaborator>()
         }
 
@@ -1107,6 +1107,7 @@ class ApiService {
                     parameter("offset", offset)
                     if (exclStr.isNotEmpty()) parameter("exclude_ids", exclStr)
                     if (!field.isNullOrBlank()) parameter("field", field)
+                    if (!excludeName.isNullOrBlank()) parameter("name", excludeName)
                 }
                 if (response.status == HttpStatusCode.OK) {
                     return@coroutineScope response.body<List<NetworkCollaborator>>()
@@ -1114,6 +1115,10 @@ class ApiService {
             } catch (e: Exception) {
                 Log.e("ApiService", "getNetworkCollaborators backend failed, falling back to direct OpenAlex query", e)
             }
+        }
+
+        if (cleanId == "fallback_seed") {
+            return@coroutineScope emptyList<NetworkCollaborator>()
         }
 
         try {

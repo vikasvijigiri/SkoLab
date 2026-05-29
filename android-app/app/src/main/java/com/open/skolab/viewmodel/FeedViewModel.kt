@@ -315,21 +315,17 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                 } else {
                     val targetId = profile?.id ?: "fallback_seed"
                     Log.i("FeedViewModel", "Fetching network collaborators for id: $targetId")
-                    val networkList = if (targetId == "fallback_seed") {
+                    val networkList = try {
+                        apiService.getNetworkCollaborators(
+                            authorId = targetId,
+                            limit = 10,
+                            offset = 0,
+                            excludeName = name,
+                            field = displayFocus.ifBlank { null }
+                        )
+                    } catch (e: Exception) {
+                        Log.e("FeedViewModel", "Error calling getNetworkCollaborators", e)
                         emptyList()
-                    } else {
-                        try {
-                            apiService.getNetworkCollaborators(
-                                authorId = targetId,
-                                limit = 10,
-                                offset = 0,
-                                excludeName = name,
-                                field = displayFocus.ifBlank { null }
-                            )
-                        } catch (e: Exception) {
-                            Log.e("FeedViewModel", "Error calling getNetworkCollaborators", e)
-                            emptyList()
-                        }
                     }
 
                     val resolvedCollaborators = if (networkList.isNotEmpty()) {
