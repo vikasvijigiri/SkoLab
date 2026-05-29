@@ -15,12 +15,21 @@ if sys.stderr and getattr(sys.stderr, "encoding", None) != 'utf-8':
         pass
 
 import platform
+import sys as _sys
 from collections import namedtuple
-# Monkey-patch platform to avoid blocking WMI queries in sandboxed environment
-platform.machine = lambda: "AMD64"
-platform.uname = lambda: namedtuple("uname_result", ["system", "node", "release", "version", "machine", "processor"])(
-    "Windows", "localhost", "10", "10.0.19045", "AMD64", "Intel64 Family 6 Model 158 Stepping 10, GenuineIntel"
-)
+
+# On Windows, zeroconf can trigger a blocking WMI query via platform.uname().
+# We monkey-patch it to return real values from the standard library instead
+# of going through WMI — this is safe on all platforms.
+if _sys.platform == "win32":
+    _node = platform.node() or "localhost"
+    _release = platform.release() or "10"
+    _version = platform.version() or ""
+    _machine = platform.machine() or "AMD64"
+    _processor = platform.processor() or _machine
+    _UnameTuple = namedtuple("uname_result", ["system", "node", "release", "version", "machine", "processor"])
+    platform.uname = lambda: _UnameTuple("Windows", _node, _release, _version, _machine, _processor)
+    platform.machine = lambda: _machine
 
 from dotenv import load_dotenv
 
@@ -161,10 +170,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve static downloads folder
+# Serve static downloads folder — path is always relative to backend root,
+# never relative to CWD so it works regardless of where uvicorn is launched from.
 from fastapi.staticfiles import StaticFiles
-os.makedirs("downloads", exist_ok=True)
-app.mount("/downloads", StaticFiles(directory="downloads"), name="downloads")
+_DOWNLOADS_DIR = settings.downloads_dir  # resolved absolute path from config
+app.mount("/downloads", StaticFiles(directory=str(_DOWNLOADS_DIR)), name="downloads")
 
 # Include aggregate router with version prefix
 app.include_router(api_router, prefix="/api/v1")

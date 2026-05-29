@@ -448,57 +448,8 @@ class PipelineServices:
 
 
 
-                concepts_list = profile.get("x_concepts", []) or []
-
-
-
-                # First try level 1/2 concepts; fall back to any concept with a name
-
-
-
-                concepts = [c.get("display_name") for c in concepts_list if c.get("level") in [1, 2] and c.get("display_name")]
-
-
-
-                if not concepts:
-
-
-
-                    concepts = [c.get("display_name") for c in concepts_list[:5] if c.get("display_name")]
-
-
-
-                # Remove author's own name from concept list (OpenAlex quirk: some authors have their name as a concept)
-
-
-
-                concepts = [c for c in concepts if c and c.strip().lower() != author_name.strip().lower()]
-
-
-
-
-
-
-
-                # Also try topics field if x_concepts is empty
-
-
-
-                if not concepts:
-
-
-
-                    topics_list = profile.get("topics", []) or []
-
-
-
-                    concepts = [t.get("display_name") for t in topics_list[:5] if t.get("display_name")]
-
-
-
-
-
-
+                from app.services.openalex_service import extract_field_and_expertise
+                _, concepts = extract_field_and_expertise(profile, author_name)
 
                 if concepts:
 
