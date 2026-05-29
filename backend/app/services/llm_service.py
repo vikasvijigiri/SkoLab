@@ -4,7 +4,7 @@ import time
 import httpx
 import asyncio
 from typing import List, Dict, Any, Optional
-from openrouter import OpenRouter
+
 
 # Global rate limit / availability state
 LLM_LIMIT_EXCEEDED = False
@@ -55,65 +55,6 @@ class LLMService:
             "gemma2-9b-it"
         ]
 
-    def _sync_openrouter_call(
-        self,
-        messages: List[Dict[str, str]],
-        model: str = "openrouter/owl-alpha",
-        temperature: float = 0.5,
-        max_tokens: Optional[int] = None,
-        response_format: Optional[Dict[str, Any]] = None,
-        tools: Optional[List[Dict[str, Any]]] = None,
-        tool_choice: Optional[str] = None
-    ) -> LLMResponse:
-        api_key = os.getenv("OPENROUTER_API_KEY", "")
-        with OpenRouter(api_key=api_key) as client:
-            kwargs = {
-                "model": model,
-                "messages": messages,
-                "temperature": temperature
-            }
-            if max_tokens is not None:
-                kwargs["max_tokens"] = max_tokens
-            if response_format is not None:
-                kwargs["response_format"] = response_format
-            if tools is not None:
-                kwargs["tools"] = tools
-            if tool_choice is not None:
-                kwargs["tool_choice"] = tool_choice
-
-            response = client.chat.send(**kwargs)
-            
-            choices = getattr(response, "choices", None)
-            if not choices and isinstance(response, dict):
-                choices = response.get("choices")
-
-            if choices:
-                msg = choices[0].message if hasattr(choices[0], "message") else choices[0].get("message")
-                content = getattr(msg, "content", None) or (msg.get("content") if isinstance(msg, dict) else None)
-                tool_calls_raw = getattr(msg, "tool_calls", None) or (msg.get("tool_calls") if isinstance(msg, dict) else None)
-                
-                tool_calls = None
-                if tool_calls_raw:
-                    tool_calls = []
-                    for tc in tool_calls_raw:
-                        func = getattr(tc, "function", None) or (tc.get("function") if isinstance(tc, dict) else None)
-                        tc_id = getattr(tc, "id", None) or (tc.get("id") if isinstance(tc, dict) else None)
-                        if func:
-                            func_name = getattr(func, "name", None) or (func.get("name") if isinstance(func, dict) else None)
-                            func_args = getattr(func, "arguments", None) or (func.get("arguments") if isinstance(func, dict) else None)
-                            tool_calls.append({
-                                "id": tc_id,
-                                "type": "function",
-                                "function": {
-                                    "name": func_name,
-                                    "arguments": func_args
-                                }
-                            })
-
-                return LLMResponse(content=content, tool_calls=tool_calls, model_used=model)
-            else:
-                return LLMResponse(content=str(response), model_used=model)
-
     async def query_openrouter(
         self,
         messages: List[Dict[str, str]],
@@ -124,19 +65,56 @@ class LLMService:
         tools: Optional[List[Dict[str, Any]]] = None,
         tool_choice: Optional[str] = None
     ) -> LLMResponse:
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
-            None,
-            lambda: self._sync_openrouter_call(
-                messages=messages,
-                model=model,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                response_format=response_format,
-                tools=tools,
-                tool_choice=tool_choice
-            )
-        )
+        api_key = os.getenv("OPENROUTER_API_KEY", "")
+        if not api_key:
+            raise Exception("OpenRouter API key is missing.")
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "http://localhost:8000",
+            "X-Title": "SkoLab"
+        }
+
+        payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature
+        }
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
+        if response_format is not None:
+            payload["response_format"] = response_format
+        if tools is not None:
+            payload["tools"] = tools
+        if tool_choice is not None:
+            payload["tool_choice"] = tool_choice
+
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=5.0)) as client:
+                resp = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers=headers,
+                    json=payload
+                )
+            
+            if resp.status_code == 200:
+                data = resp.json()
+                choices = data.get("choices", [])
+                if choices:
+                    msg = choices[0].get("message", {})
+                    content = msg.get("content")
+                    tool_calls = msg.get("tool_calls")
+                    return LLMResponse(content=content, tool_calls=tool_calls, model_used=model)
+                else:
+                    return LLMResponse(content=str(data), model_used=model)
+            else:
+                print(f"[LLMService] OpenRouter returned status {resp.status_code}: {resp.text[:200]}", flush=True)
+                raise Exception(f"OpenRouter returned status {resp.status_code}")
+        except Exception as e:
+            print(f"[LLMService] OpenRouter exception: {e}", flush=True)
+            raise e
+
 
     async def query(
         self,

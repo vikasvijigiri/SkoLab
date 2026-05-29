@@ -14,7 +14,8 @@ from app.api.dependencies import (
 from app.core.cache import (
     suggestions_cache,
     profile_cache,
-    network_collaborators_cache
+    network_collaborators_cache,
+    author_metrics_cache
 )
 
 try:
@@ -175,9 +176,16 @@ async def fetch_similar_authors(
                 if first_inst and isinstance(first_inst, dict):
                     inst = first_inst.get("display_name") or "Independent Researcher"
             
-            concepts = author.get("x_concepts", [])
-            field = concepts[0].get("display_name", "Multidisciplinary") if concepts else "Multidisciplinary"
-            
+            concepts = author.get("x_concepts", []) or []
+            author_disp = author.get("display_name", "")
+            # Filter out concepts whose name matches the author's display name (OpenAlex quirk)
+            valid_concepts = [c for c in concepts if c.get("display_name") and c.get("display_name").strip().lower() != author_disp.strip().lower()]
+            if valid_concepts:
+                field = valid_concepts[0].get("display_name", "Multidisciplinary")
+            else:
+                topics = author.get("topics") or []
+                field = topics[0].get("display_name", "Multidisciplinary") if topics else "Multidisciplinary"
+
             stats = author.get("summary_stats") or {}
             h_idx = stats.get("h_index")
             
@@ -285,11 +293,27 @@ async def get_author_suggestions(
             
             stats = author.get("summary_stats") or {}
             h_idx = stats.get("h_index")
-            
+
+            # Extract field_of_study from x_concepts (prefer level 1, fallback to topics)
+            concepts = author.get("x_concepts") or []
+            field_of_study = None
+            # Filter out concepts whose name is the author's own name (OpenAlex quirk)
+            valid_concepts = [c for c in concepts if c.get("display_name") and c.get("display_name").strip().lower() != disp_name.strip().lower()]
+            level1 = [c for c in valid_concepts if c.get("level") == 1]
+            if level1:
+                field_of_study = level1[0].get("display_name")
+            elif valid_concepts:
+                field_of_study = valid_concepts[0].get("display_name")
+            else:
+                topics = author.get("topics") or []
+                if topics:
+                    field_of_study = topics[0].get("display_name")
+
             suggestions.append(AuthorSuggestion(
                 id=author["id"],
                 display_name=disp_name,
                 institution=inst,
+                field_of_study=field_of_study,
                 h_index=int(h_idx) if h_idx is not None else None,
                 innovation_score=None
             ))
@@ -614,10 +638,22 @@ async def search_author(
 
         stats = author_data.get("summary_stats") or {}
         concepts = author_data.get("x_concepts") or []
-        field = next((c.get("display_name") for c in concepts if c.get("level") == 1), None) \
-                or (concepts[0].get("display_name") if concepts else "Multidisciplinary")
-        expertise = [c.get("display_name") for c in concepts
+        display_name_lower = (author_data.get("display_name") or name or "").strip().lower()
+        # Filter out x_concepts whose name is the author's own name (OpenAlex quirk for historic researchers)
+        valid_concepts = [c for c in concepts if c.get("display_name") and c.get("display_name").strip().lower() != display_name_lower]
+        field = next((c.get("display_name") for c in valid_concepts if c.get("level") == 1), None)
+        if not field:
+            field = valid_concepts[0].get("display_name") if valid_concepts else None
+        if not field:
+            # Fall back to topics array (newer OpenAlex format)
+            topics = author_data.get("topics") or []
+            field = topics[0].get("display_name") if topics else "Multidisciplinary"
+        expertise = [c.get("display_name") for c in valid_concepts
                      if c.get("level") in [1, 2] and c.get("display_name")][:6]
+        if not expertise:
+            # Try topics as expertise
+            topics = author_data.get("topics") or []
+            expertise = [t.get("display_name") for t in topics[:6] if t.get("display_name")]
 
         affiliations = author_data.get("affiliations") or []
         hist_map: dict = {}
@@ -680,8 +716,14 @@ async def search_author(
 async def get_author_metrics(
     author_id: str = Query(...),
 ):
+    cached = await author_metrics_cache.get(author_id)
+    if cached is not None:
+        print(f"[AuthorMetrics] Cache hit for author={author_id}", flush=True)
+        return cached
+
     try:
         data = await compute_author_metrics(author_id)
+        await author_metrics_cache.set(author_id, data)
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

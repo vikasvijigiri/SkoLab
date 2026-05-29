@@ -1,39 +1,26 @@
-import os
-from typing import Optional
-from fastapi import APIRouter, Depends, Query, HTTPException
-import httpx
+"""
+Fix script for feed.py - field-aware daily_conjecture fallback
+"""
+import sys
 
-from app.schemas.core import ConjectureResponse
-from app.services.pipeline_services import PipelineServices
-from app.services.industry_service import fetch_industry_opportunities
-from app.services.summarization_service import is_llm_working
-from app.services.openalex_service import OpenAlexService
-from app.api.dependencies import (
-    get_pipeline_services,
-    get_openalex_service
-)
+with open('app/api/v1/endpoints/feed.py', 'r', encoding='utf-8') as f:
+    content = f.read()
 
-router = APIRouter()
+# Identify the chunk to replace by finding specific markers
+START_MARKER = '    author_data = None\n    resolved_id = None\n    \n    clean_id = author_id.split("/")[-1] if author_id else None'
+END_MARKER = '    except Exception as e:\n        return fallback_conjecture'
 
-@router.get("/daily_feed")
-async def get_daily_feed(
-    author_id: Optional[str] = None,
-    query_fallback: Optional[str] = None,
-    pipeline_services: PipelineServices = Depends(get_pipeline_services)
-):
-    try:
-        data = await pipeline_services.get_daily_feed(author_id, query_fallback=query_fallback)
-        return data
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+start_idx = content.find(START_MARKER)
+end_idx = content.find(END_MARKER) + len(END_MARKER)
 
-@router.get("/daily_conjecture", response_model=ConjectureResponse)
-async def get_daily_conjecture(
-    author_id: Optional[str] = Query(None),
-    name: Optional[str] = Query(None),
-    openalex_service: OpenAlexService = Depends(get_openalex_service)
-):
-    author_data = None
+if start_idx == -1:
+    print("ERROR: START_MARKER not found!")
+    sys.exit(1)
+if end_idx == -1:
+    print("ERROR: END_MARKER not found!")
+    sys.exit(1)
+
+new_block = '''    author_data = None
     resolved_id = None
 
     clean_id = author_id.split("/")[-1] if author_id else None
@@ -52,13 +39,13 @@ async def get_daily_conjecture(
     except Exception:
         pass
 
-    # Build a field-aware fallback conjecture based on author's research area
+    # Build a field-aware fallback conjecture based on author\'s research area
     fallback_category = "Physics"
     fallback_title = "The Qubit Coherence Paradox"
-    fallback_hypothesis = "A researcher prepares a qubit in superposition and subjects it to continuous measurements. According to the quantum Zeno effect, what happens to the state's evolution?"
+    fallback_hypothesis = "A researcher prepares a qubit in superposition and subjects it to continuous measurements. According to the quantum Zeno effect, what happens to the state\'s evolution?"
     fallback_options = [
         "The state rapidly collapses into a mixed state.",
-        "The state's evolution is effectively frozen in its initial superposition.",
+        "The state\'s evolution is effectively frozen in its initial superposition.",
         "The measurement decoheres the state into |0> only.",
         "The state oscillates rapidly between |0> and |1>."
     ]
@@ -79,7 +66,7 @@ async def get_daily_conjecture(
             fallback_title = "The Gradient Vanishing Dilemma"
             fallback_hypothesis = "A deep network with L=50 sigmoid layers runs backpropagation. What happens to the gradient as it propagates from layer L to layer 1?"
             fallback_options = [
-                "Stays near constant due to sigmoid's bounded range.",
+                "Stays near constant due to sigmoid\'s bounded range.",
                 "Grows exponentially (exploding gradient).",
                 "Shrinks exponentially, approaching zero (vanishing gradient).",
                 "Oscillates between positive and negative."
@@ -129,80 +116,12 @@ async def get_daily_conjecture(
         if not works:
             return fallback_conjecture
     except Exception:
-        return fallback_conjecture
+        return fallback_conjecture'''
 
-    # Build works context for LLM
-    works_context = "\n".join([
-        f"- Paper: {w.get('title')}\n  Abstract: {w.get('abstract_inverted_index') or ''}"
-        for w in works[:3]
-    ])
-    
-    prompt = {
-        "model": "llama-3.3-70b-versatile",
-        "messages": [
-            {
-                "role": "system",
-                "content": """You are an elite scientific advisor. Your task is to generate a highly academic, rigorous scientific "conjecture/puzzle" grounded in the research areas of the provided publications.
-The conjecture should describe a specific hypothetical scenario or calculation, present a mathematical or conceptual fallacy, and ask the user to identify the correct explanation or fallacy.
-Format your output as a raw JSON object matching this schema:
-{
-  "id": "1",
-  "category": "High-level discipline name (e.g. Quantum Computing, Genomics, Condensed Matter Physics)",
-  "title": "A short, catchy, professional title",
-  "hypothesis": "The technical scenario description, including equations in LaTeX format using $$...$$ for block or $...$ for inline equations.",
-  "options": [
-    "Option A description",
-    "Option B description",
-    "Option C description",
-    "Option D description"
-  ],
-  "correctOptionIndex": 0,
-  "explanation": "A detailed 1-2 sentence explanation of why this option is correct, including any relevant scientific theory."
-}
-Only output the JSON object, do not wrap it in markdown or comments. Ensure it is valid JSON."""
-            },
-            {
-                "role": "user",
-                "content": f"Researcher Name: {author_data.get('display_name')}\nSelected Publications:\n{works_context}"
-            }
-        ],
-        "temperature": 0.3,
-        "response_format": {"type": "json_object"}
-    }
+new_content = content[:start_idx] + new_block + content[end_idx:]
 
-    if not is_llm_working():
-        return fallback_conjecture
-        
-    groq_key = os.getenv("GROQ_API")
-    if not groq_key:
-        return fallback_conjecture
-        
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            res = await client.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-                json=prompt,
-                timeout=20.0
-            )
-            if res.status_code == 200:
-                import json
-                raw_content = res.json()["choices"][0]["message"]["content"].strip()
-                conjecture_data = json.loads(raw_content)
-                return ConjectureResponse(**conjecture_data)
-            else:
-                return fallback_conjecture
-    except Exception as e:
-        return fallback_conjecture
+with open('app/api/v1/endpoints/feed.py', 'w', encoding='utf-8') as f:
+    f.write(new_content)
 
-@router.get("/industry_opportunities")
-async def get_industry_opportunities(
-    focus: str = Query("AI"),
-    openalex_service: OpenAlexService = Depends(get_openalex_service)
-):
-    try:
-        opportunities = await fetch_industry_opportunities(focus, openalex_service=openalex_service)
-        return opportunities
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
+print("SUCCESS: feed.py updated!")
+print(f"Original length: {len(content)}, New length: {len(new_content)}")

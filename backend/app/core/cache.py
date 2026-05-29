@@ -32,6 +32,7 @@ network_collaborators_cache = PgBackedCache(ttl_seconds=3600,  name="network_col
 collaborator_synergy_cache  = PgBackedCache(ttl_seconds=7200,  name="collaborator_synergy")
 citation_heatmap_cache      = PgBackedCache(ttl_seconds=3600,  name="citation_heatmap")
 journal_advisor_cache       = PgBackedCache(ttl_seconds=7200,  name="journal_advisor")
+author_metrics_cache        = PgBackedCache(ttl_seconds=7200,  name="author_metrics")
 
 # ── Feed / Content caches ─────────────────────────────────────────────────────
 daily_feed_cache            = PgBackedCache(ttl_seconds=3600,  name="daily_feed")
