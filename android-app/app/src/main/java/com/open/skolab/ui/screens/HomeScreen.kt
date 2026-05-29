@@ -1,4 +1,4 @@
-package com.open.skolab.ui.screens
+﻿package com.open.skolab.ui.screens
 
 import android.content.Intent
 import androidx.compose.animation.*
@@ -35,7 +35,7 @@ import com.open.skolab.ui.components.BrandMark
 import com.open.skolab.ui.components.PaperCard
 import com.open.skolab.ui.components.primitives.FilterChipRow
 import com.open.skolab.ui.theme.*
-import com.open.skolab.viewmodel.FeedUiState
+import com.open.skolab.model.FeedUiState
 import com.open.skolab.viewmodel.FeedViewModel
 import com.open.skolab.viewmodel.HomeViewModel
 import com.open.skolab.viewmodel.TrendingUiState

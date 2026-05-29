@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.open.skolab.R
 import com.open.skolab.auth.AuthManager
+import com.open.skolab.di.AppDependencies
 import com.open.skolab.ui.components.BrandMark
 import com.open.skolab.ui.components.BrandTagline
 import com.open.skolab.ui.components.primitives.SkoLabPrimaryButton
@@ -49,9 +50,11 @@ import com.google.android.gms.common.api.ApiException
 fun AuthScreen(onAuthSuccess: () -> Unit) {
     var isSignIn by remember { mutableStateOf(true) }
     val context = LocalContext.current
-    // Credential Manager REQUIRES an Activity context — cast from LocalContext which is always Activity inside setContent
+    // GoogleSignIn.getClient() requires Activity context — cast once here, locally.
     val activity = context as? ComponentActivity ?: context as Activity
-    val authManager = remember { AuthManager(activity) }
+    // Use application-scoped singleton — AppDependencies.authManager is initialized
+    // with applicationContext in SkoLabApplication, safe to use here.
+    val authManager = AppDependencies.authManager
     var authError by remember { mutableStateOf<String?>(null) }
     var isGoogleLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()

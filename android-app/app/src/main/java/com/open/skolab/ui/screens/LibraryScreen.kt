@@ -1,4 +1,4 @@
-package com.open.skolab.ui.screens
+﻿package com.open.skolab.ui.screens
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.open.skolab.network.ApiService
+import com.open.skolab.di.AppDependencies
 import com.open.skolab.network.DailyFeedItem
 import com.open.skolab.ui.components.ScientificCard
 import com.open.skolab.ui.components.ScientificBadge
@@ -281,7 +282,7 @@ fun SavedPaperCard(
 @Composable
 fun GrantFeedTab() {
     val activeAuthor by com.open.skolab.state.ActiveResearcherState.activeAuthor.collectAsState()
-    val api = remember { ApiService() }
+    val api = AppDependencies.apiService
     var grants by remember { mutableStateOf<List<com.open.skolab.network.GrantMatch>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
@@ -533,7 +534,7 @@ fun DailyFeedTab(
     libraryViewModel: LibraryViewModel = viewModel()
 ) {
     val activeAuthor by com.open.skolab.state.ActiveResearcherState.activeAuthor.collectAsState()
-    val api = remember { ApiService() }
+    val api = AppDependencies.apiService
     var feedItems by remember { mutableStateOf<List<DailyFeedItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
@@ -754,3 +755,4 @@ fun EmptyStateView(icon: ImageVector, title: String, subtitle: String) {
         }
     }
 }
+

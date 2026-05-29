@@ -1,4 +1,4 @@
-package com.open.skolab.ui.screens
+﻿package com.open.skolab.ui.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.open.skolab.auth.AuthManager
+import com.open.skolab.di.AppDependencies
 import com.open.skolab.model.SkoLabUser
 import com.open.skolab.ui.theme.AccentTeal
 import com.open.skolab.ui.theme.BgCard
@@ -40,7 +41,7 @@ fun CreateProjectScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val authManager = remember { AuthManager(context) }
+    val authManager = AppDependencies.authManager
     val scope = rememberCoroutineScope()
     val db = remember { FirebaseFirestore.getInstance() }
 
@@ -334,3 +335,4 @@ fun CreateProjectScreen(
         }
     }
 }
+

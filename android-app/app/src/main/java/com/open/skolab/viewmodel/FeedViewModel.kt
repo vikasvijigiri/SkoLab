@@ -3,10 +3,21 @@ package com.open.skolab.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.util.Log
-import com.open.skolab.model.Paper
+import com.open.skolab.di.AppDependencies
 import com.open.skolab.model.Author
 import com.open.skolab.model.Conjecture
-
+import com.open.skolab.model.Connection
+import com.open.skolab.model.Country
+import com.open.skolab.model.Discipline
+import com.open.skolab.model.FeedUiState
+import com.open.skolab.model.FrontierMetrics
+import com.open.skolab.model.IndustryOpportunity
+import com.open.skolab.model.Institution
+import com.open.skolab.model.Paper
+import com.open.skolab.model.ReadingProgress
+import com.open.skolab.model.ResearchArea
+import com.open.skolab.model.ResearchFilter
+import com.open.skolab.model.User
 import com.open.skolab.network.ApiService
 import com.open.skolab.network.DailyFeedItem
 import com.open.skolab.network.GrantMatch
@@ -24,111 +35,15 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 
-data class User(
-    val id: String,
-    val name: String,
-    val initials: String,
-    val researchFocus: String
-)
 
-data class FrontierMetrics(
-    val dIndex: Float,
-    val sIndex: Float,
-    val papersCount: Int,
-    val dIndexDelta: Float,
-    val sIndexDelta: Float,
-    val papersDelta: Int
-)
-
-enum class ResearchFilter(val label: String, val color: androidx.compose.ui.graphics.Color) {
-    ALL("All Fields", androidx.compose.ui.graphics.Color(0xFFC9A84C)),
-    AI("ML/AI", androidx.compose.ui.graphics.Color(0xFF3D6FFF)),
-    GENOMICS("Genomics", androidx.compose.ui.graphics.Color(0xFF00D4FF)),
-    NEURO("Neuroscience", androidx.compose.ui.graphics.Color(0xFF7C3AED)),
-    CLIMATE("Climate", androidx.compose.ui.graphics.Color(0xFF00E676)),
-    PHYSICS("Physics", androidx.compose.ui.graphics.Color(0xFFFF4757)),
-    CHEMISTRY("Chemistry", androidx.compose.ui.graphics.Color(0xFFFBBF24)),
-    MATERIALS("Materials", androidx.compose.ui.graphics.Color(0xFFFB923C))
-}
-
-data class Country(
-    val code: String,
-    val name: String,
-    val flag: String,
-    val paperCount: Int
-)
-
-data class Discipline(
-    val name: String,
-    val emoji: String,
-    val subCount: String,
-    val gradientStart: String,
-    val gradientEnd: String
-)
-
-data class ResearchArea(
-    val name: String,
-    val color: androidx.compose.ui.graphics.Color
-)
-
-data class Connection(
-    val author: Author,
-    val depth: Int,              // 1, 2, or 3
-    val mutualCount: Int,
-    val tags: List<String> = emptyList(),
-    val connectionPath: String = "",
-    val openStatus: String = "Available for Collaboration",
-    val sharedAreas: List<String> = emptyList(),
-    val papersCollaborated: Int = 0,
-    val totalPublications: Int = 0,
-    val hIndex: Int = 0,
-    /** True if this researcher has a verified SkoLab account.
-     *  Heuristic: authors sourced from OpenAlex with a non-blank real ID are treated
-     *  as SkoLab members. Mock/local authors are treated as "Not on SkoLab".
-     *  Replace with a real DB lookup once a user registry is available. */
-    val isOnSkoLab: Boolean = author.id.startsWith("https://openalex.org/")
-)
-
-data class Institution(
-    val name: String,
-    val initials: String,
-    val color: androidx.compose.ui.graphics.Color
-)
-
-data class ReadingProgress(
-    val paper: Paper,
-    val progressPercent: Int
-)
-
-data class FeedUiState(
-    val user: User = User("", "Researcher", "R", "Research"),
-    val frontierMetrics: FrontierMetrics = FrontierMetrics(0.85f, 0.79f, 24, 0.06f, 0.04f, 3),
-    val aiBriefText: String = "",
-    val selectedFilter: ResearchFilter = ResearchFilter.ALL,
-    val topCountries: List<Country> = emptyList(),
-    val disciplines: List<Discipline> = emptyList(),
-    val researchAreas: List<ResearchArea> = emptyList(),
-    val trendingPapers: List<Paper> = emptyList(),
-    val suggestedResearchers: List<Author> = emptyList(),
-    val suggestedConnections: List<Connection> = emptyList(),
-    val dailyFeedItems: List<DailyFeedItem> = emptyList(),
-    val grantMatches: List<GrantMatch> = emptyList(),
-    val industryOpportunities: List<IndustryOpportunity> = emptyList(),
-    val journalRecommendations: List<JournalRecommendation> = emptyList(),
-    val dailyConjecture: Conjecture? = null,
-    val hotPapers: List<Paper> = emptyList(),
-    val topInstitutions: List<Institution> = emptyList(),
-    val openAccessPapers: List<Paper> = emptyList(),
-    val continueReading: List<ReadingProgress> = emptyList(),
-    val collaboratorsArticles: List<Paper> = emptyList(),
-    val suggestedPeersArticles: List<Paper> = emptyList(),
-    val isLoading: Boolean = true,
-    val isLoadingMoreConnections: Boolean = false,
-    val hasMoreConnections: Boolean = true,
-    val error: String? = null
-)
-
-class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewModel() {
+/**
+ * FeedViewModel — manages all data for the Discovery (Pulse) feed.
+ *
+ * Receives the application-scoped [ApiService] from [AppDependencies] via the
+ * factory in [FeedViewModelFactory] — NOT from default parameter construction,
+ * which would create a new OkHttp instance per ViewModel.
+ */
+class FeedViewModel(private val apiService: ApiService = AppDependencies.apiService) : ViewModel() {
     private val _uiState = MutableStateFlow(FeedUiState())
     val uiState: StateFlow<FeedUiState> = _uiState.asStateFlow()
     private var userAuthorProfile: com.open.skolab.network.AuthorResponse? = null

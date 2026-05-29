@@ -1,4 +1,4 @@
-package com.open.skolab.ui.screens
+﻿package com.open.skolab.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -33,6 +33,7 @@ import com.open.skolab.ui.theme.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.ui.platform.LocalContext
 import com.open.skolab.auth.AuthManager
+import com.open.skolab.di.AppDependencies
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.open.skolab.ui.components.MarkdownText
@@ -52,7 +53,7 @@ fun CoLabWorkspaceScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val authManager = remember { AuthManager(context) }
+    val authManager = AppDependencies.authManager
     val cachedUser by authManager.cachedUser.collectAsState(initial = null)
     val firstName = remember(cachedUser?.name) {
         val fullName = cachedUser?.name ?: "Researcher"
@@ -796,3 +797,4 @@ fun VideoConferenceOverlay(
         }
     }
 }
+

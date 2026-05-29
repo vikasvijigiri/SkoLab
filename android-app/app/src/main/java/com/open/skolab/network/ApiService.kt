@@ -1,4 +1,4 @@
-package com.open.skolab.network
+﻿package com.open.skolab.network
 
 import android.util.Log
 import io.ktor.client.*
@@ -16,7 +16,7 @@ import kotlinx.coroutines.*
 import android.content.Context
 import android.net.Uri
 import io.ktor.client.request.forms.*
-import com.open.skolab.viewmodel.IndustryOpportunity
+import com.open.skolab.model.IndustryOpportunity
 
 // ── Data models ───────────────────────────────────────────────────────────────
 

@@ -1,4 +1,4 @@
-package com.open.skolab.ui.screens
+﻿package com.open.skolab.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.zIndex
 import com.open.skolab.auth.AuthManager
+import com.open.skolab.di.AppDependencies
 import com.open.skolab.network.*
 import com.open.skolab.state.ActiveResearcherState
 import com.open.skolab.ui.components.*
@@ -83,11 +84,11 @@ fun DiscoveryScreen(
     onTabNavigate: (String) -> Unit = {},
     onNavigateToChat: (String, String) -> Unit = { _, _ -> }
 ) {
-    val apiService = remember { ApiService() }
+    val apiService = AppDependencies.apiService
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
-    val authManager = remember { AuthManager(context) }
+    val authManager = AppDependencies.authManager
     val cachedUser by authManager.cachedUser.collectAsState(initial = null)
 
     val userName = if (!cachedUser?.name.isNullOrBlank()) cachedUser?.name!! else "SkoLab User"
@@ -3986,3 +3987,5 @@ fun SuggestedPeersShimmer() {
         }
     }
 }
+
+

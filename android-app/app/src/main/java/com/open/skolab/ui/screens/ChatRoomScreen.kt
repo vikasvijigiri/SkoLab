@@ -1,4 +1,4 @@
-package com.open.skolab.ui.screens
+﻿package com.open.skolab.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -37,6 +37,7 @@ import com.open.skolab.network.ApiService
 import com.open.skolab.network.ChatMessage
 import com.open.skolab.data.ChatStorage
 import com.open.skolab.auth.AuthManager
+import com.open.skolab.di.AppDependencies
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -84,7 +85,7 @@ fun ChatRoomScreen(
     peerId: String,
     onBack: () -> Unit
 ) {
-    val apiService = remember { ApiService() }
+    val apiService = AppDependencies.apiService
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     
@@ -205,7 +206,7 @@ fun ChatRoomScreen(
     var replyingToMessage by remember { mutableStateOf<ChatMessage?>(null) }
 
     val context = LocalContext.current
-    val authManager = remember { AuthManager(context) }
+    val authManager = AppDependencies.authManager
     val cachedUser by authManager.cachedUser.collectAsState(initial = null)
     val userUid = cachedUser?.uid ?: ""
     val chatStorage = remember(userUid) { if (userUid.isNotEmpty()) ChatStorage(context, userUid) else null }
@@ -2118,3 +2119,5 @@ fun SkoLabCallingOverlay(
         }
     }
 }
+
+
