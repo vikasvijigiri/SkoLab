@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.open.skolab.ui.theme.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.ui.platform.LocalContext
+import com.open.skolab.auth.AuthManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.open.skolab.ui.components.MarkdownText
@@ -49,6 +51,15 @@ fun CoLabWorkspaceScreen(
     projectName: String = "Project Nexus",
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
+    val authManager = remember { AuthManager(context) }
+    val cachedUser by authManager.cachedUser.collectAsState(initial = null)
+    val firstName = remember(cachedUser?.name) {
+        val fullName = cachedUser?.name ?: "Researcher"
+        val first = fullName.trim().split(" ").firstOrNull() ?: "Researcher"
+        if (first.equals("SkoLab", ignoreCase = true) || first.equals("User", ignoreCase = true)) "Researcher" else first
+    }
+
     var activeTab by remember { mutableStateOf("Chat") } // Chat, Equation, Manuscript, Meetings
     var showVideoCall by remember { mutableStateOf(false) }
     var userMessage by remember { mutableStateOf("") }
@@ -69,11 +80,11 @@ S_E = -\text{Tr}(\rho_A \ln \rho_A)
 The pseudocritical behavior is verified near twist angle $\theta \approx 0.045$ rad.
     """.trimIndent()) }
 
-    // Simulated Chat Messages involving actual co-authors from Vikas's publications
-    val chatMessages = remember {
+    // Simulated Chat Messages involving actual co-authors from publications
+    val chatMessages = remember(firstName) {
         mutableStateListOf(
             CoLabMessage("System", false, "Sumiran Pujari and Nisheeta Desai joined the Workspace.", "10:14 AM", isSystem = true),
-            CoLabMessage("Sumiran Pujari", false, "Vikas, I looked over the spin-1 antiferromagnet Hamiltonian again. Did you add the single-ion anisotropy term \$D(S_i^z)^2?", "10:15 AM"),
+            CoLabMessage("Sumiran Pujari", false, "$firstName, I looked over the spin-1 antiferromagnet Hamiltonian again. Did you add the single-ion anisotropy term \$D(S_i^z)^2?", "10:15 AM"),
             CoLabMessage("Nisheeta Desai", false, "I ran the DMRG check on the \$12 \\times 12$ square lattice. The entanglement entropy is showing an anomalous scaling near the phase boundary.", "10:17 AM"),
             CoLabMessage("You", true, "Yes, Sumiran. I updated the Blackboard equation. Let me know if the sign for anisotropy matches the perturbation theory.", "10:20 AM"),
             CoLabMessage("Sumiran Pujari", false, "Excellent. I am modifying the Blackboard LaTeX formula now to include the transverse magnetic field parameter.", "10:22 AM")

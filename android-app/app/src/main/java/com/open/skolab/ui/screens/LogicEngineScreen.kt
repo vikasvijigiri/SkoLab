@@ -52,7 +52,7 @@ fun LogicEngineScreen(onBack: () -> Unit = {}) {
     var conjectureError by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(cachedUser) {
         val uid = cachedUser?.uid ?: ""
-        val name = cachedUser?.name ?: "Vikas Vijigiri"
+        val name = cachedUser?.name ?: "SkoLab User"
         isConjectureLoading = true
         conjectureError = null
         try {
@@ -213,7 +213,7 @@ fun LogicEngineScreen(onBack: () -> Unit = {}) {
                                             isConjectureLoading = true
                                             conjectureError = null
                                             try {
-                                                conjecture = apiService.getDailyConjecture(cachedUser?.uid ?: "", cachedUser?.name ?: "Vikas Vijigiri")
+                                                conjecture = apiService.getDailyConjecture(cachedUser?.uid ?: "", cachedUser?.name ?: "SkoLab User")
                                             } catch (e: Exception) {
                                                 conjectureError = e.message ?: "Failed to load daily conjecture."
                                                 conjecture = null

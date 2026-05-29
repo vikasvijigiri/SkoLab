@@ -82,15 +82,15 @@ fun BottomNavDock(
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding()
-                    .height(64.dp)
-                    .padding(top = 8.dp),
+                    .height(56.dp)
+                    .padding(top = 4.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.Top
             ) {
                 items.forEach { item ->
                     val selected = currentRoute == item.route
                     val tint by animateColorAsState(
-                        targetValue = if (selected) Color(0xFF00A884) else Color(0xFF8696A0),
+                        targetValue = if (selected) com.open.skolab.ui.theme.PRIMARY else com.open.skolab.ui.theme.TEXT_MUTED,
                         animationSpec = tween(SkoLabMotion.fast),
                         label = "navTint"
                     )
@@ -132,7 +132,7 @@ fun BottomNavDock(
                                             .align(Alignment.TopEnd)
                                             .size(16.dp)
                                             .clip(androidx.compose.foundation.shape.CircleShape)
-                                            .background(Color(0xFF25D366)), // WhatsApp Bright Green
+                                            .background(com.open.skolab.ui.theme.NOTIFICATION_DOT),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
@@ -148,7 +148,7 @@ fun BottomNavDock(
                                             .align(Alignment.TopEnd)
                                             .size(10.dp)
                                             .clip(androidx.compose.foundation.shape.CircleShape)
-                                            .background(Color(0xFF25D366))
+                                            .background(com.open.skolab.ui.theme.NOTIFICATION_DOT)
                                     )
                                 }
                             }

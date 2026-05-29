@@ -685,20 +685,27 @@ fun LabsWorkspaceTab(isEnabled: Boolean) {
         return
     }
 
+    val context = LocalContext.current
+    val userPrefs = remember { UserPreferences(context) }
+    val cachedUser by userPrefs.cachedUser.collectAsState(initial = null)
+    val currentUserName = cachedUser?.name ?: "SkoLab User"
+    val currentUserEmail = cachedUser?.email ?: "user@university.edu"
+    val userFirstName = cachedUser?.firstName ?: "User"
+
     var collaboratorEmail by remember { mutableStateOf("") }
-    val collaborators = remember {
+    val collaborators = remember(currentUserName, currentUserEmail) {
         mutableStateListOf(
-            LabMember("Prof. Vikas Vijigiri", "vikas@iith.ac.in", "Director / PI"),
+            LabMember("Prof. $currentUserName", currentUserEmail, "Director / PI"),
             LabMember("Dr. Ananya Rao", "ananya@iith.ac.in", "Postdoc Fellow"),
             LabMember("Sundeep Sen", "sundeep@iith.ac.in", "PhD Researcher")
         )
     }
 
     var sharedPaperTitle by remember { mutableStateOf("") }
-    val sharedVault = remember {
+    val sharedVault = remember(userFirstName) {
         mutableStateListOf(
             SharedPaper("Entropy Collapse in LLM Logs", "Added by Sundeep, 2 hours ago"),
-            SharedPaper("Topological Quantum Field Theory in 2D", "Added by Prof. Vikas, 1 day ago")
+            SharedPaper("Topological Quantum Field Theory in 2D", "Added by Prof. $userFirstName, 1 day ago")
         )
     }
 
@@ -1139,12 +1146,17 @@ fun SchedulerTab(isEnabled: Boolean) {
         return
     }
 
+    val context = LocalContext.current
+    val userPrefs = remember { UserPreferences(context) }
+    val cachedUser by userPrefs.cachedUser.collectAsState(initial = null)
+    val currentUserName = cachedUser?.name ?: "SkoLab User"
+
     var selectedDay by remember { mutableStateOf(24) }
     
     // Core dynamic event list
-    val eventsList = remember {
+    val eventsList = remember(currentUserName) {
         mutableStateListOf(
-            AcademicEvent("1-on-1 Advisor Check-in", "10:00 AM - 10:30 AM", "Advisor check-in", "Prof. Vikas Vijigiri", 24),
+            AcademicEvent("1-on-1 Advisor Check-in", "10:00 AM - 10:30 AM", "Advisor check-in", "Prof. $currentUserName", 24),
             AcademicEvent("Weekly Lab Journal Club", "02:00 PM - 03:30 PM", "Journal Club", "IIT Hyderabad Group", 27),
             AcademicEvent("NeurIPS Abstract Deadline", "11:59 PM EST", "Conference Deadline", "Global", 28),
             AcademicEvent("Preprint Brainstorming", "11:00 AM - 12:00 PM", "Brainstorm", "Dr. Ananya Rao", 24)
@@ -1154,10 +1166,12 @@ fun SchedulerTab(isEnabled: Boolean) {
     // Input fields for scheduling
     var meetingTitle by remember { mutableStateOf("") }
     var meetingTime by remember { mutableStateOf("") }
-    var meetingInvitee by remember { mutableStateOf("Prof. Vikas Vijigiri") }
+    var meetingInvitee by remember(currentUserName) { mutableStateOf("Prof. $currentUserName") }
     var meetingType by remember { mutableStateOf("Advisor check-in") }
 
-    val collaboratorsList = listOf("Prof. Vikas Vijigiri", "Dr. Ananya Rao", "Sundeep Sen", "IIT Hyderabad Group")
+    val collaboratorsList = remember(currentUserName) {
+        listOf("Prof. $currentUserName", "Dr. Ananya Rao", "Sundeep Sen", "IIT Hyderabad Group")
+    }
     val meetingTypes = listOf("Advisor check-in", "Journal Club", "Brainstorm", "Colloquium Presentation")
 
     // Conference Countdowns

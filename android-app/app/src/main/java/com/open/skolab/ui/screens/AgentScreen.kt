@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -226,8 +227,92 @@ fun AgentScreen() {
                     )
 
                     // ── Proactive reminder chips ────────────────────────────────
+                    // ── Suggested Quick Actions Grid ────────────────────────────
+                    data class QuickActionItem(
+                        val title: String,
+                        val description: String,
+                        val icon: ImageVector,
+                        val query: String
+                    )
+
+                    val quickActions = listOf(
+                        QuickActionItem("Literature Review", "Analyze research history", Icons.Default.Book, "Perform a literature review of my active field of research"),
+                        QuickActionItem("Research Gap Finder", "Discover frontiers", Icons.Default.Analytics, "Find critical research gaps in my current research trajectory"),
+                        QuickActionItem("Proposal Generator", "Draft grant proposals", Icons.Default.Create, "Draft a strategic research proposal for my next paper based on my background"),
+                        QuickActionItem("Paper Summarizer", "Condense complex works", Icons.Default.Description, "Provide a comprehensive summary of my recent publications and papers"),
+                        QuickActionItem("Potential Collaborators", "Find orbit matches", Icons.Default.Groups, "Search for similar researchers and potential collaborators in my orbit"),
+                        QuickActionItem("Funding Search", "Match active grants", Icons.Default.MonetizationOn, "Identify live funding opportunities and grants that match my researcher profile"),
+                        QuickActionItem("Experiment Design", "Structure methodologies", Icons.Default.Science, "Draft a detailed experiment design and methodological roadmap for my next project"),
+                        QuickActionItem("Research Roadmap", "Map key milestones", Icons.Default.Map, "Generate a strategic research roadmap mapping out the next 12 months")
+                    )
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "SUGGESTED QUICK ACTIONS",
+                            color = com.open.skolab.ui.theme.TEXT_PRIMARY,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.2.sp,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                        
+                        quickActions.chunked(2).forEach { rowItems ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                rowItems.forEach { action ->
+                                    Surface(
+                                        onClick = { viewModel.sendMessage(action.query) },
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = com.open.skolab.ui.theme.SURFACE,
+                                        border = BorderStroke(0.5.dp, com.open.skolab.ui.theme.BORDER),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(12.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = action.icon,
+                                                contentDescription = null,
+                                                tint = com.open.skolab.ui.theme.PRIMARY,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Text(
+                                                text = action.title,
+                                                color = com.open.skolab.ui.theme.TEXT_PRIMARY,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = action.description,
+                                                color = com.open.skolab.ui.theme.TEXT_SECONDARY,
+                                                fontSize = 10.sp,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                                if (rowItems.size < 2) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                            }
+                        }
+                    }
+
+                    // ── Proactive reminder chips ────────────────────────────────
                     if (uiState.proactiveReminders.isNotEmpty()) {
-                        Spacer(Modifier.height(20.dp))
+                        Spacer(Modifier.height(24.dp))
                         Text(
                             text = "REMINDERS",
                             color = EntropiColors.Text3,
@@ -245,13 +330,12 @@ fun AgentScreen() {
                             uiState.proactiveReminders.forEach { reminder ->
                                 Surface(
                                     onClick = {
-                                        // Tap reminder to ask Skolar about it
                                         val clean = reminder.replace(Regex("^[^a-zA-Z]+"), "").trim()
                                         viewModel.sendMessage("Tell me more: $clean")
                                     },
                                     shape = RoundedCornerShape(12.dp),
                                     color = EntropiColors.Card,
-                                    border = BorderStroke(0.5.dp, EntropiColors.Gold1.copy(alpha = 0.25f)),
+                                    border = BorderStroke(0.5.dp, EntropiColors.Border),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Row(
@@ -272,7 +356,7 @@ fun AgentScreen() {
                                         Icon(
                                             Icons.Default.ChevronRight,
                                             contentDescription = null,
-                                            tint = EntropiColors.Gold1.copy(alpha = 0.6f),
+                                            tint = com.open.skolab.ui.theme.PRIMARY,
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
@@ -284,30 +368,31 @@ fun AgentScreen() {
                     // ── Memory stats row ────────────────────────────────────────
                     val mem = uiState.memoryProfile
                     if (mem.totalPapersRead > 0 || mem.streakDays > 0) {
-                        Spacer(Modifier.height(20.dp))
+                        Spacer(Modifier.height(24.dp))
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(EntropiColors.Card)
+                                .border(BorderStroke(0.5.dp, EntropiColors.Border), RoundedCornerShape(12.dp))
                                 .padding(vertical = 12.dp),
                             horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
                             if (mem.totalPapersRead > 0) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(mem.totalPapersRead.toString(), color = EntropiColors.Gold1, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                                    Text(mem.totalPapersRead.toString(), color = com.open.skolab.ui.theme.PRIMARY, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
                                     Text("Papers Read", color = EntropiColors.Text3, fontSize = 10.sp)
                                 }
                             }
                             if (mem.streakDays > 0) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("${mem.streakDays}🔥", color = EntropiColors.Gold1, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                                    Text("${mem.streakDays}🔥", color = com.open.skolab.ui.theme.PRIMARY, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
                                     Text("Day Streak", color = EntropiColors.Text3, fontSize = 10.sp)
                                 }
                             }
                             if (mem.avgReadMinutes > 0f) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("${mem.avgReadMinutes.toInt()}m", color = EntropiColors.Blue2, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                                    Text("${mem.avgReadMinutes.toInt()}m", color = com.open.skolab.ui.theme.PRIMARY, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
                                     Text("Avg Read", color = EntropiColors.Text3, fontSize = 10.sp)
                                 }
                             }
@@ -404,7 +489,6 @@ fun AgentTopBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .statusBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)

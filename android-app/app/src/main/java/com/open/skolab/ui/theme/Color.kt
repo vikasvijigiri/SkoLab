@@ -2,65 +2,92 @@ package com.open.skolab.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ── Warm Sand Color Palette — Parchment & natural tones for long reading ──────
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+val PAGE_BACKGROUND     = Color(0xFFF4F0E8) // warm parchment — every screen's root background
+val SURFACE             = Color(0xFFFEFCF7) // warm cream — cards, bottom sheets, dialogs (not stark white)
+val SURFACE_SUBTLE      = Color(0xFFEAE2D0) // warm tan — input fields, chips, inactive nav, skeleton loaders
+val PRIMARY             = Color(0xFF2D6BE4) // ink blue — primary buttons, active nav, links (cool accent on warm bg)
+val PRIMARY_DARK        = Color(0xFF1A4FA8) // deep ink — pressed states, progress tracks
+val PRIMARY_DEEPER      = Color(0xFF0D2E6B) // darkest ink — app logo, major headings
+
+val TEXT_PRIMARY        = Color(0xFF1C1208) // deep warm brown-black — headings, names, key values
+val TEXT_SECONDARY      = Color(0xFF6B5440) // warm mid-brown — body copy, descriptions, card subtitles
+val TEXT_MUTED          = Color(0xFFA08870) // warm tan — placeholders, timestamps, meta labels, helper text
+val TEXT_ON_PRIMARY     = Color(0xFFFFFFFF) // white — text on ink blue surfaces
+val TEXT_ON_PRIMARY_SUB = Color(0xFFBDD4F8) // light blue — subtitles on ink blue surfaces
+
+val BORDER              = Color(0xFFD6C9B0) // warm tan border — card edges, dividers, input strokes
+
+val NOTIFICATION_DOT    = Color(0xFFCC3333) // terracotta red — unread badge dots only
+val STREAK_BAR          = Color(0xFFB8A832) // warm gold — progress bars and streak indicators
+val MATCH_SCORE_BG      = Color(0xFFFFF0CC) // warm amber chip background
+val MATCH_SCORE_TEXT    = Color(0xFF8A6400) // deep amber — text inside match % chips
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ── Semantic Variable Mappings (Ensures screen compatibility) ────────────────
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 // ── Backgrounds ──────────────────────────────────────────────────
-val BgPrimary         = Color(0xFF111B21)  // WhatsApp dark background
-val BgCard            = Color(0xFF202C33)  // WhatsApp card/bubble background
-val BgElevated        = Color(0xFF222E35)  // WhatsApp elevated background
-val BgSubtle          = Color(0xFF182229)  // WhatsApp subtle background
+val BgPrimary         = PAGE_BACKGROUND
+val BgCard            = SURFACE
+val BgElevated        = SURFACE
+val BgSubtle          = SURFACE_SUBTLE
 
 // ── Accent Colors ────────────────────────────────────────────────
-val AccentTeal        = Color(0xFF00A884)  // WhatsApp Teal/Green accent
-val AccentTealDark    = Color(0xFF005C4B)  // WhatsApp Dark Green bubble/accent
-val AccentTealLight   = Color(0x2600A884)  // 15% opacity Teal tint
-val AccentIndigo      = Color(0xFF5B78C2)  // Peaceful soft blue-slate — AI
-val AccentIndigoLight = Color(0x1A5B78C2)  // Soft Indigo tint
-val AccentEmerald     = Color(0xFF25D366)  // WhatsApp Bright Green
-val AccentEmeraldLight= Color(0x1A25D366)  // Emerald tint
-val AccentAmber       = Color(0xFFF4B400)  // Flipkart Gold/Yellow highlight
-val AccentAmberLight  = Color(0x26F4B400)  // Amber/Gold tint
-val AccentRose        = Color(0xFFE53935)  // Peaceful soft red
-val AccentRoseLight   = Color(0x1AE53935)  // Rose tint
-val AccentViolet      = Color(0xFF8E24AA)  // Peaceful soft purple
-val AccentVioletLight = Color(0x1A8E24AA)  // Violet tint
-val AccentOrange      = Color(0xFF1E88E5)  // Changed to Blue as requested
-val AccentOrangeLight = Color(0x1A1E88E5)  // Blue tint
-val AccentCyan        = Color(0xFF00ACC1)  // Peaceful soft cyan
-val AccentCyanLight   = Color(0x1A00ACC1)  // Cyan tint
-val AccentSlate       = Color(0xFF607D8B)  // Neutral slate
+val AccentTeal        = PRIMARY
+val AccentTealDark    = PRIMARY_DARK
+val AccentTealLight   = PRIMARY.copy(alpha = 0.15f)
+val AccentIndigo      = SURFACE_SUBTLE
+val AccentIndigoLight = SURFACE_SUBTLE.copy(alpha = 0.15f)
+val AccentEmerald     = PRIMARY
+val AccentEmeraldLight= PRIMARY.copy(alpha = 0.15f)
+val AccentAmber       = PRIMARY
+val AccentAmberLight  = PRIMARY.copy(alpha = 0.15f)
+val AccentRose        = NOTIFICATION_DOT
+val AccentRoseLight   = NOTIFICATION_DOT.copy(alpha = 0.15f)
+val AccentViolet      = PRIMARY
+val AccentVioletLight = PRIMARY.copy(alpha = 0.15f)
+val AccentOrange      = PRIMARY
+val AccentOrangeLight = PRIMARY.copy(alpha = 0.15f)
+val AccentCyan        = PRIMARY
+val AccentCyanLight   = PRIMARY.copy(alpha = 0.15f)
+val AccentSlate       = SURFACE_SUBTLE
 
 // ── Text ─────────────────────────────────────────────────────────
-val TextPrimary       = Color(0xFFE9EDEF)  // WhatsApp Primary text
-val TextSecondary     = Color(0xFF8696A0)  // WhatsApp Secondary text
-val TextMuted         = Color(0xFF667781)  // WhatsApp Muted text
-val TextOnAccent      = Color(0xFFFFFFFF)  // High contrast white text on accent badges
+val TextPrimary       = TEXT_PRIMARY
+val TextSecondary     = TEXT_SECONDARY
+val TextMuted         = TEXT_MUTED
+val TextOnAccent      = TEXT_ON_PRIMARY
 
 // ── Borders & Dividers ────────────────────────────────────────────
-val BorderLight       = Color(0xFF222E35)  // WhatsApp Dark border
-val BorderMedium      = Color(0xFF2F3B43)  // Dark divider
+val BorderLight       = BORDER
+val BorderMedium      = BORDER
 
-// ── Shadows (used as overlay tints) ───────────────────────────────
-val ShadowColor       = Color(0xFF020617)  // Deep dark for elevation shadows
+// ── Shadows (No drop shadows - using border strokes) ──────────────
+val ShadowColor       = Color.Transparent
 
 // ── Metric-specific palette (10 research metrics) ────────────────
-val MetricDisruptionColor    = AccentRose       // Disruption score
-val MetricNoveltyColor       = AccentViolet     // Semantic novelty
-val MetricFutureImpactColor  = AccentIndigo     // Future impact
-val MetricInfluenceColor     = AccentTeal       // Network centrality
-val MetricCreativityColor    = AccentAmber      // Creativity
-val MetricComplexityColor    = AccentCyan       // Complexity
-val MetricOpenScienceColor   = AccentEmerald    // Open science
-val MetricCollabColor        = AccentOrange     // Collaboration diversity
-val MetricConsistencyColor   = AccentSlate      // Research consistency
-val MetricPolicyColor        = Color(0xFFA78BFA)// Policy/patent score
+val MetricDisruptionColor    = PRIMARY
+val MetricNoveltyColor       = PRIMARY
+val MetricFutureImpactColor  = PRIMARY
+val MetricInfluenceColor     = PRIMARY
+val MetricCreativityColor    = PRIMARY
+val MetricComplexityColor    = PRIMARY
+val MetricOpenScienceColor   = PRIMARY
+val MetricCollabColor        = PRIMARY
+val MetricConsistencyColor   = PRIMARY
+val MetricPolicyColor        = PRIMARY
 
-// ── Gradient lists ────────────────────────────────────────────────
-val HeroGradient      = listOf(Color(0xFF00E5FF), Color(0xFF818CF8))
-val TealGradient      = listOf(AccentTeal, AccentCyan)
-val IndigoGradient    = listOf(AccentIndigo, AccentViolet)
-val WarmGradient      = listOf(AccentAmber, AccentTeal)
+// ── Gradient lists (Adapted to modern Blue system) ━━━━━━━━━━━━━━━━━━━
+val HeroGradient      = listOf(PRIMARY, PRIMARY_DARK)
+val TealGradient      = listOf(PRIMARY, PRIMARY_DARK)
+val IndigoGradient    = listOf(PRIMARY, PRIMARY_DEEPER)
+val WarmGradient      = listOf(PRIMARY, PRIMARY_DARK)
 
-// ── Legacy Aliases (keep compilation of other screens) ────────────
-// Map old dark-theme names → new light equivalents
+// ── Legacy Aliases ────────────────────────────────────────────────
 val ObsidianBlack         = BgPrimary
 val Graphite              = BgCard
 val DeepNavy              = BgElevated
@@ -69,61 +96,62 @@ val SkoLabBg              = BgPrimary
 val SkoLabSurface         = BgCard
 val SkoLabSurfaceElevated = BgElevated
 val SkoLabDivider         = BorderLight
-val SkoLabDisruption      = AccentCyan
-val SkoLabNovelty         = AccentViolet
-val SkoLabVelocity        = AccentAmber
-val SkoLabAiInsight       = AccentEmerald
-val SkoLabCitations       = AccentIndigo
-val SkoLabWarning         = AccentRose
-val SkoLabPrimary         = AccentViolet
-val SkoLabSecondary       = AccentCyan
-val SkoLabGold            = AccentAmber
+val SkoLabDisruption      = PRIMARY
+val SkoLabNovelty         = PRIMARY
+val SkoLabVelocity        = PRIMARY
+val SkoLabAiInsight       = PRIMARY
+val SkoLabCitations       = PRIMARY
+val SkoLabWarning         = NOTIFICATION_DOT
+val SkoLabPrimary         = PRIMARY
+val SkoLabSecondary       = PRIMARY
+val SkoLabGold            = PRIMARY
 val SkoLabTextPrimary     = TextPrimary
 val SkoLabTextSecondary   = TextSecondary
 val SkoLabTextMuted       = TextMuted
-val NeuralGradient        = listOf(BgPrimary, BgElevated)
-val DisruptionGlow        = listOf(AccentRose.copy(alpha = 0.08f), Color.Transparent)
-val NoveltyGlow           = listOf(AccentViolet.copy(alpha = 0.08f), Color.Transparent)
-val VelocityGlow          = listOf(AccentAmber.copy(alpha = 0.08f), Color.Transparent)
+val NeuralGradient        = listOf(BgPrimary, BgSubtle)
+val DisruptionGlow        = listOf(PRIMARY.copy(alpha = 0.08f), Color.Transparent)
+val NoveltyGlow           = listOf(PRIMARY.copy(alpha = 0.08f), Color.Transparent)
+val VelocityGlow          = listOf(PRIMARY.copy(alpha = 0.08f), Color.Transparent)
 val GlassBorder           = BorderLight
 val GlassSurface          = BgCard
 val SurfaceGlass          = BgCard
 val SurfaceGlassElevated  = BgElevated
-val MetricDisruption      = MetricDisruptionColor
-val MetricNovelty         = MetricNoveltyColor
-val MetricVelocity        = AccentAmber
+val MetricDisruption      = PRIMARY
+val MetricNovelty         = PRIMARY
+val MetricVelocity        = PRIMARY
 val DeepSpace             = BgPrimary
 val SurfaceDark           = BgCard
 val BorderColor           = BorderLight
-val ElectricCyan          = AccentTeal
+val ElectricCyan          = PRIMARY
 val MutedGray             = TextMuted
 val HighContrastWhite     = TextPrimary
-val LogicBlue             = AccentIndigo
-val PlasmaPink            = AccentViolet
-val InsightGold           = AccentAmber
-val NovaOrange            = AccentOrange
-val StellarTeal           = AccentCyan
-val DiscoveryEmerald      = AccentEmerald
-val QuantumPurple         = AccentViolet
-val ProGradientSurface    = listOf(BgCard, BgElevated)
+val LogicBlue             = PRIMARY
+val PlasmaPink            = PRIMARY
+val InsightGold           = PRIMARY
+val NovaOrange            = PRIMARY
+val StellarTeal           = PRIMARY
+val DiscoveryEmerald      = PRIMARY
+val QuantumPurple         = PRIMARY
+val ProGradientSurface    = listOf(BgCard, BgSubtle)
 val ProGradientPrimary    = TealGradient
 
+// ── EntropiColors (for PaperCollabs / Ask Skolar components) ───────────
 object EntropiColors {
     val Background = BgPrimary
-    val Card = BgPrimary
-    val Card2 = BgPrimary
-    val Border = Color(0xFF222E35)
-    val Text1 = Color(0xFFE8ECFF)
-    val Text = Color(0xFFE8ECFF)
-    val Text2 = Color(0xFF8696A0)
-    val Text3 = Color(0xFF667781)
-    val Gold1 = Color(0xFFC9A84C)
-    val Gold2 = Color(0xFFE8C76A)
-    val Blue1 = Color(0xFF00A884)
-    val Blue2 = Color(0xFF25D366)
-    val Purple1 = Color(0xFF7C3AED)
-    val Purple2 = Color(0xFF9D5FFF)
-    val Cyan = Color(0xFF00D4FF)
-    val Green = Color(0xFF25D366)
-    val Red = Color(0xFFFF4757)
+    val Card = BgCard
+    val Card2 = BgSubtle
+    val Border = BORDER
+    val Text1 = TEXT_PRIMARY
+    val Text = TEXT_PRIMARY
+    val Text2 = TEXT_SECONDARY
+    val Text3 = TEXT_MUTED
+    val Gold1 = PRIMARY
+    val Gold2 = PRIMARY_DARK
+    val Blue1 = PRIMARY
+    val Blue2 = PRIMARY_DARK
+    val Purple1 = PRIMARY
+    val Purple2 = PRIMARY_DEEPER
+    val Cyan = PRIMARY
+    val Green = PRIMARY
+    val Red = NOTIFICATION_DOT
 }

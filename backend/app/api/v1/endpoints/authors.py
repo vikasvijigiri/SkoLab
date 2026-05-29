@@ -156,7 +156,7 @@ async def fetch_similar_authors(
     openalex_service: OpenAlexService
 ) -> List[AuthorSuggestion]:
     if not query_term or query_term.lower() in ["multidisciplinary", "researcher", "general research"]:
-        query_term = "physics"
+        return []
 
     try:
         results = await openalex_service.search_authors(query_term, per_page=8)
@@ -369,8 +369,6 @@ async def search_author(
     openalex_service: OpenAlexService = Depends(get_openalex_service)
 ):
     print(f"[search_author] name='{name}', id='{id}'", flush=True)
-    if name.strip().lower() in ["vikas", "user_vikas"]:
-        name = "Vikas Vijigiri"
     clean_id = id.split("/")[-1] if id else None
     cache_key = f"id:{clean_id}" if clean_id else name.strip().lower()
 

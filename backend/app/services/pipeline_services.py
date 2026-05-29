@@ -87,31 +87,21 @@ class PipelineServices:
             except Exception as e:
                 print(f"[Firestore Cache Error] daily_feeds lookup failed: {e}", flush=True)
 
-        if not author_id and not query_fallback:
-            raise ValueError("No author ID or query fallback provided for daily feed generation.")
-
         concepts = []
         author_name = "Researcher"
+        search_term = query_fallback or "research"
         if author_id:
             profile = await self._fetch_author_profile(author_id)
-            if not profile:
-                raise ValueError(f"Author with ID '{author_id}' not found on OpenAlex.")
+            if profile:
+                author_name = profile.get("display_name", "Researcher")
+                concepts_list = profile.get("x_concepts", [])
+                concepts = [c.get("display_name") for c in concepts_list if c.get("level") in [1, 2]]
+                if not concepts:
+                    concepts = [c.get("display_name") for c in concepts_list[:3]]
 
-            author_name = profile.get("display_name", "Researcher")
-            concepts_list = profile.get("x_concepts", [])
-            concepts = [c.get("display_name") for c in concepts_list if c.get("level") in [1, 2]]
-            if not concepts:
-                concepts = [c.get("display_name") for c in concepts_list[:3]]
-
-            if not concepts:
-                raise ValueError(f"No research concepts associated with researcher profile '{author_name}'.")
-
-            # Search recent papers from OpenAlex
-            search_term = " OR ".join([f'"{c}"' for c in concepts[:3]])
-        elif query_fallback:
-            search_term = query_fallback
-        else:
-            search_term = "science"
+                if concepts:
+                    # Search recent papers from OpenAlex
+                    search_term = " OR ".join([f'"{c}"' for c in concepts[:3]])
 
 
         papers = []
@@ -129,7 +119,8 @@ class PipelineServices:
             raise e
 
         if not papers:
-            raise ValueError(f"No matching publications found for research concepts: {', '.join(concepts[:3])}")
+            print(f"[DailyFeed] No matching publications found for search_term='{search_term}'", flush=True)
+            return []
 
         feed_items = []
         for i, paper in enumerate(papers[:3]):

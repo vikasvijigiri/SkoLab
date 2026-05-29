@@ -102,7 +102,7 @@ fun ScoreArcMeter(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = (score * 100).toInt().toString(),
-                color = Color.White,
+                color = com.open.skolab.ui.theme.TextPrimary,
                 fontSize = (size.value * 0.25).sp,
                 fontFamily = MonoFontFamily,
                 fontWeight = FontWeight.Bold

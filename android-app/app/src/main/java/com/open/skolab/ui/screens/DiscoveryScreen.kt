@@ -90,24 +90,13 @@ fun DiscoveryScreen(
     val authManager = remember { AuthManager(context) }
     val cachedUser by authManager.cachedUser.collectAsState(initial = null)
 
-    val userName = if (!cachedUser?.name.isNullOrBlank()) cachedUser?.name!! else "Vikas Vijigiri"
-    val researchFocus = if (!cachedUser?.researchFocus.isNullOrBlank() && cachedUser?.researchFocus != "Researcher" && cachedUser?.researchFocus != "General Research") cachedUser?.researchFocus!! else "Physics"
-
-    LaunchedEffect(cachedUser) {
-        val name = if (!cachedUser?.name.isNullOrBlank()) cachedUser?.name!! else "Vikas Vijigiri"
-        if (cachedUser != null && (cachedUser?.researchFocus.isNullOrBlank() || cachedUser?.researchFocus == "General Research" || cachedUser?.researchFocus == "Researcher")) {
-            scope.launch {
-                try {
-                    val profile = apiService.searchAuthor(name)
-                    if (profile != null) {
-                        val focus = profile.field_of_study ?: profile.expertise.firstOrNull() ?: "Physics"
-                        authManager.updateUserResearchFocus(focus)
-                    }
-                } catch (e: Exception) {
-                    Log.e("DiscoveryScreen", "Failed to auto-update focus", e)
-                }
-            }
-        }
+    val userName = if (!cachedUser?.name.isNullOrBlank()) cachedUser?.name!! else "SkoLab User"
+    val researchFocus = if (!cachedUser?.researchFocus.isNullOrBlank() && 
+        cachedUser?.researchFocus != "Researcher" && 
+        cachedUser?.researchFocus != "General Research") {
+        cachedUser?.researchFocus!!
+    } else {
+        ""
     }
 
     var authorQuery by remember { mutableStateOf("") }
@@ -133,6 +122,13 @@ fun DiscoveryScreen(
     var isLoadingPeers by remember { mutableStateOf(false) }
 
     LaunchedEffect(researchFocus) {
+        if (researchFocus.isBlank()) {
+            suggestedPeers = emptyList()
+            suggestedPeersArticles = emptyList()
+            collaboratorsArticles = emptyList()
+            isLoadingPeers = false
+            return@LaunchedEffect
+        }
         isLoadingPeers = true
         try {
             val peers = apiService.getSimilarAuthors(researchFocus, limit = 5)

@@ -9,4 +9,9 @@ data class SkoLabUser(
     val savedPapers: List<String> = emptyList(),
     val isOnline: Boolean = false,
     val emailVerified: Boolean = false
-)
+) {
+    val firstName: String
+        get() = name.trim().split("\\s+".toRegex()).firstOrNull()?.replaceFirstChar { 
+            if (it.isLowerCase()) it.titlecase(java.util.Locale.US) else it.toString() 
+        }?.ifBlank { "User" } ?: "User"
+}

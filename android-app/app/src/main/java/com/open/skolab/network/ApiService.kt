@@ -547,11 +547,7 @@ class ApiService {
     }
 
     suspend fun searchAuthor(name: String, id: String? = null, forceRefresh: Boolean = false): AuthorResponse? {
-        val mappedName = if (name.trim().equals("vikas", ignoreCase = true) || name.trim().equals("user_vikas", ignoreCase = true)) {
-            "Vikas Vijigiri"
-        } else {
-            name
-        }
+        val mappedName = name
         val base = baseUrl()
         if (base == null) {
             Log.i(tag, "searchAuthor: backend base URL is null. Querying OpenAlex directly...")
@@ -566,7 +562,16 @@ class ApiService {
             val bodyText = response.bodyAsText()
             Log.d(tag, "searchAuthor raw body: $bodyText")
             val decoded: AuthorResponse = lenientJson.decodeFromString(bodyText)
-            return decoded
+            val sanitizedExpertise = decoded.expertise.filter { !it.contains("psychology", ignoreCase = true) }
+            val sanitizedField = if (decoded.field_of_study?.contains("psychology", ignoreCase = true) == true) {
+                null
+            } else {
+                decoded.field_of_study
+            }
+            return decoded.copy(
+                field_of_study = sanitizedField,
+                expertise = sanitizedExpertise
+            )
         } catch (e: Exception) {
             Log.e(tag, "searchAuthor backend failed, falling back to direct OpenAlex query", e)
             try {
@@ -583,11 +588,7 @@ class ApiService {
      * Returns real data (name, institution, works) with metrics_computed=false.
      */
     private suspend fun fetchAuthorFromOpenAlex(name: String, id: String? = null): AuthorResponse? {
-        val mappedName = if (name.trim().equals("vikas", ignoreCase = true) || name.trim().equals("user_vikas", ignoreCase = true)) {
-            "Vikas Vijigiri"
-        } else {
-            name
-        }
+        val mappedName = name
         return try {
             val authorData = if (id != null) {
                 val cleanId = id.substringAfterLast("/")
@@ -601,6 +602,21 @@ class ApiService {
                     parameter("mailto", "vikki.4me@gmail.com")
                 }.body<OpenAlexAuthorsResponse>()
                 val first = resp.results.firstOrNull() ?: return null
+                
+                // Name Mismatch Collision Check
+                // Ensure the returned author name contains all distinct long tokens of the search query
+                val queryTokens = mappedName.lowercase().split(" ").map { it.trim() }.filter { it.length > 2 }
+                val returnedNameLower = (first.display_name ?: "").lowercase()
+                val matchValid = if (queryTokens.isNotEmpty()) {
+                    queryTokens.all { returnedNameLower.contains(it) }
+                } else {
+                    true
+                }
+                
+                if (!matchValid) {
+                    Log.i(tag, "fetchAuthorFromOpenAlex: Name mismatch collision! Queried: $mappedName, Returned: ${first.display_name}. Ignoring profile.")
+                    return null
+                }
                 // Re-fetch full detail by ID for complete data
                 val cleanId = first.id.substringAfterLast("/")
                 httpClient.get("https://api.openalex.org/authors/$cleanId") {
@@ -624,10 +640,12 @@ class ApiService {
 
             val institution = authorData.last_known_institutions?.firstOrNull()?.display_name
                 ?: "Independent Researcher"
-            val concepts = authorData.x_concepts ?: emptyList()
-            val fieldOfStudy = concepts.firstOrNull { it.level == 1 }?.display_name
+            val concepts = (authorData.x_concepts ?: emptyList()).filter { 
+                !it.display_name.isNullOrBlank() && !it.display_name.contains("psychology", ignoreCase = true)
+            }
+            val rawField = concepts.firstOrNull { it.level == 1 }?.display_name
                 ?: concepts.firstOrNull()?.display_name
-                ?: "Multidisciplinary"
+            val fieldOfStudy = if (rawField?.contains("psychology", ignoreCase = true) == true) null else rawField
             val expertise = concepts.filter { it.level in listOf(1, 2) }.take(6).mapNotNull { it.display_name }
 
             // Build affiliations history from OpenAlex affiliations

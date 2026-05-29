@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -73,6 +74,7 @@ import com.open.skolab.ui.screens.LogicEngineScreen
 import com.open.skolab.ui.screens.ProWorkspaceScreen
 import com.open.skolab.ui.screens.DailyDiscoveryScreen
 import com.open.skolab.ui.screens.CoLabWorkspaceScreen
+import com.open.skolab.ui.screens.ProfileSetupScreen
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.foundation.layout.ime
@@ -84,15 +86,37 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.focus.onFocusChanged
+import com.open.skolab.ui.components.primitives.GlassSearchBar
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT)
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.parseColor("#0D2E6B")),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.parseColor("#0D2E6B"))
         )
         super.onCreate(savedInstanceState)
+
+        // Remove and disable Firestore offline cache/persistence globally
+        try {
+            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val settings = com.google.firebase.firestore.FirebaseFirestoreSettings.Builder()
+                .setLocalCacheSettings(com.google.firebase.firestore.memoryCacheSettings {})
+                .build()
+            db.firestoreSettings = settings
+            db.clearPersistence()
+            android.util.Log.i("MainActivity", "Firestore offline cache successfully disabled & cleared.")
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Failed to disable Firestore persistence", e)
+        }
+
         setContent {
             SkoLabTheme {
                 SkoLabMainApp()
@@ -110,6 +134,15 @@ fun SkoLabMainApp() {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+
+    var searchQuery by remember { mutableStateOf("") }
+    var isSearchActive by remember { mutableStateOf(false) }
+    val cachedUser by authManager.cachedUser.collectAsStateWithLifecycle(initialValue = null)
+
+    androidx.activity.compose.BackHandler(enabled = isSearchActive) {
+        isSearchActive = false
+        searchQuery = ""
+    }
 
     val hasSeenOnboardingState by userPrefs.hasSeenOnboarding.collectAsStateWithLifecycle(initialValue = null)
     var isFeedLoading by remember { mutableStateOf(true) }
@@ -142,13 +175,13 @@ fun SkoLabMainApp() {
         }
     }
 
-    val mainTabs = listOf("discover", "collabs", "agent", "metrics", "industry")
+    val mainTabs = listOf("discover", "collabs", "agent", "industry", "collabs_ws")
     val dockItems = listOf(
-        DockItem(route = "discover", icon = Icons.Filled.Hub, label = "Home", badgeCount = 1),
-        DockItem(route = "collabs", icon = Icons.Filled.Groups, label = "Collabs", hasBadgeDot = true),
-        DockItem(route = "agent", drawableResId = com.open.skolab.R.drawable.logo, label = "Ask Skolar"),
-        DockItem(route = "metrics", icon = Icons.Filled.AutoGraph, label = "Metrics"),
-        DockItem(route = "industry", icon = Icons.Filled.BusinessCenter, label = "Industry")
+        DockItem(route = "discover", icon = Icons.Filled.Hub, label = "Pulse", badgeCount = 1),
+        DockItem(route = "collabs", icon = Icons.Filled.Groups, label = "Orbit", hasBadgeDot = true),
+        DockItem(route = "agent", drawableResId = com.open.skolab.R.drawable.logo, label = "Skolar"),
+        DockItem(route = "industry", icon = Icons.Filled.BusinessCenter, label = "Launchpad"),
+        DockItem(route = "collabs_ws", icon = Icons.Filled.Groups, label = "Collabs")
     )
 
     SkoLabScaffold { innerPadding ->
@@ -187,6 +220,21 @@ fun SkoLabMainApp() {
             Box(modifier = Modifier.weight(1f)) {
                 Scaffold(
                     containerColor = Color.Transparent,
+                    topBar = {
+                        val showTopBar = currentRoute in mainTabs
+                        if (showTopBar) {
+                            CommonTopBar(
+                                searchQuery = searchQuery,
+                                onSearchQueryChange = { searchQuery = it },
+                                isSearchActive = isSearchActive,
+                                onSearchActiveChange = { isSearchActive = it },
+                                onProfileClick = {
+                                    navController.navigate("profile")
+                                },
+                                cachedUser = cachedUser
+                            )
+                        }
+                    },
                     bottomBar = {
                         val showBottomBar = currentRoute in mainTabs
                         if (showBottomBar) {
@@ -210,11 +258,12 @@ fun SkoLabMainApp() {
                         }
                     }
                 ) { scaffoldPadding ->
-                    NavHost(
-                navController = navController,
-                startDestination = "splash",
-                modifier = Modifier.fillMaxSize()
-            ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        NavHost(
+                            navController = navController,
+                            startDestination = "splash",
+                            modifier = Modifier.fillMaxSize()
+                        ) {
                 composable(
                     route = "splash",
                     exitTransition = {
@@ -280,8 +329,29 @@ fun SkoLabMainApp() {
                     ) {
                         AuthScreen(
                             onAuthSuccess = {
-                                navController.navigate("discover") {
+                                navController.navigate("profile_setup") {
                                     popUpTo("auth") { inclusive = true }
+                                }
+                            }
+                        )
+                    }
+                }
+                composable(
+                    route = "profile_setup",
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                    }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .screenSafeArea(includeBottom = true)
+                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
+                    ) {
+                        ProfileSetupScreen(
+                            onSetupComplete = {
+                                navController.navigate("discover") {
+                                    popUpTo("profile_setup") { inclusive = true }
                                 }
                             }
                         )
@@ -296,7 +366,7 @@ fun SkoLabMainApp() {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .screenSafeArea(includeBottom = false)
+                            .padding(top = scaffoldPadding.calculateTopPadding())
                             .padding(bottom = ScreenInsets.bottomNavClearance)
                     ) {
                         FeedScreen(
@@ -344,7 +414,7 @@ fun SkoLabMainApp() {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .screenSafeArea(includeBottom = false)
+                            .padding(top = scaffoldPadding.calculateTopPadding())
                             .padding(bottom = ScreenInsets.bottomNavClearance)
                     ) {
                         PapersScreen(
@@ -379,7 +449,7 @@ fun SkoLabMainApp() {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .screenSafeArea(includeBottom = false)
+                            .padding(top = scaffoldPadding.calculateTopPadding())
                             .padding(bottom = bottomPadding)
                     ) {
                         AgentScreen()
@@ -394,7 +464,7 @@ fun SkoLabMainApp() {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .screenSafeArea(includeBottom = false)
+                            .padding(top = scaffoldPadding.calculateTopPadding())
                             .padding(bottom = ScreenInsets.bottomNavClearance)
                     ) {
                         com.open.skolab.ui.screens.IndustryScreen(
@@ -454,11 +524,48 @@ fun SkoLabMainApp() {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .screenSafeArea(includeBottom = false)
+                            .padding(top = scaffoldPadding.calculateTopPadding())
                             .padding(bottom = ScreenInsets.bottomNavClearance)
                     ) {
                         PaperCollabsScreen(
                             savedStateHandle = backStackEntry.savedStateHandle,
+                            startTab = "orbit_network",
+                            onNavigateToChat = { peerName, peerId ->
+                                navController.navigate("chat/${peerName.encodeForRoute()}/${peerId.encodeForRoute()}")
+                            },
+                            onNavigateToWorkspace = { projectName ->
+                                navController.navigate("colab_workspace/${projectName.encodeForRoute()}")
+                            },
+                            onNavigateToCreateProject = {
+                                navController.navigate("create_project")
+                            },
+                            onNavigateToInviteMember = { projectId ->
+                                navController.navigate("invite_member/${projectId.encodeForRoute()}")
+                            },
+                            onNavigateToCreateTask = { projectId ->
+                                navController.navigate("create_task/${projectId.encodeForRoute()}")
+                            },
+                            onNavigateToExternalInvite = { collaboratorName ->
+                                navController.navigate("external_invite/${collaboratorName.encodeForRoute()}")
+                            }
+                        )
+                    }
+                }
+                composable(
+                    route = "collabs_ws",
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                    }
+                ) { backStackEntry ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = scaffoldPadding.calculateTopPadding())
+                            .padding(bottom = ScreenInsets.bottomNavClearance)
+                    ) {
+                        PaperCollabsScreen(
+                            savedStateHandle = backStackEntry.savedStateHandle,
+                            startTab = "workspaces",
                             onNavigateToChat = { peerName, peerId ->
                                 navController.navigate("chat/${peerName.encodeForRoute()}/${peerId.encodeForRoute()}")
                             },
@@ -750,7 +857,141 @@ fun SkoLabMainApp() {
                     }
                 }
                     }
+
+                    // Search Results Overlay
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = isSearchActive,
+                        enter = androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(300)) + androidx.compose.animation.slideInVertically(initialOffsetY = { -40 }, animationSpec = androidx.compose.animation.core.tween(300)),
+                        exit = androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(250)) + androidx.compose.animation.slideOutVertically(targetOffsetY = { -40 }, animationSpec = androidx.compose.animation.core.tween(250))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(com.open.skolab.ui.theme.BgPrimary)
+                                .padding(top = scaffoldPadding.calculateTopPadding())
+                                .padding(bottom = if (currentRoute in mainTabs) ScreenInsets.bottomNavClearance else 0.dp)
+                        ) {
+                            SearchScreen(
+                                onPaperClick = { paperId ->
+                                    isSearchActive = false
+                                    searchQuery = ""
+                                    navController.navigate("paper_detail/${paperId.encodeForRoute()}")
+                                },
+                                onAuthorClick = { authorName ->
+                                    isSearchActive = false
+                                    searchQuery = ""
+                                    navController.navigate("author_detail/${authorName.encodeForRoute()}")
+                                },
+                                searchQuery = searchQuery,
+                                showSearchBar = false
+                            )
+                        }
+                    }
                 }
+            }
+        }
+    }
+}
+}
+
+
+
+@Composable
+fun CommonTopBar(
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    isSearchActive: Boolean,
+    onSearchActiveChange: (Boolean) -> Unit,
+    onProfileClick: () -> Unit,
+    cachedUser: com.open.skolab.model.SkoLabUser?
+) {
+    androidx.compose.material3.Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = com.open.skolab.ui.theme.BgPrimary.copy(alpha = 0.92f),
+        tonalElevation = 0.dp
+    ) {
+        androidx.compose.foundation.layout.Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)
+        ) {
+            if (isSearchActive) {
+                androidx.compose.material3.IconButton(
+                    onClick = {
+                        onSearchQueryChange("")
+                        onSearchActiveChange(false)
+                    },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    androidx.compose.material3.Icon(
+                        imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Exit Search",
+                        tint = com.open.skolab.ui.theme.TextSecondary
+                    )
+                }
+            }
+
+            // Wider search bar taking up all remaining horizontal space
+            com.open.skolab.ui.components.primitives.GlassSearchBar(
+                value = searchQuery,
+                onValueChange = {
+                    onSearchQueryChange(it)
+                    if (it.isNotEmpty()) {
+                        onSearchActiveChange(true)
+                    }
+                },
+                placeholder = "Search papers, profiles, topics...",
+                onClear = {
+                    onSearchQueryChange("")
+                    onSearchActiveChange(false)
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .onFocusChanged { focusState ->
+                        if (focusState.isFocused) {
+                            onSearchActiveChange(true)
+                        }
+                    }
+            )
+
+            // User Profile Avatar
+            val initials = remember(cachedUser?.name) {
+                (cachedUser?.name ?: "SkoLab User").split(" ")
+                    .filter { it.isNotEmpty() }
+                    .take(2)
+                    .map { it.first() }
+                    .joinToString("")
+                    .uppercase()
+            }
+
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(
+                        androidx.compose.ui.graphics.Brush.sweepGradient(
+                            colors = listOf(
+                                com.open.skolab.ui.theme.AccentAmber,
+                                com.open.skolab.ui.theme.AccentTeal,
+                                com.open.skolab.ui.theme.AccentAmber
+                            )
+                        )
+                    )
+                    .clickable { onProfileClick() }
+                    .padding(1.5.dp)
+                    .background(com.open.skolab.ui.theme.BgPrimary, androidx.compose.foundation.shape.CircleShape),
+                contentAlignment = androidx.compose.ui.Alignment.Center
+            ) {
+                androidx.compose.material3.Text(
+                    text = initials,
+                    color = com.open.skolab.ui.theme.AccentAmber,
+                    fontFamily = com.open.skolab.ui.theme.SpaceGroteskFontFamily,
+                    fontSize = 13.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                )
             }
         }
     }
