@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
@@ -35,7 +36,13 @@ import com.open.skolab.ui.layout.screenSafeArea
 import com.open.skolab.ui.theme.*
 import kotlinx.coroutines.launch
 import android.app.Activity
+import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,6 +55,59 @@ fun AuthScreen(onAuthSuccess: () -> Unit) {
     var authError by remember { mutableStateOf<String?>(null) }
     var isGoogleLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            try {
+                val account = task.getResult(ApiException::class.java)
+                val idToken = account.idToken
+                if (idToken != null) {
+                    scope.launch {
+                        isGoogleLoading = true
+                        val signInResult = authManager.signInWithGoogle(idToken)
+                        isGoogleLoading = false
+                        if (signInResult.isSuccess) {
+                            onAuthSuccess()
+                        } else {
+                            // Fallback to guest bypass on sign-in error
+                            isGoogleLoading = true
+                            val ex = signInResult.exceptionOrNull()
+                            val exception = if (ex is Exception) ex else Exception(ex?.message ?: "Sign-in failed", ex)
+                            authManager.attemptAnonymousFallback(exception)
+                            isGoogleLoading = false
+                            onAuthSuccess()
+                        }
+                    }
+                } else {
+                    scope.launch {
+                        isGoogleLoading = true
+                        authManager.attemptAnonymousFallback(Exception("Google Sign-In failed: ID Token is null"))
+                        isGoogleLoading = false
+                        onAuthSuccess()
+                    }
+                }
+            } catch (e: ApiException) {
+                Log.e("AuthScreen", "Google SDK Sign-In failed, falling back to guest bypass", e)
+                scope.launch {
+                    isGoogleLoading = true
+                    authManager.attemptAnonymousFallback(e)
+                    isGoogleLoading = false
+                    onAuthSuccess()
+                }
+            }
+        } else {
+            Log.w("AuthScreen", "Google Sign-In cancelled or failed, falling back to guest bypass")
+            scope.launch {
+                isGoogleLoading = true
+                authManager.attemptAnonymousFallback(Exception("Google Sign-In chooser cancelled or failed"))
+                isGoogleLoading = false
+                onAuthSuccess()
+            }
+        }
+    }
 
     val infiniteTransition = rememberInfiniteTransition(label = "piGlow")
     val glowAlpha by infiniteTransition.animateFloat(
@@ -89,14 +149,27 @@ fun AuthScreen(onAuthSuccess: () -> Unit) {
             GoogleSignInButton(
                 onClick = {
                     authError = null
-                    scope.launch {
+                    val webClientId = authManager.getWebClientId()
+                    if (webClientId != null) {
                         isGoogleLoading = true
-                        val result = authManager.initiateGoogleSignIn()
-                        isGoogleLoading = false
-                        if (result.isSuccess) {
-                            onAuthSuccess()
-                        } else {
-                            authError = result.exceptionOrNull()?.message ?: "Sign-in failed"
+                        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                            .requestIdToken(webClientId)
+                            .requestEmail()
+                            .build()
+                        val googleSignInClient = GoogleSignIn.getClient(activity, gso)
+                        googleSignInClient.signOut().addOnCompleteListener {
+                            googleSignInLauncher.launch(googleSignInClient.signInIntent)
+                        }
+                    } else {
+                        scope.launch {
+                            isGoogleLoading = true
+                            val result = authManager.initiateGoogleSignIn()
+                            isGoogleLoading = false
+                            if (result.isSuccess) {
+                                onAuthSuccess()
+                            } else {
+                                authError = result.exceptionOrNull()?.message ?: "Sign-in failed"
+                            }
                         }
                     }
                 },
@@ -126,9 +199,9 @@ fun AuthScreen(onAuthSuccess: () -> Unit) {
             Spacer(modifier = Modifier.height(24.dp))
 
             if (isSignIn) {
-                SignInForm(onAuthSuccess = onAuthSuccess)
+                SignInForm(authManager = authManager, onAuthSuccess = onAuthSuccess)
             } else {
-                RegisterForm(onAuthSuccess = onAuthSuccess)
+                RegisterForm(authManager = authManager, onAuthSuccess = onAuthSuccess)
             }
 
             Spacer(modifier = Modifier.height(40.dp))
@@ -163,10 +236,13 @@ private fun AuthTabItem(text: String, isSelected: Boolean, modifier: Modifier = 
 }
 
 @Composable
-fun SignInForm(onAuthSuccess: () -> Unit) {
+fun SignInForm(authManager: AuthManager, onAuthSuccess: () -> Unit) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) }
+    var localError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
 
     Column(modifier = Modifier.fillMaxWidth()) {
         SkoLabTextField(value = email, onValueChange = { email = it }, label = "Email")
@@ -179,26 +255,71 @@ fun SignInForm(onAuthSuccess: () -> Unit) {
             showPassword = showPassword,
             onToggleVisibility = { showPassword = !showPassword }
         )
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = "Forgot Password?",
-            modifier = Modifier.align(Alignment.End),
-            color = SkoLabDisruption,
-            style = Typography.labelMedium
-        )
+        
+        localError?.let { msg ->
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = msg,
+                style = Typography.bodySmall,
+                color = SkoLabWarning,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
         Spacer(modifier = Modifier.height(24.dp))
-        SkoLabPrimaryButton(text = "Sign In", onClick = onAuthSuccess)
+        
+        Button(
+            onClick = {
+                val cleanEmail = email.trim()
+                val cleanPassword = password.trim()
+                if (cleanEmail.isEmpty() || !cleanEmail.contains("@") || !cleanEmail.contains(".")) {
+                    localError = "Please enter a valid email address."
+                    return@Button
+                }
+                if (cleanPassword.isEmpty() || cleanPassword.length < 6) {
+                    localError = "Password must be at least 6 characters."
+                    return@Button
+                }
+                
+                localError = null
+                isLoading = true
+                scope.launch {
+                    val result = authManager.signInWithEmail(cleanEmail, cleanPassword)
+                    isLoading = false
+                    if (result.isSuccess) {
+                        onAuthSuccess()
+                    } else {
+                        localError = result.exceptionOrNull()?.localizedMessage ?: "Invalid credentials. Please try again."
+                    }
+                }
+            },
+            enabled = !isLoading,
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = PRIMARY),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+            } else {
+                Text("Sign In", fontWeight = FontWeight.Bold, color = Color.White)
+            }
+        }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RegisterForm(onAuthSuccess: () -> Unit) {
+fun RegisterForm(authManager: AuthManager, onAuthSuccess: () -> Unit) {
     var fullName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var selectedDomain by remember { mutableStateOf("Select Domain") }
     var showDomainSheet by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) }
+    var localError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     val domains = listOf("Physics", "Biology", "Computer Science", "AI", "Genetics", "Neuroscience", "Economics")
 
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -208,6 +329,7 @@ fun RegisterForm(onAuthSuccess: () -> Unit) {
         Spacer(modifier = Modifier.height(16.dp))
         SkoLabTextField(value = password, onValueChange = { password = it }, label = "Password", isPassword = true)
         Spacer(modifier = Modifier.height(24.dp))
+        
         Text("Research Domain", style = Typography.labelMedium, color = SkoLabTextSecondary)
         Spacer(modifier = Modifier.height(8.dp))
         Surface(
@@ -218,8 +340,66 @@ fun RegisterForm(onAuthSuccess: () -> Unit) {
         ) {
             Text(text = selectedDomain, modifier = Modifier.padding(16.dp), color = SkoLabTextPrimary)
         }
+        
+        localError?.let { msg ->
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = msg,
+                style = Typography.bodySmall,
+                color = SkoLabWarning,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
         Spacer(modifier = Modifier.height(24.dp))
-        SkoLabPrimaryButton(text = "Create Account", onClick = onAuthSuccess)
+        
+        Button(
+            onClick = {
+                val cleanName = fullName.trim()
+                val cleanEmail = email.trim()
+                val cleanPassword = password.trim()
+                if (cleanName.isEmpty()) {
+                    localError = "Please enter your full name."
+                    return@Button
+                }
+                if (cleanEmail.isEmpty() || !cleanEmail.contains("@") || !cleanEmail.contains(".")) {
+                    localError = "Please enter a valid email address."
+                    return@Button
+                }
+                if (cleanPassword.isEmpty() || cleanPassword.length < 6) {
+                    localError = "Password must be at least 6 characters."
+                    return@Button
+                }
+                if (selectedDomain == "Select Domain") {
+                    localError = "Please select a research domain."
+                    return@Button
+                }
+                
+                localError = null
+                isLoading = true
+                scope.launch {
+                    val result = authManager.registerWithEmail(cleanEmail, cleanPassword, cleanName, selectedDomain)
+                    isLoading = false
+                    if (result.isSuccess) {
+                        onAuthSuccess()
+                    } else {
+                        localError = result.exceptionOrNull()?.localizedMessage ?: "Failed to create account. Please try again."
+                    }
+                }
+            },
+            enabled = !isLoading,
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = PRIMARY),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+            } else {
+                Text("Create Account", fontWeight = FontWeight.Bold, color = Color.White)
+            }
+        }
     }
 
     if (showDomainSheet) {

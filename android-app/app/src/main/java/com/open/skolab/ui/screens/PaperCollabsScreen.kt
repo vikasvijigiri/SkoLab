@@ -1261,7 +1261,7 @@ fun RelationshipOrbitCanvas() {
             )
         }
 
-        // Center Node: Vikas Vijigiri (You)
+        // Center Node: Active User (You)
         drawCircle(
             color = PRIMARY.copy(alpha = 0.15f * pulseScale),
             radius = 32.dp.toPx(),

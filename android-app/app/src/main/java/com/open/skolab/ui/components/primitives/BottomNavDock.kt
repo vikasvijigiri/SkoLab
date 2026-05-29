@@ -85,7 +85,7 @@ fun BottomNavDock(
                     .height(56.dp)
                     .padding(top = 4.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 items.forEach { item ->
                     val selected = currentRoute == item.route
@@ -107,7 +107,7 @@ fun BottomNavDock(
                             }
                             .semantics { contentDescription = item.label },
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Top
+                        verticalArrangement = Arrangement.Center
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Box {
@@ -153,7 +153,7 @@ fun BottomNavDock(
                                 }
                             }
                         }
-                    androidx.compose.foundation.layout.Spacer(Modifier.height(4.dp))
+                    androidx.compose.foundation.layout.Spacer(Modifier.height(1.dp))
                     Text(
                         text = item.label,
                         fontSize = 11.sp,

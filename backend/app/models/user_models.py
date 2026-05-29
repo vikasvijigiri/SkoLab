@@ -6,7 +6,7 @@ from app.db.database import Base
 class User(Base):
     __tablename__ = "users"
     
-    id = Column(String, primary_key=True, index=True) # e.g. "vikas_uid"
+    id = Column(String, primary_key=True, index=True) # e.g. "user_uid"
     openalex_id = Column(String, index=True, nullable=True) # e.g. "A5020214245"
     display_name = Column(String, nullable=False)
     email = Column(String, nullable=True)

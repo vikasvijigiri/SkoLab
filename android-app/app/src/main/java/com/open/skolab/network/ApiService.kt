@@ -530,7 +530,7 @@ class ApiService {
             val response: OpenAlexAuthorsResponse = httpClient.get("https://api.openalex.org/authors") {
                 parameter("search", query)
                 parameter("per_page", 10)
-                parameter("mailto", "vikki.4me@gmail.com")
+                parameter("mailto", "support@skolab.open")
             }.body()
             
             response.results.map { author ->
@@ -593,13 +593,13 @@ class ApiService {
             val authorData = if (id != null) {
                 val cleanId = id.substringAfterLast("/")
                 httpClient.get("https://api.openalex.org/authors/$cleanId") {
-                    parameter("mailto", "vikki.4me@gmail.com")
+                    parameter("mailto", "support@skolab.open")
                 }.body<OpenAlexAuthorDetail>()
             } else {
                 val resp = httpClient.get("https://api.openalex.org/authors") {
                     parameter("search", mappedName)
                     parameter("per_page", 1)
-                    parameter("mailto", "vikki.4me@gmail.com")
+                    parameter("mailto", "support@skolab.open")
                 }.body<OpenAlexAuthorsResponse>()
                 val first = resp.results.firstOrNull() ?: return null
                 
@@ -620,7 +620,7 @@ class ApiService {
                 // Re-fetch full detail by ID for complete data
                 val cleanId = first.id.substringAfterLast("/")
                 httpClient.get("https://api.openalex.org/authors/$cleanId") {
-                    parameter("mailto", "vikki.4me@gmail.com")
+                    parameter("mailto", "support@skolab.open")
                 }.body()
             }
 
@@ -631,7 +631,7 @@ class ApiService {
                     parameter("filter", "authorships.author.id:$cleanId")
                     parameter("per_page", 20)
                     parameter("sort", "publication_year:desc")
-                    parameter("mailto", "vikki.4me@gmail.com")
+                    parameter("mailto", "support@skolab.open")
                 }.body<OpenAlexResponse>()
             } catch (e: Exception) {
                 Log.w(tag, "fetchAuthorFromOpenAlex: works fetch failed", e)
@@ -836,7 +836,7 @@ class ApiService {
                     parameter("sort", "cited_by_count:desc")
                 }
                 parameter("per_page", limit)
-                parameter("mailto", "vikki.4me@gmail.com")
+                parameter("mailto", "support@skolab.open")
             }.body()
             response.results
         } catch (e: Exception) {
@@ -856,7 +856,7 @@ class ApiService {
                 parameter("filter", "authorships.author.id:$cleanId")
                 parameter("per_page", limit)
                 parameter("sort", "publication_year:desc,cited_by_count:desc")
-                parameter("mailto", "vikki.4me@gmail.com")
+                parameter("mailto", "support@skolab.open")
             }.body()
                     response.results
         } catch (e: Exception) {
@@ -930,7 +930,7 @@ class ApiService {
             val authorResponse: OpenAlexAuthorsResponse = httpClient.get("https://api.openalex.org/authors") {
                 parameter("search", query)
                 parameter("per_page", limit + 10)
-                parameter("mailto", "vikki.4me@gmail.com")
+                parameter("mailto", "support@skolab.open")
             }.body()
             
             for (author in authorResponse.results) {
@@ -953,7 +953,7 @@ class ApiService {
                 val worksResponse: OpenAlexResponse = httpClient.get("https://api.openalex.org/works") {
                     parameter("search", query)
                     parameter("per_page", 20)
-                    parameter("mailto", "vikki.4me@gmail.com")
+                    parameter("mailto", "support@skolab.open")
                 }.body()
                 
                 val seenIds = suggestions.map { it.id }.toMutableSet()
@@ -1075,7 +1075,7 @@ class ApiService {
             val worksResponse = httpClient.get(worksUrl) {
                 parameter("filter", "authorships.author.id:$cleanId")
                 parameter("per_page", 50)
-                parameter("mailto", "vikki.4me@gmail.com")
+                parameter("mailto", "support@skolab.open")
             }.body<OpenAlexResponse>()
 
             val excludeSet = (excludeIds.map { it.substringAfterLast("/") } + cleanId).toSet()
@@ -1130,7 +1130,7 @@ class ApiService {
                             httpClient.get(worksUrl) {
                                 parameter("filter", "authorships.author.id:$d1CleanId")
                                 parameter("per_page", 15)
-                                parameter("mailto", "vikki.4me@gmail.com")
+                                parameter("mailto", "support@skolab.open")
                             }.body<OpenAlexResponse>().results
                         } catch (e: Exception) {
                             emptyList()
@@ -1190,7 +1190,7 @@ class ApiService {
                             httpClient.get("https://api.openalex.org/authors") {
                                 parameter("filter", filterVal)
                                 parameter("per_page", 50)
-                                parameter("mailto", "vikki.4me@gmail.com")
+                                parameter("mailto", "support@skolab.open")
                             }.body<OpenAlexAuthorsResponse>().results
                         } catch (e: Exception) {
                             emptyList()

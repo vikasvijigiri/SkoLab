@@ -18,7 +18,7 @@ def fetch_author_and_works(author_name, max_works=50):
     params = {
         "search": author_name,
         "per_page": 1,
-        "mailto": "vikki.4me@gmail.com"
+        "mailto": "support@skolab.open"
     }
 
     res = requests.get(author_url, params=params)
@@ -97,4 +97,4 @@ def fetch_author_and_works(author_name, max_works=50):
 # RUN
 # ---------------------------
 if __name__ == "__main__":
-    fetch_author_and_works("Vikas Vijigiri", max_works=50)
+    fetch_author_and_works("Albert Einstein", max_works=50)

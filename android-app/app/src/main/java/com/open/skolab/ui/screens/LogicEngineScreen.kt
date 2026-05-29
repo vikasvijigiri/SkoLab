@@ -28,7 +28,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.open.skolab.auth.AuthManager
-import com.open.skolab.ui.components.CosmicBackground
 import com.open.skolab.ui.components.StreakCard
 import com.open.skolab.ui.components.ConjectureCard
 import com.open.skolab.ui.theme.*
