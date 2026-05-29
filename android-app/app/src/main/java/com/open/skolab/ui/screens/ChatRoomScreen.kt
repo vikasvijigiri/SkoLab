@@ -1,4 +1,4 @@
-﻿package com.open.skolab.ui.screens
+package com.open.skolab.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -34,6 +34,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.open.skolab.network.ApiService
+import com.open.skolab.network.ServerLocator
 import com.open.skolab.network.ChatMessage
 import com.open.skolab.data.ChatStorage
 import com.open.skolab.auth.AuthManager
@@ -249,8 +250,8 @@ fun ChatRoomScreen(
             isResolvingEmail = true
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 try {
-                    // Fetch from our backend resolve_email endpoint
-                    val url = "http://10.0.2.2:8000/api/v1/authors/resolve_email?name=" + 
+                    val base = ServerLocator.baseUrl.value ?: "http://10.0.2.2:8000"
+                    val url = "$base/api/v1/authors/resolve_email?name=" + 
                               android.net.Uri.encode(peerName)
                     val client = okhttp3.OkHttpClient()
                     val request = okhttp3.Request.Builder().url(url).build()

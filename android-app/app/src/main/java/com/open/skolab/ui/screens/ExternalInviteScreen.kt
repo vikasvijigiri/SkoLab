@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.open.skolab.ui.theme.*
+import com.open.skolab.network.ServerLocator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -54,7 +55,8 @@ fun ExternalInviteScreen(
             isResolvingEmail = true
             withContext(Dispatchers.IO) {
                 try {
-                    val url = "http://10.0.2.2:8000/api/v1/authors/resolve_email?name=" +
+                    val base = ServerLocator.baseUrl.value ?: "http://10.0.2.2:8000"
+                    val url = "$base/api/v1/authors/resolve_email?name=" +
                               android.net.Uri.encode(collaboratorName)
                     val client = okhttp3.OkHttpClient()
                     val request = okhttp3.Request.Builder().url(url).build()
