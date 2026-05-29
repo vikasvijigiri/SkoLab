@@ -112,7 +112,8 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                     limit = 10,
                     offset = currentOffset,
                     excludeIds = emptyList(),
-                    excludeName = currentState.user.name
+                    excludeName = currentState.user.name,
+                    field = currentState.user.researchFocus.ifBlank { null }
                 )
                 
                 if (newNetwork.isNotEmpty()) {
@@ -322,7 +323,8 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                                 authorId = targetId,
                                 limit = 10,
                                 offset = 0,
-                                excludeName = name
+                                excludeName = name,
+                                field = displayFocus.ifBlank { null }
                             )
                         } catch (e: Exception) {
                             Log.e("FeedViewModel", "Error calling getNetworkCollaborators", e)
