@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -115,14 +116,14 @@ fun BottomNavDock(
                                     Image(
                                         painter = androidx.compose.ui.res.painterResource(id = item.drawableResId),
                                         contentDescription = null,
-                                        modifier = Modifier.size(24.dp).padding(2.dp),
+                                        modifier = Modifier.size(24.dp).padding(horizontal = 2.dp, vertical = 0.dp),
                                         alpha = if (selected) 1f else 0.5f
                                     )
                                 } else if (item.icon != null) {
                                     Icon(
                                         imageVector = item.icon,
                                         contentDescription = null,
-                                        modifier = Modifier.size(24.dp).padding(2.dp),
+                                        modifier = Modifier.size(24.dp).padding(horizontal = 2.dp, vertical = 0.dp),
                                         tint = tint
                                     )
                                 }
@@ -153,9 +154,9 @@ fun BottomNavDock(
                                 }
                             }
                         }
-                    androidx.compose.foundation.layout.Spacer(Modifier.height(1.dp))
                     Text(
                         text = item.label,
+                        modifier = Modifier.offset(y = (-3).dp),
                         fontSize = 11.sp,
                         color = tint,
                         maxLines = 1,

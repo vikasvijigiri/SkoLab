@@ -8,7 +8,11 @@ data class SkoLabUser(
     val complexityScore: Float = 0f,
     val savedPapers: List<String> = emptyList(),
     val isOnline: Boolean = false,
-    val emailVerified: Boolean = false
+    val emailVerified: Boolean = false,
+    val academicStatus: String = "Researcher",
+    val cvUri: String = "",
+    val cvFileName: String = "",
+    val about: String = ""
 ) {
     val firstName: String
         get() = name.trim().split("\\s+".toRegex()).firstOrNull()?.replaceFirstChar { 

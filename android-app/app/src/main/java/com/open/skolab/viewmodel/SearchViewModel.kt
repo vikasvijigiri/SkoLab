@@ -19,7 +19,7 @@ sealed class SearchUiState {
     data class Error(val message: String) : SearchUiState()
 }
 
-class SearchViewModel(private val apiService: ApiService = ApiService()) : ViewModel() {
+class SearchViewModel(private val apiService: ApiService = com.open.skolab.di.AppDependencies.apiService) : ViewModel() {
     private val _uiState = MutableStateFlow<SearchUiState>(SearchUiState.Idle)
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 

@@ -26,7 +26,7 @@ sealed class IntelligenceUiState {
     data class Unavailable(val reason: String = "") : IntelligenceUiState()
 }
 
-class PaperViewModel(private val apiService: ApiService = ApiService()) : ViewModel() {
+class PaperViewModel(private val apiService: ApiService = com.open.skolab.di.AppDependencies.apiService) : ViewModel() {
 
     // ── Paper basics (from OpenAlex — fast) ────────────────────────────────────
     private val _uiState = MutableStateFlow<PaperUiState>(PaperUiState.Loading)

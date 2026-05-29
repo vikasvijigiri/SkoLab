@@ -26,7 +26,7 @@ sealed class TrendingUiState {
     data class Error(val message: String) : TrendingUiState()
 }
 
-class HomeViewModel(private val api: ApiService = ApiService()) : ViewModel() {
+class HomeViewModel(private val api: ApiService = com.open.skolab.di.AppDependencies.apiService) : ViewModel() {
 
     private val _trendingState = MutableStateFlow<TrendingUiState>(TrendingUiState.Loading)
     val trendingState: StateFlow<TrendingUiState> = _trendingState.asStateFlow()

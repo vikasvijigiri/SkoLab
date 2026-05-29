@@ -1,4 +1,4 @@
-﻿package com.open.skolab.ui.screens
+package com.open.skolab.ui.screens
 
 import android.content.Intent
 import android.net.Uri
@@ -77,7 +77,7 @@ fun IndustryScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "LAUNCHPAD",
                             color = PRIMARY,
@@ -93,6 +93,8 @@ fun IndustryScreen(
                             fontWeight = FontWeight.ExtraBold
                         )
                     }
+
+                    Spacer(modifier = Modifier.width(16.dp))
 
                     // Elegant tab switcher for Explore vs Post
                     Row(

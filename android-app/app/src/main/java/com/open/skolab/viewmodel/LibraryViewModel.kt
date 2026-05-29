@@ -29,7 +29,7 @@ sealed class SavedPapersUiState {
 
 class LibraryViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = UserPreferences(application)
-    private val api = ApiService()
+    private val api = com.open.skolab.di.AppDependencies.apiService
 
     private val _uiState = MutableStateFlow<SavedPapersUiState>(SavedPapersUiState.Loading)
     val uiState: StateFlow<SavedPapersUiState> = _uiState.asStateFlow()
