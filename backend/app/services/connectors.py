@@ -322,7 +322,7 @@ def generate_interactive_chart(chart_type: str, labels: List[str], datasets: Lis
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(html_content)
             
-        host = base_url or "http://127.0.0.1:8000"
+        host = base_url or _base_url()
         download_url = f"{host}/downloads/{safe_filename}"
         return f"[SUCCESS] Generated chart successfully. View URL: {download_url}"
     except Exception as e:
@@ -366,7 +366,7 @@ def export_bibtex_file(publications: List[Dict[str, Any]], filename: str, base_u
         with open(file_path, "w", encoding="utf-8") as f:
             f.write("\n\n".join(bib_entries))
             
-        host = base_url or "http://127.0.0.1:8000"
+        host = base_url or _base_url()
         download_url = f"{host}/downloads/{safe_filename}"
         return f"[SUCCESS] Exported BibTeX successfully. Download URL: {download_url}"
     except Exception as e:
@@ -395,7 +395,7 @@ def generate_research_report(title: str, sections: List[Dict[str, Any]], filenam
         with open(file_path, "w", encoding="utf-8") as f:
             f.write("\n".join(md_content))
             
-        host = base_url or "http://127.0.0.1:8000"
+        host = base_url or _base_url()
         download_url = f"{host}/downloads/{safe_filename}"
         return f"[SUCCESS] Generated research report successfully. Download URL: {download_url}"
     except Exception as e:
