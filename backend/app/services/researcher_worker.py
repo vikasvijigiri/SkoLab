@@ -320,16 +320,8 @@ async def teleport_researcher(author_id: str) -> None:
         if last_insts and isinstance(last_insts[0], dict):
             institution = last_insts[0].get("display_name") or institution
 
-        concepts_raw: List[Dict] = author_data.get("x_concepts") or []
-        field = next(
-            (c.get("display_name") for c in concepts_raw if c.get("level") == 1),
-            concepts_raw[0].get("display_name") if concepts_raw else "Multidisciplinary",
-        )
-        expertise = [
-            c.get("display_name")
-            for c in concepts_raw
-            if c.get("level") in [1, 2] and c.get("display_name")
-        ][:6]
+        from app.services.openalex_service import extract_field_and_expertise
+        field, expertise = extract_field_and_expertise(author_data, display_name)
 
         affiliations: List[Dict] = author_data.get("affiliations") or []
         hist_map: Dict[str, List[int]] = {}
