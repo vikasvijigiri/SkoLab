@@ -1089,7 +1089,8 @@ class ApiService {
         limit: Int = 10,
         offset: Int = 0,
         excludeIds: List<String> = emptyList(),
-        excludeName: String? = null
+        excludeName: String? = null,
+        field: String? = null
     ): List<NetworkCollaborator> = coroutineScope {
         val cleanId = authorId.substringAfterLast("/")
         if (cleanId.isBlank() || cleanId == "fallback_seed") {
@@ -1105,6 +1106,7 @@ class ApiService {
                     parameter("limit", limit)
                     parameter("offset", offset)
                     if (exclStr.isNotEmpty()) parameter("exclude_ids", exclStr)
+                    if (!field.isNullOrBlank()) parameter("field", field)
                 }
                 if (response.status == HttpStatusCode.OK) {
                     return@coroutineScope response.body<List<NetworkCollaborator>>()
@@ -1319,9 +1321,18 @@ class ApiService {
 
             // Sort by relevance score
             val sortedList = collaboratorsPool.sortedByDescending { it.relevance_score }
-            val startIndex = minOf(sortedList.size, offset)
-            val endIndex = minOf(sortedList.size, offset + limit)
-            sortedList.subList(startIndex, endIndex)
+            val filteredList = if (!field.isNullOrBlank()) {
+                val fieldLower = field.trim().lowercase()
+                sortedList.filter { 
+                    (it.field ?: "").lowercase().contains(fieldLower) || 
+                    (it.connection_path ?: "").lowercase().contains(fieldLower)
+                }
+            } else {
+                sortedList
+            }
+            val startIndex = minOf(filteredList.size, offset)
+            val endIndex = minOf(filteredList.size, offset + limit)
+            filteredList.subList(startIndex, endIndex)
 
         } catch (e: Exception) {
             handleNetworkException(e, null)

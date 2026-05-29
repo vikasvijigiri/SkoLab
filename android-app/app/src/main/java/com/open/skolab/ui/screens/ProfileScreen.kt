@@ -18,6 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Edit
@@ -594,12 +595,12 @@ fun ProfileContent(
                             modifier = Modifier.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                painter = painterResource(id = android.R.drawable.ic_menu_save),
-                                contentDescription = "CV File",
-                                tint = AccentTeal,
-                                modifier = Modifier.size(24.dp)
-                            )
+                             Icon(
+                                 imageVector = Icons.Default.Description,
+                                 contentDescription = "CV File",
+                                 tint = AccentTeal,
+                                 modifier = Modifier.size(24.dp)
+                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
