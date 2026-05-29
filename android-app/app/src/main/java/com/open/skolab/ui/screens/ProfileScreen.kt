@@ -20,6 +20,8 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Business
 import androidx.compose.material.icons.outlined.EmojiEvents
@@ -193,8 +195,13 @@ fun ProfileContent(
     onSignOut: () -> Unit,
     onBack: () -> Unit
 ) {
-    val savedCount = skolabUser?.savedPapers?.size ?: 0
-    val complexity = skolabUser?.complexityScore ?: 0f
+    var skolabUserMutable by remember { mutableStateOf<com.open.skolab.model.SkoLabUser?>(null) }
+    LaunchedEffect(skolabUser) {
+        skolabUserMutable = skolabUser
+    }
+    val activeUser = skolabUserMutable ?: skolabUser
+    val savedCount = activeUser?.savedPapers?.size ?: 0
+    val complexity = activeUser?.complexityScore ?: 0f
     val mastery = (kotlin.math.ln(savedCount.toFloat() + 1f) * 20f + complexity * 0.3f).coerceIn(0f, 100f)
     val skolabScore = (mastery * 6.5f + complexity * 3.5f).toInt().coerceIn(100, 1000)
     val hIndex = maxOf(1, savedCount / 3)
@@ -204,16 +211,22 @@ fun ProfileContent(
     val apiService = remember { com.open.skolab.network.ApiService() }
     var aiProfile by remember { mutableStateOf<com.open.skolab.network.AuthorResponse?>(null) }
     var isLoadingProfile by remember { mutableStateOf(false) }
+    var showEditFocusDialog by remember { mutableStateOf(false) }
+    var editFocusText by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
 
-    LaunchedEffect(firebaseUser.displayName) {
+    LaunchedEffect(firebaseUser.displayName, skolabUserMutable?.researchFocus) {
         val name = firebaseUser.displayName
-        if (name != null) {
+        val currentFocusVal = skolabUserMutable?.researchFocus ?: ""
+        val hasValidFocusVal = currentFocusVal.isNotBlank() && currentFocusVal != "Researcher" && currentFocusVal != "General Research"
+        if (name != null && aiProfile == null) {
             isLoadingProfile = true
             try {
                 val profile = apiService.searchAuthor(name)
                 aiProfile = profile
-                if (profile != null && profile.field_of_study != null) {
+                if (profile != null && profile.field_of_study != null && !hasValidFocusVal) {
                     authManager.updateUserResearchFocus(profile.field_of_study)
+                    skolabUserMutable = skolabUserMutable?.copy(researchFocus = profile.field_of_study)
                 }
             } catch (e: Exception) {
                 Log.e("ProfileScreen", "Failed to fetch AI profile", e)
@@ -234,7 +247,9 @@ fun ProfileContent(
 
     val scrollState = rememberScrollState()
     val displayName = firebaseUser.displayName ?: "Researcher"
-    val fieldOfStudy = aiProfile?.field_of_study ?: skolabUser?.researchFocus ?: "Research Scholar"
+    val currentFocus = skolabUserMutable?.researchFocus ?: ""
+    val hasValidFocus = currentFocus.isNotBlank() && currentFocus != "Researcher" && currentFocus != "General Research"
+    val fieldOfStudy = if (hasValidFocus) currentFocus else (aiProfile?.field_of_study ?: "Research Scholar")
     val institution = aiProfile?.institution ?: "Independent Researcher"
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -339,13 +354,34 @@ fun ProfileContent(
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
                 )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = fieldOfStudy,
-                    fontSize = 14.sp,
-                    color = TextSecondary,
-                    lineHeight = 20.sp
-                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            editFocusText = fieldOfStudy
+                            showEditFocusDialog = true
+                        }
+                        .background(AccentTeal.copy(alpha = 0.08f))
+                        .padding(vertical = 4.dp, horizontal = 8.dp)
+                ) {
+                    Text(
+                        text = fieldOfStudy,
+                        fontSize = 14.sp,
+                        color = AccentTeal,
+                        lineHeight = 20.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit Research Focus",
+                        tint = AccentTeal,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.height(4.dp))
                 if (institution.isNotBlank() && institution != "Independent Researcher") {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -747,6 +783,115 @@ fun ProfileContent(
             }
 
             Spacer(modifier = Modifier.navigationBarsPadding())
+        }
+
+        if (showEditFocusDialog) {
+            AlertDialog(
+                onDismissRequest = { showEditFocusDialog = false },
+                title = {
+                    Text(
+                        text = "Edit Research Focus",
+                        fontFamily = DisplayFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = TextPrimary
+                    )
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            text = "SkoLab uses your research focus to personalize your Pulse feed, find collaborators, and recommend papers.",
+                            color = TextSecondary,
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp
+                        )
+                        OutlinedTextField(
+                            value = editFocusText,
+                            onValueChange = { editFocusText = it },
+                            label = { Text("Research Focus", color = TextMuted) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                focusedBorderColor = AccentTeal,
+                                unfocusedBorderColor = BorderLight,
+                                focusedContainerColor = BgCard,
+                                unfocusedContainerColor = BgCard
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            singleLine = true
+                        )
+                        
+                        Text(
+                            text = "Quick suggestions:",
+                            color = TextMuted,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        
+                        val suggestionsList = listOf(
+                            "Computational Neuroscience",
+                            "Machine Learning",
+                            "Quantum Computing",
+                            "Genomics",
+                            "Physics",
+                            "Chemistry"
+                        )
+                        
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            suggestionsList.forEach { sug ->
+                                val isSelected = editFocusText.trim().equals(sug, ignoreCase = true)
+                                Surface(
+                                    onClick = { editFocusText = sug },
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isSelected) AccentTeal.copy(alpha = 0.15f) else BgSubtle.copy(alpha = 0.5f),
+                                    border = BorderStroke(
+                                        0.5.dp,
+                                        if (isSelected) AccentTeal else BorderLight
+                                    ),
+                                    modifier = Modifier.padding(1.dp)
+                                ) {
+                                    Text(
+                                        text = sug,
+                                        color = if (isSelected) AccentTeal else TextSecondary,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val trimmed = editFocusText.trim()
+                            if (trimmed.isNotBlank()) {
+                                scope.launch {
+                                    authManager.updateUserResearchFocus(trimmed)
+                                    skolabUserMutable = activeUser?.copy(researchFocus = trimmed)
+                                    showEditFocusDialog = false
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.textButtonColors(contentColor = AccentTeal)
+                    ) {
+                        Text("Save", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showEditFocusDialog = false }) {
+                        Text("Cancel", color = TextMuted)
+                    }
+                },
+                containerColor = BgCard,
+                shape = RoundedCornerShape(16.dp)
+            )
         }
     }
 }

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Durations -->
+    <integer name="duration_fast">150</integer>
+    <integer name="duration_standard">250</integer>
+    <integer name="duration_slow">400</integer>
+    <integer name="duration_extra_slow">600</integer>
+
+    <!-- Screen transitions -->
+    <integer name="duration_screen_enter">350</integer>
+    <integer name="duration_screen_exit">250</integer>
+
+    <!-- Easing names for reference in code -->
+    <!-- Enter screens: FastOutSlowInInterpolator -->
+    <!-- Exit screens: FastOutLinearInInterpolator -->
+    <!-- Element state changes: LinearOutSlowInInterpolator -->
+</resources>

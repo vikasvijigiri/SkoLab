@@ -154,7 +154,7 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
 
     fun setUserContext(uid: String, name: String, focus: String) {
         val current = _uiState.value.user
-        val validFocus = if (focus.isNotBlank() && focus != "Researcher" && focus != "General Research") focus else "Physics"
+        val validFocus = if (focus.isNotBlank() && focus != "Researcher" && focus != "General Research") focus else ""
         if (current.id == uid && current.name == name && current.researchFocus == validFocus) {
             return
         }
@@ -291,30 +291,44 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
 
                 val profile = userAuthorProfile
                 
-                // Dynamically derive the true semantic focus from the user's actual OpenAlex profile
+                // ── Research Focus Resolution ──────────────────────────────────────
+                // Priority: (1) filter chip → (2) Firestore researchFocus → (3) OpenAlex expertise → (4) OpenAlex field_of_study → (5) fallback
+                // Firestore researchFocus is source-of-truth to prevent a mismatched OpenAlex profile
+                // (e.g. a different "Vikas Vijigiri" in OpenAlex returning Psychology as top concept)
                 val focus = if (currentFilter.name != "ALL") {
-                    currentFilter.name
+                    currentFilter.label // User explicitly clicked a filter chip
+                } else if (baseFocus.isNotBlank() && baseFocus.lowercase() != "research"
+                    && baseFocus != "General Research" && baseFocus != "Researcher") {
+                    baseFocus // ← Firestore researchFocus wins: what the user explicitly set
                 } else if (profile != null && profile.expertise.isNotEmpty()) {
-                    profile.expertise.first() // Uses their #1 OpenAlex expertise field!
+                    profile.expertise.first() // OpenAlex enrichment (fallback only when Firestore is blank)
                 } else if (profile != null && !profile.field_of_study.isNullOrBlank()) {
                     profile.field_of_study
-                } else if (baseFocus.isNotBlank() && baseFocus.lowercase() != "research") {
-                    baseFocus
                 } else {
-                    "Physics" // Safe semantic fallback so it never defaults to global raw citations, using Physics for testing
+                    "" // Last-resort fallback
                 }
                 
                 val displayFocus = focus
                 
+                val isMismatch = profile != null && !profile.expertise.any {
+                    it.contains(displayFocus, ignoreCase = true) || displayFocus.contains(it, ignoreCase = true)
+                }
+                val displayExpertise = if (isMismatch || profile == null || profile.expertise.isEmpty()) {
+                    getSubConceptsForFocus(displayFocus)
+                } else {
+                    profile.expertise
+                }
+                
                 val dynamicDisciplines = mutableListOf<Discipline>()
-                if (profile != null && profile.expertise.isNotEmpty()) {
-                    profile.expertise.take(6).forEachIndexed { idx, exp ->
+                if (displayExpertise.isNotEmpty()) {
+                    displayExpertise.take(6).forEachIndexed { idx, exp ->
                         val emoji = when {
                             exp.contains("physics", ignoreCase = true) || exp.contains("quantum", ignoreCase = true) -> "⚛️"
                             exp.contains("chemistry", ignoreCase = true) -> "🧪"
                             exp.contains("biology", ignoreCase = true) || exp.contains("gen", ignoreCase = true) -> "🧬"
                             exp.contains("computer", ignoreCase = true) || exp.contains("machine", ignoreCase = true) || exp.contains("ai", ignoreCase = true) -> "🤖"
                             exp.contains("math", ignoreCase = true) -> "📐"
+                            exp.contains("neuro", ignoreCase = true) || exp.contains("brain", ignoreCase = true) -> "🧠"
                             else -> "🔬"
                         }
                         val color1 = when (idx % 3) {
@@ -339,12 +353,12 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                     }
                 }
                 if (dynamicDisciplines.isEmpty()) {
-                    dynamicDisciplines.add(Discipline(displayFocus.ifBlank { "Physics" }, "⚛️", "420 papers", "#0F172A", "#3D6FFF"))
+                    dynamicDisciplines.add(Discipline(displayFocus.ifBlank { "General Research" }, "🔬", "0 papers", "#0F172A", "#3D6FFF"))
                 }
                 val disciplines = dynamicDisciplines
 
                 val dynamicResearchAreas = mutableListOf<ResearchArea>()
-                if (profile != null && profile.expertise.isNotEmpty()) {
+                if (displayExpertise.isNotEmpty()) {
                     val colors = listOf(
                         androidx.compose.ui.graphics.Color(0xFF22D3EE), 
                         androidx.compose.ui.graphics.Color(0xFF3D6FFF), 
@@ -353,11 +367,11 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                         androidx.compose.ui.graphics.Color(0xFFFF4757), 
                         androidx.compose.ui.graphics.Color(0xFFFBBF24)
                     )
-                    profile.expertise.forEachIndexed { index, exp ->
+                    displayExpertise.forEachIndexed { index, exp ->
                         dynamicResearchAreas.add(ResearchArea(exp, colors[index % colors.size]))
                     }
                 } else {
-                    dynamicResearchAreas.add(ResearchArea(displayFocus.ifBlank { "Physics" }, androidx.compose.ui.graphics.Color(0xFF3D6FFF)))
+                    dynamicResearchAreas.add(ResearchArea(displayFocus.ifBlank { "General Research" }, androidx.compose.ui.graphics.Color(0xFF3D6FFF)))
                 }
                 val researchAreas = dynamicResearchAreas
 
@@ -512,7 +526,8 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                                 // Fetch trending, hot, and open access papers, and rising researchers concurrently
                 val trendingDeferred = async(kotlinx.coroutines.Dispatchers.IO) {
                     try {
-                        apiService.getTrendingPapers(focus, limit = 5).map { mapOpenAlexToPaper(it) }
+                        val queryFocus = if (focus.isBlank()) null else focus
+                        apiService.getTrendingPapers(queryFocus, limit = 5).map { mapOpenAlexToPaper(it) }
                     } catch (e: Exception) {
                         Log.e("FeedViewModel", "Failed to fetch trending papers", e)
                         appendError("Trending Papers: ${e.localizedMessage ?: e.toString()}")
@@ -532,7 +547,8 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
 
                 val openAccessDeferred = async(kotlinx.coroutines.Dispatchers.IO) {
                     try {
-                        apiService.getTrendingPapers(displayFocus.ifBlank { "physics" }, limit = 8)
+                        val queryFocus = if (displayFocus.isBlank()) null else displayFocus
+                        apiService.getTrendingPapers(queryFocus, limit = 8)
                             .filter { !it.primary_location?.pdf_url.isNullOrBlank() }
                             .map { mapOpenAlexToPaper(it) }
                             .map { it.copy(pdfUrl = it.pdfUrl ?: "https://arxiv.org/pdf/1706.03762.pdf") }
@@ -546,21 +562,25 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
 
                 val risingDeferred = async(kotlinx.coroutines.Dispatchers.IO) {
                     try {
-                        apiService.getSimilarAuthors(displayFocus.ifBlank { "physics" }, limit = 6).map { collab ->
-                            Author(
-                                id = collab.id,
-                                name = collab.display_name,
-                                institution = collab.institution,
-                                country = "US",
-                                orcidId = null,
-                                fingerprintType = collab.field_of_study ?: displayFocus.ifBlank { "physics" },
-                                radarScores = mapOf("Disruption" to 0.85f, "Novelty" to 0.72f),
-                                careerArc = emptyList(),
-                                topPapers = emptyList(),
-                                collaborators = emptyList(),
-                                totalPapers = collab.h_index ?: 24,
-                                avgDisruptionScore = (collab.innovation_score ?: 80) / 100f
-                            )
+                        if (displayFocus.isBlank()) {
+                            emptyList<Author>()
+                        } else {
+                            apiService.getSimilarAuthors(displayFocus, limit = 6).map { collab ->
+                                Author(
+                                    id = collab.id,
+                                    name = collab.display_name,
+                                    institution = collab.institution,
+                                    country = "US",
+                                    orcidId = null,
+                                    fingerprintType = collab.field_of_study ?: displayFocus,
+                                    radarScores = mapOf("Disruption" to 0.85f, "Novelty" to 0.72f),
+                                    careerArc = emptyList(),
+                                    topPapers = emptyList(),
+                                    collaborators = emptyList(),
+                                    totalPapers = collab.h_index ?: 24,
+                                    avgDisruptionScore = (collab.innovation_score ?: 80) / 100f
+                                )
+                            }
                         }
                     } catch (e: Exception) {
                         Log.e("FeedViewModel", "Failed to fetch rising researchers", e)
@@ -580,7 +600,7 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
                 val finalPapersCount = if (profile != null && profile.works_count > 0) profile.works_count else 24
 
                 _uiState.value = FeedUiState(
-                    user = User("user_vikas", name, name.take(2).uppercase(), displayFocus),
+                    user = User(_uiState.value.user.id, name, name.take(2).uppercase(), displayFocus),
                     frontierMetrics = FrontierMetrics(
                         dIndex = finalDIndex,
                         sIndex = finalSIndex,
@@ -718,6 +738,51 @@ class FeedViewModel(private val apiService: ApiService = ApiService()) : ViewMod
             doi = work.doi ?: "",
             pdfUrl = work.primary_location?.pdf_url
         )
+    }
+
+    private fun getSubConceptsForFocus(focus: String): List<String> {
+        if (focus.isBlank()) return emptyList()
+        val f = focus.lowercase()
+        return when {
+            f.contains("neuro") || f.contains("brain") -> listOf(
+                "Computational Neuroscience", "Neural Coding", "Synaptic Plasticity",
+                "Brain-Computer Interfaces", "Cognitive Modeling", "Neuroimaging"
+            )
+            f.contains("machine learning") || f.contains("ml") || f.contains("ai") || f.contains("artificial intelligence") || f.contains("computer science") -> listOf(
+                "Deep Learning", "Natural Language Processing", "Computer Vision",
+                "Reinforcement Learning", "Generative AI", "Neural Networks"
+            )
+            f.contains("genom") || f.contains("bio") || f.contains("gene") -> listOf(
+                "Bioinformatics", "Gene Editing (CRISPR)", "Transcriptomics",
+                "Epigenetics", "Functional Genomics", "Metagenomics"
+            )
+            f.contains("physics") || f.contains("quantum") -> listOf(
+                "Quantum Mechanics", "Condensed Matter Physics", "Astrophysics",
+                "High-Energy Particle Physics", "Quantum Computing", "Statistical Mechanics"
+            )
+            f.contains("chemistry") || f.contains("chemical") -> listOf(
+                "Organic Chemistry", "Biochemistry", "Physical Chemistry",
+                "Computational Chemistry", "Materials Science", "Spectroscopy"
+            )
+            f.contains("climate") || f.contains("environment") || f.contains("earth") -> listOf(
+                "Climate Modeling", "Meteorology", "Oceanography",
+                "Renewable Energy Systems", "Environmental Science", "Glaciology"
+            )
+            f.contains("material") || f.contains("nano") -> listOf(
+                "Nanotechnology", "Semiconductors", "Superconductors",
+                "Polymer Science", "Crystallography", "Metamaterials"
+            )
+            else -> {
+                listOf(
+                    focus,
+                    "$focus Systems",
+                    "Advanced $focus",
+                    "Applied $focus",
+                    "Computational $focus",
+                    "Theoretical $focus"
+                )
+            }
+        }
     }
 }
 

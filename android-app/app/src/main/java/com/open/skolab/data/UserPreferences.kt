@@ -24,6 +24,17 @@ class UserPreferences(private val context: Context) {
     private val streakCountKey = intPreferencesKey("streak_count")
     private val lastCheckedInDateKey = stringPreferencesKey("last_checked_in_date")
     private val subscriptionTypeKey = stringPreferencesKey("subscription_type")
+    private val guestSignedInKey = booleanPreferencesKey("is_guest_signed_in")
+
+    val isGuestSignedIn: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[guestSignedInKey] ?: false
+    }
+
+    suspend fun setGuestSignedIn(signedIn: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[guestSignedInKey] = signedIn
+        }
+    }
 
     val subscriptionType: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[subscriptionTypeKey] ?: "Basic"
@@ -99,6 +110,7 @@ class UserPreferences(private val context: Context) {
             prefs.remove(userResearchFocusKey)
             prefs.remove(userComplexityScoreKey)
             prefs.remove(savedPaperIdsKey)
+            prefs.remove(guestSignedInKey)
         }
     }
 

@@ -92,7 +92,7 @@ class SummarizationService:
 
         # ── Step 2: Attempt to get the full paper text ────────────────────────
         if not is_llm_working():
-            raise Exception("LLM services are currently unavailable or rate-limited.")
+            return self._intelligence_fallback(title, meta, "abstract_only")
         
         full_text, text_source = await self._fetch_full_paper_text(
             doi=doi,
@@ -103,9 +103,11 @@ class SummarizationService:
         # ── Step 3: Build context for LLM ────────────────────────────────────
         context = self._build_context(title, meta, full_text, text_source)
         # ── Step 4: Run LLM ───────────────────────────────────────────────────
-        result = await self._run_intelligence_llm(context, title, meta, text_source)
-
-        return result
+        try:
+            return await self._run_intelligence_llm(context, title, meta, text_source)
+        except Exception as exc:
+            print(f"[analyze_paper] Falling back after LLM failure: {exc}", flush=True)
+            return self._intelligence_fallback(title, meta, text_source)
 
     # ══════════════════════════════════════════════════════════════════════════
     # PDF FETCHING & TEXT EXTRACTION
@@ -564,7 +566,10 @@ class SummarizationService:
         )
 
         if not is_llm_working():
-            raise Exception("LLM services are currently unavailable or rate-limited.")
+            fallback = self._generate_fallback_data(title)
+            fallback["metrics"] = metrics
+            fallback["top_skills"] = top_skills
+            return fallback
 
         context = f"Title: {title}\n"
         if paper_data.get("abstract"):
@@ -616,7 +621,10 @@ Return JSON: { "bullets": ["⚛️ ...", ...] }""",
         except Exception as e:
             print(f"[summarize_paper] Query failed: {e}", flush=True)
 
-        raise Exception("Failed to summarize paper using any available LLM models.")
+        fallback = self._generate_fallback_data(title)
+        fallback["metrics"] = metrics
+        fallback["top_skills"] = top_skills
+        return fallback
 
     async def generate_presentation(
         self, title: str, doi: Optional[str] = None

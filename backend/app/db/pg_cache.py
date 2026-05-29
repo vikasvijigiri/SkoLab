@@ -82,6 +82,16 @@ class PgBackedCache:
             del self._l1[k]
         self._l1[key] = (value, now + self.l1_ttl)
 
+    def _normalize_value(self, value: Any) -> Any:
+        """Convert common rich Python objects into JSON-safe primitives."""
+        if hasattr(value, "model_dump"):
+            return self._normalize_value(value.model_dump())
+        if isinstance(value, dict):
+            return {str(key): self._normalize_value(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple, set)):
+            return [self._normalize_value(item) for item in value]
+        return value
+
     # ── public API ────────────────────────────────────────────────────────────
 
     async def get(self, key: str) -> Optional[Any]:
@@ -112,14 +122,15 @@ class PgBackedCache:
 
     async def set(self, key: str, value: Any) -> None:
         """Persist value to L1 and PG."""
-        self._l1_set(key, value)
+        normalized_value = self._normalize_value(value)
+        self._l1_set(key, normalized_value)
 
         db_key = self._prefixed(key)
         now = datetime.datetime.utcnow()
         expires_at = now + datetime.timedelta(seconds=self.ttl)
 
         # Wrap in envelope so any JSON-serialisable type is stored safely
-        payload = {"v": value}
+        payload = {"v": normalized_value}
 
         async with AsyncSessionLocal() as session:
             try:

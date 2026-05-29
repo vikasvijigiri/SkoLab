@@ -1,5 +1,6 @@
 import sys
 import io
+from pathlib import Path
 
 # Force stdout/stderr to use UTF-8 on Windows to avoid 'charmap' codec errors
 if sys.stdout and getattr(sys.stdout, "encoding", None) != 'utf-8':
@@ -23,7 +24,10 @@ platform.uname = lambda: namedtuple("uname_result", ["system", "node", "release"
 
 from dotenv import load_dotenv
 
-# MUST happen BEFORE any import that auto-initialises Firebase or reads env vars
+# MUST happen BEFORE any import that auto-initialises Firebase or reads env vars.
+# Prefer backend/.env so the app behaves the same no matter where uvicorn starts.
+_BACKEND_ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(_BACKEND_ROOT / ".env")
 load_dotenv()
 
 import asyncio

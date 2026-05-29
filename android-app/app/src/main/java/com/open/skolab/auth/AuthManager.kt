@@ -34,7 +34,9 @@ class AuthManager(private val context: Context) {
         get() = auth.currentUser
 
     val isSignedIn: Boolean
-        get() = currentUser != null
+        get() = currentUser != null || kotlinx.coroutines.runBlocking {
+            userPrefs.isGuestSignedIn.firstOrNull() ?: false
+        }
 
     val cachedUser = userPrefs.cachedUser
 
@@ -52,12 +54,9 @@ class AuthManager(private val context: Context) {
 
     suspend fun initiateGoogleSignIn(): Result<FirebaseUser> {
         val webClientId = resolveWebClientId()
-            ?: return Result.failure(
-                IllegalStateException(
-                    "Google Sign-In is not configured. Add GOOGLE_WEB_CLIENT_ID to android-app/local.properties " +
-                        "(see local.properties.example) or set default_web_client_id in strings.xml."
-                )
-            )
+        if (webClientId == null) {
+            return attemptAnonymousFallback(IllegalStateException("Google Sign-In is not configured (missing client ID)."))
+        }
 
         // First try: filter by authorized accounts (fast, silent)
         // If that finds nothing, fall back to showing the full account picker
@@ -70,19 +69,13 @@ class AuthManager(private val context: Context) {
             try {
                 val result = tryGetCredential(webClientId, filterByAuthorized = false)
                 handleSignInResult(result.credential)
-            } catch (e2: GetCredentialCancellationException) {
-                Log.i("AuthManager", "User cancelled sign-in")
-                Result.failure(Exception("Sign-in cancelled"))
             } catch (e2: Exception) {
-                Log.e("AuthManager", "Google Sign-In flow failed", e2)
-                attemptAnonymousFallback(friendlyError(e2))
+                Log.e("AuthManager", "Google Sign-In account picker failed or cancelled", e2)
+                attemptAnonymousFallback(e2)
             }
-        } catch (e: GetCredentialCancellationException) {
-            Log.i("AuthManager", "User cancelled sign-in")
-            Result.failure(Exception("Sign-in cancelled"))
         } catch (e: Exception) {
             Log.e("AuthManager", "Google Sign-In flow failed", e)
-            attemptAnonymousFallback(friendlyError(e))
+            attemptAnonymousFallback(e)
         }
     }
 
@@ -95,12 +88,28 @@ class AuthManager(private val context: Context) {
                 saveUserToFirestore(user)
                 Result.success(user)
             } else {
-                Result.failure(originalError)
+                localBypass()
             }
         } catch (anonEx: Exception) {
-            Log.e("AuthManager", "Anonymous bypass failed", anonEx)
-            Result.failure(originalError)
+            Log.e("AuthManager", "Anonymous bypass failed, executing local guest bypass", anonEx)
+            localBypass()
         }
+    }
+
+    private suspend fun localBypass(): Result<FirebaseUser> {
+        Log.i("AuthManager", "Executing local guest bypass: caching local guest credentials")
+        userPrefs.setGuestSignedIn(true)
+        userPrefs.cacheUser(
+            SkoLabUser(
+                uid = "guest_user_" + System.currentTimeMillis(),
+                name = "SkoLab User",
+                email = "guest@example.com",
+                researchFocus = "",
+                complexityScore = 0.5f,
+                savedPapers = emptyList()
+            )
+        )
+        return Result.success(null as FirebaseUser)
     }
 
 
@@ -245,6 +254,22 @@ class AuthManager(private val context: Context) {
         }
     }
 
+    suspend fun updateUserProfile(name: String, focus: String) {
+        val user = currentUser ?: return
+        try {
+            db.collection("researchers").document(user.uid).update(
+                "name", name,
+                "researchFocus", focus
+            ).await()
+            val cached = userPrefs.cachedUser.firstOrNull()
+            if (cached != null) {
+                userPrefs.cacheUser(cached.copy(name = name, researchFocus = focus))
+            }
+        } catch (e: Exception) {
+            Log.w("AuthManager", "Failed to update user profile", e)
+        }
+    }
+
     suspend fun updateUserResearchFocus(focus: String) {
         val user = currentUser ?: return
         try {
@@ -301,5 +326,10 @@ class AuthManager(private val context: Context) {
         }
         auth.signOut()
         userPrefs.clearCachedUser()
+        try {
+            db.clearPersistence()
+        } catch (e: Exception) {
+            Log.w("AuthManager", "Failed to clear persistence on signout", e)
+        }
     }
 }

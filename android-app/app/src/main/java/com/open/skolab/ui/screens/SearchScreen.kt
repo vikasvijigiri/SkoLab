@@ -32,10 +32,21 @@ import com.open.skolab.viewmodel.SearchViewModel
 fun SearchScreen(
     onPaperClick: (String) -> Unit,
     onAuthorClick: (String) -> Unit,
+    searchQuery: String = "",
+    showSearchBar: Boolean = true,
     viewModel: SearchViewModel = viewModel()
 ) {
     var searchMode by remember { mutableStateOf(0) } // 0 = Papers, 1 = Profiles
-    var query by remember { mutableStateOf("") }
+    var localQuery by remember { mutableStateOf("") }
+    val query = if (showSearchBar) localQuery else searchQuery
+    
+    // Sync external query to viewModel when showSearchBar is false
+    LaunchedEffect(searchQuery, showSearchBar) {
+        if (!showSearchBar) {
+            viewModel.onSearchQueryChanged(searchQuery)
+        }
+    }
+
     val uiState by viewModel.uiState.collectAsState()
 
     Column(modifier = Modifier.fillMaxSize().background(Color.Transparent)) {
@@ -86,24 +97,26 @@ fun SearchScreen(
 
         when (searchMode) {
             0 -> {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .screenHorizontalPadding()
-                        .padding(bottom = 8.dp)
-                ) {
-                    GlassSearchBar(
-                        value = query,
-                        onValueChange = {
-                            query = it
-                            viewModel.onSearchQueryChanged(it)
-                        },
-                        placeholder = "Search papers, topics, authors...",
-                        onClear = {
-                            query = ""
-                            viewModel.onSearchQueryChanged("")
-                        }
-                    )
+                if (showSearchBar) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .screenHorizontalPadding()
+                            .padding(bottom = 8.dp)
+                    ) {
+                        GlassSearchBar(
+                            value = localQuery,
+                            onValueChange = {
+                                localQuery = it
+                                viewModel.onSearchQueryChanged(it)
+                            },
+                            placeholder = "Search papers, topics, authors...",
+                            onClear = {
+                                localQuery = ""
+                                viewModel.onSearchQueryChanged("")
+                            }
+                        )
+                    }
                 }
 
                 when (val state = uiState) {
@@ -158,7 +171,11 @@ fun SearchScreen(
                 }
             }
             1 -> {
-                SearchProfilesScreen(onAuthorClick = onAuthorClick)
+                SearchProfilesScreen(
+                    onAuthorClick = onAuthorClick,
+                    searchQuery = query,
+                    showSearchBar = showSearchBar
+                )
             }
         }
     }

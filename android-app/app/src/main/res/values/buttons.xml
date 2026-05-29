@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Widget.Skolab.Button.Primary" parent="Widget.Material3.Button">
+        <item name="android:background">@color/color_primary</item>
+        <item name="android:textAppearance">@style/TextAppearance.Skolab.H3</item>
+        <item name="android:textColor">@color/color_text_on_primary</item>
+        <item name="android:paddingTop">14dp</item>
+        <item name="android:paddingBottom">14dp</item>
+        <item name="android:paddingStart">24dp</item>
+        <item name="android:paddingEnd">24dp</item>
+        <item name="cornerRadius">@dimen/radius_md</item>
+        <item name="rippleColor">@color/color_primary_pressed</item>
+    </style>
+
+    <style name="Widget.Skolab.Button.Ghost" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:background">@android:color/transparent</item>
+        <item name="strokeColor">@color/color_primary</item>
+        <item name="strokeWidth">1.5dp</item>
+        <item name="android:textAppearance">@style/TextAppearance.Skolab.H3</item>
+        <item name="android:textColor">@color/color_primary</item>
+        <item name="cornerRadius">@dimen/radius_md</item>
+        <item name="rippleColor">@color/color_bg_subtle</item>
+    </style>
+
+    <style name="Widget.Skolab.Button.Text" parent="Widget.Material3.Button.TextButton">
+        <item name="android:textAppearance">@style/TextAppearance.Skolab.H3</item>
+        <item name="android:textColor">@color/color_primary</item>
+        <item name="rippleColor">@color/color_bg_subtle</item>
+    </style>
+
+    <style name="Widget.Skolab.Button.Disabled" parent="Widget.Skolab.Button.Primary">
+        <item name="android:background">@color/color_disabled_bg</item>
+        <item name="android:textColor">@color/color_disabled_text</item>
+        <item name="android:clickable">false</item>
+    </style>
+</resources>

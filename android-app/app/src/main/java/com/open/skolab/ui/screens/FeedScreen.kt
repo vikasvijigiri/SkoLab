@@ -53,6 +53,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.open.skolab.model.Paper
 import com.open.skolab.model.Author
 import com.open.skolab.model.UserConnection
+import com.open.skolab.model.Conjecture
+import androidx.compose.material.icons.automirrored.filled.Article
 import com.open.skolab.ui.components.ScoreArcMeter
 import com.open.skolab.ui.components.MarkdownText
 import com.open.skolab.ui.components.StreakCard
@@ -113,6 +115,9 @@ fun FeedScreen(
     var searchMode by remember { mutableStateOf(0) } // 0 = Papers, 1 = Profiles
     var searchQuery by remember { mutableStateOf("") }
     var selectedCountryFilter by remember { mutableStateOf("Global") }
+    var showSetupFocusDialog by remember { mutableStateOf(false) }
+    var setupNameText by remember { mutableStateOf("") }
+    var setupFocusText by remember { mutableStateOf("") }
 
     BackHandler(enabled = isSearchExpanded) {
         isSearchExpanded = false
@@ -138,24 +143,22 @@ fun FeedScreen(
 
 
     LaunchedEffect(cachedUser) {
-        val uid = cachedUser?.uid ?: "user_vikas"
-        val userName = if (!cachedUser?.name.isNullOrBlank()) cachedUser?.name!! else "Vikas Vijigiri"
-        val researchFocus = if (!cachedUser?.researchFocus.isNullOrBlank() && cachedUser?.researchFocus != "Researcher" && cachedUser?.researchFocus != "General Research") cachedUser?.researchFocus!! else "Physics"
-        viewModel.setUserContext(uid, userName, researchFocus)
-
-        if (cachedUser != null && (cachedUser?.researchFocus.isNullOrBlank() || cachedUser?.researchFocus == "Researcher" || cachedUser?.researchFocus == "General Research")) {
-            scope.launch {
-                try {
-                    val profile = apiService.searchAuthor(userName)
-                    if (profile != null) {
-                        val focus = profile.field_of_study ?: profile.expertise.firstOrNull() ?: "Physics"
-                        authManager.updateUserResearchFocus(focus)
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("FeedScreen", "Failed to auto-update research focus", e)
-                }
-            }
+        val uid = cachedUser?.uid ?: "user_default"
+        val name = cachedUser?.name ?: ""
+        val focus = cachedUser?.researchFocus ?: ""
+        
+        val isNameInvalid = name.isBlank() || name.equals("SkoLab User", ignoreCase = true) || name.equals("Researcher", ignoreCase = true)
+        val isFocusInvalid = focus.isBlank() || focus.equals("Researcher", ignoreCase = true) || focus.equals("General Research", ignoreCase = true)
+        
+        if ((isNameInvalid || isFocusInvalid) && cachedUser != null) {
+            setupNameText = if (isNameInvalid) "" else name
+            setupFocusText = if (isFocusInvalid) "" else focus
+            showSetupFocusDialog = true
         }
+        
+        val validName = if (isNameInvalid) "SkoLab User" else name
+        val validFocus = if (isFocusInvalid) "" else focus
+        viewModel.setUserContext(uid, validName, validFocus)
     }
 
     LaunchedEffect(uiState.suggestedConnections.size) {
@@ -711,6 +714,121 @@ fun FeedScreen(
                     )
                 }
             }
+        }
+
+        if (showSetupFocusDialog) {
+            val suggestions = listOf("Physics", "Computational Neuroscience", "Machine Learning", "Genomics", "Quantum Computing")
+            AlertDialog(
+                onDismissRequest = { /* Non-cancelable */ },
+                title = {
+                    Text(
+                        text = "Complete Your Researcher Profile",
+                        fontFamily = SyneFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = EntropiColors.Gold1
+                    )
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            text = "To personalize your Pulse feed, match papers, and discover collaborators, please define your profile name and research focus area.",
+                            color = EntropiColors.Text2,
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp
+                        )
+                        
+                        OutlinedTextField(
+                            value = setupNameText,
+                            onValueChange = { setupNameText = it },
+                            label = { Text("Full Name", color = EntropiColors.Text3) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = EntropiColors.Text,
+                                unfocusedTextColor = EntropiColors.Text,
+                                focusedBorderColor = EntropiColors.Gold1,
+                                unfocusedBorderColor = EntropiColors.Border,
+                                focusedContainerColor = EntropiColors.Card2,
+                                unfocusedContainerColor = EntropiColors.Card2
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            singleLine = true
+                        )
+                        
+                        OutlinedTextField(
+                            value = setupFocusText,
+                            onValueChange = { setupFocusText = it },
+                            label = { Text("Research Focus / Discipline", color = EntropiColors.Text3) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = EntropiColors.Text,
+                                unfocusedTextColor = EntropiColors.Text,
+                                focusedBorderColor = EntropiColors.Gold1,
+                                unfocusedBorderColor = EntropiColors.Border,
+                                focusedContainerColor = EntropiColors.Card2,
+                                unfocusedContainerColor = EntropiColors.Card2
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            singleLine = true
+                        )
+                        
+                        Text(
+                            text = "Focus Suggestions:",
+                            color = EntropiColors.Text3,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            suggestions.forEach { suggestion ->
+                                Surface(
+                                    onClick = { setupFocusText = suggestion },
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (setupFocusText == suggestion) EntropiColors.Gold1.copy(alpha = 0.15f) else EntropiColors.Card2,
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (setupFocusText == suggestion) EntropiColors.Gold1 else EntropiColors.Border
+                                    )
+                                ) {
+                                    Text(
+                                        text = suggestion,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                        color = if (setupFocusText == suggestion) EntropiColors.Gold1 else EntropiColors.Text2,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val trimmedName = setupNameText.trim()
+                            val trimmedFocus = setupFocusText.trim()
+                            if (trimmedName.isNotBlank() && trimmedFocus.isNotBlank()) {
+                                scope.launch {
+                                    val uid = cachedUser?.uid ?: "user_default"
+                                    authManager.updateUserProfile(trimmedName, trimmedFocus)
+                                    viewModel.setUserContext(uid, trimmedName, trimmedFocus)
+                                    showSetupFocusDialog = false
+                                }
+                            }
+                        },
+                        enabled = setupNameText.trim().isNotBlank() && setupFocusText.trim().isNotBlank(),
+                        colors = ButtonDefaults.textButtonColors(contentColor = EntropiColors.Gold1)
+                    ) {
+                        Text("Save Profile", fontWeight = FontWeight.Bold)
+                    }
+                },
+                containerColor = EntropiColors.Card,
+                shape = RoundedCornerShape(16.dp)
+            )
         }
     }
 }

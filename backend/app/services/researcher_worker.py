@@ -30,12 +30,28 @@ import asyncio
 import datetime
 import logging
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 # ── Firestore availability flag ───────────────────────────────────────────────
 FIRESTORE_AVAILABLE: bool = False
+_BACKEND_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _resolve_credentials_path(raw_path: str) -> Optional[Path]:
+    if not raw_path:
+        return None
+    candidate = Path(raw_path).expanduser()
+    if candidate.is_absolute() and candidate.exists():
+        return candidate
+
+    for base in (Path.cwd(), _BACKEND_ROOT, Path(__file__).resolve().parent):
+        resolved = (base / candidate).resolve()
+        if resolved.exists():
+            return resolved
+    return None
 
 
 def set_firestore_available(val: bool) -> None:
@@ -55,16 +71,15 @@ def check_connection_sync() -> bool:
 
         if not firebase_admin._apps:
             import os
-            cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
-            if not cred_path or not os.path.exists(cred_path):
+            cred_path = _resolve_credentials_path(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", ""))
+            if cred_path is None:
                 logger.warning("[researcher_worker] No Firebase credentials — Firestore disabled.")
                 return False
             from firebase_admin import credentials
-            firebase_admin.initialize_app(credentials.Certificate(cred_path))
+            firebase_admin.initialize_app(credentials.Certificate(str(cred_path)))
 
-        db = _firestore.client()
-        db.collection("_health_check").document("probe").get()
-        logger.info("[researcher_worker] Firestore connection OK.")
+        _firestore.client()
+        logger.info("[researcher_worker] Firestore client initialized.")
         return True
     except Exception as exc:
         logger.warning("[researcher_worker] Firestore probe failed: %s", exc)

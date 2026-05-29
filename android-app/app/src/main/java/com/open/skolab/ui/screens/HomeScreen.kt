@@ -53,13 +53,18 @@ fun HomeScreen(
     viewModel: FeedViewModel = viewModel(),
     homeViewModel: HomeViewModel = viewModel()
 ) {
+    val context = LocalContext.current
+    val authManager = remember { com.open.skolab.auth.AuthManager(context) }
+    val cachedUser by authManager.cachedUser.collectAsState(initial = null)
+    val userName = cachedUser?.name?.split(" ")?.firstOrNull() ?: "SkoLab User"
+
     var selectedFilter by remember { mutableStateOf("All") }
     val filters = listOf("All", "Disruptive", "High Novelty", "Rising Stars", "Trending Fields")
     val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
         containerColor = BgPrimary,
-        topBar = { SkoLabTopBar("Vikas") }
+        topBar = { SkoLabTopBar(userName) }
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -68,12 +73,6 @@ fun HomeScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // ── Daily Research Pulse ─────────────────────────────
-            item { DailyPulseCard() }
-
-            // ── Citation Alert ───────────────────────────────────
-            item { CitationAlertBanner() }
-
             // ── Hot Papers Trending ──────────────────────────────
             item { HotPapersRow(onPaperClick, homeViewModel) }
 
@@ -388,7 +387,7 @@ fun HotPaperShimmerCard() {
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = BgCard,
-        shadowElevation = 2.dp,
+        shadowElevation = 0.dp,
         modifier = Modifier.width(200.dp).height(130.dp)
     ) {
         Box(
@@ -419,7 +418,7 @@ fun HotPaperCard(
         onClick = onClick,
         shape = RoundedCornerShape(16.dp),
         color = BgCard,
-        shadowElevation = 2.dp,
+        shadowElevation = 0.dp,
         modifier = Modifier.width(200.dp)
     ) {
         Column {
@@ -487,31 +486,14 @@ fun SkoLabTopBar(userName: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(BgCard)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .background(BgPrimary)
+            .padding(horizontal = 16.dp, vertical = 16.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            BrandMark(style = Typography.titleLarge)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = {}) {
-                    Icon(Icons.Default.Notifications, null, tint = SkoLabTextSecondary)
-                }
-                Box(
-                    modifier = Modifier.size(32.dp).clip(CircleShape).background(AccentTealLight),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(userName.take(1), style = Typography.labelSmall, color = AccentTeal)
-                }
-            }
-        }
         Text(
             text = "Good ${greetingPart()}, $userName",
-            style = Typography.bodySmall,
-            color = SkoLabTextSecondary,
+            style = Typography.titleLarge,
+            color = TextPrimary,
+            fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

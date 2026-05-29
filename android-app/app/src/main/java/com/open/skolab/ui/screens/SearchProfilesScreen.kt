@@ -33,10 +33,13 @@ import kotlinx.coroutines.delay
 @Composable
 fun SearchProfilesScreen(
     onAuthorClick: (String) -> Unit,
+    searchQuery: String = "",
+    showSearchBar: Boolean = true,
     modifier: Modifier = Modifier,
     apiService: ApiService = remember { ApiService() }
 ) {
-    var query by remember { mutableStateOf("") }
+    var localQuery by remember { mutableStateOf("") }
+    val query = if (showSearchBar) localQuery else searchQuery
     var suggestions by remember { mutableStateOf<List<AuthorSuggestion>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
 
@@ -62,17 +65,19 @@ fun SearchProfilesScreen(
             .fillMaxSize()
             .background(BgPrimary)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 8.dp)
-        ) {
-            GlassSearchBar(
-                value = query,
-                onValueChange = { query = it },
-                placeholder = "Search researchers, authors, experts...",
-                onClear = { query = "" }
-            )
+        if (showSearchBar) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
+            ) {
+                GlassSearchBar(
+                    value = localQuery,
+                    onValueChange = { localQuery = it },
+                    placeholder = "Search researchers, authors, experts...",
+                    onClear = { localQuery = "" }
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
