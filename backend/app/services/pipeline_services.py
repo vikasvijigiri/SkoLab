@@ -1,47 +1,26 @@
 import os
-
 import datetime
-
 import httpx
-
 import json
-
 import random
-
 import asyncio
-
 import re
-
 from typing import List, Dict, Optional, Any
-
 from app.services.llm_service import is_llm_working, set_llm_limit_exceeded
-
 from sqlalchemy.future import select
-
 from app.db.database import AsyncSessionLocal
-
 from app.models.user_models import CacheEntry, AgentChatHistory
-
 from app.services.openalex_service import OpenAlexService
-
 from app.prompts import DAILY_FEED_ADVISOR_PROMPT_TEMPLATE
-
 from app.db.pg_cache import PgBackedCache
 
 # Per-feature PG caches with appropriate TTLs
-
 # These are the local fast layer; Firestore backs the large enriched docs.
-
 _pg_daily_feed_cache       = PgBackedCache(ttl_seconds=3600,  name="pipeline_daily_feed")
-
 _pg_match_grants_cache     = PgBackedCache(ttl_seconds=3600,  name="pipeline_match_grants")
-
 _pg_synergy_cache          = PgBackedCache(ttl_seconds=7200,  name="pipeline_synergy")
-
 _pg_heatmap_cache          = PgBackedCache(ttl_seconds=3600,  name="pipeline_heatmap")
-
 _pg_journal_advisor_cache  = PgBackedCache(ttl_seconds=7200,  name="pipeline_journal_advisor")
-
 _pg_network_collab_cache   = PgBackedCache(ttl_seconds=3600,  name="pipeline_network_collab")
 
 class PipelineServices:
@@ -855,7 +834,7 @@ Provide your response in this exact JSON format:
             except Exception as e:
                 print(f"[Firestore Cache Error] journal_advisor_recommendations write failed: {e}", flush=True)
         return venues[:3]
-    async def get_network_collaborators(self, author_id: str, limit: int = 10, offset: int = 0, exclude_ids: List[str] = None, field: str = "") -> List[Dict[str, Any]]:
+    async def get_network_collaborators(self, author_id: str, limit: int = 10, offset: int = 0, exclude_ids: List[str] = None, field: str = "", name: str = "") -> List[Dict[str, Any]]:
         """
         Fetches Depth 1 and Depth 2 co-author connections.
         Cache strategy (fastest-first):
@@ -864,6 +843,41 @@ Provide your response in this exact JSON format:
           3. Full OpenAlex computation — stores results in both above for next time.
         """
         clean_id = author_id.split("/")[-1]
+        if (not clean_id or clean_id == "fallback_seed") and name:
+            print(f"[Dynamic Resolve] Attempting dynamic resolution for '{name}' with discipline '{field}' on OpenAlex...", flush=True)
+            try:
+                results = await self.openalex_service.search_authors(name, per_page=10)
+                if results:
+                    # Filter candidates that actually match the name tokens first
+                    name_matches = []
+                    query_tokens = [tok for tok in name.lower().split() if len(tok) > 2]
+                    for cand in results:
+                        cand_name = cand.get("display_name", "").lower()
+                        if not query_tokens or all(tok in cand_name for tok in query_tokens):
+                            name_matches.append(cand)
+                    
+                    best_cand = None
+                    norm_field = field.lower() if field else ""
+                    if norm_field:
+                        for cand in name_matches:
+                            concepts = cand.get("x_concepts", []) or []
+                            concept_names = [c.get("display_name", "").lower() for c in concepts]
+                            if any(norm_field in c_name or c_name in norm_field for c_name in concept_names):
+                                best_cand = cand
+                                break
+                                
+                    if not best_cand and name_matches:
+                        best_cand = name_matches[0]
+                    if not best_cand:
+                        best_cand = results[0]
+                        
+                    if best_cand:
+                        author_id = best_cand["id"]
+                        clean_id = author_id.split("/")[-1]
+                        print(f"[Dynamic Resolve] Successfully resolved '{name}' to OpenAlex ID: {author_id} ({clean_id})", flush=True)
+            except Exception as e:
+                print(f"[Dynamic Resolve Error] Failed to resolve '{name}' on OpenAlex: {e}", flush=True)
+
         if not clean_id or clean_id == "fallback_seed":
             raise ValueError("No valid author ID provided for collaborator network extraction.")
         from app.models.user_models import ResearcherConnection, ResearcherProfile

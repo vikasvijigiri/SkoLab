@@ -723,16 +723,17 @@ async def get_network_collaborators(
     offset: int = Query(0),
     exclude_ids: str = Query(""),
     field: str = Query(""),
+    name: str = Query(""),
     pipeline_services: PipelineServices = Depends(get_pipeline_services)
 ):
-    cache_key = f"{author_id}_{limit}_{offset}_{exclude_ids}_{field}"
+    cache_key = f"{author_id}_{limit}_{offset}_{exclude_ids}_{field}_{name}"
     cached_data = await network_collaborators_cache.get(cache_key)
     if cached_data is not None:
         return cached_data
         
     excl_list = [x.strip() for x in exclude_ids.split(",")] if exclude_ids else []
     try:
-        data = await pipeline_services.get_network_collaborators(author_id, limit, offset, excl_list, field)
+        data = await pipeline_services.get_network_collaborators(author_id, limit, offset, excl_list, field, name)
         if data:
             await network_collaborators_cache.set(cache_key, data)
         return data
