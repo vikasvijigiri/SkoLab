@@ -95,12 +95,20 @@ fun ProfileScreen(
         }
     }
 
+    // Determine auth state: Firebase currentUser is the source of truth.
+    // cachedUser may be null briefly (DataStore loading); we fall back to Firebase auth state
+    // to avoid showing the login screen to an already-authenticated user.
+    val isFirebaseAuthenticated = remember { authManager.currentUser != null }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(BgPrimary)
     ) {
-        if (cachedUser == null) {
+        // Show ProfileContent when Firebase says logged in OR when cachedUser loads
+        val showProfile = isFirebaseAuthenticated || cachedUser != null
+
+        if (!showProfile) {
             LoginContent(
                 onSignInClick = {
                     val webClientId = authManager.getWebClientId()
@@ -131,8 +139,17 @@ fun ProfileScreen(
                 onBack = onBack
             )
         } else {
+            // Build a SkoLabUser from Firebase auth if cachedUser not yet loaded
+            val displayUser = cachedUser ?: authManager.currentUser?.let { firebaseUser ->
+                com.open.skolab.model.SkoLabUser(
+                    uid = firebaseUser.uid,
+                    name = firebaseUser.displayName ?: "Researcher",
+                    email = firebaseUser.email ?: "",
+                    researchFocus = ""
+                )
+            }
             ProfileContent(
-                skolabUser = cachedUser,
+                skolabUser = displayUser,
                 onNavigateToProWorkspace = onNavigateToProWorkspace,
                 onSignOut = {
                     scope.launch {

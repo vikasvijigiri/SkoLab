@@ -2383,12 +2383,6 @@ fun DiscoveryDashboard(
                 Box(
                     modifier = Modifier.background(Brush.verticalGradient(colors = listOf(BgCard, BgSubtle)))
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(100.dp)
-                            .align(Alignment.TopEnd)
-                            .background(Brush.radialGradient(colors = listOf(AccentTeal.copy(alpha = 0.07f), Color.Transparent)))
-                    )
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
                             text = "Welcome back,",
