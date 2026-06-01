@@ -459,6 +459,16 @@ fun SkoLabMainApp() {
                             },
                             onNavigateToDailyDiscovery = {
                                 navController.navigate("daily_discovery")
+                            },
+                            onNavigateToCollabs = {
+                                navController.navigate("collabs") {
+                                    popUpTo("discover") { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            onNavigateToCreateProject = {
+                                navController.navigate("create_project")
                             }
                         )
                     }
@@ -526,6 +536,9 @@ fun SkoLabMainApp() {
                             .padding(bottom = ScreenInsets.bottomNavClearance)
                     ) {
                         com.open.skolab.ui.screens.IndustryScreen(
+                            onNavigateToAuthor = { authorName ->
+                                navController.navigate("author_detail/${authorName.encodeForRoute()}")
+                            },
                             onNavigateToReader = { title, doi ->
                                 navController.navigate("reader/${title.encodeForRoute()}/${doi.encodeForRoute()}")
                             }

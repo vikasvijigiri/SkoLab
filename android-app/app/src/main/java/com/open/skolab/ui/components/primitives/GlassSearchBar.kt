@@ -73,7 +73,9 @@ fun GlassSearchBar(
                         color = TextMuted,
                         fontSize = 15.sp,
                         fontFamily = BodyFontFamily,
-                        fontWeight = FontWeight.Normal
+                        fontWeight = FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
                 BasicTextField(

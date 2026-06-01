@@ -31,7 +31,7 @@ class SemanticOpenAlexService {
                 // Semantic Search via openalex
                 parameter("search.semantic", query)
                 parameter("per_page", limit)
-                parameter("mailto", "support@skolab.open")
+                parameter("mailto", AppConfig.OPENALEX_MAILTO)
             }.body()
             response.results
         } catch (e: Exception) {
@@ -43,7 +43,7 @@ class SemanticOpenAlexService {
                     parameter("filter", "default.search:\"$query\"")
                     parameter("per_page", limit)
                     parameter("sort", "cited_by_count:desc")
-                    parameter("mailto", "support@skolab.open")
+                    parameter("mailto", AppConfig.OPENALEX_MAILTO)
                 }.body()
                 fallbackResponse.results
             } catch (ex: Exception) {

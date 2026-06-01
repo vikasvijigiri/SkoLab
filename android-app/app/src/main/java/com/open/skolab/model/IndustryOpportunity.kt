@@ -17,7 +17,15 @@ data class IndustryOpportunity(
     val tags: List<String> = emptyList(),
     val description: String = "",
     val postedAgo: String = "",
-    val url: String = ""
+    val url: String = "",
+    val eligibility: String = "",
+    val amount: String = "",
+    val procedureSteps: List<String> = emptyList(),
+    val deadline: String = "",
+    val status: String = "Active",
+    val requiredSkills: List<String> = emptyList(),
+    val matchScore: Int? = null,
+    val relevanceExplanation: String? = null
 )
 
 @Serializable

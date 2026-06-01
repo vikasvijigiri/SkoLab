@@ -51,6 +51,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
     private var cachedSuggestedResearchers: List<Author>? = null
     private var cachedSuggestedUser: String? = null
     private var cachedSuggestedFilter: ResearchFilter? = null
+    private var feedJob: kotlinx.coroutines.Job? = null
 
     private fun appendError(msg: String) {
         val currentErr = _uiState.value.error
@@ -124,7 +125,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                                 id = collab.id,
                                 name = collab.name,
                                 institution = collab.institution,
-                                country = "US",
+                                country = getCountryFromInstitution(collab.institution),
                                 orcidId = null,
                                 fingerprintType = collab.field.ifBlank { focus },
                                 radarScores = mapOf("Disruption" to (collab.relevance_score / 100f), "Novelty" to (collab.relevance_score / 100f * 0.9f)),
@@ -153,6 +154,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                                     conn.copy(author = conn.author.copy(topPapers = if (fallbackPaper != null) listOf(fallbackPaper) else emptyList()))
                                 }
                             } catch (e: Exception) {
+                                if (e is kotlinx.coroutines.CancellationException) throw e
                                 conn
                             }
                         }
@@ -172,6 +174,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                     )
                 }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 Log.e("FeedViewModel", "Failed to load more connections", e)
                 _uiState.value = currentState.copy(isLoadingMoreConnections = false)
             }
@@ -179,7 +182,14 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
     }
 
     fun loadAllFeedData() {
-        viewModelScope.launch {
+        feedJob?.cancel()
+        feedJob = viewModelScope.launch {
+            val name = _uiState.value.user.name
+            val isNameInvalid = name.isBlank() || name.equals("SkoLab User", ignoreCase = true) || name.equals("Researcher", ignoreCase = true)
+            if (isNameInvalid) {
+                _uiState.value = _uiState.value.copy(isLoading = false)
+                return@launch
+            }
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
                 val name = _uiState.value.user.name
@@ -205,6 +215,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                     Log.i("FeedViewModel", "Pre-searching author profile for name: $name")
                     userAuthorProfile = apiService.searchAuthor(name, focus = baseFocus)
                 } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
                     Log.e("FeedViewModel", "Pre-search failed", e)
                     appendError("Author Profile Search: ${e.localizedMessage ?: e.toString()}")
                 }
@@ -324,6 +335,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                             field = displayFocus.ifBlank { null }
                         )
                     } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
                         Log.e("FeedViewModel", "Error calling getNetworkCollaborators", e)
                         emptyList()
                     }
@@ -336,6 +348,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                         val similarAuthors = try {
                             apiService.getSimilarAuthors(displayFocus.ifBlank { "Artificial Intelligence" }, limit = 10)
                         } catch (exc: Exception) {
+                            if (exc is kotlinx.coroutines.CancellationException) throw exc
                             Log.e("FeedViewModel", "Failed to query similar authors for connections fallback", exc)
                             emptyList()
                         }
@@ -413,7 +426,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                                     id = collab.id,
                                     name = collab.name,
                                     institution = collab.institution,
-                                    country = "US",
+                                    country = getCountryFromInstitution(collab.institution),
                                     orcidId = null,
                                     fingerprintType = collab.field.ifBlank { displayFocus },
                                     radarScores = mapOf("Disruption" to (collab.relevance_score / 100f), "Novelty" to (collab.relevance_score / 100f * 0.9f)),
@@ -446,6 +459,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                                         conn
                                     }
                                 } catch (e: Exception) {
+                                    if (e is kotlinx.coroutines.CancellationException) throw e
                                     conn
                                 }
                             }
@@ -527,6 +541,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                         aiText = fallbackLines.joinToString("\n\n")
                     }
                 } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
                     Log.e("FeedViewModel", "Failed to load live AI daily feed", e)
                     appendError("AI Daily Brief: ${e.localizedMessage ?: e.toString()}")
                 }
@@ -537,6 +552,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                         val queryFocus = if (focus.isBlank()) null else focus
                         apiService.getTrendingPapers(queryFocus, limit = 5).map { mapOpenAlexToPaper(it) }
                     } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
                         Log.e("FeedViewModel", "Failed to fetch trending papers", e)
                         appendError("Trending Papers: ${e.localizedMessage ?: e.toString()}")
                         emptyList<Paper>()
@@ -547,6 +563,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                     try {
                         apiService.getTrendingPapers(null, limit = 6).map { mapOpenAlexToPaper(it) }
                     } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
                         Log.e("FeedViewModel", "Failed to fetch hot papers", e)
                         appendError("Hot Papers: ${e.localizedMessage ?: e.toString()}")
                         emptyList<Paper>()
@@ -562,6 +579,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                             .map { it.copy(pdfUrl = it.pdfUrl ?: "https://arxiv.org/pdf/1706.03762.pdf") }
                             .take(5)
                     } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
                         Log.e("FeedViewModel", "Failed to fetch open access papers", e)
                         appendError("Open Access Papers: ${e.localizedMessage ?: e.toString()}")
                         emptyList<Paper>()
@@ -583,7 +601,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                                     id = collab.id,
                                     name = collab.display_name,
                                     institution = collab.institution,
-                                    country = "US",
+                                    country = getCountryFromInstitution(collab.institution),
                                     orcidId = null,
                                     fingerprintType = collab.field_of_study ?: displayFocus,
                                     radarScores = mapOf("Disruption" to 0.85f, "Novelty" to 0.72f),
@@ -599,6 +617,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                             }
                         }
                     } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
                         Log.e("FeedViewModel", "Failed to fetch rising researchers", e)
                         appendError("Rising Researchers: ${e.localizedMessage ?: e.toString()}")
                     }
@@ -653,6 +672,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                 )
 
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 Log.e("FeedViewModel", "Failed to load Feed Screen metrics", e)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -700,6 +720,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                 }
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("FeedViewModel", "buildConnectionGraph failed", e)
         }
         
@@ -802,6 +823,45 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                 )
             }
         }
+    }
+}
+
+private fun getCountryFromInstitution(institution: String): String {
+    val instLower = institution.lowercase().trim()
+    return when {
+        instLower.contains("india") || instLower.contains("tifr") || instLower.contains("iit") || 
+        instLower.contains("homi bhabha") || instLower.contains("tata") || instLower.contains("bhabha") -> "India"
+        
+        instLower.contains("cambridge") || instLower.contains("oxford") || instLower.contains("london") || 
+        instLower.contains("uk") || instLower.contains("united kingdom") || instLower.contains("edinburgh") ||
+        instLower.contains("manchester") -> "UK"
+        
+        instLower.contains("munich") || instLower.contains("max planck") || instLower.contains("germany") || 
+        instLower.contains("berlin") || instLower.contains("heidelberg") || instLower.contains("goettingen") ||
+        instLower.contains("dresden") -> "Germany"
+        
+        instLower.contains("stanford") || instLower.contains("mit") || instLower.contains("harvard") || 
+        instLower.contains("caltech") || instLower.contains("princeton") || instLower.contains("berkeley") || 
+        instLower.contains("yale") || instLower.contains("us") || instLower.contains("america") || 
+        instLower.contains("chicago") || instLower.contains("columbia") || instLower.contains("california") ||
+        instLower.contains("cornell") || instLower.contains("illinois") -> "USA"
+        
+        instLower.contains("toronto") || instLower.contains("mcgill") || instLower.contains("canada") || 
+        instLower.contains("vancouver") || instLower.contains("waterloo") || instLower.contains("british columbia") -> "Canada"
+        
+        instLower.contains("melbourne") || instLower.contains("sydney") || instLower.contains("australia") ||
+        instLower.contains("queensland") || instLower.contains("anu") -> "Australia"
+        
+        instLower.contains("sorbonne") || instLower.contains("paris") || instLower.contains("france") || 
+        instLower.contains("inria") || instLower.contains("cnrs") || instLower.contains("saclay") -> "France"
+        
+        instLower.contains("tokyo") || instLower.contains("kyoto") || instLower.contains("japan") || 
+        instLower.contains("osaka") || instLower.contains("tohoku") -> "Japan"
+        
+        instLower.contains("tsinghua") || instLower.contains("peking") || instLower.contains("china") || 
+        instLower.contains("shanghai") || instLower.contains("zhejiang") || instLower.contains("chinese") -> "China"
+        
+        else -> "USA"
     }
 }
 

@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 from typing import Dict, Any, List
 from pathlib import Path
 import csv
+from app.core.config import settings
 
 # ── Portable path constants ───────────────────────────────────────────────────
 # Resolved from this file's location so they are correct regardless of CWD.
@@ -426,7 +427,7 @@ async def fetch_and_summarize_paper(query: str, source: str = "auto") -> str:
     # ── 1. OpenAlex lookup ───────────────────────────────────────────────────
     if source in ("auto", "openalex"):
         try:
-            oa_headers = {"User-Agent": "SkolabApp/1.0 (mailto:support@skolab.open)", "Accept": "application/json"}
+            oa_headers = {"User-Agent": f"SkolabApp/1.0 (mailto:{settings.openalex_email or 'support@skolab.open'})", "Accept": "application/json"}
             if is_doi:
                 works_url = f"https://api.openalex.org/works/doi:{urllib.parse.quote(query.strip())}"
                 async with httpx.AsyncClient(timeout=10.0) as client:
@@ -463,7 +464,7 @@ async def fetch_and_summarize_paper(query: str, source: str = "auto") -> str:
                     f"&sort=cited_by_count:desc"
                     f"&per_page=5"
                     f"&select=title,publication_year,doi,cited_by_count,authorships,concepts,abstract_inverted_index,primary_location"
-                    f"&mailto=support@skolab.open"
+                    f"&mailto={settings.openalex_email or 'support@skolab.open'}"
                 )
                 async with httpx.AsyncClient(timeout=12.0) as client:
                     r = await client.get(oa_url_q, headers=oa_headers)

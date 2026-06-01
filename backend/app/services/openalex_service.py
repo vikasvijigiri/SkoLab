@@ -201,4 +201,71 @@ class OpenAlexService:
             print(f"[OpenAlexService] Error searching funders for query '{query}': {e}", flush=True)
         return []
 
+def is_work_relevant_to_discipline(work: dict, discipline: str) -> bool:
+    """
+    Meticulously checks if a work (publication) is relevant to the researcher's discipline
+    to avoid incorrectly associating papers from different authors with the same name.
+    """
+    if not discipline:
+        return True
+    
+    discipline_lower = discipline.lower().strip()
+    if not discipline_lower or discipline_lower in ["general research", "researcher", "multidisciplinary", "general"]:
+        return True
+        
+    # Collect all concept and topic names for this work
+    concepts = work.get("concepts") or work.get("x_concepts") or []
+    topics = work.get("topics") or []
+    
+    work_keywords = set()
+    for c in concepts:
+        if isinstance(c, dict) and c.get("display_name"):
+            work_keywords.add(c.get("display_name").lower())
+            
+    for t in topics:
+        if isinstance(t, dict):
+            if t.get("display_name"):
+                work_keywords.add(t.get("display_name").lower())
+            for field_key in ["field", "subfield", "domain"]:
+                field_obj = t.get(field_key)
+                if isinstance(field_obj, dict) and field_obj.get("display_name"):
+                    work_keywords.add(field_obj.get("display_name").lower())
+                    
+    # Also scan title and journal
+    title = work.get("title") or ""
+    if title:
+        work_keywords.add(title.lower())
+    
+    # Primary locations / sources (journals)
+    primary_location = work.get("primary_location") or {}
+    source = primary_location.get("source") or {}
+    journal = source.get("display_name") or ""
+    if journal:
+        work_keywords.add(journal.lower())
+        
+    # Extract root search terms from discipline
+    discipline_terms = [t for t in discipline_lower.split() if len(t) > 2]
+    if not discipline_terms:
+        discipline_terms = [discipline_lower]
+        
+    # Map disciplines to related concepts to prevent clean false negatives
+    extended_terms = set(discipline_terms)
+    if "phys" in discipline_lower:
+        extended_terms.update(["phys", "quantum", "spin", "antiferromagnet", "squaric", "condensed", "superconduct", "particle", "magnetic", "optical", "fluid", "thermodynamic", "mechanics", "gravity", "energy", "matter", "cosmology"])
+    elif "comput" in discipline_lower or "cs" in discipline_lower or "ai" in discipline_lower:
+        extended_terms.update(["comput", "learn", "intel", "neural", "vision", "algorithm", "software", "network", "image", "data", "robot", "nlp", "processing"])
+    elif "biochem" in discipline_lower or "bio" in discipline_lower or "crispr" in discipline_lower:
+        extended_terms.update(["chem", "bio", "molec", "gene", "crispr", "dna", "rna", "enzyme", "protein", "cell", "genom", "nuclease", "chromatin", "nucleic"])
+    elif "chem" in discipline_lower:
+        extended_terms.update(["chem", "molec", "organ", "inorgan", "spectroscop", "synthes", "reaction", "cataly"])
+        
+    # Check if any keyword in the work matches any of the extended terms
+    for kw in work_keywords:
+        for term in extended_terms:
+            if term in kw:
+                return True
+                
+    return False
+
+
 

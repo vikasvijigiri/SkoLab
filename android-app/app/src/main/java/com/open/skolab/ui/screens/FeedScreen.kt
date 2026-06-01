@@ -114,6 +114,8 @@ fun FeedScreen(
     onLoadingStateChanged: (Boolean) -> Unit = {},
     onNavigateToLogicEngine: () -> Unit = {},
     onNavigateToDailyDiscovery: () -> Unit = {},
+    onNavigateToCollabs: () -> Unit = {},
+    onNavigateToCreateProject: () -> Unit = {},
     viewModel: FeedViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -125,13 +127,30 @@ fun FeedScreen(
     var setupNameText by remember { mutableStateOf("") }
     var setupFocusText by remember { mutableStateOf("") }
 
-
     val context = LocalContext.current
     val authManager = com.open.skolab.di.AppDependencies.authManager
     val userPrefs = remember { com.open.skolab.data.UserPreferences(context) }
     val apiService = com.open.skolab.di.AppDependencies.apiService
     val cachedUser by authManager.cachedUser.collectAsState(initial = null)
     val connectionsList by userPrefs.userConnections.collectAsState(initial = emptyList())
+
+    // ── Active Collabs: Firestore live listener ──────────────────────────────
+    val currentUserId = remember(cachedUser) { cachedUser?.uid ?: "" }
+    var activeCollabProjects by remember { mutableStateOf<List<ProjectCollab>>(emptyList()) }
+    DisposableEffect(currentUserId) {
+        if (currentUserId.isEmpty()) { onDispose {} } else {
+            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val listener = db.collection("collabs_groups")
+                .whereArrayContains("memberUids", currentUserId)
+                .addSnapshotListener { snapshot, _ ->
+                    if (snapshot != null) {
+                        activeCollabProjects = snapshot.toObjects(ProjectCollab::class.java)
+                            .sortedByDescending { it.createdAt }
+                    }
+                }
+            onDispose { listener.remove() }
+        }
+    }
 
     val isInitialLoad = remember { mutableStateOf(true) }
     LaunchedEffect(uiState.isLoading) {
@@ -143,14 +162,15 @@ fun FeedScreen(
 
 
     LaunchedEffect(cachedUser) {
-        val uid = cachedUser?.uid ?: "user_default"
-        val name = cachedUser?.name ?: ""
-        val focus = cachedUser?.researchFocus ?: ""
+        val user = cachedUser ?: return@LaunchedEffect
+        val uid = user.uid
+        val name = user.name
+        val focus = user.researchFocus
         
         val isNameInvalid = name.isBlank() || name.equals("SkoLab User", ignoreCase = true) || name.equals("Researcher", ignoreCase = true)
         val isFocusInvalid = focus.isBlank() || focus.equals("Researcher", ignoreCase = true) || focus.equals("General Research", ignoreCase = true)
         
-        if ((isNameInvalid || isFocusInvalid) && cachedUser != null) {
+        if (isNameInvalid || isFocusInvalid) {
             setupNameText = if (isNameInvalid) "" else name
             setupFocusText = if (isFocusInvalid) "" else focus
             showSetupFocusDialog = true
@@ -273,28 +293,65 @@ fun FeedScreen(
                     }
                 }
 
-                // Vertical Infinite Feed of Collaborators
-                
-                // NEW: People You May Know Header + Filter Chips
+                // ── People You May Know ──────────────────────────────────────────
                 item {
-                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp)) {
+                        // Header row
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Icon(Icons.Default.People, contentDescription = null, tint = EntropiColors.Blue1, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                "People You May Know",
-                                color = EntropiColors.Text,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(30.dp)
+                                        .background(EntropiColors.Blue1.copy(alpha = 0.12f), RoundedCornerShape(8.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.People, contentDescription = null, tint = EntropiColors.Blue1, modifier = Modifier.size(16.dp))
+                                }
+                                Spacer(Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        "People You May Know",
+                                        color = EntropiColors.Text,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 15.sp
+                                    )
+                                    Text(
+                                        "Based on your research network",
+                                        color = EntropiColors.Text3,
+                                        fontSize = 10.sp
+                                    )
+                                }
+                            }
+                            // See all button
+                            Surface(
+                                onClick = onNavigateToCollabs,
+                                shape = RoundedCornerShape(8.dp),
+                                color = EntropiColors.Blue1.copy(alpha = 0.10f),
+                                border = BorderStroke(0.5.dp, EntropiColors.Blue1.copy(alpha = 0.25f))
+                            ) {
+                                Text(
+                                    "Orbit →",
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    color = EntropiColors.Blue1,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
-                        
+
                         Spacer(Modifier.height(12.dp))
-                        
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+
+                        // Country filter chips
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(horizontal = 20.dp)
+                        ) {
                             items(listOf("Global", "USA", "UK", "India", "Germany", "Canada", "Australia", "France", "Japan")) { country ->
                                 val isSelected = selectedCountryFilter == country
                                 Surface(
@@ -313,54 +370,78 @@ fun FeedScreen(
                                 }
                             }
                         }
-                    }
-                }
 
-                val filteredConnections = if (selectedCountryFilter == "Global") {
-                    uiState.suggestedConnections
-                } else {
-                    uiState.suggestedConnections.filter { 
-                        it.author.country.contains(selectedCountryFilter, ignoreCase = true) || 
-                        it.author.institution.contains(selectedCountryFilter, ignoreCase = true) 
-                    }
-                }
+                        Spacer(Modifier.height(14.dp))
 
-                if (uiState.isLoading && filteredConnections.isEmpty()) {
-                    items(5) {
-                        Box(modifier = Modifier.padding(horizontal = 20.dp)) {
-                            PaperShimmerCard() // Shimmer loader
-                        }
-                    }
-                } else if (filteredConnections.isEmpty()) {
-                    item {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().padding(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "No connections found.",
-                                color = EntropiColors.Text3,
-                                fontSize = 14.sp
-                            )
-                        }
-                    }
-                } else {
-                    val chunkedList = filteredConnections.chunked(2)
-                    itemsIndexed(chunkedList) { index, rowItems ->
-                        // Trigger load more when reaching the end of the connections list
-                        if (index >= chunkedList.size - 1 && !uiState.isLoadingMoreConnections && !uiState.isLoading) {
-                            LaunchedEffect(index) {
-                                viewModel.loadMoreConnections()
+                        // ── Horizontal scrollable cards ──────────────────────
+                        val filteredConnections = if (selectedCountryFilter == "Global") {
+                            uiState.suggestedConnections
+                        } else {
+                            uiState.suggestedConnections.filter {
+                                it.author.country.contains(selectedCountryFilter, ignoreCase = true) ||
+                                it.author.institution.contains(selectedCountryFilter, ignoreCase = true)
                             }
                         }
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            for (conn in rowItems) {
-                                val isConnected = connectionsList.any { it.id == conn.author.id }
-                                Box(modifier = Modifier.weight(1f)) {
-                                    ConnectionCard(
+
+                        if (uiState.isLoading && filteredConnections.isEmpty()) {
+                            // Horizontal shimmer row
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                contentPadding = PaddingValues(horizontal = 20.dp)
+                            ) {
+                                items(4) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(190.dp, 230.dp)
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(EntropiColors.Card2)
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(14.dp),
+                                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            ShimmerBar(Modifier.size(44.dp).clip(CircleShape))
+                                            ShimmerBar(Modifier.fillMaxWidth().height(12.dp))
+                                            ShimmerBar(Modifier.fillMaxWidth(0.7f).height(10.dp))
+                                            ShimmerBar(Modifier.fillMaxWidth().height(10.dp))
+                                            ShimmerBar(Modifier.fillMaxWidth().height(30.dp).clip(RoundedCornerShape(8.dp)))
+                                        }
+                                    }
+                                }
+                            }
+                        } else if (filteredConnections.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 20.dp)
+                                    .height(120.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(EntropiColors.Card2),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(Icons.Default.PersonSearch, null, tint = EntropiColors.Text3, modifier = Modifier.size(28.dp))
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(
+                                        "No connections found for $selectedCountryFilter",
+                                        color = EntropiColors.Text3,
+                                        fontSize = 13.sp,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    )
+                                }
+                            }
+                        } else {
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                contentPadding = PaddingValues(horizontal = 20.dp)
+                            ) {
+                                itemsIndexed(filteredConnections) { index, conn ->
+                                    // Trigger load more when near end
+                                    if (index >= filteredConnections.size - 2 && !uiState.isLoadingMoreConnections && !uiState.isLoading) {
+                                        LaunchedEffect(index) { viewModel.loadMoreConnections() }
+                                    }
+                                    val isConnected = connectionsList.any { it.id == conn.author.id }
+                                    PulseConnectionCard(
                                         connection = conn,
                                         isConnectedExternal = isConnected,
                                         onConnect = {
@@ -376,9 +457,7 @@ fun FeedScreen(
                                             }
                                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         },
-                                        onChatClick = {
-                                            onNavigateToChat(conn.author.name, conn.author.id)
-                                        },
+                                        onChatClick = { onNavigateToChat(conn.author.name, conn.author.id) },
                                         onAuthorClick = {
                                             try {
                                                 val preview = conn.author.toAuthorResponse()
@@ -390,25 +469,249 @@ fun FeedScreen(
                                         }
                                     )
                                 }
-                            }
-                            if (rowItems.size < 2) {
-                                Spacer(modifier = Modifier.weight((2 - rowItems.size).toFloat()))
+                                if (uiState.isLoadingMoreConnections) {
+                                    item {
+                                        Box(
+                                            modifier = Modifier.size(190.dp, 230.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            CircularProgressIndicator(color = EntropiColors.Blue1, modifier = Modifier.size(28.dp), strokeWidth = 2.dp)
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
-                    if (uiState.isLoadingMoreConnections) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center
+                }
+
+                // ── Active Research Collaborations preview ───────────────────
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp)
+                    ) {
+                        // Section header
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(30.dp)
+                                        .background(EntropiColors.Green.copy(alpha = 0.12f), RoundedCornerShape(8.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.Groups, null, tint = EntropiColors.Green, modifier = Modifier.size(16.dp))
+                                }
+                                Spacer(Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        "Active Collaborations",
+                                        color = EntropiColors.Text,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 15.sp
+                                    )
+                                    Text(
+                                        "Your live research workspaces",
+                                        color = EntropiColors.Text3,
+                                        fontSize = 10.sp
+                                    )
+                                }
+                            }
+                            Surface(
+                                onClick = onNavigateToCollabs,
+                                shape = RoundedCornerShape(8.dp),
+                                color = EntropiColors.Green.copy(alpha = 0.10f),
+                                border = BorderStroke(0.5.dp, EntropiColors.Green.copy(alpha = 0.3f))
                             ) {
-                                CircularProgressIndicator(
-                                    color = EntropiColors.Blue1,
-                                    modifier = Modifier.size(32.dp),
-                                    strokeWidth = 3.dp
+                                Text(
+                                    "All →",
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    color = EntropiColors.Green,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
+                            }
+                        }
+
+                        Spacer(Modifier.height(12.dp))
+
+                        if (activeCollabProjects.isEmpty()) {
+                            // Empty CTA card
+                            Surface(
+                                onClick = onNavigateToCreateProject,
+                                shape = RoundedCornerShape(14.dp),
+                                color = EntropiColors.Card,
+                                border = BorderStroke(1.dp, EntropiColors.Border)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .background(
+                                                Brush.radialGradient(listOf(EntropiColors.Green.copy(alpha = 0.18f), Color.Transparent)),
+                                                CircleShape
+                                            )
+                                            .border(1.dp, EntropiColors.Green.copy(alpha = 0.3f), CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Default.Add, null, tint = EntropiColors.Green, modifier = Modifier.size(22.dp))
+                                    }
+                                    Column {
+                                        Text(
+                                            "Start a Collab Workspace",
+                                            color = EntropiColors.Text,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp
+                                        )
+                                        Text(
+                                            "Invite co-authors, share equations, draft manuscripts together",
+                                            color = EntropiColors.Text3,
+                                            fontSize = 11.sp,
+                                            lineHeight = 15.sp
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                activeCollabProjects.take(3).forEach { proj ->
+                                    Surface(
+                                        onClick = onNavigateToCollabs,
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = EntropiColors.Card,
+                                        border = BorderStroke(1.dp, EntropiColors.Border)
+                                    ) {
+                                        Column(modifier = Modifier.padding(14.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                    modifier = Modifier.weight(1f)
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(32.dp)
+                                                            .background(EntropiColors.Green.copy(alpha = 0.12f), CircleShape),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text(
+                                                            text = proj.name.take(1).uppercase(),
+                                                            color = EntropiColors.Green,
+                                                            fontWeight = FontWeight.ExtraBold,
+                                                            fontSize = 14.sp
+                                                        )
+                                                    }
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                            text = proj.name,
+                                                            color = EntropiColors.Text,
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = 13.sp,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                        Text(
+                                                            text = "${proj.members.size} member${if (proj.members.size != 1) "s" else ""} · by ${proj.ownerName.split(" ").firstOrNull() ?: "You"}",
+                                                            color = EntropiColors.Text3,
+                                                            fontSize = 10.sp
+                                                        )
+                                                    }
+                                                }
+                                                Icon(
+                                                    Icons.Default.ChevronRight,
+                                                    null,
+                                                    tint = EntropiColors.Text3,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+
+                                            if (proj.description.isNotBlank()) {
+                                                Spacer(Modifier.height(6.dp))
+                                                Text(
+                                                    text = proj.description,
+                                                    color = EntropiColors.Text2,
+                                                    fontSize = 11.sp,
+                                                    maxLines = 2,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    lineHeight = 15.sp
+                                                )
+                                            }
+
+                                            // Manuscript progress bar
+                                            if (proj.manuscriptProgress > 0f) {
+                                                Spacer(Modifier.height(10.dp))
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .weight(1f)
+                                                            .height(4.dp)
+                                                            .clip(RoundedCornerShape(2.dp))
+                                                            .background(EntropiColors.Border)
+                                                    ) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .fillMaxHeight()
+                                                                .fillMaxWidth(proj.manuscriptProgress.coerceIn(0f, 1f))
+                                                                .background(
+                                                                    Brush.horizontalGradient(listOf(EntropiColors.Green, EntropiColors.Blue1)),
+                                                                    RoundedCornerShape(2.dp)
+                                                                )
+                                                        )
+                                                    }
+                                                    Text(
+                                                        text = "${(proj.manuscriptProgress * 100).toInt()}%",
+                                                        color = EntropiColors.Green,
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // + New workspace button
+                                Surface(
+                                    onClick = onNavigateToCreateProject,
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = Color.Transparent,
+                                    border = BorderStroke(1.dp, EntropiColors.Border)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(Icons.Default.Add, null, tint = EntropiColors.Blue1, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            "New Workspace",
+                                            color = EntropiColors.Blue1,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -565,6 +868,226 @@ fun FeedScreen(
 }
 
 
+
+// ── PulseConnectionCard: Portrait card for horizontal PYMK scroll ─────────────
+@Composable
+fun PulseConnectionCard(
+    connection: Connection,
+    isConnectedExternal: Boolean,
+    onConnect: () -> Unit,
+    onChatClick: () -> Unit = {},
+    onAuthorClick: () -> Unit
+) {
+    val context = LocalContext.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1.0f,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "cardScale"
+    )
+
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = EntropiColors.Card,
+        border = BorderStroke(1.dp, if (isPressed) EntropiColors.Blue1.copy(alpha = 0.5f) else EntropiColors.Border),
+        modifier = Modifier
+            .width(190.dp)
+            .graphicsLayer(scaleX = scale, scaleY = scale)
+            .clickable(interactionSource = interactionSource, indication = null) { onAuthorClick() }
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Avatar + status badge row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Box(modifier = Modifier.size(42.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    listOf(EntropiColors.Blue1.copy(alpha = 0.20f), EntropiColors.Card2)
+                                )
+                            )
+                            .border(1.dp, EntropiColors.Blue1.copy(alpha = 0.3f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = connection.author.name.take(2).uppercase(),
+                            color = EntropiColors.Blue1,
+                            fontFamily = SyneFontFamily,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 14.sp
+                        )
+                    }
+                    // Online/SkoLab badge
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .align(Alignment.BottomEnd)
+                            .clip(CircleShape)
+                            .background(
+                                if (connection.isOnSkoLab) Color(0xFF00C853)
+                                else EntropiColors.Border
+                            )
+                            .border(1.5.dp, EntropiColors.Card, CircleShape)
+                    )
+                }
+
+                // Depth badge
+                val (depthLabel, depthColor) = when (connection.depth) {
+                    1 -> "Direct" to EntropiColors.Green
+                    2 -> "2nd°" to EntropiColors.Blue1
+                    else -> "3rd°" to EntropiColors.Text3
+                }
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = depthColor.copy(alpha = 0.10f),
+                    border = BorderStroke(0.5.dp, depthColor.copy(alpha = 0.3f))
+                ) {
+                    Text(
+                        text = depthLabel,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        color = depthColor,
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = SpaceGroteskFontFamily
+                    )
+                }
+            }
+
+            // Name
+            Text(
+                text = connection.author.name,
+                fontFamily = SpaceGroteskFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = EntropiColors.Text,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                lineHeight = 16.sp
+            )
+
+            // Role + institution
+            val inferredRole = when {
+                connection.author.totalPapers > 50 -> "Professor"
+                connection.author.totalPapers > 15 -> "Postdoc"
+                else -> "Researcher"
+            }
+            Text(
+                text = "$inferredRole · ${connection.author.institution.ifEmpty { connection.author.country }.take(22)}",
+                fontFamily = SpaceGroteskFontFamily,
+                fontSize = 9.5.sp,
+                color = EntropiColors.Text3,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                lineHeight = 13.sp
+            )
+
+            // Metrics strip
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(EntropiColors.Card2, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 8.dp, vertical = 5.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(connection.papersCollaborated.toString(), fontFamily = JetBrainsMonoFontFamily, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = EntropiColors.Blue1)
+                    Text("Joint", fontFamily = SpaceGroteskFontFamily, fontSize = 7.sp, color = EntropiColors.Text3)
+                }
+                Box(modifier = Modifier.width(0.5.dp).height(16.dp).background(EntropiColors.Border).align(Alignment.CenterVertically))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("h${connection.hIndex}", fontFamily = JetBrainsMonoFontFamily, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = EntropiColors.Purple1)
+                    Text("Index", fontFamily = SpaceGroteskFontFamily, fontSize = 7.sp, color = EntropiColors.Text3)
+                }
+                Box(modifier = Modifier.width(0.5.dp).height(16.dp).background(EntropiColors.Border).align(Alignment.CenterVertically))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("${connection.mutualCount}%", fontFamily = JetBrainsMonoFontFamily, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = EntropiColors.Green)
+                    Text("Match", fontFamily = SpaceGroteskFontFamily, fontSize = 7.sp, color = EntropiColors.Text3)
+                }
+            }
+
+            Spacer(Modifier.weight(1f))
+
+            // Action buttons
+            if (connection.isOnSkoLab) {
+                if (isConnectedExternal) {
+                    Surface(
+                        onClick = onChatClick,
+                        modifier = Modifier.fillMaxWidth().height(32.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        color = EntropiColors.Card2,
+                        border = BorderStroke(1.dp, EntropiColors.Border)
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Icon(Icons.AutoMirrored.Filled.Chat, null, tint = EntropiColors.Blue1, modifier = Modifier.size(12.dp))
+                                Text("Message", fontFamily = SpaceGroteskFontFamily, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = EntropiColors.Blue1)
+                            }
+                        }
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Surface(
+                            onClick = onConnect,
+                            modifier = Modifier.fillMaxWidth().height(32.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color.Transparent
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.horizontalGradient(listOf(EntropiColors.Blue1, EntropiColors.Blue2)),
+                                        RoundedCornerShape(8.dp)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Icon(Icons.Default.PersonAdd, null, tint = Color.White, modifier = Modifier.size(12.dp))
+                                    Text("Connect", fontFamily = SpaceGroteskFontFamily, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                }
+                            }
+                        }
+                        Surface(
+                            onClick = onChatClick,
+                            modifier = Modifier.fillMaxWidth().height(28.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            color = EntropiColors.Green.copy(alpha = 0.10f),
+                            border = BorderStroke(0.5.dp, EntropiColors.Green.copy(alpha = 0.3f))
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("🤝 Collab", fontFamily = SpaceGroteskFontFamily, fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = EntropiColors.Green)
+                            }
+                        }
+                    }
+                }
+            } else {
+                Surface(
+                    onClick = {
+                        android.widget.Toast.makeText(context, "Invite ${connection.author.name} to SkoLab", android.widget.Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.fillMaxWidth().height(32.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = EntropiColors.Gold1.copy(alpha = 0.10f),
+                    border = BorderStroke(0.5.dp, EntropiColors.Gold1.copy(alpha = 0.4f))
+                ) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("✉️ Invite", fontFamily = SpaceGroteskFontFamily, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = EntropiColors.Gold1)
+                    }
+                }
+            }
+        }
+    }
+}
 
 // ── COMPONENT 2: FrontierPulseCard ───────────────────────────────────────────
 @Composable
@@ -1269,7 +1792,7 @@ fun ResearcherCard(
                     contentPadding = PaddingValues(0.dp),
                     shape = RoundedCornerShape(6.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isConnected) EntropiColors.Card2 else Color(0xFF2E7D32), // Dark Green
+                        containerColor = if (isConnected) EntropiColors.Card2 else Color(0xFF1565C0), // Premium Blue
                         contentColor = if (isConnected) EntropiColors.Gold1 else Color.White
                     ),
                     border = BorderStroke(1.dp, if (isConnected) EntropiColors.Border else Color.Transparent)
@@ -1493,7 +2016,7 @@ fun ConnectionCard(
                         ) {
                             Box(
                                 modifier = Modifier.fillMaxSize().background(
-                                    Brush.horizontalGradient(listOf(Color(0xFF1565C0), Color(0xFF6A1B9A))),
+                                    Color(0xFF1565C0), // Solid Premium Blue
                                     RoundedCornerShape(8.dp)
                                 ),
                                 contentAlignment = Alignment.Center

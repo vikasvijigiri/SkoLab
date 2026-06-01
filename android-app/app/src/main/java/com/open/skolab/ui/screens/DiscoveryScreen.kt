@@ -1,4 +1,4 @@
-﻿package com.open.skolab.ui.screens
+package com.open.skolab.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
@@ -1206,7 +1206,7 @@ fun ResearcherHeroCard(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             val isRequested = connectionState == "Requested"
-                            val buttonColor = if (isRequested) BorderLight else Color(0xFF2E7D32) // Dark Green
+                            val buttonColor = if (isRequested) BorderLight else Color(0xFF1565C0) // Premium Blue
                             val contentColor = if (isRequested) TextSecondary else Color.White
                             
                             Button(

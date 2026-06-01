@@ -592,7 +592,15 @@ async def search_author(
             raise HTTPException(status_code=404, detail="Author not found on OpenAlex")
 
         author_orcid = author_data.get("orcid")
+
+        # Meticulously resolve field/discipline first to filter out papers from different authors with the same name
+        from app.services.openalex_service import extract_field_and_expertise, is_work_relevant_to_discipline
+        field, expertise = extract_field_and_expertise(author_data, author_data.get("display_name", name))
+        target_discipline = focus or field
+
         raw_works = await openalex_service.fetch_author_works(resolved_id, orcid=author_orcid, per_page=50)
+        if target_discipline:
+            raw_works = [w for w in raw_works if is_work_relevant_to_discipline(w, target_discipline)]
 
         works_data = []
         for w in raw_works:
@@ -640,8 +648,10 @@ async def search_author(
                 institution = first.get("display_name") or "Independent Researcher"
 
         stats = author_data.get("summary_stats") or {}
-        from app.services.openalex_service import extract_field_and_expertise
-        field, expertise = extract_field_and_expertise(author_data, author_data.get("display_name", name))
+        
+        # Calculate clean metrics based on filtered relevant publications
+        clean_works_count = len(works_data)
+        clean_cited_by_count = sum(w.citations for w in works_data)
 
         affiliations = author_data.get("affiliations") or []
         hist_map: dict = {}
@@ -669,8 +679,8 @@ async def search_author(
             orcid=author_data.get("orcid"),
             h_index=stats.get("h_index", 0),
             i10_index=stats.get("i10_index", 0),
-            works_count=author_data.get("works_count", 0),
-            cited_by_count=author_data.get("cited_by_count", 0),
+            works_count=clean_works_count,
+            cited_by_count=clean_cited_by_count,
             institution=institution,
             field_of_study=field,
             expertise=expertise,

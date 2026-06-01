@@ -176,8 +176,18 @@ from fastapi.staticfiles import StaticFiles
 _DOWNLOADS_DIR = settings.downloads_dir  # resolved absolute path from config
 app.mount("/downloads", StaticFiles(directory=str(_DOWNLOADS_DIR)), name="downloads")
 
-# Include aggregate router with version prefix
+# Include aggregate router at both root (for direct client pings) and /api/v1 (for versioned compatibility)
+app.include_router(api_router)
 app.include_router(api_router, prefix="/api/v1")
+
+@app.get("/")
+async def root():
+    """Root endpoint returning API metadata for mobile client verification and discovery."""
+    return {
+        "app": "Skolab API",
+        "status": "online",
+        "version": "1.0.0"
+    }
 
 @app.get("/health")
 async def health():

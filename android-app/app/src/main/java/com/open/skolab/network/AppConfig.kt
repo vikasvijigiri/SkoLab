@@ -22,4 +22,9 @@ object AppConfig {
      * an "offline / backend not found" state to the user.
      */
     const val DISCOVERY_TIMEOUT_MS = 10_000L
+
+    /**
+     * Fallback academic mailto identifier for external OpenAlex requests.
+     */
+    const val OPENALEX_MAILTO = "support@skolab.open"
 }

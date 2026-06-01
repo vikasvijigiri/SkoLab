@@ -23,6 +23,7 @@ import time
 from typing import Optional, List, Dict, Any, Tuple
 from .metrics_service import MetricsService
 from app.prompts import RESEARCH_INTELLIGENCE_SYSTEM_PROMPT
+from app.core.config import settings
 
 
 # ── LLM Context Budget ────────────────────────────────────────────────────────
@@ -183,7 +184,7 @@ class SummarizationService:
         try:
             headers = {
                 "User-Agent": (
-                    "SkolabApp/1.0 (mailto:support@skolab.open) "
+                    f"SkolabApp/1.0 (mailto:{settings.openalex_email or 'support@skolab.open'}) "
                     "Academic research tool - reading open-access papers"
                 ),
                 "Accept": "application/pdf,*/*",
@@ -288,7 +289,7 @@ class SummarizationService:
         """Queries Unpaywall to find a legal open-access PDF URL for a DOI."""
         try:
             clean_doi = self._clean_doi(doi)
-            url = f"https://api.unpaywall.org/v2/{clean_doi}?email=support@skolab.open"
+            url = f"https://api.unpaywall.org/v2/{clean_doi}?email={settings.openalex_email or 'support@skolab.open'}"
             async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
                 resp = await client.get(url)
                 if resp.status_code == 200:
@@ -334,7 +335,7 @@ class SummarizationService:
                 return {}
 
             headers = {
-                "User-Agent": "SkolabApp/1.0 (mailto:support@skolab.open)",
+                "User-Agent": f"SkolabApp/1.0 (mailto:{settings.openalex_email or 'support@skolab.open'})",
                 "Accept": "application/json",
             }
             from app.core.config import settings
