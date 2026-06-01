@@ -63,3 +63,36 @@ class Conjecture(Base):
 
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     expires_at = Column(DateTime, nullable=True)   # 24-hour TTL
+
+
+class ScrapedOpportunity(Base):
+    """
+    Opportunities (grants, fellowships, jobs) scraped/crawled from the web
+    and parsed into structured fields.
+    """
+    __tablename__ = "scraped_opportunities"
+
+    id = Column(String, primary_key=True)
+    type = Column(String, nullable=False)           # "JOB", "FUNDING", "REQUIREMENT"
+    title = Column(String, nullable=False)
+    company_or_funder = Column(String, nullable=False)
+    description = Column(Text, nullable=False)
+    url = Column(String, nullable=False)
+    posted_ago = Column(String, nullable=True)
+    tags = Column(JSON, nullable=True)              # list[str]
+    
+    # Premium fields
+    eligibility = Column(Text, nullable=True)
+    amount = Column(String, nullable=True)
+    procedure_steps = Column(JSON, nullable=True)   # list[str]
+    deadline = Column(String, nullable=True)
+    status = Column(String, default="Active")       # "Active" / "Inactive"
+    required_skills = Column(JSON, nullable=True)   # list[str]
+    focus_topic = Column(String, index=True, nullable=True) # e.g. "Physics", "AI"
+    
+    # Real profile relevance fields computed by LLM
+    match_score = Column(Integer, nullable=True)
+    relevance_explanation = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+

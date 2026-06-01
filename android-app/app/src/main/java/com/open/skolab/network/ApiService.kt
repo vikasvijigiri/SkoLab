@@ -468,6 +468,9 @@ class ApiService {
     private fun baseUrl(): String? = ServerLocator.baseUrl.value
 
     private fun handleNetworkException(e: Exception, base: String?) {
+        if (e is kotlinx.coroutines.CancellationException) {
+            return
+        }
         if (base != null && (e is java.io.IOException || 
             e.javaClass.name.contains("Timeout") || 
             e.javaClass.name.contains("Connect"))) {
@@ -1329,8 +1332,8 @@ class ApiService {
             val filteredList = if (!field.isNullOrBlank()) {
                 val fieldLower = field.trim().lowercase()
                 sortedList.filter { 
-                    (it.field ?: "").lowercase().contains(fieldLower) || 
-                    (it.connection_path ?: "").lowercase().contains(fieldLower)
+                    it.field.lowercase().contains(fieldLower) || 
+                    it.connection_path.lowercase().contains(fieldLower)
                 }
             } else {
                 sortedList
@@ -1508,7 +1511,7 @@ class ApiService {
         }
     }
 
-    suspend fun getIndustryOpportunities(focus: String): List<IndustryOpportunity> {
+    suspend fun getIndustryOpportunities(focus: String, name: String? = null): List<IndustryOpportunity> {
         return try {
             val baseUrl = ServerLocator.baseUrl.value
             if (baseUrl == null) {
@@ -1517,6 +1520,7 @@ class ApiService {
             }
             val response: io.ktor.client.statement.HttpResponse = httpClient.get("$baseUrl/industry_opportunities") {
                 parameter("focus", focus)
+                if (name != null) parameter("name", name)
             }
             if (response.status == HttpStatusCode.OK) {
                 response.body()
@@ -1525,8 +1529,25 @@ class ApiService {
                 emptyList()
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("ApiService", "Error fetching industry opportunities: ${e.message}")
             emptyList()
+        }
+    }
+
+    suspend fun getAssistantProfessorRoadmap(authorId: String?, name: String, focus: String): com.open.skolab.model.AssistantProfessorRoadmap? {
+        val base = baseUrl() ?: return null
+        return try {
+            httpClient.get("$base/assistant_professor_roadmap") {
+                authorId?.let { parameter("author_id", it) }
+                parameter("name", name)
+                parameter("focus", focus)
+            }.body()
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            handleNetworkException(e, base)
+            Log.e(tag, "getAssistantProfessorRoadmap failed", e)
+            null
         }
     }
 }

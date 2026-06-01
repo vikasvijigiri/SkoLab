@@ -127,3 +127,18 @@ class ActivityEventPayload(BaseModel):
 class UserMemoryEventsRequest(BaseModel):
     user_id: str
     events: List[ActivityEventPayload]
+
+class UserMemoryProfileResponse(BaseModel):
+    user_id: str
+    top_topics: List[str] = []
+    active_hours: List[int] = []
+    reading_pace: str = "unknown"
+    research_style: str = "unknown"
+    avg_read_minutes: float = 0.0
+    unfinished_papers: List[str] = []
+    recently_read_papers: List[str] = []
+    frequent_collaborators: List[str] = []
+    frequent_search_terms: List[str] = []
+    last_active_topic: str = ""
+    total_papers_read: int = 0
+    last_updated: int = 0

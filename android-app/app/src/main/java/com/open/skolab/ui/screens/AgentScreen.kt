@@ -1,4 +1,4 @@
-﻿package com.open.skolab.ui.screens
+package com.open.skolab.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -811,7 +811,7 @@ fun AgentInputBar(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF1E2D35))
+                            .background(EntropiColors.Card2)
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -858,8 +858,8 @@ fun AgentInputBar(
                         Surface(
                             onClick = { onQuickPrompt(prompt) },
                             shape = RoundedCornerShape(20.dp),
-                            color = Color(0xFF1E2D35),
-                            border = BorderStroke(0.5.dp, AccentTeal.copy(alpha = 0.25f))
+                            color = EntropiColors.Card2,
+                            border = BorderStroke(0.5.dp, EntropiColors.Border)
                         ) {
                             Text(
                                 text = prompt,
@@ -881,7 +881,7 @@ fun AgentInputBar(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF1E2D35))
+                        .background(EntropiColors.Card2)
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -915,7 +915,7 @@ fun AgentInputBar(
                     .fillMaxWidth()
                     .heightIn(min = 48.dp, max = 140.dp)
                     .clip(RoundedCornerShape(26.dp))
-                    .background(Color(0xFF1E2D35))
+                    .background(EntropiColors.Card2)
                     .border(
                         width = if (text.isNotBlank()) 1.dp else 0.5.dp,
                         brush = if (text.isNotBlank())

@@ -14,6 +14,58 @@ from app.services.openalex_service import OpenAlexService
 from app.prompts import DAILY_FEED_ADVISOR_PROMPT_TEMPLATE
 from app.db.pg_cache import PgBackedCache
 
+def is_field_semantically_relevant(collab_field: str, collab_path: str, discipline: str) -> bool:
+    if not discipline:
+        return True
+    
+    disc_lower = discipline.lower().strip()
+    collab_field_lower = (collab_field or "").lower().strip()
+    collab_path_lower = (collab_path or "").lower().strip()
+    
+    # Direct substring matches
+    if disc_lower in collab_field_lower or collab_field_lower in disc_lower:
+        return True
+    if disc_lower in collab_path_lower:
+        return True
+        
+    # Split the discipline and collaborator field into words
+    disc_words = [w.strip() for w in disc_lower.replace("and", "").replace("&", "").split() if len(w.strip()) > 2]
+    collab_words = [w.strip() for w in collab_field_lower.split() if len(w.strip()) > 2]
+    
+    # Check if there is any word overlap
+    for dw in disc_words:
+        for cw in collab_words:
+            if dw in cw or cw in dw:
+                return True
+                
+    # Term expansion for major fields of study
+    # Stems mapped to their broader scientific domain keywords
+    domain_keywords = {
+        "phys": ["phys", "quantum", "spin", "antiferromagnet", "squaric", "condensed", "superconduct", "particle", "magnetic", "optical", "fluid", "thermodynamic", "mechanics", "gravity", "energy", "matter", "cosmology", "phonon", "semiconductor", "crystallography", "spectroscopy", "resonance", "laser", "field", "relativity", "plasma", "astro", "nuclear"],
+        "comput": ["comput", "learn", "intel", "neural", "vision", "algorithm", "software", "network", "image", "data", "robot", "nlp", "processing", "code", "programming", "cyber", "security", "database", "graphics", "web"],
+        "cs": ["comput", "learn", "intel", "neural", "vision", "algorithm", "software", "network", "image", "data", "robot", "nlp", "processing", "code", "programming", "cyber", "security", "database", "graphics", "web"],
+        "ai": ["comput", "learn", "intel", "neural", "vision", "algorithm", "software", "network", "image", "data", "robot", "nlp", "processing", "code", "programming", "cyber", "security", "database", "graphics", "web"],
+        "bio": ["chem", "bio", "molec", "gene", "crispr", "dna", "rna", "enzyme", "protein", "cell", "genom", "nuclease", "chromatin", "nucleic", "medical", "clinical", "health", "disease", "drug", "pharma", "biotech", "immunology", "microbiology"],
+        "chem": ["chem", "molec", "organ", "inorgan", "spectroscop", "synthes", "reaction", "cataly", "polymer", "materials", "electro", "nano"],
+        "math": ["math", "algebra", "calculus", "geometry", "topology", "statistics", "probability", "discrete", "theorem", "equation", "numerical", "optimiz"],
+        "eng": ["eng", "mechanic", "electric", "civil", "chemical", "aerospace", "material", "device", "circuit", "system", "nano", "sensor", "failure"]
+    }
+    
+    # Determine the domains of the user's discipline
+    matched_domains = []
+    for stem, keywords in domain_keywords.items():
+        if any(stem in dw for dw in disc_words):
+            matched_domains.extend(keywords)
+            
+    # Check if the collaborator field contains any of these matched domain keywords
+    if matched_domains:
+        for kw in matched_domains:
+            if kw in collab_field_lower or any(kw in cw or cw in kw for cw in collab_words):
+                return True
+                
+    return False
+
+
 # Per-feature PG caches with appropriate TTLs
 # These are the local fast layer; Firestore backs the large enriched docs.
 _pg_daily_feed_cache       = PgBackedCache(ttl_seconds=3600,  name="pipeline_daily_feed")
@@ -919,22 +971,10 @@ Provide your response in this exact JSON format:
                     ]
                     # Apply field filter if requested
                     if field:
-                        target_fields = [f.strip().lower() for f in field.split(",") if f.strip()]
-                        if target_fields:
-                            filtered_rows = []
-                            for r in all_rows:
-                                r_field = (r["field"] or "").strip().lower()
-                                r_path = (r["connection_path"] or "").strip().lower()
-                                matched = False
-                                for tf in target_fields:
-                                    if not tf:
-                                        continue
-                                    if (tf in r_field or (r_field and r_field in tf)) or (tf in r_path or (r_path and r_path in tf)):
-                                        matched = True
-                                        break
-                                if matched:
-                                    filtered_rows.append(r)
-                            all_rows = filtered_rows
+                        all_rows = [
+                            r for r in all_rows 
+                            if is_field_semantically_relevant(r["field"], r["connection_path"], field)
+                        ]
                     return all_rows[offset:offset + limit]
             except Exception as e:
                 print(f"[DB Fast Path Error] ResearcherConnection read failed: {e}", flush=True)
@@ -976,19 +1016,19 @@ Provide your response in this exact JSON format:
                         pass
 
             def is_relevant_collaborator(candidate_fields: List[str]) -> bool:
-                if not target_fields:
+                if not field:
                     return True
-                for tf in target_fields:
-                    if not tf:
-                        continue
-                    for cf in candidate_fields:
-                        cf_lower = cf.strip().lower()
-                        if tf in cf_lower or cf_lower in tf:
-                            return True
+                for cf in candidate_fields:
+                    if is_field_semantically_relevant(cf, "", field):
+                        return True
                 return False
             async def fetch_works_for_author(auth_clean_id, max_works=20):
                 try:
-                    return await self.openalex_service.fetch_author_works(auth_clean_id, per_page=max_works)
+                    works = await self.openalex_service.fetch_author_works(auth_clean_id, per_page=max_works)
+                    if field:
+                        from app.services.openalex_service import is_work_relevant_to_discipline
+                        works = [w for w in works if is_work_relevant_to_discipline(w, field)]
+                    return works
                 except Exception:
                     return []
             d1_works = await fetch_works_for_author(clean_id, 100)
@@ -1067,7 +1107,7 @@ Provide your response in this exact JSON format:
                         async with httpx.AsyncClient(timeout=20.0) as client:
                             res = await client.get(
                                 f"https://api.openalex.org/authors",
-                                params={"filter": filter_str, "per_page": 50, "mailto": "support@skolab.open"},
+                                params={"filter": filter_str, "per_page": 50, "mailto": self.openalex_service.email},
                             )
                             if res.status_code == 200:
                                 for a in res.json().get("results", []):
