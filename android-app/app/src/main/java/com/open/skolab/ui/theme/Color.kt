@@ -15,9 +15,9 @@ val PRIMARY_DEEPER      = Color(0xFF0D2E6B) // darkest ink — app logo, major h
 
 val TEXT_PRIMARY        = Color(0xFF1C1208) // deep warm brown-black — headings, names, key values
 val TEXT_SECONDARY      = Color(0xFF6B5440) // warm mid-brown — body copy, descriptions
-val TEXT_MUTED          = Color(0xFFA08870) // warm tan — placeholders, timestamps, meta labels
+val TEXT_MUTED          = Color(0xFF8A725C) // warm tan — placeholders, timestamps, meta labels (WCAG AA compliant contrast)
 val TEXT_ON_PRIMARY     = Color(0xFFFFFFFF) // white — text on ink blue surfaces
-val TEXT_ON_PRIMARY_SUB = Color(0xFFBDD4F8) // light blue — subtitles on ink blue surfaces
+val TEXT_ON_PRIMARY_SUB = Color(0xFFDCE7FC) // light blue — subtitles on ink blue surfaces (WCAG AA compliant contrast)
 
 val BORDER              = Color(0xFFD6C9B0) // warm tan border — card edges, dividers, input strokes
 
