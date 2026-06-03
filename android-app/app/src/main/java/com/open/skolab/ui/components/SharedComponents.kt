@@ -361,16 +361,17 @@ fun MarkdownText(
 
             // 2. Post-process bullet lines: inject cycling accent color emoji
             //    Only apply if the text has standard markdown bullets
-            val bulletEmojis = listOf("🔹", "🟣", "🟡", "🔵", "🟢", "🔴", "⚡", "✦")
+            // Typographic bullet characters — professional, academic-grade
+            val bulletChars = listOf("•", "–", "▸", "◦", "›", "▪", "◈", "♦")
             val lines = processed.split("\n")
             var bulletCount = 0
             processed = lines.joinToString("\n") { line ->
                 val trimmed = line.trimStart()
                 if (trimmed.startsWith("- ") || trimmed.startsWith("* ") || trimmed.startsWith("+ ")) {
                     val indent = line.length - trimmed.length
-                    val emoji  = bulletEmojis[bulletCount % bulletEmojis.size]
+                    val bullet = bulletChars[bulletCount % bulletChars.size]
                     bulletCount++
-                    " ".repeat(indent) + emoji + " " + trimmed.substring(2)
+                    " ".repeat(indent) + bullet + " " + trimmed.substring(2)
                 } else {
                     line
                 }

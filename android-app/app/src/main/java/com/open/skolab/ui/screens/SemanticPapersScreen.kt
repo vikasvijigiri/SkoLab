@@ -4,7 +4,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -19,9 +19,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.open.skolab.ui.theme.*
 import com.open.skolab.viewmodel.SemanticFeedViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -30,7 +30,7 @@ fun SemanticPapersScreen(
     onPaperClick: (String) -> Unit,
     viewModel: SemanticFeedViewModel = viewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
@@ -89,26 +89,14 @@ fun SemanticPapersScreen(
                     }
                 }
             } else {
-                itemsIndexed(uiState.semanticPapers) { index, paper ->
-                    val animatedProgress = remember { Animatable(0f) }
-                    LaunchedEffect(Unit) {
-                        delay(index * 40L)
-                        animatedProgress.animateTo(1f, animationSpec = tween(300))
+                items(uiState.semanticPapers) { paper ->
+                    val accentColor = when (uiState.semanticPapers.indexOf(paper) % 3) {
+                        0 -> EntropiColors.Gold1
+                        1 -> EntropiColors.Cyan
+                        else -> EntropiColors.Red
                     }
-                    Box(
-                        modifier = Modifier
-                            .padding(horizontal = 20.dp)
-                            .graphicsLayer(
-                                alpha = animatedProgress.value,
-                                translationY = (1f - animatedProgress.value) * 20.dp.value
-                            )
-                    ) {
-                        val accentColor = when (index % 3) {
-                            0 -> EntropiColors.Gold1
-                            1 -> EntropiColors.Cyan
-                            else -> EntropiColors.Red
-                        }
-                        PaperFeedCard( 
+                    Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+                        PaperFeedCard(
                             paper = paper,
                             accentColor = accentColor,
                             onClick = { onPaperClick(paper.id) }

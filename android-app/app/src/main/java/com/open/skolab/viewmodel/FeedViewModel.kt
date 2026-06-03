@@ -3,6 +3,7 @@ package com.open.skolab.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.util.Log
+import com.open.skolab.BuildConfig
 import com.open.skolab.di.AppDependencies
 import com.open.skolab.model.Author
 import com.open.skolab.model.Conjecture
@@ -34,6 +35,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withTimeout
 
 
 /**
@@ -61,12 +63,22 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
     }
 
     init {
-        loadAllFeedData()
+        // Load data once ServerLocator has a valid URL.
+        // We deliberately do NOT call loadAllFeedData() directly here — the
+        // ServerLocator flow will emit on start, triggering exactly one load.
         viewModelScope.launch {
+            var loaded = false
             com.open.skolab.network.ServerLocator.baseUrl.collect { url ->
                 if (url != null) {
-                    Log.i("FeedViewModel", "ServerLocator base URL discovered → $url. Refreshing feed...")
+                    if (BuildConfig.DEBUG) {
+                        Log.i("FeedViewModel", "ServerLocator URL ready → $url. Loading feed.")
+                    }
                     loadAllFeedData()
+                    loaded = true
+                } else if (!loaded) {
+                    // Backend URL not yet known — fire an initial load with whatever base URL is configured
+                    loadAllFeedData()
+                    loaded = true
                 }
             }
         }
@@ -192,6 +204,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
             }
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
+                withTimeout(20_000L) { // 20-second hard timeout — prevents indefinite hang on slow backend
                 val name = _uiState.value.user.name
                 val baseFocus = _uiState.value.user.researchFocus
                 val currentFilter = _uiState.value.selectedFilter
@@ -212,7 +225,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
 
                 // 2. Search for the logged-in user profile to extract actual collaborators (co-authors)
                 try {
-                    Log.i("FeedViewModel", "Pre-searching author profile for name: $name")
+                    if (BuildConfig.DEBUG) Log.i("FeedViewModel", "Pre-searching author profile for name: $name")
                     userAuthorProfile = apiService.searchAuthor(name, focus = baseFocus)
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) throw e
@@ -325,7 +338,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                     connections = cachedSuggestedConnections!!
                 } else {
                     val targetId = profile?.id ?: "fallback_seed"
-                    Log.i("FeedViewModel", "Fetching network collaborators for id: $targetId")
+                    if (BuildConfig.DEBUG) Log.i("FeedViewModel", "Fetching network collaborators for id: $targetId")
                     val networkList = try {
                         apiService.getNetworkCollaborators(
                             authorId = targetId,
@@ -344,7 +357,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                         networkList
                     } else {
                         // Fallback: fetch similar authors based on the focus area
-                        Log.i("FeedViewModel", "Network collaborators empty. Querying similar authors for focus: $displayFocus")
+                        if (BuildConfig.DEBUG) Log.i("FeedViewModel", "Network collaborators empty. Querying similar authors for focus: $displayFocus")
                         val similarAuthors = try {
                             apiService.getSimilarAuthors(displayFocus.ifBlank { "Artificial Intelligence" }, limit = 10)
                         } catch (exc: Exception) {
@@ -671,6 +684,15 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                     error = null
                 )
 
+                } // end withTimeout
+
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+
+                Log.e("FeedViewModel", "loadAllFeedData timed out after 20s", e)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = "Data fetch timed out. Please check your connection and retry."
+                )
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 Log.e("FeedViewModel", "Failed to load Feed Screen metrics", e)

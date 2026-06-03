@@ -35,11 +35,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.open.skolab.viewmodel.PaperUiState
-import com.open.skolab.viewmodel.PaperViewModel
-import com.open.skolab.viewmodel.IntelligenceUiState
-import com.open.skolab.model.PaperIntelligence
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalContext
 import com.open.skolab.R
 import com.open.skolab.ui.components.*
@@ -59,9 +55,9 @@ fun PaperDetailScreen(
     viewModel: PaperViewModel = viewModel(),
     libraryViewModel: LibraryViewModel = viewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val intelligenceState by viewModel.intelligenceState.collectAsState()
-    val savedIds by libraryViewModel.savedIds.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val intelligenceState by viewModel.intelligenceState.collectAsStateWithLifecycle()
+    val savedIds by libraryViewModel.savedIds.collectAsStateWithLifecycle()
     val isSaved = savedIds.contains(paperId)
     val scope = rememberCoroutineScope()
 

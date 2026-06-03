@@ -48,7 +48,7 @@ import androidx.compose.ui.zIndex
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import com.google.firebase.auth.FirebaseUser
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import com.open.skolab.auth.AuthManager
@@ -72,7 +72,7 @@ fun ProfileScreen(
     val scope = rememberCoroutineScope()
     // Use application-scoped singleton — same instance as everywhere else in the app.
     val authManager = AppDependencies.authManager
-    val cachedUser by authManager.cachedUser.collectAsState(initial = null)
+    val cachedUser by authManager.cachedUser.collectAsStateWithLifecycle(initialValue = null)
     val credentialManager = remember { CredentialManager.create(context) }
 
 
