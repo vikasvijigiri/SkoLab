@@ -1,4 +1,4 @@
-﻿package com.open.skolab.ui.screens
+package com.open.skolab.ui.screens
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.open.skolab.network.ApiService
 import com.open.skolab.di.AppDependencies
@@ -119,7 +120,7 @@ fun SavedPapersTab(
     onPaperClick: (String) -> Unit,
     viewModel: LibraryViewModel = viewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     when (val state = uiState) {
         is SavedPapersUiState.Loading -> {
@@ -281,7 +282,7 @@ fun SavedPaperCard(
 
 @Composable
 fun GrantFeedTab() {
-    val activeAuthor by com.open.skolab.state.ActiveResearcherState.activeAuthor.collectAsState()
+    val activeAuthor by com.open.skolab.state.ActiveResearcherState.activeAuthor.collectAsStateWithLifecycle()
     val api = AppDependencies.apiService
     var grants by remember { mutableStateOf<List<com.open.skolab.network.GrantMatch>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -533,13 +534,13 @@ fun DailyFeedTab(
     onPaperClick: (String) -> Unit,
     libraryViewModel: LibraryViewModel = viewModel()
 ) {
-    val activeAuthor by com.open.skolab.state.ActiveResearcherState.activeAuthor.collectAsState()
+    val activeAuthor by com.open.skolab.state.ActiveResearcherState.activeAuthor.collectAsStateWithLifecycle()
     val api = AppDependencies.apiService
     var feedItems by remember { mutableStateOf<List<DailyFeedItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    val savedIds by libraryViewModel.savedIds.collectAsState()
+    val savedIds by libraryViewModel.savedIds.collectAsStateWithLifecycle()
 
     LaunchedEffect(activeAuthor) {
         isLoading = true

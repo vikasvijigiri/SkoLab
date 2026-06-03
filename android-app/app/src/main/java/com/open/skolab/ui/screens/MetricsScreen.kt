@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.open.skolab.data.UserPreferences
 import com.open.skolab.ui.theme.*
@@ -35,10 +36,10 @@ import com.open.skolab.viewmodel.MetricsViewModel
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MetricsScreen(viewModel: MetricsViewModel = viewModel()) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val userPrefs = remember { UserPreferences(context) }
-    val cachedUser by userPrefs.cachedUser.collectAsState(initial = null)
+    val cachedUser by userPrefs.cachedUser.collectAsStateWithLifecycle(initialValue = null)
 
     var selectedFolderTab by remember { mutableStateOf("papers") } // "papers" or "jobs"
 

@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.open.skolab.auth.AuthManager
 import com.open.skolab.di.AppDependencies
@@ -62,7 +63,7 @@ import java.util.*
 fun AgentScreen() {
     val context = LocalContext.current
     val authManager = AppDependencies.authManager
-    val cachedUser by authManager.cachedUser.collectAsState(initial = null)
+    val cachedUser by authManager.cachedUser.collectAsStateWithLifecycle(initialValue = null)
     val userUid = cachedUser?.uid ?: authManager.currentUser?.uid ?: "guest_user"
 
     val viewModel: AgentViewModel = viewModel(
@@ -75,7 +76,7 @@ fun AgentScreen() {
         }
     )
 
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     var messageText by remember { mutableStateOf("") }
     @Suppress("DEPRECATION")

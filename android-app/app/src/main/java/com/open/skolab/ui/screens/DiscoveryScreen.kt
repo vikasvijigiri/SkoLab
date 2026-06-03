@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.*
 import androidx.compose.ui.zIndex
 import com.open.skolab.auth.AuthManager
 import com.open.skolab.di.AppDependencies
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.open.skolab.network.*
 import com.open.skolab.state.ActiveResearcherState
 import com.open.skolab.ui.components.*
@@ -89,7 +90,7 @@ fun DiscoveryScreen(
     val context = LocalContext.current
     val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val authManager = AppDependencies.authManager
-    val cachedUser by authManager.cachedUser.collectAsState(initial = null)
+    val cachedUser by authManager.cachedUser.collectAsStateWithLifecycle(initialValue = null)
 
     val userName = if (!cachedUser?.name.isNullOrBlank()) cachedUser?.name!! else "SkoLab User"
     val researchFocus = if (!cachedUser?.researchFocus.isNullOrBlank() && 
@@ -833,8 +834,8 @@ fun ResearcherProfileView(
     onSelectResearcher: (String, String) -> Unit
 ) {
     val context = LocalContext.current
-    val authManager = remember { com.open.skolab.auth.AuthManager(context) }
-    val cachedUser by authManager.cachedUser.collectAsState(initial = null)
+    val authManager = com.open.skolab.di.AppDependencies.authManager
+    val cachedUser by authManager.cachedUser.collectAsStateWithLifecycle(initialValue = null)
     val userName = cachedUser?.name ?: "Researcher"
 
     var activeChatPaperTitle by remember { mutableStateOf<String?>(null) }

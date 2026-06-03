@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.SavedStateHandle
 import com.google.firebase.firestore.FirebaseFirestore
 import com.open.skolab.auth.AuthManager
@@ -99,7 +100,7 @@ fun PaperCollabsScreen(
 ) {
     val context = LocalContext.current
     val authManager = AppDependencies.authManager
-    val cachedUser by authManager.cachedUser.collectAsState(initial = null)
+    val cachedUser by authManager.cachedUser.collectAsStateWithLifecycle(initialValue = null)
     val currentUser = authManager.currentUser
     val currentUserId = currentUser?.uid ?: ""
     val currentUserName = currentUser?.displayName ?: (cachedUser?.name ?: "SkoLab User")

@@ -1,4 +1,4 @@
-﻿package com.open.skolab.ui.components
+package com.open.skolab.ui.components
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
@@ -28,6 +28,7 @@ import com.open.skolab.network.ApiService
 import com.open.skolab.di.AppDependencies
 import com.open.skolab.network.CollaboratorSynergy
 import com.open.skolab.state.ActiveResearcherState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.open.skolab.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -39,7 +40,7 @@ fun CollaboratorSynergyBottomSheet(
     apiService: ApiService = AppDependencies.apiService
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val activeAuthor by ActiveResearcherState.activeAuthor.collectAsState()
+    val activeAuthor by ActiveResearcherState.activeAuthor.collectAsStateWithLifecycle()
     
     var synergy by remember { mutableStateOf<CollaboratorSynergy?>(null) }
     var isLoading by remember { mutableStateOf(true) }

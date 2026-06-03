@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.open.skolab.ui.theme.*
 
 @Composable
@@ -32,8 +33,8 @@ fun StreakCard(
     val userPrefs = remember { com.open.skolab.data.UserPreferences(context) }
     val scope = rememberCoroutineScope()
 
-    val streakCount by userPrefs.streakCount.collectAsState(initial = 5)
-    val lastCheckedInDate by userPrefs.lastCheckedInDate.collectAsState(initial = null)
+    val streakCount by userPrefs.streakCount.collectAsStateWithLifecycle(initialValue = 5)
+    val lastCheckedInDate by userPrefs.lastCheckedInDate.collectAsStateWithLifecycle(initialValue = null)
 
     val today = remember {
         java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())

@@ -1,4 +1,4 @@
-﻿package com.open.skolab.ui.screens
+package com.open.skolab.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.open.skolab.auth.AuthManager
 import com.open.skolab.di.AppDependencies
 import com.open.skolab.data.ChatStorage
@@ -46,8 +47,8 @@ fun ChatListScreen(
     val authManager = AppDependencies.authManager
     val userPrefs = remember { UserPreferences(context) }
     
-    val cachedUser by authManager.cachedUser.collectAsState(initial = null)
-    val connections by userPrefs.userConnections.collectAsState(initial = emptyList())
+    val cachedUser by authManager.cachedUser.collectAsStateWithLifecycle(initialValue = null)
+    val connections by userPrefs.userConnections.collectAsStateWithLifecycle(initialValue = emptyList())
     
     var searchQuery by remember { mutableStateOf("") }
     var showSelectContactDialog by remember { mutableStateOf(false) }

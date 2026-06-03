@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.open.skolab.data.UserPreferences
 import com.open.skolab.ui.theme.*
@@ -56,15 +57,15 @@ fun IndustryScreen(
     onNavigateToAuthor: (String) -> Unit = {},
     onNavigateToReader: (String, String) -> Unit = { _, _ -> }
 ) {
-    val opportunities by viewModel.opportunities.collectAsState()
-    val roadmap by viewModel.roadmap.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val isLoadingRoadmap by viewModel.isLoadingRoadmap.collectAsState()
-    val error by viewModel.error.collectAsState()
+    val opportunities by viewModel.opportunities.collectAsStateWithLifecycle()
+    val roadmap by viewModel.roadmap.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val isLoadingRoadmap by viewModel.isLoadingRoadmap.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
     
     val context = LocalContext.current
     val userPrefs = remember { UserPreferences(context) }
-    val cachedUser by userPrefs.cachedUser.collectAsState(initial = null)
+    val cachedUser by userPrefs.cachedUser.collectAsStateWithLifecycle(initialValue = null)
 
     var currentTab by remember { mutableStateOf("explore") } // "explore", "swipe", "roadmap", "post"
     var selectedCategory by remember { mutableStateOf("All") }

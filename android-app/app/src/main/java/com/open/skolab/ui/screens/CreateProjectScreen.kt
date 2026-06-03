@@ -1,4 +1,4 @@
-﻿package com.open.skolab.ui.screens
+package com.open.skolab.ui.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,7 +46,7 @@ fun CreateProjectScreen(
     val scope = rememberCoroutineScope()
     val db = remember { FirebaseFirestore.getInstance() }
 
-    val cachedUser by authManager.cachedUser.collectAsState(initial = null)
+    val cachedUser by authManager.cachedUser.collectAsStateWithLifecycle(initialValue = null)
     val currentUserId = cachedUser?.uid ?: ""
     val currentUserName = cachedUser?.name ?: "SkoLab User"
     val currentUserEmail = cachedUser?.email ?: ""

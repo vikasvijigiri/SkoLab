@@ -1,4 +1,4 @@
-﻿package com.open.skolab.ui.screens
+package com.open.skolab.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.open.skolab.ui.theme.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalContext
 import com.open.skolab.auth.AuthManager
 import com.open.skolab.di.AppDependencies
@@ -54,7 +55,7 @@ fun CoLabWorkspaceScreen(
 ) {
     val context = LocalContext.current
     val authManager = AppDependencies.authManager
-    val cachedUser by authManager.cachedUser.collectAsState(initial = null)
+    val cachedUser by authManager.cachedUser.collectAsStateWithLifecycle(initialValue = null)
     val firstName = remember(cachedUser?.name) {
         val fullName = cachedUser?.name ?: "Researcher"
         val first = fullName.trim().split(" ").firstOrNull() ?: "Researcher"

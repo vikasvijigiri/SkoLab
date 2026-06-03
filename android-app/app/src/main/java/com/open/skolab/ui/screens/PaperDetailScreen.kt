@@ -36,6 +36,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.open.skolab.viewmodel.PaperUiState
+import com.open.skolab.viewmodel.PaperViewModel
+import com.open.skolab.viewmodel.IntelligenceUiState
+import com.open.skolab.model.PaperIntelligence
 import androidx.compose.ui.platform.LocalContext
 import com.open.skolab.R
 import com.open.skolab.ui.components.*
