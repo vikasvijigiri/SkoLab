@@ -112,7 +112,15 @@ async def get_leaderboard(
             if field and field != "All Fields" and field != "all":
                 query_ref = query_ref.where(filter=FieldFilter("field_of_study", "==", field))
             
-            docs = query_ref.order_by("innovation_score", direction=firestore.Query.DESCENDING).limit(10).get()
+            import asyncio
+            def _blocking_leaderboard():
+                return query_ref.order_by("innovation_score", direction=firestore.Query.DESCENDING).limit(10).get()
+            
+            loop = asyncio.get_running_loop()
+            docs = await asyncio.wait_for(
+                loop.run_in_executor(None, _blocking_leaderboard),
+                timeout=3.0
+            )
             
             results = []
             for idx, doc in enumerate(docs):

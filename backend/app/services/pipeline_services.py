@@ -120,6 +120,31 @@ class PipelineServices:
         except Exception as e:
             print(f"[PipelineServices] Firestore get error for {collection}/{doc_id}: {e}", flush=True)
         return None
+
+    async def _firestore_set_safe(self, collection: str, doc_id: str, data: Dict[str, Any], timeout: float = 5.0) -> bool:
+        """
+        Wraps a synchronous Firestore document.set() in a thread executor with a short timeout.
+        Prevents the blocking Firestore SDK from stalling the asyncio event loop.
+        """
+        db = self._get_firestore_db()
+        if not db:
+            return False
+        loop = asyncio.get_event_loop()
+        try:
+            def _blocking_set():
+                db.collection(collection).document(doc_id).set(data)
+                return True
+            await asyncio.wait_for(
+                loop.run_in_executor(None, _blocking_set),
+                timeout=timeout
+            )
+            return True
+        except asyncio.TimeoutError:
+            print(f"[PipelineServices] Firestore set timed out ({timeout}s) for {collection}/{doc_id}", flush=True)
+        except Exception as e:
+            print(f"[PipelineServices] Firestore set error for {collection}/{doc_id}: {e}", flush=True)
+        return False
+
     async def _save_to_postgres(self, cache_key: str, data: Dict[str, Any], ttl_seconds: int = 3600):
         """Save data to PostgreSQL cache_entries with TTL via PgBackedCache."""
         cache = PgBackedCache(ttl_seconds=ttl_seconds, name="pipeline")
@@ -364,15 +389,13 @@ class PipelineServices:
                 print(f"[Postgres Cache Save] daily_feeds for doc_id={doc_id}", flush=True)
             except Exception as e:
                 print(f"[Postgres Cache Error] daily_feeds write failed: {e}", flush=True)
-        db = self._get_firestore_db()
-        if db and feed_items:
+        if feed_items:
             try:
                 from firebase_admin import firestore as _fs
-                db.collection("daily_feeds").document(doc_id).set({
+                await self._firestore_set_safe("daily_feeds", doc_id, {
                     "items": feed_items,
                     "last_synced": _fs.SERVER_TIMESTAMP
                 })
-                print(f"[Firestore Cache Save] daily_feeds for doc_id={doc_id}", flush=True)
             except Exception as e:
                 print(f"[Firestore Cache Error] daily_feeds write failed: {e}", flush=True)
         return feed_items
@@ -519,14 +542,13 @@ class PipelineServices:
                 print(f"[Postgres Cache Save] match_grants for author_id={clean_id}", flush=True)
             except Exception as e:
                 print(f"[Postgres Cache Error] match_grants write failed: {e}", flush=True)
-        if db and scored_grants:
+        if scored_grants:
             try:
                 from firebase_admin import firestore as _fs
-                db.collection("match_grants").document(clean_id).set({
+                await self._firestore_set_safe("match_grants", clean_id, {
                     "items": scored_grants,
                     "last_synced": _fs.SERVER_TIMESTAMP
                 })
-                print(f"[Firestore Cache Save] match_grants for author_id={clean_id}", flush=True)
             except Exception as e:
                 print(f"[Firestore Cache Error] match_grants write failed: {e}", flush=True)
         return scored_grants
@@ -542,20 +564,12 @@ class PipelineServices:
         if cached_data:
             print(f"[Postgres Cache Hit] collaborator_synergy for doc_id={doc_id}", flush=True)
             return cached_data
-        db = self._get_firestore_db()
-        if db:
-            try:
-                doc = db.collection("collaborator_synergies").document(doc_id).get()
-                if doc.exists:
-                    print(f"[Firestore Cache Hit] collaborator_synergies for doc_id={doc_id}", flush=True)
-                    cached_data = doc.to_dict()
-                    if cached_data:
-                        # Clean metadata if present before returning
-                        cached_data.pop("last_synced", None)
-                        await self._save_to_postgres(cache_key, cached_data, ttl_seconds=7200)
-                        return cached_data
-            except Exception as e:
-                print(f"[Firestore Cache Error] collaborator_synergies lookup failed: {e}", flush=True)
+        _fs_cached = await self._firestore_get_safe("collaborator_synergies", doc_id, timeout=5.0)
+        if isinstance(_fs_cached, dict):
+            print(f"[Firestore Cache Hit] collaborator_synergies for doc_id={doc_id}", flush=True)
+            _fs_cached.pop("last_synced", None)
+            await self._save_to_postgres(cache_key, _fs_cached, ttl_seconds=7200)
+            return _fs_cached
         profile1_task = self._fetch_author_profile(author_id)
         profile2_task = self._fetch_author_profile(collaborator_id)
         profile1, profile2 = await asyncio.gather(profile1_task, profile2_task)
@@ -670,16 +684,14 @@ Provide your response in this exact JSON format:
             print(f"[Postgres Cache Save] collaborator_synergy for doc_id={doc_id}", flush=True)
         except Exception as e:
             print(f"[Postgres Cache Error] collaborator_synergy write failed: {e}", flush=True)
-        if db:
-            try:
-                from firebase_admin import firestore as _fs
-                db.collection("collaborator_synergies").document(doc_id).set({
-                    **result,
-                    "last_synced": _fs.SERVER_TIMESTAMP
-                })
-                print(f"[Firestore Cache Save] collaborator_synergies for doc_id={doc_id}", flush=True)
-            except Exception as e:
-                print(f"[Firestore Cache Error] collaborator_synergies write failed: {e}", flush=True)
+        try:
+            from firebase_admin import firestore as _fs
+            await self._firestore_set_safe("collaborator_synergies", doc_id, {
+                **result,
+                "last_synced": _fs.SERVER_TIMESTAMP
+            })
+        except Exception as e:
+            print(f"[Firestore Cache Error] collaborator_synergies write failed: {e}", flush=True)
         return result
     async def get_citation_heatmap(self, author_id: str) -> Dict[str, Any]:
         """
@@ -691,19 +703,12 @@ Provide your response in this exact JSON format:
         if cached_data:
             print(f"[Postgres Cache Hit] citation_heatmap for author_id={clean_id}", flush=True)
             return cached_data
-        db = self._get_firestore_db()
-        if db:
-            try:
-                doc = db.collection("citation_heatmaps").document(clean_id).get()
-                if doc.exists:
-                    print(f"[Firestore Cache Hit] citation_heatmaps for author_id={clean_id}", flush=True)
-                    cached_data = doc.to_dict()
-                    if cached_data:
-                        cached_data.pop("last_synced", None)
-                        await self._save_to_postgres(cache_key, cached_data)
-                        return cached_data
-            except Exception as e:
-                print(f"[Firestore Cache Error] citation_heatmaps lookup failed: {e}", flush=True)
+        _fs_cached = await self._firestore_get_safe("citation_heatmaps", clean_id, timeout=5.0)
+        if isinstance(_fs_cached, dict):
+            print(f"[Firestore Cache Hit] citation_heatmaps for author_id={clean_id}", flush=True)
+            _fs_cached.pop("last_synced", None)
+            await self._save_to_postgres(cache_key, _fs_cached)
+            return _fs_cached
         profile = await self._fetch_author_profile(author_id)
         if not profile:
             # Fallback
@@ -737,16 +742,14 @@ Provide your response in this exact JSON format:
             print(f"[Postgres Cache Save] citation_heatmap for author_id={clean_id}", flush=True)
         except Exception as e:
             print(f"[Postgres Cache Error] citation_heatmap write failed: {e}", flush=True)
-        if db:
-            try:
-                from firebase_admin import firestore as _fs
-                db.collection("citation_heatmaps").document(clean_id).set({
-                    **result,
-                    "last_synced": _fs.SERVER_TIMESTAMP
-                })
-                print(f"[Firestore Cache Save] citation_heatmaps for author_id={clean_id}", flush=True)
-            except Exception as e:
-                print(f"[Firestore Cache Error] citation_heatmaps write failed: {e}", flush=True)
+        try:
+            from firebase_admin import firestore as _fs
+            await self._firestore_set_safe("citation_heatmaps", clean_id, {
+                **result,
+                "last_synced": _fs.SERVER_TIMESTAMP
+            })
+        except Exception as e:
+            print(f"[Firestore Cache Error] citation_heatmaps write failed: {e}", flush=True)
         return result
     async def get_journal_advisor(self, author_id: str) -> List[Dict[str, Any]]:
         """
@@ -758,18 +761,11 @@ Provide your response in this exact JSON format:
         if isinstance(cached_data, dict) and "venues" in cached_data:
             print(f"[Postgres Cache Hit] journal_advisor for author_id={clean_id}", flush=True)
             return cached_data["venues"]
-        db = self._get_firestore_db()
-        if db:
-            try:
-                doc = db.collection("journal_advisor_recommendations").document(clean_id).get()
-                if doc.exists:
-                    cached_data = doc.to_dict()
-                    if isinstance(cached_data, dict) and "venues" in cached_data:
-                        print(f"[Firestore Cache Hit] journal_advisor_recommendations for author_id={clean_id}", flush=True)
-                        await self._save_to_postgres(cache_key, {"venues": cached_data["venues"]}, ttl_seconds=7200)
-                        return cached_data["venues"]
-            except Exception as e:
-                print(f"[Firestore Cache Error] journal_advisor_recommendations lookup failed: {e}", flush=True)
+        _fs_cached = await self._firestore_get_safe("journal_advisor_recommendations", clean_id, timeout=5.0)
+        if isinstance(_fs_cached, dict) and "venues" in _fs_cached:
+            print(f"[Firestore Cache Hit] journal_advisor_recommendations for author_id={clean_id}", flush=True)
+            await self._save_to_postgres(cache_key, {"venues": _fs_cached["venues"]}, ttl_seconds=7200)
+            return _fs_cached["venues"]
         profile = await self._fetch_author_profile(author_id)
         author_name = "Researcher"
         concepts = ["science"]
@@ -875,14 +871,13 @@ Provide your response in this exact JSON format:
                 print(f"[Postgres Cache Save] journal_advisor for author_id={clean_id}", flush=True)
             except Exception as e:
                 print(f"[Postgres Cache Error] journal_advisor write failed: {e}", flush=True)
-        if db and venues:
+        if venues:
             try:
                 from firebase_admin import firestore as _fs
-                db.collection("journal_advisor_recommendations").document(clean_id).set({
+                await self._firestore_set_safe("journal_advisor_recommendations", clean_id, {
                     "venues": venues[:3],
                     "last_synced": _fs.SERVER_TIMESTAMP
                 })
-                print(f"[Firestore Cache Save] journal_advisor_recommendations for author_id={clean_id}", flush=True)
             except Exception as e:
                 print(f"[Firestore Cache Error] journal_advisor_recommendations write failed: {e}", flush=True)
         return venues[:3]

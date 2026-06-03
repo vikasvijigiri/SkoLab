@@ -423,7 +423,7 @@ fun LaunchpadOpportunityCard(
                         Text(
                             text = opp.type.name,
                             color = tintColor,
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -437,7 +437,7 @@ fun LaunchpadOpportunityCard(
                         Text(
                             text = statusBadge.uppercase(),
                             color = statusColor,
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -446,7 +446,7 @@ fun LaunchpadOpportunityCard(
                 Text(
                     text = opp.postedAgo,
                     color = TEXT_MUTED,
-                    fontSize = 11.sp
+                    fontSize = 12.sp
                 )
             }
 
@@ -500,7 +500,7 @@ fun LaunchpadOpportunityCard(
                     Text(
                         text = "$matchScore% Match",
                         color = MATCH_SCORE_TEXT,
-                        fontSize = 11.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -530,7 +530,7 @@ fun LaunchpadOpportunityCard(
                     Text(
                         text = matchReason,
                         color = TEXT_PRIMARY,
-                        fontSize = 11.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -565,7 +565,7 @@ fun LaunchpadOpportunityCard(
                         Text(
                             text = tag,
                             color = TEXT_SECONDARY,
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -581,7 +581,7 @@ fun LaunchpadOpportunityCard(
                 Text(
                     text = "View Details & Apply →",
                     color = PRIMARY,
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -841,6 +841,7 @@ fun FastSwipeDeck(
     userFocus: String
 ) {
     var currentIndex by remember { mutableStateOf(0) }
+    var previousIndex by remember { mutableStateOf<Int?>(null) }
     val opp = opportunities.getOrNull(currentIndex)
     val context = LocalContext.current
 
@@ -974,19 +975,45 @@ fun FastSwipeDeck(
                 // Controls row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Skip button
                     IconButton(
-                        onClick = { currentIndex++ },
+                        onClick = { 
+                            previousIndex = currentIndex
+                            currentIndex++ 
+                        },
                         modifier = Modifier
-                            .size(48.dp)
+                            .size(44.dp)
                             .clip(CircleShape)
                             .background(Color(0xFF1E293B))
                     ) {
                         Icon(Icons.Default.Close, contentDescription = "Skip", tint = Color(0xFFEF4444))
                     }
+
+                    // Undo button
+                    IconButton(
+                        onClick = {
+                            previousIndex?.let {
+                                currentIndex = it
+                                previousIndex = null
+                            }
+                        },
+                        enabled = previousIndex != null,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(if (previousIndex != null) Color(0xFF1E293B) else Color(0xFF1E293B).copy(alpha = 0.4f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Replay,
+                            contentDescription = "Undo",
+                            tint = if (previousIndex != null) Color.White else Color.Gray
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.weight(1f))
 
                     // SOP toolkit
                     Button(
@@ -997,9 +1024,9 @@ fun FastSwipeDeck(
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("SOP outline", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("SOP outline", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -1014,7 +1041,7 @@ fun FastSwipeDeck(
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF38BDF8), contentColor = Color.Black),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("1-Click Apply", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text("1-Click Apply", fontWeight = FontWeight.Bold, fontSize = 11.sp)
                     }
                 }
             }
@@ -1300,11 +1327,15 @@ fun AssistantProfessorRoadmapScreen(
 @Composable
 fun ProfessorPostingForm() {
     var title by remember { mutableStateOf("") }
+    var titleError by remember { mutableStateOf(false) }
     var institution by remember { mutableStateOf("") }
+    var institutionError by remember { mutableStateOf(false) }
     var selectedType by remember { mutableStateOf(OpportunityType.JOB) }
     var description by remember { mutableStateOf("") }
+    var descriptionError by remember { mutableStateOf(false) }
     var tagsString by remember { mutableStateOf("") }
     var url by remember { mutableStateOf("") }
+    var urlError by remember { mutableStateOf(false) }
     var postSuccess by remember { mutableStateOf(false) }
 
     if (postSuccess) {
@@ -1361,6 +1392,10 @@ fun ProfessorPostingForm() {
                         description = ""
                         tagsString = ""
                         url = ""
+                        titleError = false
+                        institutionError = false
+                        descriptionError = false
+                        urlError = false
                         postSuccess = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = PRIMARY),
@@ -1373,15 +1408,15 @@ fun ProfessorPostingForm() {
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
                 Text(
                     text = "Post a New Research Position",
                     color = TEXT_PRIMARY,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.ExtraBold
                 )
                 Text(
                     text = "Recruit PhDs, Postdocs, or share funding calls with active SkoLab researchers.",
@@ -1391,129 +1426,207 @@ fun ProfessorPostingForm() {
             }
 
             item {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text("Opportunity Title (e.g. Postdoc in Computational Psychiatry)") },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PRIMARY,
-                        unfocusedBorderColor = BORDER,
-                        focusedLabelColor = PRIMARY,
-                        unfocusedLabelColor = TEXT_MUTED
-                    ),
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SURFACE),
+                    border = BorderStroke(1.dp, BORDER),
+                    shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            item {
-                OutlinedTextField(
-                    value = institution,
-                    onValueChange = { institution = it },
-                    label = { Text("Institution / Lab (e.g. MIT Neural Systems Lab)") },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PRIMARY,
-                        unfocusedBorderColor = BORDER,
-                        focusedLabelColor = PRIMARY,
-                        unfocusedLabelColor = TEXT_MUTED
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            item {
-                Text(
-                    text = "Opportunity Type",
-                    color = TEXT_PRIMARY,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    listOf(OpportunityType.JOB, OpportunityType.FUNDING, OpportunityType.REQUIREMENT).forEach { type ->
-                        val isSelected = selectedType == type
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (isSelected) PRIMARY else SURFACE)
-                                .border(
-                                    BorderStroke(1.dp, if (isSelected) PRIMARY else BORDER),
-                                    RoundedCornerShape(10.dp)
-                                )
-                                .clickable { selectedType = type }
-                                .padding(vertical = 12.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Text(
+                            text = "Position Details",
+                            color = TEXT_PRIMARY,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        
+                        OutlinedTextField(
+                            value = title,
+                            onValueChange = { 
+                                title = it
+                                if (titleError) titleError = it.isBlank()
+                            },
+                            label = { Text("Opportunity Title") },
+                            placeholder = { Text("e.g. Postdoc in Computational Psychiatry") },
+                            shape = RoundedCornerShape(12.dp),
+                            isError = titleError,
+                            supportingText = {
+                                if (titleError) {
+                                    Text("Title is required", color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                                }
+                            },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = PRIMARY,
+                                unfocusedBorderColor = BORDER,
+                                focusedLabelColor = PRIMARY,
+                                unfocusedLabelColor = TEXT_MUTED
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = institution,
+                            onValueChange = { 
+                                institution = it
+                                if (institutionError) institutionError = it.isBlank()
+                            },
+                            label = { Text("Institution / Lab") },
+                            placeholder = { Text("e.g. MIT Neural Systems Lab") },
+                            shape = RoundedCornerShape(12.dp),
+                            isError = institutionError,
+                            supportingText = {
+                                if (institutionError) {
+                                    Text("Institution / Lab is required", color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                                }
+                            },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = PRIMARY,
+                                unfocusedBorderColor = BORDER,
+                                focusedLabelColor = PRIMARY,
+                                unfocusedLabelColor = TEXT_MUTED
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Column {
                             Text(
-                                text = type.name,
-                                color = if (isSelected) TEXT_ON_PRIMARY else TEXT_SECONDARY,
-                                fontSize = 11.sp,
+                                text = "Opportunity Type",
+                                color = TEXT_PRIMARY,
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
                             )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                listOf(OpportunityType.JOB, OpportunityType.FUNDING, OpportunityType.REQUIREMENT).forEach { type ->
+                                    val isSelected = selectedType == type
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(if (isSelected) PRIMARY else SURFACE_SUBTLE)
+                                            .border(
+                                                BorderStroke(1.dp, if (isSelected) PRIMARY else BORDER),
+                                                RoundedCornerShape(10.dp)
+                                            )
+                                            .clickable { selectedType = type }
+                                            .padding(vertical = 10.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = type.name,
+                                            color = if (isSelected) TEXT_ON_PRIMARY else TEXT_SECONDARY,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
 
             item {
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("Job / Funding Description") },
-                    shape = RoundedCornerShape(12.dp),
-                    minLines = 4,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PRIMARY,
-                        unfocusedBorderColor = BORDER,
-                        focusedLabelColor = PRIMARY,
-                        unfocusedLabelColor = TEXT_MUTED
-                    ),
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SURFACE),
+                    border = BorderStroke(1.dp, BORDER),
+                    shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth()
-                )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Text(
+                            text = "Requirements & Application",
+                            color = TEXT_PRIMARY,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        OutlinedTextField(
+                            value = description,
+                            onValueChange = { 
+                                description = it
+                                if (descriptionError) descriptionError = it.isBlank()
+                            },
+                            label = { Text("Job / Funding Description") },
+                            placeholder = { Text("Provide details about the project, responsibilities, and timeline...") },
+                            shape = RoundedCornerShape(12.dp),
+                            minLines = 4,
+                            isError = descriptionError,
+                            supportingText = {
+                                if (descriptionError) {
+                                    Text("Description is required", color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                                }
+                            },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = PRIMARY,
+                                unfocusedBorderColor = BORDER,
+                                focusedLabelColor = PRIMARY,
+                                unfocusedLabelColor = TEXT_MUTED
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = tagsString,
+                            onValueChange = { tagsString = it },
+                            label = { Text("Keywords / Skills") },
+                            placeholder = { Text("e.g. NLP, PyTorch, Bioinformatics") },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = PRIMARY,
+                                unfocusedBorderColor = BORDER,
+                                focusedLabelColor = PRIMARY,
+                                unfocusedLabelColor = TEXT_MUTED
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = url,
+                            onValueChange = { 
+                                url = it
+                                if (urlError) urlError = it.isNotBlank() && !android.util.Patterns.WEB_URL.matcher(it).matches()
+                            },
+                            label = { Text("Application / Information URL") },
+                            placeholder = { Text("e.g. https://lab.mit.edu/careers/postdoc1") },
+                            shape = RoundedCornerShape(12.dp),
+                            isError = urlError,
+                            supportingText = {
+                                if (urlError) {
+                                    Text("Please enter a valid website URL", color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                                }
+                            },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = PRIMARY,
+                                unfocusedBorderColor = BORDER,
+                                focusedLabelColor = PRIMARY,
+                                unfocusedLabelColor = TEXT_MUTED
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
             }
 
             item {
-                OutlinedTextField(
-                    value = tagsString,
-                    onValueChange = { tagsString = it },
-                    label = { Text("Keywords / Skills (comma separated, e.g. NLP, PyTorch)") },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PRIMARY,
-                        unfocusedBorderColor = BORDER,
-                        focusedLabelColor = PRIMARY,
-                        unfocusedLabelColor = TEXT_MUTED
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            item {
-                OutlinedTextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    label = { Text("Application / Information URL") },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PRIMARY,
-                        unfocusedBorderColor = BORDER,
-                        focusedLabelColor = PRIMARY,
-                        unfocusedLabelColor = TEXT_MUTED
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Button(
                     onClick = {
-                        if (title.isNotBlank() && institution.isNotBlank()) {
+                        titleError = title.isBlank()
+                        institutionError = institution.isBlank()
+                        descriptionError = description.isBlank()
+                        urlError = url.isNotBlank() && !android.util.Patterns.WEB_URL.matcher(url).matches()
+                        
+                        if (!titleError && !institutionError && !descriptionError && !urlError) {
                             postSuccess = true
                         }
                     },
