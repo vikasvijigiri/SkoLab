@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,7 +48,7 @@ fun LogicEngineScreen(onBack: () -> Unit = {}) {
     var isConjectureLoading by remember { mutableStateOf(true) }
     
     var localUserMastery by remember { mutableStateOf(42f) }
-    val cachedUser by authManager.cachedUser.collectAsState(initial = null)
+    val cachedUser by authManager.cachedUser.collectAsStateWithLifecycle(initialValue = null)
     
     var conjectureError by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(cachedUser) {

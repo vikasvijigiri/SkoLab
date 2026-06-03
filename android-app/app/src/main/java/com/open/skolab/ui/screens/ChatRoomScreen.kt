@@ -39,6 +39,7 @@ import com.open.skolab.network.ChatMessage
 import com.open.skolab.data.ChatStorage
 import com.open.skolab.auth.AuthManager
 import com.open.skolab.di.AppDependencies
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -208,7 +209,7 @@ fun ChatRoomScreen(
 
     val context = LocalContext.current
     val authManager = AppDependencies.authManager
-    val cachedUser by authManager.cachedUser.collectAsState(initial = null)
+    val cachedUser by authManager.cachedUser.collectAsStateWithLifecycle(initialValue = null)
     val userUid = cachedUser?.uid ?: ""
     val chatStorage = remember(userUid) { if (userUid.isNotEmpty()) ChatStorage(context, userUid) else null }
 

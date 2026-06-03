@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.open.skolab.data.UserPreferences
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.open.skolab.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -47,7 +48,7 @@ fun ProWorkspaceScreen(onBack: () -> Unit = {}) {
     val userPrefs = remember { UserPreferences(context) }
     
     // Persistent subscription type ("Basic", "Pro", or "Labs")
-    val subscriptionType by userPrefs.subscriptionType.collectAsState(initial = "Basic")
+    val subscriptionType by userPrefs.subscriptionType.collectAsStateWithLifecycle(initialValue = "Basic")
     
     // UI tabs state
     var selectedTab by remember { mutableStateOf(0) }
@@ -687,7 +688,7 @@ fun LabsWorkspaceTab(isEnabled: Boolean) {
 
     val context = LocalContext.current
     val userPrefs = remember { UserPreferences(context) }
-    val cachedUser by userPrefs.cachedUser.collectAsState(initial = null)
+    val cachedUser by userPrefs.cachedUser.collectAsStateWithLifecycle(initialValue = null)
     val currentUserName = cachedUser?.name ?: "SkoLab User"
     val currentUserEmail = cachedUser?.email ?: "user@university.edu"
     val userFirstName = cachedUser?.firstName ?: "User"
@@ -1148,7 +1149,7 @@ fun SchedulerTab(isEnabled: Boolean) {
 
     val context = LocalContext.current
     val userPrefs = remember { UserPreferences(context) }
-    val cachedUser by userPrefs.cachedUser.collectAsState(initial = null)
+    val cachedUser by userPrefs.cachedUser.collectAsStateWithLifecycle(initialValue = null)
     val currentUserName = cachedUser?.name ?: "SkoLab User"
 
     var selectedDay by remember { mutableStateOf(24) }
