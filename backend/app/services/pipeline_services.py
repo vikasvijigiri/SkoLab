@@ -144,11 +144,11 @@ class PipelineServices:
             doc_id = "default_feed"
         cache_key = f"daily_feed_{doc_id}"
         cached_data = await self._load_from_postgres(cache_key)
-        if cached_data and "items" in cached_data:
+        if isinstance(cached_data, dict) and "items" in cached_data:
             print(f"[Postgres Cache Hit] daily_feeds for doc_id={doc_id}", flush=True)
             return cached_data["items"]
         _fs_cached = await self._firestore_get_safe("daily_feeds", doc_id, timeout=5.0)
-        if _fs_cached and "items" in _fs_cached:
+        if isinstance(_fs_cached, dict) and "items" in _fs_cached:
             print(f"[Firestore Cache Hit] daily_feeds for doc_id={doc_id}", flush=True)
             await self._save_to_postgres(cache_key, {"items": _fs_cached["items"]})
             return _fs_cached["items"]
@@ -383,11 +383,11 @@ class PipelineServices:
         clean_id = author_id.split("/")[-1]
         cache_key = f"match_grants_{clean_id}"
         cached_data = await self._load_from_postgres(cache_key)
-        if cached_data and "items" in cached_data:
+        if isinstance(cached_data, dict) and "items" in cached_data:
             print(f"[Postgres Cache Hit] match_grants for author_id={clean_id}", flush=True)
             return cached_data["items"]
         _fs_cached = await self._firestore_get_safe("match_grants", clean_id, timeout=5.0)
-        if _fs_cached and "items" in _fs_cached:
+        if isinstance(_fs_cached, dict) and "items" in _fs_cached:
             print(f"[Firestore Cache Hit] match_grants for author_id={clean_id}", flush=True)
             await self._save_to_postgres(cache_key, {"items": _fs_cached["items"]})
             return _fs_cached["items"]
@@ -755,7 +755,7 @@ Provide your response in this exact JSON format:
         clean_id = author_id.split("/")[-1]
         cache_key = f"journal_advisor_{clean_id}"
         cached_data = await self._load_from_postgres(cache_key, ttl_seconds=7200)
-        if cached_data and "venues" in cached_data:
+        if isinstance(cached_data, dict) and "venues" in cached_data:
             print(f"[Postgres Cache Hit] journal_advisor for author_id={clean_id}", flush=True)
             return cached_data["venues"]
         db = self._get_firestore_db()
@@ -764,7 +764,7 @@ Provide your response in this exact JSON format:
                 doc = db.collection("journal_advisor_recommendations").document(clean_id).get()
                 if doc.exists:
                     cached_data = doc.to_dict()
-                    if cached_data and "venues" in cached_data:
+                    if isinstance(cached_data, dict) and "venues" in cached_data:
                         print(f"[Firestore Cache Hit] journal_advisor_recommendations for author_id={clean_id}", flush=True)
                         await self._save_to_postgres(cache_key, {"venues": cached_data["venues"]}, ttl_seconds=7200)
                         return cached_data["venues"]
@@ -981,7 +981,7 @@ Provide your response in this exact JSON format:
         # ── 2. Legacy CacheEntry blob (cache_key fallback) ────────────────────
         cache_key = f"network_collaborators_{clean_id}_{field}"
         cached_blob = await self._load_from_postgres(cache_key)
-        if cached_blob and "collaborators" in cached_blob:
+        if isinstance(cached_blob, dict) and "collaborators" in cached_blob:
             print(f"[Postgres Blob Hit] network_collaborators for author_id={clean_id}", flush=True)
             collaborators = cached_blob["collaborators"]
             if exclude_ids:

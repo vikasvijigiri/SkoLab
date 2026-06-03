@@ -12,7 +12,7 @@ class HTMLTextExtractor(HTMLParser):
     ignoring scripts, styles, metadata, and link blocks.
     """
     def __init__(self):
-        super().__init__()
+        super().__init__(convert_charrefs=True)  # converts &amp; &#x200c; etc automatically
         self.result = []
         self.ignore = False
 
@@ -158,6 +158,46 @@ class ScrapingService:
 
         return results
 
+    async def search_portal(self, portal_name: str, portal_url: str) -> Optional[Dict[str, str]]:
+        """
+        Fetches a research job portal's search results page directly.
+        Returns {"name": portal_name, "url": portal_url, "text": cleaned_text} or None on failure.
+        """
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+                res = await client.get(portal_url, headers=headers)
+                if res.status_code == 200:
+                    # Safely decode bytes — replace unencodable characters instead of crashing
+                    try:
+                        html_text = res.text  # httpx auto-detects encoding
+                    except Exception:
+                        html_text = res.content.decode("utf-8", errors="replace")
+                    extractor = HTMLTextExtractor()
+                    try:
+                        extractor.feed(html_text)
+                    except Exception:
+                        # If feed() crashes on malformed HTML, try with sanitised input
+                        safe_html = html_text.encode("ascii", errors="replace").decode("ascii")
+                        extractor = HTMLTextExtractor()
+                        extractor.feed(safe_html)
+                    text = extractor.get_text()
+                    if len(text) < 200:
+                        print(f"[ScrapingService] Portal '{portal_name}' returned too-short text ({len(text)} chars), skipping.", flush=True)
+                        return None
+                    print(f"[ScrapingService] Portal '{portal_name}' returned {len(text)} chars of text.", flush=True)
+                    return {"name": portal_name, "url": portal_url, "text": text}
+                else:
+                    print(f"[ScrapingService] Portal '{portal_name}' returned status {res.status_code}.", flush=True)
+                    return None
+        except Exception as e:
+            print(f"[ScrapingService] Error fetching portal '{portal_name}' ({portal_url}): {e}", flush=True)
+            return None
+
     async def parse_content_to_json(
         self, 
         raw_content: str, 
@@ -168,8 +208,9 @@ class ScrapingService:
         Parses unstructured text/HTML content into a structured JSON dictionary
         using Groq's json_object output format.
         """
-        # Truncate content to avoid token overflow
-        truncated_content = raw_content[:15000]
+        # Truncate content to avoid token overflow (10 portals × 5000 chars each = 50k; keep 40k buffer)
+        truncated_content = raw_content[:40000]
+
 
         system_prompt = JSON_PARSER_SYSTEM_PROMPT.format(
             schema=json.dumps(response_schema, indent=2),

@@ -284,6 +284,9 @@ fun SkoLabMainApp() {
                                 onProfileClick = {
                                     navController.navigate("profile")
                                 },
+                                onMessagesClick = {
+                                    navController.navigate("chat_list")
+                                },
                                 cachedUser = cachedUser
                             )
                         }
@@ -981,8 +984,21 @@ fun CommonTopBar(
     isSearchActive: Boolean,
     onSearchActiveChange: (Boolean) -> Unit,
     onProfileClick: () -> Unit,
+    onMessagesClick: () -> Unit = {},
     cachedUser: com.open.skolab.model.SkoLabUser?
 ) {
+    // Badge pulse animation
+    val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition(label = "badge_pulse")
+    val badgePulse by infiniteTransition.animateFloat(
+        initialValue = 0.6f,
+        targetValue = 1f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(900, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "badge_alpha"
+    )
+
     androidx.compose.material3.Surface(
         modifier = Modifier.fillMaxWidth(),
         color = com.open.skolab.ui.theme.BgPrimary.copy(alpha = 0.92f),
@@ -994,9 +1010,10 @@ fun CommonTopBar(
                 .statusBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)
         ) {
             if (isSearchActive) {
+                // Back arrow when search is active
                 androidx.compose.material3.IconButton(
                     onClick = {
                         onSearchQueryChange("")
@@ -1010,9 +1027,41 @@ fun CommonTopBar(
                         tint = com.open.skolab.ui.theme.TextSecondary
                     )
                 }
+            } else {
+                // ── Messages Icon (WA-style, left of search bar) ──────────────────
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+                        .background(com.open.skolab.ui.theme.BgCard)
+                        .clickable { onMessagesClick() },
+                    contentAlignment = androidx.compose.ui.Alignment.Center
+                ) {
+                    // Chat bubble icon
+                    androidx.compose.material3.Icon(
+                        imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.Chat,
+                        contentDescription = "Messages",
+                        tint = com.open.skolab.ui.theme.AccentTeal,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    // Unread badge dot (top-right)
+                    androidx.compose.foundation.layout.Box(
+                        modifier = Modifier
+                            .size(9.dp)
+                            .align(androidx.compose.ui.Alignment.TopEnd)
+                            .androidx.compose.ui.draw.clipToBounds()
+                    ) {
+                        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                            drawCircle(
+                                color = com.open.skolab.ui.theme.AccentEmerald.copy(alpha = badgePulse),
+                                radius = size.minDimension / 2
+                            )
+                        }
+                    }
+                }
             }
 
-            // Wider search bar taking up all remaining horizontal space
+            // Search bar — takes all remaining space
             com.open.skolab.ui.components.primitives.GlassSearchBar(
                 value = searchQuery,
                 onValueChange = {
