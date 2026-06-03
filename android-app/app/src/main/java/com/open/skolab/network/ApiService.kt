@@ -269,6 +269,7 @@ data class DailyFeedItem(
     val authors: List<String>,
     val journal: String,
     val year: Int,
+    val publication_date: String? = null,
     val relevance_score: Int,
     val recommendation_reason: String,
     val doi: String? = null,

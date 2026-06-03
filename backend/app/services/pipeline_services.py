@@ -481,7 +481,7 @@ Only output the JSON object, do not wrap it in markdown or comments. Ensure it i
                 _, concepts = extract_field_and_expertise(profile, author_name)
                 if concepts:
                     # Search recent papers from OpenAlex
-                    search_term = " OR ".join([f'"{c}"' for c in concepts[:3]])
+                    search_term = " OR ".join([c for c in concepts[:3]])
             else:
                 # Fallback: Query local database metrics for concepts
                 try:
@@ -494,17 +494,23 @@ Only output the JSON object, do not wrap it in markdown or comments. Ensure it i
                             author_name = rm.display_name
                             concepts = rm.expertise or []
                             if concepts:
-                                search_term = " OR ".join([f'"{c}"' for c in concepts[:3]])
+                                search_term = " OR ".join([c for c in concepts[:3]])
                 except Exception as e:
                     print(f"[DailyFeed] Database lookup fallback error: {e}", flush=True)
         papers = []
+        seen_titles = set()
         try:
-            results = await self.openalex_service.search_works(search_term, per_page=20)
-            # Filter papers with abstracts
+            results = await self.openalex_service.search_works(search_term, per_page=30)
+            # Filter papers with abstracts and deduplicate by title
             for w in results:
+                title = w.get("title", "")
+                if not title:
+                    continue
+                title_norm = title.strip().lower().rstrip(".")
                 abstract_index = w.get("abstract_inverted_index")
-                if abstract_index and w.get("title"):
+                if abstract_index and title_norm not in seen_titles:
                     papers.append(w)
+                    seen_titles.add(title_norm)
                 if len(papers) >= 3:
                     break
         except Exception as e:
@@ -524,11 +530,16 @@ Only output the JSON object, do not wrap it in markdown or comments. Ensure it i
             
             for term in fallback_terms:
                 try:
-                    results = await self.openalex_service.search_works(term, per_page=10)
+                    results = await self.openalex_service.search_works(term, per_page=20)
                     for w in results:
+                        title = w.get("title", "")
+                        if not title:
+                            continue
+                        title_norm = title.strip().lower().rstrip(".")
                         abstract_index = w.get("abstract_inverted_index")
-                        if abstract_index and w.get("title") and w.get("id") not in [p.get("id") for p in papers]:
+                        if abstract_index and title_norm not in seen_titles and w.get("id") not in [p.get("id") for p in papers]:
                             papers.append(w)
+                            seen_titles.add(title_norm)
                         if len(papers) >= 3:
                             break
                 except Exception as e:
@@ -539,9 +550,10 @@ Only output the JSON object, do not wrap it in markdown or comments. Ensure it i
         if len(papers) < 3:
             print(f"[DailyFeed] Still fewer than 3 papers, appending verified real historical fallbacks.", flush=True)
             real_fallbacks = get_real_fallback_papers(concepts, query_fallback)
-            existing_titles = [p.get("title", "").lower() for p in papers]
             for rf in real_fallbacks:
-                if rf["title"].lower() not in existing_titles:
+                title = rf["title"]
+                title_norm = title.strip().lower().rstrip(".")
+                if title_norm not in seen_titles:
                     oa_format = {
                         "id": rf["id"],
                         "title": rf["title"],
@@ -549,6 +561,7 @@ Only output the JSON object, do not wrap it in markdown or comments. Ensure it i
                         "primary_location": {"source": {"display_name": rf["journal"]}},
                         "publication_year": rf["year"],
                         "doi": rf["doi"],
+                        "publication_date": f"{rf['year']}-01-01",
                         "abstract_inverted_index": None,
                         "_custom_abstract": rf["abstract"],
                         "_custom_metadata": {
@@ -560,6 +573,7 @@ Only output the JSON object, do not wrap it in markdown or comments. Ensure it i
                         }
                     }
                     papers.append(oa_format)
+                    seen_titles.add(title_norm)
                 if len(papers) >= 3:
                     break
 
@@ -571,6 +585,7 @@ Only output the JSON object, do not wrap it in markdown or comments. Ensure it i
             year = paper.get("publication_year") or 2025
             doi = paper.get("doi")
             openalex_id = paper.get("id")
+            publication_date = paper.get("publication_date") or f"{year}-01-01"
             
             abstract = paper.get("_custom_abstract")
             if not abstract:
@@ -599,14 +614,16 @@ Only output the JSON object, do not wrap it in markdown or comments. Ensure it i
                 else:
                     meta = extract_metadata_from_abstract(title, abstract)
                 
-                relevance_score = random.randint(88, 98)
-                recommendation_reason = f"Highly relevant to your expertise in {', '.join(concepts[:2])}."
-                if is_llm_working():
+                relevance_score = 90 - i * 3
+                recommendation_reason = "Recommended based on your research profile."
+                if is_llm_working() and concepts:
+                    from app.prompts import DAILY_FEED_ADVISOR_PROMPT_TEMPLATE
                     messages = [
                         {
-                            "role": "system",
+                            "role": "user",
                             "content": DAILY_FEED_ADVISOR_PROMPT_TEMPLATE.format(
-                                title=title,
+                                paper_title=title,
+                                paper_abstract=abstract[:800],
                                 author_name=author_name,
                                 concepts=', '.join(concepts)
                             )
@@ -630,6 +647,7 @@ Only output the JSON object, do not wrap it in markdown or comments. Ensure it i
                 "authors": authors,
                 "journal": journal,
                 "year": year,
+                "publication_date": publication_date,
                 "relevance_score": relevance_score,
                 "recommendation_reason": recommendation_reason,
                 "doi": doi,
