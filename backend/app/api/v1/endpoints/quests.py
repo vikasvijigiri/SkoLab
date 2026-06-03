@@ -7,6 +7,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.schemas.core import Quest, LeaderboardEntry
 from app.api.dependencies import get_db
 from app.models.user_models import UserPreference, User
+from app.core.resources import load_fallbacks
 
 try:
     from app.services.researcher_worker import FIRESTORE_AVAILABLE
@@ -31,11 +32,8 @@ async def get_user_quests(
     result = await session.execute(stmt)
     pref = result.scalars().first()
     
-    default_quests = [
-        {"id": "discovery", "title": "Review 5 papers", "reward_entropy": 15, "is_completed": False},
-        {"id": "logic", "title": "Solve a Conjecture", "reward_entropy": 50, "is_completed": False},
-        {"id": "profile", "title": "Endorse a Colleague", "reward_entropy": 10, "is_completed": False}
-    ]
+    fallbacks = load_fallbacks()
+    default_quests = fallbacks.get("default_quests", [])
     
     if not pref:
         # Let's ensure the user exists first
@@ -166,39 +164,5 @@ async def get_leaderboard(
         print(f"[Leaderboard] PostgreSQL fallback error: {pg_err}", flush=True)
 
     # Fallback 2: Return high-quality, professional real leaderboard matching the field
-    fld = field.lower() if field else ""
-    if "phys" in fld:
-        real_data = [
-            ("Jian-Wei Pan", "USTC", 98),
-            ("Anton Zeilinger", "University of Vienna", 95),
-            ("John Martinis", "UC Santa Barbara", 92),
-            ("Michelle Simmons", "UNSW Sydney", 89),
-            ("Immanuel Bloch", "Max Planck Institute", 86),
-        ]
-    elif "comp" in fld or "cs" in fld or "soft" in fld:
-        real_data = [
-            ("Yoshua Bengio", "University of Montreal", 97),
-            ("Yann LeCun", "New York University", 94),
-            ("Geoffrey Hinton", "University of Toronto", 91),
-            ("Andrew Ng", "Stanford University", 88),
-            ("Fei-Fei Li", "Stanford University", 85),
-        ]
-    else:
-        real_data = [
-            ("Jennifer Doudna", "UC Berkeley", 99),
-            ("Emmanuelle Charpentier", "Max Planck Unit", 97),
-            ("Feng Zhang", "MIT / Broad Institute", 95),
-            ("George Church", "Harvard Medical School", 93),
-            ("Eric Lander", "Broad Institute", 91),
-        ]
-
-    return [
-        LeaderboardEntry(
-            rank=idx + 1,
-            user_name=name,
-            institution=inst,
-            entropy_score=score
-        )
-        for idx, (name, inst, score) in enumerate(real_data)
-    ]
+    raise HTTPException(status_code=502, detail=f"No leaderboard data available for field '{field}' from Firestore or local database.")
 
