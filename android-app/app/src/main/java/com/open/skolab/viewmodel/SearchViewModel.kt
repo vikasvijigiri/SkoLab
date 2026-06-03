@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.open.skolab.model.Paper
 import com.open.skolab.network.ApiService
 import com.open.skolab.network.OpenAlexWork
+import com.open.skolab.network.reconstructAbstract
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -61,7 +62,7 @@ class SearchViewModel(private val apiService: ApiService = com.open.skolab.di.Ap
             year = work.publication_year ?: 0,
             domain = "General Science",
             subDomain = "Research",
-            abstractText = "",
+            abstractText = work.reconstructAbstract(),
             disruptionScore = 0f,
             noveltyScore = 0f,
             citationVelocity = 0f,

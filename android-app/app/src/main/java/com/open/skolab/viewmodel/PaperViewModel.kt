@@ -6,6 +6,7 @@ import com.open.skolab.model.Paper
 import com.open.skolab.model.PaperIntelligence
 import com.open.skolab.network.ApiService
 import com.open.skolab.network.OpenAlexWork
+import com.open.skolab.network.reconstructAbstract
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -106,7 +107,7 @@ class PaperViewModel(private val apiService: ApiService = com.open.skolab.di.App
             year = work.publication_year ?: 0,
             domain = work.primary_topic?.field?.display_name ?: "General Science",
             subDomain = work.primary_topic?.display_name ?: "Research",
-            abstractText = "",
+            abstractText = work.reconstructAbstract(),
             disruptionScore = minOf(1f, (work.cited_by_count ?: 0) / 5000f),
             noveltyScore = 0.5f,
             citationVelocity = 0f,

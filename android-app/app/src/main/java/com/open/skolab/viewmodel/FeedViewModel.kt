@@ -26,6 +26,7 @@ import com.open.skolab.network.NetworkCollaborator
 import com.open.skolab.network.AuthorSuggestion
 import com.open.skolab.network.JournalRecommendation
 import com.open.skolab.network.OpenAlexWork
+import com.open.skolab.network.reconstructAbstract
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -784,7 +785,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
             year = work.publication_year ?: 2026,
             domain = "General Science",
             subDomain = "Research",
-            abstractText = "",
+            abstractText = work.reconstructAbstract(),
             disruptionScore = 0.82f,
             noveltyScore = 0.76f,
             citationVelocity = 12.0f,

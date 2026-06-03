@@ -95,24 +95,16 @@ fun IndustryScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 16.dp)
+                    .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 6.dp)
             ) {
                 Text(
-                    text = "LAUNCHPAD",
-                    color = PRIMARY,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.5.sp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Research Opportunities",
+                    text = "Launchpad",
                     color = TEXT_PRIMARY,
-                    fontSize = 24.sp,
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Premium Segmented Tab Bar (Full Width)
                 Row(
@@ -382,18 +374,6 @@ fun LaunchpadOpportunityCard(
         }
     }
 
-    val statusBadge = remember(opp.id) {
-        val index = kotlin.math.abs(opp.id.hashCode()) % 4
-        listOf("Featured", "Trending", "Recently Added", "Ending Soon")[index]
-    }
-
-    val statusColor = when (statusBadge) {
-        "Featured" -> Color(0xFF2D6BE4)
-        "Trending" -> Color(0xFFE28743)
-        "Recently Added" -> Color(0xFF00A884)
-        else -> Color(0xFFD42B2B)
-    }
-
     Surface(
         color = SURFACE,
         shape = RoundedCornerShape(16.dp),
@@ -405,63 +385,18 @@ fun LaunchpadOpportunityCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(14.dp)
         ) {
-            // Badges
             Row(
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(tintColor.copy(alpha = 0.1f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = opp.type.name,
-                            color = tintColor,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(statusColor.copy(alpha = 0.1f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = statusBadge.uppercase(),
-                            color = statusColor,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Text(
-                    text = opp.postedAgo,
-                    color = TEXT_MUTED,
-                    fontSize = 12.sp
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Title & Org
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
+                // Institution / Lab Logo Box
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(SURFACE_SUBTLE),
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(tintColor.copy(alpha = 0.08f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -474,115 +409,124 @@ fun LaunchpadOpportunityCard(
 
                 Spacer(modifier = Modifier.width(12.dp))
 
+                // Title and Company
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = opp.title,
                         color = TEXT_PRIMARY,
                         fontSize = 15.sp,
-                        fontWeight = FontWeight.ExtraBold,
+                        fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = opp.companyOrFunder,
                         color = TEXT_SECONDARY,
                         fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Match Score Tag
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(8.dp))
                         .background(MATCH_SCORE_BG)
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = "$matchScore% Match",
+                        text = "$matchScore%",
                         color = MATCH_SCORE_TEXT,
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Short dynamic match reason from LLM
-            val matchReason = remember(opp.id) {
-                opp.relevanceExplanation ?: "Strong alignment with $userFocus research and citation keywords."
-            }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(SURFACE_SUBTLE)
-                    .padding(10.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = null,
-                        tint = PRIMARY,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = matchReason,
-                        color = TEXT_PRIMARY,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = opp.description,
-                color = TEXT_SECONDARY,
-                fontSize = 13.sp,
-                lineHeight = 18.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Tag list
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                opp.tags.forEach { tag ->
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(SURFACE_SUBTLE)
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = tag,
-                            color = TEXT_SECONDARY,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
+            // Inline Metadata Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                // Type Tag
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(tintColor.copy(alpha = 0.1f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = opp.type.name,
+                        color = tintColor,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
                 Text(
-                    text = "View Details & Apply →",
-                    color = PRIMARY,
-                    fontSize = 13.sp,
+                    text = "·",
+                    color = TEXT_MUTED,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    text = if (opp.amount.isNotBlank()) opp.amount else "Details online",
+                    color = TEXT_SECONDARY,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+
+                Text(
+                    text = "·",
+                    color = TEXT_MUTED,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    text = opp.postedAgo,
+                    color = TEXT_MUTED,
+                    fontSize = 11.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // AI Relevance Snippet (sleek, borderless)
+            val matchReason = remember(opp.id) {
+                opp.relevanceExplanation ?: "Matches $userFocus research and citation profile."
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 2.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = PRIMARY,
+                    modifier = Modifier.size(12.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = matchReason,
+                    color = TEXT_SECONDARY,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }

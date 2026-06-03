@@ -57,6 +57,22 @@ data class OpenAlexWork(
     val primary_topic: OpenAlexTopic? = null
 )
 
+fun OpenAlexWork.reconstructAbstract(): String {
+    val index = this.abstract_inverted_index ?: return ""
+    try {
+        val wordList = mutableListOf<Pair<Int, String>>()
+        for ((word, positions) in index) {
+            for (pos in positions) {
+                wordList.add(Pair(pos, word))
+            }
+        }
+        wordList.sortBy { it.first }
+        return wordList.joinToString(" ") { it.second }
+    } catch (e: Exception) {
+        return ""
+    }
+}
+
 @Serializable
 data class OpenAlexTopic(
     val display_name: String? = null,
@@ -244,7 +260,11 @@ data class DailyFeedItem(
     val year: Int,
     val relevance_score: Int,
     val recommendation_reason: String,
-    val doi: String? = null
+    val doi: String? = null,
+    val abstract: String? = null,
+    val methodology: String? = null,
+    val tools_used: List<String>? = null,
+    val key_findings: String? = null
 )
 
 @Serializable

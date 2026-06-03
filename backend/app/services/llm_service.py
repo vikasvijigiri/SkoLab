@@ -18,7 +18,9 @@ def is_llm_working() -> bool:
         if time.time() - LLM_LIMIT_EXCEEDED_TIME > 900:
             LLM_LIMIT_EXCEEDED = False
             print("[LLMService] Attempting to reset LLM_LIMIT_EXCEEDED after 15-minute cooldown...", flush=True)
-    return (bool(os.getenv("GROQ_API")) or bool(os.getenv("OPENROUTER_API_KEY"))) and not LLM_LIMIT_EXCEEDED
+    has_groq = bool(os.getenv("GROQ_API"))
+    has_openrouter = bool(os.getenv("OPENROUTER_API_KEY"))
+    return has_openrouter or (has_groq and not LLM_LIMIT_EXCEEDED)
 
 def set_llm_limit_exceeded(exceeded: bool):
     global LLM_LIMIT_EXCEEDED, LLM_LIMIT_EXCEEDED_TIME
@@ -59,7 +61,7 @@ class LLMService:
     async def query_openrouter(
         self,
         messages: List[Dict[str, str]],
-        model: str = "openrouter/owl-alpha",
+        model: str = "google/gemma-4-31b-it:free",
         temperature: float = 0.5,
         max_tokens: Optional[int] = None,
         response_format: Optional[Dict[str, Any]] = None,
@@ -129,20 +131,23 @@ class LLMService:
     ) -> LLMResponse:
         """
         Primary LLM query entry point. Tries Groq models sequentially.
-        If all fail, triggers OpenRouter fallback using 'openrouter/owl-alpha'.
+        If all fail, triggers OpenRouter fallback using 'google/gemma-4-31b-it:free'.
         """
+        global LLM_LIMIT_EXCEEDED
         if not is_llm_working():
-            if os.getenv("OPENROUTER_API_KEY"):
-                print("[LLMService] Groq rate limited. Falling back directly to OpenRouter...", flush=True)
-                return await self.query_openrouter(
-                    messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    response_format=response_format,
-                    tools=tools,
-                    tool_choice=tool_choice
-                )
             raise Exception("LLM services are currently unavailable or rate-limited.")
+
+        has_groq = bool(self.groq_api_key)
+        if (not has_groq or LLM_LIMIT_EXCEEDED) and os.getenv("OPENROUTER_API_KEY"):
+            print("[LLMService] Groq unavailable/rate-limited. Querying OpenRouter directly...", flush=True)
+            return await self.query_openrouter(
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                response_format=response_format,
+                tools=tools,
+                tool_choice=tool_choice
+            )
 
         # Try Groq models first
         models_to_try = models if models else self.default_models
@@ -195,7 +200,7 @@ class LLMService:
                 try:
                     return await self.query_openrouter(
                         messages=messages,
-                        model="openrouter/owl-alpha",
+                        model="google/gemma-4-31b-it:free",
                         temperature=temperature,
                         max_tokens=max_tokens,
                         response_format=response_format,
@@ -207,7 +212,7 @@ class LLMService:
                         print(f"[LLMService] OpenRouter with tools failed: {or_tool_err}. Retrying without tools...", flush=True)
                         return await self.query_openrouter(
                             messages=messages,
-                            model="openrouter/owl-alpha",
+                            model="google/gemma-4-31b-it:free",
                             temperature=temperature,
                             max_tokens=max_tokens,
                             response_format=response_format

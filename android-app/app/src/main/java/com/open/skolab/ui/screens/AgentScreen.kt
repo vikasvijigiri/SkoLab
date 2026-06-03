@@ -50,6 +50,8 @@ import com.open.skolab.ui.components.MessageBubbleWrapper
 import com.open.skolab.ui.components.ReactionBadge
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.focus.focusRequester
+import kotlinx.coroutines.delay
 import com.open.skolab.ui.theme.*
 import com.open.skolab.viewmodel.AgentMode
 import com.open.skolab.viewmodel.AgentViewModel
@@ -60,7 +62,8 @@ import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AgentScreen() {
+fun AgentScreen(initialQuery: String = "") {
+    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
     val context = LocalContext.current
     val authManager = AppDependencies.authManager
     val cachedUser by authManager.cachedUser.collectAsStateWithLifecycle(initialValue = null)
@@ -91,6 +94,16 @@ fun AgentScreen() {
     LaunchedEffect(uiState.messages.size, uiState.isTyping) {
         if (uiState.messages.isNotEmpty()) {
             listState.animateScrollToItem(uiState.messages.lastIndex)
+        }
+    }
+
+    LaunchedEffect(initialQuery) {
+        if (initialQuery.isNotEmpty()) {
+            messageText = initialQuery
+            delay(300)
+            try {
+                focusRequester.requestFocus()
+            } catch (_: Exception) {}
         }
     }
 
@@ -128,6 +141,7 @@ fun AgentScreen() {
             AgentInputBar(
                 text = messageText,
                 onTextChanged = { messageText = it },
+                focusRequester = focusRequester,
                 onSend = {
                     if (messageText.isNotBlank()) {
                         val userMsg = if (replyingToMessage != null) {
@@ -792,7 +806,8 @@ fun AgentInputBar(
     quickPrompts: List<String> = emptyList(),
     onQuickPrompt: (String) -> Unit = {},
     replyingToMessage: ChatMessage? = null,
-    onClearReply: () -> Unit = {}
+    onClearReply: () -> Unit = {},
+    focusRequester: androidx.compose.ui.focus.FocusRequester? = null
 ) {
     Surface(
         color = EntropiColors.Background,
@@ -948,7 +963,7 @@ fun AgentInputBar(
                         lineHeight = 22.sp
                     ),
                     cursorBrush = SolidColor(AccentTeal),
-                    modifier = Modifier
+                    modifier = (if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
                         .weight(1f)
                         .padding(vertical = 10.dp),
                     decorationBox = { innerTextField ->
