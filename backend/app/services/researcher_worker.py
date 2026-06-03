@@ -78,8 +78,10 @@ def check_connection_sync() -> bool:
             from firebase_admin import credentials
             firebase_admin.initialize_app(credentials.Certificate(str(cred_path)))
 
-        _firestore.client()
-        logger.info("[researcher_worker] Firestore client initialized.")
+        db = _firestore.client()
+        # Force a network request to verify credentials
+        db.collection("daily_feeds").document("ping_test").get(timeout=2.0)
+        logger.info("[researcher_worker] Firestore client initialized and verified.")
         return True
     except Exception as exc:
         logger.warning("[researcher_worker] Firestore probe failed: %s", exc)
