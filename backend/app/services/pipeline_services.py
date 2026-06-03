@@ -548,34 +548,7 @@ Only output the JSON object, do not wrap it in markdown or comments. Ensure it i
                     break
                     
         if len(papers) < 3:
-            print(f"[DailyFeed] Still fewer than 3 papers, appending verified real historical fallbacks.", flush=True)
-            real_fallbacks = get_real_fallback_papers(concepts, query_fallback)
-            for rf in real_fallbacks:
-                title = rf["title"]
-                title_norm = title.strip().lower().rstrip(".")
-                if title_norm not in seen_titles:
-                    oa_format = {
-                        "id": rf["id"],
-                        "title": rf["title"],
-                        "authorships": [{"author": {"display_name": name}} for name in rf["authors"]],
-                        "primary_location": {"source": {"display_name": rf["journal"]}},
-                        "publication_year": rf["year"],
-                        "doi": rf["doi"],
-                        "publication_date": f"{rf['year']}-01-01",
-                        "abstract_inverted_index": None,
-                        "_custom_abstract": rf["abstract"],
-                        "_custom_metadata": {
-                            "methodology": rf["methodology"],
-                            "tools_used": rf["tools_used"],
-                            "key_findings": rf["key_findings"],
-                            "relevance_score": rf["relevance_score"],
-                            "recommendation_reason": rf["recommendation_reason"]
-                        }
-                    }
-                    papers.append(oa_format)
-                    seen_titles.add(title_norm)
-                if len(papers) >= 3:
-                    break
+            raise ValueError(f"Could not retrieve at least 3 real, unique publications from OpenAlex matching search query '{search_term}'. Found only {len(papers)}.")
 
         feed_items = []
         for i, paper in enumerate(papers[:3]):
@@ -899,18 +872,14 @@ Only output the JSON object, do not wrap it in markdown or comments. Ensure it i
         # Deterministic synergy score based on overlap — no random component
         synergy_score = 72 + min(len(overlap_concepts) * 5, 20)  # max 92 from overlap alone
         synergy_score = min(max(synergy_score, 70), 99)
-        joint_proposal_title = f"Synergistic Research Framework in {overlap_concepts[0] if overlap_concepts else 'Cross-Disciplinary Sci'}"
-        co_authorship_direction = f"Combining {name1}'s expertise in {concepts1[0]} with {name2}'s deep foundation in {concepts2[0]}."
-        strategic_action_plan = [
-            "Share datasets and codebases for comparative profiling.",
-            "Formulate a joint proposal for pilot funding.",
-            "Draft a co-authored manuscript focusing on theoretical boundaries."
-        ]
-        if is_llm_working():  # Decoupled: LLM moved to background addon to unblock core app
-            messages = [
-                {
-                    "role": "system",
-                    "content": f"""You are an elite academic synergy counselor. Analyze the collaborative potential between:
+
+        if not is_llm_working():
+            raise ValueError("LLM services are currently offline or rate-limited. Synergy analysis is unavailable.")
+
+        messages = [
+            {
+                "role": "system",
+                "content": f"""You are an elite academic synergy counselor. Analyze the collaborative potential between:
 Researcher A: {name1} (Expertise: {', '.join(concepts1[:4])})
 
 Researcher B: {name2} (Expertise: {', '.join(concepts2[:4])})
@@ -929,23 +898,26 @@ Provide your response in this exact JSON format:
 
 """
 
-                }
-            ]
-            try:
-                response = await self.llm_service.query(
-                    messages=messages,
-                    models=[self.model],
-                    temperature=0.3,
-                    max_tokens=300,
-                    response_format={"type": "json_object"}
-                )
-                if response.content:
-                    data = json.loads(response.content.strip())
-                    joint_proposal_title = data.get("joint_proposal_title", joint_proposal_title)
-                    co_authorship_direction = data.get("co_authorship_direction", co_authorship_direction)
-                    strategic_action_plan = data.get("strategic_action_plan", strategic_action_plan)
-            except Exception as e:
-                print(f"Collaborator synergy generation failed: {e}", flush=True)
+            }
+        ]
+        try:
+            response = await self.llm_service.query(
+                messages=messages,
+                models=[self.model],
+                temperature=0.3,
+                max_tokens=300,
+                response_format={"type": "json_object"}
+            )
+            if response.content:
+                data = json.loads(response.content.strip())
+                joint_proposal_title = data["joint_proposal_title"]
+                co_authorship_direction = data["co_authorship_direction"]
+                strategic_action_plan = data["strategic_action_plan"]
+            else:
+                raise ValueError("LLM returned empty synergy analysis.")
+        except Exception as e:
+            raise ValueError(f"Collaborator synergy generation failed due to LLM error: {e}")
+
         result = {
             "synergy_score": synergy_score,
             "joint_proposal_title": joint_proposal_title,

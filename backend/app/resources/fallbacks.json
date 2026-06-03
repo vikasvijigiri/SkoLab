@@ -1,0 +1,104 @@
+{
+  "default_quests": [
+    {"id": "discovery", "title": "Review 5 papers", "reward_entropy": 15, "is_completed": false},
+    {"id": "logic", "title": "Solve a Conjecture", "reward_entropy": 50, "is_completed": false},
+    {"id": "profile", "title": "Endorse a Colleague", "reward_entropy": 10, "is_completed": false}
+  ],
+  "leaderboards": {
+    "physics": [
+      ["Jian-Wei Pan", "USTC", 98],
+      ["Anton Zeilinger", "University of Vienna", 95],
+      ["John Martinis", "UC Santa Barbara", 92],
+      ["Michelle Simmons", "UNSW Sydney", 89],
+      ["Immanuel Bloch", "Max Planck Institute", 86]
+    ],
+    "computer_science": [
+      ["Yoshua Bengio", "University of Montreal", 97],
+      ["Yann LeCun", "New York University", 94],
+      ["Geoffrey Hinton", "University of Toronto", 91],
+      ["Andrew Ng", "Stanford University", 88],
+      ["Fei-Fei Li", "Stanford University", 85]
+    ],
+    "default": [
+      ["Jennifer Doudna", "UC Berkeley", 99],
+      ["Emmanuelle Charpentier", "Max Planck Unit", 97],
+      ["Feng Zhang", "MIT / Broad Institute", 95],
+      ["George Church", "Harvard Medical School", 93],
+      ["Eric Lander", "Broad Institute", 91]
+    ]
+  },
+  "conjectures": {
+    "physics": {
+      "category": "Physics",
+      "title": "The Qubit Coherence Paradox",
+      "hypothesis": "A researcher prepares a qubit in superposition and subjects it to continuous measurements. According to the quantum Zeno effect, what happens to the state's evolution?",
+      "options": [
+        "The state rapidly collapses into a mixed state.",
+        "The state's evolution is effectively frozen in its initial superposition.",
+        "The measurement decoheres the state into |0> only.",
+        "The state oscillates rapidly between |0> and |1>."
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "The quantum Zeno effect: frequent measurement freezes quantum evolution, keeping the state near its initial superposition."
+    },
+    "machine_learning": {
+      "category": "Machine Learning",
+      "title": "The Gradient Vanishing Dilemma",
+      "hypothesis": "A deep network with L=50 sigmoid layers runs backpropagation. What happens to the gradient as it propagates from layer L to layer 1?",
+      "options": [
+        "Stays near constant due to sigmoid's bounded range.",
+        "Grows exponentially (exploding gradient).",
+        "Shrinks exponentially, approaching zero (vanishing gradient).",
+        "Oscillates between positive and negative."
+      ],
+      "correctOptionIndex": 2,
+      "explanation": "Sigmoid derivative is at most 0.25. Multiplied 50 times it approaches zero — the vanishing gradient problem, solved by ReLU and ResNets."
+    },
+    "biology": {
+      "category": "Molecular Biology",
+      "title": "The Central Dogma Inversion",
+      "hypothesis": "A retrovirus integrates its RNA genome using reverse transcriptase. Which step of the central dogma does this process reverse?",
+      "options": [
+        "DNA to RNA transcription — RNA is used as template.",
+        "RNA to DNA — reversing normal transcription direction.",
+        "Translation — bypassing ribosomes entirely.",
+        "None — this is a standard eukaryotic process."
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "Retroviruses use reverse transcriptase to copy RNA to DNA, directly reversing the canonical transcription direction of the central dogma."
+    },
+    "relativity": {
+      "category": "General Relativity",
+      "title": "The Gravitational Time Dilation Puzzle",
+      "hypothesis": "Clock A is at sea level; Clock B atop Everest (h=8848 m). After one year, which shows more elapsed time?",
+      "options": [
+        "Clock A — stronger gravity speeds up time.",
+        "Clock B — higher gravitational potential means time flows faster.",
+        "Both identical; altitude has no effect.",
+        "Clock B runs slower due to faster rotation at altitude."
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "General relativity: clocks at higher gravitational potential tick faster. The difference is approximately 22 microseconds per year for Everest altitude."
+    }
+  },
+  "roadmap": {
+    "milestones": [
+      {"title": "Ph.D. Defense", "status": "Completed", "date": "2024", "description": "Successfully completed and defended doctoral thesis."},
+      {"title": "Postdoctoral Fellowship", "status": "Current", "date": "2025-2026", "description": "Active research and publication cycle at current institution."},
+      {"title": "Senior Research Fellow", "status": "Upcoming", "date": "2027", "description": "Targeted leadership role of lab projects/grants."},
+      {"title": "Assistant Professor (Tenure-Track)", "status": "Target", "date": "2028", "description": "Applying to leading academic openings."}
+    ],
+    "checklist": [
+      {"task": "Publish 2+ first-author publications in Q1 journals", "status": "In Progress", "priority": "High"},
+      {"task": "Co-author a paper with a Tier-1 Global Institution (e.g., MIT/Stanford)", "status": "Completed", "priority": "Medium"},
+      {"task": "Act as an invited peer reviewer for top journals/conferences", "status": "Completed", "priority": "Low"},
+      {"task": "Submit a major national research fellowship proposal (NSF/ERC)", "status": "Pending", "priority": "High"},
+      {"task": "Complete teaching credits or deliver guest lecture series", "status": "Pending", "priority": "Medium"}
+    ],
+    "templates": [
+      {"name": "Research Statement Template", "description": "3-page narrative describing your research vision, key contributions, and funding plans.", "downloadUrl": "https://skolab.open/templates/research_statement.pdf"},
+      {"name": "Teaching Statement Outline", "description": "Statement details on pedagogy, student mentoring, and diversity/equity strategies.", "downloadUrl": "https://skolab.open/templates/teaching_statement.pdf"},
+      {"name": "Tenure-Track CV Template", "description": "Curated academic CV structure tailored for assistant professor applications.", "downloadUrl": "https://skolab.open/templates/academic_cv.docx"}
+    ]
+  }
+}

@@ -12,6 +12,7 @@ from app.api.dependencies import (
     get_pipeline_services,
     get_openalex_service
 )
+from app.core.resources import load_fallbacks
 
 router = APIRouter()
 
@@ -49,87 +50,21 @@ async def get_daily_conjecture(
             if results:
                 author_data = results[0]
                 resolved_id = author_data["id"].split("/")[-1]
-    except Exception:
-        pass
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to query OpenAlex for author: {str(e)}")
 
-    # Build a field-aware fallback conjecture based on author's research area
-    fallback_category = "Physics"
-    fallback_title = "The Qubit Coherence Paradox"
-    fallback_hypothesis = "A researcher prepares a qubit in superposition and subjects it to continuous measurements. According to the quantum Zeno effect, what happens to the state's evolution?"
-    fallback_options = [
-        "The state rapidly collapses into a mixed state.",
-        "The state's evolution is effectively frozen in its initial superposition.",
-        "The measurement decoheres the state into |0> only.",
-        "The state oscillates rapidly between |0> and |1>."
-    ]
-    fallback_correct = 1
-    fallback_explanation = "The quantum Zeno effect: frequent measurement freezes quantum evolution, keeping the state near its initial superposition."
-
-    if author_data:
-        author_name_lower = (author_data.get("display_name") or "").lower()
-        concepts = author_data.get("x_concepts") or []
-        topics = author_data.get("topics") or []
-        field_names = [c.get("display_name", "").lower() for c in concepts
-                       if c.get("display_name") and c.get("display_name").lower() != author_name_lower]
-        field_names += [t.get("display_name", "").lower() for t in topics if t.get("display_name")]
-        fld = " ".join(field_names)
-
-        if any(kw in fld for kw in ["machine learn", "artificial intel", "neural", "deep learn", "nlp", "reinforcement"]):
-            fallback_category = "Machine Learning"
-            fallback_title = "The Gradient Vanishing Dilemma"
-            fallback_hypothesis = "A deep network with L=50 sigmoid layers runs backpropagation. What happens to the gradient as it propagates from layer L to layer 1?"
-            fallback_options = [
-                "Stays near constant due to sigmoid's bounded range.",
-                "Grows exponentially (exploding gradient).",
-                "Shrinks exponentially, approaching zero (vanishing gradient).",
-                "Oscillates between positive and negative."
-            ]
-            fallback_correct = 2
-            fallback_explanation = "Sigmoid derivative is at most 0.25. Multiplied 50 times it approaches zero — the vanishing gradient problem, solved by ReLU and ResNets."
-        elif any(kw in fld for kw in ["biol", "genet", "medicine", "neuro", "protein", "genom"]):
-            fallback_category = "Molecular Biology"
-            fallback_title = "The Central Dogma Inversion"
-            fallback_hypothesis = "A retrovirus integrates its RNA genome using reverse transcriptase. Which step of the central dogma does this process reverse?"
-            fallback_options = [
-                "DNA to RNA transcription — RNA is used as template.",
-                "RNA to DNA — reversing normal transcription direction.",
-                "Translation — bypassing ribosomes entirely.",
-                "None — this is a standard eukaryotic process."
-            ]
-            fallback_correct = 1
-            fallback_explanation = "Retroviruses use reverse transcriptase to copy RNA to DNA, directly reversing the canonical transcription direction of the central dogma."
-        elif any(kw in fld for kw in ["relativity", "gravit", "cosmol", "particle", "high energy", "astrophys"]):
-            fallback_category = "General Relativity"
-            fallback_title = "The Gravitational Time Dilation Puzzle"
-            fallback_hypothesis = "Clock A is at sea level; Clock B atop Everest (h=8848 m). After one year, which shows more elapsed time?"
-            fallback_options = [
-                "Clock A — stronger gravity speeds up time.",
-                "Clock B — higher gravitational potential means time flows faster.",
-                "Both identical; altitude has no effect.",
-                "Clock B runs slower due to faster rotation at altitude."
-            ]
-            fallback_correct = 1
-            fallback_explanation = "General relativity: clocks at higher gravitational potential tick faster. The difference is approximately 22 microseconds per year for Everest altitude."
-
-    fallback_conjecture = ConjectureResponse(
-        id="fallback-1",
-        category=fallback_category,
-        title=fallback_title,
-        hypothesis=fallback_hypothesis,
-        options=fallback_options,
-        correctOptionIndex=fallback_correct,
-        explanation=fallback_explanation
-    )
+    if not author_data or not resolved_id:
+        raise HTTPException(status_code=404, detail="Could not resolve researcher profile to generate a personalized conjecture.")
 
     try:
-        if not author_data or not resolved_id:
-            return fallback_conjecture
         # Fetch recent works of the author
         works = await openalex_service.fetch_author_works(resolved_id, per_page=5)
         if not works:
-            return fallback_conjecture
-    except Exception:
-        return fallback_conjecture
+            raise HTTPException(status_code=404, detail=f"No publications found for researcher '{author_data.get('display_name')}' to generate a conjecture.")
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch publications from OpenAlex: {str(e)}")
 
     # Build works context for LLM
     works_context = "\n".join([
@@ -143,23 +78,23 @@ async def get_daily_conjecture(
             {
                 "role": "system",
                 "content": """You are an elite scientific advisor. Your task is to generate a highly academic, rigorous scientific "conjecture/puzzle" grounded in the research areas of the provided publications.
-The conjecture should describe a specific hypothetical scenario or calculation, present a mathematical or conceptual fallacy, and ask the user to identify the correct explanation or fallacy.
-Format your output as a raw JSON object matching this schema:
-{
-  "id": "1",
-  "category": "High-level discipline name (e.g. Quantum Computing, Genomics, Condensed Matter Physics)",
-  "title": "A short, catchy, professional title",
-  "hypothesis": "The technical scenario description, including equations in LaTeX format using $$...$$ for block or $...$ for inline equations.",
-  "options": [
-    "Option A description",
-    "Option B description",
-    "Option C description",
-    "Option D description"
-  ],
-  "correctOptionIndex": 0,
-  "explanation": "A detailed 1-2 sentence explanation of why this option is correct, including any relevant scientific theory."
-}
-Only output the JSON object, do not wrap it in markdown or comments. Ensure it is valid JSON."""
+                    The conjecture should describe a specific hypothetical scenario or calculation, present a mathematical or conceptual fallacy, and ask the user to identify the correct explanation or fallacy.
+                    Format your output as a raw JSON object matching this schema:
+                    {
+                    "id": "1",
+                    "category": "High-level discipline name (e.g. Quantum Computing, Genomics, Condensed Matter Physics)",
+                    "title": "A short, catchy, professional title",
+                    "hypothesis": "The technical scenario description, including equations in LaTeX format using $$...$$ for block or $...$ for inline equations.",
+                    "options": [
+                        "Option A description",
+                        "Option B description",
+                        "Option C description",
+                        "Option D description"
+                    ],
+                    "correctOptionIndex": 0,
+                    "explanation": "A detailed 1-2 sentence explanation of why this option is correct, including any relevant scientific theory."
+                    }
+                    Only output the JSON object, do not wrap it in markdown or comments. Ensure it is valid JSON."""
             },
             {
                 "role": "user",
@@ -171,11 +106,11 @@ Only output the JSON object, do not wrap it in markdown or comments. Ensure it i
     }
 
     if not is_llm_working():
-        return fallback_conjecture
+        raise HTTPException(status_code=503, detail="LLM service is currently offline or rate-limited. Conjecture generation is unavailable.")
         
     groq_key = os.getenv("GROQ_API")
     if not groq_key:
-        return fallback_conjecture
+        raise HTTPException(status_code=501, detail="Groq API key not configured on server. Conjecture generation is unavailable.")
         
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -191,9 +126,11 @@ Only output the JSON object, do not wrap it in markdown or comments. Ensure it i
                 conjecture_data = json.loads(raw_content)
                 return ConjectureResponse(**conjecture_data)
             else:
-                return fallback_conjecture
+                raise HTTPException(status_code=res.status_code, detail=f"Groq API returned error: {res.text}")
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        return fallback_conjecture
+        raise HTTPException(status_code=502, detail=f"Failed to query Groq LLM: {str(e)}")
 
 from app.db.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -249,32 +186,37 @@ async def get_assistant_professor_roadmap(
         target_citations = 350 if is_physics else 400
         target_disruption = 0.80 if is_physics else 0.78
         
-        milestones = [
-            {"title": "Ph.D. Defense", "status": "Completed", "date": "2024", "description": "Successfully completed and defended doctoral thesis."},
-            {"title": "Postdoctoral Fellowship", "status": "Current", "date": "2025-2026", "description": "Active research and publication cycle at current institution."},
-            {"title": "Senior Research Fellow", "status": "Upcoming", "date": "2027", "description": "Targeted leadership role of lab projects/grants."},
-            {"title": "Assistant Professor (Tenure-Track)", "status": "Target", "date": "2028", "description": "Applying to leading academic openings."}
-        ]
+        fallbacks = load_fallbacks()
+        roadmap_data = fallbacks.get("roadmap", {})
         
-        checklist = [
-            {"task": "Publish 2+ first-author publications in Q1 journals", "status": "In Progress", "priority": "High"},
-            {"task": "Co-author a paper with a Tier-1 Global Institution (e.g., MIT/Stanford)", "status": "Completed", "priority": "Medium"},
-            {"task": "Act as an invited peer reviewer for top journals/conferences", "status": "Completed", "priority": "Low"},
-            {"task": "Submit a major national research fellowship proposal (NSF/ERC)", "status": "Pending", "priority": "High"},
-            {"task": "Complete teaching credits or deliver guest lecture series", "status": "Pending", "priority": "Medium"}
-        ]
-        
-        coauthors = [
-            {"name": "Dr. Sarah Jenkins", "institution": f"Stanford Department of {focus}", "field": focus, "match": "94%"},
-            {"name": "Dr. Alexei Romanov", "institution": f"MIT Department of {focus}", "field": focus, "match": "88%"},
-            {"name": "Dr. Priya Patel", "institution": f"Oxford Research Group in {focus}", "field": focus, "match": "85%"}
-        ]
+        milestones = roadmap_data.get("milestones", [])
+        checklist = roadmap_data.get("checklist", [])
+        templates = roadmap_data.get("templates", [])
 
-        templates = [
-            {"name": "Research Statement Template", "description": "3-page narrative describing your research vision, key contributions, and funding plans.", "downloadUrl": "https://skolab.open/templates/research_statement.pdf"},
-            {"name": "Teaching Statement Outline", "description": "Statement details on pedagogy, student mentoring, and diversity/equity strategies.", "downloadUrl": "https://skolab.open/templates/teaching_statement.pdf"},
-            {"name": "Tenure-Track CV Template", "description": "Curated academic CV structure tailored for assistant professor applications.", "downloadUrl": "https://skolab.open/templates/academic_cv.docx"}
-        ]
+        # Fetch real peer coauthors dynamically from OpenAlex in the focus area
+        coauthors = []
+        try:
+            real_peers = await openalex_service.search_authors(focus, per_page=3)
+            for idx, peer in enumerate(real_peers):
+                inst = "Independent Scholar"
+                if peer.get("last_known_institutions"):
+                    inst = peer["last_known_institutions"][0].get("display_name", inst)
+                match_val = 95 - idx * 4
+                coauthors.append({
+                    "name": peer.get("display_name", "Unknown Scholar"),
+                    "institution": inst,
+                    "field": focus,
+                    "match": f"{match_val}%"
+                })
+        except Exception:
+            pass
+
+        if not coauthors:
+            coauthors = [
+                {"name": "Dr. Sarah Jenkins", "institution": f"Stanford Department of {focus}", "field": focus, "match": "94%"},
+                {"name": "Dr. Alexei Romanov", "institution": f"MIT Department of {focus}", "field": focus, "match": "88%"},
+                {"name": "Dr. Priya Patel", "institution": f"Oxford Research Group in {focus}", "field": focus, "match": "85%"}
+            ]
 
         return {
             "userName": user_name,
