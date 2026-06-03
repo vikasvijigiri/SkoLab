@@ -23,6 +23,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
@@ -81,25 +82,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
-// ── ReQit Professional Flipkart Colors ─────────────────────────────────────
-object EntropiColors {
-    val Background = com.open.skolab.ui.theme.BgPrimary
-    val Card = com.open.skolab.ui.theme.BgCard
-    val Card2 = com.open.skolab.ui.theme.BgElevated
-    val Border = com.open.skolab.ui.theme.BorderLight
-    val Gold1 = com.open.skolab.ui.theme.AccentAmber
-    val Gold2 = com.open.skolab.ui.theme.AccentAmber
-    val Blue1 = com.open.skolab.ui.theme.AccentTeal
-    val Blue2 = com.open.skolab.ui.theme.AccentTeal
-    val Cyan = com.open.skolab.ui.theme.AccentCyan
-    val Purple1 = com.open.skolab.ui.theme.AccentViolet
-    val Purple2 = com.open.skolab.ui.theme.AccentViolet
-    val Red = com.open.skolab.ui.theme.AccentRose
-    val Green = com.open.skolab.ui.theme.AccentEmerald
-    val Text = com.open.skolab.ui.theme.TextPrimary
-    val Text2 = com.open.skolab.ui.theme.TextSecondary
-    val Text3 = com.open.skolab.ui.theme.TextMuted
-}
+// EntropiColors is defined in Color.kt — imported via com.open.skolab.ui.theme.*
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -118,7 +101,7 @@ fun FeedScreen(
     onNavigateToCreateProject: () -> Unit = {},
     viewModel: FeedViewModel = viewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val haptic = LocalHapticFeedback.current
@@ -131,8 +114,8 @@ fun FeedScreen(
     val authManager = com.open.skolab.di.AppDependencies.authManager
     val userPrefs = remember { com.open.skolab.data.UserPreferences(context) }
     val apiService = com.open.skolab.di.AppDependencies.apiService
-    val cachedUser by authManager.cachedUser.collectAsState(initial = null)
-    val connectionsList by userPrefs.userConnections.collectAsState(initial = emptyList())
+    val cachedUser by authManager.cachedUser.collectAsStateWithLifecycle(initialValue = null)
+    val connectionsList by userPrefs.userConnections.collectAsStateWithLifecycle(initialValue = emptyList())
 
     // ── Active Collabs: Firestore live listener ──────────────────────────────
     val currentUserId = remember(cachedUser) { cachedUser?.uid ?: "" }
@@ -182,8 +165,10 @@ fun FeedScreen(
     }
 
     LaunchedEffect(uiState.suggestedConnections.size) {
-        android.util.Log.d("FeedScreen", "suggestedConnections size is now: ${uiState.suggestedConnections.size}")
-        android.util.Log.d("FeedScreen", "isLoading is now: ${uiState.isLoading}")
+        if (com.open.skolab.BuildConfig.DEBUG) {
+            android.util.Log.d("FeedScreen", "suggestedConnections size is now: ${uiState.suggestedConnections.size}")
+            android.util.Log.d("FeedScreen", "isLoading is now: ${uiState.isLoading}")
+        }
     }
 
     // Scroll tracking moved directly to the items list below
@@ -337,9 +322,9 @@ fun FeedScreen(
                             ) {
                                 Text(
                                     "Orbit →",
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                                     color = EntropiColors.Blue1,
-                                    fontSize = 11.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -356,15 +341,15 @@ fun FeedScreen(
                                 val isSelected = selectedCountryFilter == country
                                 Surface(
                                     onClick = { selectedCountryFilter = country },
-                                    shape = RoundedCornerShape(16.dp),
+                                    shape = RoundedCornerShape(20.dp),
                                     color = if (isSelected) EntropiColors.Blue1 else EntropiColors.Card2,
                                     border = BorderStroke(1.dp, if (isSelected) Color.Transparent else EntropiColors.Border)
                                 ) {
                                     Text(
                                         text = country,
-                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                                         color = if (isSelected) Color.White else EntropiColors.Text2,
-                                        fontSize = 12.sp,
+                                        fontSize = 13.sp,
                                         fontWeight = FontWeight.Medium
                                     )
                                 }
@@ -753,7 +738,7 @@ fun FeedScreen(
         if (showSetupFocusDialog) {
             val suggestions = listOf("Physics", "Computational Neuroscience", "Machine Learning", "Genomics", "Quantum Computing")
             AlertDialog(
-                onDismissRequest = { /* Non-cancelable */ },
+                onDismissRequest = { showSetupFocusDialog = false },
                 title = {
                     Text(
                         text = "Complete Your Researcher Profile",
@@ -830,9 +815,9 @@ fun FeedScreen(
                                 ) {
                                     Text(
                                         text = suggestion,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                                         color = if (setupFocusText == suggestion) EntropiColors.Gold1 else EntropiColors.Text2,
-                                        fontSize = 11.sp,
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.Medium
                                     )
                                 }
@@ -860,12 +845,21 @@ fun FeedScreen(
                         Text("Save Profile", fontWeight = FontWeight.Bold)
                     }
                 },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showSetupFocusDialog = false },
+                        colors = ButtonDefaults.textButtonColors(contentColor = EntropiColors.Text3)
+                    ) {
+                        Text("Skip for now")
+                    }
+                },
                 containerColor = EntropiColors.Card,
                 shape = RoundedCornerShape(16.dp)
             )
-        }
-    }
-}
+        } // end if (showSetupFocusDialog)
+    } // end Box
+} // end FeedScreen
+
 
 
 

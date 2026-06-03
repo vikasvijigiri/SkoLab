@@ -93,9 +93,12 @@ import androidx.compose.ui.focus.onFocusChanged
 import com.open.skolab.ui.components.primitives.GlassSearchBar
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.material.icons.outlined.Forum
 
 
 class MainActivity : ComponentActivity() {
@@ -274,43 +277,34 @@ fun SkoLabMainApp() {
                 Scaffold(
                     containerColor = Color.Transparent,
                     topBar = {
-                        val showTopBar = currentRoute in mainTabs
-                        if (showTopBar) {
+                        // Chrome is static — no independent animation.
+                        // The bars snap in at t=0 while content fades over 180ms,
+                        // which is below the human perception threshold (~250ms).
+                        if (currentRoute in mainTabs) {
                             CommonTopBar(
                                 searchQuery = searchQuery,
                                 onSearchQueryChange = { searchQuery = it },
                                 isSearchActive = isSearchActive,
                                 onSearchActiveChange = { isSearchActive = it },
-                                onProfileClick = {
-                                    navController.navigate("profile")
-                                },
-                                onMessagesClick = {
-                                    navController.navigate("chat_list")
-                                },
+                                onProfileClick = { navController.navigate("profile") },
+                                onMessagesClick = { navController.navigate("chat_list") },
                                 cachedUser = cachedUser
                             )
                         }
                     },
                     bottomBar = {
-                        val showBottomBar = currentRoute in mainTabs
-                        if (showBottomBar) {
-                            androidx.compose.animation.AnimatedVisibility(
-                                visible = showBottomBar,
-                                enter = androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.EaseOutCubic)) + androidx.compose.animation.slideInVertically(initialOffsetY = { it }, animationSpec = androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.EaseOutCubic)),
-                                exit = androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.EaseOutCubic)) + androidx.compose.animation.slideOutVertically(targetOffsetY = { it }, animationSpec = androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.EaseOutCubic))
-                            ) {
-                                BottomNavDock(
-                                    items = dockItems,
-                                    currentRoute = currentRoute,
-                                    onItemClick = { item ->
-                                        navController.navigate(item.route) {
-                                            popUpTo("discover") { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
+                        if (currentRoute in mainTabs) {
+                            BottomNavDock(
+                                items = dockItems,
+                                currentRoute = currentRoute,
+                                onItemClick = { item ->
+                                    navController.navigate(item.route) {
+                                        popUpTo("discover") { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
                                     }
-                                )
-                            }
+                                }
+                            )
                         }
                     }
                 ) { scaffoldPadding ->
@@ -320,10 +314,14 @@ fun SkoLabMainApp() {
                                 navController = navController,
                                 startDestination = startRoute!!,
                                 modifier = Modifier.fillMaxSize(),
-                                enterTransition = { fadeIn(animationSpec = tween(350, easing = EaseOutCubic)) },
-                                exitTransition = { fadeOut(animationSpec = tween(350, easing = EaseOutCubic)) },
-                                popEnterTransition = { fadeIn(animationSpec = tween(350, easing = EaseOutCubic)) },
-                                popExitTransition = { fadeOut(animationSpec = tween(350, easing = EaseOutCubic)) }
+                                // Push forward: clean 200ms fade — feels deliberate
+                                enterTransition = { fadeIn(animationSpec = tween(200, easing = EaseOutCubic)) },
+                                exitTransition = { fadeOut(animationSpec = tween(120, easing = EaseOutCubic)) },
+                                // Back: MD3 spec — returning destinations appear instantly.
+                                // The outgoing screen's exit handles the animation feel.
+                                // This eliminates the "bars appear before content" gap.
+                                popEnterTransition = { androidx.compose.animation.EnterTransition.None },
+                                popExitTransition = { fadeOut(animationSpec = tween(120, easing = EaseOutCubic)) }
                             ) {
                 composable(
                     route = "splash",
@@ -418,12 +416,7 @@ fun SkoLabMainApp() {
                         )
                     }
                 }
-                composable(
-                    route = "discover",
-                    enterTransition = {
-                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
-                    }
-                ) {
+                composable(route = "discover") {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -476,12 +469,7 @@ fun SkoLabMainApp() {
                         )
                     }
                 }
-                composable(
-                    route = "papers",
-                    enterTransition = {
-                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
-                    }
-                ) {
+                composable(route = "papers") {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -508,12 +496,7 @@ fun SkoLabMainApp() {
                         )
                     }
                 }
-                composable(
-                    route = "agent",
-                    enterTransition = {
-                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
-                    }
-                ) {
+                composable(route = "agent") {
                     val imeBottom = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current)
                     val isKeyboardVisible = imeBottom > 0
                     val bottomPadding = if (isKeyboardVisible) 0.dp else ScreenInsets.bottomNavClearance
@@ -526,12 +509,7 @@ fun SkoLabMainApp() {
                         AgentScreen()
                     }
                 }
-                composable(
-                    route = "industry",
-                    enterTransition = {
-                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
-                    }
-                ) {
+                composable(route = "industry") {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -589,12 +567,7 @@ fun SkoLabMainApp() {
                         )
                     }
                 }
-                composable(
-                    route = "collabs",
-                    enterTransition = {
-                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
-                    }
-                ) { backStackEntry ->
+                composable(route = "collabs") { backStackEntry ->
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -625,12 +598,7 @@ fun SkoLabMainApp() {
                         )
                     }
                 }
-                composable(
-                    route = "collabs_ws",
-                    enterTransition = {
-                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
-                    }
-                ) { backStackEntry ->
+                composable(route = "collabs_ws") { backStackEntry ->
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -992,8 +960,8 @@ fun CommonTopBar(
     val badgePulse by infiniteTransition.animateFloat(
         initialValue = 0.6f,
         targetValue = 1f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = androidx.compose.animation.core.tween(900, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable<Float>(
+            animation = androidx.compose.animation.core.tween<Float>(900, easing = androidx.compose.animation.core.FastOutSlowInEasing),
             repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
         ),
         label = "badge_alpha"
@@ -1039,7 +1007,7 @@ fun CommonTopBar(
                 ) {
                     // Chat bubble icon
                     androidx.compose.material3.Icon(
-                        imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.Chat,
+                        imageVector = androidx.compose.material.icons.Icons.Outlined.Forum,
                         contentDescription = "Messages",
                         tint = com.open.skolab.ui.theme.AccentTeal,
                         modifier = Modifier.size(22.dp)
@@ -1049,7 +1017,7 @@ fun CommonTopBar(
                         modifier = Modifier
                             .size(9.dp)
                             .align(androidx.compose.ui.Alignment.TopEnd)
-                            .androidx.compose.ui.draw.clipToBounds()
+                            .clipToBounds()
                     ) {
                         androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
                             drawCircle(

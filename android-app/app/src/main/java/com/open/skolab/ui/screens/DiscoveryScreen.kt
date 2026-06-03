@@ -2942,7 +2942,7 @@ fun ProCard(modifier: Modifier = Modifier, gradient: List<Color> = listOf(BgCard
 }
 
 @Composable
-fun SectionHeader(text: String, color: Color) {
+fun DiscoverySectionHeader(text: String, color: Color) {
     Text(text.uppercase(), style = MaterialTheme.typography.labelSmall, color = color, fontWeight = FontWeight.Black, letterSpacing = 1.5.sp, modifier = Modifier.padding(start = 4.dp, top = 8.dp))
 }
 

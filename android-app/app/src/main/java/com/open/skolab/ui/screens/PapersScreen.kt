@@ -20,7 +20,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.open.skolab.model.ResearchFilter
 import com.open.skolab.ui.theme.*
 import com.open.skolab.viewmodel.FeedViewModel
@@ -36,7 +36,7 @@ fun PapersScreen(
     onTabNavigate: (String) -> Unit,
     viewModel: FeedViewModel = viewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
@@ -130,21 +130,9 @@ fun PapersScreen(
                     }
                 }
             } else {
-                itemsIndexed(uiState.trendingPapers) { index, paper ->
-                    val animatedProgress = remember { Animatable(0f) }
-                    LaunchedEffect(Unit) {
-                        delay(index * 40L)
-                        animatedProgress.animateTo(1f, animationSpec = tween(300))
-                    }
-                    Box(
-                        modifier = Modifier
-                            .padding(horizontal = 20.dp)
-                            .graphicsLayer(
-                                alpha = animatedProgress.value,
-                                translationY = (1f - animatedProgress.value) * 20.dp.value
-                            )
-                    ) {
-                        val accentColor = when (index % 3) {
+                items(uiState.trendingPapers) { paper ->
+                    Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+                        val accentColor = when (uiState.trendingPapers.indexOf(paper) % 3) {
                             0 -> EntropiColors.Gold1
                             1 -> EntropiColors.Cyan
                             else -> EntropiColors.Red

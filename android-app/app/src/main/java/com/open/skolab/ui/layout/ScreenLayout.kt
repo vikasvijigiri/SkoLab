@@ -24,7 +24,7 @@ fun Modifier.screenSafeArea(includeBottom: Boolean = false): Modifier =
 
 object ScreenInsets {
     val horizontal: Dp = 16.dp
-    val bottomNavClearance: Dp = 112.dp
+    val bottomNavClearance: Dp = 72.dp
 }
 
 @Composable

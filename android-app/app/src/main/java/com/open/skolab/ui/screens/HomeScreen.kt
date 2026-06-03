@@ -1,4 +1,4 @@
-﻿package com.open.skolab.ui.screens
+package com.open.skolab.ui.screens
 
 import android.content.Intent
 import androidx.compose.animation.*
@@ -39,6 +39,7 @@ import com.open.skolab.model.FeedUiState
 import com.open.skolab.viewmodel.FeedViewModel
 import com.open.skolab.viewmodel.HomeViewModel
 import com.open.skolab.viewmodel.TrendingUiState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import java.util.Locale
 
@@ -54,13 +55,13 @@ fun HomeScreen(
     homeViewModel: HomeViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val authManager = remember { com.open.skolab.auth.AuthManager(context) }
-    val cachedUser by authManager.cachedUser.collectAsState(initial = null)
+    val authManager = com.open.skolab.di.AppDependencies.authManager
+    val cachedUser by authManager.cachedUser.collectAsStateWithLifecycle(initialValue = null)
     val userName = cachedUser?.name?.split(" ")?.firstOrNull() ?: "SkoLab User"
 
     var selectedFilter by remember { mutableStateOf("All") }
     val filters = listOf("All", "Disruptive", "High Novelty", "Rising Stars", "Trending Fields")
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = BgPrimary,
@@ -92,12 +93,8 @@ fun HomeScreen(
                     }
                 }
             } else {
-                itemsIndexed(uiState.trendingPapers) { index, paper ->
-                    var visible by remember { mutableStateOf(false) }
-                    LaunchedEffect(Unit) { delay(index * 60L); visible = true }
-                    AnimatedVisibility(visible, enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { 20 }) {
-                        PaperCard(paper = paper, onClick = { onPaperClick(paper.id) })
-                    }
+                items(uiState.trendingPapers) { paper ->
+                    PaperCard(paper = paper, onClick = { onPaperClick(paper.id) })
                 }
             }
 
@@ -191,7 +188,8 @@ fun PulseMetricChip(metric: PulseMetric, modifier: Modifier = Modifier) {
         animationSpec = tween(1200, easing = FastOutSlowInEasing),
         label = "pulse_count"
     )
-    LaunchedEffect(Unit) { delay(300); animTarget = metric.value }
+    // Start counter immediately — no artificial delay
+    LaunchedEffect(Unit) { animTarget = metric.value }
 
     Surface(
         shape = RoundedCornerShape(14.dp),
@@ -298,7 +296,7 @@ fun HotPapersRow(
     onPaperClick: (String) -> Unit,
     viewModel: HomeViewModel = viewModel()
 ) {
-    val state by viewModel.trendingState.collectAsState()
+    val state by viewModel.trendingState.collectAsStateWithLifecycle()
 
     Column {
         Row(
@@ -351,14 +349,13 @@ fun HotPapersRow(
                 }
             }
             is TrendingUiState.Success -> {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    itemsIndexed(s.papers) { index, paper ->
-                        var visible by remember { mutableStateOf(false) }
-                        LaunchedEffect(paper.id) { delay(index * 60L); visible = true }
-                        AnimatedVisibility(
-                            visible = visible,
-                            enter = fadeIn(tween(350)) + slideInHorizontally(tween(350)) { 40 }
-                        ) {
+                // Container-level fade: all cards appear at once, no per-item stagger
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = true,
+                    enter = fadeIn(tween(200))
+                ) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        itemsIndexed(s.papers) { index, paper ->
                             val color = trendingPaletteColors[index % trendingPaletteColors.size]
                             HotPaperCard(
                                 title = paper.title,

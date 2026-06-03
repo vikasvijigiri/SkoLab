@@ -184,7 +184,7 @@ fun IndustryScreen(
                             modifier = Modifier.padding(32.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Warning,
+                                imageVector = Icons.Default.WarningAmber,
                                 contentDescription = "Error Alert",
                                 tint = Color(0xFFD42B2B),
                                 modifier = Modifier.size(48.dp)

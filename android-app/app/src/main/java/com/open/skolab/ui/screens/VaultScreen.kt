@@ -20,7 +20,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.open.skolab.model.GlobalResearcher
 import com.open.skolab.ui.theme.*
 import com.open.skolab.viewmodel.ResearcherViewModel
@@ -28,8 +28,8 @@ import com.open.skolab.viewmodel.ResearcherViewModel
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun VaultScreen(viewModel: ResearcherViewModel = viewModel()) {
-    val researchers by viewModel.researchers.collectAsState(initial = emptyList())
-    val selectedField by viewModel.selectedField.collectAsState()
+    val researchers by viewModel.researchers.collectAsStateWithLifecycle(initialValue = emptyList())
+    val selectedField by viewModel.selectedField.collectAsStateWithLifecycle()
     
     val fields = listOf("All", "Physics", "Medicine", "Computer Science", "Biology", "Mathematics")
 
