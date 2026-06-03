@@ -26,7 +26,19 @@ class IndustryViewModel : ViewModel() {
     private val _isLoadingRoadmap = MutableStateFlow(false)
     val isLoadingRoadmap: StateFlow<Boolean> = _isLoadingRoadmap.asStateFlow()
 
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
+    fun setError(message: String?) {
+        _error.value = message
+    }
+
     fun loadOpportunities(focus: String, name: String? = null) {
+        if (focus.isBlank()) {
+            _error.value = "Profile research focus is not configured. Please set your area of research in profile settings."
+            return
+        }
+        _error.value = null
         if (_isLoading.value) return
         _isLoading.value = true
         viewModelScope.launch {
@@ -35,6 +47,7 @@ class IndustryViewModel : ViewModel() {
                 _opportunities.value = results
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                _error.value = "Failed to load opportunities: ${e.localizedMessage}"
             } finally {
                 _isLoading.value = false
             }
@@ -42,6 +55,11 @@ class IndustryViewModel : ViewModel() {
     }
 
     fun loadRoadmap(authorId: String?, name: String, focus: String) {
+        if (focus.isBlank()) {
+            _error.value = "Profile research focus is not configured. Please set your area of research in profile settings."
+            return
+        }
+        _error.value = null
         if (_isLoadingRoadmap.value) return
         _isLoadingRoadmap.value = true
         viewModelScope.launch {
@@ -50,6 +68,7 @@ class IndustryViewModel : ViewModel() {
                 _roadmap.value = result
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                _error.value = "Failed to load roadmap: ${e.localizedMessage}"
             } finally {
                 _isLoadingRoadmap.value = false
             }

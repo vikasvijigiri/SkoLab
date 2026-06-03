@@ -1,6 +1,8 @@
 import logging
 import datetime
 import uuid
+import asyncio
+import re
 from typing import List, Dict, Optional
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +18,25 @@ async def fetch_industry_opportunities(
     openalex_service: Optional[OpenAlexService] = None,
     db: Optional[AsyncSession] = None
 ) -> List[Dict]:
-    # 1. Try reading from Database cache first
+    # 1. Resolve researcher actual focus and expertise from database to refine web search
+    resolved_focus = focus
+    expertise_keywords = []
+    if name and db is not None:
+        try:
+            from app.models.researcher_models import ResearcherMetrics
+            stmt_metrics = select(ResearcherMetrics).where(ResearcherMetrics.display_name.ilike(f"%{name}%"))
+            res_metrics = await db.execute(stmt_metrics)
+            metrics = res_metrics.scalars().first()
+            if metrics:
+                if metrics.field_of_study:
+                    resolved_focus = metrics.field_of_study
+                if metrics.expertise:
+                    expertise_keywords = [k for k in metrics.expertise if k]
+                logger.info(f"Resolved research focus for {name} to: '{resolved_focus}' and expertise: {expertise_keywords}")
+        except Exception as e:
+            logger.error(f"Error loading profile info for {name}: {e}")
+
+    # 2. Try reading from Database cache first using resolved_focus
     cached_list = []
     if db is not None:
         try:
@@ -26,8 +46,8 @@ async def fetch_industry_opportunities(
             await db.execute(delete_stmt)
             await db.commit()
             
-            # Fetch active cached items for this focus
-            stmt = select(ScrapedOpportunity).where(ScrapedOpportunity.focus_topic == focus)
+            # Fetch active cached items for this resolved focus
+            stmt = select(ScrapedOpportunity).where(ScrapedOpportunity.focus_topic == resolved_focus)
             res = await db.execute(stmt)
             db_items = res.scalars().all()
             for item in db_items:
@@ -51,33 +71,19 @@ async def fetch_industry_opportunities(
                 })
             
             if cached_list:
-                logger.info(f"Loaded {len(cached_list)} opportunities from database cache for focus: {focus}")
-                return cached_list + get_curated_opportunities(focus)
+                logger.info(f"Loaded {len(cached_list)} opportunities from database cache for focus: {resolved_focus}")
+                return cached_list
         except Exception as e:
             logger.error(f"Error checking cache: {e}")
             
-    # 2. Run Scraping if cache is empty
-    logger.info(f"Cache miss for focus: {focus}. Launching ScrapingService...")
+    # 3. Run Scraping if cache is empty
+    logger.info(f"Cache miss for focus: {resolved_focus}. Launching ScrapingService...")
     scraping_service = ScrapingService()
     scraped_items = []
     
-    # Resolve researcher expertise keywords from database to refine web search
-    expertise_keywords = []
-    if name and db is not None:
-        try:
-            from app.models.researcher_models import ResearcherMetrics
-            stmt_metrics = select(ResearcherMetrics).where(ResearcherMetrics.display_name.ilike(f"%{name}%"))
-            res_metrics = await db.execute(stmt_metrics)
-            metrics = res_metrics.scalars().first()
-            if metrics and metrics.expertise:
-                expertise_keywords = [k for k in metrics.expertise if k]
-                logger.info(f"Found expertise keywords for {name}: {expertise_keywords}")
-        except Exception as e:
-            logger.error(f"Error loading expertise keywords for {name}: {e}")
-
     try:
         # Refine search topic using primary expertise if available
-        search_topic = focus
+        search_topic = resolved_focus
         if expertise_keywords:
             # e.g., "Advanced Condensed Matter Physics" -> "Condensed Matter Physics"
             primary_exp = expertise_keywords[0]
@@ -85,16 +91,59 @@ async def fetch_industry_opportunities(
             if cleaned_exp:
                 search_topic = cleaned_exp
 
-        logger.info(f"Searching web using refined topic: '{search_topic}' (derived from focus: '{focus}', name: '{name}')")
-        query_funding = f"{search_topic} research grant fellowship 2026"
-        query_jobs = f"{search_topic} postdoc research job positions 2026"
+        # --- Research Job Portals: only portals confirmed to return scrapable HTML ---
+        from urllib.parse import quote_plus
+        kw = quote_plus(search_topic)
+        kw_dash = kw.replace('+', '-')
+
+        RESEARCH_PORTALS = [
+            # ✅ All confirmed-accessible (200 OK, rich HTML text)
+            ("jobs.ac.uk",             f"https://www.jobs.ac.uk/search/?keywords={kw}&cat=all"),
+            ("Euraxess",               f"https://euraxess.ec.europa.eu/jobs/search?keywords={kw}"),
+            ("Nature Careers",         f"https://www.nature.com/naturecareers/jobs?q={kw}"),
+            ("Times Higher Education", f"https://www.timeshighereducation.com/unijobs/listings/?search={kw}"),
+            ("SimplyHired India",      f"https://www.simplyhired.co.in/search?q={kw_dash}+research+postdoc"),
+            ("HigherEdJobs Intl",      f"https://www.higheredjobs.com/international/search.cfm?Keyword={kw}"),
+        ]
+
+        logger.info(f"Scraping {len(RESEARCH_PORTALS)} research job portals in parallel for: '{search_topic}'")
+
+        # Fetch portals + DuckDuckGo search in parallel for maximum coverage
+        query_jobs    = f"{search_topic} postdoc research associate job position university India 2025 2026"
+        query_funding = f"{search_topic} research grant fellowship funding CSIR DST DBT India 2025 2026"
+
+        portal_tasks = [scraping_service.search_portal(portal_name, url) for portal_name, url in RESEARCH_PORTALS]
+        ddg_tasks    = [
+            scraping_service.search_web(query_jobs,    max_results=6),
+            scraping_service.search_web(query_funding, max_results=6),
+        ]
+
+        portal_results_raw, ddg_jobs_raw, ddg_funding_raw = await asyncio.gather(
+            asyncio.gather(*portal_tasks),
+            *ddg_tasks
+        )
+
+        scraped_pages = [r for r in portal_results_raw if r is not None]
+        logger.info(f"Successfully fetched {len(scraped_pages)}/{len(RESEARCH_PORTALS)} portals.")
+
+        # Convert DDG snippet results into pseudo-portal pages for the LLM
+        ddg_combined = ddg_jobs_raw + ddg_funding_raw
+        if ddg_combined:
+            ddg_text = "\n".join([
+                f"Title: {r.get('title','')}\nURL: {r.get('url','')}\nSnippet: {r.get('snippet','')}"
+                for r in ddg_combined if r.get('url','').startswith('http')
+            ])
+            scraped_pages.append({
+                "name": "DuckDuckGo Web Search",
+                "url":  "https://duckduckgo.com",
+                "text": ddg_text
+            })
+            logger.info(f"Added {len(ddg_combined)} DDG results as supplementary source.")
+
+        all_results = []  # kept for compatibility
+
         
-        search_funding = await scraping_service.search_web(query_funding, max_results=4)
-        search_jobs = await scraping_service.search_web(query_jobs, max_results=4)
-        
-        all_results = search_funding + search_jobs
-        
-        if all_results:
+        if scraped_pages:
             # LLM Prompt Schema for parsing search snippets into opportunities
             schema = {
                 "opportunities": [
@@ -103,12 +152,12 @@ async def fetch_industry_opportunities(
                         "title": "Title of the grant or position",
                         "companyOrFunder": "Funder/Employer name",
                         "description": "Short description of the opportunity",
-                        "url": "direct URL",
-                        "postedAgo": "e.g. 1d ago, 3d ago",
-                        "eligibility": "Simple eligibility criteria description",
+                        "url": "exact detail/apply URL",
+                        "postedAgo": "posted date or relative time (e.g. 2d ago, May 2026)",
+                        "eligibility": "definite eligibility criteria description",
                         "amount": "Grant amount or postdoc salary range (e.g. $75,000/yr)",
                         "procedureSteps": ["Step 1", "Step 2"],
-                        "deadline": "e.g. Dec 15, 2026",
+                        "deadline": "deadline date (e.g. Dec 15, 2026 or Rolling)",
                         "requiredSkills": ["Skill 1", "Skill 2"],
                         "matchScore": 85,
                         "relevanceExplanation": "Custom 1-sentence alignment explanation."
@@ -116,10 +165,11 @@ async def fetch_industry_opportunities(
                 ]
             }
             
-            prompt_data = f"Search Results:\n" + "\n".join([
-                f"- Title: {r['title']}\n  URL: {r['url']}\n  Snippet: {r['snippet']}"
-                for r in all_results
+            prompt_data = f"Scraped Research Job Portal Contents:\n" + "\n\n".join([
+                f"--- Portal: {p['name']} | URL: {p['url']} ---\n{p['text'][:5000]}"
+                for p in scraped_pages
             ])
+
             
             researcher_context = ""
             if name and expertise_keywords:
@@ -129,13 +179,20 @@ async def fetch_industry_opportunities(
                 raw_content=prompt_data,
                 response_schema=schema,
                 instruction=(
-                    f"Extract active, real research jobs or funding opportunities in {search_topic}. "
-                    f"{researcher_context} For each opportunity, evaluate its suitability against the researcher's background and determine: "
-                    f"1) 'matchScore' (an integer percentage from 70 to 98) indicating how well their skills match the job/funding, and "
-                    f"2) 'relevanceExplanation' (a brief 1-sentence explanation of why it aligns with their scientific publications and expertise). "
-                    f"Ensure all URLs are valid and copied exactly from the source results."
+                    f"You are extracting REAL research jobs and funding opportunities in '{search_topic}' from scraped content of multiple international job portals. "
+                    f"{researcher_context} "
+                    f"IMPORTANT: Extract opportunities from ALL countries — include India (IIT, IISc, CSIR, IISER, ICAR, DBT, DST, DRDO), UK, EU, Asia, Australia, and North America. "
+                    f"Do NOT only show US or Western jobs. If a portal listing mentions an Indian institution or region, always include it. "
+                    f"AIM to extract at least 15 distinct opportunities. For each opportunity: "
+                    f"1) Set 'matchScore' (integer 70–98) based on how well the researcher's background matches. "
+                    f"2) Write 'relevanceExplanation' — a 1-sentence explanation tied to the researcher's expertise. "
+                    f"CRITICAL: Extract ONLY real listings visible in the scraped text. Do NOT invent listings. "
+                    f"Use real eligibility criteria, real deadlines, and real salary/grant amounts from the text. "
+                    f"If a detail is missing, infer standard academic values (e.g. 'PhD required', 'INR 50,000–80,000/month' for India postdocs, '£35,000–£40,000/yr' for UK, '$65,000–$78,000/yr' for US postdocs). "
+                    f"Use the portal URL as the 'url' if no specific listing URL is available."
                 )
             )
+
             
             opps = parsed.get("opportunities", [])
             for o in opps:
@@ -154,7 +211,7 @@ async def fetch_industry_opportunities(
                     "type": opp_type,
                     "title": o.get("title") or "Research Opportunity",
                     "companyOrFunder": o.get("companyOrFunder") or "Various Partners",
-                    "tags": [focus, opp_type.capitalize()],
+                    "tags": [resolved_focus, opp_type.capitalize()],
                     "description": o.get("description") or "Active opportunity matching your profile.",
                     "postedAgo": o.get("postedAgo") or "Recently",
                     "url": opp_url,
@@ -163,7 +220,7 @@ async def fetch_industry_opportunities(
                     "procedureSteps": o.get("procedureSteps") or ["Check website", "Submit resume"],
                     "deadline": o.get("deadline") or "Open Now",
                     "status": "Active",
-                    "requiredSkills": o.get("requiredSkills") or [focus],
+                    "requiredSkills": o.get("requiredSkills") or [resolved_focus],
                     "matchScore": int(o.get("matchScore") or 80),
                     "relevanceExplanation": o.get("relevanceExplanation") or "Aligned with your research focus."
                 })
@@ -187,13 +244,13 @@ async def fetch_industry_opportunities(
                             deadline=s["deadline"],
                             status=s["status"],
                             required_skills=s["requiredSkills"],
-                            focus_topic=focus,
+                            focus_topic=resolved_focus,
                             match_score=s["matchScore"],
                             relevance_explanation=s["relevanceExplanation"]
                         )
                         db.add(db_opp)
                     await db.commit()
-                    logger.info(f"Cached {len(scraped_items)} new opportunities in database for focus: {focus}")
+                    logger.info(f"Cached {len(scraped_items)} new opportunities in database for focus: {resolved_focus}")
                 except Exception as db_err:
                     logger.error(f"Failed to cache opportunities in db: {db_err}")
                     await db.rollback()
@@ -202,69 +259,10 @@ async def fetch_industry_opportunities(
         logger.error(f"Error while scraping opportunities: {e}")
         
     if scraped_items:
-        return scraped_items + get_curated_opportunities(focus)
+        return scraped_items
     else:
-        # Fallback to OpenAlex funders + Curated Opportunities
-        return await get_openalex_funders_as_opps(focus, openalex_service) + get_curated_opportunities(focus)
-
-
-def get_curated_opportunities(focus: str) -> List[Dict]:
-    return [
-        {
-            "id": "job_deepmind",
-            "type": "JOB",
-            "title": f"Senior Research Scientist ({focus})",
-            "companyOrFunder": "Google DeepMind",
-            "tags": [focus, "Research", "Industry"],
-            "description": f"Lead advanced research projects in {focus} to build the future of intelligence.",
-            "postedAgo": "1d ago",
-            "url": "https://deepmind.google/about/careers/",
-            "eligibility": "PhD in Computer Science, Physics, or related quantitative field with publications.",
-            "amount": "$180,000 - $240,000/yr",
-            "procedureSteps": ["1. Review role descriptions", "2. Submit CV and Research Statement online", "3. Complete initial coding/technical screening", "4. Panel interviews"],
-            "deadline": "Jan 15, 2027",
-            "status": "Active",
-            "requiredSkills": ["Research Design", "Advanced Mathematics", focus],
-            "matchScore": 95,
-            "relevanceExplanation": f"Top-tier industry research placement with strong alignment with your publication citations in {focus}."
-        },
-        {
-            "id": "job_openai",
-            "type": "JOB",
-            "title": f"Postdoctoral Researcher - {focus}",
-            "companyOrFunder": "OpenAI",
-            "tags": [focus, "Postdoc", "AGI"],
-            "description": f"Collaborate with world-class engineers to push boundary safety and alignment in {focus}.",
-            "postedAgo": "3d ago",
-            "url": "https://openai.com/careers",
-            "eligibility": "Recently completed PhD with strong track record in machine learning or physics.",
-            "amount": "$150,000/yr",
-            "procedureSteps": ["1. Submit cover letter explaining alignment research", "2. Technical interview", "3. Research presentation to team"],
-            "deadline": "Open until filled",
-            "status": "Active",
-            "requiredSkills": ["Deep Learning", "Python", focus],
-            "matchScore": 92,
-            "relevanceExplanation": f"Elite postdoctoral post at OpenAI supporting alignment research intersecting with {focus} concepts."
-        },
-        {
-            "id": "req_innocentive",
-            "type": "REQUIREMENT",
-            "title": "Open Innovation Challenges",
-            "companyOrFunder": "Wazoku (InnoCentive)",
-            "tags": ["Bounty", "Open Innovation", "Problem Solving"],
-            "description": f"Solve real corporate R&D challenges in {focus} for financial rewards.",
-            "postedAgo": "Active",
-            "url": "https://www.wazoku.com/wazoku-crowd/",
-            "eligibility": "Open to all students, researchers, and professional scientists globally.",
-            "amount": "$10,000 - $50,000 Bounties",
-            "procedureSteps": ["1. Register on Wazoku platform", "2. Review challenge requirements & guidelines", "3. Submit proposed technical solution document"],
-            "deadline": "Rolling deadlines",
-            "status": "Active",
-            "requiredSkills": ["Problem Solving", "Technical Writing"],
-            "matchScore": 75,
-            "relevanceExplanation": f"Crowdsourced scientific challenge offering bounties for custom problem-solving contributions in {focus}."
-        }
-    ]
+        # Fallback to OpenAlex funders
+        return await get_openalex_funders_as_opps(resolved_focus, openalex_service)
 
 
 async def get_openalex_funders_as_opps(focus: str, openalex_service: Optional[OpenAlexService]) -> List[Dict]:

@@ -265,9 +265,9 @@ async def get_assistant_professor_roadmap(
         ]
         
         coauthors = [
-            {"name": "Dr. Sarah Jenkins", "institution": "Stanford University", "field": focus, "match": "94%"},
-            {"name": "Dr. Alexei Romanov", "institution": "MIT Neural Systems Lab", "field": focus, "match": "88%"},
-            {"name": "Dr. Priya Patel", "institution": "Oxford Research Group", "field": focus, "match": "85%"}
+            {"name": "Dr. Sarah Jenkins", "institution": f"Stanford Department of {focus}", "field": focus, "match": "94%"},
+            {"name": "Dr. Alexei Romanov", "institution": f"MIT Department of {focus}", "field": focus, "match": "88%"},
+            {"name": "Dr. Priya Patel", "institution": f"Oxford Research Group in {focus}", "field": focus, "match": "85%"}
         ]
 
         templates = [

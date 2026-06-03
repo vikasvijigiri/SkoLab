@@ -60,6 +60,7 @@ fun IndustryScreen(
     val roadmap by viewModel.roadmap.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isLoadingRoadmap by viewModel.isLoadingRoadmap.collectAsState()
+    val error by viewModel.error.collectAsState()
     
     val context = LocalContext.current
     val userPrefs = remember { UserPreferences(context) }
@@ -75,9 +76,13 @@ fun IndustryScreen(
     )
 
     LaunchedEffect(cachedUser) {
-        val focus = cachedUser?.researchFocus ?: "AI"
-        viewModel.loadOpportunities(focus, name = cachedUser?.name)
-        viewModel.loadRoadmap(cachedUser?.uid, cachedUser?.name ?: "Researcher", focus)
+        val focus = cachedUser?.researchFocus
+        if (focus.isNullOrBlank()) {
+            viewModel.setError("Profile research focus is not configured. Please set your area of research in profile settings.")
+        } else {
+            viewModel.loadOpportunities(focus, name = cachedUser?.name)
+            viewModel.loadRoadmap(cachedUser?.uid, cachedUser?.name ?: "Researcher", focus)
+        }
     }
 
     Box(
@@ -160,138 +165,175 @@ fun IndustryScreen(
             }
 
             // Tabs Content
-            when (currentTab) {
-                "explore" -> {
-                    // Category Filter Chips
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 20.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.padding(bottom = 12.dp)
+            if (error != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = SURFACE_SUBTLE),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, BORDER),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        items(categories) { category ->
-                            val isSelected = selectedCategory == category
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(if (isSelected) PRIMARY else SURFACE)
-                                    .border(
-                                        BorderStroke(1.dp, if (isSelected) PRIMARY else BORDER),
-                                        RoundedCornerShape(16.dp)
-                                    )
-                                    .clickable { selectedCategory = category }
-                                    .padding(horizontal = 14.dp, vertical = 8.dp)
-                            ) {
-                                Text(
-                                    text = category,
-                                    color = if (isSelected) TEXT_ON_PRIMARY else TEXT_SECONDARY,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier.padding(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = "Error Alert",
+                                tint = Color(0xFFD42B2B),
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = error!!,
+                                color = TEXT_PRIMARY,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
-
-                    // Opportunities list
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (isLoading && opportunities.isEmpty()) {
-                            CircularProgressIndicator(color = PRIMARY, strokeWidth = 2.dp)
-                        } else {
-                            val filteredOpps = remember(opportunities, selectedCategory) {
-                                if (selectedCategory == "All") {
-                                    opportunities
-                                } else {
-                                    opportunities.filter { opp ->
-                                        opp.title.contains(selectedCategory, ignoreCase = true) ||
-                                        opp.description.contains(selectedCategory, ignoreCase = true) ||
-                                        opp.tags.any { it.contains(selectedCategory, ignoreCase = true) } ||
-                                        (selectedCategory == "Funding Calls" && opp.type == OpportunityType.FUNDING) ||
-                                        (selectedCategory == "Research Grants" && opp.type == OpportunityType.FUNDING) ||
-                                        (selectedCategory == "Postdocs" && opp.title.contains("Postdoc", ignoreCase = true)) ||
-                                        (selectedCategory == "PhD Positions" && opp.title.contains("PhD", ignoreCase = true)) ||
-                                        (selectedCategory == "Faculty Positions" && opp.title.contains("Professor", ignoreCase = true)) ||
-                                        (selectedCategory == "Research Jobs" && opp.type == OpportunityType.JOB)
-                                    }
+                }
+            } else {
+                when (currentTab) {
+                    "explore" -> {
+                        // Category Filter Chips
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 20.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        ) {
+                            items(categories) { category ->
+                                val isSelected = selectedCategory == category
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(if (isSelected) PRIMARY else SURFACE)
+                                        .border(
+                                            BorderStroke(1.dp, if (isSelected) PRIMARY else BORDER),
+                                            RoundedCornerShape(16.dp)
+                                        )
+                                        .clickable { selectedCategory = category }
+                                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                                ) {
+                                    Text(
+                                        text = category,
+                                        color = if (isSelected) TEXT_ON_PRIMARY else TEXT_SECONDARY,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
                                 }
                             }
+                        }
 
-                            if (filteredOpps.isEmpty()) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center,
-                                    modifier = Modifier.padding(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.WorkOutline,
-                                        contentDescription = null,
-                                        tint = TEXT_MUTED,
-                                        modifier = Modifier.size(48.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Text(
-                                        text = "No opportunities found in this category",
-                                        color = TEXT_SECONDARY,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
+                        // Opportunities list
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isLoading && opportunities.isEmpty()) {
+                                CircularProgressIndicator(color = PRIMARY, strokeWidth = 2.dp)
                             } else {
-                                LazyColumn(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                                ) {
-                                    items(filteredOpps) { opp ->
-                                        LaunchpadOpportunityCard(
-                                            opp = opp,
-                                            userFocus = cachedUser?.researchFocus ?: "AI",
-                                            onClick = { selectedOpportunityForDetail = opp }
+                                val filteredOpps = remember(opportunities, selectedCategory) {
+                                    if (selectedCategory == "All") {
+                                        opportunities
+                                    } else {
+                                        opportunities.filter { opp ->
+                                            opp.title.contains(selectedCategory, ignoreCase = true) ||
+                                            opp.description.contains(selectedCategory, ignoreCase = true) ||
+                                            opp.tags.any { it.contains(selectedCategory, ignoreCase = true) } ||
+                                            (selectedCategory == "Funding Calls" && opp.type == OpportunityType.FUNDING) ||
+                                            (selectedCategory == "Research Grants" && opp.type == OpportunityType.FUNDING) ||
+                                            (selectedCategory == "Postdocs" && opp.title.contains("Postdoc", ignoreCase = true)) ||
+                                            (selectedCategory == "PhD Positions" && opp.title.contains("PhD", ignoreCase = true)) ||
+                                            (selectedCategory == "Faculty Positions" && opp.title.contains("Professor", ignoreCase = true)) ||
+                                            (selectedCategory == "Research Jobs" && opp.type == OpportunityType.JOB)
+                                        }
+                                    }
+                                }
+
+                                if (filteredOpps.isEmpty()) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center,
+                                        modifier = Modifier.padding(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.WorkOutline,
+                                            contentDescription = null,
+                                            tint = TEXT_MUTED,
+                                            modifier = Modifier.size(48.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Text(
+                                            text = "No opportunities found in this category",
+                                            color = TEXT_SECONDARY,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Medium
                                         )
                                     }
+                                } else {
+                                    LazyColumn(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
+                                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                        items(filteredOpps) { opp ->
+                                            LaunchpadOpportunityCard(
+                                                opp = opp,
+                                                userFocus = cachedUser?.researchFocus ?: "AI",
+                                                onClick = { selectedOpportunityForDetail = opp }
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
-                }
-                "swipe" -> {
-                    val jobOpps = remember(opportunities) {
-                        opportunities.filter { it.type == OpportunityType.JOB }
-                    }
-                    if (jobOpps.isEmpty()) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("No jobs available for Fast Swipe right now.", color = TEXT_SECONDARY)
+                    "swipe" -> {
+                        val jobOpps = remember(opportunities) {
+                            opportunities.filter { it.type == OpportunityType.JOB }
                         }
-                    } else {
-                        FastSwipeDeck(
-                            opportunities = jobOpps,
-                            userFocus = cachedUser?.researchFocus ?: "AI"
-                        )
-                    }
-                }
-                "roadmap" -> {
-                    if (isLoadingRoadmap && roadmap == null) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = PRIMARY)
+                        if (jobOpps.isEmpty()) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("No jobs available for Fast Swipe right now.", color = TEXT_SECONDARY)
+                            }
+                        } else {
+                            FastSwipeDeck(
+                                opportunities = jobOpps,
+                                userFocus = cachedUser?.researchFocus ?: "AI"
+                            )
                         }
-                    } else {
-                        AssistantProfessorRoadmapScreen(
-                            roadmap = roadmap,
-                            userFocus = cachedUser?.researchFocus ?: "AI",
-                            onNavigateToAuthor = onNavigateToAuthor
-                        )
                     }
-                }
-                else -> {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                    ) {
-                        ProfessorPostingForm()
+                    "roadmap" -> {
+                        if (isLoadingRoadmap && roadmap == null) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(color = PRIMARY)
+                            }
+                        } else {
+                            AssistantProfessorRoadmapScreen(
+                                roadmap = roadmap,
+                                userFocus = cachedUser?.researchFocus ?: "AI",
+                                onNavigateToAuthor = onNavigateToAuthor
+                            )
+                        }
+                    }
+                    else -> {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                        ) {
+                            ProfessorPostingForm()
+                        }
                     }
                 }
             }
@@ -554,7 +596,7 @@ fun OpportunityDetailSheetContent(
 ) {
     val context = LocalContext.current
     var activeAiTool by remember { mutableStateOf<String?>(null) } // "cover", "sop"
-    val checklistState = rememberSaveable { mutableStateMapOf<String, Boolean>() }
+    val checklistState = remember { mutableStateMapOf<String, Boolean>() }
 
     Column(
         modifier = Modifier
