@@ -188,7 +188,7 @@ fun FeedScreen(
             state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 90.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
                 if (uiState.error != null) {
                     item {
@@ -3224,41 +3224,43 @@ fun PulseFeedCard(
             }
 
             // AI Insight Brief
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = EntropiColors.Background.copy(alpha = 0.6f),
-                border = BorderStroke(0.5.dp, EntropiColors.Border.copy(alpha = 0.8f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+            if (!recommendationReason.isNullOrBlank()) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = EntropiColors.Blue1.copy(alpha = 0.05f),
+                    border = BorderStroke(0.5.dp, EntropiColors.Blue1.copy(alpha = 0.15f)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Lightbulb,
-                            contentDescription = null,
-                            tint = EntropiColors.Blue1,
-                            modifier = Modifier.size(12.dp)
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lightbulb,
+                                contentDescription = null,
+                                tint = EntropiColors.Blue1,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = "SKOLAR INSIGHT BRIEF",
+                                color = EntropiColors.Blue1,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.8.sp,
+                                fontFamily = SpaceGroteskFontFamily
+                            )
+                        }
                         Text(
-                            text = "SKOLAR INSIGHT BRIEF",
-                            color = EntropiColors.Blue1,
-                            fontSize = 8.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.8.sp,
-                            fontFamily = SpaceGroteskFontFamily
+                            text = recommendationReason,
+                            color = EntropiColors.Text,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
                         )
                     }
-                    Text(
-                        text = recommendationReason,
-                        color = EntropiColors.Text2,
-                        fontSize = 11.5.sp,
-                        lineHeight = 16.sp
-                    )
                 }
             }
 
@@ -3267,7 +3269,7 @@ fun PulseFeedCard(
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
                         text = abstractText,
-                        color = EntropiColors.Text,
+                        color = EntropiColors.Text2,
                         fontSize = 12.sp,
                         lineHeight = 17.sp,
                         maxLines = if (isExpanded) Int.MAX_VALUE else 2,
@@ -3286,116 +3288,119 @@ fun PulseFeedCard(
             }
 
             // Parsed Details Grid
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(EntropiColors.Card2.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                    .border(0.5.dp, EntropiColors.Border, RoundedCornerShape(12.dp))
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                if (!methodology.isNullOrBlank()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.Top,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Methodology",
-                            tint = EntropiColors.Text3,
-                            modifier = Modifier.size(14.dp).padding(top = 1.dp)
-                        )
-                        Column {
-                            Text(
-                                text = "Methodology",
-                                color = EntropiColors.Text3,
-                                fontSize = 8.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.5.sp
+            val hasDetails = !methodology.isNullOrBlank() || !toolsUsed.isNullOrEmpty() || !keyFindings.isNullOrBlank()
+            if (hasDetails) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(EntropiColors.Background.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                        .border(0.5.dp, EntropiColors.Border.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (!methodology.isNullOrBlank()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.Top,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Science,
+                                contentDescription = "Methodology",
+                                tint = EntropiColors.Blue1,
+                                modifier = Modifier.size(14.dp).padding(top = 1.dp)
                             )
-                            Text(
-                                text = methodology,
-                                color = EntropiColors.Text,
-                                fontSize = 11.sp,
-                                lineHeight = 14.sp
-                            )
+                            Column {
+                                Text(
+                                    text = "Methodology",
+                                    color = EntropiColors.Text3,
+                                    fontSize = 8.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                                Text(
+                                    text = methodology,
+                                    color = EntropiColors.Text,
+                                    fontSize = 11.sp,
+                                    lineHeight = 14.sp
+                                )
+                            }
                         }
                     }
-                }
 
-                if (!toolsUsed.isNullOrEmpty()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.Top,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Build,
-                            contentDescription = "Tools",
-                            tint = EntropiColors.Text3,
-                            modifier = Modifier.size(14.dp).padding(top = 1.dp)
-                        )
-                        Column {
-                            Text(
-                                text = "Tools & Infrastructure",
-                                color = EntropiColors.Text3,
-                                fontSize = 8.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.5.sp
+                    if (!toolsUsed.isNullOrEmpty()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.Top,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Code,
+                                contentDescription = "Tools",
+                                tint = EntropiColors.Blue1,
+                                modifier = Modifier.size(14.dp).padding(top = 1.dp)
                             )
-                            Spacer(Modifier.height(4.dp))
-                            androidx.compose.foundation.layout.FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                toolsUsed.forEach { tool ->
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = EntropiColors.Blue1.copy(alpha = 0.06f),
-                                        border = BorderStroke(0.5.dp, EntropiColors.Blue1.copy(alpha = 0.15f))
-                                    ) {
-                                        Text(
-                                            text = tool,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                                            color = EntropiColors.Blue1,
-                                            fontSize = 9.5.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontFamily = SpaceGroteskFontFamily
-                                        )
+                            Column {
+                                Text(
+                                    text = "Tools & Infrastructure",
+                                    color = EntropiColors.Text3,
+                                    fontSize = 8.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                androidx.compose.foundation.layout.FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    toolsUsed.forEach { tool ->
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = EntropiColors.Blue1.copy(alpha = 0.06f),
+                                            border = BorderStroke(0.5.dp, EntropiColors.Blue1.copy(alpha = 0.15f))
+                                        ) {
+                                            Text(
+                                                text = tool,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                                color = EntropiColors.Blue1,
+                                                fontSize = 9.5.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontFamily = SpaceGroteskFontFamily
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
 
-                if (!keyFindings.isNullOrBlank()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.Top,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "Key Findings",
-                            tint = EntropiColors.Green,
-                            modifier = Modifier.size(14.dp).padding(top = 1.dp)
-                        )
-                        Column {
-                            Text(
-                                text = "Key Findings & Outcome",
-                                color = EntropiColors.Text3,
-                                fontSize = 8.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.5.sp
+                    if (!keyFindings.isNullOrBlank()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.Top,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Key Findings",
+                                tint = EntropiColors.Green,
+                                modifier = Modifier.size(14.dp).padding(top = 1.dp)
                             )
-                            Text(
-                                text = keyFindings,
-                                color = EntropiColors.Text,
-                                fontSize = 11.sp,
-                                lineHeight = 14.sp
-                            )
+                            Column {
+                                Text(
+                                    text = "Key Findings & Outcome",
+                                    color = EntropiColors.Text3,
+                                    fontSize = 8.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                                Text(
+                                    text = keyFindings,
+                                    color = EntropiColors.Text,
+                                    fontSize = 11.sp,
+                                    lineHeight = 14.sp
+                                )
+                            }
                         }
                     }
                 }

@@ -875,3 +875,114 @@ async def resolve_author_email(
             "institution": institution or "Academic Institution"
         }
 
+
+# ── In-memory cache for orbit metrics (TTL: 30 min) ──────────────────────────
+_orbit_metrics_cache: dict = {}
+_orbit_metrics_cache_time: dict = {}
+_ORBIT_CACHE_TTL = 30 * 60  # 30 minutes
+
+
+@router.get("/orbit_metrics")
+async def get_orbit_metrics(
+    author_id: str = Query(..., description="OpenAlex author ID (full URL or short e.g. A5020214245)"),
+    openalex_service: OpenAlexService = Depends(get_openalex_service),
+):
+    """
+    Returns real network intelligence metrics for the Orbit tab.
+    Fetches the author's actual co-author count, institution count,
+    works count, and top real co-author names from OpenAlex.
+    Results are cached for 30 minutes.
+    """
+    import time as _time
+    import httpx
+    from collections import Counter
+
+    clean_id = author_id.split("/")[-1].strip()
+    now = _time.time()
+
+    # Check in-memory cache
+    if clean_id in _orbit_metrics_cache:
+        age = now - _orbit_metrics_cache_time.get(clean_id, 0)
+        if age < _ORBIT_CACHE_TTL:
+            print(f"[OrbitMetrics] Cache hit for {clean_id}", flush=True)
+            return _orbit_metrics_cache[clean_id]
+
+    try:
+        # 1. Fetch author detail from OpenAlex
+        author_url = f"https://api.openalex.org/authors/{clean_id}?mailto=support@skolab.open"
+        async with httpx.AsyncClient(timeout=10) as client:
+            author_resp = await client.get(author_url)
+            if author_resp.status_code != 200:
+                raise HTTPException(status_code=404, detail=f"Author {clean_id} not found on OpenAlex")
+            author_data = author_resp.json()
+
+        stats = author_data.get("summary_stats") or {}
+        works_count = author_data.get("works_count") or 0
+        cited_by_count = author_data.get("cited_by_count") or 0
+        h_index = stats.get("h_index") or 0
+        i10_index = stats.get("i10_index") or 0
+
+        # 2. Fetch recent works to extract real co-authors and institutions
+        works_url = (
+            f"https://api.openalex.org/works"
+            f"?filter=authorships.author.id:{clean_id}"
+            f"&sort=publication_year:desc&per_page=25&mailto=support@skolab.open"
+        )
+        async with httpx.AsyncClient(timeout=10) as client:
+            works_resp = await client.get(works_url)
+            works_data = works_resp.json() if works_resp.status_code == 200 else {}
+
+        works = works_data.get("results") or []
+
+        # Collect unique real co-authors (excluding self) and institutions
+        coauthor_names: list = []
+        coauthor_ids: set = set()
+        institution_names: set = set()
+
+        for work in works:
+            for authorship in work.get("authorships") or []:
+                auth_info = authorship.get("author") or {}
+                auth_id = (auth_info.get("id") or "").split("/")[-1]
+                auth_name = auth_info.get("display_name") or ""
+
+                if auth_id and auth_id != clean_id and auth_name:
+                    words = auth_name.strip().split()
+                    # Only include real human names (2-4 words)
+                    if 2 <= len(words) <= 4 and auth_id not in coauthor_ids:
+                        coauthor_ids.add(auth_id)
+                        coauthor_names.append(auth_name)
+
+                # Collect institutions
+                for inst in authorship.get("institutions") or []:
+                    inst_name = inst.get("display_name")
+                    if inst_name:
+                        institution_names.add(inst_name)
+
+        collaborator_count = len(coauthor_ids)
+        institution_count = len(institution_names)
+
+        # Top 7 most frequent real co-author names for the canvas
+        name_counter = Counter(coauthor_names)
+        top_coauthors = [name for name, _ in name_counter.most_common(7)]
+
+        result = {
+            "collaborator_count": collaborator_count,
+            "institution_count": institution_count,
+            "works_count": works_count,
+            "cited_by_count": cited_by_count,
+            "h_index": h_index,
+            "i10_index": i10_index,
+            "top_coauthors": top_coauthors,
+        }
+
+        # Store in cache
+        _orbit_metrics_cache[clean_id] = result
+        _orbit_metrics_cache_time[clean_id] = now
+        print(f"[OrbitMetrics] Fetched for {clean_id}: {collaborator_count} collabs, {institution_count} insts", flush=True)
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[OrbitMetrics] Error for {clean_id}: {e}", flush=True)
+        raise HTTPException(status_code=500, detail=str(e))
