@@ -496,7 +496,16 @@ fun SkoLabMainApp() {
                         )
                     }
                 }
-                composable(route = "agent") {
+                composable(
+                    route = "agent?query={query}",
+                    arguments = listOf(
+                        androidx.navigation.navArgument("query") {
+                            type = androidx.navigation.NavType.StringType
+                            defaultValue = ""
+                        }
+                    )
+                ) { backStackEntry ->
+                    val query = backStackEntry.arguments?.getString("query")?.decodeFromRoute() ?: ""
                     val imeBottom = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current)
                     val isKeyboardVisible = imeBottom > 0
                     val bottomPadding = if (isKeyboardVisible) 0.dp else ScreenInsets.bottomNavClearance
@@ -506,7 +515,7 @@ fun SkoLabMainApp() {
                             .padding(top = scaffoldPadding.calculateTopPadding())
                             .padding(bottom = bottomPadding)
                     ) {
-                        AgentScreen()
+                        AgentScreen(initialQuery = query)
                     }
                 }
                 composable(route = "industry") {

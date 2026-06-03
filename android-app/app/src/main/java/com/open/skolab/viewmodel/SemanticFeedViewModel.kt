@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.open.skolab.model.Paper
 import com.open.skolab.network.OpenAlexWork
+import com.open.skolab.network.reconstructAbstract
 import com.open.skolab.network.SemanticOpenAlexService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -68,7 +69,7 @@ class SemanticFeedViewModel : ViewModel() {
             year = work.publication_year ?: 2026,
             domain = "General Science",
             subDomain = "Research",
-            abstractText = "",
+            abstractText = work.reconstructAbstract(),
             disruptionScore = 0.82f,
             noveltyScore = 0.76f,
             citationVelocity = 12.0f,

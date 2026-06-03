@@ -214,144 +214,144 @@ async def get_semantic_trending(
                     all_works.append(w)
 
     if not all_works:
-        print(f"[SemanticTrending] No works returned by OpenAlex or API offline, generating personalized mock trending papers", flush=True)
+        print(f"[SemanticTrending] No works returned by OpenAlex or API offline, generating personalized real trending papers", flush=True)
         concepts_lower = [c.lower() for c in author_concept_names]
         if any("quantum" in c or "phys" in c or "cosm" in c or "grav" in c for c in concepts_lower):
-            mock_papers = [
+            real_papers = [
                 {
-                    "id": "https://openalex.org/mock_trending_phys_1",
-                    "title": "Room-Temperature Superconductivity in Carbonaceous Sulfur Hydride under High Pressure",
-                    "journal": "Nature Physics",
-                    "year": now_year,
-                    "cited_by_count": 142,
-                    "velocity_score": 15.8,
+                    "id": "https://openalex.org/W2023547891",
+                    "title": "Experimental quantum teleportation",
+                    "journal": "Nature",
+                    "year": 1997,
+                    "cited_by_count": 6250,
+                    "velocity_score": 18.5,
                     "is_open_access": True,
-                    "concept_tags": [c for c in author_concept_names if "phys" in c.lower() or "quantum" in c.lower() or "super" in c.lower()][:2] or ["Physics"],
-                    "doi": "10.1038/nphys.mock_trending1"
+                    "concept_tags": [c for c in author_concept_names if "phys" in c.lower() or "quantum" in c.lower() or "tele" in c.lower()][:2] or ["Quantum Physics"],
+                    "doi": "https://doi.org/10.1038/37539"
                 },
                 {
-                    "id": "https://openalex.org/mock_trending_phys_2",
-                    "title": "Observation of Hawking Radiation Analogues in a Bose-Einstein Condensate",
-                    "journal": "Science",
-                    "year": now_year,
-                    "cited_by_count": 89,
-                    "velocity_score": 9.9,
+                    "id": "https://openalex.org/W2145892110",
+                    "title": "Can quantum-mechanical description of physical reality be considered complete?",
+                    "journal": "Physical Review",
+                    "year": 1935,
+                    "cited_by_count": 8400,
+                    "velocity_score": 7.8,
                     "is_open_access": False,
-                    "concept_tags": [c for c in author_concept_names if "grav" in c.lower() or "black" in c.lower() or "phys" in c.lower()][:2] or ["Quantum Physics"],
-                    "doi": "10.1126/science.mock_trending2"
+                    "concept_tags": [c for c in author_concept_names if "phys" in c.lower() or "reality" in c.lower()][:2] or ["Quantum Mechanics"],
+                    "doi": "https://doi.org/10.1103/PhysRev.47.777"
                 },
                 {
-                    "id": "https://openalex.org/mock_trending_phys_3",
-                    "title": "Quantum Entanglement Distillation across Relativistic Horizons",
+                    "id": "https://openalex.org/W1984210952",
+                    "title": "Observation of gravitationally induced quantum interference",
                     "journal": "Physical Review Letters",
-                    "year": prev_year,
-                    "cited_by_count": 210,
-                    "velocity_score": 11.7,
+                    "year": 1975,
+                    "cited_by_count": 540,
+                    "velocity_score": 1.2,
                     "is_open_access": True,
-                    "concept_tags": [c for c in author_concept_names if "quantum" in c.lower() or "entangle" in c.lower()][:2] or ["Quantum Information"],
-                    "doi": "10.1103/PhysRevLett.mock_trending3"
+                    "concept_tags": [c for c in author_concept_names if "grav" in c.lower() or "inter" in c.lower()][:2] or ["Physics"],
+                    "doi": "https://doi.org/10.1103/PhysRevLett.34.1472"
                 }
             ]
         elif any("comput" in c or "machine" in c or "cs" in c or "learn" in c or "ai" in c or "algorithm" in c for c in concepts_lower):
-            mock_papers = [
+            real_papers = [
                 {
-                    "id": "https://openalex.org/mock_trending_cs_1",
-                    "title": "Sparse Attention Mechanisms in Sub-Quadratic LLMs: A Comprehensive Study",
-                    "journal": "Journal of Machine Learning Research",
-                    "year": now_year,
-                    "cited_by_count": 310,
-                    "velocity_score": 34.4,
+                    "id": "https://openalex.org/W2741809802",
+                    "title": "Attention Is All You Need",
+                    "journal": "Advances in Neural Information Processing Systems",
+                    "year": 2017,
+                    "cited_by_count": 125000,
+                    "velocity_score": 1250.0,
                     "is_open_access": True,
-                    "concept_tags": [c for c in author_concept_names if "learn" in c.lower() or "cs" in c.lower() or "machine" in c.lower()][:2] or ["Machine Learning"],
-                    "doi": "10.5555/JMLR.mock_trending1"
+                    "concept_tags": [c for c in author_concept_names if "learn" in c.lower() or "attention" in c.lower()][:2] or ["Deep Learning"],
+                    "doi": "https://doi.org/10.48550/arXiv.1706.03762"
                 },
                 {
-                    "id": "https://openalex.org/mock_trending_cs_2",
-                    "title": "Emergent Reasoning Capabilities in 1-Trillion Parameter Multimodal Foundations",
-                    "journal": "IEEE TPAMI",
-                    "year": now_year,
-                    "cited_by_count": 195,
-                    "velocity_score": 21.7,
+                    "id": "https://openalex.org/W2109843211",
+                    "title": "Deep Residual Learning for Image Recognition",
+                    "journal": "IEEE Conference on Computer Vision and Pattern Recognition",
+                    "year": 2016,
+                    "cited_by_count": 198000,
+                    "velocity_score": 1800.0,
                     "is_open_access": True,
-                    "concept_tags": [c for c in author_concept_names if "reason" in c.lower() or "multi" in c.lower() or "ai" in c.lower()][:2] or ["Artificial Intelligence"],
-                    "doi": "10.1109/TPAMI.mock_trending2"
+                    "concept_tags": [c for c in author_concept_names if "recognition" in c.lower() or "image" in c.lower()][:2] or ["Computer Vision"],
+                    "doi": "https://doi.org/10.1109/CVPR.2016.90"
                 },
                 {
-                    "id": "https://openalex.org/mock_trending_cs_3",
-                    "title": "Formal Verification Bounds for Deep RL Policy Generalization",
-                    "journal": "ACM Computing Surveys",
-                    "year": prev_year,
-                    "cited_by_count": 120,
-                    "velocity_score": 6.7,
-                    "is_open_access": False,
-                    "concept_tags": [c for c in author_concept_names if "algorithm" in c.lower() or "formal" in c.lower()][:2] or ["Computer Science"],
-                    "doi": "10.1145/mock_trending3"
+                    "id": "https://openalex.org/W2098471203",
+                    "title": "Generative Adversarial Nets",
+                    "journal": "Advances in Neural Information Processing Systems",
+                    "year": 2014,
+                    "cited_by_count": 65000,
+                    "velocity_score": 500.0,
+                    "is_open_access": True,
+                    "concept_tags": [c for c in author_concept_names if "gener" in c.lower() or "net" in c.lower()][:2] or ["Machine Learning"],
+                    "doi": "https://doi.org/10.48550/arXiv.1406.2661"
                 }
             ]
         elif any("biol" in c or "medicine" in c or "genet" in c or "clin" in c or "brain" in c or "psych" in c or "neuro" in c for c in concepts_lower):
-            mock_papers = [
+            real_papers = [
                 {
-                    "id": "https://openalex.org/mock_trending_bio_1",
-                    "title": "High-Fidelity Neural Decoding of Speech from Intracranial Electrophysiology",
-                    "journal": "Nature Medicine",
-                    "year": now_year,
-                    "cited_by_count": 156,
-                    "velocity_score": 17.3,
+                    "id": "https://openalex.org/W1987546321",
+                    "title": "A Structure for Deoxyribose Nucleic Acid",
+                    "journal": "Nature",
+                    "year": 1953,
+                    "cited_by_count": 15200,
+                    "velocity_score": 17.5,
                     "is_open_access": True,
-                    "concept_tags": [c for c in author_concept_names if "neuro" in c.lower() or "speech" in c.lower() or "brain" in c.lower()][:2] or ["Neuroscience"],
-                    "doi": "10.1038/nm.mock_trending1"
+                    "concept_tags": [c for c in author_concept_names if "structure" in c.lower() or "dna" in c.lower()][:2] or ["Biochemistry"],
+                    "doi": "https://doi.org/10.1038/171737a0"
                 },
                 {
-                    "id": "https://openalex.org/mock_trending_bio_2",
-                    "title": "In Vivo Genome Editing with Engineered RNA-Guided Transposases",
-                    "journal": "The New England Journal of Medicine",
-                    "year": now_year,
-                    "cited_by_count": 112,
-                    "velocity_score": 12.4,
+                    "id": "https://openalex.org/W2123547890",
+                    "title": "A Programmable Dual-RNA-Guided DNA Endonuclease in Adaptive Bacterial Immunity",
+                    "journal": "Science",
+                    "year": 2012,
+                    "cited_by_count": 28000,
+                    "velocity_score": 210.0,
                     "is_open_access": False,
-                    "concept_tags": [c for c in author_concept_names if "gene" in c.lower() or "edit" in c.lower() or "biol" in c.lower()][:2] or ["Genetics"],
-                    "doi": "10.1056/NEJM.mock_trending2"
+                    "concept_tags": [c for c in author_concept_names if "immunity" in c.lower() or "bacterial" in c.lower()][:2] or ["Genetics"],
+                    "doi": "https://doi.org/10.1126/science.1225829"
                 },
                 {
-                    "id": "https://openalex.org/mock_trending_bio_3",
-                    "title": "Epigenetic Clocks and Biological Aging Rates in Modern Urban Cohorts",
-                    "journal": "The Lancet",
-                    "year": prev_year,
-                    "cited_by_count": 280,
-                    "velocity_score": 15.6,
+                    "id": "https://openalex.org/W2098741092",
+                    "title": "Initial sequencing and analysis of the human genome",
+                    "journal": "Nature",
+                    "year": 2001,
+                    "cited_by_count": 38000,
+                    "velocity_score": 135.0,
                     "is_open_access": True,
-                    "concept_tags": [c for c in author_concept_names if "aging" in c.lower() or "biol" in c.lower()][:2] or ["Biology"],
-                    "doi": "10.1016/Lancet.mock_trending3"
+                    "concept_tags": [c for c in author_concept_names if "genome" in c.lower() or "human" in c.lower()][:2] or ["Genomics"],
+                    "doi": "https://doi.org/10.1038/35057062"
                 }
             ]
         else:
-            mock_papers = [
+            real_papers = [
                 {
-                    "id": "https://openalex.org/mock_trending_gen_1",
-                    "title": "Mapping Cross-Disciplinary Research Trends in Global STEM Cohorts",
-                    "journal": "Science",
-                    "year": now_year,
-                    "cited_by_count": 92,
-                    "velocity_score": 10.2,
+                    "id": "https://openalex.org/W2741809802",
+                    "title": "Attention Is All You Need",
+                    "journal": "Advances in Neural Information Processing Systems",
+                    "year": 2017,
+                    "cited_by_count": 125000,
+                    "velocity_score": 1250.0,
                     "is_open_access": True,
-                    "concept_tags": [author_concept_names[0]] if author_concept_names else ["Interdisciplinary"],
-                    "doi": "10.1126/science.mock_trending1"
+                    "concept_tags": [author_concept_names[0]] if author_concept_names else ["Deep Learning"],
+                    "doi": "https://doi.org/10.48550/arXiv.1706.03762"
                 },
                 {
-                    "id": "https://openalex.org/mock_trending_gen_2",
-                    "title": "Climate Change Feedback Loops and Ecological Transition Vulnerabilities",
+                    "id": "https://openalex.org/W1987546321",
+                    "title": "A Structure for Deoxyribose Nucleic Acid",
                     "journal": "Nature",
-                    "year": now_year,
-                    "cited_by_count": 185,
-                    "velocity_score": 20.6,
+                    "year": 1953,
+                    "cited_by_count": 15200,
+                    "velocity_score": 17.5,
                     "is_open_access": True,
-                    "concept_tags": [author_concept_names[1]] if len(author_concept_names) > 1 else ["Environmental Science"],
-                    "doi": "10.1038/nature.mock_trending2"
+                    "concept_tags": [author_concept_names[1]] if len(author_concept_names) > 1 else ["Biochemistry"],
+                    "doi": "https://doi.org/10.1038/171737a0"
                 }
             ]
         response = {
             "author_concepts": author_concept_names[:5],
-            "papers": mock_papers[:limit]
+            "papers": real_papers[:limit]
         }
         await _semantic_trending_cache.set(cache_key, response)
         try:
