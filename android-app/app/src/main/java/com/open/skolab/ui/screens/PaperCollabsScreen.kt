@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ScreenShare
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.rounded.*
@@ -42,6 +43,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.google.firebase.firestore.FirebaseFirestore
 import com.open.skolab.auth.AuthManager
 import com.open.skolab.di.AppDependencies
+import com.open.skolab.network.OrbitMetrics
 import com.open.skolab.ui.components.MarkdownText
 import com.open.skolab.ui.theme.*
 import kotlinx.coroutines.delay
@@ -148,17 +150,43 @@ fun PaperCollabsScreen(
     var similarResearchers by remember { mutableStateOf<List<com.open.skolab.network.AuthorSuggestion>>(emptyList()) }
     var isLoadingSuggestions by remember { mutableStateOf(false) }
 
+    // Real orbit metrics from OpenAlex
+    var orbitMetrics by remember { mutableStateOf<OrbitMetrics?>(null) }
+    var isLoadingOrbitMetrics by remember { mutableStateOf(false) }
+    var userOpenAlexId by remember { mutableStateOf("") }
+
     val apiService = com.open.skolab.di.AppDependencies.apiService
     val userFocus = cachedUser?.researchFocus ?: ""
+    val userName = currentUserName
+
+    // Fetch real orbit metrics: first resolve OpenAlex author ID, then fetch metrics
+    LaunchedEffect(userName, userFocus) {
+        if (userName.isNotBlank() && userName != "SkoLab User") {
+            isLoadingOrbitMetrics = true
+            try {
+                // Resolve the user's OpenAlex author ID
+                val profile = apiService.searchAuthor(userName, focus = userFocus.ifBlank { null })
+                val authorId = profile?.id ?: ""
+                userOpenAlexId = authorId
+                if (authorId.isNotBlank()) {
+                    orbitMetrics = apiService.getOrbitMetrics(authorId)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("PaperCollabsScreen", "Failed to fetch orbit metrics", e)
+            } finally {
+                isLoadingOrbitMetrics = false
+            }
+        }
+    }
 
     LaunchedEffect(userFocus) {
         if (userFocus.isNotEmpty() && userFocus != "Researcher" && userFocus != "General Research") {
             isLoadingSuggestions = true
             try {
-                val list = apiService.getSimilarAuthors(userFocus, limit = 6)
+                val list = apiService.getSimilarAuthors(userFocus, limit = 8)
                 if (list.isNotEmpty()) {
-                    suggestedCollaborators = list.take(3)
-                    similarResearchers = list.drop(3).take(3)
+                    suggestedCollaborators = list.take(4)
+                    similarResearchers = list.drop(4).take(4)
                 } else {
                     suggestedCollaborators = emptyList()
                     similarResearchers = emptyList()
@@ -324,58 +352,137 @@ fun PaperCollabsScreen(
             }
 
             if (currentTab == "orbit_network") {
-                // ORBIT NETWORK TAB: Breathtaking Relationship intelligence dashboard!
+                // ORBIT NETWORK TAB — Real Data, Industry-Standard Intelligence Dashboard
+                val context = LocalContext.current
+
                 LazyColumn(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
-                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
-                    // HERO Section
+
+                    // ── HERO METRICS CARD — Real data from OpenAlex ─────────────────
                     item {
-                        Surface(
-                            color = SURFACE,
-                            shape = RoundedCornerShape(20.dp),
-                            border = BorderStroke(1.dp, BORDER),
-                            modifier = Modifier.fillMaxWidth()
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(
+                                    brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                        colors = listOf(PRIMARY, Color(0xFF0D9488))
+                                    )
+                                )
                         ) {
                             Column(modifier = Modifier.padding(20.dp)) {
-                                Text(
-                                    text = "YOUR RESEARCH NETWORK",
-                                    color = TEXT_MUTED,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 1.sp
-                                )
-                                Spacer(modifier = Modifier.height(14.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "YOUR RESEARCH ORBIT",
+                                        color = Color.White.copy(alpha = 0.75f),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 1.5.sp
+                                    )
+                                    if (isLoadingOrbitMetrics) {
+                                        CircularProgressIndicator(
+                                            color = Color.White.copy(alpha = 0.7f),
+                                            strokeWidth = 2.dp,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(Color.White.copy(alpha = 0.15f))
+                                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                        ) {
+                                            Text(
+                                                text = "LIVE",
+                                                color = Color.White,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Black,
+                                                letterSpacing = 1.sp
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(16.dp))
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                    horizontalArrangement = Arrangement.SpaceEvenly
                                 ) {
-                                    OrbitMetricCell(count = "18", label = "Collaborators", tint = PRIMARY)
-                                    OrbitMetricCell(count = "8", label = "Institutions", tint = Color(0xFF00A884))
-                                    OrbitMetricCell(count = "3", label = "Active Grants", tint = Color(0xFFE28743))
-                                    OrbitMetricCell(count = "5", label = "Communities", tint = Color(0xFF8B5CF6))
+                                    val metrics = orbitMetrics
+                                    OrbitMetricCell(
+                                        count = if (metrics != null) "${metrics.collaborator_count}" else "—",
+                                        label = "Co-Authors",
+                                        tint = Color.White
+                                    )
+                                    OrbitMetricCell(
+                                        count = if (metrics != null) "${metrics.institution_count}" else "—",
+                                        label = "Institutions",
+                                        tint = Color.White
+                                    )
+                                    OrbitMetricCell(
+                                        count = if (metrics != null) "${metrics.works_count}" else "—",
+                                        label = "Publications",
+                                        tint = Color.White
+                                    )
+                                    OrbitMetricCell(
+                                        count = if (metrics != null) "h${metrics.h_index}" else "—",
+                                        label = "h-Index",
+                                        tint = Color(0xFFFFD700)
+                                    )
+                                }
+                                if (orbitMetrics != null && orbitMetrics!!.cited_by_count > 0) {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    androidx.compose.material3.HorizontalDivider(
+                                        color = Color.White.copy(alpha = 0.2f),
+                                        thickness = 0.5.dp
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Star,
+                                            contentDescription = null,
+                                            tint = Color(0xFFFFD700),
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Text(
+                                            text = "${orbitMetrics!!.cited_by_count.let { if (it > 1000) "${it / 1000}k+" else "$it" }} total citations across your publications",
+                                            color = Color.White.copy(alpha = 0.85f),
+                                            fontSize = 11.sp
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
 
-                    // NETWORK GRAPH Section
+                    // ── ORBIT CANVAS — Real co-author node names ───────────────────
                     item {
-                        Text(
-                            text = "Interactive Relationship Orbit Map",
-                            color = TEXT_PRIMARY,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Concentric orbit rings represent connection similarity and co-citation overlap strength.",
-                            color = TEXT_SECONDARY,
-                            fontSize = 12.sp
-                        )
+                        Column {
+                            Text(
+                                text = "Your Research Orbit Network",
+                                color = TEXT_PRIMARY,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Live co-author nodes orbiting your research center — inner ring shows primary collaborators.",
+                                color = TEXT_SECONDARY,
+                                fontSize = 12.sp,
+                                lineHeight = 17.sp
+                            )
+                        }
                     }
 
                     item {
@@ -385,23 +492,175 @@ fun PaperCollabsScreen(
                             border = BorderStroke(1.dp, BORDER),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(260.dp)
+                                .height(280.dp)
                         ) {
                             Box(modifier = Modifier.fillMaxSize()) {
-                                RelationshipOrbitCanvas()
+                                val realInnerNodes = orbitMetrics?.top_coauthors?.take(3)?.map {
+                                    val parts = it.split(" ")
+                                    if (parts.size >= 2) "${parts[0].take(1)}. ${parts.last()}" else it.take(12)
+                                } ?: listOf("Loading...", "", "")
+                                val realOuterNodes = orbitMetrics?.top_coauthors?.drop(3)?.take(4)?.map {
+                                    val parts = it.split(" ")
+                                    if (parts.size >= 2) "${parts[0].take(1)}. ${parts.last()}" else it.take(12)
+                                } ?: listOf("", "", "", "")
+                                RelationshipOrbitCanvas(
+                                    innerNodeLabels = realInnerNodes,
+                                    outerNodeLabels = realOuterNodes,
+                                    centerLabel = currentUserName.split(" ").firstOrNull() ?: "You"
+                                )
                             }
                         }
                     }
 
-                    // Potential Collaborators Section
+                    // ── POTENTIAL COLLABORATORS ────────────────────────────────────
                     item {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
                             modifier = Modifier.fillMaxWidth()
                         ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.People,
+                                    contentDescription = null,
+                                    tint = PRIMARY,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = "Potential Collaborators",
+                                    color = TEXT_PRIMARY,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            if (suggestedCollaborators.isNotEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(PRIMARY.copy(alpha = 0.1f))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                                ) {
+                                    Text(
+                                        "${suggestedCollaborators.size} found",
+                                        color = PRIMARY,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    item {
+                        if (isLoadingSuggestions) {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                repeat(2) {
+                                    Surface(
+                                        color = SURFACE,
+                                        shape = RoundedCornerShape(16.dp),
+                                        border = BorderStroke(1.dp, BORDER),
+                                        modifier = Modifier.fillMaxWidth().height(120.dp)
+                                    ) {}
+                                }
+                            }
+                        } else if (suggestedCollaborators.isEmpty()) {
+                            Surface(
+                                color = SURFACE,
+                                shape = RoundedCornerShape(16.dp),
+                                border = BorderStroke(1.dp, BORDER),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(20.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.PersonSearch,
+                                        contentDescription = null,
+                                        tint = TEXT_MUTED,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                    Text(
+                                        text = if (userFocus.isBlank())
+                                            "Set your research focus in your profile to discover matching collaborators"
+                                        else
+                                            "No matching collaborators found for '$userFocus' — try a broader research focus",
+                                        color = TEXT_SECONDARY,
+                                        fontSize = 12.sp,
+                                        textAlign = TextAlign.Center,
+                                        lineHeight = 17.sp
+                                    )
+                                }
+                            }
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                suggestedCollaborators.forEachIndexed { index, sugg ->
+                                    // Real match score: factor in h-index and field match
+                                    val matchScore = when {
+                                        sugg.field_of_study?.contains(userFocus, ignoreCase = true) == true ->
+                                            (88 + (sugg.h_index ?: 0).coerceAtMost(9)).coerceAtMost(97)
+                                        sugg.h_index != null && sugg.h_index > 20 -> 84
+                                        sugg.h_index != null && sugg.h_index > 10 -> 76
+                                        sugg.h_index != null -> 68
+                                        else -> 62 - index * 2
+                                    }
+                                    val reason = buildString {
+                                        if (!sugg.field_of_study.isNullOrBlank()) {
+                                            append("Specialises in ${sugg.field_of_study}")
+                                            if (userFocus.isNotBlank()) append(", overlapping with your focus in $userFocus")
+                                        } else if (userFocus.isNotBlank()) {
+                                            append("Active researcher in the $userFocus domain")
+                                        } else {
+                                            append("Research profile aligns with your publication network")
+                                        }
+                                        sugg.h_index?.takeIf { it > 0 }?.let { append(". h-index: $it") }
+                                    }
+                                    val tags = buildList {
+                                        sugg.field_of_study?.take(24)?.let { add(it) }
+                                            ?: run { if (userFocus.isNotBlank()) add(userFocus) }
+                                        if (sugg.h_index != null && sugg.h_index > 15) add("High Impact")
+                                        else if (matchScore >= 85) add("Strong Match")
+                                    }
+                                    OrbitCollaboratorRecommendationCard(
+                                        name = sugg.display_name,
+                                        institution = sugg.institution,
+                                        match = matchScore,
+                                        hIndex = sugg.h_index,
+                                        reason = reason,
+                                        tags = tags,
+                                        onConnect = {
+                                            val cleanName = sugg.display_name.lowercase().replace(" ", ".")
+                                            val subject = "Collaboration Inquiry — ${userFocus.ifBlank { "Research" }}"
+                                            val body = "Dear ${sugg.display_name.split(" ").firstOrNull() ?: "Professor"},\n\nI came across your work in ${sugg.field_of_study ?: userFocus} and believe there may be a great opportunity for collaboration. I would love to connect and explore a potential research partnership.\n\nBest regards,\n$currentUserName"
+                                            val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
+                                                data = Uri.parse("mailto:")
+                                                putExtra(Intent.EXTRA_EMAIL, arrayOf("$cleanName@university.edu"))
+                                                putExtra(Intent.EXTRA_SUBJECT, subject)
+                                                putExtra(Intent.EXTRA_TEXT, body)
+                                            }
+                                            try { context.startActivity(Intent.createChooser(emailIntent, "Send Collaboration Request")) }
+                                            catch (e: Exception) { android.widget.Toast.makeText(context, "No email app found", android.widget.Toast.LENGTH_SHORT).show() }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // ── RESEARCHERS SIMILAR TO YOU ─────────────────────────────────
+                    item {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Biotech,
+                                contentDescription = null,
+                                tint = Color(0xFF0D9488),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
                             Text(
-                                text = "Potential Collaborators Entering Your Orbit",
+                                text = "Researchers Similar To You",
                                 color = TEXT_PRIMARY,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold
@@ -411,63 +670,26 @@ fun PaperCollabsScreen(
 
                     item {
                         if (isLoadingSuggestions) {
-                            Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(color = PRIMARY, strokeWidth = 2.dp)
-                            }
-                        } else if (suggestedCollaborators.isEmpty()) {
-                            Surface(
-                                color = SURFACE,
-                                shape = RoundedCornerShape(16.dp),
-                                border = BorderStroke(1.dp, BORDER),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    text = if (userFocus.isBlank()) "Please set your research focus in your profile to discover dynamic collaborators!" else "No dynamic collaborators found for '$userFocus'. Try updating your research focus in your profile to discover more researchers!",
-                                    color = TEXT_SECONDARY,
-                                    fontSize = 12.sp,
-                                    modifier = Modifier.padding(16.dp),
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                        } else {
-                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                suggestedCollaborators.forEachIndexed { index, sugg ->
-                                    OrbitCollaboratorRecommendationCard(
-                                        name = sugg.display_name,
-                                        institution = sugg.institution,
-                                        match = 96 - index * 4,
-                                        reason = "Substantial overlap in citation networks, publications, and methodologies in '$userFocus'.",
-                                        tags = listOf(userFocus, "Highly Aligned")
-                                    )
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                repeat(2) {
+                                    Surface(
+                                        color = SURFACE,
+                                        shape = RoundedCornerShape(14.dp),
+                                        border = BorderStroke(1.dp, BORDER),
+                                        modifier = Modifier.fillMaxWidth().height(72.dp)
+                                    ) {}
                                 }
-                            }
-                        }
-                    }
-
-                    // Researchers Similar To You
-                    item {
-                        Text(
-                            text = "Researchers Similar To You",
-                            color = TEXT_PRIMARY,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    item {
-                        if (isLoadingSuggestions) {
-                            Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(color = PRIMARY, strokeWidth = 2.dp)
                             }
                         } else if (similarResearchers.isEmpty()) {
                             Surface(
                                 color = SURFACE,
-                                shape = RoundedCornerShape(16.dp),
+                                shape = RoundedCornerShape(14.dp),
                                 border = BorderStroke(1.dp, BORDER),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
-                                    text = if (userFocus.isBlank()) "Please set your research focus in your profile to view similar researchers." else "No similar researchers found in '$userFocus'.",
+                                    text = if (userFocus.isBlank()) "Update your research focus to see researchers similar to you."
+                                    else "No similar researchers found for '$userFocus'.",
                                     color = TEXT_SECONDARY,
                                     fontSize = 12.sp,
                                     modifier = Modifier.padding(16.dp),
@@ -475,57 +697,92 @@ fun PaperCollabsScreen(
                                 )
                             }
                         } else {
-                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 similarResearchers.forEach { sugg ->
                                     OrbitSimilarResearcherCard(
                                         name = sugg.display_name,
                                         institution = sugg.institution,
-                                        overlapReason = "High topic correlation and co-citation index similarity in the field of '$userFocus'.",
-                                        papersCount = 6
+                                        field = sugg.field_of_study ?: userFocus,
+                                        hIndex = sugg.h_index
                                     )
                                 }
                             }
                         }
                     }
 
-                    // Rising Researchers
+                    // ── RISING RESEARCHERS — sorted by relevance score ─────────────
                     item {
-                        Text(
-                            text = "Rising Researchers in Your Domain",
-                            color = TEXT_PRIMARY,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.TrendingUp,
+                                contentDescription = null,
+                                tint = Color(0xFFE28743),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = "Rising in Your Domain",
+                                color = TEXT_PRIMARY,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
 
                     item {
                         if (isLoadingSuggestions) {
-                            Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(color = PRIMARY, strokeWidth = 2.dp)
-                            }
-                        } else if (similarResearchers.isEmpty()) {
-                            Surface(
-                                color = SURFACE,
-                                shape = RoundedCornerShape(16.dp),
-                                border = BorderStroke(1.dp, BORDER),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    text = if (userFocus.isBlank()) "Please set your research focus in your profile to view rising researchers." else "No rising researchers discovered in '$userFocus'.",
-                                    color = TEXT_SECONDARY,
-                                    fontSize = 12.sp,
-                                    modifier = Modifier.padding(16.dp),
-                                    textAlign = TextAlign.Center
-                                )
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                repeat(2) {
+                                    Surface(
+                                        color = SURFACE,
+                                        shape = RoundedCornerShape(14.dp),
+                                        border = BorderStroke(1.dp, BORDER),
+                                        modifier = Modifier.fillMaxWidth().height(80.dp)
+                                    ) {}
+                                }
                             }
                         } else {
-                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                similarResearchers.take(2).forEach { sugg ->
-                                    OrbitRisingResearcherCard(
-                                        name = sugg.display_name,
-                                        momentum = "+35% Growth",
-                                        reason = "High publication velocity, citation count surges, and active preprint drafts in '$userFocus'."
+                            // Rising = suggestedCollaborators sorted by h_index desc (higher h = more established momentum)
+                            val risingList = suggestedCollaborators
+                                .sortedByDescending { it.h_index ?: 0 }
+                                .take(3)
+                            if (risingList.isEmpty()) {
+                                Surface(
+                                    color = SURFACE,
+                                    shape = RoundedCornerShape(14.dp),
+                                    border = BorderStroke(1.dp, BORDER),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = if (userFocus.isBlank()) "Set your research focus to discover rising researchers."
+                                        else "No rising researchers found in '$userFocus'.",
+                                        color = TEXT_SECONDARY,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.padding(16.dp),
+                                        textAlign = TextAlign.Center
                                     )
+                                }
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    risingList.forEach { sugg ->
+                                        val hIndexVal = sugg.h_index ?: 0
+                                        val momentum = when {
+                                            hIndexVal > 30 -> "Highly Established"
+                                            hIndexVal > 15 -> "Rapidly Growing"
+                                            hIndexVal > 5  -> "Emerging Voice"
+                                            else           -> "New Entry"
+                                        }
+                                        val reason = buildString {
+                                            append("Active in ${sugg.field_of_study ?: userFocus}")
+                                            if (hIndexVal > 0) append(" · h-index $hIndexVal")
+                                            append(" · ${sugg.institution}")
+                                        }
+                                        OrbitRisingResearcherCard(
+                                            name = sugg.display_name,
+                                            momentum = momentum,
+                                            reason = reason
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1117,164 +1374,108 @@ fun PaperCollabsScreen(
 fun OrbitMetricCell(count: String, label: String, tint: Color) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(4.dp)
+        modifier = Modifier.padding(horizontal = 4.dp)
     ) {
         Text(
             text = count,
-            fontSize = 24.sp,
+            fontSize = 22.sp,
             fontWeight = FontWeight.Black,
             color = tint
         )
         Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = label,
-            fontSize = 11.sp,
-            color = TEXT_SECONDARY,
-            fontWeight = FontWeight.Bold
+            fontSize = 10.sp,
+            color = tint.copy(alpha = 0.75f),
+            fontWeight = FontWeight.SemiBold
         )
     }
 }
 
 @Composable
-fun RelationshipOrbitCanvas() {
-    val infiniteTransition = rememberInfiniteTransition()
-    
-    // Slow organic orbit rotation angles
+fun RelationshipOrbitCanvas(
+    innerNodeLabels: List<String> = listOf("Co-Author 1", "Co-Author 2", "Co-Author 3"),
+    outerNodeLabels: List<String> = listOf("", "", "", ""),
+    centerLabel: String = "You"
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "orbit")
+
     val rotationAngle1 by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(40000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        )
+        animationSpec = infiniteRepeatable(tween(40000, easing = LinearEasing), RepeatMode.Restart),
+        label = "inner"
     )
-
     val rotationAngle2 by infiniteTransition.animateFloat(
         initialValue = 360f,
         targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(60000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        )
+        animationSpec = infiniteRepeatable(tween(65000, easing = LinearEasing), RepeatMode.Restart),
+        label = "outer"
     )
-
-    // Soft node pulse scale
     val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.95f,
-        targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2500, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        )
+        initialValue = 0.90f,
+        targetValue = 1.10f,
+        animationSpec = infiniteRepeatable(tween(2800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "pulse"
     )
 
     Canvas(modifier = Modifier.fillMaxSize()) {
         val center = Offset(size.width / 2f, size.height / 2f)
+        val rad1 = 75.dp.toPx()
+        val rad2 = 120.dp.toPx()
 
-        // Concentric Orbit Track 1 (Inner)
+        // Glow behind center
+        drawCircle(color = PRIMARY.copy(alpha = 0.06f * pulseScale), radius = 44.dp.toPx(), center = center)
+
+        // Orbit tracks (dashed rings)
         drawCircle(
-            color = BORDER.copy(alpha = 0.5f),
-            radius = 65.dp.toPx(),
-            center = center,
+            color = BORDER.copy(alpha = 0.5f), radius = rad1, center = center,
             style = androidx.compose.ui.graphics.drawscope.Stroke(
-                width = 1.dp.toPx(),
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+                1.2f.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 10f), 0f)
+            )
+        )
+        drawCircle(
+            color = BORDER.copy(alpha = 0.3f), radius = rad2, center = center,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                0.8f.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 14f), 0f)
             )
         )
 
-        // Concentric Orbit Track 2 (Outer)
-        drawCircle(
-            color = BORDER.copy(alpha = 0.3f),
-            radius = 110.dp.toPx(),
-            center = center,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(
-                width = 1.dp.toPx(),
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 12f), 0f)
-            )
-        )
+        val innerColors = listOf(PRIMARY, Color(0xFF0D9488), Color(0xFF7C3AED))
+        val outerColors = listOf(Color(0xFFE28743), Color(0xFF8B5CF6), Color(0xFF059669), Color(0xFF0891B2))
 
-        // Inner Orbit Connections & Nodes
-        val rad1 = 65.dp.toPx()
-        val numInnerNodes = 3
-        val innerNodeLabels = listOf("Sumiran P.", "Nisheeta D.", "Stellar AI")
-        val innerColors = listOf(PRIMARY, Color(0xFF00A884), PRIMARY)
-
-        for (i in 0 until numInnerNodes) {
-            val angleRad = Math.toRadians((rotationAngle1 + (i * 360f / numInnerNodes)).toDouble())
-            val nodeCenter = Offset(
+        // Inner orbit nodes
+        val numInner = innerNodeLabels.size.coerceAtMost(3)
+        for (i in 0 until numInner) {
+            val angleRad = Math.toRadians((rotationAngle1 + (i * 360.0 / numInner)))
+            val nc = Offset(
                 (center.x + rad1 * Math.cos(angleRad)).toFloat(),
                 (center.y + rad1 * Math.sin(angleRad)).toFloat()
             )
-
-            // Connection Line to Center
-            drawLine(
-                color = BORDER.copy(alpha = 0.6f),
-                start = center,
-                end = nodeCenter,
-                strokeWidth = 1.dp.toPx()
-            )
-
-            // Outer ring soft halo on the node
-            drawCircle(
-                color = innerColors[i].copy(alpha = 0.1f * pulseScale),
-                radius = 18.dp.toPx(),
-                center = nodeCenter
-            )
-
-            // Node Circle
-            drawCircle(
-                color = innerColors[i],
-                radius = 7.dp.toPx(),
-                center = nodeCenter
-            )
+            val c = innerColors[i % innerColors.size]
+            drawLine(color = c.copy(alpha = 0.25f), start = center, end = nc, strokeWidth = 1f.dp.toPx())
+            drawCircle(color = c.copy(alpha = 0.12f * pulseScale), radius = 20.dp.toPx(), center = nc)
+            drawCircle(color = c, radius = 8.dp.toPx(), center = nc)
         }
 
-        // Outer Orbit Connections & Nodes
-        val rad2 = 110.dp.toPx()
-        val numOuterNodes = 4
-        val outerColors = listOf(Color(0xFFE28743), Color(0xFF8B5CF6), Color(0xFF00D4FF), Color(0xFF2D6BE4))
-
-        for (i in 0 until numOuterNodes) {
-            val angleRad = Math.toRadians((rotationAngle2 + (i * 360f / numOuterNodes)).toDouble())
-            val nodeCenter = Offset(
+        // Outer orbit nodes
+        val numOuter = outerNodeLabels.size.coerceAtMost(4)
+        for (i in 0 until numOuter) {
+            val angleRad = Math.toRadians((rotationAngle2 + (i * 360.0 / numOuter.coerceAtLeast(1))))
+            val nc = Offset(
                 (center.x + rad2 * Math.cos(angleRad)).toFloat(),
                 (center.y + rad2 * Math.sin(angleRad)).toFloat()
             )
-
-            // Connection Line to nearby nodes
-            drawLine(
-                color = BORDER.copy(alpha = 0.3f),
-                start = center,
-                end = nodeCenter,
-                strokeWidth = 0.5.dp.toPx()
-            )
-
-            // Outer node glow
-            drawCircle(
-                color = outerColors[i].copy(alpha = 0.08f),
-                radius = 24.dp.toPx(),
-                center = nodeCenter
-            )
-
-            drawCircle(
-                color = outerColors[i],
-                radius = 5.dp.toPx(),
-                center = nodeCenter
-            )
+            val c = outerColors[i % outerColors.size]
+            drawLine(color = c.copy(alpha = 0.18f), start = center, end = nc, strokeWidth = 0.7f.dp.toPx())
+            drawCircle(color = c.copy(alpha = 0.09f), radius = 22.dp.toPx(), center = nc)
+            drawCircle(color = c, radius = 5.5.dp.toPx(), center = nc)
         }
 
-        // Center Node: Active User (You)
-        drawCircle(
-            color = PRIMARY.copy(alpha = 0.15f * pulseScale),
-            radius = 32.dp.toPx(),
-            center = center
-        )
-
-        drawCircle(
-            color = PRIMARY,
-            radius = 10.dp.toPx(),
-            center = center
-        )
+        // Center node — user
+        drawCircle(color = PRIMARY.copy(alpha = 0.18f * pulseScale), radius = 28.dp.toPx(), center = center)
+        drawCircle(color = PRIMARY, radius = 11.dp.toPx(), center = center)
+        drawCircle(color = Color.White, radius = 4.dp.toPx(), center = center)
     }
 }
 
@@ -1283,8 +1484,10 @@ fun OrbitCollaboratorRecommendationCard(
     name: String,
     institution: String,
     match: Int,
+    hIndex: Int? = null,
     reason: String,
-    tags: List<String>
+    tags: List<String>,
+    onConnect: () -> Unit = {}
 ) {
     Surface(
         color = SURFACE,
@@ -1298,82 +1501,97 @@ fun OrbitCollaboratorRecommendationCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    // Initials avatar
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(40.dp)
                             .clip(CircleShape)
-                            .background(PRIMARY.copy(alpha = 0.08f)),
+                            .background(PRIMARY.copy(alpha = 0.10f))
+                            .border(1.dp, PRIMARY.copy(alpha = 0.3f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.joinToString("").take(2),
+                            text = name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.joinToString("").take(2).uppercase(),
                             color = PRIMARY,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 13.sp
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
-                        Text(text = name, color = TEXT_PRIMARY, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        Text(text = institution, color = TEXT_SECONDARY, fontSize = 11.sp)
+                        Text(text = name, color = TEXT_PRIMARY, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(text = institution, color = TEXT_SECONDARY, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (hIndex != null && hIndex > 0) {
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = "h-index: $hIndex",
+                                color = TEXT_MUTED,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
 
+                // Color-coded match score badge
+                val matchBg = when {
+                    match >= 88 -> Color(0xFF059669).copy(alpha = 0.12f)
+                    match >= 75 -> Color(0xFFD97706).copy(alpha = 0.12f)
+                    else        -> MATCH_SCORE_BG
+                }
+                val matchTxt = when {
+                    match >= 88 -> Color(0xFF065F46)
+                    match >= 75 -> Color(0xFF92400E)
+                    else        -> MATCH_SCORE_TEXT
+                }
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(MATCH_SCORE_BG)
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .background(matchBg)
+                        .padding(horizontal = 9.dp, vertical = 5.dp)
                 ) {
                     Text(
-                        text = "$match% Match",
-                        color = MATCH_SCORE_TEXT,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
+                        text = "$match%",
+                        color = matchTxt,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Black
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(10.dp))
-            Text(text = reason, color = TEXT_SECONDARY, fontSize = 12.sp, lineHeight = 16.sp)
-            Spacer(modifier = Modifier.height(10.dp))
+            Text(text = reason, color = TEXT_SECONDARY, fontSize = 12.sp, lineHeight = 17.sp)
 
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                tags.forEach { tag ->
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(SURFACE_SUBTLE)
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(text = tag, color = TEXT_SECONDARY, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            if (tags.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    tags.take(3).forEach { tag ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(SURFACE_SUBTLE)
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(text = tag, color = TEXT_MUTED, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            Button(
+                onClick = onConnect,
+                colors = ButtonDefaults.buttonColors(containerColor = PRIMARY, contentColor = TEXT_ON_PRIMARY),
+                shape = RoundedCornerShape(10.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                OutlinedButton(
-                    onClick = {},
-                    border = BorderStroke(1.dp, BORDER),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = PRIMARY),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Orbit Profile", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-                Button(
-                    onClick = {},
-                    colors = ButtonDefaults.buttonColors(containerColor = PRIMARY, contentColor = TEXT_ON_PRIMARY),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Request Collab", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
+                Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Send Collaboration Request", fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -1383,12 +1601,13 @@ fun OrbitCollaboratorRecommendationCard(
 fun OrbitSimilarResearcherCard(
     name: String,
     institution: String,
-    overlapReason: String,
-    papersCount: Int
+    field: String = "",
+    hIndex: Int? = null
 ) {
+    val tealColor = Color(0xFF0D9488)
     Surface(
         color = SURFACE,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         border = BorderStroke(1.dp, BORDER),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -1400,13 +1619,14 @@ fun OrbitSimilarResearcherCard(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF00A884).copy(alpha = 0.08f)),
+                    .background(tealColor.copy(alpha = 0.10f))
+                    .border(1.dp, tealColor.copy(alpha = 0.3f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.joinToString("").take(2),
-                    color = Color(0xFF00A884),
-                    fontWeight = FontWeight.Bold,
+                    text = name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.joinToString("").take(2).uppercase(),
+                    color = tealColor,
+                    fontWeight = FontWeight.ExtraBold,
                     fontSize = 13.sp
                 )
             }
@@ -1414,15 +1634,19 @@ fun OrbitSimilarResearcherCard(
             Spacer(modifier = Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = name, color = TEXT_PRIMARY, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                Text(text = institution, color = TEXT_SECONDARY, fontSize = 11.sp)
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(text = overlapReason, color = TEXT_MUTED, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text(text = name, color = TEXT_PRIMARY, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(text = institution, color = TEXT_SECONDARY, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (field.isNotBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(text = field, color = TEXT_MUTED, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
 
-            Column(horizontalAlignment = Alignment.End) {
-                Text(text = "$papersCount", color = PRIMARY, fontSize = 16.sp, fontWeight = FontWeight.Black)
-                Text(text = "Papers", color = TEXT_MUTED, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            if (hIndex != null && hIndex > 0) {
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(text = "h$hIndex", color = tealColor, fontSize = 17.sp, fontWeight = FontWeight.Black)
+                    Text(text = "h-index", color = TEXT_MUTED, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
         }
     }

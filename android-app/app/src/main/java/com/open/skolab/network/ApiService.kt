@@ -193,6 +193,17 @@ data class AuthorSuggestion(
 )
 
 @Serializable
+data class OrbitMetrics(
+    val collaborator_count: Int = 0,
+    val institution_count: Int = 0,
+    val works_count: Int = 0,
+    val cited_by_count: Int = 0,
+    val h_index: Int = 0,
+    val i10_index: Int = 0,
+    val top_coauthors: List<String> = emptyList()
+)
+
+@Serializable
 data class AuthorResponse(
     val id: String,
     val display_name: String,
@@ -951,6 +962,29 @@ class ApiService {
             handleNetworkException(e, base)
             Log.e(tag, "getSimilarAuthors failed", e)
             throw e
+        }
+    }
+
+    /**
+     * Fetches real network intelligence metrics for the Orbit tab.
+     * Returns actual co-author count, institution count, works count,
+     * citation count, h-index, and top real co-author names.
+     */
+    suspend fun getOrbitMetrics(authorId: String): OrbitMetrics {
+        val base = baseUrl() ?: return OrbitMetrics()
+        return try {
+            val response = httpClient.get("$base/orbit_metrics") {
+                parameter("author_id", authorId)
+            }
+            if (response.status.value == 200) {
+                response.body<OrbitMetrics>()
+            } else {
+                Log.w(tag, "getOrbitMetrics returned ${response.status.value} for $authorId")
+                OrbitMetrics()
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "getOrbitMetrics failed for $authorId", e)
+            OrbitMetrics()
         }
     }
 
