@@ -286,6 +286,7 @@ fun FeedScreen(
                             authors = item1.authors,
                             journal = item1.journal,
                             year = item1.year,
+                            publicationDate = item1.publication_date,
                             relevanceScore = item1.relevance_score,
                             recommendationReason = item1.recommendation_reason,
                             abstractText = item1.abstract,
@@ -509,6 +510,7 @@ fun FeedScreen(
                             authors = item2.authors,
                             journal = item2.journal,
                             year = item2.year,
+                            publicationDate = item2.publication_date,
                             relevanceScore = item2.relevance_score,
                             recommendationReason = item2.recommendation_reason,
                             abstractText = item2.abstract,
@@ -774,6 +776,7 @@ fun FeedScreen(
                             authors = item3.authors,
                             journal = item3.journal,
                             year = item3.year,
+                            publicationDate = item3.publication_date,
                             relevanceScore = item3.relevance_score,
                             recommendationReason = item3.recommendation_reason,
                             abstractText = item3.abstract,
@@ -839,6 +842,7 @@ fun FeedScreen(
                             authors = paper.authors,
                             journal = paper.journal,
                             year = paper.year,
+                            publicationDate = null,
                             relevanceScore = paper.citationCount.coerceIn(85, 99),
                             recommendationReason = "Trending heavily in ${uiState.user.researchFocus.ifBlank { "your scientific discipline" }}.",
                             abstractText = paper.abstractText,
@@ -3095,6 +3099,7 @@ fun PulseFeedCard(
     authors: List<String>,
     journal: String,
     year: Int,
+    publicationDate: String? = null,
     relevanceScore: Int,
     recommendationReason: String,
     abstractText: String?,
@@ -3168,8 +3173,46 @@ fun PulseFeedCard(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
+                        val formattedDate = remember(publicationDate, year) {
+                            if (!publicationDate.isNullOrBlank()) {
+                                try {
+                                    val parts = publicationDate.split("-")
+                                    if (parts.size >= 3) {
+                                        val yearPart = parts[0]
+                                        val monthPart = parts[1].toIntOrNull()
+                                        val dayPart = parts[2].toIntOrNull()
+                                        val monthName = when (monthPart) {
+                                            1 -> "Jan"
+                                            2 -> "Feb"
+                                            3 -> "Mar"
+                                            4 -> "Apr"
+                                            5 -> "May"
+                                            6 -> "Jun"
+                                            7 -> "Jul"
+                                            8 -> "Aug"
+                                            9 -> "Sep"
+                                            10 -> "Oct"
+                                            11 -> "Nov"
+                                            12 -> "Dec"
+                                            else -> null
+                                        }
+                                        if (monthName != null && dayPart != null) {
+                                            "$monthName $dayPart, $yearPart"
+                                        } else {
+                                            publicationDate
+                                        }
+                                    } else {
+                                        publicationDate
+                                    }
+                                } catch (e: Exception) {
+                                    publicationDate
+                                }
+                            } else {
+                                year.toString()
+                            }
+                        }
                         Text(
-                            text = "$year · Academic Feed",
+                            text = "$formattedDate · Academic Feed",
                             color = EntropiColors.Text3,
                             fontSize = 10.sp
                         )
