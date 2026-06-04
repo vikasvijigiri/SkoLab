@@ -136,6 +136,7 @@ val Typography = Typography(
         fontFamily = MonoFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 11.sp,
-        letterSpacing = 1.sp
+        letterSpacing = 1.sp,
+        fontFeatureSettings = "tnum"
     )
 )

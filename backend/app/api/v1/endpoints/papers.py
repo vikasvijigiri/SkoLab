@@ -325,11 +325,25 @@ async def get_semantic_trending(
 
         loc = w.get("primary_location") or {}
         source = loc.get("source") or {}
+        journal_name = source.get("display_name")
+        if not journal_name:
+            doi_val = w.get("doi") or ""
+            pdf_val = loc.get("pdf_url") or ""
+            landing_val = loc.get("landing_page_url") or ""
+            if "arxiv" in doi_val.lower() or "arxiv.org" in pdf_val.lower() or "arxiv.org" in landing_val.lower():
+                journal_name = "arXiv Preprint"
+            else:
+                concepts_list = w.get("concepts") or w.get("topics") or []
+                if concepts_list and isinstance(concepts_list, list):
+                    journal_name = concepts_list[0].get("display_name")
+                if not journal_name:
+                    journal_name = "Academic Publication"
+
         result_items.append(
             {
                 "id": w.get("id", ""),
                 "title": w.get("title") or "Untitled",
-                "journal": source.get("display_name") or "Unknown Journal",
+                "journal": journal_name,
                 "year": pub_year_int,
                 "cited_by_count": cited,
                 "velocity_score": velocity,

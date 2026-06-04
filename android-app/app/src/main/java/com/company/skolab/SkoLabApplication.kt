@@ -19,7 +19,14 @@ import com.company.skolab.network.ServerLocator
  */
 class SkoLabApplication : Application() {
 
+    companion object {
+        lateinit var instance: SkoLabApplication
+            private set
+    }
+
     override fun onCreate() {
+        instance = this
+
         // Enable StrictMode BEFORE any other initialization in DEBUG builds.
         // This surfaces disk/network IO on the main thread, leaked closeable objects,
         // and untagged network sockets during development — not in release builds.

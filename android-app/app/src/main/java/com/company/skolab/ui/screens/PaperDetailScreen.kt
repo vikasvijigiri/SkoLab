@@ -65,6 +65,7 @@ fun PaperDetailScreen(
     val savedIds by libraryViewModel.savedIds.collectAsStateWithLifecycle()
     val isSaved = savedIds.contains(paperId)
     val scope = rememberCoroutineScope()
+    var showConfetti by remember { mutableStateOf(false) }
 
     LaunchedEffect(paperId) {
         viewModel.fetchPaperDetails(paperId)
@@ -83,7 +84,11 @@ fun PaperDetailScreen(
                 actions = {
                     // Animated bookmark button
                     IconButton(onClick = {
-                        scope.launch { libraryViewModel.toggleSaved(paperId) }
+                        scope.launch {
+                            val wasSaved = isSaved
+                            libraryViewModel.toggleSaved(paperId)
+                            if (!wasSaved) showConfetti = true
+                        }
                     }) {
                         val bookmarkIcon = if (isSaved) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder
                         val bookmarkTint = if (isSaved) AccentTeal else SkoLabTextPrimary
@@ -118,6 +123,11 @@ fun PaperDetailScreen(
                 }
                 is PaperUiState.Success -> {
                     val paper = state.paper
+                    // Hoist here so remember/LaunchedEffect are in @Composable scope
+                    var intelligenceVisible by remember { mutableStateOf(false) }
+                    LaunchedEffect(intelligenceState) {
+                        if (intelligenceState is IntelligenceUiState.Success) intelligenceVisible = true
+                    }
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
@@ -150,12 +160,14 @@ fun PaperDetailScreen(
                                                 modifier = Modifier.size(20.dp)
                                             )
                                             Spacer(modifier = Modifier.width(10.dp))
-                                            Text(
-                                                text = "ANALYZING FULL RESEARCH PAPER...",
-                                                style = Typography.labelMedium,
-                                                color = SkoLabTextPrimary,
-                                                fontWeight = FontWeight.Bold,
-                                                letterSpacing = 1.sp
+                                            StageProgressBar(
+                                                stages = listOf(
+                                                    "Parsing research content...",
+                                                    "Extracting key findings...",
+                                                    "Mapping techniques & tools...",
+                                                    "Synthesizing intelligence report..."
+                                                ),
+                                                modifier = Modifier.weight(1f)
                                             )
                                         }
                                         IntelligenceShimmerBlock()
@@ -170,67 +182,87 @@ fun PaperDetailScreen(
 
                                 // Header Row with Confidence Indicator
                                 item {
-                                    ResearchIntelligenceHeader(data)
+                                    StaggeredAnimatedVisibility(index = 0, visible = intelligenceVisible) {
+                                        ResearchIntelligenceHeader(data)
+                                    }
                                 }
 
                                 // 1. TL;DR Hero Card
                                 item {
-                                    TldrHeroCard(data)
+                                    StaggeredAnimatedVisibility(index = 1, visible = intelligenceVisible) {
+                                        TldrHeroCard(data)
+                                    }
                                 }
 
                                 // 2. Key Findings
                                 if (data.keyFindings.isNotEmpty()) {
                                     item {
-                                        KeyFindingsBlock(data.keyFindings)
+                                        StaggeredAnimatedVisibility(index = 2, visible = intelligenceVisible) {
+                                            KeyFindingsBlock(data.keyFindings)
+                                        }
                                     }
                                 }
 
                                 // 3. Techniques & Methods
                                 if (data.techniques.isNotEmpty()) {
                                     item {
-                                        TechniquesBlock(data.techniques)
+                                        StaggeredAnimatedVisibility(index = 3, visible = intelligenceVisible) {
+                                            TechniquesBlock(data.techniques)
+                                        }
                                     }
                                 }
 
                                 // 4. Tools & Software
                                 if (data.toolsAndSoftware.isNotEmpty()) {
                                     item {
-                                        ToolsAndSoftwareBlock(data.toolsAndSoftware)
+                                        StaggeredAnimatedVisibility(index = 4, visible = intelligenceVisible) {
+                                            ToolsAndSoftwareBlock(data.toolsAndSoftware)
+                                        }
                                     }
                                 }
 
                                 // 5. Core Concepts
                                 if (data.coreConcepts.isNotEmpty()) {
                                     item {
-                                        CoreConceptsBlock(data.coreConcepts)
+                                        StaggeredAnimatedVisibility(index = 5, visible = intelligenceVisible) {
+                                            CoreConceptsBlock(data.coreConcepts)
+                                        }
                                     }
                                 }
 
                                 // 6. Mathematical Model (Formulas)
                                 if (data.formulas.isNotEmpty()) {
                                     item {
-                                        IntelligenceFormulasBlock(data.formulas)
+                                        StaggeredAnimatedVisibility(index = 6, visible = intelligenceVisible) {
+                                            IntelligenceFormulasBlock(data.formulas)
+                                        }
                                     }
                                 }
 
                                 // 7. Honest Limitations
                                 if (data.limitations.isNotEmpty()) {
                                     item {
-                                        LimitationsBlock(data.limitations)
+                                        StaggeredAnimatedVisibility(index = 7, visible = intelligenceVisible) {
+                                            LimitationsBlock(data.limitations)
+                                        }
                                     }
                                 }
 
                                 // 8. Real-World Impact
                                 if (data.realWorldImpact.isNotBlank()) {
                                     item {
-                                        RealWorldImpactBlock(data.realWorldImpact)
+                                        StaggeredAnimatedVisibility(index = 8, visible = intelligenceVisible) {
+                                            RealWorldImpactBlock(data.realWorldImpact)
+                                        }
                                     }
                                 }
 
                                 // 9. Future Directions
                                 if (data.futureDirections.isNotEmpty()) {
                                     item {
-                                        FutureDirectionsBlock(data.futureDirections)
+                                        StaggeredAnimatedVisibility(index = 9, visible = intelligenceVisible) {
+                                            FutureDirectionsBlock(data.futureDirections)
+                                        }
                                     }
                                 }
                             }
@@ -241,6 +273,13 @@ fun PaperDetailScreen(
                         }
                     }
                 }
+            }
+            // Confetti overlay — fires once when user bookmarks the paper
+            if (showConfetti) {
+                ConfettiCelebration(
+                    visible = showConfetti,
+                    onFinished = { showConfetti = false }
+                )
             }
         }
     }

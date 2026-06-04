@@ -20,6 +20,9 @@ import com.company.skolab.ui.theme.ObsidianBlack
 import com.company.skolab.ui.theme.Typography
 import com.company.skolab.ui.theme.BrandGoogleText
 import com.company.skolab.ui.theme.SkoLabWarning
+import androidx.compose.ui.platform.LocalView
+import android.view.HapticFeedbackConstants
+import android.os.Build
 
 @Composable
 fun SkoLabPrimaryButton(
@@ -30,8 +33,26 @@ fun SkoLabPrimaryButton(
     isLoading: Boolean = false,
     isError: Boolean = false
 ) {
+    val view = LocalView.current
     Button(
-        onClick = if (isLoading || isError) { {} } else onClick,
+        onClick = {
+            if (isError) {
+                if (Build.VERSION.SDK_INT >= 30) {
+                    view.performHapticFeedback(HapticFeedbackConstants.REJECT)
+                } else {
+                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                }
+            } else {
+                if (Build.VERSION.SDK_INT >= 30) {
+                    view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                } else {
+                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                }
+            }
+            if (!(isLoading || isError)) {
+                onClick()
+            }
+        },
         modifier = modifier
             .fillMaxWidth()
             .height(52.dp),
@@ -65,8 +86,26 @@ fun SkoLabOutlinedButton(
     isLoading: Boolean = false,
     isError: Boolean = false
 ) {
+    val view = LocalView.current
     OutlinedButton(
-        onClick = if (isLoading || isError) { {} } else onClick,
+        onClick = {
+            if (isError) {
+                if (Build.VERSION.SDK_INT >= 30) {
+                    view.performHapticFeedback(HapticFeedbackConstants.REJECT)
+                } else {
+                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                }
+            } else {
+                if (Build.VERSION.SDK_INT >= 30) {
+                    view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                } else {
+                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                }
+            }
+            if (!(isLoading || isError)) {
+                onClick()
+            }
+        },
         modifier = modifier.height(44.dp),
         enabled = enabled && !isLoading,
         shape = SkoLabShapes.md,
@@ -104,8 +143,18 @@ fun GoogleSignInButton(
     isLoading: Boolean = false,
     enabled: Boolean = true
 ) {
+    val view = LocalView.current
     Button(
-        onClick = onClick,
+        onClick = {
+            if (Build.VERSION.SDK_INT >= 30) {
+                view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+            } else {
+                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            }
+            if (!isLoading) {
+                onClick()
+            }
+        },
         modifier = modifier
             .fillMaxWidth()
             .height(52.dp),
@@ -126,4 +175,41 @@ fun GoogleSignInButton(
             Text("Continue with Google", style = Typography.labelLarge, color = BrandGoogleText)
         }
     }
+}
+
+/**
+ * **DEPRECATED** — Use [SkoLabPrimaryButton] or [SkoLabOutlinedButton] instead.
+ *
+ * This shim exists purely to surface compiler warnings at call sites that were written
+ * before the Design System v2 button refactor (2026-06). It delegates directly to
+ * [SkoLabPrimaryButton] so it remains functionally correct until migrated.
+ *
+ * Migration guide:
+ *   - Replace `LegacySkoLabButton(text, onClick)` with `SkoLabPrimaryButton(text, onClick)`.
+ *   - For secondary actions use `SkoLabOutlinedButton(text, onClick)`.
+ *
+ * Tracked in: DESIGN_SYSTEM_CHANGELOG.md §v2.1
+ */
+@Deprecated(
+    message = "Use SkoLabPrimaryButton or SkoLabOutlinedButton from the Design System v2 palette. " +
+              "LegacySkoLabButton will be removed in the next major release.",
+    replaceWith = ReplaceWith(
+        expression = "SkoLabPrimaryButton(text = text, onClick = onClick, modifier = modifier, enabled = enabled)",
+        imports = ["com.company.skolab.ui.components.primitives.SkoLabPrimaryButton"]
+    ),
+    level = DeprecationLevel.WARNING
+)
+@Composable
+fun LegacySkoLabButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    SkoLabPrimaryButton(
+        text = text,
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled
+    )
 }

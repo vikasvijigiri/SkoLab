@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -115,12 +117,14 @@ fun LibraryScreen(onPaperClick: (String) -> Unit) {
 // SAVED PAPERS TAB (existing, cleaned up)
 // ─────────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SavedPapersTab(
     onPaperClick: (String) -> Unit,
     viewModel: LibraryViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
 
     when (val state = uiState) {
         is SavedPapersUiState.Loading -> {
@@ -147,11 +151,35 @@ fun SavedPapersTab(
             )
         }
         is SavedPapersUiState.Success -> {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
+            val listState = rememberLazyListState(
+                initialFirstVisibleItemIndex = viewModel.savedListIndex,
+                initialFirstVisibleItemScrollOffset = viewModel.savedListOffset
+            )
+            LaunchedEffect(listState) {
+                snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+                    .collect { (index, offset) ->
+                        viewModel.updateSavedScroll(index, offset)
+                    }
+            }
+            var isRefreshing by remember { mutableStateOf(false) }
+
+            androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = {
+                    scope.launch {
+                        isRefreshing = true
+                        viewModel.refresh()
+                        isRefreshing = false
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
             ) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
+                ) {
                 item {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
@@ -183,6 +211,7 @@ fun SavedPapersTab(
                         onClick = { onPaperClick(paper.id) }
                     )
                 }
+            }
             }
         }
     }
@@ -529,6 +558,7 @@ fun NexusBridgesTab() {
 // DAILY FEED TAB
 // ─────────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DailyFeedTab(
     onPaperClick: (String) -> Unit,
@@ -541,6 +571,17 @@ fun DailyFeedTab(
     var errorMsg by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val savedIds by libraryViewModel.savedIds.collectAsStateWithLifecycle()
+
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = libraryViewModel.dailyFeedListIndex,
+        initialFirstVisibleItemScrollOffset = libraryViewModel.dailyFeedListOffset
+    )
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                libraryViewModel.updateDailyFeedScroll(index, offset)
+            }
+    }
 
     LaunchedEffect(activeAuthor) {
         isLoading = true
@@ -586,11 +627,33 @@ fun DailyFeedTab(
         return
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
+    var isRefreshing by remember { mutableStateOf(false) }
+
+    androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            scope.launch {
+                isRefreshing = true
+                try {
+                    val authorId = activeAuthor?.id ?: "A5023888391"
+                    val fallbackQuery = activeAuthor?.field_of_study ?: "computer science"
+                    val results = api.getDailyFeed(authorId, fallbackQuery)
+                    feedItems = results
+                } catch (e: Exception) {
+                    errorMsg = e.message ?: "Failed to load daily feed"
+                } finally {
+                    isRefreshing = false
+                }
+            }
+        },
+        modifier = Modifier.fillMaxSize()
     ) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
+        ) {
         item {
             Surface(
                 shape = RoundedCornerShape(12.dp),
@@ -735,6 +798,7 @@ fun DailyFeedTab(
                 }
             }
         }
+    }
     }
 }
 

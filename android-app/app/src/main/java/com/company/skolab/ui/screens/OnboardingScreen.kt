@@ -62,7 +62,11 @@ fun OnboardingScreen(onFinish: (Boolean) -> Unit) {
                     .align(Alignment.TopEnd)
                     .padding(8.dp) // Adjusted padding
             ) {
-                Text("Skip", color = SkoLabTextSecondary, style = Typography.labelMedium)
+                Text(
+                    text = androidx.compose.ui.platform.LocalContext.current.getString(com.company.skolab.R.string.onboarding_skip),
+                    color = SkoLabTextSecondary,
+                    style = Typography.labelMedium
+                )
             }
         }
 
@@ -138,13 +142,13 @@ fun ProblemPage() {
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = String.format(Locale.US, "%,d", animatedCount),
+                text = String.format(Locale.getDefault(), "%,d", animatedCount),
                 style = Typography.displayLarge,
                 color = SkoLabTextPrimary,
                 fontSize = 48.sp
             )
             Text(
-                text = "papers published every year",
+                text = androidx.compose.ui.platform.LocalContext.current.getString(com.company.skolab.R.string.onboarding_papers_published),
                 style = Typography.titleLarge,
                 color = SkoLabTextSecondary
             )
@@ -162,6 +166,7 @@ fun ProblemPage() {
 
 @Composable
 fun SolutionPage() {
+    val context = androidx.compose.ui.platform.LocalContext.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -172,7 +177,7 @@ fun SolutionPage() {
     ) {
         ScoreArcMeter(
             score = 0.82f,
-            label = "IMPACT SCORE",
+            label = context.getString(com.company.skolab.R.string.onboarding_impact_score),
             color = SkoLabPrimary,
             modifier = Modifier.size(200.dp)
         )
@@ -180,16 +185,16 @@ fun SolutionPage() {
         Spacer(modifier = Modifier.height(48.dp))
         
         Text(
-            text = "Frontier Intelligence",
+            text = context.getString(com.company.skolab.R.string.onboarding_frontier_intelligence),
             style = Typography.displaySmall,
             color = SkoLabTextPrimary
         )
         
         Spacer(modifier = Modifier.height(32.dp))
         
-        FeatureRow(Icons.Default.Timeline, "Disruption Score", "Measures paradigm shift", 200)
-        FeatureRow(Icons.Default.BubbleChart, "Semantic Novelty", "Measures conceptual distance", 400)
-        FeatureRow(Icons.Default.Bolt, "Citation Velocity", "Measures acceleration", 600)
+        FeatureRow(Icons.Default.Timeline, context.getString(com.company.skolab.R.string.onboarding_disruption_title), context.getString(com.company.skolab.R.string.onboarding_disruption_desc), 200)
+        FeatureRow(Icons.Default.BubbleChart, context.getString(com.company.skolab.R.string.onboarding_novelty_title), context.getString(com.company.skolab.R.string.onboarding_novelty_desc), 400)
+        FeatureRow(Icons.Default.Bolt, context.getString(com.company.skolab.R.string.onboarding_velocity_title), context.getString(com.company.skolab.R.string.onboarding_velocity_desc), 600)
     }
 }
 
@@ -231,6 +236,7 @@ fun FeatureRow(icon: ImageVector, title: String, body: String, delayMillis: Int)
 fun ValuePage(onFinish: (Boolean) -> Unit) {
     var hasConsented by remember { mutableStateOf(false) }
     var showPolicyDialog by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     Column(
         modifier = Modifier
@@ -278,14 +284,14 @@ fun ValuePage(onFinish: (Boolean) -> Unit) {
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "Pulse Engine Ready",
+                    text = context.getString(com.company.skolab.R.string.onboarding_engine_ready),
                     color = SkoLabTextPrimary,
                     style = Typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Dynamic Frontier Analytics",
+                    text = context.getString(com.company.skolab.R.string.onboarding_frontier_analytics),
                     color = SkoLabTextSecondary,
                     style = Typography.labelSmall
                 )
@@ -295,14 +301,14 @@ fun ValuePage(onFinish: (Boolean) -> Unit) {
         Spacer(modifier = Modifier.height(48.dp))
         
         Text(
-            text = "See through the fog.",
+            text = context.getString(com.company.skolab.R.string.onboarding_see_fog),
             style = Typography.displayMedium,
             color = SkoLabTextPrimary,
             textAlign = TextAlign.Center
         )
         
         Spacer(modifier = Modifier.height(32.dp))
-
+ 
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -315,12 +321,12 @@ fun ValuePage(onFinish: (Boolean) -> Unit) {
             Spacer(modifier = Modifier.width(8.dp))
             Column {
                 Text(
-                    text = "I consent to academic data tracking",
+                    text = context.getString(com.company.skolab.R.string.onboarding_consent),
                     style = Typography.bodyMedium,
                     color = SkoLabTextPrimary
                 )
                 Text(
-                    text = "Privacy Policy & Terms",
+                    text = context.getString(com.company.skolab.R.string.onboarding_policy_terms),
                     style = Typography.labelSmall,
                     color = SkoLabDisruption,
                     modifier = Modifier.clickable { showPolicyDialog = true }
@@ -334,9 +340,9 @@ fun ValuePage(onFinish: (Boolean) -> Unit) {
             colors = ButtonDefaults.buttonColors(containerColor = SkoLabPrimary),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Text("Get Started", style = Typography.titleLarge, color = Color.White)
+            Text(context.getString(com.company.skolab.R.string.onboarding_get_started), style = Typography.titleLarge, color = Color.White)
         }
-
+ 
         if (showPolicyDialog) {
             OnboardingPolicyDialog(onDismiss = { showPolicyDialog = false })
         }
@@ -345,11 +351,12 @@ fun ValuePage(onFinish: (Boolean) -> Unit) {
 
 @Composable
 fun OnboardingPolicyDialog(onDismiss: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "Legal & Attributions",
+                text = context.getString(com.company.skolab.R.string.onboarding_legal_title),
                 style = Typography.titleLarge,
                 color = SkoLabTextPrimary,
                 fontWeight = FontWeight.Bold
@@ -364,14 +371,14 @@ fun OnboardingPolicyDialog(onDismiss: () -> Unit) {
             ) {
                 Column {
                     Text(
-                        text = "Privacy Policy",
+                        text = context.getString(com.company.skolab.R.string.onboarding_privacy_title),
                         style = Typography.titleSmall,
                         color = SkoLabDisruption,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "SkoLab respects your academic data privacy. We collect your research focus and OpenAlex ID solely to personalize feed recommendations and calculate impact metrics. We do not sell your personal data to third parties.",
+                        text = context.getString(com.company.skolab.R.string.onboarding_privacy_body),
                         style = Typography.bodyMedium,
                         color = SkoLabTextSecondary
                     )
@@ -379,14 +386,14 @@ fun OnboardingPolicyDialog(onDismiss: () -> Unit) {
 
                 Column {
                     Text(
-                        text = "Terms of Service",
+                        text = context.getString(com.company.skolab.R.string.onboarding_terms_title),
                         style = Typography.titleSmall,
                         color = SkoLabDisruption,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "By using SkoLab, you agree to comply with our academic integrity policies. You may not scrape our services or abuse LLM endpoint access.",
+                        text = context.getString(com.company.skolab.R.string.onboarding_terms_body),
                         style = Typography.bodyMedium,
                         color = SkoLabTextSecondary
                     )
@@ -398,7 +405,7 @@ fun OnboardingPolicyDialog(onDismiss: () -> Unit) {
                 onClick = onDismiss,
                 colors = ButtonDefaults.textButtonColors(contentColor = SkoLabDisruption)
             ) {
-                Text("Dismiss", fontWeight = FontWeight.Bold)
+                Text(context.getString(com.company.skolab.R.string.onboarding_dismiss), fontWeight = FontWeight.Bold)
             }
         },
         containerColor = SkoLabSurfaceElevated,

@@ -26,6 +26,7 @@ class AuthorSuggestion(BaseModel):
     field_of_study: Optional[str] = None
     h_index: Optional[int] = None
     innovation_score: Optional[int] = None
+    works_count: Optional[int] = None
 
 
 class AuthorResponse(BaseModel):

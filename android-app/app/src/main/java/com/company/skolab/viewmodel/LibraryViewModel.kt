@@ -7,6 +7,7 @@ import com.company.skolab.analytics.SkoLabAnalytics
 import com.company.skolab.data.UserPreferences
 import com.company.skolab.network.ApiService
 import com.company.skolab.network.OpenAlexWork
+import com.company.skolab.network.getJournalOrFallback
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -29,6 +30,24 @@ sealed class SavedPapersUiState {
 }
 
 class LibraryViewModel(application: Application) : AndroidViewModel(application) {
+    var selectedTab = 0
+
+    var savedListIndex = 0
+    var savedListOffset = 0
+
+    fun updateSavedScroll(index: Int, offset: Int) {
+        savedListIndex = index
+        savedListOffset = offset
+    }
+
+    var dailyFeedListIndex = 0
+    var dailyFeedListOffset = 0
+
+    fun updateDailyFeedScroll(index: Int, offset: Int) {
+        dailyFeedListIndex = index
+        dailyFeedListOffset = offset
+    }
+
     private val prefs = UserPreferences(application)
     private val api = com.company.skolab.di.AppDependencies.apiService
 
@@ -41,6 +60,10 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
     init {
+        observeSavedPapers()
+    }
+
+    fun refresh() {
         observeSavedPapers()
     }
 
@@ -88,7 +111,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         title = title ?: "Untitled",
         authors = authorships?.mapNotNull { it.author?.display_name }
             ?.take(3) ?: emptyList(),
-        journal = primary_location?.source?.display_name ?: "Unknown Journal",
+        journal = getJournalOrFallback(),
         year = publication_year ?: 0,
         citedByCount = cited_by_count ?: 0,
         doi = doi

@@ -11,7 +11,7 @@ from sqlalchemy.future import select
 from app.db.database import AsyncSessionLocal
 from app.core.config import settings
 from app.models.user_models import AgentChatHistory
-from app.services.openalex_service import OpenAlexService
+from app.services.openalex_service import OpenAlexService, is_work_relevant_to_discipline
 from app.db.pg_cache import PgBackedCache
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.prompts import (
@@ -237,6 +237,68 @@ def is_field_semantically_relevant(
             ):
                 return True
 
+    return False
+
+
+def is_prestigious_journal(journal: str) -> bool:
+    if not journal:
+        return False
+    j_lower = journal.lower().strip()
+    
+    prestigious_patterns = [
+        "nature",
+        "science",
+        "physical review",
+        "proceedings of the national academy of sciences",
+        "pnas",
+        "ieee transactions",
+        "ieee/cvf",
+        "acm transactions",
+        "journal of machine learning research",
+        "jmlr",
+        "neurips",
+        "neural information processing systems",
+        "icml",
+        "international conference on machine learning",
+        "cvpr",
+        "iccv",
+        "eccv",
+        "kdd",
+        "sigkdd",
+        "association for computational linguistics",
+        "emnlp",
+        "naacl",
+        "aaai",
+        "ijcai",
+        "cell",
+        "lancet",
+        "new england journal of medicine",
+        "nejm",
+        "journal of the american chemical society",
+        "jacs",
+        "angewandte chemie",
+        "advanced materials",
+        "monthly notices of the royal astronomical society",
+        "mnras",
+        "astrophysical journal",
+        "journal of high energy physics",
+        "jhep",
+        "bioinformatics"
+    ]
+    
+    for pat in prestigious_patterns:
+        if pat == "science":
+            if j_lower == "science" or j_lower.startswith("science ") or j_lower.endswith(" science"):
+                exclude_words = ["computer", "social", "materials", "political", "applied", "environmental", "management", "education", "policy", "society", "information", "forestry", "agricultural", "clinical", "engineering", "humanities", "sports"]
+                if any(w in j_lower for w in exclude_words):
+                    continue
+                return True
+        elif pat == "nature":
+            if j_lower == "nature" or j_lower.startswith("nature "):
+                return True
+        elif pat in j_lower:
+            return True
+            
     return False
 
 
@@ -654,6 +716,74 @@ class PipelineServices:
         except Exception:
             return None
 
+    async def _fetch_arxiv_candidates(self, query: str, max_results: int = 15) -> List[Dict[str, Any]]:
+        """
+        Searches arXiv for the query, returning list of candidate dicts structured like OpenAlex works.
+        """
+        import defusedxml.ElementTree as ET
+        import urllib.parse
+        import datetime
+        
+        safe_query = urllib.parse.quote(query)
+        url = f"https://export.arxiv.org/api/query?search_query=all:{safe_query}&start=0&max_results={max_results}&sortBy=submittedDate&sortOrder=descending"
+        try:
+            async with httpx.AsyncClient(timeout=settings.http_timeout_seconds) as client:
+                res = await client.get(url)
+                if res.status_code == 200:
+                    root = ET.fromstring(res.content)
+                    ns = {"atom": "http://www.w3.org/2005/Atom"}
+                    candidates = []
+                    for entry in root.findall("atom:entry", ns):
+                        id_elem = entry.find("atom:id", ns)
+                        title_elem = entry.find("atom:title", ns)
+                        summary_elem = entry.find("atom:summary", ns)
+                        published_elem = entry.find("atom:published", ns)
+                        
+                        id_text = id_elem.text.strip() if id_elem is not None else ""
+                        title_text = title_elem.text.strip().replace("\n", " ") if title_elem is not None else "Untitled"
+                        abstract_text = summary_elem.text.strip().replace("\n", " ") if summary_elem is not None else ""
+                        pub_date = published_elem.text.split("T")[0] if published_elem is not None else f"{datetime.datetime.now().year}-01-01"
+                        try:
+                            pub_year = int(pub_date.split("-")[0])
+                        except Exception:
+                            pub_year = datetime.datetime.now().year
+                            
+                        authors = []
+                        for author in entry.findall("atom:author", ns):
+                            name_elem = author.find("atom:name", ns)
+                            if name_elem is not None:
+                                authors.append({"author": {"display_name": name_elem.text.strip()}})
+                                
+                        # Extract doi if present
+                        doi_text = None
+                        doi_elem = entry.find("{http://arxiv.org/schemas/atom}doi")
+                        if doi_elem is not None:
+                            doi_text = doi_elem.text.strip()
+                        
+                        # Build a mock OpenAlex work dictionary
+                        w = {
+                            "id": id_text,
+                            "title": title_text,
+                            "_custom_abstract": abstract_text,
+                            "publication_date": pub_date,
+                            "publication_year": pub_year,
+                            "authorships": authors,
+                            "primary_location": {
+                                "source": {
+                                    "display_name": "arXiv",
+                                    "id": "S4306400194"
+                                },
+                                "landing_page_url": id_text
+                            },
+                            "doi": doi_text,
+                            "cited_by_count": 0
+                        }
+                        candidates.append(w)
+                    return candidates
+        except Exception as e:
+            print(f"[DailyFeed] arXiv search for '{query}' failed: {e}", flush=True)
+        return []
+
     async def _fetch_and_add_fallback_papers(
         self, term: str, papers: List[Dict[str, Any]], seen_titles: Set[str]
     ) -> None:
@@ -669,11 +799,72 @@ class PipelineServices:
         except Exception as e:
             print(f"Fallback fetch for term '{term}' failed: {e}")
 
+    def _reconstruct_abstract(self, inv_idx: Optional[Dict[str, List[int]]]) -> str:
+        if not inv_idx or not isinstance(inv_idx, dict):
+            return ""
+        try:
+            word_pos = [
+                (pos, word) for word, positions in inv_idx.items() for pos in positions
+            ]
+            return " ".join(wp[1] for wp in sorted(word_pos))
+        except Exception:
+            return ""
+
+    def _compute_jaccard_similarity(self, list1: List[str], list2: List[str]) -> float:
+        if not list1 or not list2:
+            return 0.0
+        set1 = {x.strip().lower() for x in list1 if x.strip()}
+        set2 = {x.strip().lower() for x in list2 if x.strip()}
+        if not set1 or not set2:
+            return 0.0
+        
+        exact_intersection = set1.intersection(set2)
+        partial_matches = 0.0
+        for u in set1:
+            if u in exact_intersection:
+                continue
+            for c in set2:
+                if u in c or c in u:
+                    partial_matches += 0.5
+                    break
+        
+        overlap = len(exact_intersection) + partial_matches
+        union_size = len(set1.union(set2))
+        if union_size == 0:
+            return 0.0
+        return min(1.0, overlap / union_size)
+
+    def _compute_semantic_similarity(self, user_profile_text: str, paper_title: str, paper_abstract: str) -> float:
+        import re
+        def tokenize(text: str) -> set:
+            if not text:
+                return set()
+            words = re.findall(r'\b[a-z]{3,15}\b', text.lower())
+            stopwords = {
+                "the", "and", "for", "with", "from", "using", "based", "study", "analysis",
+                "paper", "method", "results", "approach", "effects", "role", "highly",
+                "novel", "new", "efficient", "optimal", "propose", "present", "develop"
+            }
+            return {w for w in words if w not in stopwords}
+            
+        user_tokens = tokenize(user_profile_text)
+        paper_tokens = tokenize(paper_title + " " + paper_abstract)
+        
+        if not user_tokens or not paper_tokens:
+            return 0.0
+            
+        intersection = user_tokens.intersection(paper_tokens)
+        title_tokens = tokenize(paper_title)
+        title_intersection = user_tokens.intersection(title_tokens)
+        
+        score = (len(intersection) + len(title_intersection) * 2.0) / len(user_tokens.union(paper_tokens))
+        return score
+
     async def get_daily_feed(
         self, author_id: Optional[str], query_fallback: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
-        Generates a personalized daily feed of 3 papers based on author's primary concepts.
+        Generates a personalized daily feed of 3 papers based on author's primary concepts and works.
         """
         doc_id = None
         if author_id:
@@ -692,40 +883,120 @@ class PipelineServices:
             print(f"[Firestore Cache Hit] daily_feeds for doc_id={doc_id}", flush=True)
             await self._save_to_postgres(cache_key, {"items": _fs_cached["items"]})
             return _fs_cached["items"]
+
+        # Fetch user publications if profile exists
+        user_works = []
+        user_concepts = []
+        user_titles = []
+        if author_id and author_id != "fallback_seed":
+            try:
+                user_works = await self.openalex_service.fetch_author_works(author_id, per_page=10)
+                if user_works:
+                    # Sort to get top publications by citations/year
+                    user_works = sorted(user_works, key=lambda w: (w.get("cited_by_count") or 0, w.get("publication_year") or 0), reverse=True)
+                    for w in user_works:
+                        title_val = w.get("title")
+                        if title_val:
+                            user_titles.append(title_val)
+                        for c in w.get("concepts", []):
+                            name_val = c.get("display_name")
+                            if name_val and name_val not in user_concepts:
+                                user_concepts.append(name_val)
+            except Exception as e:
+                print(f"[DailyFeed] Error fetching user works: {e}", flush=True)
+
         concepts = []
         author_name = "Researcher"
-        search_term = query_fallback or "research"
         if author_id:
             author_name, concepts = await self._resolve_author_concepts_and_name(
                 author_id, doc_id
             )
-            if concepts:
-                search_term = " OR ".join([c for c in concepts[:3]])
-        papers = []
-        seen_titles = set()
-        try:
-            results = await self.openalex_service.search_works(search_term, per_page=30)
-            # Filter papers with abstracts and deduplicate by title
-            for w in results:
-                self._add_paper_if_valid(w, papers, seen_titles)
-                if len(papers) >= 3:
-                    break
-        except Exception as e:
-            print(f"Error fetching papers for daily feed: {e}")
+        
+        # Merge concepts
+        combined_concepts = []
+        for c in user_concepts:
+            if c not in combined_concepts:
+                combined_concepts.append(c)
+        for c in concepts:
+            if c not in combined_concepts:
+                combined_concepts.append(c)
 
-        if len(papers) < 3:
+        # Build dynamic search queries based on user's concepts
+        search_queries = []
+        if combined_concepts:
+            search_queries = combined_concepts[:3]
+        elif query_fallback:
+            search_queries = [query_fallback]
+        else:
+            search_queries = ["research"]
+
+        candidates = []
+        seen_titles = set()
+        discipline = query_fallback or (combined_concepts[0] if combined_concepts else "STEM")
+
+        def add_candidate_if_valid(w: Dict[str, Any]) -> None:
+            if len(candidates) >= 40:
+                return
+            title = w.get("title", "")
+            if not title:
+                return
+            title_norm = title.strip().lower().rstrip(".")
+            abstract_index = w.get("abstract_inverted_index")
+            custom_abstract = w.get("_custom_abstract")
+            
+            # Filter out future years
+            current_year = datetime.datetime.now().year
+            pub_year = w.get("publication_year")
+            if pub_year and pub_year > current_year + 1:
+                return
+                
+            if (abstract_index or custom_abstract) and title_norm not in seen_titles and w.get("id") not in [p.get("id") for p in candidates]:
+                candidates.append(w)
+                seen_titles.add(title_norm)
+
+        # Fetch in parallel from:
+        # 1. Related works (using OpenAlex related_to filter for top 3 user works)
+        # 2. arXiv API (latest preprints)
+        # 3. OpenAlex search_works (latest sorted)
+        tasks = []
+        if user_works:
+            for w in user_works[:3]:
+                work_id = w.get("id")
+                if work_id:
+                    tasks.append(self.openalex_service.fetch_related_works(work_id, per_page=10))
+
+        for q in search_queries:
+            # Fetch latest preprints from arXiv
+            tasks.append(self._fetch_arxiv_candidates(q, max_results=15))
+            # Fetch latest works from OpenAlex
+            tasks.append(self.openalex_service.search_works(q, per_page=15, sort="publication_date:desc"))
+
+        try:
+            results_list = await asyncio.gather(*tasks, return_exceptions=True)
+            for res in results_list:
+                if isinstance(res, list):
+                    for w in res:
+                        add_candidate_if_valid(w)
+                elif isinstance(res, Exception):
+                    print(f"[DailyFeed] Gather query failed: {res}", flush=True)
+        except Exception as e:
+            print(f"Error fetching papers for daily feed: {e}", flush=True)
+
+        # Fallbacks if candidates < 15
+        if len(candidates) < 15:
             print(
-                f"[DailyFeed] Fewer than 3 papers for search_term='{search_term}', trying simplified fallback query...",
+                f"[DailyFeed] Only {len(candidates)} candidate papers for queries='{search_queries}', loading fallbacks...",
                 flush=True,
             )
-            fallback_terms = ["science"]
-            concepts_lower = [c.lower() for c in concepts] if concepts else []
-            fld = (query_fallback or "STEM").lower()
+            fallback_terms = ["nature", "science", "proceedings of the national academy of sciences"]
+            concepts_lower = [c.lower() for c in combined_concepts]
+            fld = discipline.lower()
             if (
                 any("quantum" in c or "phys" in c for c in concepts_lower)
                 or "phys" in fld
+                or "quantum" in fld
             ):
-                fallback_terms = ["quantum physics", "quantum mechanics", "physics"]
+                fallback_terms = ["physical review letters", "physical review x", "quantum physics", "physics"]
             elif (
                 any(
                     "comput" in c or "machine" in c or "cs" in c or "learn" in c
@@ -736,8 +1007,10 @@ class PipelineServices:
                 or "cs" in fld
             ):
                 fallback_terms = [
+                    "neurips",
+                    "cvpr",
+                    "icml",
                     "machine learning",
-                    "deep learning",
                     "computer science",
                 ]
             elif (
@@ -745,29 +1018,111 @@ class PipelineServices:
                 or "genom" in fld
                 or "biol" in fld
             ):
-                fallback_terms = ["genomics", "biology", "genetics"]
+                fallback_terms = ["cell", "lancet", "nature medicine", "genomics", "biology"]
 
+            fallback_tasks = []
             for term in fallback_terms:
-                await self._fetch_and_add_fallback_papers(term, papers, seen_titles)
-                if len(papers) >= 3:
-                    break
+                fallback_tasks.append(self._fetch_arxiv_candidates(term, max_results=10))
+                fallback_tasks.append(self.openalex_service.search_works(term, per_page=10, sort="publication_date:desc"))
 
-        if len(papers) < 3:
+            fallback_results_list = await asyncio.gather(*fallback_tasks, return_exceptions=True)
+            for fallback_results in fallback_results_list:
+                if isinstance(fallback_results, list):
+                    for w in fallback_results:
+                        add_candidate_if_valid(w)
+                elif isinstance(fallback_results, Exception):
+                    print(f"Fallback fetch failed: {fallback_results}", flush=True)
+
+        # Emergency fallback to prevent crash
+        if len(candidates) < 3:
+            try:
+                emergency_results = await self.openalex_service.search_works("science", per_page=10)
+                for w in emergency_results:
+                    title = w.get("title", "")
+                    if title:
+                        title_norm = title.strip().lower().rstrip(".")
+                        if title_norm not in seen_titles:
+                            candidates.append(w)
+                            seen_titles.add(title_norm)
+            except Exception:
+                pass
+
+        if len(candidates) < 3:
             raise ValueError(
-                f"Could not retrieve at least 3 real, unique publications from OpenAlex matching search query '{search_term}'. Found only {len(papers)}."
+                f"Could not retrieve at least 3 real, unique publications from OpenAlex/arXiv matching queries '{search_queries}'."
             )
 
-        feed_items = []
-        for i, paper in enumerate(papers[:3]):
+        # Build user profile string for semantic similarity
+        user_profile_text = " ".join(user_titles) + " " + " ".join(combined_concepts)
+
+        # Score and sort candidates
+        scored_candidates = []
+        for w in candidates:
+            primary_loc = w.get("primary_location") or {}
+            source_obj = primary_loc.get("source") or {} if primary_loc else {}
+            journal = source_obj.get("display_name") or ""
+            is_prest = is_prestigious_journal(journal)
+            is_rel = is_work_relevant_to_discipline(w, discipline)
+            citations = w.get("cited_by_count") or 0
+
+            # Dynamic semantic similarity score
+            w_abstract = w.get("abstract") or w.get("_custom_abstract") or ""
+            if not w_abstract and w.get("abstract_inverted_index"):
+                w_abstract = self._reconstruct_abstract(w["abstract_inverted_index"])
+
+            similarity_score = self._compute_semantic_similarity(
+                user_profile_text,
+                w.get("title", ""),
+                w_abstract
+            )
+
+            scored_candidates.append({
+                "work": w,
+                "is_prestigious": is_prest,
+                "is_relevant": is_rel,
+                "citations": citations,
+                "similarity_score": similarity_score
+            })
+
+        # Sorting strategy:
+        # 1. Relevance: is_relevant (True vs False)
+        # 2. Semantic similarity_score (descending)
+        # 3. Recency: publication_date (descending)
+        # 4. Prestige: is_prestigious (True vs False)
+        # 5. Citations: citations (descending)
+        def get_sort_key(item):
+            rel = 1 if item["is_relevant"] else 0
+            sim_score = item["similarity_score"]
+            pub_date = item["work"].get("publication_date") or "1970-01-01"
+            prest = 1 if item["is_prestigious"] else 0
+            citations = item["citations"]
+            return (rel, sim_score, pub_date, prest, citations)
+
+        scored_candidates.sort(key=get_sort_key, reverse=True)
+        papers = [item["work"] for item in scored_candidates[:3]]
+
+
+        async def process_paper(i: int, paper: Dict[str, Any]) -> Dict[str, Any]:
             title = paper.get("title", "Untitled Research Paper")
             authors = [
                 a.get("author", {}).get("display_name", "Unknown")
                 for a in paper.get("authorships", [])
             ][:3]
-            journal = (
-                paper.get("primary_location", {}).get("source", {}).get("display_name")
-                or "Scientific Journal"
-            )
+            primary_loc = paper.get("primary_location") or {}
+            source_obj = primary_loc.get("source") or {} if primary_loc else {}
+            journal = source_obj.get("display_name")
+            if not journal:
+                doi_val = paper.get("doi") or ""
+                pdf_val = primary_loc.get("pdf_url") or ""
+                landing_val = primary_loc.get("landing_page_url") or ""
+                if "arxiv" in doi_val.lower() or "arxiv.org" in pdf_val.lower() or "arxiv.org" in landing_val.lower():
+                    journal = "arXiv Preprint"
+                else:
+                    concepts_list = paper.get("concepts") or paper.get("topics") or []
+                    if concepts_list and isinstance(concepts_list, list):
+                        journal = concepts_list[0].get("display_name")
+                    if not journal:
+                        journal = "Scientific Journal"
             year = paper.get("publication_year") or 2025
             doi = paper.get("doi")
             openalex_id = paper.get("id")
@@ -789,14 +1144,18 @@ class PipelineServices:
                     "recommendation_reason", "Recommended historical literature."
                 )
             else:
-                if is_llm_working():
-                    meta = await self.extract_metadata_via_llm(title, abstract)
-                else:
-                    meta = extract_metadata_from_abstract(title, abstract)
-
                 relevance_score = 90 - i * 3
                 recommendation_reason = "Recommended based on your research profile."
-                if is_llm_working() and concepts:
+                llm_ok = is_llm_working()
+                
+                meta_task = None
+                if llm_ok:
+                    meta_task = asyncio.create_task(
+                        self.extract_metadata_via_llm(title, abstract)
+                    )
+                
+                reason_task = None
+                if llm_ok and concepts:
                     messages = [
                         {
                             "role": "user",
@@ -808,35 +1167,71 @@ class PipelineServices:
                             ),
                         }
                     ]
-                    try:
-                        response = await self.llm_service.query(
+                    reason_task = asyncio.create_task(
+                        self.llm_service.query(
                             messages=messages,
                             models=[self.model],
                             temperature=0.5,
                             max_tokens=50,
                         )
-                        if response.content:
-                            recommendation_reason = response.content.strip()
-                    except Exception as e:
-                        print(f"Daily feed reason generation failed: {e}", flush=True)
+                    )
 
-            feed_items.append(
-                {
-                    "id": openalex_id,
-                    "title": title,
-                    "authors": authors,
-                    "journal": journal,
-                    "year": year,
-                    "publication_date": publication_date,
-                    "relevance_score": relevance_score,
-                    "recommendation_reason": recommendation_reason,
-                    "doi": doi,
-                    "abstract": abstract,
-                    "methodology": meta.get("methodology", ""),
-                    "tools_used": meta.get("tools_used", []),
-                    "key_findings": meta.get("key_findings", ""),
-                }
-            )
+                if meta_task and reason_task:
+                    try:
+                        meta_res, reason_res = await asyncio.gather(
+                            meta_task, reason_task, return_exceptions=True
+                        )
+                        if isinstance(meta_res, Exception):
+                            print(f"Error in metadata task: {meta_res}", flush=True)
+                            meta = extract_metadata_from_abstract(title, abstract)
+                        else:
+                            meta = meta_res or extract_metadata_from_abstract(title, abstract)
+
+                        if isinstance(reason_res, Exception):
+                            print(f"Error in recommendation reason task: {reason_res}", flush=True)
+                        elif reason_res and reason_res.content:
+                            recommendation_reason = reason_res.content.strip()
+                    except Exception as e:
+                        print(f"Error in gather for paper {i}: {e}", flush=True)
+                        meta = extract_metadata_from_abstract(title, abstract)
+                elif meta_task:
+                    try:
+                        meta = await meta_task
+                        if not meta:
+                            meta = extract_metadata_from_abstract(title, abstract)
+                    except Exception as e:
+                        print(f"Error awaiting metadata task: {e}", flush=True)
+                        meta = extract_metadata_from_abstract(title, abstract)
+                elif reason_task:
+                    meta = extract_metadata_from_abstract(title, abstract)
+                    try:
+                        reason_res = await reason_task
+                        if reason_res and reason_res.content:
+                            recommendation_reason = reason_res.content.strip()
+                    except Exception as e:
+                        print(f"Error awaiting recommendation reason task: {e}", flush=True)
+                else:
+                    meta = extract_metadata_from_abstract(title, abstract)
+
+            return {
+                "id": openalex_id,
+                "title": title,
+                "authors": authors,
+                "journal": journal,
+                "year": year,
+                "publication_date": publication_date,
+                "relevance_score": relevance_score,
+                "recommendation_reason": recommendation_reason,
+                "doi": doi,
+                "abstract": abstract,
+                "methodology": meta.get("methodology", ""),
+                "tools_used": meta.get("tools_used", []),
+                "key_findings": meta.get("key_findings", ""),
+            }
+
+        tasks = [process_paper(i, paper) for i, paper in enumerate(papers[:3])]
+        feed_items = list(await asyncio.gather(*tasks))
+
         if feed_items:
             try:
                 await self._save_to_postgres(cache_key, {"items": feed_items})
@@ -972,8 +1367,7 @@ class PipelineServices:
                 "url": "https://erc.europa.eu/apply-funding/starting-grant",
             },
         ]
-        scored_grants = []
-        for grant in grants:
+        async def process_grant(grant: Dict[str, Any]) -> Dict[str, Any]:
             grant_field_lower = grant["field"].lower()
             # Compute field overlap: how many author concepts match the grant's field
             field_overlap = sum(
@@ -1026,19 +1420,20 @@ class PipelineServices:
                         rationale = response.content.strip()
                 except Exception as e:
                     print(f"Grant rationale generation failed: {e}", flush=True)
-            scored_grants.append(
-                {
-                    "title": grant["title"],
-                    "agency": grant["agency"],
-                    "agency_color": grant["agency_color"],
-                    "days_left": grant["days_left"],
-                    "amount": grant["amount"],
-                    "field": grant["field"],
-                    "match_score": match_score,
-                    "url": grant["url"],
-                    "rationale": rationale,
-                }
-            )
+            return {
+                "title": grant["title"],
+                "agency": grant["agency"],
+                "agency_color": grant["agency_color"],
+                "days_left": grant["days_left"],
+                "amount": grant["amount"],
+                "field": grant["field"],
+                "match_score": match_score,
+                "url": grant["url"],
+                "rationale": rationale,
+            }
+
+        tasks = [process_grant(grant) for grant in grants]
+        scored_grants = list(await asyncio.gather(*tasks))
         if scored_grants:
             try:
                 await self._save_to_postgres(cache_key, {"items": scored_grants})
@@ -1930,13 +2325,16 @@ class PipelineServices:
                     await self._upsert_researcher_profile(
                         stats["raw_profile"], PROFILE_TTL_DAYS
                     )
+                
+                similarity = self._compute_jaccard_similarity(target_fields, cand_concepts)
+                relevance_val = min(99, max(80, int(80 + similarity * 40 + (d1["joint_count"] * 2))))
                 rec = {
                     "id": auth_id,
                     "name": d1["name"],
                     "institution": d1["institution"],
                     "field": d1.get("field") or "Researcher",
                     "connection_path": f"Co-authored '{d1['shared_paper']}' with {primary_name}",
-                    "relevance_score": min(99, 70 + (d1["joint_count"] * 5)),
+                    "relevance_score": relevance_val,
                     "papers_collaborated": d1["joint_count"],
                     "total_publications": total_pubs,
                     "h_index": h_idx,
@@ -1956,14 +2354,17 @@ class PipelineServices:
                     await self._upsert_researcher_profile(
                         stats["raw_profile"], PROFILE_TTL_DAYS
                     )
+
+                similarity = self._compute_jaccard_similarity(target_fields, cand_concepts)
+                relevance_val = min(99, max(60, int(60 + similarity * 100)))
                 rec = {
                     "id": auth_id,
                     "name": d2["name"],
                     "institution": d2["institution"],
                     "field": d2["field"],
                     "connection_path": d2["connection_path"],
-                    "relevance_score": 75,
-                    "papers_collaborated": 1,
+                    "relevance_score": relevance_val,
+                    "papers_collaborated": 0,
                     "total_publications": total_pubs,
                     "h_index": h_idx,
                     "depth": 2,

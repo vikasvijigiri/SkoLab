@@ -7,6 +7,7 @@ import com.company.skolab.model.PaperIntelligence
 import com.company.skolab.network.ApiService
 import com.company.skolab.network.OpenAlexWork
 import com.company.skolab.network.reconstructAbstract
+import com.company.skolab.network.getJournalOrFallback
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -103,7 +104,7 @@ class PaperViewModel(private val apiService: ApiService = com.company.skolab.di.
                     if (id != null) "$name|$id" else name
                 } else null
             } ?: emptyList(),
-            journal = work.primary_location?.source?.display_name ?: "Unknown Journal",
+            journal = work.getJournalOrFallback(),
             year = work.publication_year ?: 0,
             domain = work.primary_topic?.field?.display_name ?: "General Science",
             subDomain = work.primary_topic?.display_name ?: "Research",

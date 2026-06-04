@@ -14,6 +14,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.background
+import android.animation.ValueAnimator
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
@@ -131,13 +138,22 @@ class MainActivity : ComponentActivity() {
             android.util.Log.e("MainActivity", "Failed to disable Firestore persistence", e)
         }
 
+        userPrefsForTheme = UserPreferences(applicationContext)
+        SkoLabAnalytics.initSessionRecorder()
         setContent {
-            SkoLabTheme {
+            val dynamicColor by userPrefsForTheme.dynamicColorEnabled.collectAsStateWithLifecycle(
+                initialValue = false,
+                lifecycleOwner = this
+            )
+            SkoLabTheme(dynamicColor = dynamicColor) {
                 SkoLabMainApp()
             }
         }
     }
 }
+
+// Hoisted so setContent can observe it without triggering recompositions inside the NavHost.
+private lateinit var userPrefsForTheme: com.company.skolab.data.UserPreferences
 
 @Composable
 fun SkoLabMainApp() {
@@ -145,6 +161,19 @@ fun SkoLabMainApp() {
     // Use application-scoped singletons — do NOT construct new instances here.
     val authManager = AppDependencies.authManager
     val userPrefs = remember { UserPreferences(context) }
+    val appTheme by userPrefs.appTheme.collectAsStateWithLifecycle(initialValue = "SYSTEM")
+    androidx.compose.runtime.LaunchedEffect(appTheme) {
+        com.company.skolab.ui.theme.darkThemeOverrideState = when (appTheme) {
+            "LIGHT" -> false
+            "DARK" -> true
+            else -> null
+        }
+    }
+    // Increment session count once per cold start for NPS trigger eligibility.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        userPrefs.incrementSessionCount()
+    }
+
     val scope = rememberCoroutineScope()
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -323,19 +352,49 @@ fun SkoLabMainApp() {
                                 navController = navController,
                                 startDestination = startRoute!!,
                                 modifier = Modifier.fillMaxSize(),
-                                // Push forward: clean 200ms fade — feels deliberate
-                                enterTransition = { fadeIn(animationSpec = tween(200, easing = EaseOutCubic)) },
-                                exitTransition = { fadeOut(animationSpec = tween(120, easing = EaseOutCubic)) },
-                                // Back: MD3 spec — returning destinations appear instantly.
-                                // The outgoing screen's exit handles the animation feel.
-                                // This eliminates the "bars appear before content" gap.
-                                popEnterTransition = { androidx.compose.animation.EnterTransition.None },
-                                popExitTransition = { fadeOut(animationSpec = tween(120, easing = EaseOutCubic)) }
+                                // Push forward: directional horizontal slide metaphor (slide left)
+                                enterTransition = {
+                                    if (ValueAnimator.areAnimatorsEnabled()) {
+                                        slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300, easing = EaseOutCubic)) +
+                                        fadeIn(animationSpec = tween(300, easing = EaseOutCubic))
+                                    } else {
+                                        EnterTransition.None
+                                    }
+                                },
+                                exitTransition = {
+                                    if (ValueAnimator.areAnimatorsEnabled()) {
+                                        slideOutHorizontally(targetOffsetX = { -it }, animationSpec = tween(300, easing = EaseOutCubic)) +
+                                        fadeOut(animationSpec = tween(150, easing = EaseOutCubic))
+                                    } else {
+                                        ExitTransition.None
+                                    }
+                                },
+                                // Back: directional horizontal slide metaphor (slide right)
+                                popEnterTransition = {
+                                    if (ValueAnimator.areAnimatorsEnabled()) {
+                                        slideInHorizontally(initialOffsetX = { -it }, animationSpec = tween(300, easing = EaseOutCubic)) +
+                                        fadeIn(animationSpec = tween(300, easing = EaseOutCubic))
+                                    } else {
+                                        EnterTransition.None
+                                    }
+                                },
+                                popExitTransition = {
+                                    if (ValueAnimator.areAnimatorsEnabled()) {
+                                        slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(300, easing = EaseOutCubic)) +
+                                        fadeOut(animationSpec = tween(150, easing = EaseOutCubic))
+                                    } else {
+                                        ExitTransition.None
+                                    }
+                                }
                             ) {
                 composable(
                     route = "splash",
                     exitTransition = {
-                        fadeOut(animationSpec = tween(400, easing = EaseOutCubic))
+                        if (ValueAnimator.areAnimatorsEnabled()) {
+                            fadeOut(animationSpec = tween(300, easing = EaseOutCubic))
+                        } else {
+                            ExitTransition.None
+                        }
                     }
                 ) {
                     if (hasSeenOnboardingState == null) {
@@ -363,7 +422,11 @@ fun SkoLabMainApp() {
                 composable(
                     route = "onboarding",
                     enterTransition = {
-                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                        if (ValueAnimator.areAnimatorsEnabled()) {
+                            fadeIn(animationSpec = tween(300, easing = EaseOutCubic))
+                        } else {
+                            EnterTransition.None
+                        }
                     }
                 ) {
                     Box(
@@ -389,7 +452,11 @@ fun SkoLabMainApp() {
                 composable(
                     route = "auth",
                     enterTransition = {
-                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                        if (ValueAnimator.areAnimatorsEnabled()) {
+                            fadeIn(animationSpec = tween(300, easing = EaseOutCubic))
+                        } else {
+                            EnterTransition.None
+                        }
                     }
                 ) {
                     Box(
@@ -410,7 +477,11 @@ fun SkoLabMainApp() {
                 composable(
                     route = "profile_setup",
                     enterTransition = {
-                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                        if (ValueAnimator.areAnimatorsEnabled()) {
+                            fadeIn(animationSpec = tween(300, easing = EaseOutCubic))
+                        } else {
+                            EnterTransition.None
+                        }
                     }
                 ) {
                     Box(
@@ -550,7 +621,11 @@ fun SkoLabMainApp() {
                 composable(
                     route = "profile",
                     enterTransition = {
-                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                        if (ValueAnimator.areAnimatorsEnabled()) {
+                            fadeIn(animationSpec = tween(300, easing = EaseOutCubic))
+                        } else {
+                            EnterTransition.None
+                        }
                     }
                 ) {
                     Box(
@@ -572,7 +647,11 @@ fun SkoLabMainApp() {
                 composable(
                     route = "pro_workspace",
                     enterTransition = {
-                        fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
+                        if (ValueAnimator.areAnimatorsEnabled()) {
+                            fadeIn(animationSpec = tween(300, easing = EaseOutCubic))
+                        } else {
+                            EnterTransition.None
+                        }
                     }
                 ) {
                     Box(
@@ -653,10 +732,20 @@ fun SkoLabMainApp() {
                 composable(
                     route = "create_project",
                     enterTransition = {
-                        androidx.compose.animation.slideInVertically(initialOffsetY = { fullHeight -> fullHeight }, animationSpec = androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.EaseOutCubic))
+                        if (ValueAnimator.areAnimatorsEnabled()) {
+                            slideInVertically(initialOffsetY = { it }, animationSpec = tween(300, easing = EaseOutCubic)) +
+                            fadeIn(animationSpec = tween(300, easing = EaseOutCubic))
+                        } else {
+                            EnterTransition.None
+                        }
                     },
                     exitTransition = {
-                        androidx.compose.animation.slideOutVertically(targetOffsetY = { fullHeight -> fullHeight }, animationSpec = androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.EaseOutCubic))
+                        if (ValueAnimator.areAnimatorsEnabled()) {
+                            slideOutVertically(targetOffsetY = { it }, animationSpec = tween(300, easing = EaseOutCubic)) +
+                            fadeOut(animationSpec = tween(150, easing = EaseOutCubic))
+                        } else {
+                            ExitTransition.None
+                        }
                     }
                 ) {
                     Box(modifier = Modifier.fillMaxSize().screenSafeArea(includeBottom = true).padding(bottom = scaffoldPadding.calculateBottomPadding())) {
@@ -668,10 +757,20 @@ fun SkoLabMainApp() {
                 composable(
                     route = "invite_member/{projectId}",
                     enterTransition = {
-                        androidx.compose.animation.slideInVertically(initialOffsetY = { fullHeight -> fullHeight }, animationSpec = androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.EaseOutCubic))
+                        if (ValueAnimator.areAnimatorsEnabled()) {
+                            slideInVertically(initialOffsetY = { it }, animationSpec = tween(300, easing = EaseOutCubic)) +
+                            fadeIn(animationSpec = tween(300, easing = EaseOutCubic))
+                        } else {
+                            EnterTransition.None
+                        }
                     },
                     exitTransition = {
-                        androidx.compose.animation.slideOutVertically(targetOffsetY = { fullHeight -> fullHeight }, animationSpec = androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.EaseOutCubic))
+                        if (ValueAnimator.areAnimatorsEnabled()) {
+                            slideOutVertically(targetOffsetY = { it }, animationSpec = tween(300, easing = EaseOutCubic)) +
+                            fadeOut(animationSpec = tween(150, easing = EaseOutCubic))
+                        } else {
+                            ExitTransition.None
+                        }
                     }
                 ) { backStackEntry ->
                     val projectId = backStackEntry.arguments?.getString("projectId")?.decodeFromRoute() ?: ""
@@ -685,10 +784,20 @@ fun SkoLabMainApp() {
                 composable(
                     route = "create_task/{projectId}",
                     enterTransition = {
-                        androidx.compose.animation.slideInVertically(initialOffsetY = { fullHeight -> fullHeight }, animationSpec = androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.EaseOutCubic))
+                        if (ValueAnimator.areAnimatorsEnabled()) {
+                            slideInVertically(initialOffsetY = { it }, animationSpec = tween(300, easing = EaseOutCubic)) +
+                            fadeIn(animationSpec = tween(300, easing = EaseOutCubic))
+                        } else {
+                            EnterTransition.None
+                        }
                     },
                     exitTransition = {
-                        androidx.compose.animation.slideOutVertically(targetOffsetY = { fullHeight -> fullHeight }, animationSpec = androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.EaseOutCubic))
+                        if (ValueAnimator.areAnimatorsEnabled()) {
+                            slideOutVertically(targetOffsetY = { it }, animationSpec = tween(300, easing = EaseOutCubic)) +
+                            fadeOut(animationSpec = tween(150, easing = EaseOutCubic))
+                        } else {
+                            ExitTransition.None
+                        }
                     }
                 ) { backStackEntry ->
                     val projectId = backStackEntry.arguments?.getString("projectId")?.decodeFromRoute() ?: ""
@@ -713,10 +822,20 @@ fun SkoLabMainApp() {
                 composable(
                     route = "external_invite/{collaboratorName}",
                     enterTransition = {
-                        androidx.compose.animation.slideInVertically(initialOffsetY = { fullHeight -> fullHeight }, animationSpec = androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.EaseOutCubic))
+                        if (ValueAnimator.areAnimatorsEnabled()) {
+                            slideInVertically(initialOffsetY = { it }, animationSpec = tween(300, easing = EaseOutCubic)) +
+                            fadeIn(animationSpec = tween(300, easing = EaseOutCubic))
+                        } else {
+                            EnterTransition.None
+                        }
                     },
                     exitTransition = {
-                        androidx.compose.animation.slideOutVertically(targetOffsetY = { fullHeight -> fullHeight }, animationSpec = androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.EaseOutCubic))
+                        if (ValueAnimator.areAnimatorsEnabled()) {
+                            slideOutVertically(targetOffsetY = { it }, animationSpec = tween(300, easing = EaseOutCubic)) +
+                            fadeOut(animationSpec = tween(150, easing = EaseOutCubic))
+                        } else {
+                            ExitTransition.None
+                        }
                     }
                 ) { backStackEntry ->
                     val collaboratorName = backStackEntry.arguments?.getString("collaboratorName")?.decodeFromRoute() ?: ""

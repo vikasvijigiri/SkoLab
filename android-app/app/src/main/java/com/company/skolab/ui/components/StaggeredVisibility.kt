@@ -24,8 +24,9 @@ fun StaggeredVisibility(
     content: @Composable () -> Unit
 ) {
     var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        // No delay — content is visible immediately on the next frame
+    LaunchedEffect(index) {
+        // Content appears progressively with 50ms stagger
+        kotlinx.coroutines.delay(index * 50L)
         visible = true
     }
     AnimatedVisibility(

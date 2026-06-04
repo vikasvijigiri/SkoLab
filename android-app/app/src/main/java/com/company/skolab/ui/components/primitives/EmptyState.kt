@@ -57,9 +57,14 @@ fun ErrorState(
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(text = "Something went wrong", style = Typography.titleMedium, color = SkoLabTextPrimary)
+        Text(text = "Hmm, that didn't load.", style = Typography.titleMedium, color = SkoLabTextPrimary)
         Spacer(modifier = Modifier.height(8.dp))
-        Text(text = message, style = Typography.bodyMedium, color = SkoLabTextSecondary, textAlign = TextAlign.Center)
+        val displayMessage = if (message.contains("timed out", ignoreCase = true) || message.contains("failed", ignoreCase = true)) {
+            "Check your connection and try again."
+        } else {
+            message
+        }
+        Text(text = displayMessage, style = Typography.bodyMedium, color = SkoLabTextSecondary, textAlign = TextAlign.Center)
         if (onRetry != null) {
             Spacer(modifier = Modifier.height(16.dp))
             SkoLabOutlinedButton(text = "Try again", onClick = onRetry)

@@ -73,6 +73,31 @@ fun OpenAlexWork.reconstructAbstract(): String {
     }
 }
 
+fun OpenAlexWork.getJournalOrFallback(): String {
+    val sourceName = primary_location?.source?.display_name
+    if (!sourceName.isNullOrBlank()) return sourceName
+    
+    // Check if it's an arXiv preprint
+    val doiStr = doi ?: ""
+    val pdf = primary_location?.pdf_url ?: ""
+    val landing = primary_location?.landing_page_url ?: ""
+    if (doiStr.contains("arXiv", ignoreCase = true) || 
+        pdf.contains("arxiv.org", ignoreCase = true) || 
+        landing.contains("arxiv.org", ignoreCase = true)) {
+        return "arXiv Preprint"
+    }
+    
+    // Fall back to primary topic or field name
+    val topicName = primary_topic?.display_name
+    if (!topicName.isNullOrBlank()) return topicName
+    
+    val fieldName = primary_topic?.field?.display_name
+    if (!fieldName.isNullOrBlank()) return fieldName
+    
+    return "Academic Publication"
+}
+
+
 @Serializable
 data class OpenAlexTopic(
     val display_name: String? = null,
@@ -189,7 +214,8 @@ data class AuthorSuggestion(
     val institution: String,
     val field_of_study: String? = null,
     val h_index: Int? = null,
-    val innovation_score: Int? = null
+    val innovation_score: Int? = null,
+    val works_count: Int? = null
 )
 
 @Serializable

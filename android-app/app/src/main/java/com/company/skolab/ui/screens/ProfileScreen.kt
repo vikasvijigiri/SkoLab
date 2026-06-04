@@ -233,6 +233,9 @@ fun ProfileContent(
     // Use application-scoped singletons — do NOT create new instances per composable.
     val authManager = AppDependencies.authManager
     val apiService = AppDependencies.apiService
+    val userPrefs = remember { com.company.skolab.data.UserPreferences(context) }
+    val currentTheme by userPrefs.appTheme.collectAsStateWithLifecycle(initialValue = "SYSTEM")
+    val dynamicColorEnabled by userPrefs.dynamicColorEnabled.collectAsStateWithLifecycle(initialValue = false)
     var aiProfile by remember { mutableStateOf<com.company.skolab.network.AuthorResponse?>(null) }
     var isLoadingProfile by remember { mutableStateOf(false) }
     var showEditFocusDialog by remember { mutableStateOf(false) }
@@ -972,6 +975,125 @@ fun ProfileContent(
                 }
                 HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
             }
+
+            // ── 7.5. Preferences & Theme Settings ──────────────────────────────
+            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+                Text("App Settings", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                Surface(
+                    color = BgCard,
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, BorderLight),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("App Theme", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                                val themeText = when (currentTheme) {
+                                    "LIGHT" -> "Force Light Mode"
+                                    "DARK" -> "Force Dark Mode"
+                                    else -> "Follows Android System"
+                                }
+                                Text(themeText, fontSize = 11.sp, color = TextMuted)
+                            }
+                            
+                            var expandedThemeMenu by remember { mutableStateOf(false) }
+                            Box {
+                                OutlinedButton(
+                                    onClick = { expandedThemeMenu = true },
+                                    border = BorderStroke(1.dp, AccentTeal),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = when (currentTheme) {
+                                            "LIGHT" -> "Light"
+                                            "DARK" -> "Dark"
+                                            else -> "System"
+                                        },
+                                        color = AccentTeal,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                
+                                DropdownMenu(
+                                    expanded = expandedThemeMenu,
+                                    onDismissRequest = { expandedThemeMenu = false },
+                                    modifier = Modifier.background(BgCard)
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Follow System", color = TextPrimary) },
+                                        onClick = {
+                                            scope.launch {
+                                                userPrefs.setAppTheme("SYSTEM")
+                                            }
+                                            expandedThemeMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Light Mode", color = TextPrimary) },
+                                        onClick = {
+                                            scope.launch {
+                                                userPrefs.setAppTheme("LIGHT")
+                                            }
+                                            expandedThemeMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Dark Mode", color = TextPrimary) },
+                                        onClick = {
+                                            scope.launch {
+                                                userPrefs.setAppTheme("DARK")
+                                            }
+                                            expandedThemeMenu = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(color = BorderLight, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 8.dp))
+
+                        // Dynamic Color (Monet) toggle — Android 12+ only
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Dynamic Color (Monet)", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                                Text(
+                                    text = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S)
+                                        "Colours extracted from your wallpaper"
+                                    else
+                                        "Requires Android 12+",
+                                    fontSize = 11.sp,
+                                    color = TextMuted
+                                )
+                            }
+                            Switch(
+                                checked = dynamicColorEnabled,
+                                onCheckedChange = { enabled ->
+                                    scope.launch { userPrefs.setDynamicColorEnabled(enabled) }
+                                },
+                                enabled = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S,
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = AccentTeal,
+                                    checkedTrackColor = AccentTeal.copy(alpha = 0.3f)
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
 
             // ── 8. Sign Out ───────────────────────────────────────────────────
             Column(

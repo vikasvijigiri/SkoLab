@@ -203,8 +203,9 @@ fun SignInForm(authManager: AuthManager, onAuthSuccess: () -> Unit) {
     var localError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    val isEmailValid = email.isNotEmpty() && email.contains("@") && email.contains(".")
-    val isPasswordValid = password.length >= 6
+    val emailPattern = remember { Regex("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\$") }
+    val isEmailValid = email.isNotEmpty() && emailPattern.matches(email.trim())
+    val isPasswordValid = password.length >= 6 && password.any { it.isDigit() } && password.any { it.isLetter() }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         SkoLabTextField(
@@ -263,12 +264,12 @@ fun SignInForm(authManager: AuthManager, onAuthSuccess: () -> Unit) {
                 val cleanPassword = password.trim()
                 var hasError = false
                 
-                if (cleanEmail.isEmpty() || !cleanEmail.contains("@") || !cleanEmail.contains(".")) {
+                if (!isEmailValid) {
                     emailError = "Please enter a valid email address."
                     hasError = true
                 }
-                if (cleanPassword.isEmpty() || cleanPassword.length < 6) {
-                    passwordError = "Password must be at least 6 characters."
+                if (!isPasswordValid) {
+                    passwordError = "Password must be at least 6 characters and contain both letters and numbers."
                     hasError = true
                 }
                 
@@ -326,8 +327,9 @@ fun RegisterForm(authManager: AuthManager, onAuthSuccess: () -> Unit) {
     val domains = listOf("Physics", "Biology", "Computer Science", "AI", "Genetics", "Neuroscience", "Economics")
 
     val isNameValid = fullName.trim().isNotEmpty()
-    val isEmailValid = email.isNotEmpty() && email.contains("@") && email.contains(".")
-    val isPasswordValid = password.length >= 6
+    val emailPattern = remember { Regex("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\$") }
+    val isEmailValid = email.isNotEmpty() && emailPattern.matches(email.trim())
+    val isPasswordValid = password.length >= 6 && password.any { it.isDigit() } && password.any { it.isLetter() }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         SkoLabTextField(
@@ -453,12 +455,12 @@ fun RegisterForm(authManager: AuthManager, onAuthSuccess: () -> Unit) {
                     nameError = "Please enter your full name."
                     hasError = true
                 }
-                if (cleanEmail.isEmpty() || !cleanEmail.contains("@") || !cleanEmail.contains(".")) {
+                if (!isEmailValid) {
                     emailError = "Please enter a valid email address."
                     hasError = true
                 }
-                if (cleanPassword.isEmpty() || cleanPassword.length < 6) {
-                    passwordError = "Password must be at least 6 characters."
+                if (!isPasswordValid) {
+                    passwordError = "Password must be at least 6 characters and contain both letters and numbers."
                     hasError = true
                 }
                 if (selectedDomain == "Select Domain") {

@@ -156,6 +156,20 @@ object SkoLabAnalytics {
         log("profile_screen_opened", screen = "profile_screen")
     }
 
+    // ── NPS ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * Logs the user's NPS (Net Promoter Score) response.
+     * @param score The NPS score chosen by the user (0–10).
+     * @param feedback Optional free-text feedback (detractors only).
+     */
+    fun logNpsSubmitted(score: Int, feedback: String) {
+        log("nps_submitted", screen = "discovery_screen") {
+            putInt("score", score)
+            if (feedback.isNotBlank()) putString("feedback", feedback.take(500))
+        }
+    }
+
     // ── Internal helper ────────────────────────────────────────────────────────
 
     /**
@@ -177,4 +191,49 @@ object SkoLabAnalytics {
             // Safe fallback if Crashlytics is not initialized
         }
     }
+
+    /**
+     * Deterministically assigns and returns a variant ("A" or "B") for the given [testId]
+     * based on a hash of the user's ID to ensure variant persistence across sessions.
+     */
+    fun getAbTestVariant(testId: String): String {
+        val uid = try { 
+            com.company.skolab.di.AppDependencies.authManager.currentUser?.uid 
+        } catch (_: Exception) { 
+            null 
+        }
+        if (uid.isNullOrBlank()) return "A" // fallback to baseline variant
+        val hash = (uid + testId).hashCode().let { if (it == Int.MIN_VALUE) 0 else Math.abs(it) }
+        val variant = if (hash % 2 == 0) "A" else "B"
+        logAbTestVariant(testId, variant)
+        return variant
+    }
+
+    /**
+     * Initialises session recording hooks.
+     *
+     * Currently a stub that:
+     * 1. Logs a `session_started` analytics event so session duration can be computed.
+     * 2. Adds a Crashlytics breadcrumb for crash attribution.
+     *
+     * Replace the body with your preferred session-replay SDK (e.g., FullStory, LogRocket)
+     * once the integration contract is finalized.
+     *
+     * Should be called once per [com.company.skolab.MainActivity.onCreate].
+     */
+    fun initSessionRecorder() {
+        log("session_started", screen = "app_launch")
+        try {
+            com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance()
+                .log("Session started — SkoLabAnalytics.initSessionRecorder()")
+        } catch (_: Exception) { /* Crashlytics not available in test builds */ }
+    }
+
+    private fun logAbTestVariant(testId: String, variant: String) {
+        log("ab_test_assigned", screen = "global") {
+            putString("test_id", testId)
+            putString("variant", variant)
+        }
+    }
 }
+

@@ -464,6 +464,7 @@ fun ScoopShieldTab(isEnabled: Boolean) {
             }
         }
     }
+    var showNotificationRationaleDialog by remember { mutableStateOf(false) }
 
     var emailAlertsEnabled by remember { mutableStateOf(true) }
     
@@ -694,7 +695,7 @@ fun ScoopShieldTab(isEnabled: Boolean) {
                                                 com.company.skolab.utils.SkoLabNotificationManager.showReminderNotification(context)
                                             }
                                         } else {
-                                            permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                            showNotificationRationaleDialog = true
                                         }
                                     } else {
                                         scope.launch {
@@ -716,6 +717,45 @@ fun ScoopShieldTab(isEnabled: Boolean) {
                 }
             }
         }
+    }
+
+    if (showNotificationRationaleDialog) {
+        AlertDialog(
+            onDismissRequest = { showNotificationRationaleDialog = false },
+            title = {
+                Text(
+                    text = "Enable Push Notifications",
+                    style = Typography.titleLarge,
+                    color = SkoLabTextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "SkoLab needs notifications permission to alert you instantly when draft protection conflicts are found or when you receive responses in research chats.",
+                    style = Typography.bodyMedium,
+                    color = SkoLabTextSecondary
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showNotificationRationaleDialog = false
+                        permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = SkoLabPrimary)
+                ) {
+                    Text("Enable", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNotificationRationaleDialog = false }) {
+                    Text("Not Now", color = SkoLabTextSecondary)
+                }
+            },
+            containerColor = SkoLabSurfaceElevated,
+            shape = RoundedCornerShape(16.dp)
+        )
     }
 }
 
