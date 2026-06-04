@@ -94,12 +94,23 @@ fun DiscoveryScreen(
     val cachedUser by authManager.cachedUser.collectAsStateWithLifecycle(initialValue = null)
 
     val userName = if (!cachedUser?.name.isNullOrBlank()) cachedUser?.name!! else "SkoLab User"
-    val researchFocus = if (!cachedUser?.researchFocus.isNullOrBlank() && 
-        cachedUser?.researchFocus != "Researcher" && 
+    val researchFocus = if (!cachedUser?.researchFocus.isNullOrBlank() &&
+        cachedUser?.researchFocus != "Researcher" &&
         cachedUser?.researchFocus != "General Research") {
         cachedUser?.researchFocus!!
     } else {
         ""
+    }
+
+    // ── NPS & session state ──────────────────────────────────────────────────
+    val userPrefs = remember { com.company.skolab.data.UserPreferences(context) }
+    val sessionCount by userPrefs.sessionCount.collectAsStateWithLifecycle(initialValue = 0)
+    val npsShown by userPrefs.npsShown.collectAsStateWithLifecycle(initialValue = false)
+    var showNpsDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(sessionCount, npsShown) {
+        if (sessionCount >= 5 && !npsShown) {
+            showNpsDialog = true
+        }
     }
 
     var authorQuery by remember { mutableStateOf("") }
@@ -433,6 +444,94 @@ fun DiscoveryScreen(
                     }
                 }
             }
+        }
+
+        // NPS survey dialog — shown once at session >= 5
+        if (showNpsDialog) {
+            var npsScore by remember { mutableStateOf(-1) }
+            var npsText by remember { mutableStateOf("") }
+            AlertDialog(
+                onDismissRequest = {
+                    showNpsDialog = false
+                    scope.launch { userPrefs.setNpsShown(true) }
+                },
+                containerColor = BgCard,
+                shape = RoundedCornerShape(20.dp),
+                title = {
+                    Column {
+                        Text("How likely are you to recommend SkoLab?", fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 16.sp)
+                        Text("0 = Not at all  •  10 = Definitely", color = TextMuted, fontSize = 11.sp)
+                    }
+                },
+                text = {
+                    Column {
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            (0..10).forEach { score ->
+                                val selected = npsScore == score
+                                val color = when {
+                                    score <= 6 -> AccentRose
+                                    score <= 8 -> AccentAmber
+                                    else -> AccentEmerald
+                                }
+                                Surface(
+                                    onClick = { npsScore = score },
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (selected) color else color.copy(alpha = 0.12f),
+                                    border = BorderStroke(1.dp, color.copy(alpha = if (selected) 1f else 0.25f)),
+                                    modifier = Modifier.weight(1f).aspectRatio(1f)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = score.toString(),
+                                            color = if (selected) Color.White else color,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        if (npsScore in 0..6) {
+                            Spacer(Modifier.height(10.dp))
+                            OutlinedTextField(
+                                value = npsText,
+                                onValueChange = { npsText = it },
+                                placeholder = { Text("What could we improve?", fontSize = 12.sp) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                singleLine = false,
+                                maxLines = 3
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                userPrefs.setNpsShown(true)
+                                if (npsScore >= 0) {
+                                    SkoLabAnalytics.logNpsSubmitted(npsScore, npsText)
+                                }
+                            }
+                            showNpsDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
+                        shape = RoundedCornerShape(10.dp),
+                        enabled = npsScore >= 0
+                    ) { Text("Submit") }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showNpsDialog = false
+                        scope.launch { userPrefs.setNpsShown(true) }
+                    }) { Text("Skip", color = TextMuted) }
+                }
+            )
         }
     }
 }
@@ -2374,6 +2473,15 @@ fun DiscoveryDashboard(
             DiscoveryCategory("Trends",   "Rising Fields",    Icons.AutoMirrored.Filled.TrendingUp, AccentAmber)
         )
     }
+    // Time-based greeting computed locally in this composable
+    val greeting = remember {
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        when {
+            hour < 12 -> "Good morning,"
+            hour < 17 -> "Good afternoon,"
+            else      -> "Good evening,"
+        }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(BgPrimary),
@@ -2393,7 +2501,7 @@ fun DiscoveryDashboard(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "Welcome back,",
+                            text = greeting,
                             color = TextMuted,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium

@@ -15,4 +15,28 @@
     <string name="brand_contact_email">hello@skolab.app</string>
     
     <string name="default_web_client_id" translatable="false" />
+
+    <!-- Onboarding Screen Strings -->
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_papers_published">papers published every year</string>
+    <string name="onboarding_impact_score">IMPACT SCORE</string>
+    <string name="onboarding_frontier_intelligence">Frontier Intelligence</string>
+    <string name="onboarding_disruption_title">Disruption Score</string>
+    <string name="onboarding_disruption_desc">Measures paradigm shift</string>
+    <string name="onboarding_novelty_title">Semantic Novelty</string>
+    <string name="onboarding_novelty_desc">Measures conceptual distance</string>
+    <string name="onboarding_velocity_title">Citation Velocity</string>
+    <string name="onboarding_velocity_desc">Measures acceleration</string>
+    <string name="onboarding_engine_ready">Pulse Engine Ready</string>
+    <string name="onboarding_frontier_analytics">Dynamic Frontier Analytics</string>
+    <string name="onboarding_see_fog">See through the fog.</string>
+    <string name="onboarding_consent">I consent to academic data tracking</string>
+    <string name="onboarding_policy_terms">Privacy Policy &amp; Terms</string>
+    <string name="onboarding_get_started">Get Started</string>
+    <string name="onboarding_legal_title">Legal &amp; Attributions</string>
+    <string name="onboarding_privacy_title">Privacy Policy</string>
+    <string name="onboarding_privacy_body">SkoLab respects your academic data privacy. We collect your research focus and OpenAlex ID solely to personalize feed recommendations and calculate impact metrics. We do not sell your personal data to third parties.</string>
+    <string name="onboarding_terms_title">Terms of Service</string>
+    <string name="onboarding_terms_body">By using SkoLab, you agree to comply with our academic integrity policies. You may not scrape our services or abuse LLM endpoint access.</string>
+    <string name="onboarding_dismiss">Dismiss</string>
 </resources>

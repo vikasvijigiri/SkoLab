@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.company.skolab.network.ApiService
 import com.company.skolab.network.OpenAlexWork
+import com.company.skolab.network.getJournalOrFallback
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -58,7 +59,7 @@ class HomeViewModel(private val api: ApiService = com.company.skolab.di.AppDepen
         return TrendingPaperItem(
             id = id,
             title = title ?: "Untitled",
-            journal = primary_location?.source?.display_name ?: "Unknown Journal",
+            journal = getJournalOrFallback(),
             citedByCount = cited_by_count ?: 0,
             year = publication_year ?: 0,
             field = authorships?.firstOrNull()?.author?.display_name?.let { "Research" } ?: "Science"

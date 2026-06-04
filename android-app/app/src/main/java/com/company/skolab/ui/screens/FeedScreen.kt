@@ -105,7 +105,17 @@ fun FeedScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
-    val listState = rememberLazyListState()
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = viewModel.firstVisibleItemIndex,
+        initialFirstVisibleItemScrollOffset = viewModel.firstVisibleItemScrollOffset
+    )
+
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                viewModel.updateScrollPosition(index, offset)
+            }
+    }
     val haptic = LocalHapticFeedback.current
     var selectedCountryFilter by remember { mutableStateOf("Global") }
     var showSetupFocusDialog by remember { mutableStateOf(false) }
@@ -183,11 +193,21 @@ fun FeedScreen(
             .fillMaxSize()
             .background(EntropiColors.Background)
     ) {
+        var isRefreshing by remember { mutableStateOf(false) }
 
-
-        // Main LazyColumn
-        LazyColumn(
-            state = listState,
+        androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = {
+                scope.launch {
+                    isRefreshing = true
+                    viewModel.loadAllFeedData()
+                    isRefreshing = false
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        ) {
+            LazyColumn(
+                state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 90.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -415,7 +435,7 @@ fun FeedScreen(
                                 items(4) {
                                     Box(
                                         modifier = Modifier
-                                            .size(190.dp, 230.dp)
+                                            .size(190.dp, 270.dp)
                                             .clip(RoundedCornerShape(16.dp))
                                             .background(EntropiColors.Card2)
                                     ) {
@@ -459,8 +479,8 @@ fun FeedScreen(
                                 contentPadding = PaddingValues(horizontal = 20.dp)
                             ) {
                                 itemsIndexed(filteredConnections) { index, conn ->
-                                    // Trigger load more when near end
-                                    if (index >= filteredConnections.size - 2 && !uiState.isLoadingMoreConnections && !uiState.isLoading) {
+                                    // Trigger load more 3 cards before the end to pre-fetch next page
+                                    if (index >= filteredConnections.size - 3 && !uiState.isLoadingMoreConnections && !uiState.isLoading) {
                                         LaunchedEffect(index) { viewModel.loadMoreConnections() }
                                     }
                                     val isConnected = connectionsList.any { it.id == conn.author.id }
@@ -489,7 +509,7 @@ fun FeedScreen(
                                 if (uiState.isLoadingMoreConnections) {
                                     item {
                                         Box(
-                                            modifier = Modifier.size(190.dp, 230.dp),
+                                            modifier = Modifier.size(190.dp, 270.dp),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             CircularProgressIndicator(color = EntropiColors.Blue1, modifier = Modifier.size(28.dp), strokeWidth = 2.dp)
@@ -877,6 +897,7 @@ fun FeedScreen(
                         )
                     }
                 }
+            }
         }
 
         // Scroll to Top FAB (Section K)
@@ -1063,6 +1084,7 @@ fun PulseConnectionCard(
         border = BorderStroke(1.dp, if (isPressed) EntropiColors.Blue1.copy(alpha = 0.5f) else EntropiColors.Border),
         modifier = Modifier
             .width(190.dp)
+            .height(270.dp)
             .graphicsLayer(scaleX = scale, scaleY = scale)
             .clickable(interactionSource = interactionSource, indication = null) { onAuthorClick() }
     ) {
@@ -3276,7 +3298,7 @@ fun PulseFeedCard(
                     fontFamily = SpaceGroteskFontFamily
                 )
                 Text(
-                    text = authors.joinToString(", "),
+                    text = authors.map { it.split("|").first() }.joinToString(", "),
                     color = EntropiColors.Text2,
                     fontSize = 11.sp,
                     maxLines = 1,

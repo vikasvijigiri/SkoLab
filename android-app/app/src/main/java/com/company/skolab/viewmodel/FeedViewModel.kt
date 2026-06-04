@@ -27,6 +27,7 @@ import com.company.skolab.network.AuthorSuggestion
 import com.company.skolab.network.JournalRecommendation
 import com.company.skolab.network.OpenAlexWork
 import com.company.skolab.network.reconstructAbstract
+import com.company.skolab.network.getJournalOrFallback
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,6 +49,14 @@ import com.company.skolab.ui.theme.*
  * which would create a new OkHttp instance per ViewModel.
  */
 class FeedViewModel(private val apiService: ApiService = AppDependencies.apiService) : ViewModel() {
+    var firstVisibleItemIndex = 0
+    var firstVisibleItemScrollOffset = 0
+
+    fun updateScrollPosition(index: Int, offset: Int) {
+        firstVisibleItemIndex = index
+        firstVisibleItemScrollOffset = offset
+    }
+
     private val _uiState = MutableStateFlow(FeedUiState())
     val uiState: StateFlow<FeedUiState> = _uiState.asStateFlow()
     private var userAuthorProfile: com.company.skolab.network.AuthorResponse? = null
@@ -376,9 +385,9 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                                     institution = similar.institution,
                                     field = similar.field_of_study ?: displayFocus,
                                     connection_path = "Suggested based on $displayFocus interest",
-                                    relevance_score = similar.innovation_score ?: 80,
+                                    relevance_score = similar.innovation_score ?: 75,
                                     papers_collaborated = 0,
-                                    total_publications = similar.h_index ?: 15,
+                                    total_publications = similar.works_count ?: (similar.h_index?.times(3) ?: 15),
                                     h_index = similar.h_index ?: 5
                                 )
                             }
@@ -736,7 +745,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                     if (id != null) "$name|$id" else name
                 } else null
             } ?: emptyList(),
-            journal = work.primary_location?.source?.display_name ?: "Unknown Journal",
+            journal = work.getJournalOrFallback(),
             year = work.publication_year ?: 2026,
             domain = "General Science",
             subDomain = "Research",

@@ -59,6 +59,10 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.runtime.mutableIntStateOf
 import com.company.skolab.network.ChatMessage
 
 @Composable
@@ -189,7 +193,7 @@ fun MetricHighlight(
         )
         Text(
             text = value,
-            style = Typography.titleLarge,
+            style = Typography.titleLarge.copy(fontFeatureSettings = "tnum"),
             color = color,
             fontFamily = MonoFontFamily
         )
@@ -390,7 +394,7 @@ fun MarkdownText(
                 android.text.util.Linkify.addLinks(textView, android.text.util.Linkify.WEB_URLS)
             } catch (_: Exception) {}
         },
-        modifier = modifier
+        modifier = modifier.widthIn(max = 560.dp)
     )
 }
 
@@ -877,5 +881,213 @@ fun ReactionBadge(
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             fontSize = 12.sp
         )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── DELIGHT UTILITIES ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Canvas-based confetti celebration with animated falling particles.
+ * Call this when a meaningful user action succeeds (e.g. paper saved).
+ *
+ * @param visible Controls whether the confetti overlay is visible.
+ * @param onFinished Called when the animation cycle completes.
+ */
+@Composable
+fun ConfettiCelebration(
+    visible: Boolean,
+    onFinished: () -> Unit = {}
+) {
+    if (!visible) return
+
+    val particleCount = 40
+    val colors = listOf(
+        AccentTeal, AccentAmber, AccentViolet, AccentEmerald, AccentOrange, PRIMARY
+    )
+    data class Particle(
+        val x: Float, val y: Float,
+        val vx: Float, val vy: Float,
+        val color: androidx.compose.ui.graphics.Color,
+        val radius: Float,
+        val rotation: Float, val rotationSpeed: Float
+    )
+    val random = remember { java.util.Random() }
+    val particles = remember(visible) {
+        List(particleCount) {
+            Particle(
+                x = random.nextFloat(),
+                y = -0.05f - random.nextFloat() * 0.3f,
+                vx = (random.nextFloat() - 0.5f) * 0.008f,
+                vy = 0.004f + random.nextFloat() * 0.006f,
+                color = colors[random.nextInt(colors.size)],
+                radius = 4f + random.nextFloat() * 6f,
+                rotation = random.nextFloat() * 360f,
+                rotationSpeed = (random.nextFloat() - 0.5f) * 8f
+            )
+        }
+    }
+    val elapsed = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(visible) {
+        elapsed.snapTo(0f)
+        elapsed.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 2200, easing = LinearEasing)
+        )
+        onFinished()
+    }
+    val progress = elapsed.value
+    androidx.compose.ui.platform.LocalView.current // keep local reference
+    androidx.compose.foundation.Canvas(
+        modifier = Modifier.fillMaxSize().graphicsLayer { alpha = (1f - progress * 0.6f).coerceIn(0f, 1f) }
+    ) {
+        particles.forEach { p ->
+            val cx = (p.x + p.vx * progress * 300f) * size.width
+            val cy = (p.y + p.vy * progress * 300f) * size.height
+            if (cy < size.height) {
+                drawCircle(
+                    color = p.color.copy(alpha = 0.85f),
+                    radius = p.radius,
+                    center = Offset(cx, cy)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * A celebratory milestone dialog shown when the user reaches a paper-saving milestone.
+ * Triggers at 5, 10, and 25 saved papers.
+ *
+ * @param milestoneCount The exact milestone count that triggered this dialog.
+ * @param onDismiss Called when the user dismisses the dialog.
+ */
+@Composable
+fun MilestoneCelebrationDialog(
+    milestoneCount: Int,
+    onDismiss: () -> Unit
+) {
+    val (emoji, title, subtitle) = when {
+        milestoneCount >= 25 -> Triple("🏆", "Research Trailblazer!", "You've saved 25 research papers. You're building a serious academic library.")
+        milestoneCount >= 10 -> Triple("🌟", "Knowledge Builder!", "10 papers saved — your research vault is taking shape. Keep exploring.")
+        else -> Triple("🔖", "First 5 Saved!", "You've bookmarked 5 papers. Your research intelligence library is growing.")
+    }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                Text(emoji, fontSize = 48.sp)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    title,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 20.sp,
+                    color = TextPrimary,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+        },
+        text = {
+            Text(
+                subtitle,
+                color = TextSecondary,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(
+                onClick = onDismiss,
+                colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = AccentTeal)
+            ) {
+                Text("Keep Exploring", fontWeight = FontWeight.Bold)
+            }
+        },
+        containerColor = BgCard,
+        shape = RoundedCornerShape(20.dp)
+    )
+}
+
+/**
+ * Displays a stage-based progress indicator that cycles through descriptive stage labels
+ * at a fixed interval, giving the user a sense of progress during long-running operations.
+ *
+ * @param stages List of human-friendly stage descriptions to cycle through.
+ * @param intervalMs How long each stage is shown (default 1800ms).
+ * @param modifier Optional modifier.
+ */
+@Composable
+fun StageProgressBar(
+    stages: List<String>,
+    intervalMs: Long = 1800L,
+    modifier: Modifier = Modifier
+) {
+    var stageIndex by remember { mutableIntStateOf(0) }
+    val currentStage = stages.getOrElse(stageIndex) { stages.last() }
+    val totalStages = stages.size
+
+    LaunchedEffect(Unit) {
+        while (stageIndex < stages.size - 1) {
+            kotlinx.coroutines.delay(intervalMs)
+            stageIndex = (stageIndex + 1).coerceAtMost(stages.size - 1)
+        }
+    }
+
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = currentStage,
+            color = TextSecondary,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium
+        )
+        Spacer(Modifier.height(6.dp))
+        androidx.compose.material3.LinearProgressIndicator(
+            progress = { (stageIndex + 1f) / totalStages },
+            modifier = Modifier.fillMaxWidth(0.6f).height(3.dp),
+            color = AccentTeal,
+            trackColor = AccentTeal.copy(alpha = 0.15f),
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "Stage ${stageIndex + 1} of $totalStages",
+            color = TextMuted,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+/**
+ * Wraps content in an [AnimatedVisibility] that uses an [index]-based delay
+ * so successive items appear with a 50ms stagger, creating a cascading entrance effect.
+ *
+ * @param index Position of this item in the list — drives the entrance delay.
+ * @param visible Whether the item should be visible (default true after composition).
+ * @param content The composable content to stagger.
+ */
+@Composable
+fun StaggeredAnimatedVisibility(
+    index: Int,
+    visible: Boolean = true,
+    content: @Composable () -> Unit
+) {
+    var show by remember { mutableStateOf(false) }
+    LaunchedEffect(visible) {
+        if (visible) {
+            kotlinx.coroutines.delay((index * 50L).coerceAtMost(400L))
+            show = true
+        } else {
+            show = false
+        }
+    }
+    AnimatedVisibility(
+        visible = show,
+        enter = androidx.compose.animation.fadeIn(tween(220)) +
+                androidx.compose.animation.slideInVertically(tween(220)) { it / 3 }
+    ) {
+        content()
     }
 }

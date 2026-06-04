@@ -30,6 +30,51 @@ class UserPreferences(private val context: Context) {
     private val userAboutKey = stringPreferencesKey("user_about")
     private val isConsentGivenKey = booleanPreferencesKey("is_consent_given")
     private val pushNotificationsEnabledKey = booleanPreferencesKey("push_notifications_enabled")
+    private val appThemeKey = stringPreferencesKey("app_theme")
+    private val dynamicColorEnabledKey = booleanPreferencesKey("dynamic_color_enabled")
+    private val sessionCountKey = intPreferencesKey("session_count")
+    private val npsShownKey = booleanPreferencesKey("nps_shown")
+
+    val appTheme: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[appThemeKey] ?: "SYSTEM"
+    }
+
+    suspend fun setAppTheme(theme: String) {
+        context.dataStore.edit { prefs ->
+            prefs[appThemeKey] = theme
+        }
+    }
+
+    val dynamicColorEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[dynamicColorEnabledKey] ?: false
+    }
+
+    suspend fun setDynamicColorEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[dynamicColorEnabledKey] = enabled
+        }
+    }
+
+    /** Increments the persistent session count on every app cold start. */
+    suspend fun incrementSessionCount() {
+        context.dataStore.edit { prefs ->
+            prefs[sessionCountKey] = (prefs[sessionCountKey] ?: 0) + 1
+        }
+    }
+
+    val sessionCount: Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[sessionCountKey] ?: 0
+    }
+
+    val npsShown: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[npsShownKey] ?: false
+    }
+
+    suspend fun setNpsShown(shown: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[npsShownKey] = shown
+        }
+    }
 
     val pushNotificationsEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[pushNotificationsEnabledKey] ?: false

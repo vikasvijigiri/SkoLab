@@ -103,6 +103,7 @@ fun ExternalInviteScreen(
             ) == android.content.pm.PackageManager.PERMISSION_GRANTED
         )
     }
+    var showContactsRationaleDialog by remember { mutableStateOf(false) }
 
     val requestPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -461,7 +462,7 @@ fun ExternalInviteScreen(
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(BorderLight.copy(alpha = 0.15f))
                                 .clickable {
-                                    requestPermissionLauncher.launch(android.Manifest.permission.READ_CONTACTS)
+                                    showContactsRationaleDialog = true
                                 }
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -884,5 +885,44 @@ fun ExternalInviteScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+
+    if (showContactsRationaleDialog) {
+        AlertDialog(
+            onDismissRequest = { showContactsRationaleDialog = false },
+            title = {
+                Text(
+                    text = "Access Phone Contacts",
+                    style = Typography.titleLarge,
+                    color = SkoLabTextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "SkoLab needs access to your contacts to suggest email addresses and phone numbers of your research colleagues, making invitations instant.",
+                    style = Typography.bodyMedium,
+                    color = SkoLabTextSecondary
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showContactsRationaleDialog = false
+                        requestPermissionLauncher.launch(android.Manifest.permission.READ_CONTACTS)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = SkoLabPrimary)
+                ) {
+                    Text("Allow Access", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showContactsRationaleDialog = false }) {
+                    Text("Not Now", color = SkoLabTextSecondary)
+                }
+            },
+            containerColor = SkoLabSurfaceElevated,
+            shape = RoundedCornerShape(16.dp)
+        )
     }
 }

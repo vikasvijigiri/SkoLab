@@ -44,6 +44,26 @@ async def track_teleport_researcher(author_id: str):
 router = APIRouter()
 
 
+def compute_query_match_score(query: str, concepts: list) -> int:
+    if not query or not concepts:
+        return 75
+    query_tokens = {t.strip().lower() for t in query.split() if len(t.strip()) > 2}
+    if not query_tokens:
+        return 75
+    concepts_normalized = {c.strip().lower() for c in concepts if c.strip()}
+    
+    match_count = 0
+    for q_t in query_tokens:
+        for c in concepts_normalized:
+            if q_t in c or c in q_t:
+                match_count += 1
+                break
+                
+    union_len = len(query_tokens.union(concepts_normalized))
+    similarity = match_count / union_len if union_len > 0 else 0.0
+    return min(99, max(60, int(60 + similarity * 100)))
+
+
 # ── PostgreSQL helpers for fast local lookups ─────────────────────────────────
 
 
@@ -73,6 +93,7 @@ async def _pg_search_suggestions(
             clean_id = r.openalex_id.split("/")[-1]
             if clean_id not in seen_ids:
                 seen_ids.add(clean_id)
+                score = compute_query_match_score(query, r.expertise or [])
                 suggestions.append(
                     AuthorSuggestion(
                         id=r.openalex_id,
@@ -80,9 +101,8 @@ async def _pg_search_suggestions(
                         institution=r.current_institution or "Independent Researcher",
                         field_of_study=r.field_of_study,
                         h_index=r.h_index,
-                        innovation_score=int(r.innovation_score)
-                        if r.innovation_score
-                        else None,
+                        innovation_score=score,
+                        works_count=r.works_count,
                     )
                 )
 
@@ -99,6 +119,7 @@ async def _pg_search_suggestions(
                 clean_id = r.openalex_id.split("/")[-1]
                 if clean_id not in seen_ids:
                     seen_ids.add(clean_id)
+                    score = compute_query_match_score(query, r.concepts or [])
                     suggestions.append(
                         AuthorSuggestion(
                             id=r.openalex_id,
@@ -106,7 +127,8 @@ async def _pg_search_suggestions(
                             institution=r.institution or "Independent Researcher",
                             field_of_study=r.field_of_study,
                             h_index=r.h_index,
-                            innovation_score=None,
+                            innovation_score=score,
+                            works_count=r.works_count,
                         )
                     )
     except Exception as exc:
@@ -203,12 +225,15 @@ async def fetch_similar_authors(
 
             from app.services.openalex_service import extract_field_and_expertise
 
-            field, _ = extract_field_and_expertise(
+            field, expertise = extract_field_and_expertise(
                 author, author.get("display_name", "")
             )
 
             stats = author.get("summary_stats") or {}
             h_idx = stats.get("h_index")
+            works_count = author.get("works_count")
+
+            score = compute_query_match_score(query_term, expertise or [field])
 
             suggestions.append(
                 AuthorSuggestion(
@@ -217,7 +242,8 @@ async def fetch_similar_authors(
                     institution=inst,
                     field_of_study=field,
                     h_index=int(h_idx) if h_idx is not None else None,
-                    innovation_score=None,
+                    innovation_score=score,
+                    works_count=works_count,
                 )
             )
             if len(suggestions) >= 5:
@@ -280,7 +306,8 @@ async def get_author_suggestions(
                     fs_suggestions = []
                     for d in [doc.to_dict() for doc in docs]:
                         h_idx = d.get("h_index")
-                        inv_score = d.get("innovation_score")
+                        expertise = d.get("expertise") or []
+                        score = compute_query_match_score(query, expertise)
                         fs_suggestions.append(
                             AuthorSuggestion(
                                 id=d.get("openalex_id"),
@@ -289,9 +316,8 @@ async def get_author_suggestions(
                                 or "Independent Researcher",
                                 field_of_study=d.get("field_of_study"),
                                 h_index=int(h_idx) if h_idx is not None else None,
-                                innovation_score=int(inv_score)
-                                if inv_score is not None
-                                else None,
+                                innovation_score=score,
+                                works_count=d.get("works_count"),
                             )
                         )
                     # Merge with any PG results (deduplicate)
@@ -337,10 +363,12 @@ async def get_author_suggestions(
 
             stats = author.get("summary_stats") or {}
             h_idx = stats.get("h_index")
+            works_cnt = author.get("works_count")
 
             from app.services.openalex_service import extract_field_and_expertise
 
-            field_of_study, _ = extract_field_and_expertise(author, disp_name)
+            field_of_study, expertise = extract_field_and_expertise(author, disp_name)
+            score = compute_query_match_score(query, expertise or [field_of_study])
 
             suggestions.append(
                 AuthorSuggestion(
@@ -349,7 +377,8 @@ async def get_author_suggestions(
                     institution=inst,
                     field_of_study=field_of_study,
                     h_index=int(h_idx) if h_idx is not None else None,
-                    innovation_score=None,
+                    innovation_score=score,
+                    works_count=works_cnt,
                 )
             )
 
@@ -361,6 +390,8 @@ async def get_author_suggestions(
             works = await openalex_service.search_works(query, per_page=20)
             seen_ids = {s.id for s in suggestions}
             for work in works:
+                work_concepts = [c.get("display_name", "") for c in work.get("concepts", []) if c.get("display_name")]
+                score = compute_query_match_score(query, work_concepts)
                 for authorship in work.get("authorships", []):
                     author = authorship.get("author", {})
                     auth_name = author.get("display_name")
@@ -391,7 +422,8 @@ async def get_author_suggestions(
                             display_name=auth_name,
                             institution=inst,
                             h_index=None,
-                            innovation_score=None,
+                            innovation_score=score,
+                            works_count=None,
                         )
                     )
                     if len(suggestions) >= 10:

@@ -175,8 +175,40 @@ class OpenAlexService:
             )
         return []
 
+    async def fetch_related_works(
+        self,
+        work_id: str,
+        per_page: int = 15,
+        sort: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetches works related to a specific work ID using the related_to filter.
+        """
+        clean_id = work_id.split("/")[-1]
+        url = f"{self.base_url}/works"
+        params = {
+            "filter": f"related_to:{clean_id}",
+            "per_page": per_page,
+            "sort": sort or "publication_date:desc",
+            "mailto": self.email,
+        }
+        try:
+            async with httpx.AsyncClient(
+                timeout=settings.http_timeout_seconds
+            ) as client:
+                res = await client.get(url, params=params, headers=self.headers)
+                if res.status_code == 200:
+                    return res.json().get("results", [])
+        except Exception as e:
+            print(
+                f"[OpenAlexService] Error fetching related works for work {clean_id}: {e}",
+                flush=True,
+            )
+        return []
+
     async def search_works(
-        self, query: str, per_page: int = 20
+
+        self, query: str, per_page: int = 20, sort: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Searches OpenAlex works by keywords.
@@ -185,7 +217,7 @@ class OpenAlexService:
         params = {
             "search": query,
             "per_page": per_page,
-            "sort": "publication_year:desc,cited_by_count:desc",
+            "sort": sort or "publication_year:desc,cited_by_count:desc",
             "mailto": self.email,
         }
         try:
@@ -316,14 +348,32 @@ def is_work_relevant_to_discipline(work: dict, discipline: str) -> bool:
     if journal:
         work_keywords.add(journal.lower())
 
+    # Also scan abstract if available
+    abstract = work.get("_custom_abstract")
+    if not abstract:
+        abstract_index = work.get("abstract_inverted_index")
+        if abstract_index:
+            try:
+                word_list = []
+                for word, pos_list in abstract_index.items():
+                    for pos in pos_list:
+                        word_list.append((pos, word))
+                word_list.sort()
+                abstract = " ".join([w[1] for w in word_list])
+            except Exception:
+                pass
+    if abstract:
+        work_keywords.add(abstract.lower())
+
     # Extract root search terms from discipline
     discipline_terms = [t for t in discipline_lower.split() if len(t) > 2]
     if not discipline_terms:
         discipline_terms = [discipline_lower]
 
     # Map disciplines to related concepts to prevent clean false negatives
+    # We use independent if statements to support multidisciplinary fields
     extended_terms = set(discipline_terms)
-    if "phys" in discipline_lower:
+    if "phys" in discipline_lower or "quantum" in discipline_lower:
         extended_terms.update(
             [
                 "phys",
@@ -345,10 +395,12 @@ def is_work_relevant_to_discipline(work: dict, discipline: str) -> bool:
                 "cosmology",
             ]
         )
-    elif (
+    if (
         "comput" in discipline_lower
         or "cs" in discipline_lower
         or "ai" in discipline_lower
+        or "crypt" in discipline_lower
+        or "secur" in discipline_lower
     ):
         extended_terms.update(
             [
@@ -365,12 +417,18 @@ def is_work_relevant_to_discipline(work: dict, discipline: str) -> bool:
                 "robot",
                 "nlp",
                 "processing",
+                "crypt",
+                "secur",
+                "protocol",
+                "key distribution",
             ]
         )
-    elif (
+    if (
         "biochem" in discipline_lower
         or "bio" in discipline_lower
         or "crispr" in discipline_lower
+        or "medic" in discipline_lower
+        or "health" in discipline_lower
     ):
         extended_terms.update(
             [
@@ -388,9 +446,12 @@ def is_work_relevant_to_discipline(work: dict, discipline: str) -> bool:
                 "nuclease",
                 "chromatin",
                 "nucleic",
+                "medic",
+                "health",
+                "clinical",
             ]
         )
-    elif "chem" in discipline_lower:
+    if "chem" in discipline_lower:
         extended_terms.update(
             [
                 "chem",

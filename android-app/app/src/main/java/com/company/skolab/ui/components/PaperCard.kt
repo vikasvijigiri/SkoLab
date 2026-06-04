@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.company.skolab.model.Paper
 import com.company.skolab.ui.theme.*
+import androidx.compose.ui.tooling.preview.Preview
 import java.util.Locale
 
 @Composable
@@ -65,7 +66,7 @@ fun PaperCard(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = paper.authors.joinToString(", "),
+                text = paper.authors.map { it.split("|").first() }.joinToString(", "),
                 style = Typography.labelSmall,
                 color = SkoLabTextSecondary,
                 maxLines = 1
@@ -79,13 +80,13 @@ fun PaperCard(
                 ) {
                     MetricHighlight(
                         label = "D-INDEX",
-                        value = String.format(Locale.US, "%.2f", paper.disruptionScore),
+                        value = String.format(Locale.getDefault(), "%.2f", paper.disruptionScore),
                         color = SkoLabDisruption,
                         modifier = Modifier.weight(1f)
                     )
                     MetricHighlight(
                         label = "S-INDEX",
-                        value = String.format(Locale.US, "%.2f", paper.noveltyScore),
+                        value = String.format(Locale.getDefault(), "%.2f", paper.noveltyScore),
                         color = SkoLabNovelty,
                         modifier = Modifier.weight(1f)
                     )
@@ -103,13 +104,13 @@ fun PaperCard(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "D: ${String.format(Locale.US, "%.2f", paper.disruptionScore)}",
+                        text = "D: ${String.format(Locale.getDefault(), "%.2f", paper.disruptionScore)}",
                         style = Typography.labelSmall,
                         color = SkoLabDisruption,
                         fontFamily = MonoFontFamily
                     )
                     Text(
-                        text = "S: ${String.format(Locale.US, "%.2f", paper.noveltyScore)}",
+                        text = "S: ${String.format(Locale.getDefault(), "%.2f", paper.noveltyScore)}",
                         style = Typography.labelSmall,
                         color = SkoLabNovelty,
                         fontFamily = MonoFontFamily
@@ -117,5 +118,39 @@ fun PaperCard(
                 }
             }
         }
+    }
+}
+
+@Preview(name = "Paper Card Light", showBackground = true)
+@Composable
+fun PaperCardLightPreview() {
+    SkoLabTheme {
+        PaperCard(
+            paper = Paper(
+                id = "1",
+                title = "Attention Is All You Need",
+                authors = listOf("Ashish Vaswani", "Noam Shazeer", "Niki Parmar"),
+                journal = "NeurIPS",
+                year = 2017,
+                domain = "Computer Science",
+                subDomain = "AI",
+                abstractText = "The dominant sequence transduction models...",
+                disruptionScore = 0.99f,
+                noveltyScore = 0.95f,
+                citationVelocity = 12.5f,
+                hIndex = 42,
+                citationCount = 100000,
+                journalImpactFactor = 8.5f,
+                aiSummary = "Attention mechanisms rule sequence models.",
+                keyInsight = "Transformers replace recurrence.",
+                bulletPoints = emptyList(),
+                methodology = emptyList(),
+                latexFormula = null,
+                isRetracted = false,
+                doi = "https://doi.org/10.48550/arXiv.1706.03762",
+                pdfUrl = null
+            ),
+            onClick = {}
+        )
     }
 }

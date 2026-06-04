@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.company.skolab.model.Paper
 import com.company.skolab.network.OpenAlexWork
 import com.company.skolab.network.reconstructAbstract
+import com.company.skolab.network.getJournalOrFallback
 import com.company.skolab.network.SemanticOpenAlexService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -65,7 +66,7 @@ class SemanticFeedViewModel : ViewModel() {
                     if (id != null) "$name|$id" else name
                 } else null
             } ?: emptyList(),
-            journal = work.primary_location?.source?.display_name ?: "Unknown Journal",
+            journal = work.getJournalOrFallback(),
             year = work.publication_year ?: 2026,
             domain = "General Science",
             subDomain = "Research",
