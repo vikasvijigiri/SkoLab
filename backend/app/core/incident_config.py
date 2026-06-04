@@ -5,7 +5,7 @@ Centralized Incident Response and Alerting Configuration.
 Defines severity levels, escalation matrix, SRE contacts, and on-call rotations.
 """
 
-from typing import Dict, List, Any
+from typing import Dict, Any
 import os
 
 # ── Incident Severity Definitions (P0-P3) ─────────────────────────────────────

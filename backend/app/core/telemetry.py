@@ -15,7 +15,7 @@ class Span:
         self.parent_span_id = span_id_var.get() or None
         self.span_id = str(uuid.uuid4())[:16]
         self.start_time = time.perf_counter()
-        
+
     def __enter__(self):
         self.trace_token = trace_id_var.set(self.trace_id)
         self.span_token = span_id_var.set(self.span_id)
@@ -44,7 +44,7 @@ tracer = Tracer()
 # Instrument httpx globally if available
 try:
     import httpx
-    
+
     _original_async_send = httpx.AsyncClient.send
     _original_sync_send = httpx.Client.send
 
@@ -53,7 +53,7 @@ try:
         # Skip internal metrics/health calls to avoid infinite loops or noise
         if "health" in url_str or "metrics" in url_str:
             return await _original_async_send(self, request, *args, **kwargs)
-            
+
         if "openalex.org" in url_str:
             try:
                 from app.main import metrics_store
@@ -85,7 +85,7 @@ try:
         url_str = str(request.url)
         if "health" in url_str or "metrics" in url_str:
             return _original_sync_send(self, request, *args, **kwargs)
-            
+
         if "openalex.org" in url_str:
             try:
                 from app.main import metrics_store

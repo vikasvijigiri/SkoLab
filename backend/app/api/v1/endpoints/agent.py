@@ -30,7 +30,7 @@ async def upload_document(
         # 10MB limit
         if len(content) > 10 * 1024 * 1024:
             raise HTTPException(status_code=400, detail="File size exceeds the 10MB limit.")
-            
+
         allowed_types = ["application/pdf", "text/plain", "text/markdown", "text/csv"]
         content_type = file.content_type or ""
         filename = file.filename or ""
@@ -46,7 +46,7 @@ async def upload_document(
                 status_code=400,
                 detail="Unsupported file type. Only PDF, TXT, MD, and CSV files are allowed."
             )
-            
+
         return await agent_service.process_upload_document(
             content, filename, content_type
         )

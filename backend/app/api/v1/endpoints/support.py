@@ -1,7 +1,7 @@
 import logging
 import uuid
 import datetime
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ async def create_support_ticket(ticket: SupportTicketRequest, background_tasks: 
     """
     ticket_id = f"zd_tk_{uuid.uuid4().hex[:12]}"
     is_vip = ticket.priority == "vip"
-    
+
     # Simulate database logging
     SUPPORT_DB.append({
         "id": ticket_id,
@@ -94,7 +94,7 @@ async def get_support_metrics():
     """
     total_tickets = len(SUPPORT_DB)
     vip_tickets = sum(1 for t in SUPPORT_DB if t["is_vip"])
-    
+
     return {
         "sla_targets": {
             "vip_first_response_minutes": 15,
