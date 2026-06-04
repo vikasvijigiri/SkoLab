@@ -228,7 +228,7 @@ class AuthManager(private val context: Context) {
                     isOnline = true,
                     emailVerified = user.isEmailVerified
                 )
-                db.collection("researchers").document(user.uid).set(newUserData).await()
+                db.collection("researchers").document(user.uid).set(newUserData)
                 newUserData
             }
             if (userData != null) {
@@ -288,7 +288,7 @@ class AuthManager(private val context: Context) {
                 db.collection("researchers").document(user.uid).update(
                     "name", name,
                     "researchFocus", focus
-                ).await()
+                )
             } catch (e: Exception) {
                 Log.w("AuthManager", "Failed to update user profile on Firestore", e)
             }
@@ -308,7 +308,7 @@ class AuthManager(private val context: Context) {
                     "researchFocus", focus,
                     "academicStatus", academicStatus,
                     "about", about
-                ).await()
+                )
             } catch (e: Exception) {
                 Log.w("AuthManager", "Failed to update academic profile on Firestore", e)
             }
@@ -331,7 +331,7 @@ class AuthManager(private val context: Context) {
                 db.collection("researchers").document(user.uid).update(
                     "cvUri", uri,
                     "cvFileName", fileName
-                ).await()
+                )
             } catch (e: Exception) {
                 Log.w("AuthManager", "Failed to update CV on Firestore", e)
             }
@@ -347,7 +347,7 @@ class AuthManager(private val context: Context) {
         val user = currentUser ?: return
         try {
             // Update Firestore
-            db.collection("researchers").document(user.uid).update("researchFocus", focus).await()
+            db.collection("researchers").document(user.uid).update("researchFocus", focus)
             // Update local cache
             val cached = userPrefs.cachedUser.firstOrNull()
             if (cached != null) {
@@ -367,7 +367,6 @@ class AuthManager(private val context: Context) {
                 .collection("connections")
                 .document(cleanId)
                 .set(connection)
-                .await()
         } catch (e: Exception) {
             Log.w("AuthManager", "Failed to sync connection to Firestore, queuing offline", e)
         }
@@ -382,7 +381,6 @@ class AuthManager(private val context: Context) {
                 .collection("connections")
                 .document(cleanId)
                 .delete()
-                .await()
         } catch (e: Exception) {
             Log.w("AuthManager", "Failed to sync connection deletion to Firestore", e)
         }
@@ -403,10 +401,10 @@ class AuthManager(private val context: Context) {
                         researchFocus = "",
                         isOnline = true
                     )
-                    db.collection("researchers").document(user.uid).set(newUserData).await()
+                    db.collection("researchers").document(user.uid).set(newUserData)
                     userPrefs.cacheUser(newUserData)
                 } else {
-                    db.collection("researchers").document(user.uid).update("isOnline", true).await()
+                    db.collection("researchers").document(user.uid).update("isOnline", true)
                 }
                 Result.success(user)
             } else {
@@ -437,7 +435,7 @@ class AuthManager(private val context: Context) {
                     researchFocus = discipline,
                     isOnline = true
                 )
-                db.collection("researchers").document(user.uid).set(newUserData).await()
+                db.collection("researchers").document(user.uid).set(newUserData)
                 userPrefs.cacheUser(newUserData)
 
                 Result.success(user)
