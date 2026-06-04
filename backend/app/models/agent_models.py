@@ -1,16 +1,8 @@
-"""
-app/models/agent_models.py
-===========================
-PostgreSQL tables for agent (Ask Skolar) domain data.
-
-Tables
-------
-agent_history_summaries  – LLM-compressed summaries of long chat histories.
-                           Replaces the in-memory history_summary_cache.
-agent_document_uploads   – Extracted text from user-uploaded PDF / text files.
-"""
 import datetime
-from sqlalchemy import Column, String, Integer, DateTime, Text, Index
+
+def utcnow():
+    return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+from sqlalchemy import Column, String, Integer, DateTime, Text
 from app.db.database import Base
 
 
@@ -23,14 +15,15 @@ class AgentHistorySummary(Base):
     summary    = the compressed text produced by the summarisation LLM
     TTL: 12 hours (matches the old history_summary_cache ttl of 43200 s)
     """
+
     __tablename__ = "agent_history_summaries"
 
-    id         = Column(Integer, primary_key=True, autoincrement=True)
-    cache_key  = Column(String, unique=True, index=True, nullable=False)
-    user_id    = Column(String, index=True, nullable=True)   # optional — for future scoping
-    summary    = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    expires_at = Column(DateTime, nullable=True)   # 12-hour TTL
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    cache_key = Column(String(256), unique=True, index=True, nullable=False)
+    user_id = Column(String(100), index=True, nullable=True)  # optional — for future scoping
+    summary = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=utcnow)
+    expires_at = Column(DateTime, nullable=True)  # 12-hour TTL
 
 
 class AgentDocumentUpload(Base):
@@ -40,13 +33,15 @@ class AgentDocumentUpload(Base):
 
     TTL: 24 hours.
     """
+
     __tablename__ = "agent_document_uploads"
 
-    id             = Column(Integer, primary_key=True, autoincrement=True)
-    user_id        = Column(String, index=True, nullable=True)
-    filename       = Column(String, nullable=False)
-    content_type   = Column(String, nullable=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), index=True, nullable=True)
+    filename = Column(String(255), nullable=False)
+    content_type = Column(String(100), nullable=True)
     extracted_text = Column(Text, nullable=False)
-    file_size_kb   = Column(Integer, nullable=True)
-    uploaded_at    = Column(DateTime, default=datetime.datetime.utcnow)
-    expires_at     = Column(DateTime, nullable=True)   # 24-hour TTL
+    file_size_kb = Column(Integer, nullable=True)
+    uploaded_at = Column(DateTime, default=utcnow)
+    expires_at = Column(DateTime, nullable=True)  # 24-hour TTL
+

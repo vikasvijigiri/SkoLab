@@ -19,11 +19,11 @@ Usage
 All JSON-serialisable Python objects (dicts, lists, strings, numbers) can be
 stored as values.  Pydantic models should be serialised with .dict() first.
 """
+
 from __future__ import annotations
 
 import asyncio
 import datetime
-import json
 import time
 from typing import Any, Optional
 
@@ -52,7 +52,9 @@ class PgBackedCache:
 
     L1_DEFAULT_TTL = 30  # seconds
 
-    def __init__(self, ttl_seconds: int, name: str, l1_ttl_seconds: int = L1_DEFAULT_TTL):
+    def __init__(
+        self, ttl_seconds: int, name: str, l1_ttl_seconds: int = L1_DEFAULT_TTL
+    ):
         self.ttl = ttl_seconds
         self.name = name
         self.l1_ttl = l1_ttl_seconds
@@ -87,7 +89,9 @@ class PgBackedCache:
         if hasattr(value, "model_dump"):
             return self._normalize_value(value.model_dump())
         if isinstance(value, dict):
-            return {str(key): self._normalize_value(item) for key, item in value.items()}
+            return {
+                str(key): self._normalize_value(item) for key, item in value.items()
+            }
         if isinstance(value, (list, tuple, set)):
             return [self._normalize_value(item) for item in value]
         return value
@@ -103,7 +107,7 @@ class PgBackedCache:
 
         # L2 — PostgreSQL
         db_key = self._prefixed(key)
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
         async with AsyncSessionLocal() as session:
             try:
                 stmt = select(CacheEntry).where(
@@ -113,8 +117,8 @@ class PgBackedCache:
                 result = await session.execute(stmt)
                 entry = result.scalars().first()
                 if entry:
-                    value = entry.data.get("v")   # unwrap envelope
-                    self._l1_set(key, value)       # warm L1
+                    value = entry.data.get("v")  # unwrap envelope
+                    self._l1_set(key, value)  # warm L1
                     return value
             except Exception as exc:
                 print(f"[PgCache:{self.name}] GET error for '{key}': {exc}", flush=True)
@@ -126,7 +130,7 @@ class PgBackedCache:
         self._l1_set(key, normalized_value)
 
         db_key = self._prefixed(key)
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
         expires_at = now + datetime.timedelta(seconds=self.ttl)
 
         # Wrap in envelope so any JSON-serialisable type is stored safely
@@ -166,7 +170,9 @@ class PgBackedCache:
                 )
                 await session.commit()
             except Exception as exc:
-                print(f"[PgCache:{self.name}] DELETE error for '{key}': {exc}", flush=True)
+                print(
+                    f"[PgCache:{self.name}] DELETE error for '{key}': {exc}", flush=True
+                )
                 await session.rollback()
 
     async def clear(self) -> None:
@@ -178,6 +184,7 @@ class PgBackedCache:
             try:
                 # Use LIKE for prefix match — safe because prefix contains no wildcards
                 from sqlalchemy import text
+
                 await session.execute(
                     text("DELETE FROM cache_entries WHERE cache_key LIKE :prefix"),
                     {"prefix": prefix + "%"},

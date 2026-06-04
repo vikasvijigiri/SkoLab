@@ -10,9 +10,45 @@ services:
       POSTGRES_PASSWORD: postgrespassword
       POSTGRES_DB: skolab
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
+    networks:
+      - private-net
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1g
+        reservations:
+          memory: 256m
+
+  web:
+    build: .
+    container_name: skolab_backend
+    restart: always
+    ports:
+      - "8000:8000"
+    networks:
+      - public-net
+      - private-net
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgrespassword@db:5432/skolab
+    depends_on:
+      - db
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2g
+        reservations:
+          memory: 512m
 
 volumes:
   postgres_data:
+
+networks:
+  public-net:
+    driver: bridge
+  private-net:
+    driver: bridge

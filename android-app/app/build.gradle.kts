@@ -5,14 +5,15 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
 }
 
 android {
-    namespace = "com.open.skolab"
+    namespace = "com.company.skolab"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.open.skolab"
+        applicationId = "com.company.skolab"
         minSdk = 26
         targetSdk = 35
         versionCode = 2
@@ -34,7 +35,7 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -90,6 +91,8 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.9.0"))
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-analytics")      // Analytics
+    implementation("com.google.firebase:firebase-crashlytics")    // Crash reporting
 
     // Credential Manager for Google Sign-In
     implementation("androidx.credentials:credentials:1.3.0")
@@ -109,6 +112,7 @@ dependencies {
 
     // Preferences (onboarding)
     implementation("androidx.datastore:datastore-preferences:1.2.0")
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
     // Serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
 

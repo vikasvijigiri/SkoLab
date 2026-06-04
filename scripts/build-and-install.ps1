@@ -191,7 +191,7 @@ if (-not $hasDevice) {
             Write-Host "Setting up USB port forwarding for backend access..."
             adb -s $targetDevice reverse tcp:8000 tcp:8000
             Write-Host "Launching SkoLab..."
-            adb -s $targetDevice shell am start -n com.open.skolab/com.open.skolab.MainActivity
+            adb -s $targetDevice shell am start -n com.company.skolab/com.company.skolab.MainActivity
         }
         Write-Host "Done. Launcher name should show as SkoLab after install." -ForegroundColor Green
     }

@@ -4,6 +4,7 @@ app/config.py — centralised configuration for the Skolab backend.
 All values are read from environment variables (populated via .env in dev,
 real env vars in production).  No magic literals anywhere else in the codebase.
 """
+
 import os
 import socket
 from pathlib import Path
@@ -46,9 +47,23 @@ def _downloads_dir() -> Path:
 @dataclass(frozen=True)
 class Settings:
     # ── Server ──────────────────────────────────────────────────────────────
-    host: str = field(default_factory=lambda: os.environ["HOST"] if "HOST" in os.environ else "0.0.0.0")
+    host: str = field(
+        default_factory=lambda: (
+            os.environ["HOST"] if "HOST" in os.environ else "0.0.0.0"
+        )
+    )
     port: int = field(default_factory=lambda: int(os.environ.get("PORT", "8000")))
     lan_ip: str = field(default_factory=_lan_ip)
+    force_https: bool = field(
+        default_factory=lambda: os.environ.get("FORCE_HTTPS", "False").lower() in ("true", "1")
+    )
+
+    # ── Environment (development | staging | production) ──────────────────────
+    # Set APP_ENV=production in your deployment environment.
+    # Controls stack trace visibility in structured logs.
+    environment: str = field(
+        default_factory=lambda: os.environ.get("APP_ENV", "development").lower()
+    )
 
     # ── Public base URL (used to build download links, OpenRouter HTTP-Referer, etc.) ──
     # Set APP_BASE_URL in production to your real domain, e.g. https://api.resqit.app
@@ -76,9 +91,45 @@ class Settings:
         default_factory=lambda: os.environ.get("openalex_api", "")
     )
 
+    # ── Runtime Timeout Controls (env-driven — no rebuild required) ──────────
+    # Set HTTP_TIMEOUT_SECONDS in production to adjust all external API timeouts.
+    # Set LLM_TIMEOUT_SECONDS to tune LLM endpoint response patience.
+    # Defaults match the values previously hardcoded throughout the services.
+    http_timeout_seconds: float = field(
+        default_factory=lambda: float(os.environ.get("HTTP_TIMEOUT_SECONDS", "15.0"))
+    )
+    llm_timeout_seconds: float = field(
+        default_factory=lambda: float(os.environ.get("LLM_TIMEOUT_SECONDS", "30.0"))
+    )
+
+    # ── Cache TTL Controls (env-driven — no rebuild required) ────────────────
+    # Set CACHE_TTL_PROFILE_SECONDS, CACHE_TTL_FEED_SECONDS, etc. to override
+    # the default cache TTLs without redeploying source code.
+    cache_ttl_profile_seconds: int = field(
+        default_factory=lambda: int(os.environ.get("CACHE_TTL_PROFILE_SECONDS", "3600"))
+    )
+    cache_ttl_feed_seconds: int = field(
+        default_factory=lambda: int(os.environ.get("CACHE_TTL_FEED_SECONDS", "3600"))
+    )
+    cache_ttl_analysis_seconds: int = field(
+        default_factory=lambda: int(
+            os.environ.get("CACHE_TTL_ANALYSIS_SECONDS", "21600")
+        )
+    )
+    cache_ttl_agent_history_seconds: int = field(
+        default_factory=lambda: int(
+            os.environ.get("CACHE_TTL_AGENT_HISTORY_SECONDS", "43200")
+        )
+    )
+
     # ── Firebase ─────────────────────────────────────────────────────────────
     google_credentials_path: str = field(
         default_factory=lambda: os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+    )
+    database_encryption_key: str = field(
+        default_factory=lambda: os.environ.get(
+            "DATABASE_ENCRYPTION_KEY", "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MTI="
+        )
     )
 
     @property
