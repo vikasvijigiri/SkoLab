@@ -1,18 +1,23 @@
 package com.company.skolab.ui.screens
 
+import android.widget.Toast
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.automirrored.filled.Article
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,26 +26,30 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.company.skolab.ui.theme.DisplayFontFamily
-import com.company.skolab.ui.theme.EntropiColors
-import kotlinx.coroutines.launch
-import kotlin.math.absoluteValue
-import com.company.skolab.ui.components.MarkdownText
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.zIndex
+import com.company.skolab.ui.components.ConfettiCelebration
+import com.company.skolab.ui.components.MarkdownText
+import com.company.skolab.ui.theme.*
 import com.company.skolab.viewmodel.DailyDiscoveryViewModel
 import com.company.skolab.viewmodel.DiscoveryItem
+import kotlinx.coroutines.launch
+import kotlin.math.absoluteValue
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DailyDiscoveryScreen(
     onBack: () -> Unit,
     onPaperSaved: (String) -> Unit,
+    onDiscussClick: (String) -> Unit = {},
     viewModel: DailyDiscoveryViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -48,7 +57,10 @@ fun DailyDiscoveryScreen(
     val isLoading = uiState.isLoading
     val errorMessage = uiState.errorMessage
     val coroutineScope = rememberCoroutineScope()
-
+    val context = LocalContext.current
+    
+    var savedIds by remember { mutableStateOf(setOf<String>()) }
+    var confettiVisible by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -57,7 +69,7 @@ fun DailyDiscoveryScreen(
     ) {
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = EntropiColors.Gold2)
+                CircularProgressIndicator(color = AccentAmber)
             }
         } else if (errorMessage != null) {
             Box(
@@ -69,7 +81,7 @@ fun DailyDiscoveryScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = "ACADEMIC SIGNAL TIMEOUT",
-                        color = Color.Red,
+                        color = AccentRose,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.5.sp
@@ -84,9 +96,9 @@ fun DailyDiscoveryScreen(
                     Spacer(modifier = Modifier.height(24.dp))
                     Button(
                         onClick = onBack,
-                        colors = ButtonDefaults.buttonColors(containerColor = EntropiColors.Gold2)
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentAmber)
                     ) {
-                        Text("Go Back", color = Color.Black)
+                        Text("Go Back", color = Color.White)
                     }
                 }
             }
@@ -101,172 +113,402 @@ fun DailyDiscoveryScreen(
                         .padding(top = 16.dp, start = 16.dp, end = 16.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onBack) {
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier
+                            .background(Color.White.copy(alpha = 0.06f), CircleShape)
+                    ) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
                             tint = EntropiColors.Text1
                         )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "Daily Discovery",
+                            text = "Daily Discovery Feed",
                             color = EntropiColors.Text1,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = DisplayFontFamily
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontFamily = SpaceGroteskFontFamily
                         )
                         Text(
-                            text = "${pagerState.currentPage + 1} of ${discoveryItems.size}",
-                            color = EntropiColors.Gold2,
-                            fontSize = 14.sp
+                            text = "${pagerState.currentPage + 1} of ${discoveryItems.size} papers",
+                            color = AccentAmber,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
                 
-                // Pager for Swipeable Cards
-                HorizontalPager(
+                // Vertical Pager with Perspective Cascade Geometry
+                VerticalPager(
                     state = pagerState,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
-                    contentPadding = PaddingValues(horizontal = 32.dp),
+                    contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp, start = 20.dp, end = 20.dp),
                     pageSpacing = 16.dp
                 ) { page ->
+                    // Calculate fractional page offset relative to current page
                     val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
                     
-                    DiscoveryCard(
-                        item = discoveryItems[page],
+                    Box(
                         modifier = Modifier
+                            .fillMaxSize()
                             .graphicsLayer {
-                                // Scale effect
-                                val scale = 1f - (pageOffset.absoluteValue * 0.15f).coerceIn(0f, 0.15f)
-                                scaleX = scale
-                                scaleY = scale
-                                // Alpha effect
-                                alpha = 1f - (pageOffset.absoluteValue * 0.5f).coerceIn(0f, 0.5f)
+                                val pageHeight = size.height
+                                
+                                if (pageOffset > 0) {
+                                    // Slide off upwards with slight scale & fade
+                                    translationY = -pageOffset * pageHeight * 0.15f
+                                    alpha = (1f - pageOffset).coerceIn(0f, 1f)
+                                    scaleX = 1f - (pageOffset * 0.05f)
+                                    scaleY = 1f - (pageOffset * 0.05f)
+                                } else {
+                                    // Stacked underneath cascade
+                                    // Cancel default vertical scroll alignment offset
+                                    translationY = pageOffset * pageHeight
+                                    
+                                    // Stagger downward slightly based on index difference
+                                    val idxDiff = pageOffset.absoluteValue
+                                    translationY += idxDiff * 24.dp.toPx()
+                                    
+                                    // Scale down background cards slightly
+                                    val scale = 1f - (idxDiff * 0.05f).coerceIn(0f, 0.15f)
+                                    scaleX = scale
+                                    scaleY = scale
+                                    
+                                    // Mute/fade background cards
+                                    alpha = (1f - (idxDiff * 0.25f)).coerceIn(0.1f, 1f)
+                                }
                             }
-                    )
-                }
-                
-                // Action Buttons
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(32.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Pass Button
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .background(EntropiColors.Card, CircleShape)
-                            .clickable {
-                                coroutineScope.launch {
-                                    if (pagerState.currentPage < discoveryItems.size - 1) {
-                                        pagerState.animateScrollToPage(pagerState.currentPage + 1)
-                                    }
+                            // Ensure background cards draw behind the active card
+                            .zIndex(if (pageOffset.absoluteValue < 1f) 1f - pageOffset.absoluteValue else 0f)
+                    ) {
+                        val item = discoveryItems[page]
+                        val isSaved = savedIds.contains(item.id)
+                        
+                        DiscoveryCard(
+                            item = item,
+                            isSaved = isSaved,
+                            onSaveClick = {
+                                val newSaved = !isSaved
+                                savedIds = if (newSaved) savedIds + item.id else savedIds - item.id
+                                onPaperSaved(item.id)
+                                if (newSaved) {
+                                    confettiVisible = true
+                                    Toast.makeText(context, "Saved to Vault", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "Removed from Vault", Toast.LENGTH_SHORT).show()
                                 }
                             },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Pass", tint = EntropiColors.Text2, modifier = Modifier.size(32.dp))
-                    }
-                    
-                    // Save Button
-                    Box(
-                        modifier = Modifier
-                            .size(80.dp)
-                            .background(
-                                Brush.linearGradient(listOf(EntropiColors.Gold1, EntropiColors.Gold2)),
-                                CircleShape
-                            )
-                            .clickable {
-                                onPaperSaved(discoveryItems[pagerState.currentPage].id)
-                                coroutineScope.launch {
-                                    if (pagerState.currentPage < discoveryItems.size - 1) {
-                                        pagerState.animateScrollToPage(pagerState.currentPage + 1)
-                                    } else {
-                                        onBack() // All done!
-                                    }
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Bookmark, contentDescription = "Save", tint = Color.White, modifier = Modifier.size(40.dp))
+                            onDiscussClick = { onDiscussClick(item.title) },
+                            onShareClick = {
+                                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                val clip = android.content.ClipData.newPlainText("Paper Title", "${item.title} - ${item.authors}")
+                                clipboard.setPrimaryClip(clip)
+                                Toast.makeText(context, "Title & Authors copied to clipboard", Toast.LENGTH_SHORT).show()
+                            }
+                        )
                     }
                 }
             }
         }
+
+        // Overlay Confetti celebration for delightful feedback
+        ConfettiCelebration(
+            visible = confettiVisible,
+            onFinished = { confettiVisible = false }
+        )
     }
 }
 
 @Composable
-fun DiscoveryCard(item: DiscoveryItem, modifier: Modifier = Modifier) {
+fun DiscoveryCard(
+    item: DiscoveryItem,
+    isSaved: Boolean,
+    onSaveClick: () -> Unit,
+    onDiscussClick: () -> Unit,
+    onShareClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val scrollState = rememberScrollState()
+    val context = LocalContext.current
+    
+    val accentColor = remember(item.tags) {
+        val firstTag = item.tags.firstOrNull()?.lowercase() ?: ""
+        when {
+            firstTag.contains("quantum") || firstTag.contains("physics") -> AccentViolet
+            firstTag.contains("machine") || firstTag.contains("intelligence") || firstTag.contains("deep") || firstTag.contains("ai") -> AccentTeal
+            firstTag.contains("climate") || firstTag.contains("environmental") -> AccentEmerald
+            firstTag.contains("bio") || firstTag.contains("gen") -> AccentCyan
+            firstTag.contains("math") -> AccentIndigo
+            else -> AccentAmber
+        }
+    }
+
     Surface(
         shape = RoundedCornerShape(24.dp),
-        color = EntropiColors.Card,
-        border = BorderStroke(1.dp, EntropiColors.Border),
+        color = Color(0xFF1E293B).copy(alpha = 0.82f), // Matte glassmorphic slate background
+        border = BorderStroke(
+            width = 1.dp,
+            brush = Brush.verticalGradient(
+                listOf(
+                    Color.White.copy(alpha = 0.16f),
+                    Color.White.copy(alpha = 0.02f)
+                )
+            )
+        ),
+        tonalElevation = 2.dp,
         modifier = modifier
-            .fillMaxWidth()
-            .fillMaxHeight(0.9f)
+            .fillMaxSize()
+            .clip(RoundedCornerShape(24.dp))
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp)
+            modifier = Modifier.fillMaxSize()
         ) {
-            MarkdownText(
-                markdown = item.title,
-                color = EntropiColors.Text1,
-                fontSize = 24.sp,
-                modifier = Modifier.fillMaxWidth()
+            // Dynamic Accent Category Strip
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(accentColor, accentColor.copy(alpha = 0.3f))
+                        )
+                    )
             )
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            Text(
-                text = item.authors,
-                color = EntropiColors.Gold2,
-                fontSize = 16.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                item.tags.forEach { tag ->
-                    Box(
-                        modifier = Modifier
-                            .background(EntropiColors.Gold1, RoundedCornerShape(8.dp))
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(scrollState)
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Header row: Journal & Relevance match
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color.White.copy(alpha = 0.06f),
+                        border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.1f))
                     ) {
-                        Text(text = tag, color = EntropiColors.Gold1, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                        Text(
+                            text = "${item.journal} (${item.year})",
+                            color = EntropiColors.Text2,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .widthIn(max = 180.dp)
+                        )
+                    }
+                    
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = accentColor.copy(alpha = 0.12f),
+                        border = BorderStroke(0.5.dp, accentColor.copy(alpha = 0.3f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = accentColor,
+                                modifier = Modifier.size(10.dp)
+                            )
+                            Text(
+                                text = "${item.relevanceScore}% Match",
+                                color = accentColor,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = SpaceGroteskFontFamily
+                            )
+                        }
                     }
                 }
+
+                // Title
+                MarkdownText(
+                    markdown = item.title,
+                    color = EntropiColors.Text1,
+                    fontSize = 20.sp,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Authors
+                Text(
+                    text = "By ${item.authors}",
+                    color = accentColor,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                // Tags row
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    item.tags.forEach { tag ->
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color.White.copy(alpha = 0.04f),
+                            border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.08f))
+                        ) {
+                            Text(
+                                text = tag,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                color = EntropiColors.Text2,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = Color.White.copy(alpha = 0.08f), thickness = 1.dp)
+
+                // Abstract details section
+                Text(
+                    text = "ABSTRACT & INSIGHTS",
+                    color = EntropiColors.Text3,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+
+                MarkdownText(
+                    markdown = item.abstractText,
+                    color = EntropiColors.Text2,
+                    fontSize = 14.sp,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            Text(
-                text = "ABSTRACT",
-                color = EntropiColors.Text3,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
-            )
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            MarkdownText(
-                markdown = item.abstractText,
-                color = EntropiColors.Text2,
-                fontSize = 15.sp,
-                modifier = Modifier.fillMaxWidth()
-            )
+
+            // Quick Interaction Buttons Dock
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.2f))
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Discuss button
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.clickable { onDiscussClick() }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(Color.White.copy(alpha = 0.06f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Forum,
+                            contentDescription = "Discuss with AI",
+                            tint = AccentViolet,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text("Discuss", color = EntropiColors.Text3, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+
+                // Read PDF / Web Reader button
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.clickable {
+                        if (!item.pdfUrl.isNullOrBlank()) {
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(item.pdfUrl))
+                            context.startActivity(intent)
+                        } else {
+                            Toast.makeText(context, "Full PDF not available for this article", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(
+                                if (!item.pdfUrl.isNullOrBlank()) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.02f),
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Article,
+                            contentDescription = "Read PDF",
+                            tint = if (!item.pdfUrl.isNullOrBlank()) AccentCyan else Color.White.copy(alpha = 0.2f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text("Read PDF", color = if (!item.pdfUrl.isNullOrBlank()) EntropiColors.Text3 else Color.White.copy(alpha = 0.2f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+
+                // Save button
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.clickable { onSaveClick() }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(
+                                if (isSaved) accentColor.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.06f),
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                            contentDescription = "Save",
+                            tint = if (isSaved) accentColor else EntropiColors.Text1,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(if (isSaved) "Saved" else "Save", color = EntropiColors.Text3, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+
+                // Share button
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.clickable { onShareClick() }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(Color.White.copy(alpha = 0.06f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Share",
+                            tint = AccentAmber,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text("Share", color = EntropiColors.Text3, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
         }
     }
 }

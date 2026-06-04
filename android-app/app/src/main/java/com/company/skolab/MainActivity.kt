@@ -1045,7 +1045,11 @@ fun SkoLabMainApp() {
                         DailyDiscoveryScreen(
                             onBack = { navController.popBackStack() },
                             onPaperSaved = { paperId ->
-                                // no-op for now, would typically save to Vault
+                                SkoLabAnalytics.logPaperSaved(paperId)
+                            },
+                            onDiscussClick = { title ->
+                                val discussPrompt = "Discussing paper: \"$title\"\n\nCould you explain the methodology, tools used, and key findings of this work?"
+                                navController.navigate("agent?query=${android.net.Uri.encode(discussPrompt)}")
                             }
                         )
                     }

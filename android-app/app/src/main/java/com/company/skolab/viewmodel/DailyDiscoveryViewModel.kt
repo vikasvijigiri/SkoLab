@@ -11,12 +11,18 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+import com.company.skolab.network.getJournalOrFallback
+
 data class DiscoveryItem(
     val id: String,
     val title: String,
     val authors: String,
     val abstractText: String,
-    val tags: List<String>
+    val tags: List<String>,
+    val journal: String = "Academic Publication",
+    val year: Int = 2026,
+    val relevanceScore: Int = 85,
+    val pdfUrl: String? = null
 )
 
 data class DailyDiscoveryUiState(
@@ -61,12 +67,20 @@ class DailyDiscoveryViewModel(
                         tags.add("Research")
                         tags.add("Paper")
                     }
+                    val journalText = work.getJournalOrFallback()
+                    val yearValue = work.publication_year ?: 2026
+                    val relevanceVal = (80..99).random()
+                    val pdfLink = work.primary_location?.pdf_url
                     DiscoveryItem(
                         id = work.id,
                         title = work.title ?: "Untitled Paper",
                         authors = authorsText,
                         abstractText = abstractText,
-                        tags = tags.take(3)
+                        tags = tags.take(3),
+                        journal = journalText,
+                        year = yearValue,
+                        relevanceScore = relevanceVal,
+                        pdfUrl = pdfLink
                     )
                 }
                 _uiState.update { 
