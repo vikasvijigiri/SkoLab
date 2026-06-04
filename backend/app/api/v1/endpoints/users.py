@@ -1,4 +1,3 @@
-import os
 import time
 import json
 import hmac
@@ -14,7 +13,7 @@ from pathlib import Path
 from app.api.dependencies import get_db
 from app.core.config import settings
 from app.core.cache import _user_memory_cache, history_summary_cache
-from app.models.user_models import User, UserPreference, Connection, Message, AgentChatHistory
+from app.models.user_models import User, UserPreference, Connection, AgentChatHistory
 from app.models.analytics_models import UserSettings, UserActivityLog, ApiRequestLog
 
 logger = logging.getLogger("skolab.users")
@@ -204,7 +203,7 @@ async def export_user_data(userId: str, db: AsyncSession = Depends(get_db)):
         # Generate a signed timed token expiring in 24 hours (86400 seconds)
         expires_at = int(time.time()) + 86400
         token = generate_signed_token(userId, str(file_path), expires_at)
-        
+
         # Build download link
         download_url = f"{settings.app_base_url}/api/v1/users/download-export?token={token}"
 

@@ -379,7 +379,7 @@ class RateLimiter:
     async def check_rate_limit(self, client_ip: str, capacity: float = None, refill_rate: float = None) -> bool:
         cap = capacity if capacity is not None else self.capacity
         refill = refill_rate if refill_rate is not None else self.refill_rate
-        
+
         async with self.lock:
             now = time.perf_counter()
             if now - self.last_cleanup > 60.0:
@@ -394,7 +394,7 @@ class RateLimiter:
             bucket_key = f"{client_ip}:{cap}"
             if bucket_key not in self.buckets:
                 self.buckets[bucket_key] = TokenBucket(cap, refill)
-            
+
             return await self.buckets[bucket_key].consume()
 
 
@@ -406,7 +406,7 @@ async def kill_switch_middleware(request: Request, call_next):
     # Retrieve active kill switches dynamically from environment
     kill_switches = [x.strip().lower() for x in os.environ.get("KILL_SWITCHES", "").split(",") if x.strip()]
     path = request.url.path.lower()
-    
+
     # Allow health and metrics checks to bypass kill switches
     if path not in ["/", "/health", "/health/", "/metrics", "/metrics/"]:
         for feature in kill_switches:
@@ -439,7 +439,7 @@ async def admin_access_guard_middleware(request: Request, call_next):
         import os
         client_ip = request.client.host if request.client else "unknown"
         is_private = False
-        
+
         # Check standard private subnet prefixes
         if client_ip in ["127.0.0.1", "::1", "localhost", "testserver"]:
             is_private = True
@@ -453,10 +453,10 @@ async def admin_access_guard_middleware(request: Request, call_next):
                     is_private = True
             except Exception:
                 pass
-                
+
         sre_token = request.headers.get("X-SRE-Token")
         expected_token = os.environ.get("SRE_SECURITY_TOKEN", "sre_bypass_secret_2026")
-        
+
         if not is_private and sre_token != expected_token:
             from fastapi.responses import JSONResponse
             return JSONResponse(
@@ -469,21 +469,20 @@ async def admin_access_guard_middleware(request: Request, call_next):
 @app.middleware("http")
 async def device_signature_middleware(request: Request, call_next):
     if request.method in ["POST", "PUT", "DELETE", "PATCH"]:
-        import os
         import hmac
         import hashlib
         user_id = request.headers.get("X-User-Id") or request.query_params.get("user_id") or request.query_params.get("userId")
         if user_id:
             timestamp_str = request.headers.get("X-Device-Timestamp")
             signature = request.headers.get("X-Device-Signature")
-            
+
             if not timestamp_str or not signature:
                 from fastapi.responses import JSONResponse
                 return JSONResponse(
                     status_code=401,
                     content={"detail": "Unauthorized: Missing device signature headers."}
                 )
-            
+
             try:
                 timestamp = int(timestamp_str)
                 # Check replay attack (5 minutes window)
@@ -493,7 +492,7 @@ async def device_signature_middleware(request: Request, call_next):
                         status_code=401,
                         content={"detail": "Unauthorized: Device signature timestamp expired."}
                     )
-                
+
                 # Verify HMAC
                 device_secret = str(settings.database_encryption_key).encode("utf-8")
                 payload = f"{user_id}:{timestamp_str}"
@@ -518,18 +517,18 @@ async def rate_limiting_middleware(request: Request, call_next):
     path = request.url.path
     if path in ["/", "/health", "/health/"]:
         return await call_next(request)
-        
+
     client_ip = request.client.host if request.client else "unknown"
-    
+
     # Path-specific rate limits
     strict_paths = ["/api/v1/agent/chat", "/api/v1/papers/search", "/api/v1/authors/search", "/api/v1/users/download-export", "/export"]
     is_strict = any(sp in path for sp in strict_paths)
-    
+
     if is_strict:
         allowed = await rate_limiter.check_rate_limit(client_ip, capacity=5.0, refill_rate=5.0/60.0)
     else:
         allowed = await rate_limiter.check_rate_limit(client_ip, capacity=60.0, refill_rate=1.0)
-        
+
     if not allowed:
         from fastapi.responses import JSONResponse
         return JSONResponse(
@@ -552,7 +551,7 @@ class MetricsStore:
         self.latency_buckets = [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0]
         self.histogram_buckets = {}  # (method, endpoint, le) -> count
         self.lock = asyncio.Lock()
-        
+
         # Outbound HTTP Client metrics (thread-safe for sync/async wrappers)
         import threading
         self.outbound_lock = threading.Lock()
@@ -564,7 +563,7 @@ class MetricsStore:
         with self.outbound_lock:
             key = (host, str(status))
             self.outbound_request_counts[key] = self.outbound_request_counts.get(key, 0) + 1
-            
+
             if host not in self.outbound_request_latency:
                 self.outbound_request_latency[host] = []
             self.outbound_request_latency[host].append(latency_sec)
@@ -599,14 +598,14 @@ class MetricsStore:
         async with self.lock:
             key = (method, endpoint, str(status))
             self.request_counts[key] = self.request_counts.get(key, 0) + 1
-            
+
             lat_key = (method, endpoint)
             if lat_key not in self.request_latency:
                 self.request_latency[lat_key] = []
             self.request_latency[lat_key].append(latency_sec)
             if len(self.request_latency[lat_key]) > 1000:
                 self.request_latency[lat_key].pop(0)
-                
+
             # Histogram buckets
             for bucket in self.latency_buckets:
                 bucket_key = (method, endpoint, f"{bucket:.3f}")
@@ -615,7 +614,7 @@ class MetricsStore:
             # Add +Inf bucket
             inf_key = (method, endpoint, "+Inf")
             self.histogram_buckets[inf_key] = self.histogram_buckets.get(inf_key, 0) + 1
-            
+
             if status >= 400:
                 self.error_counts += 1
 
@@ -631,28 +630,28 @@ async def structured_log_middleware(request: Request, call_next):
         parts = traceparent.split("-")
         if len(parts) >= 3:
             trace_id = parts[1]
-            
+
     if not trace_id:
         trace_id = request.headers.get("x-trace-id") or request.headers.get("x-request-id") or str(uuid.uuid4()).replace("-", "")
-        
+
     # Set context variables temporarily so telemetry Span initialization reads them
     trace_id_token = trace_id_var.set(trace_id)
-    
+
     request_id = request.headers.get("x-request-id") or trace_id
     request_id_token = request_id_var.set(request_id)
-    
+
     # Try to extract user ID from query parameters
     user_id = request.query_params.get("user_id") or request.query_params.get("userId") or ""
     user_id_token = user_id_var.set(user_id)
-    
+
     # Start a span for the router path
     from app.core.telemetry import tracer
     span_name = f"{request.method} {request.url.path}"
-    
+
     await metrics_store.increment_active_requests()
     start_time = time.perf_counter()
     response = None
-    
+
     # Use the telemetry Span context manager
     with tracer.start_as_current_span(span_name) as span:
         try:
@@ -676,7 +675,7 @@ async def structured_log_middleware(request: Request, call_next):
             status_code = response.status_code if response else 500
             await metrics_store.record_request(request.method, request.url.path, status_code, latency_ms)
             await metrics_store.decrement_active_requests()
-            
+
             logger.info(
                 f"{request.method} {request.url.path} - {status_code} - {latency_ms}ms",
                 extra={
@@ -724,7 +723,7 @@ async def health():
     """Dynamic status check verifying database and cache connectivity."""
     db_status = "unhealthy"
     cache_status = "unhealthy"
-    
+
     # Check Database
     from app.db.database import AsyncSessionLocal
     from sqlalchemy import text
@@ -734,7 +733,7 @@ async def health():
             db_status = "healthy"
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
-        
+
     # Check Cache (PgBackedCache)
     try:
         await suggestions_cache.set("health_ping", "1")
@@ -743,11 +742,11 @@ async def health():
             cache_status = "healthy"
     except Exception as e:
         logger.error(f"Cache health check failed: {e}")
-        
+
     status_code = 200
     if db_status != "healthy" or cache_status != "healthy":
         status_code = 503  # Service Unavailable
-        
+
     return Response(
         content=json.dumps({
             "status": "healthy" if status_code == 200 else "unhealthy",
@@ -763,18 +762,18 @@ async def health():
 async def metrics():
     """Prometheus metrics endpoint in plain text exposition format."""
     lines = []
-    
+
     # http_requests_total
     lines.append("# HELP http_requests_total Total number of HTTP requests.")
     lines.append("# TYPE http_requests_total counter")
     for (method, endpoint, status), count in metrics_store.request_counts.items():
         lines.append(f'http_requests_total{{method="{method}",endpoint="{endpoint}",status="{status}"}} {count}')
-        
+
     # http_active_requests
     lines.append("# HELP http_active_requests Current number of active HTTP requests.")
     lines.append("# TYPE http_active_requests gauge")
     lines.append(f"http_active_requests {metrics_store.active_requests}")
-    
+
     # http_request_duration_seconds (Histogram)
     lines.append("# HELP http_request_duration_seconds HTTP request duration histogram.")
     lines.append("# TYPE http_request_duration_seconds histogram")
@@ -794,12 +793,12 @@ async def metrics():
             # Sum and Count
             lines.append(f'http_request_duration_seconds_sum{{method="{method}",endpoint="{endpoint}"}} {total_duration:.6f}')
             lines.append(f'http_request_duration_seconds_count{{method="{method}",endpoint="{endpoint}"}} {count}')
-            
+
     # background_tasks_active
     lines.append("# HELP background_tasks_active Current number of active background worker tasks.")
     lines.append("# TYPE background_tasks_active gauge")
     lines.append(f"background_tasks_active {metrics_store.background_tasks_active}")
-    
+
     # openalex_api_requests_total
     lines.append("# HELP openalex_api_requests_total Total number of external requests to OpenAlex API.")
     lines.append("# TYPE openalex_api_requests_total counter")
@@ -809,7 +808,7 @@ async def metrics():
     lines.append("# HELP system_errors_total Total number of error responses.")
     lines.append("# TYPE system_errors_total counter")
     lines.append(f"system_errors_total {metrics_store.error_counts}")
-    
+
     # host metrics
     import psutil
     import shutil
@@ -817,29 +816,29 @@ async def metrics():
         cpu_usage = psutil.cpu_percent(interval=None)
         mem = psutil.virtual_memory()
         disk = shutil.disk_usage("/")
-        
+
         lines.append("# HELP host_cpu_usage_percent Host CPU utilization percentage.")
         lines.append("# TYPE host_cpu_usage_percent gauge")
         lines.append(f"host_cpu_usage_percent {cpu_usage:.1f}")
-        
+
         lines.append("# HELP host_memory_used_percent Host memory used percentage.")
         lines.append("# TYPE host_memory_used_percent gauge")
         lines.append(f"host_memory_used_percent {mem.percent:.1f}")
-        
+
         disk_used_pct = (disk.used / disk.total) * 100
         lines.append("# HELP host_disk_used_percent Host disk capacity used percentage.")
         lines.append("# TYPE host_disk_used_percent gauge")
         lines.append(f"host_disk_used_percent {disk_used_pct:.1f}")
     except Exception as e:
         logger.error(f"Failed to gather host metrics: {e}")
-        
+
     # outbound metrics
     lines.append("# HELP outbound_http_requests_total Total number of outbound HTTP requests.")
     lines.append("# TYPE outbound_http_requests_total counter")
     with metrics_store.outbound_lock:
         for (host, status), count in metrics_store.outbound_request_counts.items():
             lines.append(f'outbound_http_requests_total{{host="{host}",status="{status}"}} {count}')
-            
+
     lines.append("# HELP outbound_http_request_duration_seconds Outbound HTTP request duration summary.")
     lines.append("# TYPE outbound_http_request_duration_seconds summary")
     with metrics_store.outbound_lock:
@@ -849,7 +848,7 @@ async def metrics():
                 count = len(latencies)
                 lines.append(f'outbound_http_request_duration_seconds_sum{{host="{host}"}} {total_duration:.6f}')
                 lines.append(f'outbound_http_request_duration_seconds_count{{host="{host}"}} {count}')
-                
+
     return Response(
         content="\n".join(lines) + "\n",
         media_type="text/plain; version=0.0.4"

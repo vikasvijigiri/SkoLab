@@ -4,7 +4,7 @@ def utcnow():
     return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
 
 import re
-from typing import Optional, List
+from typing import Optional
 from sqlalchemy import (
     Column,
     String,
@@ -145,7 +145,7 @@ class ResearcherMetrics(Base):
             return None
         if not isinstance(value, list):
             raise ValueError("Expertise must be a list")
-        
+
         CLEAN_TEXT_REGEX = re.compile(r"^[a-zA-Z0-9\s\-_.,()]+$")
         clean_list = []
         for item in value:

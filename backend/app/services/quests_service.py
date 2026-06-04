@@ -165,7 +165,7 @@ class QuestsService:
                 )
                 sig_res = await self.db.execute(sig_stmt)
                 sig_pref = sig_res.scalars().first()
-                
+
                 from app.db.database import generate_record_signature, verify_record_signature
                 if sig_pref:
                     if not verify_record_signature(user_id, quests_data, str(sig_pref.preference_value)):
@@ -218,7 +218,7 @@ class QuestsService:
                 )
                 sig_res = await self.db.execute(sig_stmt)
                 sig_pref = sig_res.scalars().first()
-                
+
                 from app.db.database import generate_record_signature, verify_record_signature
                 if sig_pref:
                     if not verify_record_signature(user_id, quests_data, str(sig_pref.preference_value)):
@@ -236,7 +236,7 @@ class QuestsService:
             if updated:
                 pref.preference_value = quests
                 flag_modified(pref, "preference_value")
-                
+
                 if not is_mock_db:
                     from app.db.database import generate_record_signature
                     new_sig = generate_record_signature(user_id, quests)
@@ -250,7 +250,7 @@ class QuestsService:
                             preference_value=new_sig,
                         )
                         self.db.add(sig_pref)
-                    
+
                 try:
                     await self.db.commit()
                 except Exception:

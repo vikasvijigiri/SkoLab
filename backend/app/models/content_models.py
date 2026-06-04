@@ -15,7 +15,6 @@ from sqlalchemy import (
     CheckConstraint,
 )
 from sqlalchemy.orm import validates
-from typing import Optional
 from app.db.database import Base
 from app.models.researcher_models import clean_and_validate_doi
 
