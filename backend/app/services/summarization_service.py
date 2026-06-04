@@ -13,17 +13,19 @@ PDF sourcing priority:
 """
 
 import httpx
-import os
-import random
 import json
 import re
 import io
 import asyncio
-import time
 from typing import Optional, List, Dict, Any, Tuple
 from .metrics_service import MetricsService
-from app.prompts import RESEARCH_INTELLIGENCE_SYSTEM_PROMPT
+from app.prompts import (
+    RESEARCH_INTELLIGENCE_SYSTEM_PROMPT,
+    PAPER_COMMUNICATOR_PROMPT_TEMPLATE,
+    PRESENTATION_PRESENTER_PROMPT_TEMPLATE,
+)
 from app.core.config import settings
+from app.services.llm_service import is_llm_working
 
 
 # ── LLM Context Budget ────────────────────────────────────────────────────────
@@ -47,23 +49,19 @@ NOISE_PATTERNS = re.compile(
 
 # Shared module-level in-memory cache
 _global_intelligence_cache: Dict[str, Dict[str, Any]] = {}
-from app.services.llm_service import (
-    is_llm_working,
-    set_llm_limit_exceeded,
-    LLM_LIMIT_EXCEEDED,
-    LLM_LIMIT_EXCEEDED_TIME
-)
+
 
 class SummarizationService:
     def __init__(self):
         from app.services.llm_service import LLMService
+
         self.llm_service = LLMService()
         self.models = [
             "llama-3.3-70b-versatile",
             "llama3-8b-8192",
             "mixtral-8x7b-32768",
             "gemma2-9b-it",
-            "llama-3.1-8b-instant"
+            "llama-3.1-8b-instant",
         ]
         self.metrics_service = MetricsService()
 
@@ -84,7 +82,6 @@ class SummarizationService:
         Reads the FULL TEXT of the paper (PDF when available, abstract as fallback)
         and extracts 9-dimensional structured intelligence via the LLM.
         """
-        cache_key = openalex_id or doi or title
         # Caching disabled as per complete cache removal requirement
 
         # ── Step 1: Fetch OpenAlex metadata (always) ──────────────────────────
@@ -93,8 +90,10 @@ class SummarizationService:
 
         # ── Step 2: Attempt to get the full paper text ────────────────────────
         if not is_llm_working():
-            return self._intelligence_fallback(title, meta, "abstract_only")
-        
+            raise Exception(
+                "LLM service is offline or rate-limited. Paper analysis is unavailable."
+            )
+
         full_text, text_source = await self._fetch_full_paper_text(
             doi=doi,
             openalex_id=openalex_id,
@@ -107,8 +106,7 @@ class SummarizationService:
         try:
             return await self._run_intelligence_llm(context, title, meta, text_source)
         except Exception as exc:
-            print(f"[analyze_paper] Falling back after LLM failure: {exc}", flush=True)
-            return self._intelligence_fallback(title, meta, text_source)
+            raise Exception(f"Failed to query LLM to analyze paper: {str(exc)}")
 
     # ══════════════════════════════════════════════════════════════════════════
     # PDF FETCHING & TEXT EXTRACTION
@@ -132,8 +130,6 @@ class SummarizationService:
           4. Semantic Scholar S2 PDF link
           ↳ Fallback: None (caller uses abstract)
         """
-        pdf_url: Optional[str] = None
-        source_label = "abstract_only"
 
         # ── Source 1: OpenAlex oa_url ─────────────────────────────────────────
         if oa_url:
@@ -176,9 +172,12 @@ class SummarizationService:
     async def _download_and_extract_pdf(self, url: str) -> Optional[str]:
         """Downloads a PDF from url and extracts clean text. Returns None on failure."""
         try:
-            import pdfplumber
+            import pdfplumber  # noqa: F401
         except ImportError:
-            print("[PDF] pdfplumber not installed. Run: pip install pdfplumber", flush=True)
+            print(
+                "[PDF] pdfplumber not installed. Run: pip install pdfplumber",
+                flush=True,
+            )
             return None
 
         try:
@@ -191,7 +190,7 @@ class SummarizationService:
             }
             async with httpx.AsyncClient(
                 headers=headers,
-                timeout=httpx.Timeout(2.0, connect=2.0),
+                timeout=httpx.Timeout(settings.http_timeout_seconds, connect=2.0),
                 follow_redirects=True,
             ) as client:
                 resp = await client.get(url)
@@ -206,7 +205,10 @@ class SummarizationService:
 
                 pdf_bytes = resp.content
                 if len(pdf_bytes) < 1000:
-                    print(f"[PDF] File too small ({len(pdf_bytes)} bytes), skipping", flush=True)
+                    print(
+                        f"[PDF] File too small ({len(pdf_bytes)} bytes), skipping",
+                        flush=True,
+                    )
                     return None
 
             # Extract text in a thread pool to avoid blocking the event loop
@@ -215,7 +217,10 @@ class SummarizationService:
             )
 
             if not text or len(text.strip()) < 200:
-                print("[PDF] Extracted text too short — likely image-based PDF", flush=True)
+                print(
+                    "[PDF] Extracted text too short — likely image-based PDF",
+                    flush=True,
+                )
                 return None
 
             print(f"[PDF] Extracted {len(text.split())} words from PDF", flush=True)
@@ -226,7 +231,7 @@ class SummarizationService:
             return None
         except Exception as e:
             # Encode error message safely — PDF titles may contain non-ASCII chars (em-dashes etc.)
-            safe_err = str(e).encode('ascii', errors='replace').decode('ascii')
+            safe_err = str(e).encode("ascii", errors="replace").decode("ascii")
             print(f"[PDF] Download/extraction error: {safe_err}", flush=True)
             return None
 
@@ -235,6 +240,7 @@ class SummarizationService:
         """Synchronous PDF text extraction — run in executor."""
         try:
             import pdfplumber
+
             pages_text: List[str] = []
             references_hit = False
             word_count = 0
@@ -273,11 +279,14 @@ class SummarizationService:
             # Enforce word limit
             words = full_text.split()
             if len(words) > MAX_PAPER_WORDS:
-                full_text = " ".join(words[:MAX_PAPER_WORDS]) + "\n\n[TEXT TRUNCATED AT 30,000 WORDS]"
+                full_text = (
+                    " ".join(words[:MAX_PAPER_WORDS])
+                    + "\n\n[TEXT TRUNCATED AT 30,000 WORDS]"
+                )
 
             return full_text
         except Exception as e:
-            safe_err = str(e).encode('ascii', errors='replace').decode('ascii')
+            safe_err = str(e).encode("ascii", errors="replace").decode("ascii")
             print(f"[pdfplumber] Extraction error: {safe_err}", flush=True)
             return None
 
@@ -290,7 +299,9 @@ class SummarizationService:
         try:
             clean_doi = self._clean_doi(doi)
             url = f"https://api.unpaywall.org/v2/{clean_doi}?email={settings.openalex_email or 'support@skolab.open'}"
-            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            async with httpx.AsyncClient(
+                timeout=settings.http_timeout_seconds, follow_redirects=True
+            ) as client:
                 resp = await client.get(url)
                 if resp.status_code == 200:
                     data = resp.json()
@@ -309,7 +320,9 @@ class SummarizationService:
         try:
             clean_doi = self._clean_doi(doi)
             url = f"https://api.semanticscholar.org/graph/v1/paper/{clean_doi}?fields=openAccessPdf"
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(
+                timeout=settings.http_timeout_seconds
+            ) as client:
                 resp = await client.get(url)
                 if resp.status_code == 200:
                     data = resp.json()
@@ -338,10 +351,12 @@ class SummarizationService:
                 "User-Agent": f"SkolabApp/1.0 (mailto:{settings.openalex_email or 'support@skolab.open'})",
                 "Accept": "application/json",
             }
-            from app.core.config import settings
+
             if settings.openalex_api_key:
                 headers["api_key"] = settings.openalex_api_key
-            async with httpx.AsyncClient(headers=headers, timeout=15.0) as client:
+            async with httpx.AsyncClient(
+                headers=headers, timeout=settings.http_timeout_seconds
+            ) as client:
                 resp = await client.get(url)
                 if resp.status_code != 200:
                     return {}
@@ -416,6 +431,7 @@ class SummarizationService:
         except Exception as e:
             print(f"[OpenAlex meta] Error: {e}", flush=True)
             import traceback
+
             traceback.print_exc()
             return {}
 
@@ -481,18 +497,18 @@ class SummarizationService:
             {"role": "system", "content": RESEARCH_INTELLIGENCE_SYSTEM_PROMPT},
             {"role": "user", "content": context},
         ]
-        
+
         response = await self.llm_service.query(
             messages=messages,
             models=self.models,
             temperature=0.15,
             max_tokens=2048,
-            response_format={"type": "json_object"}
+            response_format={"type": "json_object"},
         )
-        
+
         if not response.content:
             raise Exception("LLM response was empty.")
-            
+
         return self._parse_and_normalise(response.content, title, meta, text_source)
 
     def _parse_and_normalise(
@@ -510,7 +526,7 @@ class SummarizationService:
                 # Fix unescaped backslashes that confuse JSON parser
                 fixed = re.sub(
                     r'(?<!\\)\\(?!["\\\/bfnrt]|u[0-9a-fA-F]{4})',
-                    r'\\\\',
+                    r"\\\\",
                     raw,
                 )
                 content = json.loads(fixed)
@@ -535,7 +551,9 @@ class SummarizationService:
             "full_text_s2": "High",
             "abstract_only": "Medium",
         }
-        confidence = confidence_map.get(text_source, content.get("confidence", "Medium"))
+        confidence = confidence_map.get(
+            text_source, content.get("confidence", "Medium")
+        )
 
         return {
             "tldr": fix_latex(content.get("tldr", "")),
@@ -559,7 +577,9 @@ class SummarizationService:
         self, title: str, doi: Optional[str] = None
     ) -> Dict[str, Any]:
         """Legacy: returns bullets + metrics + top_skills (used by /summarize_work)."""
-        paper_data = await self._fetch_openalex_meta(doi=doi) if doi else {"title": title}
+        paper_data = (
+            await self._fetch_openalex_meta(doi=doi) if doi else {"title": title}
+        )
 
         metrics = self.metrics_service.calculate_metrics(paper_data)
         top_skills = self.metrics_service.extract_top_skills(
@@ -567,10 +587,9 @@ class SummarizationService:
         )
 
         if not is_llm_working():
-            fallback = self._generate_fallback_data(title)
-            fallback["metrics"] = metrics
-            fallback["top_skills"] = top_skills
-            return fallback
+            raise Exception(
+                "LLM service is offline or rate-limited. Paper summary is unavailable."
+            )
 
         context = f"Title: {title}\n"
         if paper_data.get("abstract"):
@@ -583,16 +602,7 @@ class SummarizationService:
                 messages=[
                     {
                         "role": "system",
-                        "content": r"""You are a world-class scientific communicator.
-Summarize the provided paper into 4-5 high-impact, technical bullet points.
-
-RULES:
-- Use **bold** for key terms.
-- Use LaTeX $$...$$ for formulas (double backslash in JSON).
-- Start each bullet with a scientific emoji.
-- Only use information provided. Do NOT invent numbers.
-
-Return JSON: { "bullets": ["⚛️ ...", ...] }""",
+                        "content": PAPER_COMMUNICATOR_PROMPT_TEMPLATE,
                     },
                     {"role": "user", "content": context},
                 ],
@@ -600,7 +610,7 @@ Return JSON: { "bullets": ["⚛️ ...", ...] }""",
                 temperature=0.3,
                 response_format={"type": "json_object"},
             )
-            
+
             if response.content:
                 raw = response.content
                 try:
@@ -608,7 +618,7 @@ Return JSON: { "bullets": ["⚛️ ...", ...] }""",
                 except json.JSONDecodeError:
                     fixed = re.sub(
                         r'(?<!\\)\\(?!["\\\/bfnrt]|u[0-9a-fA-F]{4})',
-                        r'\\\\',
+                        r"\\\\",
                         raw,
                     )
                     content = json.loads(fixed)
@@ -620,12 +630,9 @@ Return JSON: { "bullets": ["⚛️ ...", ...] }""",
                 content["top_skills"] = top_skills
                 return content
         except Exception as e:
-            print(f"[summarize_paper] Query failed: {e}", flush=True)
+            raise Exception(f"Failed to query LLM to summarize paper: {str(e)}")
 
-        fallback = self._generate_fallback_data(title)
-        fallback["metrics"] = metrics
-        fallback["top_skills"] = top_skills
-        return fallback
+        raise Exception("LLM summary generation failed to return a response.")
 
     async def generate_presentation(
         self, title: str, doi: Optional[str] = None
@@ -643,11 +650,7 @@ Return JSON: { "bullets": ["⚛️ ...", ...] }""",
                 messages=[
                     {
                         "role": "system",
-                        "content": r"""You are an expert academic presenter.
-Convert the paper DNA into a professional 7-slide outline.
-STRUCTURE: Title, Problem, Methodology, Key Discovery, Complexity, Application, Future.
-Each slide: 'title' + 3-4 'bullets'. Use $$LaTeX$$ for formulas.
-Return JSON: { "slides": [{ "title": "...", "bullets": ["..."] }] }""",
+                        "content": PRESENTATION_PRESENTER_PROMPT_TEMPLATE,
                     },
                     {"role": "user", "content": context},
                 ],
@@ -659,7 +662,7 @@ Return JSON: { "slides": [{ "title": "...", "bullets": ["..."] }] }""",
                 return json.loads(response.content)
         except Exception as e:
             print(f"[generate_presentation] Query failed: {e}", flush=True)
-            
+
         return {"slides": []}
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -685,7 +688,7 @@ Return JSON: { "slides": [{ "title": "...", "bullets": ["..."] }] }""",
         """Strips URL prefix from DOI."""
         for prefix in ["https://doi.org/", "http://doi.org/", "doi:"]:
             if doi.startswith(prefix):
-                return doi[len(prefix):]
+                return doi[len(prefix) :]
         return doi
 
     @staticmethod
@@ -700,7 +703,7 @@ Return JSON: { "slides": [{ "title": "...", "bullets": ["..."] }] }""",
 
     @staticmethod
     def _reconstruct_abstract(
-        inverted_index: Optional[Dict[str, List[int]]]
+        inverted_index: Optional[Dict[str, List[int]]],
     ) -> Optional[str]:
         """Reconstructs abstract text from OpenAlex inverted index format."""
         if not inverted_index:
@@ -712,58 +715,3 @@ Return JSON: { "slides": [{ "title": "...", "bullets": ["..."] }] }""",
         if not word_positions:
             return None
         return " ".join(word_positions[i] for i in sorted(word_positions.keys()))
-
-    def _intelligence_fallback(
-        self,
-        title: str,
-        meta: Dict[str, Any],
-        text_source: str = "abstract_only",
-    ) -> Dict[str, Any]:
-        concepts = meta.get("concepts", [])
-        topics = meta.get("topics", [])
-        year = meta.get("year", "")
-        cited = meta.get("cited_by_count", 0)
-
-        return {
-            "tldr": f"This paper investigates {title.lower()}, contributing novel findings to the field.",
-            "key_findings": [
-                f"🔬 Presents novel research on **{title}** ({year}).",
-                f"📊 Accumulated **{cited}** citations, indicating field impact." if cited else
-                "📊 Research impact metrics are being indexed.",
-                "💡 Introduces a new theoretical or experimental framework.",
-            ],
-            "techniques": topics[:4] if topics else concepts[:4],
-            "tools_and_software": [],
-            "core_concepts": concepts[:5] or ["Scientific Research Methodology"],
-            "formulas": [],
-            "limitations": [
-                "Full paper text not available for deep analysis.",
-                "Analysis based on metadata only — accuracy may be limited.",
-            ],
-            "real_world_impact": (
-                f"This research has potential applications in "
-                f"{topics[0] if topics else 'the field'}, pending deeper analysis."
-            ),
-            "future_directions": [
-                "Extending findings to broader experimental contexts.",
-                "Replication with larger datasets.",
-            ],
-            "confidence": "Low",
-            "text_source": text_source,
-        }
-
-    def _generate_fallback_data(self, title: str) -> Dict[str, Any]:
-        return {
-            "bullets": [
-                f"🔬 Investigates the core dynamics of {title.lower()}.",
-                "📐 Proposes a specialized framework for theoretical modeling.",
-                "📊 Establishes new baselines for experimental verification.",
-                "💡 Highlights critical implications for the field's trajectory.",
-            ],
-            "metrics": {
-                "creativity": 0,
-                "complexity": 0,
-                "skill_set_score": 0,
-            },
-            "top_skills": ["Theoretical Physics", "Advanced Mathematics"],
-        }

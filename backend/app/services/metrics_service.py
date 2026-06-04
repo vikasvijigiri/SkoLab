@@ -1,11 +1,12 @@
 import numpy as np
 import networkx as nx
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional
 import math
 import json
 import os
 from app.services.openalex_service import OpenAlexService
 from app.services.scraping_service import ScrapingService
+
 
 class MetricsService:
     """
@@ -17,9 +18,11 @@ class MetricsService:
 
     def _load_taxonomy(self):
         try:
-            path = os.path.join(os.path.dirname(__file__), "..", "data", "arxiv_taxonomy.json")
+            path = os.path.join(
+                os.path.dirname(__file__), "..", "data", "arxiv_taxonomy.json"
+            )
             if os.path.exists(path):
-                with open(path, 'r') as f:
+                with open(path, "r") as f:
                     return json.load(f)
         except Exception:
             pass
@@ -47,7 +50,9 @@ class MetricsService:
         return c[-1] - 2 * c[-2] + c[-3]
 
     @staticmethod
-    def calculate_future_impact(early_citations: int, journal_score: float, h_index: int) -> float:
+    def calculate_future_impact(
+        early_citations: int, journal_score: float, h_index: int
+    ) -> float:
         """
         3. Future Impact Score (ML-based Approximation)
         Approx: a1*early_cites + a2*journal + a3*h_index
@@ -67,20 +72,23 @@ class MetricsService:
         return round(centrality.get(node_id, 0.0) * 100, 1)
 
     @staticmethod
-    def calculate_semantic_novelty(embedding: np.ndarray, peer_embeddings: List[np.ndarray]) -> float:
+    def calculate_semantic_novelty(
+        embedding: np.ndarray, peer_embeddings: List[np.ndarray]
+    ) -> float:
         """
         5. Semantic Novelty Score
         Novelty = 1 - max(cosine_similarity)
         """
         if not peer_embeddings:
             return 1.0
-        
+
         def cosine_sim(a, b):
             norm_a = np.linalg.norm(a)
             norm_b = np.linalg.norm(b)
-            if norm_a == 0 or norm_b == 0: return 0
+            if norm_a == 0 or norm_b == 0:
+                return 0
             return np.dot(a, b) / (norm_a * norm_b)
-        
+
         similarities = [cosine_sim(embedding, peer) for peer in peer_embeddings]
         max_sim = max(similarities)
         return round((1.0 - max_sim) * 100, 1)
@@ -91,8 +99,9 @@ class MetricsService:
         H = - sum(p_i * log(p_i))
         Refined by checking cross-domain variety in ArXiv taxonomy.
         """
-        if not topic_counts: return 0.0
-        
+        if not topic_counts:
+            return 0.0
+
         # Group topics by top-level domains in taxonomy
         domain_counts = {}
         for topic, count in topic_counts.items():
@@ -112,7 +121,7 @@ class MetricsService:
             p = count / total
             if p > 0:
                 entropy -= p * math.log(p)
-        
+
         # Normalize: if topics span multiple major domains (Physics, CS, Bio), score is higher
         # Max entropy for 4 domains is ln(4) approx 1.38
         return round(min((entropy / 1.2) * 100, 100.0), 1)
@@ -125,7 +134,9 @@ class MetricsService:
         return (policy_cites * 5) + (patent_cites * 10)
 
     @staticmethod
-    def calculate_open_science_score(code: bool, data: bool, oa: bool, preprint: bool) -> int:
+    def calculate_open_science_score(
+        code: bool, data: bool, oa: bool, preprint: bool
+    ) -> int:
         """
         8. Open Science Score
         (C + D + O + P) / 4
@@ -139,8 +150,10 @@ class MetricsService:
         9. Collaboration Diversity Index
         Entropy over countries.
         """
-        if not countries: return 0.0
+        if not countries:
+            return 0.0
         from collections import Counter
+
         counts = Counter(countries)
         total = len(countries)
         entropy = 0.0
@@ -158,7 +171,8 @@ class MetricsService:
         if len(citations_per_year) < 2:
             return 100.0
         variance = np.var(citations_per_year)
-        if variance == 0: return 100.0
+        if variance == 0:
+            return 100.0
         # Normalize: inverse of variance, mapped to 0-100
         score = 100.0 / (1.0 + math.sqrt(variance))
         return round(score, 1)
@@ -169,26 +183,35 @@ class MetricsService:
         """
         # Legacy mapping for researcher_worker.py
         creativity = self.calculate_semantic_novelty(
-            data.get("embedding", np.random.rand(384)), 
-            data.get("peer_embeddings", [])
+            data.get("embedding", np.random.rand(384)), data.get("peer_embeddings", [])
         )
-        complexity = self.calculate_interdisciplinary_index(data.get("topic_counts", {"Physics": 1}))
+        complexity = self.calculate_interdisciplinary_index(
+            data.get("topic_counts", {"Physics": 1})
+        )
         skill_score = self.calculate_open_science_score(
-            data.get("code", False), 
-            data.get("data", False), 
-            data.get("oa", True), 
-            data.get("preprint", True)
+            data.get("code", False),
+            data.get("data", False),
+            data.get("oa", True),
+            data.get("preprint", True),
         )
-        
+
         return {
             "creativity": creativity,
             "complexity": complexity,
             "skill_set_score": skill_score,
-            "disruption": self.calculate_disruption_score(data.get("n1", 0), data.get("n2", 0), data.get("n3", 0)),
-            "acceleration": self.calculate_citation_acceleration(data.get("yearly_cites", [0, 0, 0])),
-            "consistency": self.calculate_research_consistency(data.get("yearly_cites", [0, 0, 0])),
-            "diversity": self.calculate_collaboration_diversity(data.get("countries", [])),
-            "impact": data.get("cited_by_count", 0) # Placeholder
+            "disruption": self.calculate_disruption_score(
+                data.get("n1", 0), data.get("n2", 0), data.get("n3", 0)
+            ),
+            "acceleration": self.calculate_citation_acceleration(
+                data.get("yearly_cites", [0, 0, 0])
+            ),
+            "consistency": self.calculate_research_consistency(
+                data.get("yearly_cites", [0, 0, 0])
+            ),
+            "diversity": self.calculate_collaboration_diversity(
+                data.get("countries", [])
+            ),
+            "impact": data.get("cited_by_count", 0),  # Placeholder
         }
 
     def extract_top_skills(self, concepts: List[Dict]) -> List[str]:
@@ -201,22 +224,25 @@ class MetricsService:
             level = c.get("level")
             name = c.get("display_name")
             score = c.get("score", 0)
-            
+
             # Level 2-4 usually represents specific techniques, materials, or methods
             if level is not None and level >= 2 and score > 0.4:
                 skills.append(name)
-        
+
         # Sort by relevance score if possible (though OpenAlex usually sorts by score)
         # Limit to top 6 specific skills
         return list(dict.fromkeys(skills))[:6]
 
+
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 async def compute_author_metrics(
     author_id: str,
     openalex_service: Optional[OpenAlexService] = None,
-    scraping_service: Optional[ScrapingService] = None
+    scraping_service: Optional[ScrapingService] = None,
 ) -> dict:
     if not openalex_service:
         openalex_service = OpenAlexService()
@@ -225,44 +251,45 @@ async def compute_author_metrics(
 
     clean_id = author_id.split("/")[-1]
     try:
-        results = await openalex_service.fetch_author_works(author_id=clean_id, per_page=10)
+        results = await openalex_service.fetch_author_works(
+            author_id=clean_id, per_page=10
+        )
     except Exception as e:
-        logger.error(f"Failed to fetch works for clean_id {clean_id} (original: {author_id}) via OpenAlexService: {e}")
+        logger.error(
+            f"Failed to fetch works for clean_id {clean_id} (original: {author_id}) via OpenAlexService: {e}"
+        )
         results = []
 
     if not results:
-        return {
-            "overall_score": 50,
-            "topic_toughness": 50,
-            "velocity": 50,
-            "skills": ["Research"],
-            "tools": ["Literature Review"],
-            "analysis": "Not enough recent papers to analyze comprehensively."
-        }
+        raise ValueError("Not enough recent papers to analyze comprehensively.")
 
     abstracts = []
     for work in results:
         title = work.get("title", "")
-        concepts = [c.get("display_name") for c in work.get("concepts", []) if c.get("display_name")]
+        concepts = [
+            c.get("display_name")
+            for c in work.get("concepts", [])
+            if c.get("display_name")
+        ]
         abstracts.append(f"Title: {title}. Concepts: {', '.join(concepts)}")
 
     context = "\n".join(abstracts)
-    
+
     schema = {
         "topic_toughness": "integer (0-100 indicating the complexity and niche of their topics)",
         "velocity": "integer (0-100 indicating how rapidly they are producing complex work)",
         "skills": "array of strings (3-5 high-level research skills implied by their work)",
         "tools": "array of strings (3-5 tools/frameworks/datasets implied by their work)",
-        "analysis": "string (a short 2 sentence explanation of why they got this score)"
+        "analysis": "string (a short 2 sentence explanation of why they got this score)",
     }
-    
+
     try:
         parsed = await scraping_service.parse_content_to_json(
             raw_content=context,
             response_schema=schema,
-            instruction="Analyze the recent research works of the author based on the density of the terminology, concepts, and titles, and evaluate their topic toughness and research velocity, along with identifying key skills, tools, and a brief analytical explanation."
+            instruction="Analyze the recent research works of the author based on the density of the terminology, concepts, and titles, and evaluate their topic toughness and research velocity, along with identifying key skills, tools, and a brief analytical explanation.",
         )
-        
+
         # Calculate an overall composite score and guarantee integer types for Ktor
         tt = int(parsed.get("topic_toughness", 50))
         vel = int(parsed.get("velocity", 50))
@@ -272,12 +299,4 @@ async def compute_author_metrics(
         return parsed
     except Exception as e:
         logger.error(f"Error analyzing metrics with LLM: {e}")
-        return {
-            "overall_score": 65,
-            "topic_toughness": 60,
-            "velocity": 70,
-            "skills": ["Data Analysis", "Scientific Writing"],
-            "tools": ["OpenAlex", "Statistical Software"],
-            "analysis": "Fallback metrics applied due to processing error."
-        }
-
+        raise e

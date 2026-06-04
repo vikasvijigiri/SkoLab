@@ -1,12 +1,13 @@
-from pydantic import BaseModel
-from typing import List, Optional, Union
+from pydantic import BaseModel, Field
+from typing import List, Optional
+
 
 class Work(BaseModel):
     id: Optional[str] = None
     title: Optional[str] = None
     year: Optional[int] = None
     doi: Optional[str] = None
-    journal: Optional[str] = None          # journal / venue name
+    journal: Optional[str] = None  # journal / venue name
     is_open_access: bool = False
     citations: int = 0
     creativity_score: float = 0.0
@@ -17,6 +18,7 @@ class Work(BaseModel):
     open_science_score: float = 0.0
     authors: Optional[List[str]] = None
 
+
 class AuthorSuggestion(BaseModel):
     id: str
     display_name: str
@@ -24,6 +26,7 @@ class AuthorSuggestion(BaseModel):
     field_of_study: Optional[str] = None
     h_index: Optional[int] = None
     innovation_score: Optional[int] = None
+
 
 class AuthorResponse(BaseModel):
     id: str
@@ -59,6 +62,7 @@ class AuthorResponse(BaseModel):
     next_prediction: Optional[str] = None
     similar_researchers: List[AuthorSuggestion] = []
 
+
 class PaperIntelligenceResponse(BaseModel):
     tldr: str = ""
     key_findings: List[str] = []
@@ -72,15 +76,18 @@ class PaperIntelligenceResponse(BaseModel):
     confidence: str = "Medium"
     text_source: str = "abstract_only"
 
+
 class ChatMessage(BaseModel):
     role: str
     content: str
 
+
 class ChatRequest(BaseModel):
     author_id: str
     paper_title: str
-    user_message: str
+    user_message: str = Field(..., max_length=2000)
     history: List[ChatMessage] = []
+
 
 class ConjectureResponse(BaseModel):
     id: str
@@ -91,11 +98,13 @@ class ConjectureResponse(BaseModel):
     correctOptionIndex: int
     explanation: str
 
+
 class Quest(BaseModel):
     id: str
     title: str
     reward_entropy: int
     is_completed: bool
+
 
 class LeaderboardEntry(BaseModel):
     rank: int
@@ -103,11 +112,13 @@ class LeaderboardEntry(BaseModel):
     institution: str
     entropy_score: int
 
+
 class AgentChatRequest(BaseModel):
-    message: str
+    message: str = Field(..., max_length=2000)
     history: list[dict[str, str]] = []
     mode: str = "RESEARCH"
     user_memory: Optional[dict] = None
+
 
 class ActivityEventPayload(BaseModel):
     type: str
@@ -124,9 +135,11 @@ class ActivityEventPayload(BaseModel):
     collaboratorName: Optional[str] = None
     collaboratorField: Optional[str] = None
 
+
 class UserMemoryEventsRequest(BaseModel):
     user_id: str
     events: List[ActivityEventPayload]
+
 
 class UserMemoryProfileResponse(BaseModel):
     user_id: str

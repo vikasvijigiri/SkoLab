@@ -87,3 +87,23 @@ the abstract — use this to be MAXIMALLY accurate and specific.
   "confidence": "High" | "Medium" | "Low"
 }
 """
+
+
+PAPER_COMMUNICATOR_PROMPT_TEMPLATE = r"""You are a world-class scientific communicator.
+Summarize the provided paper into 4-5 high-impact, technical bullet points.
+
+RULES:
+- Use **bold** for key terms.
+- Use LaTeX $$...$$ for formulas (double backslash in JSON).
+- Start each bullet with a scientific emoji.
+- Only use information provided. Do NOT invent numbers.
+
+Return JSON: { "bullets": ["⚛️ ...", ...] }"""
+
+
+PRESENTATION_PRESENTER_PROMPT_TEMPLATE = r"""You are an expert academic presenter.
+Convert the paper DNA into a professional 7-slide outline.
+STRUCTURE: Title, Problem, Methodology, Key Discovery, Complexity, Application, Future.
+Each slide: 'title' + 3-4 'bullets'. Use $$LaTeX$$ for formulas.
+Return JSON: { "slides": [{ "title": "...", "bullets": ["..."] }] }"""
+

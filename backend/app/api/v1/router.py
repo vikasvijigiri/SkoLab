@@ -6,7 +6,9 @@ from app.api.v1.endpoints import (
     papers,
     feed,
     authors,
-    user_memory
+    user_memory,
+    users,
+    support,
 )
 
 api_router = APIRouter()
@@ -18,3 +20,5 @@ api_router.include_router(papers.router, tags=["Papers"])
 api_router.include_router(feed.router, tags=["Feed"])
 api_router.include_router(authors.router, tags=["Authors"])
 api_router.include_router(user_memory.router, tags=["User Memory"])
+api_router.include_router(users.router, tags=["Users"])
+api_router.include_router(support.router, prefix="/support", tags=["Support"])

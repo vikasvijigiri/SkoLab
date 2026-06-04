@@ -2,6 +2,7 @@ import asyncio
 import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.core import PaperIntelligenceResponse
 from app.services.summarization_service import SummarizationService
@@ -10,29 +11,36 @@ from app.services.openalex_service import OpenAlexService
 from app.api.dependencies import (
     get_summarization_service,
     get_pipeline_services,
-    get_openalex_service
+    get_openalex_service,
+    get_db,
 )
 from app.core.cache import analyze_paper_cache, _semantic_trending_cache
 
 router = APIRouter()
 
+
 @router.get("/summarize_work")
 async def summarize_work(
     title: str = Query(...),
     doi: Optional[str] = None,
-    summarization_service: SummarizationService = Depends(get_summarization_service)
+    summarization_service: SummarizationService = Depends(get_summarization_service),
 ):
     try:
         return await summarization_service.summarize_paper(title, doi)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.get("/analyze_paper", response_model=PaperIntelligenceResponse)
 async def analyze_paper(
     title: str = Query(..., description="Full paper title"),
-    doi: Optional[str] = Query(None, description="DOI of the paper (e.g. 10.48550/arXiv.1706.03762)"),
-    openalex_id: Optional[str] = Query(None, description="OpenAlex work ID (e.g. W2741809807 or full URL)"),
-    summarization_service: SummarizationService = Depends(get_summarization_service)
+    doi: Optional[str] = Query(
+        None, description="DOI of the paper (e.g. 10.48550/arXiv.1706.03762)"
+    ),
+    openalex_id: Optional[str] = Query(
+        None, description="OpenAlex work ID (e.g. W2741809807 or full URL)"
+    ),
+    summarization_service: SummarizationService = Depends(get_summarization_service),
 ):
     """
     Deep paper intelligence: reads the FULL paper text (PDF when available)
@@ -55,23 +63,26 @@ async def analyze_paper(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.get("/presentation_outline")
 async def presentation_outline(
     title: str = Query(...),
     doi: Optional[str] = None,
-    summarization_service: SummarizationService = Depends(get_summarization_service)
+    summarization_service: SummarizationService = Depends(get_summarization_service),
 ):
     try:
         return await summarization_service.generate_presentation(title, doi)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.get("/semantic_trending")
 async def get_semantic_trending(
     author_id: str = Query(..., description="Full OpenAlex author URI or short ID"),
     limit: int = Query(10, ge=1, le=30),
     pipeline_services: PipelineServices = Depends(get_pipeline_services),
-    openalex_service: OpenAlexService = Depends(get_openalex_service)
+    openalex_service: OpenAlexService = Depends(get_openalex_service),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Returns papers trending specifically in the author's research field.
@@ -87,12 +98,15 @@ async def get_semantic_trending(
         pg_cached = await pipeline_services._load_from_postgres(cache_key)
         if pg_cached is not None:
             await _semantic_trending_cache.set(cache_key, pg_cached)
-            print(f"[SemanticTrending] Postgres cache hit for author={author_id}", flush=True)
+            print(
+                f"[SemanticTrending] Postgres cache hit for author={author_id}",
+                flush=True,
+            )
             return pg_cached
     except Exception as e:
         print(f"[SemanticTrending] Postgres cache read error: {e}", flush=True)
 
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     now_year = now.year
     now_month = now.month
 
@@ -111,7 +125,9 @@ async def get_semantic_trending(
     if author_data:
         display_name = author_data.get("display_name") or ""
         # Robust name filtering: remove any concept that is a word-subset of the author's name
-        a_words = {w.strip().lower() for w in display_name.split() if len(w.strip()) > 2}
+        a_words = {
+            w.strip().lower() for w in display_name.split() if len(w.strip()) > 2
+        }
 
         # ── Priority 1: topics (new OpenAlex format — richer, better IDs) ────
         topics = author_data.get("topics") or []
@@ -121,17 +137,23 @@ async def get_semantic_trending(
                 name = t.get("display_name") or ""
                 if not name:
                     continue
-                n_words = {w.strip().lower() for w in name.split() if len(w.strip()) > 2}
+                n_words = {
+                    w.strip().lower() for w in name.split() if len(w.strip()) > 2
+                }
                 if n_words and n_words.issubset(a_words):
                     continue  # author's own name masquerading as a concept
-                topic_concepts.append({
-                    "id": t.get("id", ""),
-                    "display_name": name,
-                    "score": float(t.get("count", 1) or 1)
-                })
+                topic_concepts.append(
+                    {
+                        "id": t.get("id", ""),
+                        "display_name": name,
+                        "score": float(t.get("count", 1) or 1),
+                    }
+                )
             if topic_concepts:
                 top_concepts = topic_concepts
-                author_concept_ids = {c["id"].split("/")[-1] for c in top_concepts if c.get("id")}
+                author_concept_ids = {
+                    c["id"].split("/")[-1] for c in top_concepts if c.get("id")
+                }
                 author_concept_names = [c["display_name"] for c in top_concepts]
 
         # ── Priority 2: x_concepts fallback (old format) ─────────────────────
@@ -142,42 +164,66 @@ async def get_semantic_trending(
                 name = c.get("display_name") or ""
                 if not name:
                     continue
-                n_words = {w.strip().lower() for w in name.split() if len(w.strip()) > 2}
+                n_words = {
+                    w.strip().lower() for w in name.split() if len(w.strip()) > 2
+                }
                 if n_words and n_words.issubset(a_words):
                     continue
                 valid_concepts.append(c)
             if valid_concepts:
-                top_concepts = sorted(valid_concepts, key=lambda c: c.get("score", 0) or 0, reverse=True)[:5]
-                author_concept_ids = {c.get("id", "").split("/")[-1] for c in top_concepts if c.get("id")}
-                author_concept_names = [c.get("display_name", "") for c in top_concepts if c.get("display_name")]
+                top_concepts = sorted(
+                    valid_concepts, key=lambda c: c.get("score", 0) or 0, reverse=True
+                )[:5]
+                author_concept_ids = {
+                    c.get("id", "").split("/")[-1] for c in top_concepts if c.get("id")
+                }
+                author_concept_names = [
+                    c.get("display_name", "")
+                    for c in top_concepts
+                    if c.get("display_name")
+                ]
 
     # ── Priority 3: Postgres DB fallback ─────────────────────────────────────
     if not top_concepts:
         try:
             from app.models.researcher_models import ResearcherMetrics
-            from app.db.database import AsyncSessionLocal
             from sqlalchemy.future import select
-            async with AsyncSessionLocal() as session:
-                stmt = select(ResearcherMetrics).where(ResearcherMetrics.openalex_id == clean_id)
-                res = await session.execute(stmt)
-                rm = res.scalars().first()
-                if rm:
-                    author_concept_names = rm.expertise or []
-                    if not author_concept_names and rm.field_of_study:
-                        author_concept_names = [rm.field_of_study]
-                    top_concepts = [{"id": f"https://openalex.org/C_{name.replace(' ', '_')}", "display_name": name, "score": 1.0} for name in author_concept_names]
-                    author_concept_ids = {c["id"].split("/")[-1] for c in top_concepts}
+
+            stmt = select(ResearcherMetrics).where(
+                ResearcherMetrics.openalex_id == clean_id
+            )
+            res = await db.execute(stmt)
+            rm = res.scalars().first()
+            if rm:
+                author_concept_names = rm.expertise or []
+                if not author_concept_names and rm.field_of_study:
+                    author_concept_names = [rm.field_of_study]
+                top_concepts = [
+                    {
+                        "id": f"https://openalex.org/C_{name.replace(' ', '_')}",
+                        "display_name": name,
+                        "score": 1.0,
+                    }
+                    for name in author_concept_names
+                ]
+                author_concept_ids = {c["id"].split("/")[-1] for c in top_concepts}
         except Exception as e:
             print(f"[SemanticTrending] Database lookup fallback error: {e}", flush=True)
 
     if not top_concepts:
         # Extreme fallback: generic science concepts
         author_concept_names = ["Science", "Physics", "Computer Science", "Biology"]
-        top_concepts = [{"id": f"https://openalex.org/C_{name.replace(' ', '_')}", "display_name": name, "score": 1.0} for name in author_concept_names]
+        top_concepts = [
+            {
+                "id": f"https://openalex.org/C_{name.replace(' ', '_')}",
+                "display_name": name,
+                "score": 1.0,
+            }
+            for name in author_concept_names
+        ]
         author_concept_ids = {c["id"].split("/")[-1] for c in top_concepts}
 
     print(f"[SemanticTrending] Author concepts: {author_concept_names}", flush=True)
-
 
     # ── Step 2: Fetch works per concept (in parallel) ─────────────────────
     prev_year = now_year - 1
@@ -190,16 +236,15 @@ async def get_semantic_trending(
             return []
         try:
             works_data = await openalex_service.fetch_works_by_concept(
-                concept_id,
-                prev_year,
-                now_year,
-                per_page=15
+                concept_id, prev_year, now_year, per_page=15
             )
             for w in works_data:
                 w["_source_concept_id"] = concept_id
             return works_data
         except Exception as e:
-            print(f"[SemanticTrending] Concept {concept_id} fetch error: {e}", flush=True)
+            print(
+                f"[SemanticTrending] Concept {concept_id} fetch error: {e}", flush=True
+            )
             return []
 
     fetch_tasks = [fetch_one_concept(concept) for concept in top_concepts[:4]]
@@ -214,151 +259,10 @@ async def get_semantic_trending(
                     all_works.append(w)
 
     if not all_works:
-        print(f"[SemanticTrending] No works returned by OpenAlex or API offline, generating personalized real trending papers", flush=True)
-        concepts_lower = [c.lower() for c in author_concept_names]
-        if any("quantum" in c or "phys" in c or "cosm" in c or "grav" in c for c in concepts_lower):
-            real_papers = [
-                {
-                    "id": "https://openalex.org/W2023547891",
-                    "title": "Experimental quantum teleportation",
-                    "journal": "Nature",
-                    "year": 1997,
-                    "cited_by_count": 6250,
-                    "velocity_score": 18.5,
-                    "is_open_access": True,
-                    "concept_tags": [c for c in author_concept_names if "phys" in c.lower() or "quantum" in c.lower() or "tele" in c.lower()][:2] or ["Quantum Physics"],
-                    "doi": "https://doi.org/10.1038/37539"
-                },
-                {
-                    "id": "https://openalex.org/W2145892110",
-                    "title": "Can quantum-mechanical description of physical reality be considered complete?",
-                    "journal": "Physical Review",
-                    "year": 1935,
-                    "cited_by_count": 8400,
-                    "velocity_score": 7.8,
-                    "is_open_access": False,
-                    "concept_tags": [c for c in author_concept_names if "phys" in c.lower() or "reality" in c.lower()][:2] or ["Quantum Mechanics"],
-                    "doi": "https://doi.org/10.1103/PhysRev.47.777"
-                },
-                {
-                    "id": "https://openalex.org/W1984210952",
-                    "title": "Observation of gravitationally induced quantum interference",
-                    "journal": "Physical Review Letters",
-                    "year": 1975,
-                    "cited_by_count": 540,
-                    "velocity_score": 1.2,
-                    "is_open_access": True,
-                    "concept_tags": [c for c in author_concept_names if "grav" in c.lower() or "inter" in c.lower()][:2] or ["Physics"],
-                    "doi": "https://doi.org/10.1103/PhysRevLett.34.1472"
-                }
-            ]
-        elif any("comput" in c or "machine" in c or "cs" in c or "learn" in c or "ai" in c or "algorithm" in c for c in concepts_lower):
-            real_papers = [
-                {
-                    "id": "https://openalex.org/W2741809802",
-                    "title": "Attention Is All You Need",
-                    "journal": "Advances in Neural Information Processing Systems",
-                    "year": 2017,
-                    "cited_by_count": 125000,
-                    "velocity_score": 1250.0,
-                    "is_open_access": True,
-                    "concept_tags": [c for c in author_concept_names if "learn" in c.lower() or "attention" in c.lower()][:2] or ["Deep Learning"],
-                    "doi": "https://doi.org/10.48550/arXiv.1706.03762"
-                },
-                {
-                    "id": "https://openalex.org/W2109843211",
-                    "title": "Deep Residual Learning for Image Recognition",
-                    "journal": "IEEE Conference on Computer Vision and Pattern Recognition",
-                    "year": 2016,
-                    "cited_by_count": 198000,
-                    "velocity_score": 1800.0,
-                    "is_open_access": True,
-                    "concept_tags": [c for c in author_concept_names if "recognition" in c.lower() or "image" in c.lower()][:2] or ["Computer Vision"],
-                    "doi": "https://doi.org/10.1109/CVPR.2016.90"
-                },
-                {
-                    "id": "https://openalex.org/W2098471203",
-                    "title": "Generative Adversarial Nets",
-                    "journal": "Advances in Neural Information Processing Systems",
-                    "year": 2014,
-                    "cited_by_count": 65000,
-                    "velocity_score": 500.0,
-                    "is_open_access": True,
-                    "concept_tags": [c for c in author_concept_names if "gener" in c.lower() or "net" in c.lower()][:2] or ["Machine Learning"],
-                    "doi": "https://doi.org/10.48550/arXiv.1406.2661"
-                }
-            ]
-        elif any("biol" in c or "medicine" in c or "genet" in c or "clin" in c or "brain" in c or "psych" in c or "neuro" in c for c in concepts_lower):
-            real_papers = [
-                {
-                    "id": "https://openalex.org/W1987546321",
-                    "title": "A Structure for Deoxyribose Nucleic Acid",
-                    "journal": "Nature",
-                    "year": 1953,
-                    "cited_by_count": 15200,
-                    "velocity_score": 17.5,
-                    "is_open_access": True,
-                    "concept_tags": [c for c in author_concept_names if "structure" in c.lower() or "dna" in c.lower()][:2] or ["Biochemistry"],
-                    "doi": "https://doi.org/10.1038/171737a0"
-                },
-                {
-                    "id": "https://openalex.org/W2123547890",
-                    "title": "A Programmable Dual-RNA-Guided DNA Endonuclease in Adaptive Bacterial Immunity",
-                    "journal": "Science",
-                    "year": 2012,
-                    "cited_by_count": 28000,
-                    "velocity_score": 210.0,
-                    "is_open_access": False,
-                    "concept_tags": [c for c in author_concept_names if "immunity" in c.lower() or "bacterial" in c.lower()][:2] or ["Genetics"],
-                    "doi": "https://doi.org/10.1126/science.1225829"
-                },
-                {
-                    "id": "https://openalex.org/W2098741092",
-                    "title": "Initial sequencing and analysis of the human genome",
-                    "journal": "Nature",
-                    "year": 2001,
-                    "cited_by_count": 38000,
-                    "velocity_score": 135.0,
-                    "is_open_access": True,
-                    "concept_tags": [c for c in author_concept_names if "genome" in c.lower() or "human" in c.lower()][:2] or ["Genomics"],
-                    "doi": "https://doi.org/10.1038/35057062"
-                }
-            ]
-        else:
-            real_papers = [
-                {
-                    "id": "https://openalex.org/W2741809802",
-                    "title": "Attention Is All You Need",
-                    "journal": "Advances in Neural Information Processing Systems",
-                    "year": 2017,
-                    "cited_by_count": 125000,
-                    "velocity_score": 1250.0,
-                    "is_open_access": True,
-                    "concept_tags": [author_concept_names[0]] if author_concept_names else ["Deep Learning"],
-                    "doi": "https://doi.org/10.48550/arXiv.1706.03762"
-                },
-                {
-                    "id": "https://openalex.org/W1987546321",
-                    "title": "A Structure for Deoxyribose Nucleic Acid",
-                    "journal": "Nature",
-                    "year": 1953,
-                    "cited_by_count": 15200,
-                    "velocity_score": 17.5,
-                    "is_open_access": True,
-                    "concept_tags": [author_concept_names[1]] if len(author_concept_names) > 1 else ["Biochemistry"],
-                    "doi": "https://doi.org/10.1038/171737a0"
-                }
-            ]
-        response = {
-            "author_concepts": author_concept_names[:5],
-            "papers": real_papers[:limit]
-        }
-        await _semantic_trending_cache.set(cache_key, response)
-        try:
-            await pipeline_services._save_to_postgres(cache_key, response)
-        except Exception as e:
-            print(f"[SemanticTrending] Postgres cache write error: {e}", flush=True)
-        return response
+        raise HTTPException(
+            status_code=502,
+            detail="No works returned by OpenAlex or API is offline. Cannot determine semantic trending papers.",
+        )
 
     # ── Step 3: Score each paper ──────────────────────────────────────────
     def score_paper(w: dict) -> float:
@@ -402,7 +306,9 @@ async def get_semantic_trending(
             pub_year_int = pub_year
             pub_month_int = 1
 
-        months_alive = max(1, (now_year - pub_year_int) * 12 + (now_month - pub_month_int))
+        months_alive = max(
+            1, (now_year - pub_year_int) * 12 + (now_month - pub_month_int)
+        )
         cited = w.get("cited_by_count") or 0
         velocity = round(cited / months_alive, 2)
 
@@ -411,24 +317,27 @@ async def get_semantic_trending(
         matched_tags = [
             c.get("display_name", "")
             for c in paper_concepts
-            if c.get("id", "").split("/")[-1] in author_concept_ids and c.get("display_name")
+            if c.get("id", "").split("/")[-1] in author_concept_ids
+            and c.get("display_name")
         ][:3]
         if not matched_tags and author_concept_names:
             matched_tags = [author_concept_names[0]]
 
         loc = w.get("primary_location") or {}
         source = loc.get("source") or {}
-        result_items.append({
-            "id": w.get("id", ""),
-            "title": w.get("title") or "Untitled",
-            "journal": source.get("display_name") or "Unknown Journal",
-            "year": pub_year_int,
-            "cited_by_count": cited,
-            "velocity_score": velocity,
-            "is_open_access": (w.get("open_access") or {}).get("is_oa", False),
-            "concept_tags": matched_tags,
-            "doi": w.get("doi") or "",
-        })
+        result_items.append(
+            {
+                "id": w.get("id", ""),
+                "title": w.get("title") or "Untitled",
+                "journal": source.get("display_name") or "Unknown Journal",
+                "year": pub_year_int,
+                "cited_by_count": cited,
+                "velocity_score": velocity,
+                "is_open_access": (w.get("open_access") or {}).get("is_oa", False),
+                "concept_tags": matched_tags,
+                "doi": w.get("doi") or "",
+            }
+        )
 
     response = {
         "author_concepts": author_concept_names[:5],
@@ -442,5 +351,8 @@ async def get_semantic_trending(
     except Exception as e:
         print(f"[SemanticTrending] Postgres cache write error: {e}", flush=True)
 
-    print(f"[SemanticTrending] Returning {len(result_items)} personalized papers for author={author_id}", flush=True)
+    print(
+        f"[SemanticTrending] Returning {len(result_items)} personalized papers for author={author_id}",
+        flush=True,
+    )
     return response

@@ -1,0 +1,131 @@
+groups:
+  - name: skolab-alert-rules
+    rules:
+      - alert: HostDiskSpaceCrossingThreshold
+        expr: host_disk_used_percent > 80
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host disk space crossed 80% boundary"
+          description: "Current disk space utilization is {{ $value }}%, which exceeds the 80% safety margin."
+
+      - alert: HighErrorRateDetected
+        expr: increase(system_errors_total[5m]) > 10
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API error occurrences detected"
+          description: "System generated {{ $value }} error responses (HTTP status >= 400) in the last 5 minutes."
+
+      - alert: HostCpuHighUtilization
+        expr: host_cpu_usage_percent > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host CPU utilization is extremely high"
+          description: "Host CPU usage has been {{ $value }}% for over 5 minutes."
+
+      - alert: HostMemoryExhaustion
+        expr: host_memory_used_percent > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host memory exhaustion warning"
+          description: "Virtual memory usage has exceeded 90% (currently {{ $value }}%) for over 5 minutes."
+
+      - alert: HighApiLatency
+        expr: http_request_duration_seconds_sum / http_request_duration_seconds_count > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High HTTP request latency warning"
+          description: "Average API endpoint latency is above 5 seconds (currently {{ $value }}s)."
+
+      # ---------------------------------------------------------------------------
+      # P95 per-endpoint latency threshold — fires after 3 consecutive evaluation
+      # cycles (3 × 1 min = 3 minutes sustained breach). Replaces the mean-only alert.
+      # Requires http_request_duration_seconds histogram from the /metrics endpoint.
+      # ---------------------------------------------------------------------------
+      - alert: P95EndpointLatencyHigh
+        expr: >
+          histogram_quantile(0.95,
+            sum by (le, endpoint) (
+              rate(http_request_duration_seconds_bucket[5m])
+            )
+          ) > 2.0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P95 endpoint latency exceeds 2s threshold"
+          description: >
+            Endpoint '{{ $labels.endpoint }}' P95 latency is {{ $value | humanizeDuration }}.
+            This has been sustained for 3 consecutive evaluation cycles.
+            Investigate slow queries, upstream API timeouts, or event-loop contention.
+
+      # ---------------------------------------------------------------------------
+      # Postmortem CA-002 (inc-2026-001): OpenAlex upstream API health
+      # Fires when the OpenAlex HTTP client receives more than 10 5xx responses
+      # in a 2-minute window — provides early warning before cascading 502s.
+      # ---------------------------------------------------------------------------
+      - alert: OpenAlexApiHighErrorRate
+        expr: increase(outbound_http_requests_total{status=~"5.."}[2m]) > 10
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OpenAlex API upstream is returning 5xx errors"
+          description: "Detected {{ $value }} 5xx responses from outbound HTTP clients in the last 2 minutes. Check OpenAlex status page. Consider applying kill switch: KILL_SWITCHES=papers/search,authors/search"
+
+      # ---------------------------------------------------------------------------
+      # Postmortem CA-002 (inc-2026-002): LLM token quota early warning
+      # Fires when Groq token remaining ratio drops below 20% of the daily limit.
+      # Requires groq_tokens_remaining gauge to be exposed on /metrics.
+      # ---------------------------------------------------------------------------
+      - alert: LlmApiQuotaApproaching
+        expr: groq_tokens_remaining_ratio < 0.20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Groq LLM API token quota approaching exhaustion"
+          description: "Groq remaining token ratio is {{ $value | humanizePercentage }}. Pause background enrichment jobs and monitor live agent chat. Consider switching to OpenRouter models proactively."
+
+      # ---------------------------------------------------------------------------
+      # High request rate surge — early DDoS/bot pre-alert at origin level.
+      # Fires before Cloudflare WAF thresholds are reached so SRE can react first.
+      # ---------------------------------------------------------------------------
+      - alert: HighRequestRateSurge
+        expr: rate(http_requests_total[1m]) > 100
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unusually high HTTP request rate detected at origin"
+          description: >
+            Request rate is {{ $value | humanize }} req/s sustained for 2 minutes.
+            Cloudflare WAF rate-limiting may not have triggered yet.
+            Check for bot activity or a push-notification-triggered traffic spike.
+            Apply kill switch if required: KILL_SWITCHES=agent/chat
+
+      # ---------------------------------------------------------------------------
+      # Circuit breaker open alert — fires when any downstream service breaker trips.
+      # Requires a skolab_circuit_breaker_state gauge (0=closed, 1=open, 2=half_open).
+      # ---------------------------------------------------------------------------
+      - alert: CircuitBreakerOpen
+        expr: skolab_circuit_breaker_state == 1
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Circuit breaker OPEN for service '{{ $labels.service }}'"
+          description: >
+            The circuit breaker for '{{ $labels.service }}' has tripped to OPEN state.
+            All outbound calls to this service are being rejected.
+            Recovery probe will occur after 30s cooldown.
+            Check the service status page and SRE runbook.

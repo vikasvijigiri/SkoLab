@@ -1,0 +1,86 @@
+[
+  {
+    "id": "block_generic_scrapers",
+    "description": "Block request libraries, command-line downloaders, and common scraping framework user-agents.",
+    "expression": "(http.user_agent contains \"python-requests\") or (http.user_agent contains \"urllib\") or (http.user_agent contains \"curl\") or (http.user_agent contains \"wget\") or (http.user_agent contains \"scrapy\") or (http.user_agent contains \"playwright\") or (http.user_agent contains \"puppeteer\")",
+    "action": "block"
+  },
+  {
+    "id": "rate_limit_search_auth",
+    "description": "Enforce strict rate limits on expensive search, AI chat, and CCPA export endpoints.",
+    "expression": "(http.request.uri.path contains \"/api/v1/agent/chat\") or (http.request.uri.path contains \"/api/v1/papers/search\") or (http.request.uri.path contains \"/api/v1/authors/search\") or (http.request.uri.path contains \"/export\")",
+    "action": "rate_limit",
+    "rate_limit": {
+      "threshold": 5,
+      "period": 60,
+      "action": "block"
+    }
+  },
+  {
+    "id": "rate_limit_auth_endpoints",
+    "description": "Strict per-IP rate limit on authentication and password reset endpoints to mitigate credential stuffing.",
+    "expression": "(http.request.uri.path contains \"/api/login\") or (http.request.uri.path contains \"/api/register\") or (http.request.uri.path contains \"/api/password-reset\")",
+    "action": "rate_limit",
+    "rate_limit": {
+      "threshold": 5,
+      "period": 60,
+      "action": "block"
+    }
+  },
+  {
+    "id": "block_public_admin",
+    "description": "Restrict access to administrative endpoints to local SRE IP ranges or secure VPN boundaries.",
+    "expression": "((http.request.uri.path contains \"/metrics\") or (http.request.uri.path contains \"/ai_status\")) and not (ip.src in {127.0.0.1 ::1 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16})",
+    "action": "block"
+  },
+  {
+    "id": "block_high_risk_asns",
+    "description": "Block traffic from known high-risk ASNs (bulletproof hosting, Tor exit relays, botnet-associated ranges) to all admin and auth routes. Update ASN list quarterly using threat intelligence feeds.",
+    "expression": "((http.request.uri.path contains \"/api/login\") or (http.request.uri.path contains \"/api/register\") or (http.request.uri.path contains \"/metrics\") or (http.request.uri.path contains \"/ai_status\")) and (ip.geoip.asnum in {209 3462 4134 4837 9009 16276 20473 24961 35916 51167 60781 200651})",
+    "action": "block"
+  },
+  {
+    "id": "bot_fight_mode_bypass_googlebot",
+    "description": "Allow verified Googlebot and Bingbot crawlers to bypass Bot Fight Mode for SEO crawling of public pages. Verification relies on Cloudflare's rDNS check.",
+    "expression": "(http.user_agent contains \"Googlebot\") or (http.user_agent contains \"Bingbot\") or (http.user_agent contains \"facebookexternalhit\")",
+    "action": "skip",
+    "skip": {
+      "products": ["botFightMode"]
+    }
+  },
+  {
+    "id": "cache_static_assets",
+    "description": "Cache all static assets (versioned CSS, JS, fonts, images served from /downloads/) at the edge for 1 year. Assets must use content-hash filenames to guarantee cache busting on deploy.",
+    "expression": "(http.request.uri.path contains \"/downloads/\") and not (http.cookie contains \"session\") and not (http.request.uri.path contains \"/downloads/exports/\")",
+    "action": "set_cache_settings",
+    "cache_settings": {
+      "cache": "override",
+      "browser_ttl": 31536000,
+      "edge_ttl": 31536000,
+      "serve_stale": true,
+      "stale_ttl": 86400
+    }
+  },
+  {
+    "id": "bypass_cache_authenticated_api",
+    "description": "Never cache authenticated API responses. All /api/v1/ routes that carry session cookies or Authorization headers must bypass the CDN cache entirely.",
+    "expression": "(http.request.uri.path contains \"/api/v1/\") and ((http.request.headers[\"authorization\"] ne \"\") or (http.cookie contains \"session\"))",
+    "action": "set_cache_settings",
+    "cache_settings": {
+      "cache": "bypass"
+    }
+  },
+  {
+    "id": "cache_public_api_feeds",
+    "description": "Cache public read-only feed endpoints (trending papers, author suggestions) at edge for a short TTL to reduce origin load during spikes.",
+    "expression": "(http.request.uri.path contains \"/api/v1/papers/trending\") or (http.request.uri.path contains \"/api/v1/authors/trending\") or (http.request.uri.path contains \"/api/v1/authors/suggest\")",
+    "action": "set_cache_settings",
+    "cache_settings": {
+      "cache": "override",
+      "browser_ttl": 60,
+      "edge_ttl": 120,
+      "serve_stale": true,
+      "stale_ttl": 300
+    }
+  }
+]
