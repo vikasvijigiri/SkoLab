@@ -363,6 +363,8 @@ fun HomeScreen(
                         uiState = sparkUiState,
                         userFocus = userFocus,
                         userMemoryProfile = userMemoryProfile,
+                        projects = projects,
+                        tasks = tasks,
                         onHailClick = { topic, bounty, tags ->
                             sparkViewModel.hailHelper(currentUserId, userName, topic, bounty, tags)
                         },
@@ -1261,6 +1263,8 @@ fun SparkConsole(
     uiState: com.company.skolab.viewmodel.SparkUiState,
     userFocus: String,
     userMemoryProfile: com.company.skolab.network.UserMemoryProfileResponse?,
+    projects: List<ProjectCollab>,
+    tasks: List<CollabTask>,
     onHailClick: (String, String, List<String>) -> Unit,
     onCancelBroadcast: () -> Unit
 ) {
@@ -1644,31 +1648,16 @@ fun SparkConsole(
     if (showHailDialog) {
         var topic by remember { mutableStateOf("") }
         var selectedBounty by remember { mutableStateOf("10 Tokens") }
+        var selectedProject by remember { mutableStateOf<ProjectCollab?>(null) }
+        var selectedTask by remember { mutableStateOf<CollabTask?>(null) }
+        var selectedPaper by remember { mutableStateOf<String?>(null) }
 
-        // Dynamic, user-relevant presets and tags based on semantic profile data
-        val topicPresets = remember(userMemoryProfile, userFocus) {
-            val presets = mutableListOf<Pair<String, String>>()
-            val activeTopic = userMemoryProfile?.last_active_topic?.ifBlank { null }
-                ?: userMemoryProfile?.top_topics?.firstOrNull()
-                ?: userFocus.ifBlank { "Research" }
-
-            val recentPaper = userMemoryProfile?.recently_read_papers?.firstOrNull()
-                ?: userMemoryProfile?.unfinished_papers?.firstOrNull()
-
-            presets.add("Literature 📚" to "Looking for foundational papers or trending literature in the field of $activeTopic.")
-            presets.add("Derivation 📐" to "Stuck on a theoretical proof or mathematical derivation for $activeTopic.")
-            
-            if (recentPaper != null) {
-                presets.add("Paper review 📝" to "Need to discuss findings/methodology in the paper: \"$recentPaper\".")
-            } else {
-                presets.add("Review 📝" to "Need a peer-review of my abstract/intro draft for $activeTopic.")
-            }
-
-            presets.add("Methodology 🔬" to "Need advice on experimental setup, datasets, or tooling for $activeTopic.")
-            presets.add("General Help 💡" to "Brainstorming new avenues and industry tie-ups for $activeTopic.")
-            presets
+        // Filter tasks that belong to the selected project
+        val projectTasks = remember(selectedProject, tasks) {
+            if (selectedProject == null) emptyList() else tasks
         }
 
+        // Available tags from user profile
         val availableTags = remember(userMemoryProfile, userFocus) {
             val list = mutableListOf<String>()
             userMemoryProfile?.let { prof ->
@@ -1723,7 +1712,7 @@ fun SparkConsole(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Briefly describe your blocker. Matching online experts will receive your ping.",
+                        text = "Specify your blocker context using your active project files, tasks, and papers.",
                         color = TEXT_SECONDARY,
                         fontSize = 11.sp,
                         lineHeight = 15.sp
@@ -1731,13 +1720,17 @@ fun SparkConsole(
                 }
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier.verticalScroll(rememberScrollState())
+                ) {
                     // Blocker input
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("Blocker Description:", color = TEXT_PRIMARY, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         OutlinedTextField(
                             value = topic,
                             onValueChange = { topic = it },
-                            placeholder = { Text("What is your blocker?", fontSize = 12.sp) },
+                            placeholder = { Text("Describe what you are blocked on...", fontSize = 12.sp) },
                             textStyle = androidx.compose.ui.text.TextStyle(color = TEXT_PRIMARY, fontSize = 13.sp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = TEXT_PRIMARY,
@@ -1750,23 +1743,125 @@ fun SparkConsole(
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth()
                         )
-                        
-                        // Presets
-                        Text("Quick Prefills:", color = TEXT_MUTED, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.horizontalScroll(rememberScrollState())
-                        ) {
-                            topicPresets.forEach { (label, textValue) ->
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(SURFACE)
-                                        .border(0.5.dp, BORDER, RoundedCornerShape(8.dp))
-                                        .clickable { topic = textValue }
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                    }
+
+                    // Select Workspace Project (Dynamic User Content)
+                    if (projects.isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Folder, contentDescription = null, tint = PRIMARY, modifier = Modifier.size(12.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Project Context:", color = TEXT_PRIMARY, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.horizontalScroll(rememberScrollState())
+                            ) {
+                                projects.forEach { proj ->
+                                    val isSelected = selectedProject?.id == proj.id
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (isSelected) PRIMARY.copy(alpha = 0.15f) else SURFACE)
+                                            .border(0.5.dp, if (isSelected) PRIMARY else BORDER, RoundedCornerShape(8.dp))
+                                            .clickable {
+                                                if (isSelected) {
+                                                    selectedProject = null
+                                                    selectedTask = null
+                                                } else {
+                                                    selectedProject = proj
+                                                    selectedTask = null
+                                                    // Append or set project context in text
+                                                    if (!topic.contains(proj.name)) {
+                                                        topic = "Working on project [${proj.name}]: " + topic.replace(Regex("Working on project \\[.*?\\]: "), "")
+                                                    }
+                                                }
+                                            }
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(text = proj.name, color = if (isSelected) PRIMARY else TEXT_SECONDARY, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Select Project Task (Dynamic User Content)
+                    if (selectedProject != null && projectTasks.isNotEmpty()) {
+                        val unfinishedTasks = projectTasks.filter { !it.isCompleted }
+                        if (unfinishedTasks.isNotEmpty()) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.AutoMirrored.Filled.Assignment, contentDescription = null, tint = PRIMARY, modifier = Modifier.size(12.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Blocked Task:", color = TEXT_PRIMARY, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.horizontalScroll(rememberScrollState())
                                 ) {
-                                    Text(text = label, color = TEXT_SECONDARY, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                                    unfinishedTasks.forEach { task ->
+                                        val isSelected = selectedTask?.id == task.id
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(if (isSelected) PRIMARY.copy(alpha = 0.15f) else SURFACE)
+                                                .border(0.5.dp, if (isSelected) PRIMARY else BORDER, RoundedCornerShape(8.dp))
+                                                .clickable {
+                                                    if (isSelected) {
+                                                        selectedTask = null
+                                                    } else {
+                                                        selectedTask = task
+                                                        // Pre-fill blocker topic with blocked task context
+                                                        topic = "Blocked on task '${task.title}' in project '${selectedProject?.name}': "
+                                                    }
+                                                }
+                                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(text = task.title, color = if (isSelected) PRIMARY else TEXT_SECONDARY, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Attach Active Reading Context (Dynamic User Content)
+                    val recentPapers = userMemoryProfile?.recently_read_papers.orEmpty()
+                    val unfinishedPapers = userMemoryProfile?.unfinished_papers.orEmpty()
+                    val papersList = (recentPapers + unfinishedPapers).distinct().take(4)
+                    if (papersList.isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Book, contentDescription = null, tint = PRIMARY, modifier = Modifier.size(12.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Attach Paper Context:", color = TEXT_PRIMARY, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.horizontalScroll(rememberScrollState())
+                            ) {
+                                papersList.forEach { paper ->
+                                    val isSelected = selectedPaper == paper
+                                    val truncatedPaper = if (paper.length > 25) paper.take(22) + "..." else paper
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (isSelected) PRIMARY.copy(alpha = 0.15f) else SURFACE)
+                                            .border(0.5.dp, if (isSelected) PRIMARY else BORDER, RoundedCornerShape(8.dp))
+                                            .clickable {
+                                                if (isSelected) {
+                                                    selectedPaper = null
+                                                } else {
+                                                    selectedPaper = paper
+                                                    // Pre-fill blocker topic with paper context
+                                                    topic = "Need to discuss methodology in paper \"$paper\": "
+                                                }
+                                            }
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(text = truncatedPaper, color = if (isSelected) PRIMARY else TEXT_SECONDARY, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                                    }
                                 }
                             }
                         }
@@ -1774,7 +1869,7 @@ fun SparkConsole(
 
                     // Preset Skills tags selection
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Select Skill Tags:", color = TEXT_PRIMARY, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("Required Expertise tags:", color = TEXT_PRIMARY, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         
                         // Wrap tags in rows
                         val chunkedTags = availableTags.chunked(3)
@@ -1809,26 +1904,35 @@ fun SparkConsole(
                         }
                     }
 
-                    // Incentive Bounty
+                    // Collaboration Mode (Replaced irrelevant Bounty tokens with professional academic modes)
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Offer Incentive Bounty:", color = TEXT_PRIMARY, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.People, contentDescription = null, tint = PRIMARY, modifier = Modifier.size(12.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Collaboration Mode:", color = TEXT_PRIMARY, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            listOf("5 Tokens", "10 Tokens", "Co-Authorship").forEach { bountyOption ->
-                                val isSelected = selectedBounty == bountyOption
+                            val collabOptions = listOf(
+                                "Quick Q&A" to "5 Tokens",
+                                "Deep Review" to "10 Tokens",
+                                "Co-Authorship" to "Co-Authorship"
+                            )
+                            collabOptions.forEach { (label, bountyValue) ->
+                                val isSelected = selectedBounty == bountyValue
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
                                         .clip(RoundedCornerShape(12.dp))
                                         .background(if (isSelected) PRIMARY.copy(alpha = 0.15f) else SURFACE)
                                         .border(0.5.dp, if (isSelected) PRIMARY else BORDER, RoundedCornerShape(12.dp))
-                                        .clickable { selectedBounty = bountyOption }
+                                        .clickable { selectedBounty = bountyValue }
                                         .padding(vertical = 8.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = bountyOption,
+                                        text = label,
                                         color = if (isSelected) PRIMARY else TEXT_PRIMARY,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold
