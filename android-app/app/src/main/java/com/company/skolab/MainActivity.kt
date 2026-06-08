@@ -33,6 +33,7 @@ import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.filled.Hub
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AutoGraph
@@ -83,6 +84,8 @@ import com.company.skolab.ui.screens.ChatListScreen
 import com.company.skolab.ui.screens.LogicEngineScreen
 import com.company.skolab.ui.screens.ProWorkspaceScreen
 import com.company.skolab.ui.screens.DailyDiscoveryScreen
+import com.company.skolab.ui.screens.HomeScreen
+import com.company.skolab.ui.screens.SparkSessionScreen
 import com.company.skolab.ui.screens.CoLabWorkspaceScreen
 import com.company.skolab.ui.screens.ProfileSetupScreen
 import androidx.compose.material.icons.filled.Groups
@@ -269,13 +272,12 @@ fun SkoLabMainApp() {
         }
     }
 
-    val mainTabs = listOf("discover", "collabs", "agent", "industry", "collabs_ws")
+    val mainTabs = listOf("discover", "industry", "agent", "collabs_ws")
     val dockItems = listOf(
-        DockItem(route = "discover", icon = Icons.Filled.Hub, label = "Pulse", badgeCount = 1),
-        DockItem(route = "collabs", icon = Icons.Filled.Groups, label = "Orbit", hasBadgeDot = true),
+        DockItem(route = "discover", icon = Icons.Filled.Home, label = "Home"),
+        DockItem(route = "industry", icon = Icons.Outlined.TravelExplore, label = "Launchpad"),
         DockItem(route = "agent", drawableResId = com.company.skolab.R.drawable.logo, label = "Skolar"),
-        DockItem(route = "industry", icon = Icons.Filled.BusinessCenter, label = "Launchpad"),
-        DockItem(route = "collabs_ws", icon = Icons.Filled.GridView, label = "Collabs")
+        DockItem(route = "collabs_ws", icon = Icons.Filled.Groups, label = "CoLab")
     )
 
     SkoLabScaffold { innerPadding ->
@@ -506,41 +508,21 @@ fun SkoLabMainApp() {
                             .padding(top = scaffoldPadding.calculateTopPadding())
                             .padding(bottom = ScreenInsets.bottomNavClearance)
                     ) {
-                        FeedScreen(
+                        HomeScreen(
                             onPaperClick = { paperId ->
                                 navController.navigate("paper_detail/${paperId.encodeForRoute()}")
-                            },
-                            onProfileClick = {
-                                navController.navigate("profile")
-                            },
-                            onNavigateToChat = { name, id ->
-                                navController.navigate("chat/${name.encodeForRoute()}/${id.encodeForRoute()}")
-                            },
-                            onNavigateToChatList = {
-                                navController.navigate("chat_list")
-                            },
-                            onNavigateToReader = { title, doi ->
-                                navController.navigate("reader/${title.encodeForRoute()}/${doi.encodeForRoute()}")
-                            },
-                            onTabNavigate = { route ->
-                                navController.navigate(route) {
-                                    popUpTo("discover") { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
                             },
                             onAuthorClick = { authorName ->
                                 navController.navigate("author_detail/${authorName.encodeForRoute()}")
                             },
-                            onLoadingStateChanged = { isFeedLoading = it },
-                            onNavigateToLogicEngine = {
-                                navController.navigate("logic_engine")
+                            onNavigateToChat = { name, id ->
+                                navController.navigate("chat/${name.encodeForRoute()}/${id.encodeForRoute()}")
                             },
                             onNavigateToDailyDiscovery = {
                                 navController.navigate("daily_discovery")
                             },
                             onNavigateToCollabs = {
-                                navController.navigate("collabs") {
+                                navController.navigate("collabs_ws") {
                                     popUpTo("discover") { saveState = true }
                                     launchSingleTop = true
                                     restoreState = true
@@ -548,6 +530,32 @@ fun SkoLabMainApp() {
                             },
                             onNavigateToCreateProject = {
                                 navController.navigate("create_project")
+                            },
+                            onNavigateToSparkSession = { sessionId ->
+                                navController.navigate("spark_session/$sessionId")
+                            }
+                        )
+                    }
+                }
+                composable(
+                    route = "spark_session/{sessionId}",
+                    arguments = listOf(
+                        androidx.navigation.navArgument("sessionId") {
+                            type = androidx.navigation.NavType.StringType
+                        }
+                    )
+                ) { backStackEntry ->
+                    val sessionId = backStackEntry.arguments?.getString("sessionId") ?: ""
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .screenSafeArea(includeBottom = true)
+                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
+                    ) {
+                        SparkSessionScreen(
+                            sessionId = sessionId,
+                            onNavigateBack = {
+                                navController.popBackStack()
                             }
                         )
                     }
