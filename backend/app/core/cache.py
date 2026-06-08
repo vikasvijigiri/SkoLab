@@ -55,3 +55,5 @@ history_summary_cache = PgBackedCache(
     ttl_seconds=settings.cache_ttl_agent_history_seconds, name="history_summary"
 )
 _user_memory_cache = PgBackedCache(ttl_seconds=3600, name="user_memory")
+industry_academic_cache = PgBackedCache(ttl_seconds=3600, name="industry_academic")
+

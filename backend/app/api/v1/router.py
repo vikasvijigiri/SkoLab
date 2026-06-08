@@ -9,6 +9,7 @@ from app.api.v1.endpoints import (
     user_memory,
     users,
     support,
+    industry_academic,
 )
 
 api_router = APIRouter()
@@ -22,3 +23,5 @@ api_router.include_router(authors.router, tags=["Authors"])
 api_router.include_router(user_memory.router, tags=["User Memory"])
 api_router.include_router(users.router, tags=["Users"])
 api_router.include_router(support.router, prefix="/support", tags=["Support"])
+api_router.include_router(industry_academic.router, tags=["Industry Academic"])
+

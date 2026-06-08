@@ -267,7 +267,7 @@ fun CoLabChatView(
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            items(messages) { msg ->
+            items(messages, key = { "${it.sender}-${it.time}" }) { msg ->
                 if (msg.isSystem) {
                     Box(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),

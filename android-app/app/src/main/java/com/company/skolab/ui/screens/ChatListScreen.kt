@@ -266,7 +266,7 @@ fun ChatListScreen(
                         }
                     }
                 } else {
-                    items(filteredChats) { (connection, lastMessage) ->
+                    items(filteredChats, key = { it.first.id }) { (connection, lastMessage) ->
                         val avatarColor = avatarColors[kotlin.math.abs(connection.id.hashCode()) % avatarColors.size]
                         val timestampFormatted = remember(lastMessage.timestamp) {
                             val msgCal = Calendar.getInstance().apply { timeInMillis = lastMessage.timestamp }

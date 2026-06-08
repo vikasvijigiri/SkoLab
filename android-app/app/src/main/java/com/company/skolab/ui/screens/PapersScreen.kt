@@ -131,7 +131,7 @@ fun PapersScreen(
                     }
                 }
             } else {
-                items(uiState.trendingPapers) { paper ->
+                items(uiState.trendingPapers, key = { it.id }) { paper ->
                     Box(modifier = Modifier.padding(horizontal = 20.dp)) {
                         val accentColor = when (uiState.trendingPapers.indexOf(paper) % 3) {
                             0 -> EntropiColors.Gold1
@@ -161,7 +161,7 @@ fun PapersScreen(
                         contentPadding = PaddingValues(horizontal = 20.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        items(uiState.continueReading) { progress ->
+                        items(uiState.continueReading, key = { it.paper.id }) { progress ->
                             ResumeCard(
                                 progress = progress,
                                 onClick = { onPaperClick(progress.paper.id) },

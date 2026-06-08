@@ -286,7 +286,7 @@ fun FeedScreen(
                             contentPadding = PaddingValues(horizontal = 20.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            items(uiState.continueReading) { progress ->
+                            items(uiState.continueReading, key = { it.paper.id }) { progress ->
                                 ResumeCard(
                                     progress = progress,
                                     onClick = { onPaperClick(progress.paper.id) },
@@ -828,6 +828,41 @@ fun FeedScreen(
                     }
                 }
 
+                // Empty state for daily feed — only shown after load completes with no items
+                if (!uiState.isLoading && uiState.dailyFeedItems.isEmpty() && uiState.error == null) {
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp, vertical = 24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = TEXT_MUTED,
+                                modifier = Modifier.size(40.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Your daily feed is warming up",
+                                color = TEXT_PRIMARY,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Set your research focus in Profile settings to unlock personalized paper recommendations.",
+                                color = TEXT_MUTED,
+                                fontSize = 12.sp,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 18.sp
+                            )
+                        }
+                    }
+                }
+
                 // --- Live Trending & Hot Feed Section ---
                 val trendingFeedList = (uiState.trendingPapers + uiState.hotPapers).distinctBy { it.id }
                 if (trendingFeedList.isNotEmpty()) {
@@ -863,7 +898,7 @@ fun FeedScreen(
                         }
                     }
 
-                    items(trendingFeedList) { paper ->
+                    items(trendingFeedList, key = { it.id }) { paper ->
                         val (methodology, tools, findings) = generateClientMetadata(paper.title, paper.abstractText)
                         PulseFeedCard(
                             title = paper.title,

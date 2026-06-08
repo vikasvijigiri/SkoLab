@@ -201,7 +201,7 @@ fun SavedPapersTab(
                         }
                     }
                 }
-                items(state.papers) { paper ->
+                items(state.papers, key = { it.id }) { paper ->
                     SavedPaperCard(
                         title = paper.title,
                         authors = paper.authors,
@@ -347,6 +347,15 @@ fun GrantFeedTab() {
             Icons.Default.ErrorOutline,
             "Could not match grants",
             errorMsg ?: "Unknown error"
+        )
+        return
+    }
+
+    if (grants.isEmpty()) {
+        EmptyStateView(
+            Icons.Default.EmojiEvents,
+            "No matching grants",
+            "No funding opportunities matched this researcher's profile. View a researcher's profile to find relevant grants."
         )
         return
     }

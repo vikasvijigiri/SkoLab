@@ -306,10 +306,25 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Skolab API",
-    description="The backend API for the Skolab platform",
-    version="1.0.0",
+    title="SkoLab API",
+    description=(
+        "Research intelligence backend powering the SkoLab Android app.\n\n"
+        "**Auth**: Protected endpoints require a Firebase ID token in the "
+        "`Authorization: Bearer <token>` header.\n\n"
+        "**Rate limits**: `/agent/chat` and search endpoints — 5 req/min per IP. "
+        "All other endpoints — 60 req/min per IP."
+    ),
+    version="1.1.0",
     lifespan=lifespan,
+    openapi_tags=[
+        {"name": "agent",   "description": "AI research agent — chat, document upload, cover letters."},
+        {"name": "papers",  "description": "Paper search, feed, and recommendations."},
+        {"name": "authors", "description": "Researcher profiles, metrics, and co-author graphs."},
+        {"name": "users",   "description": "User account management and GDPR deletion."},
+        {"name": "feed",    "description": "Personalised daily feed and trending items."},
+        {"name": "system",  "description": "Health, metrics, and AI status endpoints."},
+    ],
+    swagger_ui_parameters={"persistAuthorization": True},
 )
 
 # Configure CORS origins dynamically and restrict from wildcard

@@ -24,7 +24,8 @@ data class SparkUiState(
     val isBroadcasting: Boolean = false,
     val myCurrentBroadcastId: String? = null,
     val walletTokens: Int = 120,
-    val rating: Float = 4.9f
+    val rating: Float = 4.9f,
+    val error: String? = null
 )
 
 class SparkViewModel : ViewModel() {
@@ -145,7 +146,13 @@ class SparkViewModel : ViewModel() {
             }
             .addOnFailureListener { e ->
                 Log.e("SparkViewModel", "Failed to create spark session", e)
-                _uiState.update { it.copy(isBroadcasting = false, myCurrentBroadcastId = null) }
+                _uiState.update {
+                    it.copy(
+                        isBroadcasting = false,
+                        myCurrentBroadcastId = null,
+                        error = "Could not broadcast. Check your connection and try again."
+                    )
+                }
             }
     }
 
@@ -167,6 +174,7 @@ class SparkViewModel : ViewModel() {
             listenToActiveSession(sessionId)
         }.addOnFailureListener { e ->
             Log.e("SparkViewModel", "Failed to accept spark session", e)
+            _uiState.update { it.copy(error = "Could not accept session. It may have been taken.") }
         }
     }
 
@@ -374,5 +382,9 @@ class SparkViewModel : ViewModel() {
     private fun stopTimer() {
         timerJob?.cancel()
         timerJob = null
+    }
+
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
     }
 }

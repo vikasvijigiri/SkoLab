@@ -108,6 +108,7 @@ data class UserMemoryProfile(
     val lastActiveTopic: String = "",
     val streakDays: Int = 0,
     val totalPapersRead: Int = 0,
+    val researcherBio: String? = null,
     val lastUpdated: Long = System.currentTimeMillis()
 ) {
     /** Formats memory as a compact block to inject into the agent system prompt. */
@@ -115,6 +116,7 @@ data class UserMemoryProfile(
         if (topTopics.isEmpty()) return ""
         val sb = StringBuilder()
         sb.appendLine("[USER MEMORY CONTEXT — use this to personalize all responses]")
+        if (!researcherBio.isNullOrBlank()) sb.appendLine("Academic Biography: $researcherBio")
         if (topTopics.isNotEmpty()) sb.appendLine("Research focus: ${topTopics.take(4).joinToString(", ")}")
         if (lastActiveTopic.isNotEmpty()) sb.appendLine("Currently exploring: $lastActiveTopic")
         if (readingPace != "unknown") sb.appendLine("Reading style: $readingPace (avg ${avgReadMinutes.toInt()} min/paper)")

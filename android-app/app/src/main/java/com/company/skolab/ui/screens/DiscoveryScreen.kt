@@ -1085,7 +1085,7 @@ fun ResearcherProfileView(
                     )
                 }
 
-                items(author.works.sortedByDescending { it.year ?: 0 }) { work ->
+                items(author.works.sortedByDescending { it.year ?: 0 }, key = { it.id ?: "" }) { work ->
                     LightPublicationCard(
                         work = work,
                         apiService = apiService,
@@ -2656,7 +2656,7 @@ fun DiscoveryDashboard(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        items(collaboratorsArticles) { work ->
+                        items(collaboratorsArticles, key = { it.id ?: "" }) { work ->
                             DashboardFriendArticleCard(
                                 work = work,
                                 onOpenPaper = {
@@ -2686,7 +2686,7 @@ fun DiscoveryDashboard(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        items(suggestedPeersArticles) { work ->
+                        items(suggestedPeersArticles, key = { it.id ?: "" }) { work ->
                             DashboardFriendArticleCard(
                                 work = work,
                                 onOpenPaper = {
@@ -2716,7 +2716,7 @@ fun DiscoveryDashboard(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        items(trendingPapers) { work ->
+                        items(trendingPapers, key = { it.id ?: "" }) { work ->
                             DashboardFriendArticleCard(
                                 work = work,
                                 onOpenPaper = {
@@ -3687,7 +3687,7 @@ fun JournalAdvisorSection(recommendations: List<JournalRecommendation>) {
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                items(recommendations) { recommendation ->
+                items(recommendations, key = { it.journal_name }) { recommendation ->
                     JournalRecommendationCard(recommendation = recommendation)
                 }
             }

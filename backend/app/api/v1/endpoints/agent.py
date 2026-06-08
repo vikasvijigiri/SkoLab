@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
 from app.schemas.core import AgentChatRequest, ChatRequest
 from app.services.agent_service import AgentService
 from app.services.pipeline_services import PipelineServices
-from app.api.dependencies import get_agent_service, get_pipeline_services
+from app.api.dependencies import get_agent_service, get_pipeline_services, get_verified_user
 
 router = APIRouter()
 
@@ -12,6 +12,7 @@ async def agent_chat(
     req: AgentChatRequest,
     request: Request,
     agent_service: AgentService = Depends(get_agent_service),
+    _user: dict = Depends(get_verified_user),
 ):
     try:
         base_url = str(request.base_url).rstrip("/")
