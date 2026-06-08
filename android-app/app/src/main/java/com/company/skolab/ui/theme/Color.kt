@@ -68,40 +68,40 @@ fun isDarkThemeActive(): Boolean {
 }
 
 val PAGE_BACKGROUND: Color
-    get() = if (isDarkThemeActive()) Color(0xFF0F172A) else Color(0xFFF4F0E8)
+    get() = if (isDarkThemeActive()) Color(0xFF130D0A) else Color(0xFFF9F2EB)
 
 val SURFACE: Color
-    get() = if (isDarkThemeActive()) Color(0xFF1E293B) else Color(0xFFFEFCF7)
+    get() = if (isDarkThemeActive()) Color(0xFF221512) else Color(0xFFFFFFFF)
 
 val SURFACE_SUBTLE: Color
-    get() = if (isDarkThemeActive()) Color(0xFF334155) else Color(0xFFEAE2D0)
+    get() = if (isDarkThemeActive()) Color(0xFF2F1D19) else Color(0xFFF3E7DB)
 
 val PRIMARY: Color
-    get() = if (isDarkThemeActive()) Color(0xFF38BDF8) else Color(0xFF2D6BE4)
+    get() = Color(0xFFC67C4E) // JavaGem Terracotta Caramel / Coffee Brown-Orange
 
 val PRIMARY_DARK: Color
-    get() = if (isDarkThemeActive()) Color(0xFF0284C7) else Color(0xFF1A4FA8)
+    get() = if (isDarkThemeActive()) Color(0xFFA15D39) else Color(0xFF8B4D2F)
 
 val PRIMARY_DEEPER: Color
-    get() = if (isDarkThemeActive()) Color(0xFF0C1D3A) else Color(0xFF0D2E6B)
+    get() = if (isDarkThemeActive()) Color(0xFF1C100D) else Color(0xFFE8D5C4)
 
 val TEXT_PRIMARY: Color
-    get() = if (isDarkThemeActive()) Color(0xFFCBD5E1) else Color(0xFF1C1208)
+    get() = if (isDarkThemeActive()) Color(0xFFF9EFE6) else Color(0xFF221512)
 
 val TEXT_SECONDARY: Color
-    get() = if (isDarkThemeActive()) Color(0xFF94A3B8) else Color(0xFF6B5440)
+    get() = if (isDarkThemeActive()) Color(0xFFC4A297) else Color(0xFF785C54)
 
 val TEXT_MUTED: Color
-    get() = if (isDarkThemeActive()) Color(0xFF64748B) else Color(0xFF8A725C)
+    get() = if (isDarkThemeActive()) Color(0xFF9E867E) else Color(0xFFA18E88)
 
 val TEXT_ON_PRIMARY: Color
-    get() = if (isDarkThemeActive()) Color(0xFF0F172A) else Color(0xFFFFFFFF)
+    get() = Color(0xFFFFFFFF)
 
 val TEXT_ON_PRIMARY_SUB: Color
-    get() = if (isDarkThemeActive()) Color(0xFF94A3B8) else Color(0xFFDCE7FC)
+    get() = if (isDarkThemeActive()) Color(0xFFE8D5C4) else Color(0xFF785C54)
 
 val BORDER: Color
-    get() = if (isDarkThemeActive()) Color(0xFF334155) else Color(0xFFD6C9B0)
+    get() = if (isDarkThemeActive()) Color(0xFF33201B) else Color(0xFFE6D6C8)
 
 val NOTIFICATION_DOT: Color
     get() = Color(0xFFEF4444)

@@ -11,9 +11,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.VerticalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,26 +21,23 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
-import androidx.compose.material.icons.automirrored.outlined.HelpOutline
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.company.skolab.analytics.SkoLabAnalytics
@@ -50,8 +47,10 @@ import com.company.skolab.model.IndustryOpportunity
 import com.company.skolab.viewmodel.IndustryViewModel
 import com.company.skolab.model.OpportunityType
 import com.company.skolab.model.AssistantProfessorRoadmap
+import kotlinx.coroutines.launch
+import kotlin.math.absoluteValue
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun IndustryScreen(
     viewModel: IndustryViewModel = viewModel(),
@@ -68,14 +67,11 @@ fun IndustryScreen(
     val userPrefs = remember { UserPreferences(context) }
     val cachedUser by userPrefs.cachedUser.collectAsStateWithLifecycle(initialValue = null)
 
-    var currentTab by remember { mutableStateOf("explore") } // "explore", "swipe", "roadmap", "post"
-    var selectedCategory by remember { mutableStateOf("All") }
+    var selectedStream by remember { mutableStateOf("FEED") } // "FEED", "JOBS", "TRENDING", "GRANTS"
+    var showRoadmapSheet by remember { mutableStateOf(false) }
+    var showPostSheet by remember { mutableStateOf(false) }
     var selectedOpportunityForDetail by remember { mutableStateOf<IndustryOpportunity?>(null) }
-
-    val categories = listOf(
-        "All", "Research Jobs", "Postdocs", "PhD Positions", "Faculty Positions",
-        "Funding Calls", "Research Grants"
-    )
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(cachedUser) {
         val focus = cachedUser?.researchFocus
@@ -93,10 +89,13 @@ fun IndustryScreen(
             .background(BgPrimary)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Column(
+            // Header: Launchpad Title and icons
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 6.dp)
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "Launchpad",
@@ -104,78 +103,127 @@ fun IndustryScreen(
                     fontSize = 22.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
+                
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Post opportunity icon
+                    IconButton(
+                        onClick = { showPostSheet = true },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(SURFACE_SUBTLE, CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Post Opportunity",
+                            tint = TEXT_PRIMARY,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    // Career Roadmap icon
+                    IconButton(
+                        onClick = { 
+                            showRoadmapSheet = true
+                            SkoLabAnalytics.logRoadmapOpened(cachedUser?.uid ?: "")
+                        },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(SURFACE_SUBTLE, CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Timeline,
+                            contentDescription = "Career Roadmap",
+                            tint = TEXT_PRIMARY,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Premium Segmented Tab Bar (Full Width)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(SURFACE_SUBTLE)
-                        .padding(4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val tabs = listOf(
-                        Triple("explore", "Explore", Icons.Default.Explore),
-                        Triple("swipe", "Swipe", Icons.Default.Swipe),
-                        Triple("roadmap", "Path", Icons.Default.Timeline),
-                        Triple("post", "Post", Icons.Default.AddBox)
-                    )
-                    tabs.forEach { (tabId, label, icon) ->
-                        val isSelected = currentTab == tabId
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSelected) PRIMARY else Color.Transparent)
-                                .clickable {
-                                    currentTab = tabId
-                                    if (tabId == "roadmap") {
-                                        SkoLabAnalytics.logRoadmapOpened(cachedUser?.uid ?: "")
-                                    }
-                                }
-                                .padding(vertical = 8.dp),
-                            contentAlignment = Alignment.Center
+            // Top Stream Selector Chips with Nice Icons
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(SURFACE_SUBTLE)
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val streams = listOf(
+                    Triple("FEED", "Feed", Icons.Default.Explore),
+                    Triple("JOBS", "Jobs", Icons.Default.Work),
+                    Triple("TRENDING", "Trending", Icons.AutoMirrored.Filled.TrendingUp),
+                    Triple("GRANTS", "Grants", Icons.Default.AttachMoney)
+                )
+                
+                streams.forEach { (streamId, label, icon) ->
+                    val isSelected = selectedStream == streamId
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isSelected) PRIMARY else Color.Transparent)
+                            .clickable { selectedStream = streamId }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = null,
-                                    tint = if (isSelected) TEXT_ON_PRIMARY else TEXT_SECONDARY,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = label,
-                                    color = if (isSelected) TEXT_ON_PRIMARY else TEXT_SECONDARY,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1
-                                )
-                            }
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = label,
+                                tint = if (isSelected) TEXT_ON_PRIMARY else TEXT_SECONDARY,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = label,
+                                color = if (isSelected) TEXT_ON_PRIMARY else TEXT_SECONDARY,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
                         }
                     }
                 }
             }
 
-            // Tabs Content
-            if (error != null) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(24.dp),
-                    contentAlignment = Alignment.Center
-                ) {
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Filter/sort opportunities
+            val filteredOpps = remember(opportunities, selectedStream, cachedUser?.researchFocus) {
+                val userFocus = cachedUser?.researchFocus ?: "AI"
+                when (selectedStream) {
+                    "JOBS" -> opportunities.filter { it.type == OpportunityType.JOB }
+                    "GRANTS" -> opportunities.filter { it.type == OpportunityType.FUNDING }
+                    "TRENDING" -> opportunities.sortedByDescending { opp ->
+                        opp.matchScore ?: run {
+                            val hash = kotlin.math.abs(opp.title.hashCode() + userFocus.hashCode())
+                            val b = if (opp.title.contains(userFocus, ignoreCase = true) || opp.description.contains(userFocus, ignoreCase = true)) 88 else 74
+                            (b + (hash % 12)).coerceAtMost(99)
+                        }
+                    }
+                    else -> opportunities
+                }
+            }
+
+            // Pager viewport
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                if (error != null) {
                     Card(
                         colors = CardDefaults.cardColors(containerColor = SURFACE_SUBTLE),
                         shape = RoundedCornerShape(16.dp),
                         border = BorderStroke(1.dp, BORDER),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.padding(24.dp).fillMaxWidth()
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -198,154 +246,143 @@ fun IndustryScreen(
                             )
                         }
                     }
-                }
-            } else {
-                when (currentTab) {
-                    "explore" -> {
-                        // Category Filter Chips
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 20.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.padding(bottom = 12.dp)
-                        ) {
-                            items(categories) { category ->
-                                val isSelected = selectedCategory == category
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .background(if (isSelected) PRIMARY else SURFACE)
-                                        .border(
-                                            BorderStroke(1.dp, if (isSelected) PRIMARY else BORDER),
-                                            RoundedCornerShape(16.dp)
-                                        )
-                                        .clickable { selectedCategory = category }
-                                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                                ) {
-                                    Text(
-                                        text = category,
-                                        color = if (isSelected) TEXT_ON_PRIMARY else TEXT_SECONDARY,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                            }
-                        }
-
-                        // Opportunities list
+                } else if (isLoading && opportunities.isEmpty()) {
+                    CircularProgressIndicator(color = PRIMARY, strokeWidth = 2.dp)
+                } else if (filteredOpps.isEmpty()) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.padding(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.WorkOutline,
+                            contentDescription = null,
+                            tint = TEXT_MUTED,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "No opportunities found in this feed",
+                            color = TEXT_SECONDARY,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                } else {
+                    val pagerState = rememberPagerState(pageCount = { filteredOpps.size })
+                    
+                    // Reduced padding around pager to maximize card sizes
+                    VerticalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(top = 8.dp, bottom = 12.dp, start = 12.dp, end = 12.dp),
+                        pageSpacing = 12.dp
+                    ) { page ->
+                        val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
+                        
                         Box(
                             modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (isLoading && opportunities.isEmpty()) {
-                                CircularProgressIndicator(color = PRIMARY, strokeWidth = 2.dp)
-                            } else {
-                                val filteredOpps = remember(opportunities, selectedCategory) {
-                                    if (selectedCategory == "All") {
-                                        opportunities
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    val pageHeight = size.height
+                                    if (pageOffset > 0) {
+                                        translationY = -pageOffset * pageHeight * 0.15f
+                                        alpha = (1f - pageOffset).coerceIn(0f, 1f)
+                                        scaleX = 1f - (pageOffset * 0.05f)
+                                        scaleY = 1f - (pageOffset * 0.05f)
                                     } else {
-                                        opportunities.filter { opp ->
-                                            opp.title.contains(selectedCategory, ignoreCase = true) ||
-                                            opp.description.contains(selectedCategory, ignoreCase = true) ||
-                                            opp.tags.any { it.contains(selectedCategory, ignoreCase = true) } ||
-                                            (selectedCategory == "Funding Calls" && opp.type == OpportunityType.FUNDING) ||
-                                            (selectedCategory == "Research Grants" && opp.type == OpportunityType.FUNDING) ||
-                                            (selectedCategory == "Postdocs" && opp.title.contains("Postdoc", ignoreCase = true)) ||
-                                            (selectedCategory == "PhD Positions" && opp.title.contains("PhD", ignoreCase = true)) ||
-                                            (selectedCategory == "Faculty Positions" && opp.title.contains("Professor", ignoreCase = true)) ||
-                                            (selectedCategory == "Research Jobs" && opp.type == OpportunityType.JOB)
-                                        }
+                                        translationY = pageOffset * pageHeight
+                                        val idxDiff = pageOffset.absoluteValue
+                                        translationY += idxDiff * 24.dp.toPx()
+                                        val scale = 1f - (idxDiff * 0.05f).coerceIn(0f, 0.15f)
+                                        scaleX = scale
+                                        scaleY = scale
+                                        alpha = (1f - (idxDiff * 0.25f)).coerceIn(0.1f, 1f)
                                     }
                                 }
-
-                                if (filteredOpps.isEmpty()) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center,
-                                        modifier = Modifier.padding(32.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.WorkOutline,
-                                            contentDescription = null,
-                                            tint = TEXT_MUTED,
-                                            modifier = Modifier.size(48.dp)
-                                        )
-                                        Spacer(modifier = Modifier.height(16.dp))
-                                        Text(
-                                            text = "No opportunities found in this category",
-                                            color = TEXT_SECONDARY,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
-                                } else {
-                                    LazyColumn(
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
-                                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                                    ) {
-                                        items(filteredOpps) { opp ->
-                                            LaunchpadOpportunityCard(
-                                                opp = opp,
-                                                userFocus = cachedUser?.researchFocus ?: "AI",
-                                                onClick = { selectedOpportunityForDetail = opp }
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    "swipe" -> {
-                        val jobOpps = remember(opportunities) {
-                            opportunities.filter { it.type == OpportunityType.JOB }
-                        }
-                        if (jobOpps.isEmpty()) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("No jobs available for Fast Swipe right now.", color = TEXT_SECONDARY)
-                            }
-                        } else {
-                            FastSwipeDeck(
-                                opportunities = jobOpps,
-                                userFocus = cachedUser?.researchFocus ?: "AI"
-                            )
-                        }
-                    }
-                    "roadmap" -> {
-                        if (isLoadingRoadmap && roadmap == null) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(color = PRIMARY)
-                            }
-                        } else {
-                            AssistantProfessorRoadmapScreen(
-                                roadmap = roadmap,
-                                userFocus = cachedUser?.researchFocus ?: "AI",
-                                onNavigateToAuthor = onNavigateToAuthor
-                            )
-                        }
-                    }
-                    else -> {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
+                                .zIndex(if (pageOffset.absoluteValue < 1f) 1f - pageOffset.absoluteValue else 0f)
                         ) {
-                            ProfessorPostingForm()
+                            val opp = filteredOpps[page]
+                            LaunchpadReelsCard(
+                                opp = opp,
+                                userFocus = cachedUser?.researchFocus ?: "AI",
+                                onNextClick = {
+                                    if (pagerState.currentPage < filteredOpps.size - 1) {
+                                        coroutineScope.launch {
+                                            pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                        }
+                                    }
+                                },
+                                onPrevClick = {
+                                    if (pagerState.currentPage > 0) {
+                                        coroutineScope.launch {
+                                            pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                                        }
+                                    }
+                                },
+                                prevEnabled = pagerState.currentPage > 0,
+                                onViewDetailsClick = {
+                                    selectedOpportunityForDetail = opp
+                                }
+                            )
                         }
                     }
                 }
             }
         }
 
-        // Detailed Bottom Sheet for Opportunity
+        // Career Roadmap Bottom Sheet
+        if (showRoadmapSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showRoadmapSheet = false },
+                containerColor = BgPrimary,
+                dragHandle = { BottomSheetDefaults.DragHandle(color = BORDER) }
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight(0.85f)
+                        .fillMaxWidth()
+                ) {
+                    if (isLoadingRoadmap && roadmap == null) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = PRIMARY)
+                        }
+                    } else {
+                        AssistantProfessorRoadmapScreen(
+                            roadmap = roadmap,
+                            userFocus = cachedUser?.researchFocus ?: "AI",
+                            onNavigateToAuthor = onNavigateToAuthor
+                        )
+                    }
+                }
+            }
+        }
+
+        // Post Position Bottom Sheet
+        if (showPostSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showPostSheet = false },
+                containerColor = BgPrimary,
+                dragHandle = { BottomSheetDefaults.DragHandle(color = BORDER) }
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight(0.85f)
+                        .fillMaxWidth()
+                ) {
+                    ProfessorPostingForm(onDismiss = { showPostSheet = false })
+                }
+            }
+        }
+
+        // Details Bottom Sheet (Fixes clumsy card layout)
         if (selectedOpportunityForDetail != null) {
             ModalBottomSheet(
                 onDismissRequest = { selectedOpportunityForDetail = null },
                 containerColor = BgPrimary,
                 dragHandle = { BottomSheetDefaults.DragHandle(color = BORDER) }
             ) {
-                OpportunityDetailSheetContent(
+                OpportunityDetailSheet(
                     opp = selectedOpportunityForDetail!!,
                     userFocus = cachedUser?.researchFocus ?: "AI",
                     onClose = { selectedOpportunityForDetail = null }
@@ -355,192 +392,299 @@ fun IndustryScreen(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun LaunchpadOpportunityCard(
+fun LaunchpadReelsCard(
     opp: IndustryOpportunity,
     userFocus: String,
-    onClick: () -> Unit
+    onNextClick: () -> Unit,
+    onPrevClick: () -> Unit,
+    prevEnabled: Boolean,
+    onViewDetailsClick: () -> Unit
 ) {
-    val (icon, tintColor) = when (opp.type) {
-        OpportunityType.JOB -> Icons.Filled.Work to PRIMARY
-        OpportunityType.FUNDING -> Icons.Filled.AttachMoney to WhatsAppTealGreen
-        OpportunityType.REQUIREMENT -> Icons.Filled.TipsAndUpdates to CustomOrangeGold
-    }
-
-    val matchScore = remember(opp.id, userFocus) {
-        opp.matchScore ?: run {
-            val hash = kotlin.math.abs(opp.title.hashCode() + userFocus.hashCode())
-            val base = if (opp.title.contains(userFocus, ignoreCase = true) || opp.description.contains(userFocus, ignoreCase = true)) {
-                88
-            } else {
-                74
-            }
-            (base + (hash % 12)).coerceAtMost(99)
-        }
-    }
-
-    Surface(
-        color = SURFACE,
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, BORDER),
+    Card(
         modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
+            .fillMaxSize()
+            .clickable { onViewDetailsClick() },
+        shape = RoundedCornerShape(24.dp),
+        border = BorderStroke(1.dp, BORDER),
+        colors = CardDefaults.cardColors(containerColor = SURFACE)
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp)
+                .fillMaxSize()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                // Institution / Lab Logo Box
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(tintColor.copy(alpha = 0.08f)),
-                    contentAlignment = Alignment.Center
+                // Header row: Badge and Match Score
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = tintColor,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    val (typeLabel, typeColor) = when (opp.type) {
+                        OpportunityType.JOB -> "JOB" to PRIMARY
+                        OpportunityType.FUNDING -> "FUNDING" to WhatsAppTealGreen
+                        OpportunityType.REQUIREMENT -> "REQUIREMENT" to CustomOrangeGold
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(typeColor.copy(alpha = 0.12f))
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = typeLabel,
+                            color = typeColor,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    val matchScore = remember(opp.id, userFocus) {
+                        opp.matchScore ?: run {
+                            val hash = kotlin.math.abs(opp.title.hashCode() + userFocus.hashCode())
+                            val base = if (opp.title.contains(userFocus, ignoreCase = true) || opp.description.contains(userFocus, ignoreCase = true)) 88 else 74
+                            (base + (hash % 12)).coerceAtMost(99)
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MATCH_SCORE_BG)
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = MATCH_SCORE_TEXT,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "$matchScore% Match",
+                                color = MATCH_SCORE_TEXT,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
 
-                Spacer(modifier = Modifier.width(12.dp))
-
-                // Title and Company
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = opp.title,
-                        color = TEXT_PRIMARY,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = opp.companyOrFunder,
-                        color = TEXT_SECONDARY,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Match Score Tag
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MATCH_SCORE_BG)
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = "$matchScore%",
-                        color = MATCH_SCORE_TEXT,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Inline Metadata Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                // Type Tag
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(tintColor.copy(alpha = 0.1f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = opp.type.name,
-                        color = tintColor,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
+                // Title
                 Text(
-                    text = "·",
-                    color = TEXT_MUTED,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
+                    text = opp.title,
+                    color = TEXT_PRIMARY,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    lineHeight = 28.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
 
+                // Company/Funder
                 Text(
-                    text = if (opp.amount.isNotBlank()) opp.amount else "Details online",
+                    text = opp.companyOrFunder,
                     color = TEXT_SECONDARY,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-
-                Text(
-                    text = "·",
-                    color = TEXT_MUTED,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Text(
-                    text = opp.postedAgo,
-                    color = TEXT_MUTED,
-                    fontSize = 11.sp
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // AI Relevance Snippet (sleek, borderless)
-            val matchReason = remember(opp.id) {
-                opp.relevanceExplanation ?: "Matches $userFocus research and citation profile."
-            }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 2.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.AutoAwesome,
-                    contentDescription = null,
-                    tint = PRIMARY,
-                    modifier = Modifier.size(12.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = matchReason,
-                    color = TEXT_SECONDARY,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Normal,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+
+                // Info Chips
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(SURFACE_SUBTLE)
+                            .padding(10.dp)
+                    ) {
+                        Column {
+                            Text("Compensation", color = TEXT_MUTED, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = opp.amount.ifBlank { "Details Online" },
+                                color = TEXT_PRIMARY,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(SURFACE_SUBTLE)
+                            .padding(10.dp)
+                    ) {
+                        Column {
+                            Text("Deadline", color = TEXT_MUTED, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = opp.deadline.ifBlank { "Open Now" },
+                                color = TEXT_PRIMARY,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
+                // AI Match analysis section
+                val relevance = opp.relevanceExplanation ?: "Matches your academic publications & $userFocus research portfolio."
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .border(BorderStroke(1.dp, BORDER), RoundedCornerShape(12.dp))
+                        .background(SURFACE_SUBTLE)
+                        .padding(12.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.Top) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = PRIMARY,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text("AI MATCH ANALYSIS", color = PRIMARY, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = relevance,
+                                color = TEXT_PRIMARY,
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
+                // Required Skills
+                val skills = remember(opp.id) {
+                    opp.requiredSkills.ifEmpty { listOf(userFocus, "Python", "Data Analysis") }
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Required Skills", color = TEXT_PRIMARY, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        skills.take(3).forEach { skill ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(SURFACE_SUBTLE)
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(skill, color = TEXT_SECONDARY, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                    }
+                }
+
+                // Excerpt description
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Overview", color = TEXT_PRIMARY, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = opp.description,
+                        color = TEXT_SECONDARY,
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            // Action buttons footer (Always visible on card)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Prev button
+                IconButton(
+                    onClick = {
+                        onPrevClick()
+                    },
+                    enabled = prevEnabled,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(if (prevEnabled) SURFACE_SUBTLE else SURFACE_SUBTLE.copy(alpha = 0.4f))
+                        .border(BorderStroke(1.dp, BORDER), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Replay,
+                        contentDescription = "Previous",
+                        tint = if (prevEnabled) TEXT_PRIMARY else TEXT_MUTED
+                    )
+                }
+
+                // Next/Skip button
+                IconButton(
+                    onClick = {
+                        onNextClick()
+                    },
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(SURFACE_SUBTLE)
+                        .border(BorderStroke(1.dp, BORDER), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Skip",
+                        tint = AccentRose
+                    )
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                // View details and apply button
+                Button(
+                    onClick = onViewDetailsClick,
+                    colors = ButtonDefaults.buttonColors(containerColor = PRIMARY, contentColor = TEXT_ON_PRIMARY),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .height(48.dp)
+                        .widthIn(min = 140.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("View Details", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-fun OpportunityDetailSheetContent(
+fun OpportunityDetailSheet(
     opp: IndustryOpportunity,
     userFocus: String,
     onClose: () -> Unit
@@ -556,86 +700,183 @@ fun OpportunityDetailSheetContent(
             .padding(24.dp)
     ) {
         // Opportunity Header
-        Text(
-            text = opp.type.name,
-            color = if (opp.type == OpportunityType.JOB) PRIMARY else WhatsAppTealGreen,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            val (typeLabel, typeColor) = when (opp.type) {
+                OpportunityType.JOB -> "JOB" to PRIMARY
+                OpportunityType.FUNDING -> "FUNDING" to WhatsAppTealGreen
+                OpportunityType.REQUIREMENT -> "REQUIREMENT" to CustomOrangeGold
+            }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(typeColor.copy(alpha = 0.12f))
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = typeLabel,
+                    color = typeColor,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            val matchScore = remember(opp.id, userFocus) {
+                opp.matchScore ?: 85
+            }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MATCH_SCORE_BG)
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = MATCH_SCORE_TEXT,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "$matchScore% Match",
+                        color = MATCH_SCORE_TEXT,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
         Text(
             text = opp.title,
             color = TEXT_PRIMARY,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.ExtraBold
+            fontSize = 22.sp,
+            fontWeight = FontWeight.ExtraBold,
+            lineHeight = 28.sp
         )
         Text(
             text = opp.companyOrFunder,
             color = TEXT_SECONDARY,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold
         )
+        
         Spacer(modifier = Modifier.height(16.dp))
 
         // Core Information
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(SURFACE_SUBTLE)
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Column {
-                Text("Funding / Salary", color = TEXT_MUTED, fontSize = 11.sp)
-                Text(opp.amount.ifBlank { "Varies" }, color = TEXT_PRIMARY, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(SURFACE_SUBTLE)
+                    .padding(12.dp)
+            ) {
+                Column {
+                    Text("Compensation", color = TEXT_MUTED, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = opp.amount.ifBlank { "Details Online" },
+                        color = TEXT_PRIMARY,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
             }
-            Column(horizontalAlignment = Alignment.End) {
-                Text("Deadline", color = TEXT_MUTED, fontSize = 11.sp)
-                Text(opp.deadline.ifBlank { "Open Now" }, color = TEXT_PRIMARY, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(SURFACE_SUBTLE)
+                    .padding(12.dp)
+            ) {
+                Column {
+                    Text("Deadline", color = TEXT_MUTED, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = opp.deadline.ifBlank { "Open Now" },
+                        color = TEXT_PRIMARY,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         // Description
-        Text("Description", color = TEXT_PRIMARY, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Text("Description", color = TEXT_PRIMARY, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = opp.description,
             color = TEXT_SECONDARY,
             fontSize = 13.sp,
-            lineHeight = 18.sp
+            lineHeight = 20.sp
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         // Eligibility
         if (opp.eligibility.isNotBlank()) {
-            Text("Eligibility Criteria", color = TEXT_PRIMARY, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text("Eligibility Criteria", color = TEXT_PRIMARY, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = opp.eligibility,
                 color = TEXT_SECONDARY,
                 fontSize = 13.sp,
-                lineHeight = 18.sp
+                lineHeight = 20.sp
             )
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
         }
+
+        // Required Skills
+        val skills = remember(opp.id) {
+            opp.requiredSkills.ifEmpty { listOf(userFocus, "Python", "Data Analysis") }
+        }
+        Text("Required Skills", color = TEXT_PRIMARY, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            skills.take(4).forEach { skill ->
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(SURFACE_SUBTLE)
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(skill, color = TEXT_SECONDARY, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
 
         // Procedure Checklist
         val steps = remember(opp.id) {
             opp.procedureSteps.ifEmpty {
                 listOf(
-                    "Check official guidelines",
-                    "Update academic CV with $userFocus keywords",
-                    "Draft brief research statement",
-                    "Submit online application form"
+                    "Check official guidelines & eligibility parameters",
+                    "Update academic CV with $userFocus key credentials",
+                    "Draft brief statement of purpose (SOP)",
+                    "Submit online application form via institutional portal"
                 )
             }
         }
 
-        Text("Application Procedure", color = TEXT_PRIMARY, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Text("Application Roadmap & Checklist", color = TEXT_PRIMARY, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
         steps.forEachIndexed { index, step ->
             val stepKey = "${opp.id}_step_$index"
@@ -645,7 +886,7 @@ fun OpportunityDetailSheetContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { checklistState[stepKey] = !isChecked }
-                    .padding(vertical = 4.dp)
+                    .padding(vertical = 6.dp)
             ) {
                 Checkbox(
                     checked = isChecked,
@@ -668,9 +909,9 @@ fun OpportunityDetailSheetContent(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .border(BorderStroke(1.dp, BORDER), RoundedCornerShape(12.dp))
-                .background(SURFACE)
+                .clip(RoundedCornerShape(16.dp))
+                .border(BorderStroke(1.dp, BORDER), RoundedCornerShape(16.dp))
+                .background(SURFACE_SUBTLE)
                 .padding(16.dp)
         ) {
             Column {
@@ -679,7 +920,7 @@ fun OpportunityDetailSheetContent(
                         imageVector = Icons.Default.AutoAwesome,
                         contentDescription = null,
                         tint = PRIMARY,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
@@ -689,46 +930,48 @@ fun OpportunityDetailSheetContent(
                         fontWeight = FontWeight.Bold
                     )
                 }
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = "Generate custom outlines based on your publications and focus area.",
-                    color = TEXT_SECONDARY,
+                    color = TEXT_MUTED,
                     fontSize = 12.sp
                 )
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button(
                         onClick = { activeAiTool = if (activeAiTool == "cover") null else "cover" },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (activeAiTool == "cover") PRIMARY else SURFACE_SUBTLE,
+                            containerColor = if (activeAiTool == "cover") PRIMARY else SURFACE,
                             contentColor = if (activeAiTool == "cover") TEXT_ON_PRIMARY else TEXT_PRIMARY
                         ),
                         shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, BORDER),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Cover Letter", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("Cover Letter", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                     Button(
                         onClick = { activeAiTool = if (activeAiTool == "sop") null else "sop" },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (activeAiTool == "sop") PRIMARY else SURFACE_SUBTLE,
+                            containerColor = if (activeAiTool == "sop") PRIMARY else SURFACE,
                             contentColor = if (activeAiTool == "sop") TEXT_ON_PRIMARY else TEXT_PRIMARY
                         ),
                         shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, BORDER),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("SOP Outline", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("SOP Outline", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
                 if (activeAiTool != null) {
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
-                            .background(BgPrimary)
-                            .padding(12.dp)
+                            .background(SURFACE)
+                            .padding(14.dp)
                     ) {
                         Column {
                             val draftTitle = if (activeAiTool == "cover") "Tailored Cover Letter Draft" else "SOP Research Goal Section"
@@ -739,7 +982,7 @@ fun OpportunityDetailSheetContent(
                             }
                             Text(draftTitle, color = TEXT_PRIMARY, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text(draftText, color = TEXT_SECONDARY, fontSize = 12.sp, lineHeight = 16.sp)
+                            Text(draftText, color = TEXT_SECONDARY, fontSize = 12.sp, lineHeight = 18.sp)
                         }
                     }
                 }
@@ -754,10 +997,10 @@ fun OpportunityDetailSheetContent(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             OutlinedButton(
-                onClick = { onClose() },
+                onClick = onClose,
                 border = BorderStroke(1.dp, BORDER),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = TEXT_SECONDARY),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.weight(1f)
             ) {
                 Text("Dismiss", fontWeight = FontWeight.Bold)
@@ -772,7 +1015,7 @@ fun OpportunityDetailSheetContent(
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = PRIMARY, contentColor = TEXT_ON_PRIMARY),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.weight(1.5f)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -782,220 +1025,8 @@ fun OpportunityDetailSheetContent(
                 }
             }
         }
-    }
-}
 
-@Composable
-fun FastSwipeDeck(
-    opportunities: List<IndustryOpportunity>,
-    userFocus: String
-) {
-    var currentIndex by remember { mutableStateOf(0) }
-    var previousIndex by remember { mutableStateOf<Int?>(null) }
-    val opp = opportunities.getOrNull(currentIndex)
-    val context = LocalContext.current
-
-    if (opp == null) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("You've viewed all jobs! Pull to refresh.", color = TEXT_SECONDARY)
-        }
-        return
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        // Visually stunning job reels card
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.85f)
-                .clip(RoundedCornerShape(24.dp))
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            DarkSlateGray,
-                            DeepVioletBlue,
-                            DarkSlateGray
-                        )
-                    )
-                )
-                .border(BorderStroke(1.5.dp, SlateBorder), RoundedCornerShape(24.dp))
-                .padding(24.dp)
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // Header details
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(SkyBlueAccent.copy(alpha = 0.2f))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text("POSTDOC ROLE", color = SkyBlueAccent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    }
-                    Text(opp.postedAgo, color = SlateTextSub, fontSize = 12.sp)
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // Title and Institution
-                Text(
-                    text = opp.title,
-                    color = Color.White,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    lineHeight = 28.sp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = opp.companyOrFunder,
-                    color = SkyBlueAccent,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Metadata Chips
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(SlateCardBg)
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        Text(opp.amount.ifBlank { "$85,000/yr" }, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(SlateCardBg)
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        Text("Active Status", color = EmeraldBright, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Description
-                Text(
-                    text = opp.description,
-                    color = LightSlateText,
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp,
-                    maxLines = 5,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                // Key required skills
-                val skills = remember(opp.id) {
-                    opp.requiredSkills.ifEmpty { listOf(userFocus, "Python", "Data Analysis") }
-                }
-                Text("REQUIRED SKILLS", color = SlateTextSub, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    skills.take(3).forEach { skill ->
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(SlateBorder)
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text(skill, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium)
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Controls row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Skip button
-                    IconButton(
-                        onClick = { 
-                            previousIndex = currentIndex
-                            currentIndex++ 
-                        },
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(SlateCardBg)
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Skip", tint = ErrorRed)
-                    }
-
-                    // Undo button
-                    IconButton(
-                        onClick = {
-                            previousIndex?.let {
-                                currentIndex = it
-                                previousIndex = null
-                            }
-                        },
-                        enabled = previousIndex != null,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(if (previousIndex != null) SlateCardBg else SlateCardBg.copy(alpha = 0.4f))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Replay,
-                            contentDescription = "Undo",
-                            tint = if (previousIndex != null) Color.White else Color.Gray
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.weight(1f))
-
-                    // SOP toolkit
-                    Button(
-                        onClick = {
-                            Toast.makeText(context, "SOP outline generated & saved to your workspace details!", Toast.LENGTH_SHORT).show()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = SlateBorder),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("SOP outline", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    // Direct Apply Link
-                    Button(
-                        onClick = {
-                            if (opp.url.isNotBlank()) {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(opp.url))
-                                context.startActivity(intent)
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = SkyBlueAccent, contentColor = Color.Black),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("1-Click Apply", fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                    }
-                }
-            }
-        }
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
@@ -1005,10 +1036,9 @@ fun AssistantProfessorRoadmapScreen(
     userFocus: String,
     onNavigateToAuthor: (String) -> Unit = {}
 ) {
-    val context = LocalContext.current
     if (roadmap == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Roadmap currently syncing with your OpenAlex profile...", color = TEXT_SECONDARY)
+            Text("Roadmap currently syncing with your profile...", color = TEXT_SECONDARY)
         }
         return
     }
@@ -1195,7 +1225,6 @@ fun AssistantProfessorRoadmapScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.weight(1f)
                     ) {
-                        // Initials avatar
                         Box(
                             modifier = Modifier
                                 .size(36.dp)
@@ -1254,6 +1283,7 @@ fun AssistantProfessorRoadmapScreen(
                         Text(template.description, color = TEXT_SECONDARY, fontSize = 12.sp)
                     }
                     Spacer(modifier = Modifier.width(12.dp))
+                    val context = LocalContext.current
                     IconButton(
                         onClick = {
                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(template.downloadUrl))
@@ -1275,7 +1305,7 @@ fun AssistantProfessorRoadmapScreen(
 }
 
 @Composable
-fun ProfessorPostingForm() {
+fun ProfessorPostingForm(onDismiss: () -> Unit = {}) {
     var title by remember { mutableStateOf("") }
     var titleError by remember { mutableStateOf(false) }
     var institution by remember { mutableStateOf("") }
@@ -1347,11 +1377,12 @@ fun ProfessorPostingForm() {
                         descriptionError = false
                         urlError = false
                         postSuccess = false
+                        onDismiss()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = PRIMARY),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Post Another Position", fontWeight = FontWeight.Bold)
+                    Text("Done", fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -1412,7 +1443,9 @@ fun ProfessorPostingForm() {
                                 focusedBorderColor = PRIMARY,
                                 unfocusedBorderColor = BORDER,
                                 focusedLabelColor = PRIMARY,
-                                unfocusedLabelColor = TEXT_MUTED
+                                unfocusedLabelColor = TEXT_MUTED,
+                                focusedTextColor = TEXT_PRIMARY,
+                                unfocusedTextColor = TEXT_PRIMARY
                             ),
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1436,7 +1469,9 @@ fun ProfessorPostingForm() {
                                 focusedBorderColor = PRIMARY,
                                 unfocusedBorderColor = BORDER,
                                 focusedLabelColor = PRIMARY,
-                                unfocusedLabelColor = TEXT_MUTED
+                                unfocusedLabelColor = TEXT_MUTED,
+                                focusedTextColor = TEXT_PRIMARY,
+                                unfocusedTextColor = TEXT_PRIMARY
                             ),
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1520,7 +1555,9 @@ fun ProfessorPostingForm() {
                                 focusedBorderColor = PRIMARY,
                                 unfocusedBorderColor = BORDER,
                                 focusedLabelColor = PRIMARY,
-                                unfocusedLabelColor = TEXT_MUTED
+                                unfocusedLabelColor = TEXT_MUTED,
+                                focusedTextColor = TEXT_PRIMARY,
+                                unfocusedTextColor = TEXT_PRIMARY
                             ),
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1535,7 +1572,9 @@ fun ProfessorPostingForm() {
                                 focusedBorderColor = PRIMARY,
                                 unfocusedBorderColor = BORDER,
                                 focusedLabelColor = PRIMARY,
-                                unfocusedLabelColor = TEXT_MUTED
+                                unfocusedLabelColor = TEXT_MUTED,
+                                focusedTextColor = TEXT_PRIMARY,
+                                unfocusedTextColor = TEXT_PRIMARY
                             ),
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1559,7 +1598,9 @@ fun ProfessorPostingForm() {
                                 focusedBorderColor = PRIMARY,
                                 unfocusedBorderColor = BORDER,
                                 focusedLabelColor = PRIMARY,
-                                unfocusedLabelColor = TEXT_MUTED
+                                unfocusedLabelColor = TEXT_MUTED,
+                                focusedTextColor = TEXT_PRIMARY,
+                                unfocusedTextColor = TEXT_PRIMARY
                             ),
                             modifier = Modifier.fillMaxWidth()
                         )

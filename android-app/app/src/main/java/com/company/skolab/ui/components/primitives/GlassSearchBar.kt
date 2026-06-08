@@ -48,11 +48,11 @@ fun GlassSearchBar(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .height(52.dp)
-            .border(width = if (isFocused || value.isNotEmpty()) 1.5.dp else 1.dp, color = borderColor, shape = SkoLabShapes.md),
+            .height(44.dp)
+            .border(width = if (isFocused || value.isNotEmpty()) 1.5.dp else 1.dp, color = borderColor, shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)),
         color = containerColor,
-        shape = SkoLabShapes.md,
-        shadowElevation = if (isFocused) 4.dp else 1.dp,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+        shadowElevation = if (isFocused) 3.dp else 0.dp,
         tonalElevation = 0.dp
     ) {
         Row(
