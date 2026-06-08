@@ -116,6 +116,7 @@ class AgentViewModel(context: Context, private val userUid: String) : ViewModel(
                         frequentSearchTerms = remote.frequent_search_terms.ifEmpty { local.frequentSearchTerms },
                         lastActiveTopic = remote.last_active_topic.ifEmpty { local.lastActiveTopic },
                         totalPapersRead = remote.total_papers_read.coerceAtLeast(local.totalPapersRead),
+                        researcherBio = remote.researcher_bio ?: local.researcherBio,
                         lastUpdated = remote.last_updated
                     )
                     UserActivityTracker.saveMemory(context, merged)
@@ -185,6 +186,7 @@ class AgentViewModel(context: Context, private val userUid: String) : ViewModel(
                         frequentCollaborators = remote.frequent_collaborators.ifEmpty { current.frequentCollaborators },
                         frequentSearchTerms = remote.frequent_search_terms.ifEmpty { current.frequentSearchTerms },
                         lastActiveTopic = remote.last_active_topic.ifEmpty { current.lastActiveTopic },
+                        researcherBio = remote.researcher_bio ?: current.researcherBio,
                         lastUpdated = remote.last_updated
                     )
                     UserActivityTracker.saveMemory(context, updated)

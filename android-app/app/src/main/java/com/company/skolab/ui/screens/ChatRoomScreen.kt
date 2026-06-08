@@ -741,7 +741,7 @@ fun ChatRoomScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(vertical = 12.dp)
             ) {
-                items(chatHistory) { msg ->
+                items(chatHistory, key = { "${it.role}-${it.timestamp}" }) { msg ->
                     val isMe = msg.role == "user"
                     ChatBubble(
                         message = msg,

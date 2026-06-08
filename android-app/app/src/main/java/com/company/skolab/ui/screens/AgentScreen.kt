@@ -425,7 +425,7 @@ fun AgentScreen(initialQuery: String = "") {
                     verticalArrangement = Arrangement.spacedBy(0.dp),
                     contentPadding = PaddingValues(top = 16.dp, bottom = 8.dp)
                 ) {
-                    items(uiState.messages) { msg ->
+                    items(uiState.messages, key = { "${it.role}-${it.timestamp}" }) { msg ->
                         val isMe = msg.role == "user"
                         AgentMessageBubble(
                             message = msg,

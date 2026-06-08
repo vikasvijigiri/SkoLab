@@ -133,7 +133,7 @@ fun SparkSessionScreen(
                     // Ephemeral indicator badge
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFF1E293B),
+                        color = SlateCardBg,
                         border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.1f)),
                         modifier = Modifier.padding(end = 12.dp)
                     ) {
@@ -247,7 +247,7 @@ fun SparkSessionScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     Surface(
                         shape = RoundedCornerShape(16.dp),
-                        color = Color(0xFF1E293B).copy(alpha = 0.5f),
+                        color = SlateCardBg.copy(alpha = 0.5f),
                         border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.08f)),
                         modifier = Modifier
                             .fillMaxSize()
@@ -297,7 +297,7 @@ fun SparkSessionScreen(
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(chatMessages) { message ->
+                        items(chatMessages, key = { it.id }) { message ->
                             val isMe = message.senderId == currentUserId
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -310,7 +310,7 @@ fun SparkSessionScreen(
                                         bottomStart = if (isMe) 16.dp else 4.dp,
                                         bottomEnd = if (isMe) 4.dp else 16.dp
                                     ),
-                                    color = if (isMe) AccentTeal.copy(alpha = 0.15f) else Color(0xFF1E293B),
+                                    color = if (isMe) AccentTeal.copy(alpha = 0.15f) else SlateCardBg,
                                     border = BorderStroke(
                                         width = 0.5.dp,
                                         color = if (isMe) AccentTeal.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.08f)
@@ -358,8 +358,8 @@ fun SparkSessionScreen(
                             onValueChange = { messageInput = it },
                             placeholder = { Text("Ask a question or offer code help...", color = TextMuted, fontSize = 12.sp) },
                             colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color(0xFF1E293B),
-                                unfocusedContainerColor = Color(0xFF1E293B),
+                                focusedContainerColor = SlateCardBg,
+                                unfocusedContainerColor = SlateCardBg,
                                 focusedIndicatorColor = Color.Transparent,
                                 unfocusedIndicatorColor = Color.Transparent,
                                 focusedTextColor = TextPrimary,
@@ -543,7 +543,7 @@ fun SparkSessionCompletionCard(
             Button(
                 onClick = onClose,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (session.status == "RESOLVED") AccentTeal else Color(0xFF334155),
+                    containerColor = if (session.status == "RESOLVED") AccentTeal else SlateBorder,
                     contentColor = Color.Black
                 ),
                 shape = RoundedCornerShape(12.dp),

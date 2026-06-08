@@ -10,7 +10,7 @@ from sqlalchemy import delete, update, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from pathlib import Path
 
-from app.api.dependencies import get_db
+from app.api.dependencies import get_db, get_verified_user
 from app.core.config import settings
 from app.core.cache import _user_memory_cache, history_summary_cache
 from app.models.user_models import User, UserPreference, Connection, AgentChatHistory
@@ -58,11 +58,18 @@ def verify_signed_token(token: str) -> tuple[str, str] | None:
         return None
 
 @router.delete("/users/{userId}")
-async def delete_user(userId: str, db: AsyncSession = Depends(get_db)):
+async def delete_user(
+    userId: str,
+    db: AsyncSession = Depends(get_db),
+    verified_user: dict = Depends(get_verified_user),
+):
     """
     GDPR Right to be Forgotten: Permanently deletes the user and associated PII,
     and anonymizes telemetry log records.
     """
+    if verified_user.get("uid") != userId:
+        raise HTTPException(status_code=403, detail="Forbidden: you may only delete your own account.")
+
     user_stmt = select(User).where(User.id == userId)
     user_result = await db.execute(user_stmt)
     user = user_result.scalar_one_or_none()

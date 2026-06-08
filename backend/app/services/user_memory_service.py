@@ -193,6 +193,36 @@ class UserMemoryService:
 
         last_active_topic = top_topics[0] if top_topics else ""
 
+        # Dynamically generate semantic biography using LLM reflection
+        researcher_bio = "An active researcher currently focused on exploratory academic topics."
+        try:
+            from app.services.llm_service import LLMService, is_llm_working
+            if is_llm_working():
+                llm = LLMService()
+                prompt = (
+                    f"You are an expert academic advisor. Summarize the research profile of a user based on their recent activity logs:\n"
+                    f"- Top Research Topics: {', '.join(top_topics[:4]) if top_topics else 'None'}\n"
+                    f"- Frequent Search Terms: {', '.join(frequent_search_terms[:3]) if frequent_search_terms else 'None'}\n"
+                    f"- Recently Read Papers: {', '.join(recently_read_papers[:3]) if recently_read_papers else 'None'}\n"
+                    f"- Research Style: {research_style}\n"
+                    f"- Reading Pace: {reading_pace}\n"
+                    f"- Collaborators: {', '.join(frequent_collaborators[:3]) if frequent_collaborators else 'None'}\n\n"
+                    f"Write a concise, professional 2-3 sentence academic biography/profile of this researcher's current trajectory, focus, and collaboration network. "
+                    f"Write in the third person. Keep it highly specific, dense, and professional. Do not use generic filler."
+                )
+                res = await llm.query(
+                    messages=[
+                        {"role": "system", "content": "You are a professional academic career assistant."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.3,
+                    max_tokens=256
+                )
+                if res.content:
+                    researcher_bio = res.content.strip()
+        except Exception as e:
+            print(f"[UserMemoryService] Failed to generate semantic bio: {e}", flush=True)
+
         profile = UserMemoryProfileResponse(
             user_id=user_id,
             top_topics=top_topics,
@@ -206,6 +236,7 @@ class UserMemoryService:
             frequent_search_terms=frequent_search_terms,
             last_active_topic=last_active_topic,
             total_papers_read=total_papers_read,
+            researcher_bio=researcher_bio,
             last_updated=int(time.time() * 1000),
         )
 

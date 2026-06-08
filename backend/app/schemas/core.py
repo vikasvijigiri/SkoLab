@@ -155,4 +155,28 @@ class UserMemoryProfileResponse(BaseModel):
     frequent_search_terms: List[str] = []
     last_active_topic: str = ""
     total_papers_read: int = 0
+    researcher_bio: Optional[str] = None
     last_updated: int = 0
+
+
+class AcademicPaperInfo(BaseModel):
+    id: str
+    title: str
+    doi: Optional[str] = None
+    year: Optional[int] = None
+    journal: Optional[str] = None
+    citations: int = 0
+    authors: List[str] = []
+
+
+class TieupIdea(BaseModel):
+    title: str
+    description: str
+    search_queries: List[str] = []
+    papers: List[AcademicPaperInfo] = []
+
+
+class IndustryAcademicTieupsResponse(BaseModel):
+    trending: List[TieupIdea] = []
+    futuristic: List[TieupIdea] = []
+

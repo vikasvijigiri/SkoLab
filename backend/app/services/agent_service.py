@@ -120,6 +120,7 @@ class AgentService:
                 )
                 streak = m.get("streakDays") or m.get("streak_days") or 0
                 avg_read = m.get("avgReadMinutes") or m.get("avg_read_minutes") or 0
+                bio = m.get("researcherBio") or m.get("researcher_bio") or ""
 
                 # Build a prominent domain directive that forces domain-scoped searches
                 if top_topics:
@@ -136,6 +137,8 @@ class AgentService:
                         f"\n[END DOMAIN DIRECTIVE]\n"
                     )
 
+                if bio:
+                    parts.append(f"Semantic Academic Profile: {bio}")
                 if top_topics:
                     parts.append(f"Research focus: {', '.join(top_topics[:4])}")
                 if last_topic:

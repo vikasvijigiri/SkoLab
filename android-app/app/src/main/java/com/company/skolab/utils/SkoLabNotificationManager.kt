@@ -37,11 +37,18 @@ object SkoLabNotificationManager {
     }
 
     fun showReminderNotification(context: Context) {
+        // Check if today is Friday
+        val calendar = java.util.Calendar.getInstance()
+        val isFriday = calendar.get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.FRIDAY
+
+        val title = if (isFriday) "SkoLab Weekly Goal" else "SkoLab Research Update"
+        
         // Fetch active reminders from derived user memory
         val memory = UserActivityTracker.readMemory(context)
         val reminders = memory.proactiveReminders()
-        val title = "SkoLab Research Update"
-        val message = if (reminders.isNotEmpty()) {
+        val message = if (isFriday) {
+            "Time to make SkoLab better! Open your workspace to set goals, review progress, and check reminders."
+        } else if (reminders.isNotEmpty()) {
             reminders.random()
         } else {
             "Ready to continue your research? Open SkoLab to explore new papers."

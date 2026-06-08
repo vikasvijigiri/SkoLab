@@ -427,6 +427,7 @@ data class UserMemoryProfileResponse(
     val frequent_search_terms: List<String> = emptyList(),
     val last_active_topic: String = "",
     val total_papers_read: Int = 0,
+    val researcher_bio: String? = null,
     val last_updated: Long = 0
 )
 
@@ -434,6 +435,32 @@ data class UserMemoryProfileResponse(
 data class AgentChatResponse(
     val reply: String
 )
+
+@Serializable
+data class AcademicPaperInfo(
+    val id: String,
+    val title: String,
+    val doi: String? = null,
+    val year: Int? = null,
+    val journal: String? = null,
+    val citations: Int = 0,
+    val authors: List<String> = emptyList()
+)
+
+@Serializable
+data class TieupIdea(
+    val title: String,
+    val description: String,
+    val search_queries: List<String> = emptyList(),
+    val papers: List<AcademicPaperInfo> = emptyList()
+)
+
+@Serializable
+data class IndustryAcademicTieupsResponse(
+    val trending: List<TieupIdea> = emptyList(),
+    val futuristic: List<TieupIdea> = emptyList()
+)
+
 
 // Mapped from PaperIntelligence.kt — using the model class directly
 // (no duplicate serializable needed — PaperIntelligence is @Serializable)
@@ -1625,6 +1652,20 @@ class ApiService {
             emptyList()
         }
     }
+
+    suspend fun getIndustryAcademicTieups(userId: String): IndustryAcademicTieupsResponse? {
+        val base = baseUrl() ?: return null
+        return try {
+            httpClient.get("$base/api/v1/industry_academic_tieups") {
+                parameter("user_id", userId)
+            }.body()
+        } catch (e: Exception) {
+            handleNetworkException(e, base)
+            Log.e("ApiService", "getIndustryAcademicTieups failed", e)
+            null
+        }
+    }
+
 
     suspend fun getAssistantProfessorRoadmap(authorId: String?, name: String, focus: String): com.company.skolab.model.AssistantProfessorRoadmap? {
         val base = baseUrl() ?: return null

@@ -272,12 +272,12 @@ fun SkoLabMainApp() {
         }
     }
 
-    val mainTabs = listOf("discover", "industry", "agent", "collabs_ws")
+    val mainTabs = listOf("discover", "industry", "agent", "industry_academic")
     val dockItems = listOf(
         DockItem(route = "discover", icon = Icons.Filled.Home, label = "Home"),
         DockItem(route = "industry", icon = Icons.Outlined.TravelExplore, label = "Launchpad"),
         DockItem(route = "agent", drawableResId = com.company.skolab.R.drawable.logo, label = "Skolar"),
-        DockItem(route = "collabs_ws", icon = Icons.Filled.Groups, label = "CoLab")
+        DockItem(route = "industry_academic", icon = Icons.Filled.Hub, label = "Tie-ups")
     )
 
     SkoLabScaffold { innerPadding ->
@@ -522,7 +522,7 @@ fun SkoLabMainApp() {
                                 navController.navigate("daily_discovery")
                             },
                             onNavigateToCollabs = {
-                                navController.navigate("collabs_ws") {
+                                navController.navigate("industry_academic") {
                                     popUpTo("discover") { saveState = true }
                                     launchSingleTop = true
                                     restoreState = true
@@ -533,6 +533,18 @@ fun SkoLabMainApp() {
                             },
                             onNavigateToSparkSession = { sessionId ->
                                 navController.navigate("spark_session/$sessionId")
+                            },
+                            onNavigateToWorkspace = { projectName ->
+                                navController.navigate("colab_workspace/${projectName.encodeForRoute()}")
+                            },
+                            onNavigateToInviteMember = { projectId ->
+                                navController.navigate("invite_member/${projectId.encodeForRoute()}")
+                            },
+                            onNavigateToCreateTask = { projectId ->
+                                navController.navigate("create_task/${projectId.encodeForRoute()}")
+                            },
+                            onNavigateToExternalInvite = { collaboratorName ->
+                                navController.navigate("external_invite/${collaboratorName.encodeForRoute()}")
                             }
                         )
                     }
@@ -675,64 +687,19 @@ fun SkoLabMainApp() {
                         )
                     }
                 }
-                composable(route = "collabs") { backStackEntry ->
+                composable(route = "industry_academic") {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(top = scaffoldPadding.calculateTopPadding())
                             .padding(bottom = ScreenInsets.bottomNavClearance)
                     ) {
-                        PaperCollabsScreen(
-                            savedStateHandle = backStackEntry.savedStateHandle,
-                            startTab = "orbit_network",
-                            onNavigateToChat = { peerName, peerId ->
-                                navController.navigate("chat/${peerName.encodeForRoute()}/${peerId.encodeForRoute()}")
+                        com.company.skolab.ui.screens.IndustryAcademicScreen(
+                            onNavigateToAuthor = { authorName ->
+                                navController.navigate("author_detail/${authorName.encodeForRoute()}")
                             },
-                            onNavigateToWorkspace = { projectName ->
-                                navController.navigate("colab_workspace/${projectName.encodeForRoute()}")
-                            },
-                            onNavigateToCreateProject = {
-                                navController.navigate("create_project")
-                            },
-                            onNavigateToInviteMember = { projectId ->
-                                navController.navigate("invite_member/${projectId.encodeForRoute()}")
-                            },
-                            onNavigateToCreateTask = { projectId ->
-                                navController.navigate("create_task/${projectId.encodeForRoute()}")
-                            },
-                            onNavigateToExternalInvite = { collaboratorName ->
-                                navController.navigate("external_invite/${collaboratorName.encodeForRoute()}")
-                            }
-                        )
-                    }
-                }
-                composable(route = "collabs_ws") { backStackEntry ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(top = scaffoldPadding.calculateTopPadding())
-                            .padding(bottom = ScreenInsets.bottomNavClearance)
-                    ) {
-                        PaperCollabsScreen(
-                            savedStateHandle = backStackEntry.savedStateHandle,
-                            startTab = "workspaces",
-                            onNavigateToChat = { peerName, peerId ->
-                                navController.navigate("chat/${peerName.encodeForRoute()}/${peerId.encodeForRoute()}")
-                            },
-                            onNavigateToWorkspace = { projectName ->
-                                navController.navigate("colab_workspace/${projectName.encodeForRoute()}")
-                            },
-                            onNavigateToCreateProject = {
-                                navController.navigate("create_project")
-                            },
-                            onNavigateToInviteMember = { projectId ->
-                                navController.navigate("invite_member/${projectId.encodeForRoute()}")
-                            },
-                            onNavigateToCreateTask = { projectId ->
-                                navController.navigate("create_task/${projectId.encodeForRoute()}")
-                            },
-                            onNavigateToExternalInvite = { collaboratorName ->
-                                navController.navigate("external_invite/${collaboratorName.encodeForRoute()}")
+                            onNavigateToReader = { title, doi ->
+                                navController.navigate("reader/${title.encodeForRoute()}/${doi.encodeForRoute()}")
                             }
                         )
                     }

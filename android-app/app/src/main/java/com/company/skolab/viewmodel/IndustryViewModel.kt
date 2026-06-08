@@ -8,10 +8,12 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.company.skolab.di.AppDependencies
 import com.company.skolab.model.AssistantProfessorRoadmap
 import com.company.skolab.model.IndustryOpportunity
 import com.company.skolab.network.ChatMessage
+import com.company.skolab.di.AppDependencies
+import com.company.skolab.repository.DefaultIndustryRepository
+import com.company.skolab.repository.IndustryRepository
 import com.company.skolab.utils.IndustryMatchUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,7 +26,9 @@ private val Context.bookmarkStore: DataStore<Preferences>
 
 private val BOOKMARKED_IDS_KEY = stringPreferencesKey("bookmarked_opportunity_ids")
 
-class IndustryViewModel : ViewModel() {
+class IndustryViewModel(
+    private val repository: IndustryRepository = DefaultIndustryRepository()
+) : ViewModel() {
 
     private val apiService = AppDependencies.apiService
 
@@ -50,11 +54,11 @@ class IndustryViewModel : ViewModel() {
     private val _bookmarkedIds = MutableStateFlow<Set<String>>(emptySet())
     val bookmarkedIds: StateFlow<Set<String>> = _bookmarkedIds.asStateFlow()
 
-    private var bookmarkStore: DataStore<Preferences>? = null
+    private var bookmarkDataStore: DataStore<Preferences>? = null
 
     fun initBookmarks(context: Context) {
-        if (bookmarkStore != null) return
-        bookmarkStore = context.bookmarkStore
+        if (bookmarkDataStore != null) return
+        bookmarkDataStore = context.bookmarkStore
         viewModelScope.launch {
             val prefs = context.bookmarkStore.data.first()
             val raw = prefs[BOOKMARKED_IDS_KEY] ?: ""
@@ -63,7 +67,7 @@ class IndustryViewModel : ViewModel() {
     }
 
     fun toggleBookmark(id: String) {
-        val store = bookmarkStore ?: return
+        val store = bookmarkDataStore ?: return
         viewModelScope.launch {
             val updated = _bookmarkedIds.value.toMutableSet()
             if (id in updated) updated.remove(id) else updated.add(id)
@@ -89,12 +93,8 @@ class IndustryViewModel : ViewModel() {
         _aiDraftError.value = null
     }
 
-    /**
-     * Generates a cover letter or SOP outline by calling the Groq-backed agent
-     * endpoint with a structured academic prompt. Results replace [aiDraft].
-     */
     fun generateAiDraft(
-        type: String,           // "cover" or "sop"
+        type: String,
         opp: IndustryOpportunity,
         userFocus: String,
         userName: String
@@ -129,8 +129,10 @@ class IndustryViewModel : ViewModel() {
         userName: String
     ): String {
         val posLabel = opp.positionLevel.displayLabel().ifBlank { opp.type.name.lowercase() }
-        val skills = opp.requiredSkills.take(5).joinToString(", ").ifBlank { "research, analysis, academic writing" }
-        val descSnippet = opp.description.take(400).ifBlank { "Conduct advanced research in ${opp.companyOrFunder}." }
+        val skills = opp.requiredSkills.take(5).joinToString(", ")
+            .ifBlank { "research, analysis, academic writing" }
+        val descSnippet = opp.description.take(400)
+            .ifBlank { "Conduct advanced research in ${opp.companyOrFunder}." }
 
         return if (type == "cover") {
             """Write a concise, professional academic cover letter for a $posLabel position.
@@ -166,12 +168,12 @@ Instructions:
         }
     }
 
-    // ── Match Score (real, deterministic) ────────────────────────────────────
+    // ── Match Score (real, deterministic) ─────────────────────────────────────
 
     fun computeMatchScore(userFocus: String, opp: IndustryOpportunity): Int =
         IndustryMatchUtils.computeMatchScore(userFocus, opp)
 
-    // ── Data Loading ──────────────────────────────────────────────────────────
+    // ── Data Loading ───────────────────────────────────────────────────────────
 
     fun setError(message: String?) {
         _error.value = message
@@ -187,7 +189,7 @@ Instructions:
         _isLoading.value = true
         viewModelScope.launch {
             try {
-                val results = apiService.getIndustryOpportunities(focus, name)
+                val results = repository.getOpportunities(focus, name)
                 _opportunities.value = results
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -207,7 +209,7 @@ Instructions:
         _isLoadingRoadmap.value = true
         viewModelScope.launch {
             try {
-                val result = apiService.getAssistantProfessorRoadmap(authorId, name, focus)
+                val result = repository.getRoadmap(authorId, name, focus)
                 _roadmap.value = result
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e

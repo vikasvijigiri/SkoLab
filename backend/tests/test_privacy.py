@@ -70,8 +70,14 @@ async def test_gdpr_account_deletion():
         await db.commit()
 
     # Trigger delete API via AsyncClient
-    async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
-        response = await ac.delete(f"/api/v1/users/{user_id}")
+    from app.api.dependencies import get_verified_user
+    app.dependency_overrides[get_verified_user] = lambda: {"uid": user_id}
+    try:
+        async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
+            response = await ac.delete(f"/api/v1/users/{user_id}")
+    finally:
+        app.dependency_overrides.clear()
+
     assert response.status_code == 200
     assert response.json()["status"] == "success"
 
