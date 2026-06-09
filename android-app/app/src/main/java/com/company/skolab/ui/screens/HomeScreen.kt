@@ -38,6 +38,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import com.company.skolab.analytics.SkoLabAnalytics
 import com.company.skolab.ui.theme.*
 import com.company.skolab.viewmodel.SparkViewModel
@@ -325,7 +330,8 @@ fun HomeScreen(
                     skolabConnections = membersPresence.values.filter { it.uid != currentUserId }.take(4),
                     networkCollaborators = networkCollaborators.take(5),
                     onNavigateToChat = onNavigateToChat,
-                    onInviteClick = onNavigateToExternalInvite
+                    onInviteClick = onNavigateToExternalInvite,
+                    onAuthorClick = onAuthorClick
                 )
                 // Tab Selection
                 Row(
@@ -1219,7 +1225,8 @@ fun HomeTopWidget(
     skolabConnections: List<com.company.skolab.model.SkoLabUser>,
     networkCollaborators: List<com.company.skolab.network.NetworkCollaborator>,
     onNavigateToChat: (String, String) -> Unit,
-    onInviteClick: (String) -> Unit
+    onInviteClick: (String) -> Unit,
+    onAuthorClick: (String) -> Unit = {}
 ) {
     val hasConnections = skolabConnections.isNotEmpty() || networkCollaborators.isNotEmpty()
     if (recentPapers.isEmpty() && !hasConnections) return
@@ -1272,9 +1279,10 @@ fun HomeTopWidget(
             Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text(
                     "Your Network",
-                    color = TEXT_MUTED,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold
+                    color = TEXT_SECONDARY,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
                 )
                 Row(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -1294,7 +1302,8 @@ fun HomeTopWidget(
                             isOnline = user.isOnline,
                             actionLabel = "Message",
                             actionFilled = true,
-                            onClick = { onNavigateToChat(user.uid, user.name) }
+                            onClick = { onNavigateToChat(user.uid, user.name) },
+                            onCardClick = { onNavigateToChat(user.uid, user.name) }
                         )
                     }
                     // Real co-authors from user's papers — show "+ Invite" to connect outside SkoLab
@@ -1323,7 +1332,8 @@ fun HomeTopWidget(
                             isOnline = false,
                             actionLabel = "+ Invite",
                             actionFilled = false,
-                            onClick = { onInviteClick(collab.name) }
+                            onClick = { onInviteClick(collab.name) },
+                            onCardClick = { onAuthorClick("${collab.name}|${collab.id}") }
                         )
                     }
                 }
@@ -1332,6 +1342,7 @@ fun HomeTopWidget(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NetworkPersonCard(
     initials: String,
@@ -1340,86 +1351,107 @@ private fun NetworkPersonCard(
     isOnline: Boolean,
     actionLabel: String,
     actionFilled: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onCardClick: () -> Unit = onClick
 ) {
+    val avatarPalette = listOf(
+        Color(0xFF0D9488), Color(0xFF4F46E5), Color(0xFF059669),
+        Color(0xFFD97706), Color(0xFF7C3AED), Color(0xFFEA580C),
+        Color(0xFF0891B2), Color(0xFFDB2777)
+    )
+    val accentColor = avatarPalette[kotlin.math.abs(name.hashCode()) % avatarPalette.size]
+
     Surface(
-        modifier = Modifier.width(136.dp),
-        shape = RoundedCornerShape(12.dp),
+        onClick = onCardClick,
+        modifier = Modifier.width(148.dp),
+        shape = RoundedCornerShape(14.dp),
         color = SURFACE,
-        border = BorderStroke(0.5.dp, BORDER)
+        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.22f)),
+        shadowElevation = 3.dp
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)
-        ) {
-            // Avatar + name/subtitle
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp)
-            ) {
-                Box(contentAlignment = Alignment.BottomEnd) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .background(PRIMARY.copy(alpha = 0.13f), CircleShape)
-                            .border(1.dp, PRIMARY.copy(alpha = 0.28f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            initials.ifEmpty { "?" },
-                            color = PRIMARY,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    if (isOnline) {
-                        Box(
-                            modifier = Modifier
-                                .size(9.dp)
-                                .background(Color(0xFF3DD68C), CircleShape)
-                                .border(1.5.dp, BgPrimary, CircleShape)
-                        )
-                    }
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        name,
-                        color = TEXT_PRIMARY,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        subtitle,
-                        color = TEXT_MUTED,
-                        fontSize = 9.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-            // Action button
+        Column {
+            // Accent top strip
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(if (actionFilled) PRIMARY else Color.Transparent)
-                    .border(
-                        width = if (actionFilled) 0.dp else 1.dp,
-                        color = if (actionFilled) Color.Transparent else PRIMARY.copy(alpha = 0.55f),
-                        shape = RoundedCornerShape(6.dp)
+                    .height(3.dp)
+                    .background(
+                        Brush.horizontalGradient(listOf(accentColor, accentColor.copy(alpha = 0.4f)))
                     )
-                    .clickable(onClick = onClick)
-                    .padding(vertical = 5.dp),
-                contentAlignment = Alignment.Center
+            )
+            Column(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    actionLabel,
-                    color = if (actionFilled) Color.White else PRIMARY,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                // Avatar + name/subtitle
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(contentAlignment = Alignment.BottomEnd) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(accentColor.copy(alpha = 0.18f), CircleShape)
+                                .border(1.5.dp, accentColor.copy(alpha = 0.45f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                initials.ifEmpty { "?" },
+                                color = accentColor,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        if (isOnline) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .background(Color(0xFF3DD68C), CircleShape)
+                                    .border(1.5.dp, SURFACE, CircleShape)
+                            )
+                        }
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            name,
+                            color = TEXT_PRIMARY,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            subtitle,
+                            color = TEXT_SECONDARY,
+                            fontSize = 10.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                // Action button
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (actionFilled) accentColor else accentColor.copy(alpha = 0.1f))
+                        .border(
+                            width = 1.dp,
+                            color = if (actionFilled) Color.Transparent else accentColor.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        .clickable(onClick = onClick)
+                        .padding(vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        actionLabel,
+                        color = if (actionFilled) Color.White else accentColor,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }
@@ -1438,6 +1470,23 @@ fun SparkConsole(
     onCancelBroadcast: () -> Unit
 ) {
     var isListeningForDoubt by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) isListeningForDoubt = true
+    }
+
+    fun launchMicOrRequest() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
+            == PackageManager.PERMISSION_GRANTED
+        ) {
+            isListeningForDoubt = true
+        } else {
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
 
     val autoTags = remember(userMemoryProfile, userFocus) {
         val list = mutableListOf<String>()
@@ -1547,7 +1596,7 @@ fun SparkConsole(
                 IconButton(
                     onClick = {
                         if (!uiState.isBroadcasting) {
-                            isListeningForDoubt = true
+                            launchMicOrRequest()
                         } else {
                             onCancelBroadcast()
                         }
@@ -1617,7 +1666,7 @@ fun SparkConsole(
                     }
                 } else {
                     Button(
-                        onClick = { isListeningForDoubt = true },
+                        onClick = { launchMicOrRequest() },
                         colors = ButtonDefaults.buttonColors(containerColor = PRIMARY, contentColor = TEXT_ON_PRIMARY),
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
@@ -1670,7 +1719,9 @@ fun SparkMicOverlay(
 ) {
     val context = LocalContext.current
     var transcript by remember { mutableStateOf("") }
+    // phases: "listening" | "processing" | "text_fallback"
     var phase by remember { mutableStateOf("listening") }
+    var textInput by remember { mutableStateOf("") }
 
     val infiniteTransition = rememberInfiniteTransition(label = "micPulse")
 
@@ -1724,7 +1775,7 @@ fun SparkMicOverlay(
 
     DisposableEffect(Unit) {
         if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-            onDismiss()
+            phase = "text_fallback"
             return@DisposableEffect onDispose {}
         }
         val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
@@ -1748,7 +1799,10 @@ fun SparkMicOverlay(
                 val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
                 onResult(text)
             }
-            override fun onError(error: Int) { onDismiss() }
+            override fun onError(error: Int) {
+                // Fall back to text input instead of silently dismissing
+                phase = "text_fallback"
+            }
         })
         recognizer.startListening(intent)
         onDispose {
@@ -1807,26 +1861,63 @@ fun SparkMicOverlay(
                 }
             }
 
-            if (transcript.isNotBlank()) {
+            if (phase == "text_fallback") {
                 Text(
-                    text = "\"$transcript\"",
+                    text = "Describe your doubt",
                     color = TEXT_PRIMARY,
                     fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 22.sp
-                )
-            } else {
-                Text(
-                    text = if (phase == "processing") "Processing your doubt..." else "Speak your doubt...",
-                    color = TEXT_SECONDARY,
-                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
                     textAlign = TextAlign.Center
                 )
-            }
-
-            TextButton(onClick = onDismiss) {
-                Text("Cancel", color = TEXT_MUTED, fontSize = 13.sp)
+                OutlinedTextField(
+                    value = textInput,
+                    onValueChange = { textInput = it },
+                    placeholder = { Text("e.g. Need help with my methodology section", color = TEXT_MUTED, fontSize = 13.sp) },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = PRIMARY,
+                        unfocusedBorderColor = TEXT_MUTED.copy(alpha = 0.4f),
+                        focusedTextColor = TEXT_PRIMARY,
+                        unfocusedTextColor = TEXT_PRIMARY,
+                        cursorColor = PRIMARY
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 3
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel", color = TEXT_MUTED, fontSize = 13.sp)
+                    }
+                    Button(
+                        onClick = { if (textInput.isNotBlank()) onResult(textInput) },
+                        enabled = textInput.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(containerColor = PRIMARY),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Ask", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+            } else {
+                if (transcript.isNotBlank()) {
+                    Text(
+                        text = "\"$transcript\"",
+                        color = TEXT_PRIMARY,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 22.sp
+                    )
+                } else {
+                    Text(
+                        text = if (phase == "processing") "Processing your doubt..." else "Speak your doubt...",
+                        color = TEXT_SECONDARY,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel", color = TEXT_MUTED, fontSize = 13.sp)
+                }
             }
         }
     }
