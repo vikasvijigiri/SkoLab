@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from sqlalchemy import select
 
 from app.main import app
+from app.api.dependencies import get_verified_user
 from app.db.database import AsyncSessionLocal, engine, generate_record_signature
 from app.models.user_models import User, UserPreference
 from app.schemas.core import AgentChatRequest
@@ -106,19 +107,27 @@ async def test_device_signature_validation():
         assert response_invalid.status_code == 401
         assert "Invalid device signature" in response_invalid.json()["detail"]
 
-        # POST request with VALID signature (should bypass auth check and continue to endpoint logic, returning 404 User not found)
+        # POST request with VALID signature — device sig middleware passes, endpoint logic runs → 404 no user
         from app.core.config import settings
         device_secret = str(settings.database_encryption_key).encode("utf-8")
         payload = f"{user_id}:{valid_ts}"
         valid_sig = hmac.new(device_secret, payload.encode("utf-8"), hashlib.sha256).hexdigest()
-        
+
         headers_valid = {
             "X-User-Id": user_id,
             "X-Device-Timestamp": valid_ts,
             "X-Device-Signature": valid_sig
         }
-        response_valid = await ac.post(f"/api/v1/users/{user_id}/export", headers=headers_valid)
-        assert response_valid.status_code == 404  # Reached endpoint logic, user not found
+
+        async def _mock_verified_user():
+            return {"uid": user_id}
+
+        app.dependency_overrides[get_verified_user] = _mock_verified_user
+        try:
+            response_valid = await ac.post(f"/api/v1/users/{user_id}/export", headers=headers_valid)
+            assert response_valid.status_code == 404  # Reached endpoint logic, user not found
+        finally:
+            app.dependency_overrides.pop(get_verified_user, None)
 
 @pytest.mark.anyio
 async def test_path_specific_rate_limiting():

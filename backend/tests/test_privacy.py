@@ -3,6 +3,7 @@ import pytest
 import httpx
 from sqlalchemy import select, delete
 from app.main import app
+from app.api.dependencies import get_verified_user
 from app.db.database import AsyncSessionLocal, engine
 from app.models.user_models import User, UserPreference, AgentChatHistory
 from app.models.analytics_models import UserSettings, UserActivityLog, ApiRequestLog
@@ -114,43 +115,48 @@ async def test_gdpr_account_deletion():
 async def test_ccpa_data_portability_export():
     """Verify CCPA data export produces signed tokens and enforces expiration."""
     user_id = "test_user_export_456"
-    
+
     async with AsyncSessionLocal() as db:
         await force_cleanup_user(db, user_id)
-            
+
         # Create User
         u = User(id=user_id, display_name="Test Export", email="export@skolab.open")
         db.add(u)
         await db.commit()
 
-    async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
-        # Request export link
-        response = await ac.post(f"/api/v1/users/{user_id}/export")
-        assert response.status_code == 200
-        resp_data = response.json()
-        assert resp_data["status"] == "success"
-        assert "download_url" in resp_data
-        
-        # Extract token
-        download_url = resp_data["download_url"]
-        token = download_url.split("token=")[1]
-        
-        # Download using valid token
-        dl_response = await ac.get(f"/api/v1/users/download-export?token={token}")
-        assert dl_response.status_code == 200
-        export_payload = dl_response.json()
-        assert export_payload["user_id"] == user_id
-        assert export_payload["display_name"] == "Test Export"
+    async def _mock_verified_user():
+        return {"uid": user_id, "email": "export@skolab.open"}
 
-        # Download using altered token (invalid signature)
-        dl_response_invalid = await ac.get("/api/v1/users/download-export?token=altered_token_xyz")
-        assert dl_response_invalid.status_code == 403
-        
-        # Download using expired token
-        expired_token = generate_signed_token(user_id, "mock_path", expires_at=int(time.time()) - 10)
-        dl_response_expired = await ac.get(f"/api/v1/users/download-export?token={expired_token}")
-        assert dl_response_expired.status_code == 403
+    app.dependency_overrides[get_verified_user] = _mock_verified_user
+    try:
+        async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
+            # Request export link
+            response = await ac.post(f"/api/v1/users/{user_id}/export")
+            assert response.status_code == 200
+            resp_data = response.json()
+            assert resp_data["status"] == "success"
+            assert "download_url" in resp_data
 
-    # Clean up user
-    async with AsyncSessionLocal() as db:
-        await force_cleanup_user(db, user_id)
+            # Extract token
+            download_url = resp_data["download_url"]
+            token = download_url.split("token=")[1]
+
+            # Download using valid token
+            dl_response = await ac.get(f"/api/v1/users/download-export?token={token}")
+            assert dl_response.status_code == 200
+            export_payload = dl_response.json()
+            assert export_payload["user_id"] == user_id
+            assert export_payload["display_name"] == "Test Export"
+
+            # Download using altered token (invalid signature)
+            dl_response_invalid = await ac.get("/api/v1/users/download-export?token=altered_token_xyz")
+            assert dl_response_invalid.status_code == 403
+
+            # Download using expired token
+            expired_token = generate_signed_token(user_id, "mock_path", expires_at=int(time.time()) - 10)
+            dl_response_expired = await ac.get(f"/api/v1/users/download-export?token={expired_token}")
+            assert dl_response_expired.status_code == 403
+    finally:
+        app.dependency_overrides.pop(get_verified_user, None)
+        async with AsyncSessionLocal() as db:
+            await force_cleanup_user(db, user_id)
