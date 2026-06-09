@@ -211,17 +211,25 @@ async def get_semantic_trending(
             print(f"[SemanticTrending] Database lookup fallback error: {e}", flush=True)
 
     if not top_concepts:
-        # Extreme fallback: generic science concepts
-        author_concept_names = ["Science", "Physics", "Computer Science", "Biology"]
-        top_concepts = [
-            {
-                "id": f"https://openalex.org/C_{name.replace(' ', '_')}",
-                "display_name": name,
-                "score": 1.0,
-            }
-            for name in author_concept_names
-        ]
-        author_concept_ids = {c["id"].split("/")[-1] for c in top_concepts}
+        # Last resort: pull concepts stored in ResearcherProfile from a previous pipeline run
+        try:
+            from app.models.user_models import ResearcherProfile
+            from sqlalchemy.future import select as sa_select
+            stmt = sa_select(ResearcherProfile).where(ResearcherProfile.openalex_id == clean_id)
+            res = await db.execute(stmt)
+            rp = res.scalars().first()
+            if rp and rp.concepts:
+                stored = rp.concepts if isinstance(rp.concepts, list) else []
+                author_concept_names = [c for c in stored if isinstance(c, str)][:5]
+                top_concepts = [{"id": "", "display_name": n, "score": 1.0} for n in author_concept_names]
+                author_concept_ids = set()
+        except Exception as e:
+            print(f"[SemanticTrending] ResearcherProfile fallback error: {e}", flush=True)
+
+    if not top_concepts:
+        empty = {"author_concepts": [], "papers": []}
+        await _semantic_trending_cache.set(cache_key, empty)
+        return empty
 
     print(f"[SemanticTrending] Author concepts: {author_concept_names}", flush=True)
 
@@ -259,10 +267,9 @@ async def get_semantic_trending(
                     all_works.append(w)
 
     if not all_works:
-        raise HTTPException(
-            status_code=502,
-            detail="No works returned by OpenAlex or API is offline. Cannot determine semantic trending papers.",
-        )
+        empty = {"author_concepts": author_concept_names[:5], "papers": []}
+        await _semantic_trending_cache.set(cache_key, empty)
+        return empty
 
     # ── Step 3: Score each paper ──────────────────────────────────────────
     def score_paper(w: dict) -> float:

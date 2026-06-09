@@ -90,9 +90,21 @@ class SummarizationService:
 
         # ── Step 2: Attempt to get the full paper text ────────────────────────
         if not is_llm_working():
-            raise Exception(
-                "LLM service is offline or rate-limited. Paper analysis is unavailable."
-            )
+            return {
+                "tldr": "",
+                "key_findings": [],
+                "techniques": [],
+                "tools_and_software": [],
+                "core_concepts": [],
+                "formulas": [],
+                "limitations": [],
+                "real_world_impact": "",
+                "future_directions": [],
+                "confidence": "Low",
+                "text_source": "unavailable",
+                "status": "degraded",
+                "message": "LLM service is temporarily unavailable.",
+            }
 
         full_text, text_source = await self._fetch_full_paper_text(
             doi=doi,
@@ -587,9 +599,13 @@ class SummarizationService:
         )
 
         if not is_llm_working():
-            raise Exception(
-                "LLM service is offline or rate-limited. Paper summary is unavailable."
-            )
+            return {
+                "bullets": [],
+                "metrics": metrics,
+                "top_skills": top_skills,
+                "status": "degraded",
+                "message": "LLM service is temporarily unavailable.",
+            }
 
         context = f"Title: {title}\n"
         if paper_data.get("abstract"):
@@ -630,9 +646,22 @@ class SummarizationService:
                 content["top_skills"] = top_skills
                 return content
         except Exception as e:
-            raise Exception(f"Failed to query LLM to summarize paper: {str(e)}")
+            print(f"[summarize_paper] LLM query failed: {e}", flush=True)
+            return {
+                "bullets": [],
+                "metrics": metrics,
+                "top_skills": top_skills,
+                "status": "degraded",
+                "message": "LLM service is temporarily unavailable.",
+            }
 
-        raise Exception("LLM summary generation failed to return a response.")
+        return {
+            "bullets": [],
+            "metrics": metrics,
+            "top_skills": top_skills,
+            "status": "degraded",
+            "message": "LLM service is temporarily unavailable.",
+        }
 
     async def generate_presentation(
         self, title: str, doi: Optional[str] = None

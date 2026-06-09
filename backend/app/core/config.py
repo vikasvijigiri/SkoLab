@@ -122,6 +122,13 @@ class Settings:
         )
     )
 
+    # ── Monitoring ───────────────────────────────────────────────────────────
+    # Full name of the primary researcher. Used by add_monitors.py to resolve
+    # the OpenAlex author ID at runtime — never hardcoded in source.
+    monitor_author_name: str = field(
+        default_factory=lambda: os.environ.get("MONITOR_AUTHOR_NAME", "")
+    )
+
     # ── Firebase ─────────────────────────────────────────────────────────────
     google_credentials_path: str = field(
         default_factory=lambda: os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")

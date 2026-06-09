@@ -273,11 +273,13 @@ fun SkoLabMainApp() {
     }
 
     val mainTabs = listOf("discover", "industry", "agent", "industry_academic")
+    // Routes where the nav dock must not appear (pre-auth / setup flows)
+    val noNavRoutes = setOf("splash", "onboarding", "auth", "profile_setup")
     val dockItems = listOf(
-        DockItem(route = "discover", icon = Icons.Filled.Home, label = "Home"),
-        DockItem(route = "industry", icon = Icons.Outlined.TravelExplore, label = "Launchpad"),
-        DockItem(route = "agent", drawableResId = com.company.skolab.R.drawable.logo, label = "Skolar"),
-        DockItem(route = "industry_academic", icon = Icons.Filled.Hub, label = "Tie-ups")
+        DockItem(route = "discover", icon = Icons.Filled.Home, label = "Feed"),
+        DockItem(route = "industry", icon = Icons.Outlined.TravelExplore, label = "Explore"),
+        DockItem(route = "agent", drawableResId = com.company.skolab.R.drawable.logo, label = "Ask AI"),
+        DockItem(route = "industry_academic", icon = Icons.Filled.Hub, label = "Connect")
     )
 
     SkoLabScaffold { innerPadding ->
@@ -333,7 +335,7 @@ fun SkoLabMainApp() {
                         }
                     },
                     bottomBar = {
-                        if (currentRoute in mainTabs) {
+                        if (currentRoute != null && currentRoute !in noNavRoutes) {
                             BottomNavDock(
                                 items = dockItems,
                                 currentRoute = currentRoute,
@@ -611,7 +613,7 @@ fun SkoLabMainApp() {
                     val query = backStackEntry.arguments?.getString("query")?.decodeFromRoute() ?: ""
                     val imeBottom = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current)
                     val isKeyboardVisible = imeBottom > 0
-                    val bottomPadding = if (isKeyboardVisible) 0.dp else ScreenInsets.bottomNavClearance
+                    val bottomPadding = if (isKeyboardVisible) 0.dp else scaffoldPadding.calculateBottomPadding()
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -1025,7 +1027,8 @@ fun SkoLabMainApp() {
                             onDiscussClick = { title ->
                                 val discussPrompt = "Discussing paper: \"$title\"\n\nCould you explain the methodology, tools used, and key findings of this work?"
                                 navController.navigate("agent?query=${android.net.Uri.encode(discussPrompt)}")
-                            }
+                            },
+                            userFocus = cachedUser?.researchFocus ?: ""
                         )
                     }
                 }
@@ -1063,7 +1066,8 @@ fun SkoLabMainApp() {
                                     navController.navigate("author_detail/${authorName.encodeForRoute()}")
                                 },
                                 searchQuery = searchQuery,
-                                showSearchBar = false
+                                showSearchBar = false,
+                                userFocus = cachedUser?.researchFocus ?: ""
                             )
                         }
                     }

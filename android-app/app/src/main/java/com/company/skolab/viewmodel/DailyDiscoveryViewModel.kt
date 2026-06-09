@@ -38,15 +38,15 @@ class DailyDiscoveryViewModel(
     private val _uiState = MutableStateFlow(DailyDiscoveryUiState())
     val uiState: StateFlow<DailyDiscoveryUiState> = _uiState.asStateFlow()
 
-    init {
-        loadDiscoveryItems()
-    }
-
-    fun loadDiscoveryItems() {
+    fun loadDiscoveryItems(focus: String) {
+        if (focus.isBlank()) {
+            _uiState.update { it.copy(isLoading = false) }
+            return
+        }
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             try {
-                val trending = apiService.getTrendingPapers(focus = "Artificial Intelligence", limit = 10)
+                val trending = apiService.getTrendingPapers(focus = focus, limit = 10)
                 if (trending.isEmpty()) {
                     throw Exception("No trending academic papers found from OpenAlex")
                 }

@@ -6,9 +6,11 @@ import base64
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from sqlalchemy import delete, update, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from pathlib import Path
+from typing import Optional
 
 from app.api.dependencies import get_db, get_verified_user
 from app.core.config import settings
@@ -56,6 +58,87 @@ def verify_signed_token(token: str) -> tuple[str, str] | None:
         return user_id, file_path
     except Exception:
         return None
+
+class UserProfileSyncRequest(BaseModel):
+    uid: str
+    name: str
+    discipline: Optional[str] = ""
+
+
+async def _enrich_user_profile_bg(uid: str, name: str, discipline: str) -> None:
+    """
+    Background task: resolve OpenAlex author ID from name, store it, then run
+    the teleport worker to pre-fetch and cache papers/metrics/co-authors.
+    Exits early when the user already has an openalex_id — no redundant API calls.
+    """
+    from app.db.database import AsyncSessionLocal
+    from app.services.openalex_service import OpenAlexService
+    from app.api.v1.endpoints.authors import track_teleport_researcher
+
+    async with AsyncSessionLocal() as session:
+        user = await session.get(User, uid)
+        if user and user.openalex_id:
+            logger.info(f"[profile_sync] {uid} already has openalex_id={user.openalex_id}, skipping.")
+            return
+
+    svc = OpenAlexService()
+    # Including discipline narrows the match when multiple authors share the same name
+    search_query = f"{name} {discipline}".strip() if discipline else name
+    try:
+        results = await svc.search_authors(search_query, per_page=1)
+    except Exception as exc:
+        logger.warning(f"[profile_sync] OpenAlex lookup failed for '{name}': {exc}")
+        return
+
+    if not results:
+        logger.warning(f"[profile_sync] No OpenAlex match for '{name}'")
+        return
+
+    openalex_id = results[0].get("id", "").split("/")[-1]
+    if not openalex_id:
+        return
+
+    async with AsyncSessionLocal() as session:
+        user = await session.get(User, uid)
+        if user:
+            user.openalex_id = openalex_id
+            await session.commit()
+    logger.info(f"[profile_sync] Saved openalex_id={openalex_id} for uid={uid} ('{name}')")
+
+    await track_teleport_researcher(openalex_id)
+    logger.info(f"[profile_sync] Teleport enrichment complete for {openalex_id}")
+
+
+@router.post("/users/profile/sync")
+async def sync_user_profile(
+    req: UserProfileSyncRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Called once after the user provides their name and discipline during
+    profile setup. Upserts the User record, then fires a background job that:
+      1. Resolves their OpenAlex author ID by name (skipped if already stored)
+      2. Pre-warms all research data caches via the teleport worker
+    Returns immediately — enrichment happens asynchronously.
+    """
+    user = await db.get(User, req.uid)
+    if user:
+        user.display_name = req.name
+    else:
+        user = User(id=req.uid, display_name=req.name)
+        db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    background_tasks.add_task(_enrich_user_profile_bg, req.uid, req.name, req.discipline or "")
+
+    return {
+        "status": "syncing",
+        "uid": user.id,
+        "openalex_id": user.openalex_id,
+    }
+
 
 @router.delete("/users/{userId}")
 async def delete_user(
@@ -119,7 +202,13 @@ async def delete_user(
         raise HTTPException(status_code=500, detail=f"Failed to delete account: {str(e)}")
 
 @router.post("/users/{userId}/export")
-async def export_user_data(userId: str, db: AsyncSession = Depends(get_db)):
+async def export_user_data(
+    userId: str,
+    db: AsyncSession = Depends(get_db),
+    verified_user: dict = Depends(get_verified_user),
+):
+    if verified_user.get("uid") != userId:
+        raise HTTPException(status_code=403, detail="Forbidden: you may only export your own data.")
     """
     CCPA Data Portability: Packages all user records into a structured JSON file,
     saving it securely with a signed expiring download link.
@@ -237,7 +326,11 @@ async def download_user_export(
         raise HTTPException(status_code=403, detail="Invalid, altered, or expired download link.")
 
     user_id, file_path_str = token_val
-    file_path = Path(file_path_str)
+    file_path = Path(file_path_str).resolve()
+
+    # Ensure the resolved path is within the allowed exports directory
+    if not file_path.is_relative_to(EXPORTS_DIR.resolve()):
+        raise HTTPException(status_code=403, detail="Invalid download token.")
 
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Export file not found or already downloaded.")

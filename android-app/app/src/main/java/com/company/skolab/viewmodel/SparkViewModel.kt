@@ -24,7 +24,6 @@ data class SparkUiState(
     val isBroadcasting: Boolean = false,
     val myCurrentBroadcastId: String? = null,
     val walletTokens: Int = 120,
-    val rating: Float = 4.9f,
     val error: String? = null
 )
 
