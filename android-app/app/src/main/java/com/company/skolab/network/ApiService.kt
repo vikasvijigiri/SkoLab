@@ -655,6 +655,10 @@ class ApiService {
             }
             val bodyText = response.bodyAsText()
             Log.d(tag, "searchAuthor raw body: $bodyText")
+            if (!response.status.isSuccess()) {
+                Log.w(tag, "searchAuthor returned non-200 status ${response.status.value}, falling back to OpenAlex")
+                return fetchAuthorFromOpenAlex(mappedName, id, focus)
+            }
             val decoded: AuthorResponse = lenientJson.decodeFromString(bodyText)
             val sanitizedExpertise = decoded.expertise.filter { !it.contains("psychology", ignoreCase = true) }
             val sanitizedField = if (decoded.field_of_study?.contains("psychology", ignoreCase = true) == true) {

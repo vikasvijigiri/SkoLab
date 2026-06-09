@@ -774,7 +774,7 @@ async def search_author(
             source = primary_location.get("source") or {}
             journal_name = source.get("display_name")
             pub_year = w.get("publication_year")
-            citations = w.get("cited_by_count", 0)
+            citations = w.get("cited_by_count") or 0
             impact = source.get("2yr_mean_citedness", 0.0) or 0.0
 
             authors_list = []

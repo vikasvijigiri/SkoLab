@@ -275,6 +275,18 @@ fun SkoLabMainApp() {
     val mainTabs = listOf("discover", "industry", "agent", "industry_academic")
     // Routes where the nav dock must not appear (pre-auth / setup flows)
     val noNavRoutes = setOf("splash", "onboarding", "auth", "profile_setup")
+
+    // Map any sub-screen back to the tab it belongs to, so the active tab stays highlighted
+    val activeTab = when {
+        currentRoute == null -> null
+        currentRoute in mainTabs -> currentRoute
+        currentRoute.startsWith("agent") -> "agent"
+        currentRoute == "create_project" ||
+        currentRoute.startsWith("invite_member") ||
+        currentRoute.startsWith("create_task") ||
+        currentRoute.startsWith("external_invite") -> "industry_academic"
+        else -> "discover"
+    }
     val dockItems = listOf(
         DockItem(route = "discover", icon = Icons.Filled.Home, label = "Feed"),
         DockItem(route = "industry", icon = Icons.Outlined.TravelExplore, label = "Explore"),
@@ -338,7 +350,7 @@ fun SkoLabMainApp() {
                         if (currentRoute != null && currentRoute !in noNavRoutes) {
                             BottomNavDock(
                                 items = dockItems,
-                                currentRoute = currentRoute,
+                                currentRoute = activeTab,
                                 onItemClick = { item ->
                                     navController.navigate(item.route) {
                                         popUpTo("discover") { saveState = true }

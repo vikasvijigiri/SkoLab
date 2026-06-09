@@ -330,7 +330,13 @@ fun FeedScreen(
                             },
                             isSaved = savedFeedItemIds.contains(item1.id),
                             onShareClick = {
-                                android.widget.Toast.makeText(context, "Link copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+                                val shareText = "📄 ${item1.title}\nPublished in ${item1.journal} (${item1.year})\n\nShared via SkoLab"
+                                val sendIntent = android.content.Intent().apply {
+                                    action = android.content.Intent.ACTION_SEND
+                                    putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                                    type = "text/plain"
+                                }
+                                context.startActivity(android.content.Intent.createChooser(sendIntent, "Share Paper"))
                             }
                         )
                     }
@@ -552,7 +558,13 @@ fun FeedScreen(
                             },
                             isSaved = savedFeedItemIds.contains(item2.id),
                             onShareClick = {
-                                android.widget.Toast.makeText(context, "Link copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+                                val shareText = "📄 ${item2.title}\nPublished in ${item2.journal} (${item2.year})\n\nShared via SkoLab"
+                                val sendIntent = android.content.Intent().apply {
+                                    action = android.content.Intent.ACTION_SEND
+                                    putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                                    type = "text/plain"
+                                }
+                                context.startActivity(android.content.Intent.createChooser(sendIntent, "Share Paper"))
                             }
                         )
                     }
@@ -575,10 +587,10 @@ fun FeedScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(30.dp)
-                                        .background(EntropiColors.Green.copy(alpha = 0.12f), RoundedCornerShape(8.dp)),
+                                        .background(PRIMARY.copy(alpha = 0.12f), RoundedCornerShape(8.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(Icons.Default.Groups, null, tint = EntropiColors.Green, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Default.Groups, null, tint = PRIMARY, modifier = Modifier.size(16.dp))
                                 }
                                 Spacer(Modifier.width(10.dp))
                                 Column {
@@ -598,13 +610,13 @@ fun FeedScreen(
                             Surface(
                                 onClick = onNavigateToCollabs,
                                 shape = RoundedCornerShape(8.dp),
-                                color = EntropiColors.Green.copy(alpha = 0.10f),
-                                border = BorderStroke(0.5.dp, EntropiColors.Green.copy(alpha = 0.3f))
+                                color = PRIMARY.copy(alpha = 0.10f),
+                                border = BorderStroke(0.5.dp, PRIMARY.copy(alpha = 0.3f))
                             ) {
                                 Text(
                                     "All →",
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                    color = EntropiColors.Green,
+                                    color = PRIMARY,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -632,13 +644,13 @@ fun FeedScreen(
                                         modifier = Modifier
                                             .size(44.dp)
                                             .background(
-                                                Brush.radialGradient(listOf(EntropiColors.Green.copy(alpha = 0.18f), Color.Transparent)),
+                                                Brush.radialGradient(listOf(AccentTeal.copy(alpha = 0.18f), Color.Transparent)),
                                                 CircleShape
                                             )
-                                            .border(1.dp, EntropiColors.Green.copy(alpha = 0.3f), CircleShape),
+                                            .border(1.dp, AccentTeal.copy(alpha = 0.3f), CircleShape),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(Icons.Default.Add, null, tint = EntropiColors.Green, modifier = Modifier.size(22.dp))
+                                        Icon(Icons.Default.Add, null, tint = AccentTeal, modifier = Modifier.size(22.dp))
                                     }
                                     Column {
                                         Text(
@@ -679,12 +691,12 @@ fun FeedScreen(
                                                     Box(
                                                         modifier = Modifier
                                                             .size(32.dp)
-                                                            .background(EntropiColors.Green.copy(alpha = 0.12f), CircleShape),
+                                                            .background(PRIMARY.copy(alpha = 0.12f), CircleShape),
                                                         contentAlignment = Alignment.Center
                                                     ) {
                                                         Text(
                                                             text = proj.name.take(1).uppercase(),
-                                                            color = EntropiColors.Green,
+                                                            color = PRIMARY,
                                                             fontWeight = FontWeight.ExtraBold,
                                                             fontSize = 14.sp
                                                         )
@@ -745,14 +757,14 @@ fun FeedScreen(
                                                                 .fillMaxHeight()
                                                                 .fillMaxWidth(proj.manuscriptProgress.coerceIn(0f, 1f))
                                                                 .background(
-                                                                    Brush.horizontalGradient(listOf(EntropiColors.Green, EntropiColors.Blue1)),
+                                                                    Brush.horizontalGradient(listOf(PRIMARY, AccentTeal)),
                                                                     RoundedCornerShape(2.dp)
                                                                 )
                                                         )
                                                     }
                                                     Text(
                                                         text = "${(proj.manuscriptProgress * 100).toInt()}%",
-                                                        color = EntropiColors.Green,
+                                                        color = PRIMARY,
                                                         fontSize = 9.sp,
                                                         fontWeight = FontWeight.Bold
                                                     )
@@ -822,7 +834,13 @@ fun FeedScreen(
                             },
                             isSaved = savedFeedItemIds.contains(item3.id),
                             onShareClick = {
-                                android.widget.Toast.makeText(context, "Link copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+                                val shareText = "📄 ${item3.title}\nPublished in ${item3.journal} (${item3.year})\n\nShared via SkoLab"
+                                val sendIntent = android.content.Intent().apply {
+                                    action = android.content.Intent.ACTION_SEND
+                                    putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                                    type = "text/plain"
+                                }
+                                context.startActivity(android.content.Intent.createChooser(sendIntent, "Share Paper"))
                             }
                         )
                     }
@@ -875,10 +893,10 @@ fun FeedScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(30.dp)
-                                        .background(EntropiColors.Gold1.copy(alpha = 0.12f), RoundedCornerShape(8.dp)),
+                                        .background(PRIMARY.copy(alpha = 0.12f), RoundedCornerShape(8.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(Icons.AutoMirrored.Filled.TrendingUp, null, tint = EntropiColors.Gold1, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.AutoMirrored.Filled.TrendingUp, null, tint = PRIMARY, modifier = Modifier.size(16.dp))
                                 }
                                 Spacer(Modifier.width(10.dp))
                                 Column {
@@ -1212,7 +1230,7 @@ fun PulseConnectionCard(
                 text = "$inferredRole · ${connection.author.institution.ifEmpty { connection.author.country }.take(22)}",
                 fontFamily = SpaceGroteskFontFamily,
                 fontSize = 9.5.sp,
-                color = EntropiColors.Text3,
+                color = EntropiColors.Text2,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 lineHeight = 13.sp
@@ -1227,17 +1245,17 @@ fun PulseConnectionCard(
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(connection.papersCollaborated.toString(), fontFamily = JetBrainsMonoFontFamily, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = EntropiColors.Blue1)
+                    Text(connection.papersCollaborated.toString(), fontFamily = JetBrainsMonoFontFamily, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = PRIMARY)
                     Text("Joint", fontFamily = SpaceGroteskFontFamily, fontSize = 7.sp, color = EntropiColors.Text3)
                 }
                 Box(modifier = Modifier.width(0.5.dp).height(16.dp).background(EntropiColors.Border).align(Alignment.CenterVertically))
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("h${connection.hIndex}", fontFamily = JetBrainsMonoFontFamily, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = EntropiColors.Purple1)
+                    Text("h${connection.hIndex}", fontFamily = JetBrainsMonoFontFamily, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = PRIMARY)
                     Text("Index", fontFamily = SpaceGroteskFontFamily, fontSize = 7.sp, color = EntropiColors.Text3)
                 }
                 Box(modifier = Modifier.width(0.5.dp).height(16.dp).background(EntropiColors.Border).align(Alignment.CenterVertically))
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("${connection.mutualCount}%", fontFamily = JetBrainsMonoFontFamily, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = EntropiColors.Green)
+                    Text("${connection.mutualCount}%", fontFamily = JetBrainsMonoFontFamily, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = AccentTeal)
                     Text("Match", fontFamily = SpaceGroteskFontFamily, fontSize = 7.sp, color = EntropiColors.Text3)
                 }
             }
@@ -1256,8 +1274,8 @@ fun PulseConnectionCard(
                     ) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Icon(Icons.AutoMirrored.Filled.Chat, null, tint = EntropiColors.Blue1, modifier = Modifier.size(12.dp))
-                                Text("Message", fontFamily = SpaceGroteskFontFamily, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = EntropiColors.Blue1)
+                                Icon(Icons.AutoMirrored.Filled.Chat, null, tint = AccentTeal, modifier = Modifier.size(12.dp))
+                                Text("Message", fontFamily = SpaceGroteskFontFamily, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = AccentTeal)
                             }
                         }
                     }
@@ -1273,7 +1291,7 @@ fun PulseConnectionCard(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .background(
-                                        Brush.horizontalGradient(listOf(PremiumBlue, EntropiColors.Blue2)),
+                                        Brush.horizontalGradient(listOf(AccentTeal, AccentTealDark)),
                                         RoundedCornerShape(8.dp)
                                     ),
                                 contentAlignment = Alignment.Center
@@ -1288,11 +1306,11 @@ fun PulseConnectionCard(
                             onClick = onChatClick,
                             modifier = Modifier.fillMaxWidth().height(28.dp),
                             shape = RoundedCornerShape(8.dp),
-                            color = DeepSuccessGreen.copy(alpha = 0.10f),
-                            border = BorderStroke(0.5.dp, DeepSuccessGreen.copy(alpha = 0.3f))
+                            color = AccentTeal.copy(alpha = 0.10f),
+                            border = BorderStroke(0.5.dp, AccentTeal.copy(alpha = 0.3f))
                         ) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("🤝 Collab", fontFamily = SpaceGroteskFontFamily, fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = DeepSuccessGreen)
+                                Text("Collaborate", fontFamily = SpaceGroteskFontFamily, fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = AccentTeal)
                             }
                         }
                     }
@@ -1304,11 +1322,11 @@ fun PulseConnectionCard(
                     },
                     modifier = Modifier.fillMaxWidth().height(32.dp),
                     shape = RoundedCornerShape(8.dp),
-                    color = EntropiColors.Gold1.copy(alpha = 0.10f),
-                    border = BorderStroke(0.5.dp, EntropiColors.Gold1.copy(alpha = 0.4f))
+                    color = AccentTeal.copy(alpha = 0.10f),
+                    border = BorderStroke(0.5.dp, AccentTeal.copy(alpha = 0.35f))
                 ) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("✉️ Invite", fontFamily = SpaceGroteskFontFamily, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = EntropiColors.Gold1)
+                        Text("Invite to SkoLab", fontFamily = SpaceGroteskFontFamily, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = AccentTeal)
                     }
                 }
             }
@@ -3292,8 +3310,8 @@ fun PulseFeedCard(
 
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = EntropiColors.Gold1.copy(alpha = 0.12f),
-                    border = BorderStroke(0.5.dp, EntropiColors.Gold1.copy(alpha = 0.4f))
+                    color = PRIMARY.copy(alpha = 0.10f),
+                    border = BorderStroke(0.5.dp, PRIMARY.copy(alpha = 0.35f))
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -3303,12 +3321,12 @@ fun PulseFeedCard(
                         Icon(
                             imageVector = Icons.Default.AutoAwesome,
                             contentDescription = null,
-                            tint = EntropiColors.Gold1,
+                            tint = PRIMARY,
                             modifier = Modifier.size(10.dp)
                         )
                         Text(
                             text = "$relevanceScore% Match",
-                            color = EntropiColors.Gold2,
+                            color = PRIMARY,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = SpaceGroteskFontFamily
@@ -3580,8 +3598,8 @@ fun PulseFeedCard(
                 Surface(
                     onClick = onDiscussClick,
                     shape = RoundedCornerShape(8.dp),
-                    color = EntropiColors.Blue1.copy(alpha = 0.08f),
-                    border = BorderStroke(0.5.dp, EntropiColors.Blue1.copy(alpha = 0.25f))
+                    color = AccentTeal.copy(alpha = 0.08f),
+                    border = BorderStroke(0.5.dp, AccentTeal.copy(alpha = 0.3f))
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -3591,12 +3609,12 @@ fun PulseFeedCard(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Comment,
                             contentDescription = "Ask Skolar",
-                            tint = EntropiColors.Blue1,
+                            tint = AccentTeal,
                             modifier = Modifier.size(14.dp)
                         )
                         Text(
                             text = "Discuss",
-                            color = EntropiColors.Blue1,
+                            color = AccentTeal,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = SpaceGroteskFontFamily
