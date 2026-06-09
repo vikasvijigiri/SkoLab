@@ -1158,7 +1158,7 @@ fun AssistantProfessorRoadmapScreen(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     LinearProgressIndicator(
-                        progress = { ratio.toFloat().coerceAtMost(1f) },
+                        progress = { ratio.coerceAtMost(1f) },
                         modifier = Modifier.fillMaxWidth().height(6.dp)
                             .clip(RoundedCornerShape(3.dp)),
                         color = if (ratio >= 1f) WhatsAppTealGreen else PRIMARY,

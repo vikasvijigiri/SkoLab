@@ -12,7 +12,8 @@ data class SkoLabUser(
     val academicStatus: String = "Researcher",
     val cvUri: String = "",
     val cvFileName: String = "",
-    val about: String = ""
+    val about: String = "",
+    val openAlexId: String = ""
 ) {
     val firstName: String
         get() = name.trim().split("\\s+".toRegex()).firstOrNull()?.replaceFirstChar { 

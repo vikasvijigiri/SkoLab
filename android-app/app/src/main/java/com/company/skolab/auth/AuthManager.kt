@@ -22,6 +22,7 @@ import com.company.skolab.model.UserConnection
 import kotlinx.coroutines.tasks.await
 
 import com.company.skolab.data.UserPreferences
+import com.company.skolab.di.AppDependencies
 import kotlinx.coroutines.flow.firstOrNull
 
 class AuthManager(private val context: Context) {
@@ -292,6 +293,15 @@ class AuthManager(private val context: Context) {
             } catch (e: Exception) {
                 Log.w("AuthManager", "Failed to update user profile on Firestore", e)
             }
+            // Resolve OpenAlex ID in backend background — name + discipline are the two inputs
+            val result = AppDependencies.apiService.syncUserProfile(
+                uid = user.uid, name = name, discipline = focus
+            )
+            result?.openalex_id?.takeIf { it.isNotBlank() }?.let { id ->
+                userPrefs.setOpenAlexId(id)
+                val cached = userPrefs.cachedUser.firstOrNull()
+                if (cached != null) userPrefs.cacheUser(cached.copy(openAlexId = id))
+            }
         }
         val cached = userPrefs.cachedUser.firstOrNull()
         if (cached != null) {
@@ -311,6 +321,15 @@ class AuthManager(private val context: Context) {
                 )
             } catch (e: Exception) {
                 Log.w("AuthManager", "Failed to update academic profile on Firestore", e)
+            }
+            // Resolve OpenAlex ID in backend background — name + discipline are the two inputs
+            val result = AppDependencies.apiService.syncUserProfile(
+                uid = user.uid, name = name, discipline = focus
+            )
+            result?.openalex_id?.takeIf { it.isNotBlank() }?.let { id ->
+                userPrefs.setOpenAlexId(id)
+                val cached = userPrefs.cachedUser.firstOrNull()
+                if (cached != null) userPrefs.cacheUser(cached.copy(openAlexId = id))
             }
         }
         val cached = userPrefs.cachedUser.firstOrNull()

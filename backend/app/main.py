@@ -139,13 +139,43 @@ def schoolab_print(*args, **kwargs):
 
 builtins.print = schoolab_print
 
+# Re-entrancy flag so schoolab_print never recurses if the logging system itself
+# tries to call print (e.g. from handleError / traceback.print_exception).
+_in_schoolab_print = False
+
+def schoolab_print_safe(*args, **kwargs):
+    global _in_schoolab_print
+    if _in_schoolab_print:
+        # We are already inside the custom logger — fall back to real stdout to break the cycle.
+        _original_print(*args, **kwargs)
+        return
+    _in_schoolab_print = True
+    try:
+        schoolab_print(*args, **kwargs)
+    finally:
+        _in_schoolab_print = False
+
+builtins.print = schoolab_print_safe
+
 from contextlib import asynccontextmanager
 import asyncio
 import socket
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from zeroconf import ServiceInfo
-from zeroconf.asyncio import AsyncZeroconf
+try:
+    from zeroconf import ServiceInfo
+    from zeroconf.asyncio import AsyncZeroconf
+    _ZEROCONF_AVAILABLE = True
+except (ImportError, Exception) as _zeroconf_import_err:
+    _ZEROCONF_AVAILABLE = False
+    ServiceInfo = None  # type: ignore
+    AsyncZeroconf = None  # type: ignore
+    # Use _original_print here — settings is not yet imported so the JSON
+    # formatter would crash if we went through the logging system.
+    _original_print(
+        f"[mDNS] zeroconf unavailable — mDNS service discovery disabled. "
+        f"Reason: {_zeroconf_import_err}"
+    )
 
 from app.core.config import settings
 from app.core.cache import (
@@ -231,46 +261,50 @@ async def lifespan(app: FastAPI):
         )
         set_firestore_available(False)
 
-    # 3. Register mDNS
+    # 3. Register mDNS (optional — skipped if zeroconf is blocked by antivirus)
     global _zeroconf, _mdns_info
     import traceback
 
-    try:
-        ips = []
+    if not _ZEROCONF_AVAILABLE:
+        print("[mDNS] Skipped — zeroconf library unavailable (likely blocked by antivirus). "
+              "Android clients will connect via manual IP or emulator loopback.", flush=True)
+    else:
         try:
-            for info in socket.getaddrinfo(socket.gethostname(), None):
-                ip = info[4][0]
-                if (
-                    "." in ip
-                    and not ip.startswith("127.")
-                    and not ip.startswith("169.254")
-                ):
-                    if ip not in ips:
-                        ips.append(ip)
-        except Exception as e:
-            print(f"[mDNS] Failed to get IPs via getaddrinfo: {e}", flush=True)
+            ips = []
+            try:
+                for info in socket.getaddrinfo(socket.gethostname(), None):
+                    ip = info[4][0]
+                    if (
+                        "." in ip
+                        and not ip.startswith("127.")
+                        and not ip.startswith("169.254")
+                    ):
+                        if ip not in ips:
+                            ips.append(ip)
+            except Exception as e:
+                print(f"[mDNS] Failed to get IPs via getaddrinfo: {e}", flush=True)
 
-        if not ips:
-            ips = [settings.lan_ip]
+            if not ips:
+                ips = [settings.lan_ip]
 
-        addresses = [socket.inet_aton(ip) for ip in ips]
-        print(f"[mDNS] Advertising backend on IPs: {ips}", flush=True)
+            addresses = [socket.inet_aton(ip) for ip in ips]
+            print(f"[mDNS] Advertising backend on IPs: {ips}", flush=True)
 
-        _mdns_info = ServiceInfo(
-            type_=settings.mdns_service_type,
-            name=settings.mdns_service_name,
-            addresses=addresses,
-            port=settings.port,
-            properties={"path": "/", "version": "1"},
-        )
-        _zeroconf = AsyncZeroconf()
-        await _zeroconf.async_register_service(_mdns_info, allow_name_change=True)
-        print(
-            f"[mDNS] '{settings.mdns_service_name}' registered at {ips}:{settings.port}"
-        )
-    except Exception as exc:
-        print(f"[mDNS] Registration failed: {exc}")
-        traceback.print_exc()
+            _mdns_info = ServiceInfo(
+                type_=settings.mdns_service_type,
+                name=settings.mdns_service_name,
+                addresses=addresses,
+                port=settings.port,
+                properties={"path": "/", "version": "1"},
+            )
+            _zeroconf = AsyncZeroconf()
+            await _zeroconf.async_register_service(_mdns_info, allow_name_change=True)
+            print(
+                f"[mDNS] '{settings.mdns_service_name}' registered at {ips}:{settings.port}"
+            )
+        except Exception as exc:
+            print(f"[mDNS] Registration failed: {exc}")
+            traceback.print_exc()
 
     # Start SRE Host Disk Capacity Monitor background task
     async def monitor_disk_space():
@@ -825,9 +859,9 @@ async def metrics():
     lines.append(f"system_errors_total {metrics_store.error_counts}")
 
     # host metrics
-    import psutil
-    import shutil
     try:
+        import psutil
+        import shutil
         cpu_usage = psutil.cpu_percent(interval=None)
         mem = psutil.virtual_memory()
         disk = shutil.disk_usage("/")

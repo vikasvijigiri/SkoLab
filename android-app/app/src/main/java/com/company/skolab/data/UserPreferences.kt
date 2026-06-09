@@ -34,6 +34,7 @@ class UserPreferences(private val context: Context) {
     private val dynamicColorEnabledKey = booleanPreferencesKey("dynamic_color_enabled")
     private val sessionCountKey = intPreferencesKey("session_count")
     private val npsShownKey = booleanPreferencesKey("nps_shown")
+    private val openAlexIdKey = stringPreferencesKey("openalex_id")
 
     val appTheme: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[appThemeKey] ?: "SYSTEM"
@@ -73,6 +74,16 @@ class UserPreferences(private val context: Context) {
     suspend fun setNpsShown(shown: Boolean) {
         context.dataStore.edit { prefs ->
             prefs[npsShownKey] = shown
+        }
+    }
+
+    val openAlexId: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[openAlexIdKey] ?: ""
+    }
+
+    suspend fun setOpenAlexId(id: String) {
+        context.dataStore.edit { prefs ->
+            prefs[openAlexIdKey] = id
         }
     }
 

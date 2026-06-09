@@ -50,6 +50,7 @@ fun DailyDiscoveryScreen(
     onBack: () -> Unit,
     onPaperSaved: (String) -> Unit,
     onDiscussClick: (String) -> Unit = {},
+    userFocus: String = "",
     viewModel: DailyDiscoveryViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -58,7 +59,9 @@ fun DailyDiscoveryScreen(
     val errorMessage = uiState.errorMessage
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
-    
+
+    LaunchedEffect(userFocus) { viewModel.loadDiscoveryItems(userFocus) }
+
     var savedIds by remember { mutableStateOf(setOf<String>()) }
     var confettiVisible by remember { mutableStateOf(false) }
 

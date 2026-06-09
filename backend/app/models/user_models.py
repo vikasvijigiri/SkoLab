@@ -4,7 +4,7 @@ def utcnow():
     return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
 
 import re
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, JSON, Text, CheckConstraint, UniqueConstraint
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, JSON, Text, CheckConstraint, UniqueConstraint, Float
 from sqlalchemy.orm import relationship, validates
 from app.db.database import Base
 from app.db.encrypted_type import EncryptedString
@@ -149,6 +149,35 @@ class ResearcherProfile(Base):
         DateTime, default=utcnow, onupdate=utcnow
     )
     expires_at = Column(DateTime, nullable=True)  # refresh after 7 days
+
+
+class UserCircle(Base):
+    """
+    A user's research circle — peers in the same or adjacent field.
+    Populated automatically after Spark sessions and manually by the user.
+    Used to prioritise who gets ringed when "Ask an Expert" is triggered.
+    """
+
+    __tablename__ = "user_circles"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    peer_id = Column(String(100), ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    # "spark_session" | "same_field" | "collab" | "manual"
+    relationship_type = Column(String(50), nullable=False, default="same_field")
+    field_tags = Column(JSON, nullable=True)          # overlapping research tags
+    spark_sessions_count = Column(Integer, default=0) # times they've helped each other
+    relevance_score = Column(Float, default=0.5)      # 0–1, higher = closer match
+    last_interacted = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "peer_id", name="uq_user_circle_pair"),
+        CheckConstraint(
+            "relationship_type IN ('spark_session', 'same_field', 'collab', 'manual')",
+            name="chk_circle_relationship_type",
+        ),
+    )
 
 
 class ResearcherConnection(Base):

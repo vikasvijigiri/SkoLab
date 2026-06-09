@@ -1531,6 +1531,41 @@ class ApiService {
         }
     }
 
+    @Serializable
+    private data class UserProfileSyncPayload(
+        val uid: String,
+        val name: String,
+        val discipline: String
+    )
+
+    @Serializable
+    data class UserProfileSyncResponse(
+        val status: String,
+        val uid: String,
+        val openalex_id: String? = null
+    )
+
+    /**
+     * Called once after profile setup. Sends name + discipline to the backend,
+     * which resolves the OpenAlex author ID in the background and pre-warms all
+     * research data caches. Returns the already-stored openalex_id if available,
+     * or null while the background enrichment is still running.
+     */
+    suspend fun syncUserProfile(uid: String, name: String, discipline: String): UserProfileSyncResponse? {
+        return withContext(Dispatchers.IO) {
+            val base = baseUrl() ?: return@withContext null
+            try {
+                httpClient.post("$base/users/profile/sync") {
+                    contentType(ContentType.Application.Json)
+                    setBody(UserProfileSyncPayload(uid = uid, name = name, discipline = discipline))
+                }.body<UserProfileSyncResponse>()
+            } catch (e: Exception) {
+                Log.e("ApiService", "syncUserProfile failed: ${e.message}")
+                null
+            }
+        }
+    }
+
     /** Syncs a batch of local activity events to the backend memory engine. Fire-and-forget safe. */
     suspend fun syncMemoryEvents(
         userId: String,

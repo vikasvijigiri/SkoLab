@@ -40,6 +40,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.company.skolab.ui.theme.BgPrimary
 import com.company.skolab.ui.theme.BorderLight
 import com.company.skolab.ui.theme.NOTIFICATION_DOT
@@ -132,7 +133,7 @@ fun BottomNavDock(
                                         painter = painterResource(id = item.drawableResId),
                                         contentDescription = null,
                                         modifier = Modifier
-                                            .size(22.dp)
+                                            .size(19.dp)
                                             .padding(horizontal = 1.dp),
                                         alpha = if (selected) 1f else 0.5f
                                     )
@@ -141,7 +142,7 @@ fun BottomNavDock(
                                         imageVector = item.icon,
                                         contentDescription = null,
                                         modifier = Modifier
-                                            .size(22.dp)
+                                            .size(19.dp)
                                             .padding(horizontal = 1.dp),
                                         tint = tint
                                     )
@@ -176,7 +177,7 @@ fun BottomNavDock(
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = item.label,
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                             color = tint,
                             maxLines = 1,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal

@@ -238,25 +238,32 @@ class OpenAlexService:
         self, concept_id: str, prev_year: int, now_year: int, per_page: int = 15
     ) -> List[Dict[str, Any]]:
         """
-        Fetches works filtered by OpenAlex concept ID published since prev_year,
-        sorted by citation count descending.
-        Uses `from_publication_date` for a continuous range instead of OR-filter.
+        Fetches works filtered by concept/topic ID published since prev_year.
+        Tries topics.id first (new OpenAlex format), then concepts.id (legacy).
         """
         url = f"{self.base_url}/works"
-        params = {
-            # from_publication_date gives a true '>= date' range filter in OpenAlex
-            "filter": f"concepts.id:{concept_id},from_publication_date:{prev_year}-01-01",
-            "sort": "cited_by_count:desc",
-            "per_page": per_page,
-            "mailto": self.email,
-        }
+        date_filter = f"from_publication_date:{prev_year}-01-01"
+        # OpenAlex migrated from /concepts to /topics — try both filters
+        filters_to_try = [
+            f"topics.id:{concept_id},{date_filter}",
+            f"concepts.id:{concept_id},{date_filter}",
+        ]
         try:
             async with httpx.AsyncClient(
                 timeout=settings.http_timeout_seconds
             ) as client:
-                res = await client.get(url, params=params, headers=self.headers)
-                if res.status_code == 200:
-                    return res.json().get("results", [])
+                for filt in filters_to_try:
+                    params = {
+                        "filter": filt,
+                        "sort": "cited_by_count:desc",
+                        "per_page": per_page,
+                        "mailto": self.email,
+                    }
+                    res = await client.get(url, params=params, headers=self.headers)
+                    if res.status_code == 200:
+                        results = res.json().get("results", [])
+                        if results:
+                            return results
         except Exception as e:
             print(
                 f"[OpenAlexService] Error fetching works by concept {concept_id}: {e}",

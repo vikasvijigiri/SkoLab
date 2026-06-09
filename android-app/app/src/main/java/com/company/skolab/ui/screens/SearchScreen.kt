@@ -41,6 +41,7 @@ fun SearchScreen(
     onAuthorClick: (String) -> Unit,
     searchQuery: String = "",
     showSearchBar: Boolean = true,
+    userFocus: String = "",
     viewModel: SearchViewModel = viewModel()
 ) {
     var searchMode by remember { mutableStateOf(0) } // 0 = Papers, 1 = Profiles
@@ -129,13 +130,7 @@ fun SearchScreen(
                 when (val state = uiState) {
                     is SearchUiState.Idle -> {
                         val recentList by SearchViewModel.recentSearches.collectAsStateWithLifecycle()
-                        val trendingSearches = listOf(
-                            "Artificial Intelligence",
-                            "Quantum Computing",
-                            "CRISPR Gene Editing",
-                            "Climate Change",
-                            "Superconductivity"
-                        )
+                        val trendingSearches = if (userFocus.isNotBlank()) listOf(userFocus) else emptyList()
                         
                         Column(
                             modifier = Modifier
@@ -279,7 +274,7 @@ fun SearchScreen(
                                             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            listOf("Artificial Intelligence", "Quantum Computing").forEach { item ->
+                                            listOfNotNull(userFocus.takeIf { it.isNotBlank() }).forEach { item ->
                                                 Surface(
                                                     onClick = {
                                                         localQuery = item

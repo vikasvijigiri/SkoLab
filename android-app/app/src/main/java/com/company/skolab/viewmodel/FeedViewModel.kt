@@ -370,7 +370,7 @@ class FeedViewModel(private val apiService: ApiService = AppDependencies.apiServ
                         // Fallback: fetch similar authors based on the focus area
                         if (BuildConfig.DEBUG) Log.i("FeedViewModel", "Network collaborators empty. Querying similar authors for focus: $displayFocus")
                         val similarAuthors = try {
-                            apiService.getSimilarAuthors(displayFocus.ifBlank { "Artificial Intelligence" }, limit = 10)
+                            apiService.getSimilarAuthors(displayFocus, limit = 10)
                         } catch (exc: Exception) {
                             if (exc is kotlinx.coroutines.CancellationException) throw exc
                             Log.e("FeedViewModel", "Failed to query similar authors for connections fallback", exc)

@@ -40,12 +40,33 @@ class IndustryAcademicService:
             bio = ""
             last_topic = ""
 
-        # Determine user domain
+        # Determine user domain — derive from activity, then ResearcherProfile, never fake data
         focus_domain = last_topic
         if not focus_domain and top_topics:
             focus_domain = top_topics[0]
         if not focus_domain:
-            focus_domain = "Artificial Intelligence"
+            try:
+                from app.models.user_models import ResearcherProfile, User
+                from sqlalchemy.future import select as sa_select
+                # user_id may be Firebase UID or OpenAlex ID
+                openalex_id = user_id
+                if not user_id.startswith("A") or not user_id[1:].isdigit():
+                    stmt = sa_select(User).where(User.id == user_id)
+                    res = await self.db.execute(stmt)
+                    user_row = res.scalars().first()
+                    if user_row and user_row.openalex_id:
+                        openalex_id = user_row.openalex_id
+                stmt = sa_select(ResearcherProfile).where(ResearcherProfile.openalex_id == openalex_id)
+                res = await self.db.execute(stmt)
+                rp = res.scalars().first()
+                if rp:
+                    focus_domain = rp.field_of_study or (
+                        rp.concepts[0] if isinstance(rp.concepts, list) and rp.concepts else ""
+                    )
+            except Exception as e:
+                logger.error(f"ResearcherProfile lookup failed for tieups: {e}")
+        if not focus_domain:
+            return {"trending": [], "futuristic": []}
 
         # 3. Call LLM to generate tie-ups
         tieups_data = {"trending": [], "futuristic": []}

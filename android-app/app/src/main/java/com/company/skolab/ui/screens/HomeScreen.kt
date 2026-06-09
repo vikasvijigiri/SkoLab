@@ -3,6 +3,10 @@ package com.company.skolab.ui.screens
 import androidx.compose.ui.graphics.vector.ImageVector
 import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -111,6 +115,9 @@ fun HomeScreen(
     var similarResearchers by remember { mutableStateOf<List<com.company.skolab.network.AuthorSuggestion>>(emptyList()) }
     var isLoadingSuggestions by remember { mutableStateOf(false) }
 
+    // Real network collaborators — user's actual co-authors from their papers
+    var networkCollaborators by remember { mutableStateOf<List<com.company.skolab.network.NetworkCollaborator>>(emptyList()) }
+
     // Real orbit metrics from OpenAlex
     var orbitMetrics by remember { mutableStateOf<OrbitMetrics?>(null) }
     var isLoadingOrbitMetrics by remember { mutableStateOf(false) }
@@ -118,7 +125,7 @@ fun HomeScreen(
 
     val apiService = com.company.skolab.di.AppDependencies.apiService
 
-    // Fetch real orbit metrics
+    // Resolve user's OpenAlex ID + orbit metrics
     LaunchedEffect(currentUserName, userFocus) {
         if (currentUserName.isNotBlank() && currentUserName != "SkoLab User") {
             isLoadingOrbitMetrics = true
@@ -133,6 +140,22 @@ fun HomeScreen(
                 android.util.Log.e("HomeScreen", "Failed to fetch orbit metrics", e)
             } finally {
                 isLoadingOrbitMetrics = false
+            }
+        }
+    }
+
+    // Fetch real co-authors once we have the user's OpenAlex ID
+    LaunchedEffect(userOpenAlexId) {
+        if (userOpenAlexId.isNotBlank()) {
+            try {
+                val collabs = apiService.getNetworkCollaborators(
+                    authorId = userOpenAlexId,
+                    limit = 6,
+                    excludeName = currentUserName
+                )
+                networkCollaborators = collabs
+            } catch (e: Exception) {
+                android.util.Log.e("HomeScreen", "Failed to fetch network collaborators", e)
             }
         }
     }
@@ -297,13 +320,12 @@ fun HomeScreen(
         containerColor = BgPrimary,
         topBar = { 
             Column(modifier = Modifier.background(BgPrimary)) {
-                HomeScreenTopBar(
-                    userName = userName,
-                    onProfileClick = { /* Profile page action */ },
-                    isOnline = sparkUiState.isOnline,
-                    onOnlineToggle = { online ->
-                        sparkViewModel.toggleOnline(currentUserId, userName, userFocus, online)
-                    }
+                HomeTopWidget(
+                    recentPapers = userMemoryProfile?.recently_read_papers.orEmpty().take(5),
+                    skolabConnections = membersPresence.values.filter { it.uid != currentUserId }.take(4),
+                    networkCollaborators = networkCollaborators.take(5),
+                    onNavigateToChat = onNavigateToChat,
+                    onInviteClick = onNavigateToExternalInvite
                 )
                 // Tab Selection
                 Row(
@@ -1164,6 +1186,17 @@ fun HomeScreen(
     }
 
 
+    // Ring expert's phone when a new matching request arrives
+    val firstIncomingId = sparkUiState.incomingRequests.firstOrNull()?.id
+    LaunchedEffect(firstIncomingId) {
+        if (firstIncomingId != null && sparkUiState.isOnline && sparkUiState.activeSession == null) {
+            val incoming = sparkUiState.incomingRequests.first()
+            com.company.skolab.utils.SkoLabNotificationManager.showSparkCallNotification(
+                context, incoming.seekerName, incoming.topic
+            )
+        }
+    }
+
     // Incoming Spark Call Ring Overlay
     if (sparkUiState.isOnline && sparkUiState.incomingRequests.isNotEmpty() && sparkUiState.activeSession == null) {
         val incoming = sparkUiState.incomingRequests.first()
@@ -1179,77 +1212,213 @@ fun HomeScreen(
     }
 }
 
-// ── HEADER TOP BAR ──
+// ── HOME TOP WIDGET — Trending & Network ──
 @Composable
-fun HomeScreenTopBar(
-    userName: String,
-    onProfileClick: () -> Unit,
-    isOnline: Boolean,
-    onOnlineToggle: (Boolean) -> Unit
+fun HomeTopWidget(
+    recentPapers: List<String>,
+    skolabConnections: List<com.company.skolab.model.SkoLabUser>,
+    networkCollaborators: List<com.company.skolab.network.NetworkCollaborator>,
+    onNavigateToChat: (String, String) -> Unit,
+    onInviteClick: (String) -> Unit
 ) {
-    Row(
+    val hasConnections = skolabConnections.isNotEmpty() || networkCollaborators.isNotEmpty()
+    if (recentPapers.isEmpty() && !hasConnections) return
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(BgPrimary)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(horizontal = 16.dp)
+            .padding(top = 10.dp, bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Column {
-            Text(
-                text = "Welcome back",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                color = TextMuted
-            )
-            Text(
-                text = "Hello, $userName",
-                style = Typography.titleLarge,
-                color = TextPrimary,
-                fontWeight = FontWeight.Black,
-                fontFamily = SpaceGroteskFontFamily
-            )
-        }
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
+        // ── Trending papers ──────────────────────────────────────────────────
+        if (recentPapers.isNotEmpty()) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier
-                    .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(20.dp))
-                    .border(0.5.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(20.dp))
-                    .clickable { onOnlineToggle(!isOnline) }
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .background(if (isOnline) AccentEmerald else TextMuted, CircleShape)
-                )
                 Text(
-                    text = if (isOnline) "ONLINE" else "OFFLINE",
-                    color = if (isOnline) AccentEmerald else TextMuted,
+                    "Trending",
+                    color = TEXT_MUTED,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.width(52.dp)
+                )
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    recentPapers.forEach { paper ->
+                        val label = if (paper.length > 28) paper.take(26) + "…" else paper
+                        Row(
+                            modifier = Modifier
+                                .background(SURFACE, RoundedCornerShape(8.dp))
+                                .border(0.5.dp, BORDER, RoundedCornerShape(8.dp))
+                                .padding(horizontal = 8.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(Icons.Default.Book, null, tint = TEXT_MUTED, modifier = Modifier.size(10.dp))
+                            Text(label, color = TEXT_SECONDARY, fontSize = 10.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Network connections row ──────────────────────────────────────────
+        if (hasConnections) {
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(
+                    "Your Network",
+                    color = TEXT_MUTED,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold
                 )
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // SkoLab project collaborators — show "Message" (filled)
+                    skolabConnections.forEach { user ->
+                        val initials = user.name.split(" ")
+                            .filter { it.isNotBlank() }
+                            .mapNotNull { token -> token.filter { c -> c.isLetter() }.firstOrNull()?.uppercaseChar() }
+                            .take(2).joinToString("")
+                        val subtitle = user.researchFocus.ifBlank { "SkoLab Researcher" }
+                        NetworkPersonCard(
+                            initials = initials,
+                            name = user.name,
+                            subtitle = subtitle,
+                            isOnline = user.isOnline,
+                            actionLabel = "Message",
+                            actionFilled = true,
+                            onClick = { onNavigateToChat(user.uid, user.name) }
+                        )
+                    }
+                    // Real co-authors from user's papers — show "+ Invite" to connect outside SkoLab
+                    networkCollaborators.forEach { collab ->
+                        val initials = collab.name.split(" ")
+                            .filter { it.isNotBlank() }
+                            .mapNotNull { token -> token.filter { c -> c.isLetter() }.firstOrNull()?.uppercaseChar() }
+                            .take(2).joinToString("")
+                        val papersLabel = collab.papers_collaborated?.let { n ->
+                            if (n > 0) "$n paper${if (n > 1) "s" else ""}" else null
+                        }
+                        val subtitle = buildString {
+                            val inst = collab.institution.trim()
+                            if (inst.isNotBlank() && inst != "Independent Researcher") {
+                                append(if (inst.length > 18) inst.take(16) + "…" else inst)
+                            }
+                            if (papersLabel != null) {
+                                if (isNotEmpty()) append(" · ")
+                                append(papersLabel)
+                            }
+                        }.ifBlank { collab.field.ifBlank { "Co-author" } }
+                        NetworkPersonCard(
+                            initials = initials,
+                            name = collab.name,
+                            subtitle = subtitle,
+                            isOnline = false,
+                            actionLabel = "+ Invite",
+                            actionFilled = false,
+                            onClick = { onInviteClick(collab.name) }
+                        )
+                    }
+                }
             }
+        }
+    }
+}
 
+@Composable
+private fun NetworkPersonCard(
+    initials: String,
+    name: String,
+    subtitle: String,
+    isOnline: Boolean,
+    actionLabel: String,
+    actionFilled: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.width(136.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = SURFACE,
+        border = BorderStroke(0.5.dp, BORDER)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            // Avatar + name/subtitle
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                Box(contentAlignment = Alignment.BottomEnd) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(PRIMARY.copy(alpha = 0.13f), CircleShape)
+                            .border(1.dp, PRIMARY.copy(alpha = 0.28f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            initials.ifEmpty { "?" },
+                            color = PRIMARY,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    if (isOnline) {
+                        Box(
+                            modifier = Modifier
+                                .size(9.dp)
+                                .background(Color(0xFF3DD68C), CircleShape)
+                                .border(1.5.dp, BgPrimary, CircleShape)
+                        )
+                    }
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        name,
+                        color = TEXT_PRIMARY,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        subtitle,
+                        color = TEXT_MUTED,
+                        fontSize = 9.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            // Action button
             Box(
                 modifier = Modifier
-                    .size(38.dp)
-                    .background(Color.White.copy(alpha = 0.06f), CircleShape)
-                    .border(0.5.dp, Color.White.copy(alpha = 0.1f), CircleShape)
-                    .clickable { onProfileClick() },
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(if (actionFilled) PRIMARY else Color.Transparent)
+                    .border(
+                        width = if (actionFilled) 0.dp else 1.dp,
+                        color = if (actionFilled) Color.Transparent else PRIMARY.copy(alpha = 0.55f),
+                        shape = RoundedCornerShape(6.dp)
+                    )
+                    .clickable(onClick = onClick)
+                    .padding(vertical = 5.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = "Profile",
-                    tint = TextPrimary,
-                    modifier = Modifier.size(18.dp)
+                Text(
+                    actionLabel,
+                    color = if (actionFilled) Color.White else PRIMARY,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
@@ -1268,7 +1437,21 @@ fun SparkConsole(
     onHailClick: (String, String, List<String>) -> Unit,
     onCancelBroadcast: () -> Unit
 ) {
-    var showHailDialog by remember { mutableStateOf(false) }
+    var isListeningForDoubt by remember { mutableStateOf(false) }
+
+    val autoTags = remember(userMemoryProfile, userFocus) {
+        val list = mutableListOf<String>()
+        userMemoryProfile?.let { prof ->
+            list.addAll(prof.top_topics)
+            list.addAll(prof.frequent_search_terms)
+        }
+        if (userFocus.isNotBlank() && !list.contains(userFocus)) list.add(userFocus)
+        list.map { it.trim() }
+            .filter { it.isNotBlank() && !it.contains("unknown", ignoreCase = true) }
+            .distinct()
+            .take(6)
+            .ifEmpty { listOf("Research", "Methodology", "Writing") }
+    }
 
     // Animating transition loop
     val infiniteTransition = rememberInfiniteTransition(label = "radarTransition")
@@ -1305,109 +1488,7 @@ fun SparkConsole(
         label = "pulseScale"
     )
 
-    // Dynamic, non-synchronous floating expert avatar drifts
-    val floatX1 by infiniteTransition.animateFloat(
-        initialValue = -10f,
-        targetValue = 10f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "floatX1"
-    )
-    val floatY1 by infiniteTransition.animateFloat(
-        initialValue = -16f,
-        targetValue = 16f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(4200, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "floatY1"
-    )
-
-    val floatX2 by infiniteTransition.animateFloat(
-        initialValue = 12f,
-        targetValue = -12f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3500, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "floatX2"
-    )
-    val floatY2 by infiniteTransition.animateFloat(
-        initialValue = -8f,
-        targetValue = 8f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(4800, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "floatY2"
-    )
-
-    val floatX3 by infiniteTransition.animateFloat(
-        initialValue = -15f,
-        targetValue = 15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(4000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "floatX3"
-    )
-    val floatY3 by infiniteTransition.animateFloat(
-        initialValue = 10f,
-        targetValue = -10f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3400, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "floatY3"
-    )
-
-    val floatX4 by infiniteTransition.animateFloat(
-        initialValue = 16f,
-        targetValue = -16f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3800, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "floatX4"
-    )
-    val floatY4 by infiniteTransition.animateFloat(
-        initialValue = 12f,
-        targetValue = -12f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(4600, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "floatY4"
-    )
-
-    val floatX5 by infiniteTransition.animateFloat(
-        initialValue = -8f,
-        targetValue = 8f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3200, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "floatX5"
-    )
-    val floatY5 by infiniteTransition.animateFloat(
-        initialValue = -14f,
-        targetValue = 14f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(4400, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "floatY5"
-    )
-
     // Animate convergence ratio when searching (avatars slide closer)
-    val convergenceRatio by animateFloatAsState(
-        targetValue = if (uiState.isBroadcasting) 0.35f else 1.0f,
-        animationSpec = tween(1500, easing = FastOutSlowInEasing),
-        label = "convergence"
-    )
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1447,67 +1528,6 @@ fun SparkConsole(
                 )
             }
 
-            // Floating Matchable Avatars (positioned relative to container center)
-            // Dr. Alice (Top-Left)
-            Box(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .offset(
-                        x = (-80.dp * convergenceRatio) + floatX1.dp,
-                        y = (-85.dp * convergenceRatio) + floatY1.dp
-                    )
-            ) {
-                ExpertAvatar(initials = "AJ", name = "Dr. Alice", isOnline = true)
-            }
-
-            // Prof. Lin (Top-Right)
-            Box(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .offset(
-                        x = (85.dp * convergenceRatio) + floatX2.dp,
-                        y = (-60.dp * convergenceRatio) + floatY2.dp
-                    )
-            ) {
-                ExpertAvatar(initials = "RL", name = "Prof. Lin", isOnline = true)
-            }
-
-            // Sarah K. (Bottom-Left)
-            Box(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .offset(
-                        x = (-80.dp * convergenceRatio) + floatX3.dp,
-                        y = (65.dp * convergenceRatio) + floatY3.dp
-                    )
-            ) {
-                ExpertAvatar(initials = "SK", name = "Sarah K.", isOnline = true)
-            }
-
-            // Robert M. (Bottom-Right)
-            Box(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .offset(
-                        x = (80.dp * convergenceRatio) + floatX4.dp,
-                        y = (75.dp * convergenceRatio) + floatY4.dp
-                    )
-            ) {
-                ExpertAvatar(initials = "RM", name = "Robert M.", isOnline = true)
-            }
-
-            // Dr. Sarah (Mid-Left)
-            Box(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .offset(
-                        x = (-105.dp * convergenceRatio) + floatX5.dp,
-                        y = (-10.dp * convergenceRatio) + floatY5.dp
-                    )
-            ) {
-                ExpertAvatar(initials = "SB", name = "Dr. Sarah", isOnline = true)
-            }
-
             // Central Bolt Launcher Button (Perfect Symmetrical center of Radar rings)
             Box(contentAlignment = Alignment.Center) {
                 Box(
@@ -1525,9 +1545,9 @@ fun SparkConsole(
                 )
 
                 IconButton(
-                    onClick = { 
+                    onClick = {
                         if (!uiState.isBroadcasting) {
-                            showHailDialog = true 
+                            isListeningForDoubt = true
                         } else {
                             onCancelBroadcast()
                         }
@@ -1597,7 +1617,7 @@ fun SparkConsole(
                     }
                 } else {
                     Button(
-                        onClick = { showHailDialog = true },
+                        onClick = { isListeningForDoubt = true },
                         colors = ButtonDefaults.buttonColors(containerColor = PRIMARY, contentColor = TEXT_ON_PRIMARY),
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
@@ -1609,396 +1629,206 @@ fun SparkConsole(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Icon(Icons.Default.WifiTethering, null, tint = Color.White, modifier = Modifier.size(18.dp))
-                            Text("Hail Live Helper Now", fontWeight = FontWeight.Black, fontSize = 14.sp)
+                            Text("Ask an Expert", fontWeight = FontWeight.Black, fontSize = 14.sp)
                         }
                     }
                 }
             }
 
-            // Symmetrical, non-wrapping footer stats row
-            Row(
+            Text(
+                text = "🪙 ${uiState.walletTokens} Tokens",
+                color = TEXT_MUTED,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "● 1,420 Experts Online",
-                    color = AccentEmerald,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "⭐ 4.9 Seeker Rating",
-                    color = TEXT_MUTED,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = "🪙 ${uiState.walletTokens} Tokens",
-                    color = TEXT_MUTED,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = 4.dp)
+            )
         }
     }
 
-    if (showHailDialog) {
-        var topic by remember { mutableStateOf("") }
-        var selectedBounty by remember { mutableStateOf("10 Tokens") }
-        var selectedProject by remember { mutableStateOf<ProjectCollab?>(null) }
-        var selectedTask by remember { mutableStateOf<CollabTask?>(null) }
-        var selectedPaper by remember { mutableStateOf<String?>(null) }
-
-        // Filter tasks that belong to the selected project
-        val projectTasks = remember(selectedProject, tasks) {
-            if (selectedProject == null) emptyList() else tasks
-        }
-
-        // Available tags from user profile
-        val availableTags = remember(userMemoryProfile, userFocus) {
-            val list = mutableListOf<String>()
-            userMemoryProfile?.let { prof ->
-                list.addAll(prof.top_topics)
-                list.addAll(prof.frequent_search_terms)
-            }
-            if (userFocus.isNotBlank() && !list.contains(userFocus)) {
-                list.add(userFocus)
-            }
-            val cleaned = list.map { it.trim() }
-                .filter { it.isNotBlank() && !it.contains("unknown", ignoreCase = true) }
-                .distinct()
-                .take(6)
-            if (cleaned.isNotEmpty()) cleaned else listOf("Research", "LaTeX", "Methodology", "Writing", "Data Analysis")
-        }
-
-        val selectedTags = remember { mutableStateListOf<String>() }
-
-        AlertDialog(
-            onDismissRequest = { showHailDialog = false },
-            containerColor = BgCard,
-            shape = RoundedCornerShape(24.dp),
-            modifier = Modifier.border(1.dp, BORDER, RoundedCornerShape(24.dp)),
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (topic.isNotBlank()) {
-                            onHailClick(topic, selectedBounty, selectedTags.toList())
-                            showHailDialog = false
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = PRIMARY, contentColor = TEXT_ON_PRIMARY),
-                    shape = RoundedCornerShape(12.dp),
-                    enabled = topic.isNotBlank()
-                ) {
-                    Text("Broadcast Call ⚡", fontWeight = FontWeight.Bold)
-                }
+    if (isListeningForDoubt) {
+        SparkMicOverlay(
+            onResult = { transcript ->
+                isListeningForDoubt = false
+                onHailClick(
+                    transcript.ifBlank { userFocus.ifBlank { "Need expert help" } },
+                    "10 Tokens",
+                    autoTags
+                )
             },
-            dismissButton = {
-                TextButton(onClick = { showHailDialog = false }) {
-                    Text("Cancel", color = TEXT_MUTED)
-                }
-            },
-            title = {
-                Column {
-                    Text(
-                        text = "Hail Live Helper",
-                        color = TEXT_PRIMARY,
-                        fontWeight = FontWeight.Black,
-                        fontFamily = SpaceGroteskFontFamily,
-                        fontSize = 18.sp
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Specify your blocker context using your active project files, tasks, and papers.",
-                        color = TEXT_SECONDARY,
-                        fontSize = 11.sp,
-                        lineHeight = 15.sp
-                    )
-                }
-            },
-            text = {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                    modifier = Modifier.verticalScroll(rememberScrollState())
-                ) {
-                    // Blocker input
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Blocker Description:", color = TEXT_PRIMARY, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        OutlinedTextField(
-                            value = topic,
-                            onValueChange = { topic = it },
-                            placeholder = { Text("Describe what you are blocked on...", fontSize = 12.sp) },
-                            textStyle = androidx.compose.ui.text.TextStyle(color = TEXT_PRIMARY, fontSize = 13.sp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = TEXT_PRIMARY,
-                                unfocusedTextColor = TEXT_PRIMARY,
-                                focusedBorderColor = PRIMARY,
-                                unfocusedBorderColor = BORDER,
-                                focusedContainerColor = SURFACE,
-                                unfocusedContainerColor = SURFACE
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-
-                    // Select Workspace Project (Dynamic User Content)
-                    if (projects.isNotEmpty()) {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Folder, contentDescription = null, tint = PRIMARY, modifier = Modifier.size(12.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Project Context:", color = TEXT_PRIMARY, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = Modifier.horizontalScroll(rememberScrollState())
-                            ) {
-                                projects.forEach { proj ->
-                                    val isSelected = selectedProject?.id == proj.id
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(if (isSelected) PRIMARY.copy(alpha = 0.15f) else SURFACE)
-                                            .border(0.5.dp, if (isSelected) PRIMARY else BORDER, RoundedCornerShape(8.dp))
-                                            .clickable {
-                                                if (isSelected) {
-                                                    selectedProject = null
-                                                    selectedTask = null
-                                                } else {
-                                                    selectedProject = proj
-                                                    selectedTask = null
-                                                    // Append or set project context in text
-                                                    if (!topic.contains(proj.name)) {
-                                                        topic = "Working on project [${proj.name}]: " + topic.replace(Regex("Working on project \\[.*?\\]: "), "")
-                                                    }
-                                                }
-                                            }
-                                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Text(text = proj.name, color = if (isSelected) PRIMARY else TEXT_SECONDARY, fontSize = 10.sp, fontWeight = FontWeight.Medium)
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Select Project Task (Dynamic User Content)
-                    if (selectedProject != null && projectTasks.isNotEmpty()) {
-                        val unfinishedTasks = projectTasks.filter { !it.isCompleted }
-                        if (unfinishedTasks.isNotEmpty()) {
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.AutoMirrored.Filled.Assignment, contentDescription = null, tint = PRIMARY, modifier = Modifier.size(12.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Blocked Task:", color = TEXT_PRIMARY, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                }
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                    modifier = Modifier.horizontalScroll(rememberScrollState())
-                                ) {
-                                    unfinishedTasks.forEach { task ->
-                                        val isSelected = selectedTask?.id == task.id
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(if (isSelected) PRIMARY.copy(alpha = 0.15f) else SURFACE)
-                                                .border(0.5.dp, if (isSelected) PRIMARY else BORDER, RoundedCornerShape(8.dp))
-                                                .clickable {
-                                                    if (isSelected) {
-                                                        selectedTask = null
-                                                    } else {
-                                                        selectedTask = task
-                                                        // Pre-fill blocker topic with blocked task context
-                                                        topic = "Blocked on task '${task.title}' in project '${selectedProject?.name}': "
-                                                    }
-                                                }
-                                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                                        ) {
-                                            Text(text = task.title, color = if (isSelected) PRIMARY else TEXT_SECONDARY, fontSize = 10.sp, fontWeight = FontWeight.Medium)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Attach Active Reading Context (Dynamic User Content)
-                    val recentPapers = userMemoryProfile?.recently_read_papers.orEmpty()
-                    val unfinishedPapers = userMemoryProfile?.unfinished_papers.orEmpty()
-                    val papersList = (recentPapers + unfinishedPapers).distinct().take(4)
-                    if (papersList.isNotEmpty()) {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Book, contentDescription = null, tint = PRIMARY, modifier = Modifier.size(12.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Attach Paper Context:", color = TEXT_PRIMARY, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = Modifier.horizontalScroll(rememberScrollState())
-                            ) {
-                                papersList.forEach { paper ->
-                                    val isSelected = selectedPaper == paper
-                                    val truncatedPaper = if (paper.length > 25) paper.take(22) + "..." else paper
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(if (isSelected) PRIMARY.copy(alpha = 0.15f) else SURFACE)
-                                            .border(0.5.dp, if (isSelected) PRIMARY else BORDER, RoundedCornerShape(8.dp))
-                                            .clickable {
-                                                if (isSelected) {
-                                                    selectedPaper = null
-                                                } else {
-                                                    selectedPaper = paper
-                                                    // Pre-fill blocker topic with paper context
-                                                    topic = "Need to discuss methodology in paper \"$paper\": "
-                                                }
-                                            }
-                                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Text(text = truncatedPaper, color = if (isSelected) PRIMARY else TEXT_SECONDARY, fontSize = 10.sp, fontWeight = FontWeight.Medium)
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Preset Skills tags selection
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Required Expertise tags:", color = TEXT_PRIMARY, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        
-                        // Wrap tags in rows
-                        val chunkedTags = availableTags.chunked(3)
-                        chunkedTags.forEach { rowTags ->
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                rowTags.forEach { tag ->
-                                    val isSelected = selectedTags.contains(tag)
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(if (isSelected) PRIMARY.copy(alpha = 0.15f) else SURFACE)
-                                            .border(0.5.dp, if (isSelected) PRIMARY else BORDER, RoundedCornerShape(8.dp))
-                                            .clickable {
-                                                if (isSelected) selectedTags.remove(tag) else selectedTags.add(tag)
-                                            }
-                                            .padding(vertical = 6.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = tag,
-                                            color = if (isSelected) PRIMARY else TEXT_SECONDARY,
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Collaboration Mode (Replaced irrelevant Bounty tokens with professional academic modes)
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.People, contentDescription = null, tint = PRIMARY, modifier = Modifier.size(12.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Collaboration Mode:", color = TEXT_PRIMARY, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            val collabOptions = listOf(
-                                "Quick Q&A" to "5 Tokens",
-                                "Deep Review" to "10 Tokens",
-                                "Co-Authorship" to "Co-Authorship"
-                            )
-                            collabOptions.forEach { (label, bountyValue) ->
-                                val isSelected = selectedBounty == bountyValue
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(if (isSelected) PRIMARY.copy(alpha = 0.15f) else SURFACE)
-                                        .border(0.5.dp, if (isSelected) PRIMARY else BORDER, RoundedCornerShape(12.dp))
-                                        .clickable { selectedBounty = bountyValue }
-                                        .padding(vertical = 8.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = label,
-                                        color = if (isSelected) PRIMARY else TEXT_PRIMARY,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            onDismiss = { isListeningForDoubt = false }
         )
     }
 }
 
+// ── SPARK MIC OVERLAY ──
 @Composable
-fun ExpertAvatar(
-    initials: String,
-    name: String,
-    isOnline: Boolean
+fun SparkMicOverlay(
+    onResult: (String) -> Unit,
+    onDismiss: () -> Unit
 ) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        Box(
-            modifier = Modifier.size(52.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF221512)) // Deep dark coffee bg
-                    .border(
-                        width = 2.dp,
-                        brush = Brush.linearGradient(
-                            listOf(PRIMARY, AccentEmerald)
-                        ),
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = initials,
-                    color = PRIMARY,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 14.sp
-                )
+    val context = LocalContext.current
+    var transcript by remember { mutableStateOf("") }
+    var phase by remember { mutableStateOf("listening") }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "micPulse")
+
+    val ring1Alpha by infiniteTransition.animateFloat(
+        initialValue = 0.7f, targetValue = 0f,
+        animationSpec = infiniteRepeatable(tween(1400, easing = LinearEasing), RepeatMode.Restart),
+        label = "r1a"
+    )
+    val ring1Scale by infiniteTransition.animateFloat(
+        initialValue = 0.5f, targetValue = 1.6f,
+        animationSpec = infiniteRepeatable(tween(1400, easing = LinearEasing), RepeatMode.Restart),
+        label = "r1s"
+    )
+    val ring2Alpha by infiniteTransition.animateFloat(
+        initialValue = 0.7f, targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            tween(1400, easing = LinearEasing), RepeatMode.Restart,
+            initialStartOffset = StartOffset(470)
+        ),
+        label = "r2a"
+    )
+    val ring2Scale by infiniteTransition.animateFloat(
+        initialValue = 0.5f, targetValue = 1.6f,
+        animationSpec = infiniteRepeatable(
+            tween(1400, easing = LinearEasing), RepeatMode.Restart,
+            initialStartOffset = StartOffset(470)
+        ),
+        label = "r2s"
+    )
+    val ring3Alpha by infiniteTransition.animateFloat(
+        initialValue = 0.7f, targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            tween(1400, easing = LinearEasing), RepeatMode.Restart,
+            initialStartOffset = StartOffset(940)
+        ),
+        label = "r3a"
+    )
+    val ring3Scale by infiniteTransition.animateFloat(
+        initialValue = 0.5f, targetValue = 1.6f,
+        animationSpec = infiniteRepeatable(
+            tween(1400, easing = LinearEasing), RepeatMode.Restart,
+            initialStartOffset = StartOffset(940)
+        ),
+        label = "r3s"
+    )
+    val micScale by infiniteTransition.animateFloat(
+        initialValue = 0.93f, targetValue = 1.07f,
+        animationSpec = infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "micS"
+    )
+
+    DisposableEffect(Unit) {
+        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
+            onDismiss()
+            return@DisposableEffect onDispose {}
+        }
+        val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        }
+        recognizer.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) {}
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() { phase = "processing" }
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+            override fun onPartialResults(partial: Bundle?) {
+                val text = partial?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
+                if (text.isNotBlank()) transcript = text
             }
-            if (isOnline) {
+            override fun onResults(results: Bundle?) {
+                val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
+                onResult(text)
+            }
+            override fun onError(error: Int) { onDismiss() }
+        })
+        recognizer.startListening(intent)
+        onDispose {
+            recognizer.stopListening()
+            recognizer.destroy()
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xF0100B09))
+            .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {},
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(28.dp),
+            modifier = Modifier.padding(horizontal = 32.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(200.dp)) {
                 Box(
                     modifier = Modifier
-                        .size(12.dp)
-                        .background(AccentEmerald, CircleShape)
-                        .border(2.dp, Color(0xFF130D0A), CircleShape)
-                        .align(Alignment.TopEnd)
+                        .size(180.dp)
+                        .graphicsLayer(scaleX = ring3Scale, scaleY = ring3Scale, alpha = ring3Alpha)
+                        .background(PRIMARY.copy(alpha = 0.1f), CircleShape)
+                        .border(1.dp, PRIMARY.copy(alpha = ring3Alpha * 0.4f), CircleShape)
+                )
+                Box(
+                    modifier = Modifier
+                        .size(140.dp)
+                        .graphicsLayer(scaleX = ring2Scale, scaleY = ring2Scale, alpha = ring2Alpha)
+                        .background(PRIMARY.copy(alpha = 0.15f), CircleShape)
+                        .border(1.dp, PRIMARY.copy(alpha = ring2Alpha * 0.5f), CircleShape)
+                )
+                Box(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .graphicsLayer(scaleX = ring1Scale, scaleY = ring1Scale, alpha = ring1Alpha)
+                        .background(PRIMARY.copy(alpha = 0.22f), CircleShape)
+                )
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .graphicsLayer(scaleX = micScale, scaleY = micScale)
+                        .background(PRIMARY, CircleShape)
+                        .border(2.dp, Color.White.copy(alpha = 0.18f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Mic,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+            }
+
+            if (transcript.isNotBlank()) {
+                Text(
+                    text = "\"$transcript\"",
+                    color = TEXT_PRIMARY,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 22.sp
+                )
+            } else {
+                Text(
+                    text = if (phase == "processing") "Processing your doubt..." else "Speak your doubt...",
+                    color = TEXT_SECONDARY,
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center
                 )
             }
+
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = TEXT_MUTED, fontSize = 13.sp)
+            }
         }
-        Text(
-            text = name,
-            color = TEXT_PRIMARY,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
 
