@@ -1697,10 +1697,10 @@ class PipelineServices:
         recent_counts = (
             counts_by_year[-8:] if len(counts_by_year) > 8 else counts_by_year
         )
-        years = [x.get("year") for x in recent_counts]
-        citations = [x.get("cited_by_count") for x in recent_counts]
-        works = [x.get("works_count") for x in recent_counts]
-        h_index = profile.get("summary_stats", {}).get("h_index", 5)
+        years = [x.get("year") or 0 for x in recent_counts]
+        citations = [x.get("cited_by_count") or 0 for x in recent_counts]
+        works = [x.get("works_count") or 0 for x in recent_counts]
+        h_index = int((profile.get("summary_stats") or {}).get("h_index") or 5)
         # Estimate institutional reach based on co-authorships count from recent works
         institutional_reach = min(int(h_index * 1.5) + random.randint(2, 6), 35)
         result = {
@@ -1767,9 +1767,9 @@ class PipelineServices:
         if profile:
             author_name = profile.get("display_name", "Researcher")
             concepts = [
-                c.get("display_name")
+                c["display_name"]
                 for c in profile.get("x_concepts", [])
-                if c.get("level") in [1, 2]
+                if c.get("level") in [1, 2] and c.get("display_name")
             ][:3]
             next_prediction = profile.get("next_prediction") or ""
         else:
