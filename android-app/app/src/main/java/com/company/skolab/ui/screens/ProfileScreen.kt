@@ -321,13 +321,13 @@ fun ProfileContent(
                 .fillMaxSize()
                 .verticalScroll(scrollState)
         ) {
-            // ── 1. Banner + Avatar header ─────────────────────────────────────
+            // ── 1. Banner + Avatar + Name hero ───────────────────────────────
             Box(modifier = Modifier.fillMaxWidth()) {
-                // Banner
+                // Banner — taller to hold the name/institution overlay
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(150.dp)
+                        .height(190.dp)
                         .background(
                             Brush.linearGradient(
                                 colors = listOf(
@@ -338,22 +338,90 @@ fun ProfileContent(
                             )
                         )
                 ) {
-                    // Decorative circles in banner
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         drawCircle(
+                            color = Color.White.copy(alpha = 0.07f),
+                            radius = 210f,
+                            center = Offset(size.width * 0.88f, size.height * 0.1f)
+                        )
+                        drawCircle(
                             color = Color.White.copy(alpha = 0.04f),
-                            radius = 180f,
-                            center = Offset(size.width * 0.85f, size.height * 0.2f)
+                            radius = 130f,
+                            center = Offset(size.width * 0.72f, size.height * 0.85f)
                         )
                         drawCircle(
                             color = Color.White.copy(alpha = 0.03f),
-                            radius = 100f,
-                            center = Offset(size.width * 0.7f, size.height * 0.8f)
+                            radius = 70f,
+                            center = Offset(size.width * 0.15f, size.height * 0.65f)
                         )
+                    }
+                    // Bottom scrim so overlaid text is readable
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(110.dp)
+                            .align(Alignment.BottomCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.52f))
+                                )
+                            )
+                    )
+                    // Name + status badge + institution overlaid at banner bottom
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 120.dp, bottom = 14.dp, end = 16.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(7.dp)
+                        ) {
+                            Text(
+                                text = displayName,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 1
+                            )
+                            val statusText = activeUser?.academicStatus ?: "Researcher"
+                            if (statusText.isNotBlank()) {
+                                Surface(
+                                    color = Color.White.copy(alpha = 0.18f),
+                                    shape = RoundedCornerShape(5.dp)
+                                ) {
+                                    Text(
+                                        text = statusText,
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+                        if (institution.isNotBlank() && institution != "Independent Researcher") {
+                            Spacer(Modifier.height(3.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Business,
+                                    contentDescription = null,
+                                    tint = Color.White.copy(alpha = 0.8f),
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Spacer(Modifier.width(3.dp))
+                                Text(
+                                    text = institution,
+                                    fontSize = 11.sp,
+                                    color = Color.White.copy(alpha = 0.85f),
+                                    maxLines = 1
+                                )
+                            }
+                        }
                     }
                 }
 
-                // Avatar — overlapping the banner
+                // Avatar — overlapping the banner bottom-left
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
@@ -362,14 +430,14 @@ fun ProfileContent(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(84.dp)
+                            .size(88.dp)
                             .clip(CircleShape)
                             .background(BgPrimary),
                         contentAlignment = Alignment.Center
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(78.dp)
+                                .size(80.dp)
                                 .clip(CircleShape)
                                 .background(
                                     Brush.radialGradient(
@@ -380,7 +448,7 @@ fun ProfileContent(
                         ) {
                             Text(
                                 text = displayName.take(1).uppercase(),
-                                fontSize = 30.sp,
+                                fontSize = 32.sp,
                                 fontWeight = FontWeight.Black,
                                 color = Color.White
                             )
@@ -390,38 +458,10 @@ fun ProfileContent(
             }
 
             // Space below avatar overlap
-            Spacer(modifier = Modifier.height(56.dp))
+            Spacer(modifier = Modifier.height(52.dp))
 
-            // ── 2. Name + Title + Institution ────────────────────────────────
+            // ── 2. Field chip + score + action buttons ───────────────────────
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = displayName,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                    val statusText = activeUser?.academicStatus ?: "Researcher"
-                    if (statusText.isNotBlank()) {
-                        Surface(
-                            color = AccentTeal.copy(alpha = 0.12f),
-                            shape = RoundedCornerShape(6.dp),
-                            border = BorderStroke(0.5.dp, AccentTeal.copy(alpha = 0.25f))
-                        ) {
-                            Text(
-                                text = statusText,
-                                color = AccentTeal,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(4.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -452,20 +492,7 @@ fun ProfileContent(
                         modifier = Modifier.size(13.dp)
                     )
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                if (institution.isNotBlank() && institution != "Independent Researcher") {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Outlined.Business,
-                            contentDescription = null,
-                            tint = TextMuted,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(institution, fontSize = 13.sp, color = TextSecondary)
-                    }
-                    Spacer(modifier = Modifier.height(3.dp))
-                }
+                Spacer(modifier = Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Outlined.EmojiEvents,
@@ -489,7 +516,6 @@ fun ProfileContent(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Share button (primary)
                     val cvFileNameVal = activeUser?.cvFileName ?: ""
                     Button(
                         onClick = {
@@ -502,7 +528,7 @@ fun ProfileContent(
                                 Field: $fieldOfStudy
                                 Institution: $institution
                                 h-index (estimated): $hIndex$cvNote
-                                
+
                                 Explore my research on SkoLab!
                             """.trimIndent()
                             val sendIntent = Intent().apply {
@@ -522,7 +548,6 @@ fun ProfileContent(
                         Text("Share", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     }
 
-                    // Pro Workspace button (outlined)
                     OutlinedButton(
                         onClick = onNavigateToProWorkspace,
                         border = BorderStroke(1.dp, AccentAmber),
