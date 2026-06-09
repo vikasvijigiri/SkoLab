@@ -181,10 +181,25 @@ def _build_url(path: str) -> str | None:
         return f"{DOCKER_HOST}{path}?query={requests.utils.quote(query_val)}"
 
     # user_id-based endpoints
-    if norm == "/industry_academic_tieups":
+    if norm in {"/industry_academic_tieups", "/users/quests"}:
         if not aid:
-            return f"{DOCKER_HOST}{path}"
+            return None
         return f"{DOCKER_HOST}{path}?user_id={aid}"
+
+    # author_id-required endpoints (raise 400/404 without it)
+    if norm == "/daily_conjecture":
+        if not aid:
+            return None
+        return f"{DOCKER_HOST}{path}?author_id={aid}"
+
+    if norm == "/assistant_professor_roadmap":
+        if not aid:
+            return None
+        focus_val = _AUTHOR_TOP_CONCEPT or settings.monitor_author_name
+        if not focus_val:
+            return f"{DOCKER_HOST}{path}?author_id={aid}"
+        return (f"{DOCKER_HOST}{path}"
+                f"?author_id={aid}&focus={requests.utils.quote(focus_val)}")
 
     return f"{DOCKER_HOST}{path}"
 
@@ -224,52 +239,68 @@ def main():
     api = UptimeKumaApi(UPTIME_KUMA)
     api.login(args.username, args.password)
 
-    # Index existing monitors by URL base path (strip query string) to allow
-    # updating already-added monitors with better URLs
-    existing_monitors = {m["url"].split("?")[0]: m for m in api.get_monitors()}
+    # Index existing monitors by both the exact base URL and the /api/v1-stripped
+    # variant so stale monitors at either path are found and cleaned up.
+    all_monitors = api.get_monitors()
+    existing_monitors: dict[str, dict] = {}
+    for m in all_monitors:
+        base = m["url"].split("?")[0]
+        existing_monitors[base] = m
+        alt = re.sub(r"^http://[^/]+", "", base)        # path only
+        alt_no_prefix = re.sub(r"^/api/v1", "", alt)   # strip /api/v1
+        alt_url = f"{DOCKER_HOST}{alt_no_prefix}"
+        existing_monitors.setdefault(alt_url, m)
 
-    updated = added = skipped = 0
+    deleted = added = skipped = 0
 
     for method, path in candidates:
         url = _build_url(path)
-        if url is None:
-            print(f"  SKIP (un-monitorable): {_friendly(path)}")
-            skipped += 1
-            continue
-
         name = _friendly(path)
-        base_url = url.split("?")[0]
-        existing = existing_monitors.get(base_url)
+        base_url = url.split("?")[0] if url else f"{DOCKER_HOST}{path}"
+        # Also check the /api/v1-stripped base
+        norm_base = f"{DOCKER_HOST}{re.sub(r'^/api/v1', '', path)}"
+        existing = existing_monitors.get(base_url) or existing_monitors.get(norm_base)
 
-        if existing and existing["url"] == url:
-            print(f"  OK   (unchanged): {name}")
+        if url is None:
+            if existing:
+                try:
+                    api.delete_monitor(existing["id"])
+                    print(f"  -    (removed un-monitorable): {name}")
+                    deleted += 1
+                except Exception as exc:
+                    print(f"  ERROR deleting {name}: {exc}")
+            else:
+                print(f"  SKIP (un-monitorable): {name}")
             skipped += 1
             continue
+
+        # Always delete stale monitor then re-add fresh — edit_monitor does NOT
+        # reset heartbeat history so old 422 timestamps would stay frozen.
+        if existing:
+            try:
+                api.delete_monitor(existing["id"])
+                deleted += 1
+            except Exception as exc:
+                print(f"  ERROR deleting stale {name}: {exc}")
 
         try:
-            if existing:
-                api.edit_monitor(existing["id"], url=url,
-                                 accepted_statuscodes=ACCEPTED_CODES)
-                print(f"  ^    (updated):   {name}  ->  {url}")
-                updated += 1
-            else:
-                api.add_monitor(
-                    type=MonitorType.HTTP,
-                    name=name,
-                    url=url,
-                    method=method,
-                    interval=60,
-                    retryInterval=30,
-                    maxretries=2,
-                    accepted_statuscodes=ACCEPTED_CODES,
-                )
-                print(f"  +    (added):     {name}  ->  {url}")
-                added += 1
+            api.add_monitor(
+                type=MonitorType.HTTP,
+                name=name,
+                url=url,
+                method=method,
+                interval=60,
+                retryInterval=30,
+                maxretries=2,
+                accepted_statuscodes=ACCEPTED_CODES,
+            )
+            print(f"  +    (added):  {name}  ->  {url}")
+            added += 1
         except Exception as exc:
-            print(f"  ERROR: {name}: {exc}")
+            print(f"  ERROR adding {name}: {exc}")
 
     api.disconnect()
-    print(f"\nDone — {added} added, {updated} updated, {skipped} skipped.")
+    print(f"\nDone — {added} added, {deleted} stale deleted, {skipped} skipped.")
     print(f"Dashboard: {UPTIME_KUMA}")
 
 
