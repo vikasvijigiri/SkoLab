@@ -1,7 +1,7 @@
-import pytest
+﻿import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.services.user_memory_service import UserMemoryService
+from app.services.user.user_memory_service import UserMemoryService
 from app.schemas.core import UserMemoryEventsRequest, ActivityEventPayload
 from app.models.analytics_models import UserActivityLog
 
@@ -14,7 +14,7 @@ def mock_db():
 
 
 @pytest.mark.asyncio
-@patch("app.services.user_memory_service._user_memory_cache")
+@patch("app.services.user.user_memory_service._user_memory_cache")
 async def test_sync_events_success(mock_cache, mock_db):
     mock_cache.delete = AsyncMock()
 
@@ -54,7 +54,7 @@ async def test_sync_events_success(mock_cache, mock_db):
 
 
 @pytest.mark.asyncio
-@patch("app.services.user_memory_service._user_memory_cache")
+@patch("app.services.user.user_memory_service._user_memory_cache")
 async def test_get_user_memory_cache_hit(mock_cache, mock_db):
     cached_profile = {
         "user_id": "user_abc",
@@ -83,7 +83,7 @@ async def test_get_user_memory_cache_hit(mock_cache, mock_db):
 
 
 @pytest.mark.asyncio
-@patch("app.services.user_memory_service._user_memory_cache")
+@patch("app.services.user.user_memory_service._user_memory_cache")
 async def test_get_user_memory_no_logs_fallback(mock_cache, mock_db):
     mock_cache.get = AsyncMock(return_value=None)
     mock_cache.set = AsyncMock()
@@ -102,7 +102,7 @@ async def test_get_user_memory_no_logs_fallback(mock_cache, mock_db):
 
 
 @pytest.mark.asyncio
-@patch("app.services.user_memory_service._user_memory_cache")
+@patch("app.services.user.user_memory_service._user_memory_cache")
 async def test_get_user_memory_aggregation(mock_cache, mock_db):
     mock_cache.get = AsyncMock(return_value=None)
     mock_cache.set = AsyncMock()

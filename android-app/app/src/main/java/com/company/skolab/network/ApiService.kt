@@ -1186,11 +1186,15 @@ class ApiService {
     suspend fun getCitationHeatmap(authorId: String): CitationHeatmap? {
         val base = baseUrl() ?: return null
         return try {
-            httpClient.get("$base/citation_heatmap") {
+            val response = httpClient.get("$base/citation_heatmap") {
                 parameter("author_id", authorId)
-            }.body()
+            }
+            if (!response.status.isSuccess()) {
+                Log.w(tag, "getCitationHeatmap returned ${response.status.value}")
+                return null
+            }
+            response.body()
         } catch (e: Exception) {
-            handleNetworkException(e, base)
             Log.e(tag, "getCitationHeatmap failed", e)
             null
         }
@@ -1199,11 +1203,15 @@ class ApiService {
     suspend fun getJournalAdvisor(authorId: String): List<JournalRecommendation> {
         val base = baseUrl() ?: return emptyList()
         return try {
-            httpClient.get("$base/journal_advisor") {
+            val response = httpClient.get("$base/journal_advisor") {
                 parameter("author_id", authorId)
-            }.body()
+            }
+            if (!response.status.isSuccess()) {
+                Log.w(tag, "getJournalAdvisor returned ${response.status.value}")
+                return emptyList()
+            }
+            response.body()
         } catch (e: Exception) {
-            handleNetworkException(e, base)
             Log.e(tag, "getJournalAdvisor failed", e)
             emptyList()
         }

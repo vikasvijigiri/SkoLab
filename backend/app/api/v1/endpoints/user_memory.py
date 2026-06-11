@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+﻿from fastapi import APIRouter, Depends, HTTPException
 
 from app.schemas.core import UserMemoryEventsRequest, UserMemoryProfileResponse
 from app.api.dependencies import get_user_memory_service
-from app.services.user_memory_service import UserMemoryService
+from app.services.user.user_memory_service import UserMemoryService
 
 router = APIRouter()
 

@@ -1,11 +1,11 @@
-import hashlib
+﻿import hashlib
 import datetime
 import json
 import re
 import io
 import pdfplumber
-from app.services.connectors import TOOLS_SCHEMA, execute_tool_call
-from app.services.llm_service import is_llm_working
+from app.services.platform.connectors import TOOLS_SCHEMA, execute_tool_call
+from app.services.ai.llm_service import is_llm_working
 from app.prompts import (
     AGENT_BASE_PROMPT,
     AGENT_SUMMARY_PROMPT,
@@ -27,7 +27,7 @@ class AgentService:
         # history_summary_cache param kept for API compat; PG is used directly.
         self.history_summary_cache = history_summary_cache
         self.db = db
-        from app.services.llm_service import LLMService
+        from app.services.ai.llm_service import LLMService
 
         self.llm_service = LLMService()
 
@@ -270,23 +270,14 @@ class AgentService:
             structured_message = f"<user_query>\n{sanitized_message}\n</user_query>"
             messages.append({"role": "user", "content": structured_message})
 
-            models = [
-                "openai/gpt-oss-120b",
-                "llama-3.3-70b-versatile",
-                "llama-3.1-8b-instant",
-                "qwen/qwen3-32b",
-            ]
+            models = None
             if is_llm_working():
                 chosen_model = None
                 max_turns = 5
 
                 for turn in range(max_turns):
                     print(f"[AgentChat] Turn {turn + 1}/{max_turns}...", flush=True)
-                    model_order = models
-                    if chosen_model:
-                        model_order = [chosen_model] + [
-                            m for m in models if m != chosen_model
-                        ]
+                    model_order = [chosen_model] if chosen_model else None
 
                     response_msg = None
                     success = False

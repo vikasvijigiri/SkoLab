@@ -1,8 +1,8 @@
-import logging
+﻿import logging
 import json
 from pathlib import Path
 from fastapi import APIRouter
-from app.services.summarization_service import is_llm_working
+from app.services.ai.summarization_service import is_llm_working
 
 logger = logging.getLogger(__name__)
 

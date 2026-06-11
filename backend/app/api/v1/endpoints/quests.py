@@ -1,10 +1,10 @@
-from typing import List
+﻿from typing import List
 from fastapi import APIRouter, Depends, Query, HTTPException
 
 from app.schemas.core import Quest, LeaderboardEntry
 from app.api.dependencies import get_quests_service, get_openalex_service
-from app.services.openalex_service import OpenAlexService
-from app.services.quests_service import QuestsService
+from app.services.data.openalex_service import OpenAlexService
+from app.services.user.quests_service import QuestsService
 
 router = APIRouter()
 

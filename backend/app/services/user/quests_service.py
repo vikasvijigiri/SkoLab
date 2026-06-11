@@ -1,4 +1,4 @@
-import json
+﻿import json
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -7,12 +7,12 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.prompts import QUESTS_GENERATION_PROMPT_TEMPLATE
 from app.schemas.core import Quest, LeaderboardEntry
 from app.models.user_models import UserPreference, User
-from app.services.openalex_service import OpenAlexService
-from app.services.summarization_service import is_llm_working
-from app.services.llm_service import LLMService
+from app.services.data.openalex_service import OpenAlexService
+from app.services.ai.summarization_service import is_llm_working
+from app.services.ai.llm_service import LLMService
 
 try:
-    from app.services.researcher_worker import FIRESTORE_AVAILABLE
+    from app.services.data.researcher_worker import FIRESTORE_AVAILABLE
 except ImportError:
     FIRESTORE_AVAILABLE = False
 

@@ -1,4 +1,4 @@
-import datetime
+﻿import datetime
 import time
 from collections import Counter
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -196,7 +196,7 @@ class UserMemoryService:
         # Dynamically generate semantic biography using LLM reflection
         researcher_bio = "An active researcher currently focused on exploratory academic topics."
         try:
-            from app.services.llm_service import LLMService, is_llm_working
+            from app.services.ai.llm_service import LLMService, is_llm_working
             if is_llm_working():
                 llm = LLMService()
                 prompt = (

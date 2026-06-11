@@ -1,4 +1,4 @@
-"""
+﻿"""
 Skolab Paper Intelligence Engine
 ================================
 Reads the FULL text of scientific papers (via open-access PDF) and runs a
@@ -18,14 +18,14 @@ import re
 import io
 import asyncio
 from typing import Optional, List, Dict, Any, Tuple
-from .metrics_service import MetricsService
+from app.services.platform.metrics_service import MetricsService
 from app.prompts import (
     RESEARCH_INTELLIGENCE_SYSTEM_PROMPT,
     PAPER_COMMUNICATOR_PROMPT_TEMPLATE,
     PRESENTATION_PRESENTER_PROMPT_TEMPLATE,
 )
 from app.core.config import settings
-from app.services.llm_service import is_llm_working
+from app.services.ai.llm_service import is_llm_working
 
 
 # ── LLM Context Budget ────────────────────────────────────────────────────────
@@ -53,16 +53,10 @@ _global_intelligence_cache: Dict[str, Dict[str, Any]] = {}
 
 class SummarizationService:
     def __init__(self):
-        from app.services.llm_service import LLMService
+        from app.services.ai.llm_service import LLMService
 
         self.llm_service = LLMService()
-        self.models = [
-            "llama-3.3-70b-versatile",
-            "llama3-8b-8192",
-            "mixtral-8x7b-32768",
-            "gemma2-9b-it",
-            "llama-3.1-8b-instant",
-        ]
+        self.models = None
         self.metrics_service = MetricsService()
 
         # In-memory cache: DOI / OpenAlex ID → intelligence result (session-scoped)

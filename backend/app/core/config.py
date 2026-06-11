@@ -84,6 +84,9 @@ class Settings:
 
     # ── External API keys ────────────────────────────────────────────────────
     groq_api_key: str = field(default_factory=lambda: os.environ.get("GROQ_API", ""))
+    openrouter_api_key: str = field(
+        default_factory=lambda: os.environ.get("OPENROUTER_API_KEY", "")
+    )
     openalex_email: str = field(
         default_factory=lambda: os.environ.get("OPENALEX_EMAIL", "")
     )

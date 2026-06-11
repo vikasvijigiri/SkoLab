@@ -1,19 +1,14 @@
-from typing import List
-from app.services.llm_service import is_llm_working
+﻿from typing import List
+from app.services.ai.llm_service import is_llm_working
 from app.prompts import PREDICTION_SYSTEM_PROMPT
 
 
 class PredictionService:
     def __init__(self):
-        from app.services.llm_service import LLMService
+        from app.services.ai.llm_service import LLMService
 
         self.llm_service = LLMService()
-        self.models = [
-            "llama-3.3-70b-versatile",
-            "llama-3.1-8b-instant",
-            "openai/gpt-oss-120b",
-            "qwen/qwen3-32b",
-        ]
+        self.models = None
 
     async def predict_next_problem(
         self, author_name: str, expertise: List[str], works: List[dict]

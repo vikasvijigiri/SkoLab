@@ -1,13 +1,13 @@
-import re
+﻿import re
 from typing import List, Optional, Union
 from fastapi import APIRouter, Depends, Query, BackgroundTasks, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.core import AuthorResponse, AuthorSuggestion, Work
-from app.services.pipeline_services import PipelineServices
-from app.services.metrics_service import compute_author_metrics
-from app.services.summarization_service import is_llm_working
-from app.services.openalex_service import OpenAlexService
+from app.services.platform.pipeline_services import PipelineServices
+from app.services.platform.metrics_service import compute_author_metrics
+from app.services.ai.summarization_service import is_llm_working
+from app.services.data.openalex_service import OpenAlexService
 from app.api.dependencies import get_pipeline_services, get_openalex_service, get_db
 from app.core.config import settings
 from app.core.cache import (
@@ -18,7 +18,7 @@ from app.core.cache import (
 )
 
 try:
-    from app.services.researcher_worker import (
+    from app.services.data.researcher_worker import (
         teleport_researcher,
         FIRESTORE_AVAILABLE,
         _get_firestore_client,
@@ -223,7 +223,7 @@ async def fetch_similar_authors(
                 if first_inst and isinstance(first_inst, dict):
                     inst = first_inst.get("display_name") or "Independent Researcher"
 
-            from app.services.openalex_service import extract_field_and_expertise
+            from app.services.data.openalex_service import extract_field_and_expertise
 
             field, expertise = extract_field_and_expertise(
                 author, author.get("display_name", "")
@@ -365,7 +365,7 @@ async def get_author_suggestions(
             h_idx = stats.get("h_index")
             works_cnt = author.get("works_count")
 
-            from app.services.openalex_service import extract_field_and_expertise
+            from app.services.data.openalex_service import extract_field_and_expertise
 
             field_of_study, expertise = extract_field_and_expertise(author, disp_name)
             score = compute_query_match_score(query, expertise or [field_of_study])
@@ -745,7 +745,7 @@ async def search_author(
         author_orcid = author_data.get("orcid")
 
         # Meticulously resolve field/discipline first to filter out papers from different authors with the same name
-        from app.services.openalex_service import (
+        from app.services.data.openalex_service import (
             extract_field_and_expertise,
             is_work_relevant_to_discipline,
         )
@@ -847,8 +847,8 @@ async def search_author(
             id=author_data.get("id", resolved_id),
             display_name=author_data.get("display_name", name),
             orcid=author_data.get("orcid"),
-            h_index=stats.get("h_index", 0),
-            i10_index=stats.get("i10_index", 0),
+            h_index=stats.get("h_index") or 0,
+            i10_index=stats.get("i10_index") or 0,
             works_count=clean_works_count,
             cited_by_count=clean_cited_by_count,
             institution=institution,

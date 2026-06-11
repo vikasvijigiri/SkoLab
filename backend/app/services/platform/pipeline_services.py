@@ -1,4 +1,4 @@
-import datetime
+﻿import datetime
 import httpx
 import json
 import random
@@ -6,12 +6,12 @@ import asyncio
 import re
 from contextlib import asynccontextmanager
 from typing import List, Dict, Optional, Any, AsyncGenerator, Tuple, Set
-from app.services.llm_service import is_llm_working
+from app.services.ai.llm_service import is_llm_working
 from sqlalchemy.future import select
 from app.db.database import AsyncSessionLocal
 from app.core.config import settings
 from app.models.user_models import AgentChatHistory
-from app.services.openalex_service import OpenAlexService, is_work_relevant_to_discipline
+from app.services.data.openalex_service import OpenAlexService, is_work_relevant_to_discipline
 from app.db.pg_cache import PgBackedCache
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.prompts import (
@@ -449,7 +449,7 @@ _pg_network_collab_cache = PgBackedCache(
 class PipelineServices:
     def __init__(self, db: Optional[AsyncSession] = None):
         self.db = db
-        from app.services.llm_service import LLMService
+        from app.services.ai.llm_service import LLMService
 
         self.llm_service = LLMService()
         self.model = "llama-3.3-70b-versatile"
@@ -466,7 +466,7 @@ class PipelineServices:
     def _get_firestore_db(self) -> Any:
         """Returns a Firestore client if available, else None."""
         try:
-            from app.services.researcher_worker import FIRESTORE_AVAILABLE
+            from app.services.data.researcher_worker import FIRESTORE_AVAILABLE
 
             if not FIRESTORE_AVAILABLE:
                 return None
@@ -617,7 +617,7 @@ class PipelineServices:
         profile = await self._fetch_author_profile(author_id)
         if profile:
             author_name = profile.get("display_name", "Researcher")
-            from app.services.openalex_service import extract_field_and_expertise
+            from app.services.data.openalex_service import extract_field_and_expertise
 
             _, concepts = extract_field_and_expertise(profile, author_name)
             return author_name, concepts or []
@@ -1688,9 +1688,7 @@ class PipelineServices:
             return _fs_cached
         profile = await self._fetch_author_profile(author_id)
         if not profile:
-            raise ValueError(
-                f"Could not retrieve citation history for author profile '{author_id}'."
-            )
+            return {"years": [], "citations": [], "works": [], "institutional_reach": 0, "h_index": 0}
         counts_by_year = profile.get("counts_by_year", [])
         counts_by_year = sorted(counts_by_year, key=lambda x: x.get("year", 0))
         # Keep last 8 years for compactness in mobile layout
@@ -1792,9 +1790,7 @@ class PipelineServices:
                     f"[JournalAdvisor] Database lookup fallback error: {e}", flush=True
                 )
         if not is_llm_working():
-            raise ValueError(
-                "LLM service is currently offline or rate-limited. Journal advisor recommendation is unavailable."
-            )
+            return []
 
         messages = [
             {
@@ -2165,7 +2161,7 @@ class PipelineServices:
                         auth_clean_id, per_page=max_works
                     )
                     if field:
-                        from app.services.openalex_service import (
+                        from app.services.data.openalex_service import (
                             is_work_relevant_to_discipline,
                         )
 
@@ -2446,7 +2442,7 @@ class PipelineServices:
             if insts
             else "Independent Researcher"
         )
-        from app.services.openalex_service import extract_field_and_expertise
+        from app.services.data.openalex_service import extract_field_and_expertise
 
         field, concepts = extract_field_and_expertise(
             openalex_author, openalex_author.get("display_name", "Researcher")

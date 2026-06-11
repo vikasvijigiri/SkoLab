@@ -1,11 +1,11 @@
-import numpy as np
+﻿import numpy as np
 import networkx as nx
 from typing import List, Dict, Optional
 import math
 import json
 import os
-from app.services.openalex_service import OpenAlexService
-from app.services.scraping_service import ScrapingService
+from app.services.data.openalex_service import OpenAlexService
+from app.services.data.scraping_service import ScrapingService
 
 
 class MetricsService:

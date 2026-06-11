@@ -1,8 +1,8 @@
-import pytest
+﻿import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import json
 
-from app.services.quests_service import QuestsService
+from app.services.user.quests_service import QuestsService
 from app.models.user_models import UserPreference, User
 from app.models.researcher_models import ResearcherMetrics
 
@@ -57,8 +57,8 @@ async def test_get_user_quests_existing_preference(mock_db, mock_openalex):
 
 
 @pytest.mark.asyncio
-@patch("app.services.quests_service.is_llm_working", return_value=True)
-@patch("app.services.quests_service.LLMService")
+@patch("app.services.user.quests_service.is_llm_working", return_value=True)
+@patch("app.services.user.quests_service.LLMService")
 async def test_get_user_quests_dynamic_initialization(
     mock_llm_class, mock_is_llm_working, mock_db, mock_openalex
 ):
@@ -172,8 +172,8 @@ async def test_complete_quest_not_found(mock_db, mock_openalex):
 
 
 @pytest.mark.asyncio
-@patch("app.services.quests_service.FIRESTORE_AVAILABLE", True)
-@patch("app.services.quests_service.firestore", create=True)
+@patch("app.services.user.quests_service.FIRESTORE_AVAILABLE", True)
+@patch("app.services.user.quests_service.firestore", create=True)
 async def test_get_leaderboard_firestore(mock_firestore_mod, mock_db):
     mock_db_client = MagicMock()
     mock_firestore_mod.client.return_value = mock_db_client
@@ -206,7 +206,7 @@ async def test_get_leaderboard_firestore(mock_firestore_mod, mock_db):
 
 
 @pytest.mark.asyncio
-@patch("app.services.quests_service.FIRESTORE_AVAILABLE", False)
+@patch("app.services.user.quests_service.FIRESTORE_AVAILABLE", False)
 async def test_get_leaderboard_postgres_fallback(mock_db):
     # Mock ResearcherMetrics objects
     rm1 = ResearcherMetrics(
@@ -230,8 +230,8 @@ async def test_get_leaderboard_postgres_fallback(mock_db):
 
 
 @pytest.mark.asyncio
-@patch("app.services.quests_service.is_llm_working", return_value=True)
-@patch("app.services.quests_service.LLMService")
+@patch("app.services.user.quests_service.is_llm_working", return_value=True)
+@patch("app.services.user.quests_service.LLMService")
 async def test_get_user_quests_user_has_openalex_id(
     mock_llm_class, mock_is_llm_working, mock_db, mock_openalex
 ):
@@ -294,8 +294,8 @@ async def test_get_user_quests_user_has_openalex_id(
 
 
 @pytest.mark.asyncio
-@patch("app.services.quests_service.is_llm_working", return_value=True)
-@patch("app.services.quests_service.LLMService")
+@patch("app.services.user.quests_service.is_llm_working", return_value=True)
+@patch("app.services.user.quests_service.LLMService")
 async def test_get_user_quests_llm_failure(
     mock_llm_class, mock_is_llm_working, mock_db, mock_openalex
 ):
@@ -316,8 +316,8 @@ async def test_get_user_quests_llm_failure(
 
 
 @pytest.mark.asyncio
-@patch("app.services.quests_service.is_llm_working", return_value=True)
-@patch("app.services.quests_service.LLMService")
+@patch("app.services.user.quests_service.is_llm_working", return_value=True)
+@patch("app.services.user.quests_service.LLMService")
 async def test_get_user_quests_db_commit_error(
     mock_llm_class, mock_is_llm_working, mock_db, mock_openalex
 ):
@@ -393,7 +393,7 @@ async def test_complete_quest_db_commit_error(mock_db, mock_openalex):
 
 
 @pytest.mark.asyncio
-@patch("app.services.quests_service.FIRESTORE_AVAILABLE", False)
+@patch("app.services.user.quests_service.FIRESTORE_AVAILABLE", False)
 async def test_get_leaderboard_all_fail_raises_value_error(mock_db):
     mock_db.execute = AsyncMock(side_effect=Exception("DB failure"))
 

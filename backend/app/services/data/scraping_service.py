@@ -1,4 +1,4 @@
-import json
+﻿import json
 import re
 import httpx
 import asyncio
@@ -64,7 +64,7 @@ class ScrapingService:
     """
 
     def __init__(self):
-        from app.services.llm_service import LLMService
+        from app.services.ai.llm_service import LLMService
 
         self.llm_service = LLMService()
         self.model = "llama-3.3-70b-versatile"
