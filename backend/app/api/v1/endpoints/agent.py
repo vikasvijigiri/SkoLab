@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
+﻿from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
 from app.schemas.core import AgentChatRequest, ChatRequest
-from app.services.agent_service import AgentService
-from app.services.pipeline_services import PipelineServices
+from app.services.ai.agent_service import AgentService
+from app.services.platform.pipeline_services import PipelineServices
 from app.api.dependencies import get_agent_service, get_pipeline_services, get_verified_user
 
 router = APIRouter()

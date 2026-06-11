@@ -1,4 +1,4 @@
-import os
+﻿import os
 import json
 import httpx
 import re
@@ -75,7 +75,7 @@ async def search_arxiv_publications(query: str, max_results: int = 5) -> str:
 
 async def search_google_scholar_profile(query: str) -> str:
     """Searches for a researcher's Google Scholar citation page and returns their profile details and publications list."""
-    from app.services.scraping_service import ScrapingService
+    from app.services.data.scraping_service import ScrapingService
 
     scraper = ScrapingService()
     try:
@@ -165,7 +165,7 @@ async def search_google_scholar_profile(query: str) -> str:
 
 async def search_researchgate_profile(query: str) -> str:
     """Searches for a researcher's profile on ResearchGate using DuckDuckGo snippets."""
-    from app.services.scraping_service import ScrapingService
+    from app.services.data.scraping_service import ScrapingService
 
     scraper = ScrapingService()
     try:
@@ -225,7 +225,7 @@ def read_local_file(file_path: str) -> str:
 
 async def search_web(query: str, max_results: int = 5) -> str:
     """Real connector to search the web using ScrapingService."""
-    from app.services.scraping_service import ScrapingService
+    from app.services.data.scraping_service import ScrapingService
 
     scraping_service = ScrapingService()
     try:
@@ -750,7 +750,7 @@ async def fetch_and_summarize_paper(query: str, source: str = "auto") -> str:
     # ── 4. Web-scraping fallback ─────────────────────────────────────────────
     if source in ("auto", "web") and not found_abstract:
         try:
-            from app.services.scraping_service import ScrapingService
+            from app.services.data.scraping_service import ScrapingService
 
             scraper = ScrapingService()
             # Search on multiple academic sites in sequence
@@ -1300,7 +1300,7 @@ async def execute_tool_call(
                 arguments.get("query", ""), arguments.get("max_results", 5)
             )
         elif tool_name == "search_openalex_authors":
-            from app.services.openalex_service import OpenAlexService
+            from app.services.data.openalex_service import OpenAlexService
 
             openalex = OpenAlexService()
             domain = arguments.get("domain", "").lower().strip()
@@ -1345,7 +1345,7 @@ async def execute_tool_call(
             domain_note = f" (filtered by domain: {domain})'" if domain else ""
             return f"[OpenAlex Authors{domain_note}]\n\n" + "\n\n".join(res_list)
         elif tool_name == "fetch_openalex_author_works":
-            from app.services.openalex_service import OpenAlexService
+            from app.services.data.openalex_service import OpenAlexService
 
             openalex = OpenAlexService()
             works = await openalex.fetch_author_works(
@@ -1364,7 +1364,7 @@ async def execute_tool_call(
                 )
             return "\n\n".join(res_list)
         elif tool_name == "search_openalex_works":
-            from app.services.openalex_service import OpenAlexService
+            from app.services.data.openalex_service import OpenAlexService
 
             openalex = OpenAlexService()
             domain = arguments.get("domain", "").strip()
@@ -1391,7 +1391,7 @@ async def execute_tool_call(
                 )
             return "\n\n".join(res_list)
         elif tool_name == "search_openalex_author_and_works":
-            from app.services.openalex_service import OpenAlexService
+            from app.services.data.openalex_service import OpenAlexService
 
             openalex = OpenAlexService()
             domain = arguments.get("domain", "").lower().strip()

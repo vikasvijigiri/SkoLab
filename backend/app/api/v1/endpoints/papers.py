@@ -1,13 +1,13 @@
-import asyncio
+﻿import asyncio
 import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.core import PaperIntelligenceResponse
-from app.services.summarization_service import SummarizationService
-from app.services.pipeline_services import PipelineServices
-from app.services.openalex_service import OpenAlexService
+from app.services.ai.summarization_service import SummarizationService
+from app.services.platform.pipeline_services import PipelineServices
+from app.services.data.openalex_service import OpenAlexService
 from app.api.dependencies import (
     get_summarization_service,
     get_pipeline_services,

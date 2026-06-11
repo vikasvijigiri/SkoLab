@@ -1,4 +1,4 @@
-import sys
+﻿import sys
 import io
 from pathlib import Path
 
@@ -213,7 +213,7 @@ async def lifespan(app: FastAPI):
         print(f"[Postgres] Database initialization failed: {e}", flush=True)
 
     # 2. Verify Firestore & Clear Cache
-    from app.services.researcher_worker import (
+    from app.services.data.researcher_worker import (
         check_connection_sync,
         set_firestore_available,
     )

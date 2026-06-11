@@ -15,7 +15,7 @@ val provider = GoogleFont.Provider(
     certificates = R.array.com_google_android_gms_fonts_certs
 )
 
-val DisplayFontName = GoogleFont("Space Grotesk")
+val DisplayFontName = GoogleFont("Lora")
 val MetricsFontName = GoogleFont("IBM Plex Mono")
 val BodyFontName = GoogleFont("Inter")
 val SyneFontName = GoogleFont("Syne")

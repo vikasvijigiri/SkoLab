@@ -1,4 +1,4 @@
-import pytest
+﻿import pytest
 import httpx
 from unittest.mock import patch, MagicMock
 from app.main import app
@@ -35,7 +35,7 @@ async def test_assistant_professor_roadmap_mocked():
                 "cited_by_count": 1500
             }
         }
-        with patch("app.services.openalex_service.OpenAlexService.fetch_author_by_id", return_value=mock_author):
+        with patch("app.services.data.openalex_service.OpenAlexService.fetch_author_by_id", return_value=mock_author):
             response = await ac.get("/api/v1/assistant_professor_roadmap?author_id=A12345678&focus=Physics")
             assert response.status_code == 200
             data = response.json()
@@ -68,8 +68,8 @@ async def test_daily_conjecture_mocked():
                 "abstract_inverted_index": {"The": [0]}
             }
         ]
-        with patch("app.services.openalex_service.OpenAlexService.fetch_author_by_id", return_value=mock_author), \
-             patch("app.services.openalex_service.OpenAlexService.fetch_author_works", return_value=mock_works):
+        with patch("app.services.data.openalex_service.OpenAlexService.fetch_author_by_id", return_value=mock_author), \
+             patch("app.services.data.openalex_service.OpenAlexService.fetch_author_works", return_value=mock_works):
             response = await ac.get("/api/v1/daily_conjecture?author_id=A12345678")
             assert response.status_code == 200
             data = response.json()
@@ -90,7 +90,7 @@ async def test_network_collaborators_mocked():
                 "match": "94%"
             }
         ]
-        with patch("app.services.pipeline_services.PipelineServices.get_network_collaborators", return_value=mock_collaborators):
+        with patch("app.services.platform.pipeline_services.PipelineServices.get_network_collaborators", return_value=mock_collaborators):
             response = await ac.get("/api/v1/network_collaborators?author_id=A12345678")
             assert response.status_code == 200
             data = response.json()

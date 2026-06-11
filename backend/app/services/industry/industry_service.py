@@ -1,12 +1,12 @@
-import logging
+﻿import logging
 import datetime
 import uuid
 import asyncio
 from typing import List, Dict, Optional
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.services.openalex_service import OpenAlexService
-from app.services.scraping_service import ScrapingService
+from app.services.data.openalex_service import OpenAlexService
+from app.services.data.scraping_service import ScrapingService
 from app.models.content_models import ScrapedOpportunity
 
 logger = logging.getLogger(__name__)

@@ -1,11 +1,11 @@
-from typing import Optional
+﻿from typing import Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 
 from app.schemas.core import ConjectureResponse
-from app.services.pipeline_services import PipelineServices
-from app.services.industry_service import fetch_industry_opportunities
-from app.services.summarization_service import is_llm_working
-from app.services.openalex_service import OpenAlexService
+from app.services.platform.pipeline_services import PipelineServices
+from app.services.industry.industry_service import fetch_industry_opportunities
+from app.services.ai.summarization_service import is_llm_working
+from app.services.data.openalex_service import OpenAlexService
 from app.core.config import settings
 from app.api.dependencies import get_pipeline_services, get_openalex_service
 
@@ -192,7 +192,7 @@ async def get_daily_conjecture(
         "response_format": {"type": "json_object"},
     }
 
-    from app.services.llm_service import LLMService
+    from app.services.ai.llm_service import LLMService
 
     llm_service = LLMService()
 
@@ -399,7 +399,7 @@ Target Metrics:
         },
     ]
 
-    from app.services.llm_service import LLMService
+    from app.services.ai.llm_service import LLMService
 
     llm_service = LLMService()
 

@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+﻿from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.core import IndustryAcademicTieupsResponse
 from app.api.dependencies import get_db
-from app.services.industry_academic_service import IndustryAcademicService
+from app.services.industry.industry_academic_service import IndustryAcademicService
 
 router = APIRouter()
 

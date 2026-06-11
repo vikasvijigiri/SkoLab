@@ -1418,14 +1418,16 @@ private fun NetworkPersonCard(
                             color = TEXT_PRIMARY,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
+                            maxLines = 2,
+                            lineHeight = 15.sp,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             subtitle,
                             color = TEXT_SECONDARY,
                             fontSize = 10.sp,
-                            maxLines = 1,
+                            maxLines = 2,
+                            lineHeight = 13.sp,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
@@ -1435,10 +1437,10 @@ private fun NetworkPersonCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
-                        .background(if (actionFilled) accentColor else accentColor.copy(alpha = 0.1f))
+                        .background(if (actionFilled) accentColor else Color.White)
                         .border(
                             width = 1.dp,
-                            color = if (actionFilled) Color.Transparent else accentColor.copy(alpha = 0.5f),
+                            color = if (actionFilled) Color.Transparent else accentColor,
                             shape = RoundedCornerShape(8.dp)
                         )
                         .clickable(onClick = onClick)

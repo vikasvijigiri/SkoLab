@@ -1,4 +1,4 @@
-import datetime
+﻿import datetime
 import pytest
 import re
 import sys
@@ -17,8 +17,8 @@ from app.models.user_models import User, UserPreference, Connection, CacheEntry,
 from app.models.researcher_models import ResearcherWork, ResearcherMetrics
 from app.models.content_models import DailyFeedItem, ScrapedOpportunity
 from app.models.analytics_models import UserSettings
-from app.services.researcher_worker import teleport_researcher
-from app.services.researcher_fetcher import PhysicsResearcherFetcher
+from app.services.data.researcher_worker import teleport_researcher
+from app.services.data.researcher_fetcher import PhysicsResearcherFetcher
 
 # Dynamically import hyphenated scripts
 import importlib.util
@@ -162,7 +162,7 @@ async def test_data_ingest_filters_researcher_worker(monkeypatch):
         def error(self, msg, *args):
             pass
 
-    import app.services.researcher_worker as rw
+    import app.services.data.researcher_worker as rw
     monkeypatch.setattr(rw, "logger", MockLogger())
 
     # Mock openalex fetch functions

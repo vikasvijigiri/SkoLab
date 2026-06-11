@@ -10,13 +10,17 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
+import androidx.compose.foundation.isSystemInDarkTheme
+
 @Composable
 fun SkoLabTheme(
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
-    val isDark = isDarkThemeActive()
+    val isSystemDark = isSystemInDarkTheme()
+    isDarkThemeActiveState = darkThemeOverrideState ?: isSystemDark
+    val isDark = isDarkThemeActiveState
 
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {

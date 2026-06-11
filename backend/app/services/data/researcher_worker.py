@@ -1,4 +1,4 @@
-"""
+﻿"""
 researcher_worker.py
 ====================
 Background worker that enriches researcher profiles with:
@@ -110,7 +110,7 @@ def _get_firestore_client() -> Optional[Any]:
 
 
 async def _fetch_author_from_openalex(author_id: str) -> Optional[Dict[str, Any]]:
-    from app.services.openalex_service import OpenAlexService
+    from app.services.data.openalex_service import OpenAlexService
 
     try:
         return await OpenAlexService().fetch_author_by_id(author_id)
@@ -124,7 +124,7 @@ async def _fetch_author_from_openalex(author_id: str) -> Optional[Dict[str, Any]
 async def _fetch_works_from_openalex(
     author_id: str, orcid: Optional[str] = None, max_results: int = 50
 ) -> List[Dict[str, Any]]:
-    from app.services.openalex_service import OpenAlexService
+    from app.services.data.openalex_service import OpenAlexService
 
     try:
         return await OpenAlexService().fetch_author_works(
@@ -366,7 +366,7 @@ async def teleport_researcher(author_id: str) -> None:
         cited_by_count: int = int(author_data.get("cited_by_count") or 0)
 
 
-        from app.services.openalex_service import extract_field_and_expertise
+        from app.services.data.openalex_service import extract_field_and_expertise
 
         field, expertise = extract_field_and_expertise(author_data, display_name)
 
@@ -402,7 +402,7 @@ async def teleport_researcher(author_id: str) -> None:
         ]
 
         # ── 3. Compute the 10 Modern Research Metrics ─────────────────────────
-        from app.services.metrics_service import MetricsService
+        from app.services.platform.metrics_service import MetricsService
 
         ms = MetricsService()
 
@@ -469,11 +469,11 @@ async def teleport_researcher(author_id: str) -> None:
 
         # ── 4. LLM: next research prediction ─────────────────────────────────
         next_prediction: Optional[str] = None
-        from app.services.summarization_service import is_llm_working
+        from app.services.ai.summarization_service import is_llm_working
 
         if is_llm_working() and works:
             try:
-                from app.services.prediction_service import PredictionService
+                from app.services.ai.prediction_service import PredictionService
 
                 ps = PredictionService()
                 next_prediction = await ps.predict_next_problem(

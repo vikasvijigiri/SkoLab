@@ -1,9 +1,9 @@
-import pytest
+﻿import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services.industry_academic_service import IndustryAcademicService
+from app.services.industry.industry_academic_service import IndustryAcademicService
 from app.schemas.core import UserMemoryProfileResponse
 
 
@@ -14,10 +14,10 @@ def mock_db():
 
 
 @pytest.mark.asyncio
-@patch("app.services.industry_academic_service.industry_academic_cache")
-@patch("app.services.industry_academic_service.UserMemoryService")
-@patch("app.services.industry_academic_service.LLMService")
-@patch("app.services.industry_academic_service.OpenAlexService")
+@patch("app.services.industry.industry_academic_service.industry_academic_cache")
+@patch("app.services.industry.industry_academic_service.UserMemoryService")
+@patch("app.services.industry.industry_academic_service.LLMService")
+@patch("app.services.industry.industry_academic_service.OpenAlexService")
 async def test_get_tieups_cache_hit(
     MockOpenAlex, MockLLM, MockUserMemory, mock_cache, mock_db
 ):
@@ -55,10 +55,10 @@ async def test_get_tieups_cache_hit(
 
 
 @pytest.mark.asyncio
-@patch("app.services.industry_academic_service.industry_academic_cache")
-@patch("app.services.industry_academic_service.UserMemoryService")
-@patch("app.services.industry_academic_service.LLMService")
-@patch("app.services.industry_academic_service.OpenAlexService")
+@patch("app.services.industry.industry_academic_service.industry_academic_cache")
+@patch("app.services.industry.industry_academic_service.UserMemoryService")
+@patch("app.services.industry.industry_academic_service.LLMService")
+@patch("app.services.industry.industry_academic_service.OpenAlexService")
 async def test_get_tieups_cache_miss_success(
     MockOpenAlex, MockLLM, MockUserMemory, mock_cache, mock_db
 ):

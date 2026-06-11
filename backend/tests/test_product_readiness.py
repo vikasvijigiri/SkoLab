@@ -1,10 +1,10 @@
-import os
+﻿import os
 import pytest
 import httpx
 from unittest.mock import patch, MagicMock
 from app.main import app
 from app.core.config import settings
-from app.services.llm_service import is_llm_working, set_llm_limit_exceeded
+from app.services.ai.llm_service import is_llm_working, set_llm_limit_exceeded
 
 # Configure HTTPX AsyncClient transport compatibility
 try:

@@ -1,16 +1,16 @@
-from typing import AsyncGenerator, Optional
+﻿from typing import AsyncGenerator, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.db.database import AsyncSessionLocal
-from app.services.agent_service import AgentService
-from app.services.pipeline_services import PipelineServices
-from app.services.summarization_service import SummarizationService
-from app.services.prediction_service import PredictionService
-from app.services.scraping_service import ScrapingService
-from app.services.openalex_service import OpenAlexService
-from app.services.user_memory_service import UserMemoryService
-from app.services.quests_service import QuestsService
+from app.services.ai.agent_service import AgentService
+from app.services.platform.pipeline_services import PipelineServices
+from app.services.ai.summarization_service import SummarizationService
+from app.services.ai.prediction_service import PredictionService
+from app.services.data.scraping_service import ScrapingService
+from app.services.data.openalex_service import OpenAlexService
+from app.services.user.user_memory_service import UserMemoryService
+from app.services.user.quests_service import QuestsService
 from app.core.cache import history_summary_cache
 
 _bearer_scheme = HTTPBearer(auto_error=False)

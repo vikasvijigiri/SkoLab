@@ -1,11 +1,11 @@
-import json
+﻿import json
 import logging
 import asyncio
 from typing import Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.services.user_memory_service import UserMemoryService
-from app.services.openalex_service import OpenAlexService
-from app.services.llm_service import LLMService, is_llm_working
+from app.services.user.user_memory_service import UserMemoryService
+from app.services.data.openalex_service import OpenAlexService
+from app.services.ai.llm_service import LLMService, is_llm_working
 from app.core.cache import industry_academic_cache
 
 logger = logging.getLogger(__name__)

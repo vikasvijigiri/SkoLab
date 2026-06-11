@@ -642,9 +642,9 @@ fun ExternalInviteScreen(
                             modifier = Modifier.weight(1f).height(48.dp),
                             shape = RoundedCornerShape(10.dp)
                         ) {
-                            Icon(Icons.Default.Email, null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Email, null, tint = Color.White, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Gmail", color = Color.Black, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text("Gmail", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
 
                         Button(

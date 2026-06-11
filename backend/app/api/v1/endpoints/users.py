@@ -1,4 +1,4 @@
-import time
+﻿import time
 import json
 import hmac
 import hashlib
@@ -72,7 +72,7 @@ async def _enrich_user_profile_bg(uid: str, name: str, discipline: str) -> None:
     Exits early when the user already has an openalex_id — no redundant API calls.
     """
     from app.db.database import AsyncSessionLocal
-    from app.services.openalex_service import OpenAlexService
+    from app.services.data.openalex_service import OpenAlexService
     from app.api.v1.endpoints.authors import track_teleport_researcher
 
     async with AsyncSessionLocal() as session:

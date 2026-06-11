@@ -1,4 +1,4 @@
-import os
+﻿import os
 import time
 import hmac
 import hashlib
@@ -12,7 +12,7 @@ from app.api.dependencies import get_verified_user
 from app.db.database import AsyncSessionLocal, engine, generate_record_signature
 from app.models.user_models import User, UserPreference
 from app.schemas.core import AgentChatRequest
-from app.services.quests_service import QuestsService
+from app.services.user.quests_service import QuestsService
 
 # Configure HTTPX AsyncClient transport compatibility
 try:
