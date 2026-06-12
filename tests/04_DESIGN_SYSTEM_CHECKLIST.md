@@ -61,7 +61,7 @@
 
 > **Copilot:** Verify that the code satisfies the 'Harmonious Color Palettes (Dark/Light Modes)' constraints in the current PR diff.
 
-> **Verification:** `Color.kt` defines 196 lines of centralized color tokens: base palette (PAGE_BACKGROUND, SURFACE, TEXT_PRIMARY etc.), semantic accent palette (TEAL/EMERALD/AMBER/VIOLET/ORANGE/CYAN/ROSE/PINK/INDIGO), gradient lists, and `EntropiColors` named alias object. `Theme.kt` maps these to `lightColorScheme` (primary, secondary, error, outline, background etc.). Semantic colors (error=NOTIFICATION_DOT, success=EMERALD, warning=AMBER) are consistent.
+> **Verification:** `Color.kt` defines 196 lines of centralized color tokens: base palette (PAGE_BACKGROUND, SURFACE, TEXT_PRIMARY etc.), semantic accent palette (TEAL/EMERALD/AMBER/VIOLET/ORANGE/CYAN/ROSE/PINK/INDIGO), gradient lists, and `SkoLabColors` named alias object. `Theme.kt` maps these to `lightColorScheme` (primary, secondary, error, outline, background etc.). Semantic colors (error=NOTIFICATION_DOT, success=EMERALD, warning=AMBER) are consistent.
 
 - [x] Color tokens centralize light, dark, and high-contrast color values.
 - [x] Theme palettes define primary (glowing Amber), secondary (Slate/Teal), and background shades.

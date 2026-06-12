@@ -882,7 +882,7 @@ fun LoadingResearcherSkeleton() {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(vertical = 16.dp)
+        contentPadding = PaddingValues(top = 16.dp, bottom = 80.dp)
     ) {
         item {
             // Hero skeleton
@@ -994,7 +994,7 @@ fun ResearcherProfileView(
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().background(BgPrimary),
-                contentPadding = PaddingValues(bottom = 0.dp)
+                contentPadding = PaddingValues(bottom = 80.dp)
             ) {
                 // ── Hero Header ──────────────────────────────────────
                 item { ResearcherHeroCard(author = author, apiService = apiService, scope = scope, onUpdateData = onUpdateData) }
@@ -2485,7 +2485,7 @@ fun DiscoveryDashboard(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(BgPrimary),
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 12.dp),
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 80.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Welcome hero

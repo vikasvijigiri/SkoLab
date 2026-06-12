@@ -64,6 +64,8 @@ import com.company.skolab.ui.components.primitives.BottomNavDock
 import com.company.skolab.ui.components.primitives.DockItem
 import com.company.skolab.ui.components.primitives.SkoLabScaffold
 import com.company.skolab.ui.layout.ScreenInsets
+import com.company.skolab.ui.layout.ScreenType
+import com.company.skolab.ui.layout.SkoLabScreen
 import com.company.skolab.ui.layout.screenSafeArea
 import com.company.skolab.ui.screens.ArticleReaderScreen
 import com.company.skolab.ui.screens.AuthScreen
@@ -91,9 +93,10 @@ import com.company.skolab.ui.screens.ProfileSetupScreen
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.WindowInsets
 import com.company.skolab.ui.screens.AgentScreen
 import com.company.skolab.ui.theme.SkoLabTheme
-import com.company.skolab.ui.theme.EntropiColors
+import com.company.skolab.ui.theme.SkoLabColors
 import com.company.skolab.ui.theme.AccentRed
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
@@ -167,9 +170,8 @@ fun SkoLabMainApp() {
     val appTheme by userPrefs.appTheme.collectAsStateWithLifecycle(initialValue = "SYSTEM")
     androidx.compose.runtime.LaunchedEffect(appTheme) {
         com.company.skolab.ui.theme.darkThemeOverrideState = when (appTheme) {
-            "LIGHT" -> false
             "DARK" -> true
-            else -> null
+            else -> false  // LIGHT or SYSTEM both force the warm-sand light theme
         }
     }
     // Increment session count once per cold start for NPS trigger eligibility.
@@ -273,8 +275,11 @@ fun SkoLabMainApp() {
     }
 
     val mainTabs = listOf("discover", "industry", "agent", "industry_academic")
-    // Routes where the nav dock must not appear (pre-auth / setup flows)
-    val noNavRoutes = setOf("splash", "onboarding", "auth", "profile_setup")
+
+    // Bottom dock is ONLY shown on the 4 main tabs.
+    // All other screens (detail, full-screen, pre-auth) hide it so screens
+    // have full real-estate and padding is unambiguous.
+    val showBottomDock = currentRoute in mainTabs
 
     // Map any sub-screen back to the tab it belongs to, so the active tab stays highlighted
     val activeTab = when {
@@ -330,6 +335,7 @@ fun SkoLabMainApp() {
             Box(modifier = Modifier.weight(1f)) {
                 Scaffold(
                     containerColor = Color.Transparent,
+                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
                     topBar = {
                         // Chrome is static — no independent animation.
                         // The bars snap in at t=0 while content fades over 180ms,
@@ -347,7 +353,7 @@ fun SkoLabMainApp() {
                         }
                     },
                     bottomBar = {
-                        if (currentRoute != null && currentRoute !in noNavRoutes) {
+                        if (showBottomDock) {
                             BottomNavDock(
                                 items = dockItems,
                                 currentRoute = activeTab,
@@ -415,7 +421,7 @@ fun SkoLabMainApp() {
                 ) {
                     if (hasSeenOnboardingState == null) {
                         // Wait for DataStore to load
-                        Box(modifier = Modifier.fillMaxSize().background(EntropiColors.Background))
+                        Box(modifier = Modifier.fillMaxSize().background(SkoLabColors.Background))
                     } else if (hasSeenOnboardingState == true) {
                         // Skip splash animation if onboarding is already completed
                         androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -424,7 +430,7 @@ fun SkoLabMainApp() {
                                 popUpTo("splash") { inclusive = true }
                             }
                         }
-                        Box(modifier = Modifier.fillMaxSize().background(EntropiColors.Background))
+                        Box(modifier = Modifier.fillMaxSize().background(SkoLabColors.Background))
                     } else {
                         SplashScreen(
                             onAnimationFinished = {
@@ -445,12 +451,7 @@ fun SkoLabMainApp() {
                         }
                     }
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .screenSafeArea(includeBottom = true)
-                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
-                    ) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.PRE_AUTH) {
                         OnboardingScreen(
                             onFinish = { consented ->
                                 scope.launch {
@@ -475,12 +476,7 @@ fun SkoLabMainApp() {
                         }
                     }
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .screenSafeArea(includeBottom = true)
-                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
-                    ) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.PRE_AUTH) {
                         AuthScreen(
                             onAuthSuccess = {
                                 navController.navigate("profile_setup") {
@@ -500,12 +496,7 @@ fun SkoLabMainApp() {
                         }
                     }
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .screenSafeArea(includeBottom = true)
-                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
-                    ) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.PRE_AUTH) {
                         ProfileSetupScreen(
                             onSetupComplete = {
                                 navController.navigate("discover") {
@@ -516,12 +507,7 @@ fun SkoLabMainApp() {
                     }
                 }
                 composable(route = "discover") {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(top = scaffoldPadding.calculateTopPadding())
-                            .padding(bottom = ScreenInsets.bottomNavClearance)
-                    ) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.MAIN_TAB) {
                         HomeScreen(
                             onPaperClick = { paperId ->
                                 navController.navigate("paper_detail/${paperId.encodeForRoute()}")
@@ -572,12 +558,7 @@ fun SkoLabMainApp() {
                     )
                 ) { backStackEntry ->
                     val sessionId = backStackEntry.arguments?.getString("sessionId") ?: ""
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .screenSafeArea(includeBottom = true)
-                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
-                    ) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.DETAIL) {
                         SparkSessionScreen(
                             sessionId = sessionId,
                             onNavigateBack = {
@@ -587,12 +568,7 @@ fun SkoLabMainApp() {
                     }
                 }
                 composable(route = "papers") {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(top = scaffoldPadding.calculateTopPadding())
-                            .padding(bottom = ScreenInsets.bottomNavClearance)
-                    ) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.DETAIL) {
                         PapersScreen(
                             onPaperClick = { paperId ->
                                 navController.navigate("paper_detail/${paperId.encodeForRoute()}")
@@ -623,25 +599,12 @@ fun SkoLabMainApp() {
                     )
                 ) { backStackEntry ->
                     val query = backStackEntry.arguments?.getString("query")?.decodeFromRoute() ?: ""
-                    val imeBottom = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current)
-                    val isKeyboardVisible = imeBottom > 0
-                    val bottomPadding = if (isKeyboardVisible) 0.dp else scaffoldPadding.calculateBottomPadding()
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(top = scaffoldPadding.calculateTopPadding())
-                            .padding(bottom = bottomPadding)
-                    ) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.MAIN_TAB) {
                         AgentScreen(initialQuery = query)
                     }
                 }
                 composable(route = "industry") {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(top = scaffoldPadding.calculateTopPadding())
-                            .padding(bottom = ScreenInsets.bottomNavClearance)
-                    ) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.MAIN_TAB) {
                         com.company.skolab.ui.screens.IndustryScreen(
                             onNavigateToAuthor = { authorName ->
                                 navController.navigate("author_detail/${authorName.encodeForRoute()}")
@@ -662,12 +625,7 @@ fun SkoLabMainApp() {
                         }
                     }
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .screenSafeArea(includeBottom = true)
-                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
-                    ) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.DETAIL) {
                         ProfileScreen(
                             onBack = {
                                 navController.popBackStack()
@@ -688,12 +646,7 @@ fun SkoLabMainApp() {
                         }
                     }
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .screenSafeArea(includeBottom = true)
-                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
-                    ) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.DETAIL) {
                         ProWorkspaceScreen(
                             onBack = {
                                 navController.popBackStack()
@@ -702,12 +655,7 @@ fun SkoLabMainApp() {
                     }
                 }
                 composable(route = "industry_academic") {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(top = scaffoldPadding.calculateTopPadding())
-                            .padding(bottom = ScreenInsets.bottomNavClearance)
-                    ) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.MAIN_TAB) {
                         com.company.skolab.ui.screens.IndustryAcademicScreen(
                             onNavigateToAuthor = { authorName ->
                                 navController.navigate("author_detail/${authorName.encodeForRoute()}")
@@ -737,7 +685,7 @@ fun SkoLabMainApp() {
                         }
                     }
                 ) {
-                    Box(modifier = Modifier.fillMaxSize().screenSafeArea(includeBottom = true).padding(bottom = scaffoldPadding.calculateBottomPadding())) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.DETAIL) {
                         com.company.skolab.ui.screens.CreateProjectScreen(
                             onBack = { navController.popBackStack() }
                         )
@@ -763,7 +711,7 @@ fun SkoLabMainApp() {
                     }
                 ) { backStackEntry ->
                     val projectId = backStackEntry.arguments?.getString("projectId")?.decodeFromRoute() ?: ""
-                    Box(modifier = Modifier.fillMaxSize().screenSafeArea(includeBottom = true).padding(bottom = scaffoldPadding.calculateBottomPadding())) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.DETAIL) {
                         com.company.skolab.ui.screens.InviteMemberScreen(
                             projectId = projectId,
                             onBack = { navController.popBackStack() }
@@ -790,7 +738,7 @@ fun SkoLabMainApp() {
                     }
                 ) { backStackEntry ->
                     val projectId = backStackEntry.arguments?.getString("projectId")?.decodeFromRoute() ?: ""
-                    Box(modifier = Modifier.fillMaxSize().screenSafeArea(includeBottom = true).padding(bottom = scaffoldPadding.calculateBottomPadding())) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.DETAIL) {
                         com.company.skolab.ui.screens.CreateTaskScreen(
                             projectId = projectId,
                             onBack = { navController.popBackStack() },
@@ -828,7 +776,7 @@ fun SkoLabMainApp() {
                     }
                 ) { backStackEntry ->
                     val collaboratorName = backStackEntry.arguments?.getString("collaboratorName")?.decodeFromRoute() ?: ""
-                    Box(modifier = Modifier.fillMaxSize().screenSafeArea(includeBottom = true).padding(bottom = scaffoldPadding.calculateBottomPadding())) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.DETAIL) {
                         com.company.skolab.ui.screens.ExternalInviteScreen(
                             collaboratorName = collaboratorName,
                             onBack = { navController.popBackStack() }
@@ -841,12 +789,7 @@ fun SkoLabMainApp() {
                         fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
                     }
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .screenSafeArea(includeBottom = false)
-                            .padding(bottom = ScreenInsets.bottomNavClearance)
-                    ) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.DETAIL) {
                         LibraryScreen(onPaperClick = { paperId -> navController.navigate("paper_detail/${paperId.encodeForRoute()}") })
                     }
                 }
@@ -856,12 +799,7 @@ fun SkoLabMainApp() {
                         fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
                     }
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .screenSafeArea(includeBottom = false)
-                            .padding(bottom = ScreenInsets.bottomNavClearance)
-                    ) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.DETAIL) {
                         MetricsScreen()
                     }
                 }
@@ -876,12 +814,7 @@ fun SkoLabMainApp() {
                     }
                 ) { backStackEntry ->
                     val paperId = backStackEntry.arguments?.getString("paperId")?.decodeFromRoute() ?: ""
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .screenSafeArea(includeBottom = true)
-                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
-                    ) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.DETAIL) {
                         PaperDetailScreen(
                             paperId = paperId,
                             onBack = { navController.popBackStack() },
@@ -900,12 +833,7 @@ fun SkoLabMainApp() {
                     }
                 ) { backStackEntry ->
                     val authorName = backStackEntry.arguments?.getString("authorName")?.decodeFromRoute() ?: ""
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .screenSafeArea(includeBottom = false)
-                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
-                    ) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.DETAIL) {
                         AuthorDetailScreen(
                             authorName = authorName,
                             onBack = { navController.popBackStack() },
@@ -922,12 +850,7 @@ fun SkoLabMainApp() {
                     val title = backStackEntry.arguments?.getString("title")?.decodeFromRoute() ?: ""
                     val urlArg = backStackEntry.arguments?.getString("url")?.decodeFromRoute() ?: ""
                     val url = if (urlArg.startsWith("http")) urlArg else "https://doi.org/$urlArg"
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .screenSafeArea(includeBottom = true)
-                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
-                    ) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.DETAIL) {
                         ArticleReaderScreen(
                             url = url,
                             title = title,
@@ -947,12 +870,7 @@ fun SkoLabMainApp() {
                 ) { backStackEntry ->
                     val peerName = backStackEntry.arguments?.getString("peerName")?.decodeFromRoute() ?: ""
                     val peerId = backStackEntry.arguments?.getString("peerId")?.decodeFromRoute() ?: ""
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .screenSafeArea(includeBottom = true)
-                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
-                    ) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.FULL_SCREEN) {
                         ChatRoomScreen(
                             peerName = peerName,
                             peerId = peerId,
@@ -966,18 +884,16 @@ fun SkoLabMainApp() {
                         fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
                     }
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .screenSafeArea(includeBottom = true)
-                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
-                    ) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.DETAIL) {
                         ChatListScreen(
                             onChatClick = { peerName, peerId ->
                                 navController.navigate("chat/${peerName.encodeForRoute()}/${peerId.encodeForRoute()}")
                             },
                             onCoLabClick = { projectName ->
                                 navController.navigate("colab_workspace/${projectName.encodeForRoute()}")
+                            },
+                            onNavigateToCreateProject = {
+                                navController.navigate("create_project")
                             },
                             onBack = { navController.popBackStack() }
                         )
@@ -993,8 +909,6 @@ fun SkoLabMainApp() {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .screenSafeArea(includeBottom = true)
-                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
                     ) {
                         CoLabWorkspaceScreen(
                             projectName = projectName,
@@ -1008,12 +922,7 @@ fun SkoLabMainApp() {
                         fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
                     }
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .screenSafeArea(includeBottom = true)
-                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
-                    ) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.DETAIL) {
                         LogicEngineScreen(
                             onBack = { navController.popBackStack() }
                         )
@@ -1025,12 +934,7 @@ fun SkoLabMainApp() {
                         fadeIn(animationSpec = tween(450, easing = EaseOutCubic))
                     }
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .screenSafeArea(includeBottom = true)
-                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
-                    ) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.DETAIL) {
                         DailyDiscoveryScreen(
                             onBack = { navController.popBackStack() },
                             onPaperSaved = { paperId ->
@@ -1064,7 +968,7 @@ fun SkoLabMainApp() {
                                 .fillMaxSize()
                                 .background(com.company.skolab.ui.theme.BgPrimary)
                                 .padding(top = scaffoldPadding.calculateTopPadding())
-                                .padding(bottom = if (currentRoute in mainTabs) ScreenInsets.bottomNavClearance else 0.dp)
+                                .padding(bottom = scaffoldPadding.calculateBottomPadding())
                         ) {
                             SearchScreen(
                                 onPaperClick = { paperId ->

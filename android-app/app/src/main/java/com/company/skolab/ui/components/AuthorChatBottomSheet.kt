@@ -246,12 +246,22 @@ fun AuthorChatBottomSheet(
             }
 
             // 4. Bottom WhatsApp-Style Input Bar
+            val isMessageEmpty = textInput.trim().isEmpty()
+            val sendButtonBg by animateColorAsState(
+                targetValue = if (isMessageEmpty || isAuthorTyping) BorderMedium else BrandWhatsAppTeal,
+                label = "sendBg"
+            )
+            val sendButtonTint by animateColorAsState(
+                targetValue = if (isMessageEmpty || isAuthorTyping) TextMuted else Color.White,
+                label = "sendTint"
+            )
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(BgCard)
                     .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // Input TextField Card
@@ -264,7 +274,8 @@ fun AuthorChatBottomSheet(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp),
+                            .heightIn(min = 40.dp, max = 120.dp)
+                            .padding(horizontal = 14.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
@@ -274,29 +285,61 @@ fun AuthorChatBottomSheet(
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        BasicTextField(
-                            value = textInput,
-                            onValueChange = { textInput = it },
-                            textStyle = Typography.bodyMedium.copy(color = TextPrimary),
-                            cursorBrush = SolidColor(TextPrimary),
+                        Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .padding(vertical = 8.dp),
-                            decorationBox = { innerTextField ->
-                                Box(contentAlignment = Alignment.CenterStart) {
-                                    if (textInput.isEmpty()) {
-                                        Text(
-                                            text = "Ask about this paper...",
-                                            color = TextMuted,
-                                            fontSize = 14.sp
+                                .padding(vertical = 6.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            BasicTextField(
+                                value = textInput,
+                                onValueChange = { textInput = it },
+                                textStyle = Typography.bodyMedium.copy(color = TextPrimary),
+                                cursorBrush = SolidColor(TextPrimary),
+                                singleLine = false,
+                                maxLines = 5,
+                                modifier = Modifier.fillMaxWidth(),
+                                decorationBox = { innerTextField ->
+                                    Box(contentAlignment = Alignment.CenterStart) {
+                                        if (textInput.isEmpty()) {
+                                            Text(
+                                                text = "Ask about this paper...",
+                                                color = TextMuted,
+                                                fontSize = 14.sp
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                },
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                keyboardActions = KeyboardActions(onSend = {
+                                    if (textInput.isNotBlank() && !isAuthorTyping) {
+                                        sendMessage(
+                                            text = textInput,
+                                            authorId = authorId,
+                                            paperTitle = paperTitle,
+                                            apiService = apiService,
+                                            onSent = { textInput = "" },
+                                            onAddMessage = { messages.add(it) },
+                                            onUpdateTyping = { isAuthorTyping = it },
+                                            currentHistory = messages.toList()
                                         )
                                     }
-                                    innerTextField()
-                                }
-                            },
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                            keyboardActions = KeyboardActions(onSend = {
-                                if (textInput.isNotBlank() && !isAuthorTyping) {
+                                })
+                            )
+                        }
+                    }
+                }
+
+                // Send Circle Button
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .background(sendButtonBg)
+                        .then(
+                            if (!isMessageEmpty && !isAuthorTyping) {
+                                Modifier.clickable {
                                     sendMessage(
                                         text = textInput,
                                         authorId = authorId,
@@ -308,35 +351,16 @@ fun AuthorChatBottomSheet(
                                         currentHistory = messages.toList()
                                     )
                                 }
-                            })
-                        )
-                    }
-                }
-
-                // Send Circle Button
-                Box(
-                    modifier = Modifier
-                        .size(46.dp)
-                        .clip(CircleShape)
-                        .background(if (textInput.isBlank() || isAuthorTyping) BorderMedium else BrandWhatsAppTeal)
-                        .clickable(enabled = textInput.isNotBlank() && !isAuthorTyping) {
-                            sendMessage(
-                                text = textInput,
-                                authorId = authorId,
-                                paperTitle = paperTitle,
-                                apiService = apiService,
-                                onSent = { textInput = "" },
-                                onAddMessage = { messages.add(it) },
-                                onUpdateTyping = { isAuthorTyping = it },
-                                currentHistory = messages.toList()
-                            )
-                        },
+                            } else {
+                                Modifier
+                            }
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Send,
                         contentDescription = "Send",
-                        tint = Color.White,
+                        tint = sendButtonTint,
                         modifier = Modifier.size(20.dp)
                     )
                 }

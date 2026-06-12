@@ -52,6 +52,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.company.skolab.di.AppDependencies
 import com.company.skolab.network.OrbitMetrics
 import com.company.skolab.ui.components.MarkdownText
+import com.company.skolab.viewmodel.HomeViewModel
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -68,7 +69,8 @@ fun HomeScreen(
     onNavigateToInviteMember: (String) -> Unit,
     onNavigateToCreateTask: (String) -> Unit,
     onNavigateToExternalInvite: (String) -> Unit,
-    sparkViewModel: SparkViewModel = viewModel()
+    sparkViewModel: SparkViewModel = viewModel(),
+    homeViewModel: HomeViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val authManager = com.company.skolab.di.AppDependencies.authManager
@@ -116,55 +118,26 @@ fun HomeScreen(
     val currentProject = projects.getOrNull(selectedProjectIndex)
     var showProjectDropdown by remember { mutableStateOf(false) }
 
-    var suggestedCollaborators by remember { mutableStateOf<List<com.company.skolab.network.AuthorSuggestion>>(emptyList()) }
-    var similarResearchers by remember { mutableStateOf<List<com.company.skolab.network.AuthorSuggestion>>(emptyList()) }
-    var isLoadingSuggestions by remember { mutableStateOf(false) }
+    // Network, orbit, and suggestions data — all cached in ViewModel (survives navigation)
+    val networkUiState by homeViewModel.networkState.collectAsStateWithLifecycle()
+    val networkCollaborators = networkUiState.networkCollaborators
+    val orbitMetrics = networkUiState.orbitMetrics
+    val isLoadingOrbitMetrics = networkUiState.isLoadingNetwork
+    val isLoadingSuggestions = networkUiState.isLoadingSuggestions
+    val suggestedCollaborators = networkUiState.suggestedCollaborators.take(4)
 
-    // Real network collaborators — user's actual co-authors from their papers
-    var networkCollaborators by remember { mutableStateOf<List<com.company.skolab.network.NetworkCollaborator>>(emptyList()) }
-
-    // Real orbit metrics from OpenAlex
-    var orbitMetrics by remember { mutableStateOf<OrbitMetrics?>(null) }
-    var isLoadingOrbitMetrics by remember { mutableStateOf(false) }
-    var userOpenAlexId by remember { mutableStateOf("") }
-
-    val apiService = com.company.skolab.di.AppDependencies.apiService
-
-    // Resolve user's OpenAlex ID + orbit metrics
+    // Trigger ViewModel loads — these are no-ops if data is already cached
     LaunchedEffect(currentUserName, userFocus) {
         if (currentUserName.isNotBlank() && currentUserName != "SkoLab User") {
-            isLoadingOrbitMetrics = true
-            try {
-                val profile = apiService.searchAuthor(currentUserName, focus = userFocus.ifBlank { null })
-                val authorId = profile?.id ?: ""
-                userOpenAlexId = authorId
-                if (authorId.isNotBlank()) {
-                    orbitMetrics = apiService.getOrbitMetrics(authorId)
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("HomeScreen", "Failed to fetch orbit metrics", e)
-            } finally {
-                isLoadingOrbitMetrics = false
-            }
+            homeViewModel.loadNetworkData(currentUserName, userFocus, excludeName = currentUserName)
         }
     }
 
-    // Fetch real co-authors once we have the user's OpenAlex ID
-    LaunchedEffect(userOpenAlexId) {
-        if (userOpenAlexId.isNotBlank()) {
-            try {
-                val collabs = apiService.getNetworkCollaborators(
-                    authorId = userOpenAlexId,
-                    limit = 6,
-                    excludeName = currentUserName
-                )
-                networkCollaborators = collabs
-            } catch (e: Exception) {
-                android.util.Log.e("HomeScreen", "Failed to fetch network collaborators", e)
-            }
-        }
+    LaunchedEffect(userFocus) {
+        homeViewModel.loadSuggestions(userFocus)
     }
 
+    val apiService = com.company.skolab.di.AppDependencies.apiService
     var userMemoryProfile by remember { mutableStateOf<com.company.skolab.network.UserMemoryProfileResponse?>(null) }
     LaunchedEffect(currentUserId) {
         if (currentUserId.isNotEmpty()) {
@@ -175,26 +148,6 @@ fun HomeScreen(
                 }
             } catch (e: Exception) {
                 android.util.Log.e("HomeScreen", "Failed to fetch user memory profile", e)
-            }
-        }
-    }
-
-    LaunchedEffect(userFocus) {
-        if (userFocus.isNotEmpty() && userFocus != "Researcher" && userFocus != "General Research") {
-            isLoadingSuggestions = true
-            try {
-                val list = apiService.getSimilarAuthors(userFocus, limit = 8)
-                if (list.isNotEmpty()) {
-                    suggestedCollaborators = list.take(4)
-                    similarResearchers = list.drop(4).take(4)
-                } else {
-                    suggestedCollaborators = emptyList()
-                    similarResearchers = emptyList()
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("HomeScreen", "Failed to fetch similar authors", e)
-            } finally {
-                isLoadingSuggestions = false
             }
         }
     }
@@ -323,12 +276,14 @@ fun HomeScreen(
 
     Scaffold(
         containerColor = BgPrimary,
-        topBar = { 
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0.dp),
+        topBar = {
             Column(modifier = Modifier.background(BgPrimary)) {
                 HomeTopWidget(
                     recentPapers = userMemoryProfile?.recently_read_papers.orEmpty().take(5),
                     skolabConnections = membersPresence.values.filter { it.uid != currentUserId }.take(4),
                     networkCollaborators = networkCollaborators.take(5),
+                    isLoadingNetwork = isLoadingOrbitMetrics,
                     onNavigateToChat = onNavigateToChat,
                     onInviteClick = onNavigateToExternalInvite,
                     onAuthorClick = onAuthorClick
@@ -338,10 +293,10 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 6.dp)
-                        .background(Color.White.copy(alpha = 0.03f), RoundedCornerShape(12.dp))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
+                        .background(SURFACE_SUBTLE, RoundedCornerShape(12.dp))
+                        .border(0.5.dp, BORDER, RoundedCornerShape(12.dp))
                         .padding(4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     val tabOptions = listOf(
                         "spark" to "Spark Live ⚡",
@@ -350,26 +305,30 @@ fun HomeScreen(
                     )
                     tabOptions.forEach { (route, label) ->
                         val isSelected = activeTab == route
-                        val backgroundGlow = if (isSelected) {
-                            Brush.linearGradient(listOf(PRIMARY, AccentTeal))
-                        } else {
-                            Brush.linearGradient(listOf(Color.Transparent, Color.Transparent))
-                        }
-                        
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(backgroundGlow)
+                                .clip(RoundedCornerShape(9.dp))
+                                .background(
+                                    if (isSelected)
+                                        Brush.linearGradient(listOf(PRIMARY, AccentTeal))
+                                    else
+                                        Brush.linearGradient(listOf(Color.Transparent, Color.Transparent))
+                                )
+                                .then(
+                                    if (!isSelected) Modifier.border(0.5.dp, BORDER, RoundedCornerShape(9.dp))
+                                    else Modifier
+                                )
                                 .clickable { activeTab = route }
-                                .padding(vertical = 8.dp),
+                                .padding(vertical = 9.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = label,
                                 color = if (isSelected) Color.White else TEXT_SECONDARY,
                                 fontSize = 11.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                maxLines = 1
                             )
                         }
                     }
@@ -381,7 +340,8 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp)
+                .padding(top = 4.dp),
             contentAlignment = Alignment.Center
         ) {
             when (activeTab) {
@@ -516,7 +476,7 @@ fun HomeScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth(),
-                            contentPadding = PaddingValues(vertical = 12.dp),
+                            contentPadding = PaddingValues(top = 12.dp, bottom = 80.dp),
                             verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
                             val proj = currentProject
@@ -526,7 +486,7 @@ fun HomeScreen(
                                         color = SURFACE,
                                         shape = RoundedCornerShape(16.dp),
                                         border = BorderStroke(1.dp, BORDER),
-                                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Column(
                                             modifier = Modifier.padding(20.dp),
@@ -886,7 +846,7 @@ fun HomeScreen(
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
-                        contentPadding = PaddingValues(bottom = 16.dp)
+                        contentPadding = PaddingValues(bottom = 80.dp)
                     ) {
                         // HERO METRICS CARD - Real data from OpenAlex
                         item {
@@ -1224,12 +1184,15 @@ fun HomeTopWidget(
     recentPapers: List<String>,
     skolabConnections: List<com.company.skolab.model.SkoLabUser>,
     networkCollaborators: List<com.company.skolab.network.NetworkCollaborator>,
+    isLoadingNetwork: Boolean = false,
     onNavigateToChat: (String, String) -> Unit,
     onInviteClick: (String) -> Unit,
     onAuthorClick: (String) -> Unit = {}
 ) {
-    val hasConnections = skolabConnections.isNotEmpty() || networkCollaborators.isNotEmpty()
-    if (recentPapers.isEmpty() && !hasConnections) return
+    val hasActiveConnections = skolabConnections.isNotEmpty()
+    val hasInviteCandidates = networkCollaborators.isNotEmpty()
+    val showNetwork = hasActiveConnections || hasInviteCandidates || isLoadingNetwork
+    if (recentPapers.isEmpty() && !showNetwork) return
 
     Column(
         modifier = Modifier
@@ -1274,67 +1237,104 @@ fun HomeTopWidget(
             }
         }
 
-        // ── Network connections row ──────────────────────────────────────────
-        if (hasConnections) {
-            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text(
-                    "Your Network",
-                    color = TEXT_SECONDARY,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.5.sp
-                )
+        // ── Network section ──────────────────────────────────────────────────
+        if (showNetwork) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                // Section header
                 Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // SkoLab project collaborators — show "Message" (filled)
-                    skolabConnections.forEach { user ->
-                        val initials = user.name.split(" ")
-                            .filter { it.isNotBlank() }
-                            .mapNotNull { token -> token.filter { c -> c.isLetter() }.firstOrNull()?.uppercaseChar() }
-                            .take(2).joinToString("")
-                        val subtitle = user.researchFocus.ifBlank { "SkoLab Researcher" }
-                        NetworkPersonCard(
-                            initials = initials,
-                            name = user.name,
-                            subtitle = subtitle,
-                            isOnline = user.isOnline,
-                            actionLabel = "Message",
-                            actionFilled = true,
-                            onClick = { onNavigateToChat(user.uid, user.name) },
-                            onCardClick = { onNavigateToChat(user.uid, user.name) }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            if (hasActiveConnections) "Your Network" else "Improve Your Network",
+                            color = TEXT_PRIMARY,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
                         )
-                    }
-                    // Real co-authors from user's papers — show "+ Invite" to connect outside SkoLab
-                    networkCollaborators.forEach { collab ->
-                        val initials = collab.name.split(" ")
-                            .filter { it.isNotBlank() }
-                            .mapNotNull { token -> token.filter { c -> c.isLetter() }.firstOrNull()?.uppercaseChar() }
-                            .take(2).joinToString("")
-                        val papersLabel = collab.papers_collaborated?.let { n ->
-                            if (n > 0) "$n paper${if (n > 1) "s" else ""}" else null
+                        if (hasActiveConnections) {
+                            val onlineCount = skolabConnections.count { it.isOnline }
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(if (onlineCount > 0) Color(0xFF3DD68C).copy(alpha = 0.15f) else SURFACE_SUBTLE)
+                                    .padding(horizontal = 7.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = if (onlineCount > 0) "$onlineCount online" else "all offline",
+                                    color = if (onlineCount > 0) Color(0xFF3DD68C) else TEXT_MUTED,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(AccentAmber.copy(alpha = 0.12f))
+                                    .padding(horizontal = 7.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "0 connections",
+                                    color = AccentAmber,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
-                        val subtitle = buildString {
-                            val inst = collab.institution.trim()
-                            if (inst.isNotBlank() && inst != "Independent Researcher") {
-                                append(if (inst.length > 18) inst.take(16) + "…" else inst)
-                            }
-                            if (papersLabel != null) {
-                                if (isNotEmpty()) append(" · ")
-                                append(papersLabel)
-                            }
-                        }.ifBlank { collab.field.ifBlank { "Co-author" } }
-                        NetworkPersonCard(
-                            initials = initials,
-                            name = collab.name,
-                            subtitle = subtitle,
-                            isOnline = false,
-                            actionLabel = "+ Invite",
-                            actionFilled = false,
-                            onClick = { onInviteClick(collab.name) },
-                            onCardClick = { onAuthorClick("${collab.name}|${collab.id}") }
-                        )
+                    }
+                }
+
+                if (!hasActiveConnections) {
+                    Text(
+                        text = "Invite your co-authors to collaborate on SkoLab",
+                        color = TEXT_MUTED,
+                        fontSize = 10.sp
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .height(IntrinsicSize.Max)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (isLoadingNetwork && !hasActiveConnections && !hasInviteCandidates) {
+                        repeat(3) { NetworkCardSkeleton() }
+                    } else if (hasActiveConnections) {
+                        skolabConnections.forEach { user ->
+                            val initials = user.name.split(" ")
+                                .filter { it.isNotBlank() }
+                                .mapNotNull { t -> t.filter { c -> c.isLetter() }.firstOrNull()?.uppercaseChar() }
+                                .take(2).joinToString("")
+                            ConnectedPersonCard(
+                                initials = initials,
+                                name = user.name,
+                                researchFocus = user.researchFocus.ifBlank { "SkoLab Researcher" },
+                                isOnline = user.isOnline,
+                                onClick = { onNavigateToChat(user.uid, user.name) }
+                            )
+                        }
+                    } else {
+                        networkCollaborators.forEach { collab ->
+                            val initials = collab.name.split(" ")
+                                .filter { it.isNotBlank() }
+                                .mapNotNull { t -> t.filter { c -> c.isLetter() }.firstOrNull()?.uppercaseChar() }
+                                .take(2).joinToString("")
+                            InvitePersonCard(
+                                initials = initials,
+                                name = collab.name,
+                                institution = collab.institution.ifBlank { "Independent Researcher" },
+                                field = collab.field.ifBlank { "Research" },
+                                papersCollaborated = collab.papers_collaborated ?: 0,
+                                onInvite = { onInviteClick(collab.name) },
+                                onCardClick = { onAuthorClick("${collab.name}|${collab.id}") }
+                            )
+                        }
                     }
                 }
             }
@@ -1342,6 +1342,273 @@ fun HomeTopWidget(
     }
 }
 
+// ── Skeleton card shown while network data loads ──────────────────────────────
+@Composable
+private fun NetworkCardSkeleton() {
+    val infiniteTransition = rememberInfiniteTransition(label = "skeletonPulse")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "skeletonAlpha"
+    )
+    val shimmerColor = SURFACE_SUBTLE.copy(alpha = alpha)
+
+    Surface(
+        modifier = Modifier.width(200.dp).height(160.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = SURFACE,
+        border = BorderStroke(1.dp, BORDER)
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(modifier = Modifier.fillMaxWidth().height(4.dp).background(shimmerColor, RoundedCornerShape(2.dp)))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(46.dp).background(shimmerColor, CircleShape))
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Box(modifier = Modifier.width(90.dp).height(12.dp).background(shimmerColor, RoundedCornerShape(4.dp)))
+                    Box(modifier = Modifier.width(60.dp).height(9.dp).background(shimmerColor, RoundedCornerShape(4.dp)))
+                }
+            }
+            Box(modifier = Modifier.fillMaxWidth().height(9.dp).background(shimmerColor, RoundedCornerShape(4.dp)))
+            Box(modifier = Modifier.width(120.dp).height(9.dp).background(shimmerColor, RoundedCornerShape(4.dp)))
+            Spacer(modifier = Modifier.weight(1f))
+            Box(modifier = Modifier.fillMaxWidth().height(32.dp).background(shimmerColor, RoundedCornerShape(10.dp)))
+        }
+    }
+}
+
+// ── Card for already-connected SkoLab users ──────────────────────────────────
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ConnectedPersonCard(
+    initials: String,
+    name: String,
+    researchFocus: String,
+    isOnline: Boolean,
+    onClick: () -> Unit
+) {
+    val accentColor = PRIMARY
+
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.width(200.dp).fillMaxHeight(),
+        shape = RoundedCornerShape(16.dp),
+        color = SURFACE,
+        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.22f)),
+        shadowElevation = 4.dp
+    ) {
+        Column(modifier = Modifier.fillMaxHeight()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .background(Brush.horizontalGradient(listOf(accentColor, accentColor.copy(alpha = 0.35f))))
+            )
+            Column(
+                modifier = Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 11.dp),
+                verticalArrangement = Arrangement.spacedBy(9.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(contentAlignment = Alignment.BottomEnd) {
+                        Box(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .background(accentColor.copy(alpha = 0.18f), CircleShape)
+                                .border(2.dp, accentColor.copy(alpha = 0.45f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(initials.ifEmpty { "?" }, color = accentColor, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(12.dp)
+                                .background(if (isOnline) Color(0xFF3DD68C) else Color(0xFF94A3B8), CircleShape)
+                                .border(2.dp, SURFACE, CircleShape)
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            name,
+                            color = TEXT_PRIMARY,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            lineHeight = 16.sp,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .background(
+                                        if (isOnline) Color(0xFF3DD68C) else Color(0xFF94A3B8),
+                                        CircleShape
+                                    )
+                            )
+                            Text(
+                                if (isOnline) "Online" else "Offline",
+                                color = if (isOnline) Color(0xFF3DD68C) else TEXT_MUTED,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+                Text(
+                    researchFocus,
+                    color = TEXT_SECONDARY,
+                    fontSize = 11.sp,
+                    maxLines = 2,
+                    lineHeight = 14.sp,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Brush.linearGradient(listOf(accentColor, accentColor.copy(alpha = 0.75f))))
+                        .clickable(onClick = onClick)
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.Send, null, tint = Color.White, modifier = Modifier.size(13.dp))
+                        Text("Message", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Card for co-authors / invite candidates ───────────────────────────────────
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun InvitePersonCard(
+    initials: String,
+    name: String,
+    institution: String,
+    field: String,
+    papersCollaborated: Int,
+    onInvite: () -> Unit,
+    onCardClick: () -> Unit
+) {
+    val accentColor = AccentTeal
+
+    Surface(
+        onClick = onCardClick,
+        modifier = Modifier.width(220.dp).fillMaxHeight(),
+        shape = RoundedCornerShape(16.dp),
+        color = SURFACE,
+        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.2f)),
+        shadowElevation = 4.dp
+    ) {
+        Column(modifier = Modifier.fillMaxHeight()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .background(Brush.horizontalGradient(listOf(accentColor, accentColor.copy(alpha = 0.35f))))
+            )
+            Column(
+                modifier = Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 11.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .background(accentColor.copy(alpha = 0.18f), CircleShape)
+                            .border(2.dp, accentColor.copy(alpha = 0.45f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(initials.ifEmpty { "?" }, color = accentColor, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            name,
+                            color = TEXT_PRIMARY,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 3,
+                            lineHeight = 16.sp,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            institution,
+                            color = TEXT_SECONDARY,
+                            fontSize = 10.sp,
+                            maxLines = 3,
+                            lineHeight = 13.sp,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                // Field tag
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(accentColor.copy(alpha = 0.10f))
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Text(field, color = accentColor, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, lineHeight = 13.sp, overflow = TextOverflow.Ellipsis)
+                }
+                // Metrics row
+                if (papersCollaborated > 0) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(Icons.Default.Description, null, tint = TEXT_MUTED, modifier = Modifier.size(11.dp))
+                        Text(
+                            "$papersCollaborated paper${if (papersCollaborated > 1) "s" else ""} together",
+                            color = TEXT_MUTED,
+                            fontSize = 10.sp
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                // Invite button
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color.Transparent)
+                        .border(1.5.dp, accentColor, RoundedCornerShape(10.dp))
+                        .clickable(onClick = onInvite)
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(Icons.Default.PersonAdd, null, tint = accentColor, modifier = Modifier.size(13.dp))
+                        Text("Invite to SkoLab", color = accentColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── LEGACY stub kept for any remaining call-sites (currently unused) ──────────
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NetworkPersonCard(
@@ -1354,105 +1621,32 @@ private fun NetworkPersonCard(
     onClick: () -> Unit,
     onCardClick: () -> Unit = onClick
 ) {
-    val avatarPalette = listOf(
-        Color(0xFF0D9488), Color(0xFF4F46E5), Color(0xFF059669),
-        Color(0xFFD97706), Color(0xFF7C3AED), Color(0xFFEA580C),
-        Color(0xFF0891B2), Color(0xFFDB2777)
-    )
-    val accentColor = avatarPalette[kotlin.math.abs(name.hashCode()) % avatarPalette.size]
-
+    val accentColor = PRIMARY
     Surface(
         onClick = onCardClick,
-        modifier = Modifier.width(148.dp),
-        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.width(200.dp),
+        shape = RoundedCornerShape(16.dp),
         color = SURFACE,
         border = BorderStroke(1.dp, accentColor.copy(alpha = 0.22f)),
         shadowElevation = 3.dp
     ) {
         Column {
-            // Accent top strip
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(3.dp)
-                    .background(
-                        Brush.horizontalGradient(listOf(accentColor, accentColor.copy(alpha = 0.4f)))
-                    )
-            )
-            Column(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // Avatar + name/subtitle
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+            Box(modifier = Modifier.fillMaxWidth().height(4.dp).background(Brush.horizontalGradient(listOf(accentColor, accentColor.copy(alpha = 0.4f)))))
+            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(contentAlignment = Alignment.BottomEnd) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .background(accentColor.copy(alpha = 0.18f), CircleShape)
-                                .border(1.5.dp, accentColor.copy(alpha = 0.45f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                initials.ifEmpty { "?" },
-                                color = accentColor,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                        Box(modifier = Modifier.size(44.dp).background(accentColor.copy(alpha = 0.18f), CircleShape).border(2.dp, accentColor.copy(alpha = 0.45f), CircleShape), contentAlignment = Alignment.Center) {
+                            Text(initials.ifEmpty { "?" }, color = accentColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
-                        if (isOnline) {
-                            Box(
-                                modifier = Modifier
-                                    .size(10.dp)
-                                    .background(Color(0xFF3DD68C), CircleShape)
-                                    .border(1.5.dp, SURFACE, CircleShape)
-                            )
-                        }
+                        if (isOnline) Box(modifier = Modifier.size(11.dp).background(Color(0xFF3DD68C), CircleShape).border(2.dp, SURFACE, CircleShape))
                     }
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            name,
-                            color = TEXT_PRIMARY,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 2,
-                            lineHeight = 15.sp,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            subtitle,
-                            color = TEXT_SECONDARY,
-                            fontSize = 10.sp,
-                            maxLines = 2,
-                            lineHeight = 13.sp,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Text(name, color = TEXT_PRIMARY, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 2, lineHeight = 16.sp, overflow = TextOverflow.Ellipsis)
+                        Text(subtitle, color = TEXT_SECONDARY, fontSize = 10.sp, maxLines = 2, lineHeight = 13.sp, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                // Action button
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (actionFilled) accentColor else Color.White)
-                        .border(
-                            width = 1.dp,
-                            color = if (actionFilled) Color.Transparent else accentColor,
-                            shape = RoundedCornerShape(8.dp)
-                        )
-                        .clickable(onClick = onClick)
-                        .padding(vertical = 6.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        actionLabel,
-                        color = if (actionFilled) Color.White else accentColor,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (actionFilled) accentColor else Color.Transparent).border(1.dp, accentColor, RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(vertical = 7.dp), contentAlignment = Alignment.Center) {
+                    Text(actionLabel, color = if (actionFilled) Color.White else accentColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -1544,16 +1738,15 @@ fun SparkConsole(
         modifier = Modifier
             .fillMaxSize()
             .clip(RoundedCornerShape(28.dp))
-            .background(Color(0xFF130D0A)) // Warm coffee-shop dark espresso
+            .background(SURFACE)
             .border(BorderStroke(1.dp, BORDER), RoundedCornerShape(28.dp))
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween
     ) {
         // ── Radar Scan container box (Pulsing rings + Floating Avatars + Bolt button) ──
         Box(
             modifier = Modifier
-                .weight(1.4f)
+                .weight(1f)
                 .fillMaxWidth()
                 .clipToBounds(),
             contentAlignment = Alignment.Center
@@ -1619,14 +1812,14 @@ fun SparkConsole(
             }
         }
 
-        // ── Controls & Information Area (Texts, CTA button, Symmetrical footer row) ──
+        // ── Controls & Information Area (Texts, CTA button, Token footer) ──
         Column(
             modifier = Modifier
-                .weight(1f)
                 .fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
         ) {
+            Spacer(Modifier.height(8.dp))
+
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -1649,52 +1842,67 @@ fun SparkConsole(
                 )
             }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp)
-            ) {
-                if (uiState.isBroadcasting) {
-                    Button(
-                        onClick = onCancelBroadcast,
-                        colors = ButtonDefaults.buttonColors(containerColor = SURFACE_SUBTLE, contentColor = TEXT_PRIMARY),
-                        shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, BORDER),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
+            Spacer(Modifier.height(12.dp))
+
+            if (uiState.isBroadcasting) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(SURFACE_SUBTLE)
+                        .border(1.dp, BORDER, RoundedCornerShape(16.dp))
+                        .clickable { onCancelBroadcast() }
+                        .padding(vertical = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Cancel Call ❌", color = TEXT_PRIMARY, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Brush.linearGradient(listOf(PRIMARY, AccentTeal)))
+                        .clickable { launchMicOrRequest() }
+                        .padding(vertical = 15.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text("Cancel Call ❌", fontWeight = FontWeight.Bold)
-                    }
-                } else {
-                    Button(
-                        onClick = { launchMicOrRequest() },
-                        colors = ButtonDefaults.buttonColors(containerColor = PRIMARY, contentColor = TEXT_ON_PRIMARY),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(Icons.Default.WifiTethering, null, tint = Color.White, modifier = Modifier.size(18.dp))
-                            Text("Ask an Expert", fontWeight = FontWeight.Black, fontSize = 14.sp)
-                        }
+                        Icon(Icons.Default.WifiTethering, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        Text(
+                            "Ask an Expert",
+                            color = Color.White,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 15.sp,
+                            letterSpacing = 0.3.sp
+                        )
                     }
                 }
             }
 
-            Text(
-                text = "🪙 ${uiState.walletTokens} Tokens",
-                color = TEXT_MUTED,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Medium,
+            Spacer(Modifier.height(8.dp))
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(top = 4.dp)
-            )
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(SURFACE_SUBTLE)
+                    .padding(horizontal = 12.dp, vertical = 5.dp)
+            ) {
+                Text("🪙", fontSize = 12.sp)
+                Text(
+                    text = "${uiState.walletTokens} Tokens",
+                    color = TEXT_SECONDARY,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            Spacer(Modifier.height(6.dp))
         }
     }
 

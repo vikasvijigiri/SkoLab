@@ -84,7 +84,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
-// EntropiColors is defined in Color.kt — imported via com.company.skolab.ui.theme.*
+// SkoLabColors is defined in Color.kt — imported via com.company.skolab.ui.theme.*
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -191,7 +191,7 @@ fun FeedScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(EntropiColors.Background)
+            .background(SkoLabColors.Background)
     ) {
         var isRefreshing by remember { mutableStateOf(false) }
 
@@ -357,22 +357,22 @@ fun FeedScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(30.dp)
-                                        .background(EntropiColors.Blue1.copy(alpha = 0.12f), RoundedCornerShape(8.dp)),
+                                        .background(SkoLabColors.Blue1.copy(alpha = 0.12f), RoundedCornerShape(8.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(Icons.Default.People, contentDescription = null, tint = EntropiColors.Blue1, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Default.People, contentDescription = null, tint = SkoLabColors.Blue1, modifier = Modifier.size(16.dp))
                                 }
                                 Spacer(Modifier.width(10.dp))
                                 Column {
                                     Text(
                                         "People You May Know",
-                                        color = EntropiColors.Text,
+                                        color = SkoLabColors.Text,
                                         fontWeight = FontWeight.ExtraBold,
                                         fontSize = 15.sp
                                     )
                                     Text(
                                         "Based on your research network",
-                                        color = EntropiColors.Text3,
+                                        color = SkoLabColors.Text3,
                                         fontSize = 10.sp
                                     )
                                 }
@@ -381,13 +381,13 @@ fun FeedScreen(
                             Surface(
                                 onClick = onNavigateToCollabs,
                                 shape = RoundedCornerShape(8.dp),
-                                color = EntropiColors.Blue1.copy(alpha = 0.10f),
-                                border = BorderStroke(0.5.dp, EntropiColors.Blue1.copy(alpha = 0.25f))
+                                color = SkoLabColors.Blue1.copy(alpha = 0.10f),
+                                border = BorderStroke(0.5.dp, SkoLabColors.Blue1.copy(alpha = 0.25f))
                             ) {
                                 Text(
                                     "Orbit →",
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                    color = EntropiColors.Blue1,
+                                    color = SkoLabColors.Blue1,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -406,13 +406,13 @@ fun FeedScreen(
                                 Surface(
                                     onClick = { selectedCountryFilter = country },
                                     shape = RoundedCornerShape(20.dp),
-                                    color = if (isSelected) EntropiColors.Blue1 else EntropiColors.Card2,
-                                    border = BorderStroke(1.dp, if (isSelected) Color.Transparent else EntropiColors.Border)
+                                    color = if (isSelected) SkoLabColors.Blue1 else SkoLabColors.Card2,
+                                    border = BorderStroke(1.dp, if (isSelected) Color.Transparent else SkoLabColors.Border)
                                 ) {
                                     Text(
                                         text = country,
                                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                                        color = if (isSelected) Color.White else EntropiColors.Text2,
+                                        color = if (isSelected) Color.White else SkoLabColors.Text2,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Medium
                                     )
@@ -443,7 +443,7 @@ fun FeedScreen(
                                         modifier = Modifier
                                             .size(190.dp, 270.dp)
                                             .clip(RoundedCornerShape(16.dp))
-                                            .background(EntropiColors.Card2)
+                                            .background(SkoLabColors.Card2)
                                     ) {
                                         Column(
                                             modifier = Modifier.padding(14.dp),
@@ -465,15 +465,15 @@ fun FeedScreen(
                                     .padding(horizontal = 20.dp)
                                     .height(120.dp)
                                     .clip(RoundedCornerShape(16.dp))
-                                    .background(EntropiColors.Card2),
+                                    .background(SkoLabColors.Card2),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.PersonSearch, null, tint = EntropiColors.Text3, modifier = Modifier.size(28.dp))
+                                    Icon(Icons.Default.PersonSearch, null, tint = SkoLabColors.Text3, modifier = Modifier.size(28.dp))
                                     Spacer(Modifier.height(8.dp))
                                     Text(
                                         "No connections found for $selectedCountryFilter",
-                                        color = EntropiColors.Text3,
+                                        color = SkoLabColors.Text3,
                                         fontSize = 13.sp,
                                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                     )
@@ -518,7 +518,7 @@ fun FeedScreen(
                                             modifier = Modifier.size(190.dp, 270.dp),
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            CircularProgressIndicator(color = EntropiColors.Blue1, modifier = Modifier.size(28.dp), strokeWidth = 2.dp)
+                                            CircularProgressIndicator(color = SkoLabColors.Blue1, modifier = Modifier.size(28.dp), strokeWidth = 2.dp)
                                         }
                                     }
                                 }
@@ -596,13 +596,13 @@ fun FeedScreen(
                                 Column {
                                     Text(
                                         "Active Collaborations",
-                                        color = EntropiColors.Text,
+                                        color = SkoLabColors.Text,
                                         fontWeight = FontWeight.ExtraBold,
                                         fontSize = 15.sp
                                     )
                                     Text(
                                         "Your live research workspaces",
-                                        color = EntropiColors.Text3,
+                                        color = SkoLabColors.Text3,
                                         fontSize = 10.sp
                                     )
                                 }
@@ -630,8 +630,8 @@ fun FeedScreen(
                             Surface(
                                 onClick = onNavigateToCreateProject,
                                 shape = RoundedCornerShape(14.dp),
-                                color = EntropiColors.Card,
-                                border = BorderStroke(1.dp, EntropiColors.Border)
+                                color = SkoLabColors.Card,
+                                border = BorderStroke(1.dp, SkoLabColors.Border)
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -655,13 +655,13 @@ fun FeedScreen(
                                     Column {
                                         Text(
                                             "Start a Collab Workspace",
-                                            color = EntropiColors.Text,
+                                            color = SkoLabColors.Text,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 13.sp
                                         )
                                         Text(
                                             "Invite co-authors, share equations, draft manuscripts together",
-                                            color = EntropiColors.Text3,
+                                            color = SkoLabColors.Text3,
                                             fontSize = 11.sp,
                                             lineHeight = 15.sp
                                         )
@@ -674,8 +674,8 @@ fun FeedScreen(
                                     Surface(
                                         onClick = onNavigateToCollabs,
                                         shape = RoundedCornerShape(14.dp),
-                                        color = EntropiColors.Card,
-                                        border = BorderStroke(1.dp, EntropiColors.Border)
+                                        color = SkoLabColors.Card,
+                                        border = BorderStroke(1.dp, SkoLabColors.Border)
                                     ) {
                                         Column(modifier = Modifier.padding(14.dp)) {
                                             Row(
@@ -704,7 +704,7 @@ fun FeedScreen(
                                                     Column(modifier = Modifier.weight(1f)) {
                                                         Text(
                                                             text = proj.name,
-                                                            color = EntropiColors.Text,
+                                                            color = SkoLabColors.Text,
                                                             fontWeight = FontWeight.Bold,
                                                             fontSize = 13.sp,
                                                             maxLines = 1,
@@ -712,7 +712,7 @@ fun FeedScreen(
                                                         )
                                                         Text(
                                                             text = "${proj.members.size} member${if (proj.members.size != 1) "s" else ""} · by ${proj.ownerName.split(" ").firstOrNull() ?: "You"}",
-                                                            color = EntropiColors.Text3,
+                                                            color = SkoLabColors.Text3,
                                                             fontSize = 10.sp
                                                         )
                                                     }
@@ -720,7 +720,7 @@ fun FeedScreen(
                                                 Icon(
                                                     Icons.Default.ChevronRight,
                                                     null,
-                                                    tint = EntropiColors.Text3,
+                                                    tint = SkoLabColors.Text3,
                                                     modifier = Modifier.size(18.dp)
                                                 )
                                             }
@@ -729,7 +729,7 @@ fun FeedScreen(
                                                 Spacer(Modifier.height(6.dp))
                                                 Text(
                                                     text = proj.description,
-                                                    color = EntropiColors.Text2,
+                                                    color = SkoLabColors.Text2,
                                                     fontSize = 11.sp,
                                                     maxLines = 2,
                                                     overflow = TextOverflow.Ellipsis,
@@ -750,7 +750,7 @@ fun FeedScreen(
                                                             .weight(1f)
                                                             .height(4.dp)
                                                             .clip(RoundedCornerShape(2.dp))
-                                                            .background(EntropiColors.Border)
+                                                            .background(SkoLabColors.Border)
                                                     ) {
                                                         Box(
                                                             modifier = Modifier
@@ -779,7 +779,7 @@ fun FeedScreen(
                                     onClick = onNavigateToCreateProject,
                                     shape = RoundedCornerShape(14.dp),
                                     color = Color.Transparent,
-                                    border = BorderStroke(1.dp, EntropiColors.Border)
+                                    border = BorderStroke(1.dp, SkoLabColors.Border)
                                 ) {
                                     Row(
                                         modifier = Modifier
@@ -788,11 +788,11 @@ fun FeedScreen(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.Center
                                     ) {
-                                        Icon(Icons.Default.Add, null, tint = EntropiColors.Blue1, modifier = Modifier.size(16.dp))
+                                        Icon(Icons.Default.Add, null, tint = SkoLabColors.Blue1, modifier = Modifier.size(16.dp))
                                         Spacer(Modifier.width(6.dp))
                                         Text(
                                             "New Workspace",
-                                            color = EntropiColors.Blue1,
+                                            color = SkoLabColors.Blue1,
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold
                                         )
@@ -902,13 +902,13 @@ fun FeedScreen(
                                 Column {
                                     Text(
                                         "Live Trending Feed",
-                                        color = EntropiColors.Text,
+                                        color = SkoLabColors.Text,
                                         fontWeight = FontWeight.ExtraBold,
                                         fontSize = 15.sp
                                     )
                                     Text(
                                         "Hot publications and new insights in your field",
-                                        color = EntropiColors.Text3,
+                                        color = SkoLabColors.Text3,
                                         fontSize = 10.sp
                                     )
                                 }
@@ -971,8 +971,8 @@ fun FeedScreen(
                             listState.animateScrollToItem(0)
                         }
                     },
-                    containerColor = EntropiColors.Gold1,
-                    contentColor = EntropiColors.Background,
+                    containerColor = SkoLabColors.Gold1,
+                    contentColor = SkoLabColors.Background,
                     shape = CircleShape,
                     modifier = Modifier.size(48.dp)
                 ) {
@@ -995,14 +995,14 @@ fun FeedScreen(
                         fontFamily = SyneFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp,
-                        color = EntropiColors.Gold1
+                        color = SkoLabColors.Gold1
                     )
                 },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
                             text = "To personalize your Pulse feed, match papers, and discover collaborators, please define your profile name and research focus area.",
-                            color = EntropiColors.Text2,
+                            color = SkoLabColors.Text2,
                             fontSize = 13.sp,
                             lineHeight = 18.sp
                         )
@@ -1010,14 +1010,14 @@ fun FeedScreen(
                         OutlinedTextField(
                             value = setupNameText,
                             onValueChange = { setupNameText = it },
-                            label = { Text("Full Name", color = EntropiColors.Text3) },
+                            label = { Text("Full Name", color = SkoLabColors.Text3) },
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = EntropiColors.Text,
-                                unfocusedTextColor = EntropiColors.Text,
-                                focusedBorderColor = EntropiColors.Gold1,
-                                unfocusedBorderColor = EntropiColors.Border,
-                                focusedContainerColor = EntropiColors.Card2,
-                                unfocusedContainerColor = EntropiColors.Card2
+                                focusedTextColor = SkoLabColors.Text,
+                                unfocusedTextColor = SkoLabColors.Text,
+                                focusedBorderColor = SkoLabColors.Gold1,
+                                unfocusedBorderColor = SkoLabColors.Border,
+                                focusedContainerColor = SkoLabColors.Card2,
+                                unfocusedContainerColor = SkoLabColors.Card2
                             ),
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(10.dp),
@@ -1027,14 +1027,14 @@ fun FeedScreen(
                         OutlinedTextField(
                             value = setupFocusText,
                             onValueChange = { setupFocusText = it },
-                            label = { Text("Research Focus / Discipline", color = EntropiColors.Text3) },
+                            label = { Text("Research Focus / Discipline", color = SkoLabColors.Text3) },
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = EntropiColors.Text,
-                                unfocusedTextColor = EntropiColors.Text,
-                                focusedBorderColor = EntropiColors.Gold1,
-                                unfocusedBorderColor = EntropiColors.Border,
-                                focusedContainerColor = EntropiColors.Card2,
-                                unfocusedContainerColor = EntropiColors.Card2
+                                focusedTextColor = SkoLabColors.Text,
+                                unfocusedTextColor = SkoLabColors.Text,
+                                focusedBorderColor = SkoLabColors.Gold1,
+                                unfocusedBorderColor = SkoLabColors.Border,
+                                focusedContainerColor = SkoLabColors.Card2,
+                                unfocusedContainerColor = SkoLabColors.Card2
                             ),
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(10.dp),
@@ -1043,7 +1043,7 @@ fun FeedScreen(
                         
                         Text(
                             text = "Focus Suggestions:",
-                            color = EntropiColors.Text3,
+                            color = SkoLabColors.Text3,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -1057,16 +1057,16 @@ fun FeedScreen(
                                 Surface(
                                     onClick = { setupFocusText = suggestion },
                                     shape = RoundedCornerShape(8.dp),
-                                    color = if (setupFocusText == suggestion) EntropiColors.Gold1.copy(alpha = 0.15f) else EntropiColors.Card2,
+                                    color = if (setupFocusText == suggestion) SkoLabColors.Gold1.copy(alpha = 0.15f) else SkoLabColors.Card2,
                                     border = BorderStroke(
                                         1.dp,
-                                        if (setupFocusText == suggestion) EntropiColors.Gold1 else EntropiColors.Border
+                                        if (setupFocusText == suggestion) SkoLabColors.Gold1 else SkoLabColors.Border
                                     )
                                 ) {
                                     Text(
                                         text = suggestion,
                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                        color = if (setupFocusText == suggestion) EntropiColors.Gold1 else EntropiColors.Text2,
+                                        color = if (setupFocusText == suggestion) SkoLabColors.Gold1 else SkoLabColors.Text2,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Medium
                                     )
@@ -1090,7 +1090,7 @@ fun FeedScreen(
                             }
                         },
                         enabled = setupNameText.trim().isNotBlank() && setupFocusText.trim().isNotBlank(),
-                        colors = ButtonDefaults.textButtonColors(contentColor = EntropiColors.Gold1)
+                        colors = ButtonDefaults.textButtonColors(contentColor = SkoLabColors.Gold1)
                     ) {
                         Text("Save Profile", fontWeight = FontWeight.Bold)
                     }
@@ -1098,12 +1098,12 @@ fun FeedScreen(
                 dismissButton = {
                     TextButton(
                         onClick = { showSetupFocusDialog = false },
-                        colors = ButtonDefaults.textButtonColors(contentColor = EntropiColors.Text3)
+                        colors = ButtonDefaults.textButtonColors(contentColor = SkoLabColors.Text3)
                     ) {
                         Text("Skip for now")
                     }
                 },
-                containerColor = EntropiColors.Card,
+                containerColor = SkoLabColors.Card,
                 shape = RoundedCornerShape(16.dp)
             )
         } // end if (showSetupFocusDialog)
@@ -1133,8 +1133,8 @@ fun PulseConnectionCard(
 
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = EntropiColors.Card,
-        border = BorderStroke(1.dp, if (isPressed) EntropiColors.Blue1.copy(alpha = 0.5f) else EntropiColors.Border),
+        color = SkoLabColors.Card,
+        border = BorderStroke(1.dp, if (isPressed) SkoLabColors.Blue1.copy(alpha = 0.5f) else SkoLabColors.Border),
         modifier = Modifier
             .width(190.dp)
             .height(270.dp)
@@ -1158,15 +1158,15 @@ fun PulseConnectionCard(
                             .clip(CircleShape)
                             .background(
                                 Brush.radialGradient(
-                                    listOf(EntropiColors.Blue1.copy(alpha = 0.20f), EntropiColors.Card2)
+                                    listOf(SkoLabColors.Blue1.copy(alpha = 0.20f), SkoLabColors.Card2)
                                 )
                             )
-                            .border(1.dp, EntropiColors.Blue1.copy(alpha = 0.3f), CircleShape),
+                            .border(1.dp, SkoLabColors.Blue1.copy(alpha = 0.3f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = connection.author.name.take(2).uppercase(),
-                            color = EntropiColors.Blue1,
+                            color = SkoLabColors.Blue1,
                             fontFamily = SyneFontFamily,
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 14.sp
@@ -1180,17 +1180,17 @@ fun PulseConnectionCard(
                             .clip(CircleShape)
                             .background(
                                 if (connection.isOnSkoLab) OpenAlexBrightGreen
-                                else EntropiColors.Border
+                                else SkoLabColors.Border
                             )
-                            .border(1.5.dp, EntropiColors.Card, CircleShape)
+                            .border(1.5.dp, SkoLabColors.Card, CircleShape)
                     )
                 }
 
                 // Depth badge
                 val (depthLabel, depthColor) = when (connection.depth) {
-                    1 -> "Direct" to EntropiColors.Green
-                    2 -> "2nd°" to EntropiColors.Blue1
-                    else -> "3rd°" to EntropiColors.Text3
+                    1 -> "Direct" to SkoLabColors.Green
+                    2 -> "2nd°" to SkoLabColors.Blue1
+                    else -> "3rd°" to SkoLabColors.Text3
                 }
                 Surface(
                     shape = RoundedCornerShape(6.dp),
@@ -1214,7 +1214,7 @@ fun PulseConnectionCard(
                 fontFamily = SpaceGroteskFontFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = 13.sp,
-                color = EntropiColors.Text,
+                color = SkoLabColors.Text,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 lineHeight = 16.sp
@@ -1230,7 +1230,7 @@ fun PulseConnectionCard(
                 text = "$inferredRole · ${connection.author.institution.ifEmpty { connection.author.country }.take(22)}",
                 fontFamily = SpaceGroteskFontFamily,
                 fontSize = 9.5.sp,
-                color = EntropiColors.Text2,
+                color = SkoLabColors.Text2,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 lineHeight = 13.sp
@@ -1240,23 +1240,23 @@ fun PulseConnectionCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(EntropiColors.Card2, RoundedCornerShape(8.dp))
+                    .background(SkoLabColors.Card2, RoundedCornerShape(8.dp))
                     .padding(horizontal = 8.dp, vertical = 5.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(connection.papersCollaborated.toString(), fontFamily = JetBrainsMonoFontFamily, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = PRIMARY)
-                    Text("Joint", fontFamily = SpaceGroteskFontFamily, fontSize = 7.sp, color = EntropiColors.Text3)
+                    Text("Joint", fontFamily = SpaceGroteskFontFamily, fontSize = 7.sp, color = SkoLabColors.Text3)
                 }
-                Box(modifier = Modifier.width(0.5.dp).height(16.dp).background(EntropiColors.Border).align(Alignment.CenterVertically))
+                Box(modifier = Modifier.width(0.5.dp).height(16.dp).background(SkoLabColors.Border).align(Alignment.CenterVertically))
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("h${connection.hIndex}", fontFamily = JetBrainsMonoFontFamily, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = PRIMARY)
-                    Text("Index", fontFamily = SpaceGroteskFontFamily, fontSize = 7.sp, color = EntropiColors.Text3)
+                    Text("Index", fontFamily = SpaceGroteskFontFamily, fontSize = 7.sp, color = SkoLabColors.Text3)
                 }
-                Box(modifier = Modifier.width(0.5.dp).height(16.dp).background(EntropiColors.Border).align(Alignment.CenterVertically))
+                Box(modifier = Modifier.width(0.5.dp).height(16.dp).background(SkoLabColors.Border).align(Alignment.CenterVertically))
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("${connection.mutualCount}%", fontFamily = JetBrainsMonoFontFamily, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = AccentTeal)
-                    Text("Match", fontFamily = SpaceGroteskFontFamily, fontSize = 7.sp, color = EntropiColors.Text3)
+                    Text("Match", fontFamily = SpaceGroteskFontFamily, fontSize = 7.sp, color = SkoLabColors.Text3)
                 }
             }
 
@@ -1269,8 +1269,8 @@ fun PulseConnectionCard(
                         onClick = onChatClick,
                         modifier = Modifier.fillMaxWidth().height(32.dp),
                         shape = RoundedCornerShape(8.dp),
-                        color = EntropiColors.Card2,
-                        border = BorderStroke(1.dp, EntropiColors.Border)
+                        color = SkoLabColors.Card2,
+                        border = BorderStroke(1.dp, SkoLabColors.Border)
                     ) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1326,7 +1326,7 @@ fun PulseConnectionCard(
                     border = BorderStroke(0.5.dp, AccentTeal.copy(alpha = 0.35f))
                 ) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Invite to SkoLab", fontFamily = SpaceGroteskFontFamily, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = AccentTeal)
+                        Text("Invite", fontFamily = SpaceGroteskFontFamily, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = AccentTeal)
                     }
                 }
             }
@@ -1351,8 +1351,8 @@ fun FrontierPulseCard(metrics: FrontierMetrics) {
 
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = EntropiColors.Card,
-        border = BorderStroke(1.dp, EntropiColors.Border),
+        color = SkoLabColors.Card,
+        border = BorderStroke(1.dp, SkoLabColors.Border),
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
@@ -1363,7 +1363,7 @@ fun FrontierPulseCard(metrics: FrontierMetrics) {
                     // radial Gold glow top-right
                     drawRect(
                         brush = Brush.radialGradient(
-                            colors = listOf(EntropiColors.Gold1.copy(alpha = 0.08f), Color.Transparent),
+                            colors = listOf(SkoLabColors.Gold1.copy(alpha = 0.08f), Color.Transparent),
                             center = Offset(size.width * 0.9f, size.height * 0.1f),
                             radius = size.width * 0.4f
                         )
@@ -1371,7 +1371,7 @@ fun FrontierPulseCard(metrics: FrontierMetrics) {
                     // radial Blue glow bottom-left
                     drawRect(
                         brush = Brush.radialGradient(
-                            colors = listOf(EntropiColors.Blue1.copy(alpha = 0.08f), Color.Transparent),
+                            colors = listOf(SkoLabColors.Blue1.copy(alpha = 0.08f), Color.Transparent),
                             center = Offset(size.width * 0.1f, size.height * 0.9f),
                             radius = size.width * 0.4f
                         )
@@ -1394,14 +1394,14 @@ fun FrontierPulseCard(metrics: FrontierMetrics) {
                     Box(
                         modifier = Modifier
                             .size(6.dp)
-                            .background(EntropiColors.Gold1.copy(alpha = alpha), CircleShape)
+                            .background(SkoLabColors.Gold1.copy(alpha = alpha), CircleShape)
                     )
                     Text(
                         text = "FRONTIER PULSE · LIVE",
                         fontFamily = SpaceGroteskFontFamily,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        color = EntropiColors.Gold1,
+                        color = SkoLabColors.Gold1,
                         letterSpacing = 1.2.sp
                     )
                 }
@@ -1419,13 +1419,13 @@ fun FrontierPulseCard(metrics: FrontierMetrics) {
                             fontFamily = SyneFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 28.sp,
-                            color = EntropiColors.Gold2
+                            color = SkoLabColors.Gold2
                         )
-                        Text("D-INDEX", fontFamily = SpaceGroteskFontFamily, fontSize = 9.sp, color = EntropiColors.Text3, fontWeight = FontWeight.Bold)
-                        Text("+${String.format("%.2f", metrics.dIndexDelta)} delta", fontFamily = JetBrainsMonoFontFamily, fontSize = 9.sp, color = EntropiColors.Green)
+                        Text("D-INDEX", fontFamily = SpaceGroteskFontFamily, fontSize = 9.sp, color = SkoLabColors.Text3, fontWeight = FontWeight.Bold)
+                        Text("+${String.format("%.2f", metrics.dIndexDelta)} delta", fontFamily = JetBrainsMonoFontFamily, fontSize = 9.sp, color = SkoLabColors.Green)
                     }
 
-                    Box(modifier = Modifier.size(width = 1.dp, height = 36.dp).background(EntropiColors.Border))
+                    Box(modifier = Modifier.size(width = 1.dp, height = 36.dp).background(SkoLabColors.Border))
 
                     // S-Index
                     Column(horizontalAlignment = Alignment.Start) {
@@ -1434,13 +1434,13 @@ fun FrontierPulseCard(metrics: FrontierMetrics) {
                             fontFamily = SyneFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 28.sp,
-                            color = EntropiColors.Blue2
+                            color = SkoLabColors.Blue2
                         )
-                        Text("S-INDEX", fontFamily = SpaceGroteskFontFamily, fontSize = 9.sp, color = EntropiColors.Text3, fontWeight = FontWeight.Bold)
-                        Text("+${String.format("%.2f", metrics.sIndexDelta)} delta", fontFamily = JetBrainsMonoFontFamily, fontSize = 9.sp, color = EntropiColors.Green)
+                        Text("S-INDEX", fontFamily = SpaceGroteskFontFamily, fontSize = 9.sp, color = SkoLabColors.Text3, fontWeight = FontWeight.Bold)
+                        Text("+${String.format("%.2f", metrics.sIndexDelta)} delta", fontFamily = JetBrainsMonoFontFamily, fontSize = 9.sp, color = SkoLabColors.Green)
                     }
 
-                    Box(modifier = Modifier.size(width = 1.dp, height = 36.dp).background(EntropiColors.Border))
+                    Box(modifier = Modifier.size(width = 1.dp, height = 36.dp).background(SkoLabColors.Border))
 
                     // Total Papers
                     Column(horizontalAlignment = Alignment.Start) {
@@ -1449,10 +1449,10 @@ fun FrontierPulseCard(metrics: FrontierMetrics) {
                             fontFamily = SyneFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 28.sp,
-                            color = EntropiColors.Purple2
+                            color = SkoLabColors.Purple2
                         )
-                        Text("PAPERS", fontFamily = SpaceGroteskFontFamily, fontSize = 9.sp, color = EntropiColors.Text3, fontWeight = FontWeight.Bold)
-                        Text("+${metrics.papersDelta} new", fontFamily = JetBrainsMonoFontFamily, fontSize = 9.sp, color = EntropiColors.Green)
+                        Text("PAPERS", fontFamily = SpaceGroteskFontFamily, fontSize = 9.sp, color = SkoLabColors.Text3, fontWeight = FontWeight.Bold)
+                        Text("+${metrics.papersDelta} new", fontFamily = JetBrainsMonoFontFamily, fontSize = 9.sp, color = SkoLabColors.Green)
                     }
                 }
 
@@ -1464,32 +1464,32 @@ fun FrontierPulseCard(metrics: FrontierMetrics) {
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .background(EntropiColors.Card2, RoundedCornerShape(8.dp))
-                            .border(1.dp, EntropiColors.Border, RoundedCornerShape(8.dp))
+                            .background(SkoLabColors.Card2, RoundedCornerShape(8.dp))
+                            .border(1.dp, SkoLabColors.Border, RoundedCornerShape(8.dp))
                             .padding(vertical = 10.dp, horizontal = 4.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        ScoreArcMeter(score = dProgress, label = "Disruption", size = 52.dp, color = EntropiColors.Gold1)
+                        ScoreArcMeter(score = dProgress, label = "Disruption", size = 52.dp, color = SkoLabColors.Gold1)
                     }
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .background(EntropiColors.Card2, RoundedCornerShape(8.dp))
-                            .border(1.dp, EntropiColors.Border, RoundedCornerShape(8.dp))
+                            .background(SkoLabColors.Card2, RoundedCornerShape(8.dp))
+                            .border(1.dp, SkoLabColors.Border, RoundedCornerShape(8.dp))
                             .padding(vertical = 10.dp, horizontal = 4.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        ScoreArcMeter(score = sProgress, label = "Novelty", size = 52.dp, color = EntropiColors.Cyan)
+                        ScoreArcMeter(score = sProgress, label = "Novelty", size = 52.dp, color = SkoLabColors.Cyan)
                     }
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .background(EntropiColors.Card2, RoundedCornerShape(8.dp))
-                            .border(1.dp, EntropiColors.Border, RoundedCornerShape(8.dp))
+                            .background(SkoLabColors.Card2, RoundedCornerShape(8.dp))
+                            .border(1.dp, SkoLabColors.Border, RoundedCornerShape(8.dp))
                             .padding(vertical = 10.dp, horizontal = 4.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        ScoreArcMeter(score = influenceScore, label = "Influence", size = 52.dp, color = EntropiColors.Purple2)
+                        ScoreArcMeter(score = influenceScore, label = "Influence", size = 52.dp, color = SkoLabColors.Purple2)
                     }
                 }
             }
@@ -1506,8 +1506,8 @@ fun AIDailyBriefCard(
 ) {
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = EntropiColors.Card,
-        border = BorderStroke(1.dp, EntropiColors.Purple1.copy(alpha = 0.35f)),
+        color = SkoLabColors.Card,
+        border = BorderStroke(1.dp, SkoLabColors.Purple1.copy(alpha = 0.35f)),
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
@@ -1518,7 +1518,7 @@ fun AIDailyBriefCard(
                     // radial Purple glow top-right
                     drawRect(
                         brush = Brush.radialGradient(
-                            colors = listOf(EntropiColors.Purple1.copy(alpha = 0.1f), Color.Transparent),
+                            colors = listOf(SkoLabColors.Purple1.copy(alpha = 0.1f), Color.Transparent),
                             center = Offset(size.width * 0.85f, size.height * 0.15f),
                             radius = size.width * 0.45f
                         )
@@ -1535,13 +1535,13 @@ fun AIDailyBriefCard(
                     Box(
                         modifier = Modifier
                             .size(26.dp)
-                            .background(EntropiColors.Purple1.copy(alpha = 0.12f), CircleShape),
+                            .background(SkoLabColors.Purple1.copy(alpha = 0.12f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.AutoAwesome,
                             contentDescription = "AI Brain",
-                            tint = EntropiColors.Purple2,
+                            tint = SkoLabColors.Purple2,
                             modifier = Modifier.size(14.dp)
                         )
                     }
@@ -1550,7 +1550,7 @@ fun AIDailyBriefCard(
                         fontFamily = SpaceGroteskFontFamily,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = EntropiColors.Purple2,
+                        color = SkoLabColors.Purple2,
                         letterSpacing = 1.sp
                     )
                     Spacer(Modifier.weight(1f))
@@ -1558,7 +1558,7 @@ fun AIDailyBriefCard(
                         text = "Today",
                         fontFamily = SpaceGroteskFontFamily,
                         fontSize = 10.sp,
-                        color = EntropiColors.Text3,
+                        color = SkoLabColors.Text3,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -1574,7 +1574,7 @@ fun AIDailyBriefCard(
                         val parts = briefText.split("**")
                         parts.forEachIndexed { index, part ->
                             if (index % 2 == 1) {
-                                withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = EntropiColors.Gold2)) {
+                                withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = SkoLabColors.Gold2)) {
                                     append(part)
                                 }
                             } else {
@@ -1588,7 +1588,7 @@ fun AIDailyBriefCard(
                         fontFamily = SpaceGroteskFontFamily,
                         fontSize = 12.sp,
                         lineHeight = 17.sp,
-                        color = EntropiColors.Text
+                        color = SkoLabColors.Text
                     )
                 }
             }
@@ -1607,7 +1607,7 @@ fun ShimmerBar(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(4.dp))
-            .background(EntropiColors.Text3.copy(alpha = alpha))
+            .background(SkoLabColors.Text3.copy(alpha = alpha))
     )
 }
 
@@ -1627,8 +1627,8 @@ fun QuickFilterRail(
             Surface(
                 onClick = { onFilterSelect(filter) },
                 shape = RoundedCornerShape(20.dp),
-                color = if (isActive) EntropiColors.Gold1.copy(alpha = 0.12f) else EntropiColors.Card2,
-                border = BorderStroke(1.dp, if (isActive) EntropiColors.Gold1 else EntropiColors.Border)
+                color = if (isActive) SkoLabColors.Gold1.copy(alpha = 0.12f) else SkoLabColors.Card2,
+                border = BorderStroke(1.dp, if (isActive) SkoLabColors.Gold1 else SkoLabColors.Border)
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -1645,7 +1645,7 @@ fun QuickFilterRail(
                         fontFamily = SpaceGroteskFontFamily,
                         fontSize = 11.sp,
                         fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isActive) EntropiColors.Gold2 else EntropiColors.Text2
+                        color = if (isActive) SkoLabColors.Gold2 else SkoLabColors.Text2
                     )
                 }
             }
@@ -1671,8 +1671,8 @@ fun CountryTile(country: Country, onClick: () -> Unit) {
             .size(80.dp, 90.dp)
             .graphicsLayer(scaleX = scale, scaleY = scale),
         shape = RoundedCornerShape(14.dp),
-        color = EntropiColors.Card,
-        border = BorderStroke(1.dp, if (isPressed) EntropiColors.Gold1 else EntropiColors.Border)
+        color = SkoLabColors.Card,
+        border = BorderStroke(1.dp, if (isPressed) SkoLabColors.Gold1 else SkoLabColors.Border)
     ) {
         Column(
             modifier = Modifier.fillMaxSize().padding(6.dp),
@@ -1685,7 +1685,7 @@ fun CountryTile(country: Country, onClick: () -> Unit) {
                 text = country.name,
                 fontFamily = SpaceGroteskFontFamily,
                 fontSize = 11.sp,
-                color = EntropiColors.Text,
+                color = SkoLabColors.Text,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -1694,7 +1694,7 @@ fun CountryTile(country: Country, onClick: () -> Unit) {
                 text = "${country.paperCount} papers",
                 fontFamily = JetBrainsMonoFontFamily,
                 fontSize = 9.sp,
-                color = EntropiColors.Gold2
+                color = SkoLabColors.Gold2
             )
         }
     }
@@ -1742,7 +1742,7 @@ fun DisciplineTile(discipline: Discipline, onClick: () -> Unit) {
                     text = discipline.subCount,
                     fontFamily = SpaceGroteskFontFamily,
                     fontSize = 8.sp,
-                    color = EntropiColors.Text2,
+                    color = SkoLabColors.Text2,
                     maxLines = 1
                 )
             }
@@ -1797,8 +1797,8 @@ fun PaperFeedCard(
             .fillMaxWidth()
             .graphicsLayer(scaleX = scale, scaleY = scale),
         shape = RoundedCornerShape(16.dp),
-        color = EntropiColors.Card,
-        border = BorderStroke(1.dp, if (isPressed) EntropiColors.Gold1 else EntropiColors.Border)
+        color = SkoLabColors.Card,
+        border = BorderStroke(1.dp, if (isPressed) SkoLabColors.Gold1 else SkoLabColors.Border)
     ) {
         Row(modifier = Modifier.fillMaxWidth()) {
             // Left Accent Bar (Gold -> Blue)
@@ -1807,7 +1807,7 @@ fun PaperFeedCard(
                     .width(3.5.dp)
                     .fillMaxHeight()
                     .align(Alignment.CenterVertically)
-                    .background(Brush.verticalGradient(colors = listOf(EntropiColors.Gold1, EntropiColors.Blue1)))
+                    .background(Brush.verticalGradient(colors = listOf(SkoLabColors.Gold1, SkoLabColors.Blue1)))
             )
 
             Column(modifier = Modifier.padding(14.dp)) {
@@ -1820,13 +1820,13 @@ fun PaperFeedCard(
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Surface(
                             shape = RoundedCornerShape(4.dp),
-                            color = EntropiColors.Card2,
-                            border = BorderStroke(0.5.dp, EntropiColors.Border)
+                            color = SkoLabColors.Card2,
+                            border = BorderStroke(0.5.dp, SkoLabColors.Border)
                         ) {
                             Text(
                                 text = paper.journal.take(18),
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                color = EntropiColors.Gold2,
+                                color = SkoLabColors.Gold2,
                                 fontSize = 9.sp,
                                 fontFamily = JetBrainsMonoFontFamily,
                                 fontWeight = FontWeight.Bold
@@ -1835,12 +1835,12 @@ fun PaperFeedCard(
 
                         Surface(
                             shape = RoundedCornerShape(4.dp),
-                            color = EntropiColors.Purple1.copy(alpha = 0.08f)
+                            color = SkoLabColors.Purple1.copy(alpha = 0.08f)
                         ) {
                             Text(
                                 text = "D·${String.format("%.2f", paper.disruptionScore)}",
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                color = EntropiColors.Purple2,
+                                color = SkoLabColors.Purple2,
                                 fontSize = 9.sp,
                                 fontFamily = JetBrainsMonoFontFamily,
                                 fontWeight = FontWeight.Black
@@ -1852,12 +1852,12 @@ fun PaperFeedCard(
                     Box(
                         modifier = Modifier
                             .size(24.dp)
-                            .background(EntropiColors.Gold1.copy(alpha = 0.12f), CircleShape),
+                            .background(SkoLabColors.Gold1.copy(alpha = 0.12f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = (paper.noveltyScore * 100).toInt().toString(),
-                            color = EntropiColors.Gold2,
+                            color = SkoLabColors.Gold2,
                             fontSize = 10.sp,
                             fontFamily = JetBrainsMonoFontFamily,
                             fontWeight = FontWeight.Bold
@@ -1874,7 +1874,7 @@ fun PaperFeedCard(
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     lineHeight = 19.sp,
-                    color = EntropiColors.Text,
+                    color = SkoLabColors.Text,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1886,7 +1886,7 @@ fun PaperFeedCard(
                     text = paper.authors.firstOrNull()?.split("|")?.firstOrNull() ?: "Unknown Author",
                     fontFamily = SpaceGroteskFontFamily,
                     fontSize = 11.sp,
-                    color = EntropiColors.Text3,
+                    color = SkoLabColors.Text3,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1903,16 +1903,16 @@ fun PaperFeedCard(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Icon(Icons.Default.RemoveRedEye, null, tint = EntropiColors.Text3, modifier = Modifier.size(12.dp))
-                        Text(text = "1.2k views", fontFamily = JetBrainsMonoFontFamily, fontSize = 9.sp, color = EntropiColors.Text3)
+                        Icon(Icons.Default.RemoveRedEye, null, tint = SkoLabColors.Text3, modifier = Modifier.size(12.dp))
+                        Text(text = "1.2k views", fontFamily = JetBrainsMonoFontFamily, fontSize = 9.sp, color = SkoLabColors.Text3)
                     }
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Icon(Icons.Default.FormatQuote, null, tint = EntropiColors.Green, modifier = Modifier.size(12.dp))
-                        Text(text = "${paper.citationCount} citations", fontFamily = JetBrainsMonoFontFamily, fontSize = 9.sp, color = EntropiColors.Green, fontWeight = FontWeight.Bold)
+                        Icon(Icons.Default.FormatQuote, null, tint = SkoLabColors.Green, modifier = Modifier.size(12.dp))
+                        Text(text = "${paper.citationCount} citations", fontFamily = JetBrainsMonoFontFamily, fontSize = 9.sp, color = SkoLabColors.Green, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -1931,8 +1931,8 @@ fun ResearcherCard(
 
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = EntropiColors.Card,
-        border = BorderStroke(1.dp, EntropiColors.Border),
+        color = SkoLabColors.Card,
+        border = BorderStroke(1.dp, SkoLabColors.Border),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -1946,16 +1946,16 @@ fun ResearcherCard(
                     .clip(CircleShape)
                     .background(
                         Brush.radialGradient(
-                            colors = listOf(EntropiColors.Gold1, EntropiColors.Blue1)
+                            colors = listOf(SkoLabColors.Gold1, SkoLabColors.Blue1)
                         )
                     )
                     .padding(2.dp)
-                    .background(EntropiColors.Card, CircleShape),
+                    .background(SkoLabColors.Card, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = researcher.name.take(1).uppercase(),
-                    color = EntropiColors.Gold2,
+                    color = SkoLabColors.Gold2,
                     fontFamily = SyneFontFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp
@@ -1970,7 +1970,7 @@ fun ResearcherCard(
                 fontFamily = SpaceGroteskFontFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = 12.sp,
-                color = EntropiColors.Text,
+                color = SkoLabColors.Text,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -1980,7 +1980,7 @@ fun ResearcherCard(
                 text = researcher.institution.take(16),
                 fontFamily = SpaceGroteskFontFamily,
                 fontSize = 10.sp,
-                color = EntropiColors.Text3,
+                color = SkoLabColors.Text3,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -1991,7 +1991,7 @@ fun ResearcherCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(EntropiColors.Card2, RoundedCornerShape(6.dp))
+                    .background(SkoLabColors.Card2, RoundedCornerShape(6.dp))
                     .padding(6.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
@@ -2001,20 +2001,20 @@ fun ResearcherCard(
                         fontFamily = JetBrainsMonoFontFamily,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        color = EntropiColors.Gold2
+                        color = SkoLabColors.Gold2
                     )
-                    Text("Disruption", fontFamily = SpaceGroteskFontFamily, fontSize = 8.sp, color = EntropiColors.Text3)
+                    Text("Disruption", fontFamily = SpaceGroteskFontFamily, fontSize = 8.sp, color = SkoLabColors.Text3)
                 }
-                Box(modifier = Modifier.size(width = 0.5.dp, height = 18.dp).background(EntropiColors.Border))
+                Box(modifier = Modifier.size(width = 0.5.dp, height = 18.dp).background(SkoLabColors.Border))
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = "6.2k",
                         fontFamily = JetBrainsMonoFontFamily,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        color = EntropiColors.Green
+                        color = SkoLabColors.Green
                     )
-                    Text("Citations", fontFamily = SpaceGroteskFontFamily, fontSize = 8.sp, color = EntropiColors.Text3)
+                    Text("Citations", fontFamily = SpaceGroteskFontFamily, fontSize = 8.sp, color = SkoLabColors.Text3)
                 }
             }
 
@@ -2037,10 +2037,10 @@ fun ResearcherCard(
                     contentPadding = PaddingValues(0.dp),
                     shape = RoundedCornerShape(6.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isConnected) EntropiColors.Card2 else PremiumBlue,
-                        contentColor = if (isConnected) EntropiColors.Gold1 else Color.White
+                        containerColor = if (isConnected) SkoLabColors.Card2 else PremiumBlue,
+                        contentColor = if (isConnected) SkoLabColors.Gold1 else Color.White
                     ),
-                    border = BorderStroke(1.dp, if (isConnected) EntropiColors.Border else Color.Transparent)
+                    border = BorderStroke(1.dp, if (isConnected) SkoLabColors.Border else Color.Transparent)
                 ) {
                     Text(
                         text = if (isConnected) "Pending" else "Connect",
@@ -2059,10 +2059,10 @@ fun ResearcherCard(
                     contentPadding = PaddingValues(0.dp),
                     shape = RoundedCornerShape(6.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = EntropiColors.Card2,
-                        contentColor = EntropiColors.Text2
+                        containerColor = SkoLabColors.Card2,
+                        contentColor = SkoLabColors.Text2
                     ),
-                    border = BorderStroke(1.dp, EntropiColors.Border)
+                    border = BorderStroke(1.dp, SkoLabColors.Border)
                 ) {
                     Text(
                         text = "View",
@@ -2092,8 +2092,8 @@ fun ConnectionCard(
 
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = EntropiColors.Card,
-        border = BorderStroke(1.dp, EntropiColors.Border),
+        color = SkoLabColors.Card,
+        border = BorderStroke(1.dp, SkoLabColors.Border),
         modifier = Modifier.fillMaxWidth().clickable { onAuthorClick() }
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -2111,12 +2111,12 @@ fun ConnectionCard(
                         modifier = Modifier
                             .size(32.dp)
                             .clip(CircleShape)
-                            .background(EntropiColors.Card2),
+                            .background(SkoLabColors.Card2),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = connection.author.name.take(2).uppercase(),
-                            color = EntropiColors.Text2,
+                            color = SkoLabColors.Text2,
                             fontFamily = SyneFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 10.sp
@@ -2130,9 +2130,9 @@ fun ConnectionCard(
                             .clip(CircleShape)
                             .background(
                                 if (connection.isOnSkoLab) OpenAlexBrightGreen
-                                else EntropiColors.Border
+                                else SkoLabColors.Border
                             )
-                            .border(1.2.dp, EntropiColors.Card, CircleShape),
+                            .border(1.2.dp, SkoLabColors.Card, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         if (connection.isOnSkoLab) {
@@ -2145,7 +2145,7 @@ fun ConnectionCard(
                         } else {
                             Text(
                                 text = "–",
-                                color = EntropiColors.Text3,
+                                color = SkoLabColors.Text3,
                                 fontSize = 6.sp,
                                 fontWeight = FontWeight.Bold,
                                 lineHeight = 6.sp
@@ -2156,9 +2156,9 @@ fun ConnectionCard(
 
                 // Depth badge + match % row (compact right-aligned badge)
                 val (depthLabel, depthColor) = when (connection.depth) {
-                    1 -> "Direct" to EntropiColors.Green
-                    2 -> "2nd" to EntropiColors.Blue2
-                    else -> "3rd+" to EntropiColors.Text3
+                    1 -> "Direct" to SkoLabColors.Green
+                    2 -> "2nd" to SkoLabColors.Blue2
+                    else -> "3rd+" to SkoLabColors.Text3
                 }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -2180,7 +2180,7 @@ fun ConnectionCard(
                     }
                     Text(
                         text = "${connection.mutualCount}%",
-                        color = EntropiColors.Green.copy(alpha = 0.9f),
+                        color = SkoLabColors.Green.copy(alpha = 0.9f),
                         fontSize = 8.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = SpaceGroteskFontFamily
@@ -2197,7 +2197,7 @@ fun ConnectionCard(
                     fontFamily = SpaceGroteskFontFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,
-                    color = EntropiColors.Text,
+                    color = SkoLabColors.Text,
                     maxLines = 2, // Allow wrapping to 2 lines so the complete name is fully visible
                     overflow = TextOverflow.Ellipsis,
                     lineHeight = 15.sp
@@ -2214,7 +2214,7 @@ fun ConnectionCard(
                     text = "$inferredRole · ${connection.author.institution.ifEmpty { connection.author.country }.take(25)}",
                     fontFamily = SpaceGroteskFontFamily,
                     fontSize = 9.sp,
-                    color = EntropiColors.Text3,
+                    color = SkoLabColors.Text3,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -2228,11 +2228,11 @@ fun ConnectionCard(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                MetricPill(value = connection.papersCollaborated.toString(), label = "Joint", color = EntropiColors.Blue1)
-                Box(modifier = Modifier.width(1.dp).height(12.dp).background(EntropiColors.Border))
-                MetricPill(value = connection.totalPublications.toString(), label = "Papers", color = EntropiColors.Text)
-                Box(modifier = Modifier.width(1.dp).height(12.dp).background(EntropiColors.Border))
-                MetricPill(value = "h${connection.hIndex}", label = "Index", color = EntropiColors.Purple1)
+                MetricPill(value = connection.papersCollaborated.toString(), label = "Joint", color = SkoLabColors.Blue1)
+                Box(modifier = Modifier.width(1.dp).height(12.dp).background(SkoLabColors.Border))
+                MetricPill(value = connection.totalPublications.toString(), label = "Papers", color = SkoLabColors.Text)
+                Box(modifier = Modifier.width(1.dp).height(12.dp).background(SkoLabColors.Border))
+                MetricPill(value = "h${connection.hIndex}", label = "Index", color = SkoLabColors.Purple1)
             }
 
             Spacer(Modifier.height(8.dp))
@@ -2244,11 +2244,11 @@ fun ConnectionCard(
                         onClick = onChatClick,
                         modifier = Modifier.fillMaxWidth().height(30.dp),
                         shape = RoundedCornerShape(8.dp),
-                        color = EntropiColors.Card2,
-                        border = BorderStroke(1.dp, EntropiColors.Border)
+                        color = SkoLabColors.Card2,
+                        border = BorderStroke(1.dp, SkoLabColors.Border)
                     ) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("💬 Message", fontFamily = SpaceGroteskFontFamily, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = EntropiColors.Gold2)
+                            Text("💬 Message", fontFamily = SpaceGroteskFontFamily, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = SkoLabColors.Gold2)
                         }
                     }
                 } else {
@@ -2292,16 +2292,16 @@ fun ConnectionCard(
                         modifier = Modifier.weight(1f).height(30.dp),
                         shape = RoundedCornerShape(8.dp),
                         color = Color.Transparent,
-                        border = BorderStroke(1.dp, EntropiColors.Gold1.copy(alpha = 0.4f))
+                        border = BorderStroke(1.dp, SkoLabColors.Gold1.copy(alpha = 0.4f))
                     ) {
                         Box(
                             modifier = Modifier.fillMaxSize().background(
-                                Brush.horizontalGradient(listOf(EntropiColors.Gold1.copy(alpha = 0.10f), EntropiColors.Gold2.copy(alpha = 0.06f))),
+                                Brush.horizontalGradient(listOf(SkoLabColors.Gold1.copy(alpha = 0.10f), SkoLabColors.Gold2.copy(alpha = 0.06f))),
                                 RoundedCornerShape(8.dp)
                             ),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("✉️ Email Invite", fontFamily = SpaceGroteskFontFamily, fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = EntropiColors.Gold1)
+                            Text("✉️ Email Invite", fontFamily = SpaceGroteskFontFamily, fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = SkoLabColors.Gold1)
                         }
                     }
 
@@ -2311,16 +2311,16 @@ fun ConnectionCard(
                         modifier = Modifier.weight(1f).height(30.dp),
                         shape = RoundedCornerShape(8.dp),
                         color = Color.Transparent,
-                        border = BorderStroke(1.dp, EntropiColors.Cyan.copy(alpha = 0.4f))
+                        border = BorderStroke(1.dp, SkoLabColors.Cyan.copy(alpha = 0.4f))
                     ) {
                         Box(
                             modifier = Modifier.fillMaxSize().background(
-                                Brush.horizontalGradient(listOf(EntropiColors.Cyan.copy(alpha = 0.10f), EntropiColors.Cyan.copy(alpha = 0.06f))),
+                                Brush.horizontalGradient(listOf(SkoLabColors.Cyan.copy(alpha = 0.10f), SkoLabColors.Cyan.copy(alpha = 0.06f))),
                                 RoundedCornerShape(8.dp)
                             ),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("💬 SMS Invite", fontFamily = SpaceGroteskFontFamily, fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = EntropiColors.Cyan)
+                            Text("💬 SMS Invite", fontFamily = SpaceGroteskFontFamily, fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = SkoLabColors.Cyan)
                         }
                     }
                 }
@@ -2338,27 +2338,27 @@ fun ConnectionCard(
                             fontFamily = SyneFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
-                            color = EntropiColors.Gold1
+                            color = SkoLabColors.Gold1
                         )
                     },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(
                                 text = "Send a secure SkoLab invite to ${connection.author.name}:",
-                                color = EntropiColors.Text2,
+                                color = SkoLabColors.Text2,
                                 fontSize = 13.sp
                             )
                             OutlinedTextField(
                                 value = emailInput,
                                 onValueChange = { emailInput = it },
-                                label = { Text("Collaborator's Email", color = EntropiColors.Text3) },
+                                label = { Text("Collaborator's Email", color = SkoLabColors.Text3) },
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = EntropiColors.Text,
-                                    unfocusedTextColor = EntropiColors.Text,
-                                    focusedBorderColor = EntropiColors.Gold1,
-                                    unfocusedBorderColor = EntropiColors.Border,
-                                    focusedContainerColor = EntropiColors.Card2,
-                                    unfocusedContainerColor = EntropiColors.Card2
+                                    focusedTextColor = SkoLabColors.Text,
+                                    unfocusedTextColor = SkoLabColors.Text,
+                                    focusedBorderColor = SkoLabColors.Gold1,
+                                    unfocusedBorderColor = SkoLabColors.Border,
+                                    focusedContainerColor = SkoLabColors.Card2,
+                                    unfocusedContainerColor = SkoLabColors.Card2
                                 ),
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(10.dp),
@@ -2386,17 +2386,17 @@ fun ConnectionCard(
                                     }
                                 }
                             },
-                            colors = ButtonDefaults.textButtonColors(contentColor = EntropiColors.Gold1)
+                            colors = ButtonDefaults.textButtonColors(contentColor = SkoLabColors.Gold1)
                         ) {
                             Text("Send Email", fontWeight = FontWeight.Bold)
                         }
                     },
                     dismissButton = {
                         TextButton(onClick = { showEmailInviteDialog = false }) {
-                            Text("Cancel", color = EntropiColors.Text3)
+                            Text("Cancel", color = SkoLabColors.Text3)
                         }
                     },
-                    containerColor = EntropiColors.Card,
+                    containerColor = SkoLabColors.Card,
                     shape = RoundedCornerShape(16.dp)
                 )
             }
@@ -2412,28 +2412,28 @@ fun ConnectionCard(
                             fontFamily = SyneFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
-                            color = EntropiColors.Cyan
+                            color = SkoLabColors.Cyan
                         )
                     },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(
                                 text = "Send an SMS invite to ${connection.author.name}:",
-                                color = EntropiColors.Text2,
+                                color = SkoLabColors.Text2,
                                 fontSize = 13.sp
                             )
                             OutlinedTextField(
                                 value = phoneInput,
                                 onValueChange = { phoneInput = it },
-                                label = { Text("Mobile Number", color = EntropiColors.Text3) },
-                                placeholder = { Text("e.g. +1234567890", color = EntropiColors.Text3) },
+                                label = { Text("Mobile Number", color = SkoLabColors.Text3) },
+                                placeholder = { Text("e.g. +1234567890", color = SkoLabColors.Text3) },
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = EntropiColors.Text,
-                                    unfocusedTextColor = EntropiColors.Text,
-                                    focusedBorderColor = EntropiColors.Cyan,
-                                    unfocusedBorderColor = EntropiColors.Border,
-                                    focusedContainerColor = EntropiColors.Card2,
-                                    unfocusedContainerColor = EntropiColors.Card2
+                                    focusedTextColor = SkoLabColors.Text,
+                                    unfocusedTextColor = SkoLabColors.Text,
+                                    focusedBorderColor = SkoLabColors.Cyan,
+                                    unfocusedBorderColor = SkoLabColors.Border,
+                                    focusedContainerColor = SkoLabColors.Card2,
+                                    unfocusedContainerColor = SkoLabColors.Card2
                                 ),
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(10.dp),
@@ -2458,17 +2458,17 @@ fun ConnectionCard(
                                     }
                                 }
                             },
-                            colors = ButtonDefaults.textButtonColors(contentColor = EntropiColors.Cyan)
+                            colors = ButtonDefaults.textButtonColors(contentColor = SkoLabColors.Cyan)
                         ) {
                             Text("Send SMS", fontWeight = FontWeight.Bold)
                         }
                     },
                     dismissButton = {
                         TextButton(onClick = { showSMSInviteDialog = false }) {
-                            Text("Cancel", color = EntropiColors.Text3)
+                            Text("Cancel", color = SkoLabColors.Text3)
                         }
                     },
-                    containerColor = EntropiColors.Card,
+                    containerColor = SkoLabColors.Card,
                     shape = RoundedCornerShape(16.dp)
                 )
             }
@@ -2480,7 +2480,7 @@ fun ConnectionCard(
 private fun MetricPill(value: String, label: String, color: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(text = value, color = color, fontWeight = FontWeight.Bold, fontSize = 12.sp, fontFamily = JetBrainsMonoFontFamily)
-        Text(text = label, color = EntropiColors.Text3, fontSize = 8.sp, fontFamily = SpaceGroteskFontFamily)
+        Text(text = label, color = SkoLabColors.Text3, fontSize = 8.sp, fontFamily = SpaceGroteskFontFamily)
     }
 }
 
@@ -2494,8 +2494,8 @@ fun CompactPaperTile(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(16.dp),
-        color = EntropiColors.Card,
-        border = BorderStroke(1.dp, EntropiColors.Border),
+        color = SkoLabColors.Card,
+        border = BorderStroke(1.dp, SkoLabColors.Border),
         modifier = Modifier
             .width(140.dp)
             .height(180.dp)
@@ -2531,7 +2531,7 @@ fun CompactPaperTile(
                 ) {
                     Text(
                         text = (paper.disruptionScore * 100).toInt().toString(),
-                        color = EntropiColors.Gold2,
+                        color = SkoLabColors.Gold2,
                         fontFamily = SyneFontFamily,
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 32.sp
@@ -2546,7 +2546,7 @@ fun CompactPaperTile(
                     fontFamily = SpaceGroteskFontFamily,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 10.sp,
-                    color = EntropiColors.Text,
+                    color = SkoLabColors.Text,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     lineHeight = 13.sp
@@ -2559,14 +2559,14 @@ fun CompactPaperTile(
                 ) {
                     Text(
                         text = "${paper.citationCount} cit",
-                        color = EntropiColors.Green,
+                        color = SkoLabColors.Green,
                         fontSize = 8.sp,
                         fontFamily = JetBrainsMonoFontFamily,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = "2026",
-                        color = EntropiColors.Text3,
+                        color = SkoLabColors.Text3,
                         fontSize = 8.sp,
                         fontFamily = JetBrainsMonoFontFamily
                     )
@@ -2588,8 +2588,8 @@ fun InstitutionTile(institution: Institution, onClick: () -> Unit) {
             modifier = Modifier
                 .size(64.dp)
                 .clip(RoundedCornerShape(20.dp))
-                .background(EntropiColors.Card)
-                .border(BorderStroke(1.dp, EntropiColors.Border), RoundedCornerShape(20.dp))
+                .background(SkoLabColors.Card)
+                .border(BorderStroke(1.dp, SkoLabColors.Border), RoundedCornerShape(20.dp))
                 .clickable { onClick() },
             contentAlignment = Alignment.Center
         ) {
@@ -2613,7 +2613,7 @@ fun InstitutionTile(institution: Institution, onClick: () -> Unit) {
             text = institution.name,
             fontFamily = SpaceGroteskFontFamily,
             fontSize = 9.sp,
-            color = EntropiColors.Text2,
+            color = SkoLabColors.Text2,
             textAlign = TextAlign.Center,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
@@ -2630,8 +2630,8 @@ fun OpenAccessCard(
 ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = EntropiColors.Card,
-        border = BorderStroke(1.dp, EntropiColors.Border),
+        color = SkoLabColors.Card,
+        border = BorderStroke(1.dp, SkoLabColors.Border),
         modifier = Modifier
             .width(280.dp)
             .clickable { onClick() }
@@ -2641,7 +2641,7 @@ fun OpenAccessCard(
                 modifier = Modifier
                     .width(3.5.dp)
                     .fillMaxHeight()
-                    .background(EntropiColors.Green)
+                    .background(SkoLabColors.Green)
             )
             Column(modifier = Modifier.padding(14.dp)) {
                 Row(
@@ -2651,13 +2651,13 @@ fun OpenAccessCard(
                 ) {
                     Surface(
                         shape = RoundedCornerShape(4.dp),
-                        color = EntropiColors.Green.copy(alpha = 0.08f),
-                        border = BorderStroke(0.5.dp, EntropiColors.Green.copy(alpha = 0.2f))
+                        color = SkoLabColors.Green.copy(alpha = 0.08f),
+                        border = BorderStroke(0.5.dp, SkoLabColors.Green.copy(alpha = 0.2f))
                     ) {
                         Text(
                             text = "OPEN ACCESS",
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            color = EntropiColors.Green,
+                            color = SkoLabColors.Green,
                             fontSize = 8.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = SpaceGroteskFontFamily
@@ -2669,13 +2669,13 @@ fun OpenAccessCard(
                         onClick = onDownload,
                         modifier = Modifier
                             .size(24.dp)
-                            .background(EntropiColors.Card2, CircleShape)
-                            .border(0.5.dp, EntropiColors.Border, CircleShape)
+                            .background(SkoLabColors.Card2, CircleShape)
+                            .border(0.5.dp, SkoLabColors.Border, CircleShape)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Download,
                             contentDescription = "Read",
-                            tint = EntropiColors.Green,
+                            tint = SkoLabColors.Green,
                             modifier = Modifier.size(12.dp)
                         )
                     }
@@ -2689,7 +2689,7 @@ fun OpenAccessCard(
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,
                     lineHeight = 16.sp,
-                    color = EntropiColors.Text,
+                    color = SkoLabColors.Text,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -2700,7 +2700,7 @@ fun OpenAccessCard(
                     text = paper.journal,
                     fontFamily = SpaceGroteskFontFamily,
                     fontSize = 10.sp,
-                    color = EntropiColors.Text3
+                    color = SkoLabColors.Text3
                 )
             }
         }
@@ -2716,8 +2716,8 @@ fun ResumeCard(
 ) {
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = EntropiColors.Card,
-        border = BorderStroke(1.dp, EntropiColors.Border),
+        color = SkoLabColors.Card,
+        border = BorderStroke(1.dp, SkoLabColors.Border),
         modifier = Modifier
             .width(200.dp)
             .height(110.dp)
@@ -2729,13 +2729,13 @@ fun ResumeCard(
                 modifier = Modifier
                     .width(4.dp)
                     .fillMaxHeight()
-                    .background(EntropiColors.Border)
+                    .background(SkoLabColors.Border)
             ) {
                 Box(
                     modifier = Modifier
                         .width(4.dp)
                         .fillMaxHeight(progress.progressPercent / 100f)
-                        .background(EntropiColors.Gold1)
+                        .background(SkoLabColors.Gold1)
                 )
             }
 
@@ -2746,7 +2746,7 @@ fun ResumeCard(
                     fontWeight = FontWeight.Bold,
                     fontSize = 11.sp,
                     lineHeight = 15.sp,
-                    color = EntropiColors.Text,
+                    color = SkoLabColors.Text,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -2757,7 +2757,7 @@ fun ResumeCard(
                     text = progress.paper.journal,
                     fontFamily = SpaceGroteskFontFamily,
                     fontSize = 9.sp,
-                    color = EntropiColors.Text3,
+                    color = SkoLabColors.Text3,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -2771,14 +2771,14 @@ fun ResumeCard(
                 ) {
                     Text(
                         text = "${progress.progressPercent}% read",
-                        color = EntropiColors.Gold2,
+                        color = SkoLabColors.Gold2,
                         fontSize = 9.sp,
                         fontFamily = JetBrainsMonoFontFamily,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = "Resume →",
-                        color = EntropiColors.Blue2,
+                        color = SkoLabColors.Blue2,
                         fontFamily = SpaceGroteskFontFamily,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
@@ -2814,18 +2814,18 @@ fun SectionHeader(
                 fontFamily = SpaceGroteskFontFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = 15.sp,
-                color = EntropiColors.Text
+                color = SkoLabColors.Text
             )
             if (badgeCount != null) {
                 Surface(
                     shape = CircleShape,
-                    color = EntropiColors.Card2,
-                    border = BorderStroke(0.5.dp, EntropiColors.Border)
+                    color = SkoLabColors.Card2,
+                    border = BorderStroke(0.5.dp, SkoLabColors.Border)
                 ) {
                     Text(
                         text = badgeCount.toString(),
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        color = EntropiColors.Gold2,
+                        color = SkoLabColors.Gold2,
                         fontSize = 9.sp,
                         fontFamily = JetBrainsMonoFontFamily,
                         fontWeight = FontWeight.Bold
@@ -2839,7 +2839,7 @@ fun SectionHeader(
                 text = subtitle,
                 fontFamily = JetBrainsMonoFontFamily,
                 fontSize = 10.sp,
-                color = EntropiColors.Red,
+                color = SkoLabColors.Red,
                 fontWeight = FontWeight.Bold
             )
         } else {
@@ -2847,7 +2847,7 @@ fun SectionHeader(
                 text = "See all →",
                 fontFamily = SpaceGroteskFontFamily,
                 fontSize = 11.sp,
-                color = EntropiColors.Gold2,
+                color = SkoLabColors.Gold2,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.clickable { onSeeAll() }
             )
@@ -2860,8 +2860,8 @@ fun SectionHeader(
 fun PaperShimmerCard() {
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = EntropiColors.Card,
-        border = BorderStroke(1.dp, EntropiColors.Border),
+        color = SkoLabColors.Card,
+        border = BorderStroke(1.dp, SkoLabColors.Border),
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
@@ -3211,8 +3211,8 @@ fun PulseFeedCard(
 
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = EntropiColors.Card,
-        border = BorderStroke(1.dp, EntropiColors.Border.copy(alpha = 0.5f)),
+        color = SkoLabColors.Card,
+        border = BorderStroke(1.dp, SkoLabColors.Border.copy(alpha = 0.5f)),
         shadowElevation = 1.dp,
         modifier = Modifier
             .fillMaxWidth()
@@ -3237,13 +3237,13 @@ fun PulseFeedCard(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(EntropiColors.Blue1.copy(alpha = 0.08f))
-                            .border(0.5.dp, EntropiColors.Blue1.copy(alpha = 0.2f), CircleShape),
+                            .background(SkoLabColors.Blue1.copy(alpha = 0.08f))
+                            .border(0.5.dp, SkoLabColors.Blue1.copy(alpha = 0.2f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = journal.take(2).uppercase(),
-                            color = EntropiColors.Blue1,
+                            color = SkoLabColors.Blue1,
                             fontWeight = FontWeight.ExtraBold,
                             fontFamily = SpaceGroteskFontFamily,
                             fontSize = 13.sp
@@ -3254,7 +3254,7 @@ fun PulseFeedCard(
                     ) {
                         Text(
                             text = journal,
-                            color = EntropiColors.Text,
+                            color = SkoLabColors.Text,
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
                             maxLines = 1,
@@ -3300,7 +3300,7 @@ fun PulseFeedCard(
                         }
                         Text(
                             text = "$formattedDate · Academic Feed",
-                            color = EntropiColors.Text3,
+                            color = SkoLabColors.Text3,
                             fontSize = 10.sp
                         )
                     }
@@ -3344,7 +3344,7 @@ fun PulseFeedCard(
             ) {
                 Text(
                     text = title,
-                    color = EntropiColors.Text,
+                    color = SkoLabColors.Text,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
                     lineHeight = 22.sp,
@@ -3352,7 +3352,7 @@ fun PulseFeedCard(
                 )
                 Text(
                     text = authors.map { it.split("|").first() }.joinToString(", "),
-                    color = EntropiColors.Text2,
+                    color = SkoLabColors.Text2,
                     fontSize = 11.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -3365,14 +3365,14 @@ fun PulseFeedCard(
             if (!recommendationReason.isNullOrBlank()) {
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = EntropiColors.Blue1.copy(alpha = 0.04f),
-                    border = BorderStroke(0.5.dp, EntropiColors.Blue1.copy(alpha = 0.12f)),
+                    color = SkoLabColors.Blue1.copy(alpha = 0.04f),
+                    border = BorderStroke(0.5.dp, SkoLabColors.Blue1.copy(alpha = 0.12f)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .drawBehind {
                             val strokeWidthPx = 3.dp.toPx()
                             drawLine(
-                                color = EntropiColors.Blue1,
+                                color = SkoLabColors.Blue1,
                                 start = Offset(strokeWidthPx / 2, 0f),
                                 end = Offset(strokeWidthPx / 2, size.height),
                                 strokeWidth = strokeWidthPx
@@ -3390,12 +3390,12 @@ fun PulseFeedCard(
                             Icon(
                                 imageVector = Icons.Default.AutoAwesome,
                                 contentDescription = null,
-                                tint = EntropiColors.Blue1,
+                                tint = SkoLabColors.Blue1,
                                 modifier = Modifier.size(13.dp)
                             )
                             Text(
                                 text = "SKOLAR INSIGHT BRIEF",
-                                color = EntropiColors.Blue1,
+                                color = SkoLabColors.Blue1,
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 1.sp,
@@ -3404,7 +3404,7 @@ fun PulseFeedCard(
                         }
                         Text(
                             text = recommendationReason,
-                            color = EntropiColors.Text,
+                            color = SkoLabColors.Text,
                             fontSize = 12.sp,
                             lineHeight = 17.sp,
                             fontFamily = SpaceGroteskFontFamily
@@ -3418,7 +3418,7 @@ fun PulseFeedCard(
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
                         text = abstractText,
-                        color = EntropiColors.Text2,
+                        color = SkoLabColors.Text2,
                         fontSize = 12.sp,
                         lineHeight = 17.sp,
                         maxLines = if (isExpanded) Int.MAX_VALUE else 2,
@@ -3426,7 +3426,7 @@ fun PulseFeedCard(
                     )
                     Text(
                         text = if (isExpanded) "Show less" else "...see more",
-                        color = EntropiColors.Blue1,
+                        color = SkoLabColors.Blue1,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier
@@ -3441,8 +3441,8 @@ fun PulseFeedCard(
             if (hasDetails) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = EntropiColors.Card2.copy(alpha = 0.4f),
-                    border = BorderStroke(0.5.dp, EntropiColors.Border.copy(alpha = 0.5f)),
+                    color = SkoLabColors.Card2.copy(alpha = 0.4f),
+                    border = BorderStroke(0.5.dp, SkoLabColors.Border.copy(alpha = 0.5f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -3458,13 +3458,13 @@ fun PulseFeedCard(
                                 Icon(
                                     imageVector = Icons.Default.Science,
                                     contentDescription = "Methodology",
-                                    tint = EntropiColors.Blue1,
+                                    tint = SkoLabColors.Blue1,
                                     modifier = Modifier.size(14.dp).padding(top = 1.dp)
                                 )
                                 Column {
                                     Text(
                                         text = "METHODOLOGY",
-                                        color = EntropiColors.Text3,
+                                        color = SkoLabColors.Text3,
                                         fontSize = 8.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         letterSpacing = 0.5.sp,
@@ -3472,7 +3472,7 @@ fun PulseFeedCard(
                                     )
                                     Text(
                                         text = methodology,
-                                        color = EntropiColors.Text,
+                                        color = SkoLabColors.Text,
                                         fontSize = 11.sp,
                                         lineHeight = 15.sp
                                     )
@@ -3489,13 +3489,13 @@ fun PulseFeedCard(
                                 Icon(
                                     imageVector = Icons.Default.Code,
                                     contentDescription = "Tools",
-                                    tint = EntropiColors.Blue1,
+                                    tint = SkoLabColors.Blue1,
                                     modifier = Modifier.size(14.dp).padding(top = 1.dp)
                                 )
                                 Column {
                                     Text(
                                         text = "TOOLS & INFRASTRUCTURE",
-                                        color = EntropiColors.Text3,
+                                        color = SkoLabColors.Text3,
                                         fontSize = 8.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         letterSpacing = 0.5.sp,
@@ -3509,13 +3509,13 @@ fun PulseFeedCard(
                                         toolsUsed.forEach { tool ->
                                             Surface(
                                                 shape = RoundedCornerShape(6.dp),
-                                                color = EntropiColors.Blue1.copy(alpha = 0.08f),
-                                                border = BorderStroke(0.5.dp, EntropiColors.Blue1.copy(alpha = 0.2f))
+                                                color = SkoLabColors.Blue1.copy(alpha = 0.08f),
+                                                border = BorderStroke(0.5.dp, SkoLabColors.Blue1.copy(alpha = 0.2f))
                                             ) {
                                                 Text(
                                                     text = tool,
                                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                                                    color = EntropiColors.Blue1,
+                                                    color = SkoLabColors.Blue1,
                                                     fontSize = 9.5.sp,
                                                     fontWeight = FontWeight.SemiBold,
                                                     fontFamily = SpaceGroteskFontFamily
@@ -3536,13 +3536,13 @@ fun PulseFeedCard(
                                 Icon(
                                     imageVector = Icons.Default.CheckCircle,
                                     contentDescription = "Key Findings",
-                                    tint = EntropiColors.Green,
+                                    tint = SkoLabColors.Green,
                                     modifier = Modifier.size(14.dp).padding(top = 1.dp)
                                 )
                                 Column {
                                     Text(
                                         text = "KEY FINDINGS & OUTCOME",
-                                        color = EntropiColors.Text3,
+                                        color = SkoLabColors.Text3,
                                         fontSize = 8.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         letterSpacing = 0.5.sp,
@@ -3550,7 +3550,7 @@ fun PulseFeedCard(
                                     )
                                     Text(
                                         text = keyFindings,
-                                        color = EntropiColors.Text,
+                                        color = SkoLabColors.Text,
                                         fontSize = 11.sp,
                                         lineHeight = 15.sp
                                     )
@@ -3561,7 +3561,7 @@ fun PulseFeedCard(
                 }
             }
 
-            HorizontalDivider(color = EntropiColors.Border.copy(alpha = 0.5f), thickness = 0.5.dp)
+            HorizontalDivider(color = SkoLabColors.Border.copy(alpha = 0.5f), thickness = 0.5.dp)
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -3580,14 +3580,14 @@ fun PulseFeedCard(
                     Icon(
                         imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                         contentDescription = "Like",
-                        tint = if (isLiked) ButtonDeleteRed else EntropiColors.Text3,
+                        tint = if (isLiked) ButtonDeleteRed else SkoLabColors.Text3,
                         modifier = Modifier
                             .size(16.dp)
                             .graphicsLayer(scaleX = scale, scaleY = scale)
                     )
                     Text(
                         text = if (isLiked) "Liked" else "React",
-                        color = if (isLiked) ButtonDeleteRed else EntropiColors.Text2,
+                        color = if (isLiked) ButtonDeleteRed else SkoLabColors.Text2,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = SpaceGroteskFontFamily
@@ -3630,7 +3630,7 @@ fun PulseFeedCard(
                     Icon(
                         imageVector = if (isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                         contentDescription = "Save",
-                        tint = if (isSaved) EntropiColors.Gold1 else EntropiColors.Text3,
+                        tint = if (isSaved) SkoLabColors.Gold1 else SkoLabColors.Text3,
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -3643,7 +3643,7 @@ fun PulseFeedCard(
                     Icon(
                         imageVector = Icons.Default.Share,
                         contentDescription = "Share",
-                        tint = EntropiColors.Text3,
+                        tint = SkoLabColors.Text3,
                         modifier = Modifier.size(16.dp)
                     )
                 }

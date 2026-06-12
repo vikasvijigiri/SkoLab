@@ -4,6 +4,10 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -37,12 +41,14 @@ import com.company.skolab.network.ChatMessage
 import com.company.skolab.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
+import com.google.firebase.firestore.FirebaseFirestore
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatListScreen(
     onChatClick: (String, String) -> Unit,
     onCoLabClick: (String) -> Unit,
+    onNavigateToCreateProject: () -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -52,13 +58,33 @@ fun ChatListScreen(
     val cachedUser by authManager.cachedUser.collectAsStateWithLifecycle(initialValue = null)
     val connections by userPrefs.userConnections.collectAsStateWithLifecycle(initialValue = emptyList())
     
+    val userUid = cachedUser?.uid ?: ""
+    val db = remember { FirebaseFirestore.getInstance() }
+    var userProjects by remember { mutableStateOf<List<ProjectCollab>>(emptyList()) }
+
+    DisposableEffect(userUid) {
+        if (userUid.isEmpty()) {
+            onDispose {}
+        } else {
+            val listener = db.collection("collabs_groups")
+                .whereArrayContains("memberUids", userUid)
+                .addSnapshotListener { snapshot, error ->
+                    if (snapshot != null) {
+                        userProjects = snapshot.toObjects(ProjectCollab::class.java).sortedByDescending { it.createdAt }
+                    }
+                }
+            onDispose {
+                listener.remove()
+            }
+        }
+    }
+    
     var searchQuery by remember { mutableStateOf("") }
     var showSelectContactDialog by remember { mutableStateOf(false) }
 
     // Initials color palette
     val avatarColors = listOf(AccentTeal, AccentIndigo, AccentEmerald, AccentViolet, AccentAmber, AccentOrange, AccentRose, AccentCyan)
 
-    val userUid = cachedUser?.uid ?: ""
     val chatStorage = remember(userUid) { if (userUid.isNotEmpty()) ChatStorage(context, userUid) else null }
 
     // Load active chat threads based on existing chat logs
@@ -92,42 +118,61 @@ fun ChatListScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .padding(start = 4.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+                        .padding(start = 4.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = TextPrimary)
+                    IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = TextPrimary, modifier = Modifier.size(20.dp))
                     }
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search chats…", color = TextMuted, fontSize = 14.sp) },
-                        leadingIcon = {
-                            Icon(Icons.Default.Search, null, tint = TextMuted, modifier = Modifier.size(18.dp))
-                        },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(
-                                    onClick = { searchQuery = "" },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(Icons.Default.Close, "Clear", tint = TextMuted, modifier = Modifier.size(16.dp))
-                                }
+                    var isFocused by remember { mutableStateOf(false) }
+                    val borderColor = if (isFocused || searchQuery.isNotEmpty()) AccentTeal else BorderLight
+                    val borderWidth = if (isFocused || searchQuery.isNotEmpty()) 1.5.dp else 1.dp
+
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(40.dp)
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(BgPrimary)
+                            .border(borderWidth, borderColor, RoundedCornerShape(24.dp))
+                            .padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = TextMuted,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                            if (searchQuery.isEmpty()) {
+                                Text("Search chats…", color = TextMuted, fontSize = 13.sp)
                             }
-                        },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AccentTeal,
-                            unfocusedBorderColor = BorderLight,
-                            focusedContainerColor = BgPrimary,
-                            unfocusedContainerColor = BgPrimary,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
-                        ),
-                        shape = RoundedCornerShape(24.dp),
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
+                            BasicTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .onFocusChanged { isFocused = it.isFocused },
+                                singleLine = true,
+                                textStyle = androidx.compose.ui.text.TextStyle(
+                                    color = TextPrimary,
+                                    fontSize = 13.sp
+                                ),
+                                cursorBrush = SolidColor(AccentTeal)
+                            )
+                        }
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(
+                                onClick = { searchQuery = "" },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(Icons.Default.Close, "Clear", tint = TextMuted, modifier = Modifier.size(14.dp))
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -206,71 +251,153 @@ fun ChatListScreen(
             ) {
                 // 1. Project Co-Labs Section
                 item {
-                    Text(
-                        text = "Project Co-Labs",
-                        color = AccentTeal,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                    )
-                }
-
-                item {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = BgCard),
-                        border = BorderStroke(0.5.dp, BorderLight),
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp)
-                            .clickable { onCoLabClick("Project Nexus") }
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Text(
+                            text = "Project Co-Labs",
+                            color = AccentTeal,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                        IconButton(
+                            onClick = { onNavigateToCreateProject() },
+                            modifier = Modifier.size(24.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(CircleShape)
-                                    .background(AccentEmerald.copy(alpha = 0.15f)),
-                                contentAlignment = Alignment.Center
+                            Icon(
+                                imageVector = Icons.Default.AddCircleOutline,
+                                contentDescription = "Create Project Group",
+                                tint = AccentTeal,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+
+                if (userProjects.isEmpty()) {
+                    item {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = BgCard),
+                            border = BorderStroke(0.5.dp, BorderLight),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                                .clickable { onCoLabClick("Project Nexus") }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Groups,
-                                    contentDescription = null,
-                                    tint = AccentEmerald,
-                                    modifier = Modifier.size(24.dp)
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(CircleShape)
+                                        .background(AccentEmerald.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Groups,
+                                        contentDescription = null,
+                                        tint = AccentEmerald,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Project Nexus (Mock)",
+                                        color = TextPrimary,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "Tap to view mock spin-1 workspace.",
+                                        color = TextSecondary,
+                                        fontSize = 13.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Surface(
+                                    color = AccentEmerald,
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Text(
+                                        text = "3 online",
+                                        color = TextOnAccent,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
                             }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Project Nexus",
-                                    color = TextPrimary,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "Sumiran Pujari: Added the transverse...",
-                                    color = TextSecondary,
-                                    fontSize = 13.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Surface(
-                                color = AccentEmerald,
-                                shape = RoundedCornerShape(10.dp)
+                        }
+                    }
+                } else {
+                    items(userProjects, key = { it.id }) { proj ->
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = BgCard),
+                            border = BorderStroke(0.5.dp, BorderLight),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                                .clickable { onCoLabClick(proj.id) }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = "3 online",
-                                    color = TextOnAccent,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(CircleShape)
+                                        .background(AccentIndigo.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Groups,
+                                        contentDescription = null,
+                                        tint = AccentIndigo,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = proj.name,
+                                        color = TextPrimary,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = proj.description.ifBlank { "No description provided." },
+                                        color = TextSecondary,
+                                        fontSize = 13.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                val memberCount = proj.members.size
+                                Surface(
+                                    color = AccentIndigo,
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Text(
+                                        text = "$memberCount member${if (memberCount > 1) "s" else ""}",
+                                        color = TextOnAccent,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
                             }
                         }
                     }

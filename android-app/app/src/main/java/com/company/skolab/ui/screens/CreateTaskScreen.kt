@@ -24,6 +24,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.company.skolab.ui.theme.*
 import kotlinx.coroutines.tasks.await
 import android.view.HapticFeedbackConstants
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.ImeAction
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,6 +44,7 @@ fun CreateTaskScreen(
     var assignees by remember { mutableStateOf<List<String>>(listOf("You")) }
     var projectName by remember { mutableStateOf("") }
     var isLoadingProject by remember { mutableStateOf(true) }
+    var titleError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(projectId) {
         try {
@@ -86,7 +90,7 @@ fun CreateTaskScreen(
                 )
             )
         },
-        containerColor = com.company.skolab.ui.theme.EntropiColors.Background
+        containerColor = com.company.skolab.ui.theme.SkoLabColors.Background
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -110,20 +114,46 @@ fun CreateTaskScreen(
                     ) {
                         OutlinedTextField(
                             value = newTaskTitle,
-                            onValueChange = { newTaskTitle = it },
+                            onValueChange = { 
+                                newTaskTitle = it 
+                                if (it.isNotBlank()) titleError = null
+                            },
                             label = { Text("Task Description", color = TextMuted) },
                             placeholder = { Text("e.g. Run DMRG scaling simulations", color = TextMuted) },
+                            isError = titleError != null,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(
+                                onDone = {
+                                    if (newTaskTitle.isBlank()) {
+                                        titleError = "Task description cannot be empty"
+                                    } else {
+                                        onTaskCreated(newTaskTitle.trim(), newTaskAssignee)
+                                        onBack()
+                                    }
+                                }
+                            ),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = TextPrimary,
                                 unfocusedTextColor = TextPrimary,
                                 focusedBorderColor = AccentTeal,
                                 unfocusedBorderColor = BorderLight,
                                 focusedContainerColor = BgElevated,
-                                unfocusedContainerColor = BgElevated
+                                unfocusedContainerColor = BgElevated,
+                                errorBorderColor = SkoLabWarning,
+                                errorLabelColor = SkoLabWarning
                             ),
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(10.dp),
+                            singleLine = true
                         )
+                        if (titleError != null) {
+                            Text(
+                                text = titleError ?: "",
+                                color = SkoLabWarning,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(start = 8.dp)
+                            )
+                        }
 
                         // AI Brainstorming suggestion trigger
                         Surface(
@@ -141,9 +171,9 @@ fun CreateTaskScreen(
                                         "Verify scaling relations and fit correlation length" to "Nisheeta Desai",
                                         "Plot entanglement entropy trace S_E = -Tr(rho_A ln rho_A)" to "You"
                                     )
-                                    nameLower.contains("entropic") -> listOf(
+                                    nameLower.contains("skolabc") -> listOf(
                                         "Model energy dispersion for twisted bilayer twist angle 0.045 rad" to "Sumiran Pujari",
-                                        "Analyze non-equilibrium entropic phase dynamics" to "K. G. Paulson",
+                                        "Analyze non-equilibrium skolabc phase dynamics" to "K. G. Paulson",
                                         "Draft twisted bilayer manuscript methodology" to "You"
                                     )
                                     else -> listOf(
@@ -231,7 +261,7 @@ fun CreateTaskScreen(
                         Button(
                             onClick = {
                                 if (newTaskTitle.isBlank()) {
-                                    Toast.makeText(context, "Task description cannot be empty.", Toast.LENGTH_SHORT).show()
+                                    titleError = "Task description cannot be empty"
                                     return@Button
                                 }
                                 onTaskCreated(newTaskTitle.trim(), newTaskAssignee)

@@ -33,6 +33,11 @@ import com.company.skolab.ui.theme.TextMuted
 import com.company.skolab.ui.theme.TextPrimary
 import com.company.skolab.ui.theme.TextSecondary
 import com.company.skolab.ui.theme.CallEndRed
+import com.company.skolab.ui.theme.SkoLabWarning
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import kotlinx.coroutines.launch
 
 data class CreateProjectMember(val uid: String, val name: String, val email: String)
@@ -56,11 +61,49 @@ fun CreateProjectScreen(
     var newProjDesc by remember { mutableStateOf("") }
     var newProjEq by remember { mutableStateOf("") }
 
+    var nameError by remember { mutableStateOf<String?>(null) }
+
     var memberEmailInput by remember { mutableStateOf("") }
     var isSearchingMember by remember { mutableStateOf(false) }
     var membersList by remember { mutableStateOf<List<CreateProjectMember>>(emptyList()) }
 
     var isSaving by remember { mutableStateOf(false) }
+
+    val onAddMember: () -> Unit = {
+        if (memberEmailInput.isNotBlank() && !isSearchingMember) {
+            isSearchingMember = true
+            db.collection("researchers")
+                .whereEqualTo("email", memberEmailInput.trim())
+                .get()
+                .addOnSuccessListener { querySnapshot ->
+                    isSearchingMember = false
+                    val doc = querySnapshot.documents.firstOrNull()
+                    if (doc != null) {
+                        val researcher = doc.toObject(SkoLabUser::class.java)
+                        if (researcher != null) {
+                            if (researcher.uid == currentUserId) {
+                                Toast.makeText(context, "You are automatically added as the owner.", Toast.LENGTH_SHORT).show()
+                            } else if (membersList.none { it.uid == researcher.uid }) {
+                                membersList = membersList + CreateProjectMember(
+                                    uid = researcher.uid,
+                                    name = researcher.name,
+                                    email = researcher.email
+                                )
+                                memberEmailInput = ""
+                            } else {
+                                Toast.makeText(context, "User already added to the list", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    } else {
+                        Toast.makeText(context, "This user is not registered in the app.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                .addOnFailureListener {
+                    isSearchingMember = false
+                    Toast.makeText(context, "Error looking up user: ${it.message}", Toast.LENGTH_SHORT).show()
+                }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -87,7 +130,7 @@ fun CreateProjectScreen(
                 )
             )
         },
-        containerColor = com.company.skolab.ui.theme.EntropiColors.Background
+        containerColor = com.company.skolab.ui.theme.SkoLabColors.Background
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -115,23 +158,40 @@ fun CreateProjectScreen(
                     )
                     OutlinedTextField(
                         value = newProjName,
-                        onValueChange = { newProjName = it },
+                        onValueChange = { 
+                            newProjName = it 
+                            if (it.isNotBlank()) nameError = null
+                        },
                         label = { Text("Project Name", color = TextMuted) },
+                        isError = nameError != null,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = TextPrimary,
                             unfocusedTextColor = TextPrimary,
                             focusedBorderColor = AccentTeal,
                             unfocusedBorderColor = BorderLight,
                             focusedContainerColor = BgElevated,
-                            unfocusedContainerColor = BgElevated
+                            unfocusedContainerColor = BgElevated,
+                            errorBorderColor = SkoLabWarning,
+                            errorLabelColor = SkoLabWarning
                         ),
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true
                     )
+                    if (nameError != null) {
+                        Text(
+                            text = nameError ?: "",
+                            color = SkoLabWarning,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
                     OutlinedTextField(
                         value = newProjDesc,
                         onValueChange = { newProjDesc = it },
                         label = { Text("Description", color = TextMuted) },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = TextPrimary,
                             unfocusedTextColor = TextPrimary,
@@ -141,13 +201,16 @@ fun CreateProjectScreen(
                             unfocusedContainerColor = BgElevated
                         ),
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = false,
+                        maxLines = 4
                     )
                     OutlinedTextField(
                         value = newProjEq,
                         onValueChange = { newProjEq = it },
                         label = { Text("Recent Equations (LaTeX format)", color = TextMuted) },
                         placeholder = { Text("e.g. \\mathcal{H} = J \\sum ...", color = TextMuted) },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = TextPrimary,
                             unfocusedTextColor = TextPrimary,
@@ -157,7 +220,8 @@ fun CreateProjectScreen(
                             unfocusedContainerColor = BgElevated
                         ),
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true
                     )
                 }
             }
@@ -197,43 +261,17 @@ fun CreateProjectScreen(
                             ),
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(10.dp),
-                            singleLine = true
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Email,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onDone = { onAddMember() }
+                            )
                         )
                         Button(
-                            onClick = {
-                                if (memberEmailInput.isBlank()) return@Button
-                                isSearchingMember = true
-                                db.collection("researchers")
-                                    .whereEqualTo("email", memberEmailInput.trim())
-                                    .get()
-                                    .addOnSuccessListener { querySnapshot ->
-                                        isSearchingMember = false
-                                        val doc = querySnapshot.documents.firstOrNull()
-                                        if (doc != null) {
-                                            val researcher = doc.toObject(SkoLabUser::class.java)
-                                            if (researcher != null) {
-                                                if (researcher.uid == currentUserId) {
-                                                    Toast.makeText(context, "You are automatically added as the owner.", Toast.LENGTH_SHORT).show()
-                                                } else if (membersList.none { it.uid == researcher.uid }) {
-                                                    membersList = membersList + CreateProjectMember(
-                                                        uid = researcher.uid,
-                                                        name = researcher.name,
-                                                        email = researcher.email
-                                                    )
-                                                    memberEmailInput = ""
-                                                } else {
-                                                    Toast.makeText(context, "User already added to the list", Toast.LENGTH_SHORT).show()
-                                                }
-                                            }
-                                        } else {
-                                            Toast.makeText(context, "This user is not registered in the app.", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                    .addOnFailureListener {
-                                        isSearchingMember = false
-                                        Toast.makeText(context, "Error looking up user: ${it.message}", Toast.LENGTH_SHORT).show()
-                                    }
-                            },
+                            onClick = onAddMember,
                             colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
                             shape = RoundedCornerShape(10.dp),
                             enabled = !isSearchingMember,
@@ -283,7 +321,7 @@ fun CreateProjectScreen(
             Button(
                 onClick = {
                     if (newProjName.isBlank()) {
-                        Toast.makeText(context, "Project name cannot be empty.", Toast.LENGTH_SHORT).show()
+                        nameError = "Project name cannot be empty"
                         return@Button
                     }
                     isSaving = true

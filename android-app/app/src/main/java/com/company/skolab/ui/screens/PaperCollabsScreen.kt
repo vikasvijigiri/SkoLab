@@ -911,7 +911,7 @@ fun PaperCollabsScreen(
                                 color = SURFACE,
                                 shape = RoundedCornerShape(20.dp),
                                 border = BorderStroke(1.dp, BORDER),
-                                modifier = Modifier.fillMaxWidth().padding(top = 24.dp)
+                                modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(
                                     modifier = Modifier.padding(24.dp),

@@ -9,7 +9,7 @@ load_dotenv(os.path.join(backend_root, ".env"))
 
 if "DATABASE_URL" not in os.environ:
     os.environ["DATABASE_URL"] = (
-        "postgresql+asyncpg://postgres:postgres@localhost:5432/qyrus"
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/skolab"
     )
 os.environ["TESTING"] = "True"
 os.environ["GROQ_API"] = "mock_groq_key"

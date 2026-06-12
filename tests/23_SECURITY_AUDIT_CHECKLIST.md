@@ -24,9 +24,9 @@
 **Sign-off:** `[x]` Dependency Vulnerability Scanning (SAST/DAST) verified by Vikas Vijigiri  Date: 2026-06-04
 
 ### Pillar 1 Evidence & Justification
-* **SAST (Bandit):** Configured as part of the Github Actions workflow [.github/workflows/verify.yml](file:///c:/Users/VikasVijigiri/Documents/QyRus/.github/workflows/verify.yml#L38-L40), executing `bandit -r backend/app -ll` to fail on medium/high-severity SAST warnings.
-* **Dependency Scanning (pip-audit):** Integrated into the CI workflow [.github/workflows/verify.yml](file:///c:/Users/VikasVijigiri/Documents/QyRus/.github/workflows/verify.yml#L42-L44), running `pip-audit -r backend/requirements.txt` to check packages for known CVEs.
-* **XML Parsing Protection:** Fixed potential XXE injection vulnerabilities by adding `defusedxml` to [requirements.txt](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/requirements.txt) and replacing standard XML parsing imports with `defusedxml.ElementTree as ET` in [connectors.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/services/connectors.py#L6) and [researcher_fetcher.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/services/researcher_fetcher.py#L3).
+* **SAST (Bandit):** Configured as part of the Github Actions workflow [.github/workflows/verify.yml](file:///c:/Users/VikasVijigiri/Documents/SkoLab/.github/workflows/verify.yml#L38-L40), executing `bandit -r backend/app -ll` to fail on medium/high-severity SAST warnings.
+* **Dependency Scanning (pip-audit):** Integrated into the CI workflow [.github/workflows/verify.yml](file:///c:/Users/VikasVijigiri/Documents/SkoLab/.github/workflows/verify.yml#L42-L44), running `pip-audit -r backend/requirements.txt` to check packages for known CVEs.
+* **XML Parsing Protection:** Fixed potential XXE injection vulnerabilities by adding `defusedxml` to [requirements.txt](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/requirements.txt) and replacing standard XML parsing imports with `defusedxml.ElementTree as ET` in [connectors.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/services/connectors.py#L6) and [researcher_fetcher.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/services/researcher_fetcher.py#L3).
 
 ---
 
@@ -40,8 +40,8 @@
 **Sign-off:** `[x]` Secret Ingestion Prevention Gating verified by Vikas Vijigiri  Date: 2026-06-04
 
 ### Pillar 2 Evidence & Justification
-* **Pre-Commit Hook Scanner:** Created [detect_secrets.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/scripts/detect_secrets.py) that checks staged files for high-entropy tokens, keys, and private certificates. Wired into the git pre-commit hook template via [setup_hooks.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/scripts/setup_hooks.py#L22-L28).
-* **History Scanner:** Developed [scan_history_secrets.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/scripts/scan_history_secrets.py) to audit the entire git commit log history, filtering comments, `.env.example`, and test code paths to find credential leaks. History scan completed successfully with zero leaks found.
+* **Pre-Commit Hook Scanner:** Created [detect_secrets.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/scripts/detect_secrets.py) that checks staged files for high-entropy tokens, keys, and private certificates. Wired into the git pre-commit hook template via [setup_hooks.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/scripts/setup_hooks.py#L22-L28).
+* **History Scanner:** Developed [scan_history_secrets.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/scripts/scan_history_secrets.py) to audit the entire git commit log history, filtering comments, `.env.example`, and test code paths to find credential leaks. History scan completed successfully with zero leaks found.
 
 ---
 
@@ -55,7 +55,7 @@
 **Sign-off:** `[x]` Privilege Boundary & Role Access Audit verified by Vikas Vijigiri  Date: 2026-06-04
 
 ### Pillar 3 Evidence & Justification
-* **Least Privilege DB & Cloud Access:** Connection strings (`DATABASE_URL`) and cloud credentials paths are strictly environment-driven via [config.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/core/config.py#L116-L122) and kept out of Git. Production database parameters are configured with dedicated role access controls in production environments.
+* **Least Privilege DB & Cloud Access:** Connection strings (`DATABASE_URL`) and cloud credentials paths are strictly environment-driven via [config.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/core/config.py#L116-L122) and kept out of Git. Production database parameters are configured with dedicated role access controls in production environments.
 * **MFA Enforcement:** Mandatory Multi-Factor Authentication is enforced on all infrastructure consoles (GCP Console, GitHub, and Firebase portal admin logins).
 
 ---
@@ -70,8 +70,8 @@
 **Sign-off:** `[x]` Network Security Port Audits verified by Vikas Vijigiri  Date: 2026-06-04
 
 ### Pillar 4 Evidence & Justification
-* **VPC Port Scanning:** Implemented a socket-based network security tool [port_scan_audit.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/scripts/port_scan_audit.py) to automatically probe default service ports (22, 5432, 9090, 3000) and identify external interface vulnerability risks.
-* **HTTPS Enforcement Middleware:** Added configuration-driven `force_https` in [config.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/core/config.py#L57-L59) and integrated conditional FastAPI `HTTPSRedirectMiddleware` in [main.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/main.py#L308-L310) to automatically redirect all unencrypted HTTP requests to HTTPS.
+* **VPC Port Scanning:** Implemented a socket-based network security tool [port_scan_audit.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/scripts/port_scan_audit.py) to automatically probe default service ports (22, 5432, 9090, 3000) and identify external interface vulnerability risks.
+* **HTTPS Enforcement Middleware:** Added configuration-driven `force_https` in [config.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/core/config.py#L57-L59) and integrated conditional FastAPI `HTTPSRedirectMiddleware` in [main.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/main.py#L308-L310) to automatically redirect all unencrypted HTTP requests to HTTPS.
 
 ---
 
@@ -85,8 +85,8 @@
 **Sign-off:** `[x]` Penetration Testing & OWASP Mobile Verification verified by Vikas Vijigiri  Date: 2026-06-04
 
 ### Pillar 5 Evidence & Justification
-* **Security Integration Tests:** Added integration tests in [test_security.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/tests/test_security.py) verifying CORS policy limits and HTTP-to-HTTPS redirect middleware responses. All tests executed and pass successfully.
-* **OWASP Mobile Compliance:** The Android client enforces secure local storage by utilizing Android Jetpack Security's `EncryptedSharedPreferences` (AES-256-GCM / AES-256-SIV) in [EncryptedPreferences.kt](file:///c:/Users/VikasVijigiri/Documents/QyRus/android-app/app/src/main/java/com.company.skolab/data/EncryptedPreferences.kt) and [UserPreferences.kt](file:///c:/Users/VikasVijigiri/Documents/QyRus/android-app/app/src/main/java/com.company.skolab/data/UserPreferences.kt#L83-L130) to encrypt cached user credentials at rest.
+* **Security Integration Tests:** Added integration tests in [test_security.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/tests/test_security.py) verifying CORS policy limits and HTTP-to-HTTPS redirect middleware responses. All tests executed and pass successfully.
+* **OWASP Mobile Compliance:** The Android client enforces secure local storage by utilizing Android Jetpack Security's `EncryptedSharedPreferences` (AES-256-GCM / AES-256-SIV) in [EncryptedPreferences.kt](file:///c:/Users/VikasVijigiri/Documents/SkoLab/android-app/app/src/main/java/com.company.skolab/data/EncryptedPreferences.kt) and [UserPreferences.kt](file:///c:/Users/VikasVijigiri/Documents/SkoLab/android-app/app/src/main/java/com.company.skolab/data/UserPreferences.kt#L83-L130) to encrypt cached user credentials at rest.
 
 ---
 
@@ -99,7 +99,7 @@
 **Sign-off:** `[x]` SSL/TLS Configuration Validation verified by Vikas Vijigiri  Date: 2026-06-04
 
 ### Pillar 6 Evidence & Justification
-* **SSL Expiration Auditor:** Developed the SRE script [ssl_cert_check.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/scripts/ssl_cert_check.py) to connect to peer SSL sockets, retrieve the server certificates, parse the `notAfter` dates, cipher details, and key lengths, and raise alarms if the certificates are expiring within 30 days.
+* **SSL Expiration Auditor:** Developed the SRE script [ssl_cert_check.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/scripts/ssl_cert_check.py) to connect to peer SSL sockets, retrieve the server certificates, parse the `notAfter` dates, cipher details, and key lengths, and raise alarms if the certificates are expiring within 30 days.
 
 ---
 

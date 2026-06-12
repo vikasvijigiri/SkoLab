@@ -67,14 +67,14 @@ fun SemanticPapersScreen(
                 Column(modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 8.dp)) {
                     Text(
                         text = "Semantic Feed",
-                        color = EntropiColors.Text,
+                        color = SkoLabColors.Text,
                         fontFamily = SyneFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 24.sp
                     )
                     Text(
                         text = "Curated based on: ${uiState.userResearchFocus}",
-                        color = EntropiColors.Gold2,
+                        color = SkoLabColors.Gold2,
                         fontFamily = SpaceGroteskFontFamily,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(top = 4.dp)
@@ -91,9 +91,9 @@ fun SemanticPapersScreen(
             } else {
                 items(uiState.semanticPapers) { paper ->
                     val accentColor = when (uiState.semanticPapers.indexOf(paper) % 3) {
-                        0 -> EntropiColors.Gold1
-                        1 -> EntropiColors.Cyan
-                        else -> EntropiColors.Red
+                        0 -> SkoLabColors.Gold1
+                        1 -> SkoLabColors.Cyan
+                        else -> SkoLabColors.Red
                     }
                     Box(modifier = Modifier.padding(horizontal = 20.dp)) {
                         PaperFeedCard(
@@ -109,7 +109,7 @@ fun SemanticPapersScreen(
                 item {
                     Text(
                         text = "No relevant papers found for your research focus.",
-                        color = EntropiColors.Text2,
+                        color = SkoLabColors.Text2,
                         fontFamily = SpaceGroteskFontFamily,
                         fontSize = 14.sp,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp)
@@ -136,8 +136,8 @@ fun SemanticPapersScreen(
                             listState.animateScrollToItem(0)
                         }
                     },
-                    containerColor = EntropiColors.Gold1,
-                    contentColor = EntropiColors.Background,
+                    containerColor = SkoLabColors.Gold1,
+                    contentColor = SkoLabColors.Background,
                     shape = CircleShape,
                     modifier = Modifier.size(48.dp)
                 ) {

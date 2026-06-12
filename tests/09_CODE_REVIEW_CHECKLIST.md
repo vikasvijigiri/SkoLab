@@ -35,7 +35,7 @@ All items have been verified as **PASS**.
 * **Status:** PASS
 * **Evidence:**
   * Source files: Backend Python codebase, Android Kotlin codebase.
-  * Linter definition: [verify.yml](file:///c:/Users/VikasVijigiri/Documents/QyRus/.github/workflows/verify.yml)
+  * Linter definition: [verify.yml](file:///c:/Users/VikasVijigiri/Documents/SkoLab/.github/workflows/verify.yml)
 * **Justification:** Python codebase enforces PEP 8 styling conventions via Ruff checks in the CI/CD pipeline. Kotlin codebase adheres to Android Kotlin conventions checked via Gradle Lint.
 * **Remediation:** None required.
 
@@ -49,7 +49,7 @@ All items have been verified as **PASS**.
 ### 3. Type hints used for all function arguments and return types.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [pipeline_services.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/services/pipeline_services.py), [quests_service.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/services/quests_service.py), [user_memory_service.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/services/user_memory_service.py)
+  * Source files: [pipeline_services.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/services/pipeline_services.py), [quests_service.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/services/quests_service.py), [user_memory_service.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/services/user_memory_service.py)
 * **Justification:** All methods in the core pipeline service and new business services are annotated with complete argument and return type hints.
 * **Remediation:** None required.
 
@@ -66,7 +66,7 @@ All items have been verified as **PASS**.
 ### 4. Duplicate code segments refactored into modular, reusable helpers.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [pipeline_services.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/services/pipeline_services.py)
+  * Source files: [pipeline_services.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/services/pipeline_services.py)
   * Functions: `_db_session()`, `_get_firestore_db()`, `_firestore_get_safe()`, `_save_to_postgres()`, `_upsert_researcher_profile()`.
 * **Justification:** Repeated database connection checks, firestore retrievals, and profile upsert blocks are refactored into centralized helper methods.
 * **Remediation:** None required.
@@ -81,7 +81,7 @@ All items have been verified as **PASS**.
 ### 6. No nested logic conditions exceeding 3 levels of depth.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [pipeline_services.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/services/pipeline_services.py) (refactored `get_daily_feed` and `get_network_collaborators`).
+  * Source files: [pipeline_services.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/services/pipeline_services.py) (refactored `get_daily_feed` and `get_network_collaborators`).
 * **Justification:** Extracted nested authors and citation mapping loops into dedicated sub-functions (`_reconstruct_abstract()`, `_process_depth1_work()`, `_process_depth2_work()`) to keep conditional block nesting strictly below 3 levels.
 * **Remediation:** None required.
 
@@ -98,21 +98,21 @@ All items have been verified as **PASS**.
 ### 7. All public modules, classes, and complex functions contain docstrings.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [quests_service.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/services/quests_service.py), [user_memory_service.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/services/user_memory_service.py), [encrypted_type.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/db/encrypted_type.py)
+  * Source files: [quests_service.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/services/quests_service.py), [user_memory_service.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/services/user_memory_service.py), [encrypted_type.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/db/encrypted_type.py)
 * **Justification:** Class definitions and functions document their purpose, arguments, and return models.
 * **Remediation:** None required.
 
 ### 8. Code comments explain why a decision was made, not what the code does.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [main.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/main.py) (explains Windows platform uname override), [pipeline_services.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/services/pipeline_services.py) (explains polite pool headers).
+  * Source files: [main.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/main.py) (explains Windows platform uname override), [pipeline_services.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/services/pipeline_services.py) (explains polite pool headers).
 * **Justification:** Comments explain logic choices (such as avoiding WMI locks on Windows or complying with OpenAlex polite rate limits).
 * **Remediation:** None required.
 
 ### 9. Complex algorithms include inline references to design specifications.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [user_memory_service.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/services/user_memory_service.py) (learning style and reading pace computations).
+  * Source files: [user_memory_service.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/services/user_memory_service.py) (learning style and reading pace computations).
 * **Justification:** Formulas are annotated with comments explaining calculations and reference values.
 * **Remediation:** None required.
 
@@ -136,7 +136,7 @@ All items have been verified as **PASS**.
 ### 11. Database sessions and file handles are closed using context managers.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [database.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/db/database.py)
+  * Source files: [database.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/db/database.py)
 * **Justification:** Database sessions use FastAPI depend-injection scope or async block managers (`async with`), ensuring connection closure.
 * **Remediation:** None required.
 
@@ -160,14 +160,14 @@ All items have been verified as **PASS**.
 ### 13. Pull requests are gated to reject code coverage reductions.
 * **Status:** PASS
 * **Evidence:**
-  * CI definition: [verify.yml](file:///c:/Users/VikasVijigiri/Documents/QyRus/.github/workflows/verify.yml)
+  * CI definition: [verify.yml](file:///c:/Users/VikasVijigiri/Documents/SkoLab/.github/workflows/verify.yml)
 * **Justification:** Enforces pytest with `--cov-fail-under=80` for core modules (`quests_service`, `user_memory_service`, and `encrypted_type`), achieving **85%** total coverage and gating builds from code coverage regression.
 * **Remediation:** Configured CI coverage scope to target the tested packages correctly.
 
 ### 14. New logic blocks are covered by both positive and negative unit tests.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [test_quests_service.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/tests/test_quests_service.py), [test_user_memory_service.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/tests/test_user_memory_service.py), [test_encrypted_type.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/tests/test_encrypted_type.py)
+  * Source files: [test_quests_service.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/tests/test_quests_service.py), [test_user_memory_service.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/tests/test_user_memory_service.py), [test_encrypted_type.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/tests/test_encrypted_type.py)
 * **Justification:** Test suites verify happy path features and cover edge cases (e.g. LLM timeouts, database rollbacks, decryption fallbacks).
 * **Remediation:** None required.
 

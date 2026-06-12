@@ -12,7 +12,7 @@ The application consists of a high-performance **FastAPI backend** (with an in-m
 SkoLab/
 ├── android-app/             # Jetpack Compose Mobile Client (Kotlin)
 │   ├── app/
-│   │   ├── src/main/java/com/open/entropy/
+│   │   ├── src/main/java/com/company/skolab/
 │   │   │   ├── network/     # ApiService and data models
 │   │   │   ├── ui/          # Theme, screens, custom primitive components
 │   │   │   └── MainActivity.kt
@@ -36,13 +36,13 @@ SkoLab/
 ## 🚀 Key Features
 
 ### 1. Premium Ultra-Modern Light Theme
-The mobile client leverages an HSL-tailored light theme styled for a premium, dashboard-like feel. The color tokens are mapped dynamically inside [Color.kt](file:///c:/Users/VikasVijigiri/Documents/SkoLab/android-app/app/src/main/java/com/open/entropy/ui/theme/Color.kt):
+The mobile client leverages an HSL-tailored light theme styled for a premium, dashboard-like feel. The color tokens are mapped dynamically inside [Color.kt](file:///c:/Users/VikasVijigiri/Documents/SkoLab/android-app/app/src/main/java/com/company/skolab/ui/theme/Color.kt):
 *   **Primary Background:** Sleek slate gray-blue (`#F5F7FA`) to eliminate generic white-wash colors.
 *   **Card Surfaces:** Clean elevated pure white (`#FFFFFF`) with subtle border shadows.
 *   **Accents:** Custom semantic colors representing academic metrics (Teal, Indigo, Emerald, Amber, Rose, Violet).
 
 ### 2. Search Autocomplete & Profile Discovery
-Users search for global researchers using the [GlassSearchBar.kt](file:///c:/Users/VikasVijigiri/Documents/SkoLab/android-app/app/src/main/java/com/open/entropy/ui/components/primitives/GlassSearchBar.kt):
+Users search for global researchers using the [GlassSearchBar.kt](file:///c:/Users/VikasVijigiri/Documents/SkoLab/android-app/app/src/main/java/com/company/skolab/ui/components/primitives/GlassSearchBar.kt):
 *   **Live Suggestion Dropdown:** Displays interactive list items showing the researcher's avatar initials, name, and current institution.
 *   **Firestore Indexing & Fallbacks:** Queries local Firestore indices first for maximum performance. If no match is found, it dynamically falls back to OpenAlex's API, parsing institutions from lists to ensure no user remains marked as "Independent".
 

@@ -19,7 +19,7 @@
 > **Copilot:** Verify that the code satisfies the 'Help Desk Ticket Routing' constraints in the current PR diff.
 
 - [x] Support ticket forms submit directly to Zendesk/Freshdesk integration pipelines.
-  - **Evidence:** [support.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/api/v1/endpoints/support.py) exposes the ticket ingestion route (`POST /api/v1/support/ticket`), which receives ticket data and kicks off the background task `simulate_zendesk_pipeline` to push tickets to external queues.
+  - **Evidence:** [support.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/api/v1/endpoints/support.py) exposes the ticket ingestion route (`POST /api/v1/support/ticket`), which receives ticket data and kicks off the background task `simulate_zendesk_pipeline` to push tickets to external queues.
 - [x] Auto-responder templates confirm ticket receipt to customers.
   - **Evidence:** `POST /api/v1/support/ticket` returns a pre-formatted auto-reply template confirming ticket ID, topic, and expected SLA response times.
 
@@ -45,9 +45,9 @@
 > **Copilot:** Verify that the code satisfies the 'User Manuals & FAQs Audit' constraints in the current PR diff.
 
 - [x] Support knowledge bases updated with screenshots of new UI components.
-  - **Evidence:** Verified under PM documentation freeze checks in [RELEASE_SIGN_OFF.md](file:///c:/Users/VikasVijigiri/Documents/QyRus/docs/RELEASE_SIGN_OFF.md).
+  - **Evidence:** Verified under PM documentation freeze checks in [RELEASE_SIGN_OFF.md](file:///c:/Users/VikasVijigiri/Documents/SkoLab/docs/RELEASE_SIGN_OFF.md).
 - [x] Self-service guides detail how users can manage quest and roadmap preferences.
-  - **Evidence:** Tracked and validated under [RELEASE_SIGN_OFF.md](file:///c:/Users/VikasVijigiri/Documents/QyRus/docs/RELEASE_SIGN_OFF.md) feature sign-offs.
+  - **Evidence:** Tracked and validated under [RELEASE_SIGN_OFF.md](file:///c:/Users/VikasVijigiri/Documents/SkoLab/docs/RELEASE_SIGN_OFF.md) feature sign-offs.
 
 **Sign-off:** `[x]` User Manuals & FAQs Audit verified by Antigravity  Date: 2026-06-04
 
@@ -58,9 +58,9 @@
 > **Copilot:** Verify that the code satisfies the 'Customer Feedback Loops' constraints in the current PR diff.
 
 - [x] In-app feedback buttons collect user details and diagnostic parameters.
-  - **Evidence:** Android app [ProfileScreen.kt](file:///c:/Users/VikasVijigiri/Documents/QyRus/android-app/app/src/main/java/com.company.skolab/ui/screens/ProfileScreen.kt) lines 1354-1355 logs user-submitted bug/feedback reports directly to Firebase Crashlytics alongside context keys.
+  - **Evidence:** Android app [ProfileScreen.kt](file:///c:/Users/VikasVijigiri/Documents/SkoLab/android-app/app/src/main/java/com.company.skolab/ui/screens/ProfileScreen.kt) lines 1354-1355 logs user-submitted bug/feedback reports directly to Firebase Crashlytics alongside context keys.
 - [x] Satisfaction score (CSAT) survey triggers configured for solved tickets.
-  - **Evidence:** Exposed tracking of CSAT metrics (CSAT target: 98.4%) via [support.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/api/v1/endpoints/support.py) `/metrics`.
+  - **Evidence:** Exposed tracking of CSAT metrics (CSAT target: 98.4%) via [support.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/api/v1/endpoints/support.py) `/metrics`.
 
 **Sign-off:** `[x]` Customer Feedback Loops verified by Antigravity  Date: 2026-06-04
 
@@ -73,7 +73,7 @@
 - [x] Priority channels allow VIP customers to request direct help via email/chat.
   - **Evidence:** Support endpoints dynamically segment incoming requests using the `priority` configuration field, enabling expedited routing.
 - [x] SLA thresholds page team leads if VIP tickets remain unresolved.
-  - **Evidence:** VIP response target SLA (15 minutes) is tracked in [support.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/api/v1/endpoints/support.py) `/metrics` SLA definitions.
+  - **Evidence:** VIP response target SLA (15 minutes) is tracked in [support.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/api/v1/endpoints/support.py) `/metrics` SLA definitions.
 
 **Sign-off:** `[x]` VIP Account Support verified by Antigravity  Date: 2026-06-04
 
@@ -84,7 +84,7 @@
 > **Copilot:** Verify that the code satisfies the 'Support Metrics & SLAs' constraints in the current PR diff.
 
 - [x] Target metrics (First Response Time, Resolution Time) tracked on support dashboards.
-  - **Evidence:** Exposed via [support.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/api/v1/endpoints/support.py) `/metrics`, displaying average first response times, resolution hours, and open queue capacities.
+  - **Evidence:** Exposed via [support.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/api/v1/endpoints/support.py) `/metrics`, displaying average first response times, resolution hours, and open queue capacities.
 
 **Sign-off:** `[x]` Support Metrics & SLAs verified by Antigravity  Date: 2026-06-04
 

@@ -18,7 +18,7 @@
 
 > **Copilot:** Verify that the code satisfies the 'Visual Identity, Styling & Glassmorphic Aesthetics' constraints in the current PR diff.
 
-> **Verification:** `Color.kt` defines a complete token system (PAGE_BACKGROUND, SURFACE, SURFACE_SUBTLE, PRIMARY, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED) mapped to SkoLabTheme via `lightColorScheme` in `Theme.kt`. `EntropiColors` object provides named aliases for all subsystems. No raw hex is used in UI files — all colors reference named tokens. `TEXT_MUTED` comment reads "WCAG AA compliant contrast".
+> **Verification:** `Color.kt` defines a complete token system (PAGE_BACKGROUND, SURFACE, SURFACE_SUBTLE, PRIMARY, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED) mapped to SkoLabTheme via `lightColorScheme` in `Theme.kt`. `SkoLabColors` object provides named aliases for all subsystems. No raw hex is used in UI files — all colors reference named tokens. `TEXT_MUTED` comment reads "WCAG AA compliant contrast".
 
 - [x] SkoLab design system tokens applied across all Compose components.
 - [x] Contrast ratios meet WCAG AA standards (4.5:1 minimum for body text).

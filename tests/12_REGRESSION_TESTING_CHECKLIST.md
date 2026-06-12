@@ -23,8 +23,8 @@ All items have been verified as **PASS** or **NOT APPLICABLE**.
 
 | Pillar & Item | Status | Action/Resolution Detail |
 |---|---|---|
-| **Pillar 1 — CI Regression Gating** | **PASS** | Automated pytest and linting runs on every pull request inside [.github/workflows/verify.yml](file:///c:/Users/VikasVijigiri/Documents/QyRus/.github/workflows/verify.yml). |
-| **Pillar 5 — API Backward Compatibility** | **PASS** | Router is mounted at both the root `/` and `/api/v1` in [main.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/main.py) to prevent breaking legacy API clients. |
+| **Pillar 1 — CI Regression Gating** | **PASS** | Automated pytest and linting runs on every pull request inside [.github/workflows/verify.yml](file:///c:/Users/VikasVijigiri/Documents/SkoLab/.github/workflows/verify.yml). |
+| **Pillar 5 — API Backward Compatibility** | **PASS** | Router is mounted at both the root `/` and `/api/v1` in [main.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/main.py) to prevent breaking legacy API clients. |
 | **Pillar 6 — Play Store Rollback** | **NOT APPLICABLE** | Play Store beta rollback triggers are managed inside Google Play Console, which is not applicable to the source repository. |
 
 ---
@@ -34,14 +34,14 @@ All items have been verified as **PASS** or **NOT APPLICABLE**.
 ### 1. Regression test suite is run on every pull request.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [.github/workflows/verify.yml](file:///c:/Users/VikasVijigiri/Documents/QyRus/.github/workflows/verify.yml) (triggered on `push` and `pull_request` to `main`/`master` branches).
+  * Source files: [.github/workflows/verify.yml](file:///c:/Users/VikasVijigiri/Documents/SkoLab/.github/workflows/verify.yml) (triggered on `push` and `pull_request` to `main`/`master` branches).
 * **Justification:** Automates execution of all pytest tests to block regressions on every PR.
 * **Remediation:** None required.
 
 ### 2. Test coverage of previously fixed bugs is verified to prevent regressions.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [test_quests_service.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/tests/test_quests_service.py) (transaction rollback coverage), [test_encrypted_type.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/tests/test_encrypted_type.py) (PII decryption fallback coverage).
+  * Source files: [test_quests_service.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/tests/test_quests_service.py) (transaction rollback coverage), [test_encrypted_type.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/tests/test_encrypted_type.py) (PII decryption fallback coverage).
 * **Justification:** Specific test cases assert correct behavior on previously patched bug patterns.
 * **Remediation:** None required.
 
@@ -66,7 +66,7 @@ All items have been verified as **PASS** or **NOT APPLICABLE**.
 ### 4. Modified code modules mapped to target tests to identify impacted paths.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: Git hooks installer [setup_hooks.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/scripts/setup_hooks.py), pre-commit file `.git/hooks/pre-commit`.
+  * Source files: Git hooks installer [setup_hooks.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/scripts/setup_hooks.py), pre-commit file `.git/hooks/pre-commit`.
 * **Justification:** The git pre-commit hook maps and executes tests on local commit modifications to block code breakage early.
 * **Remediation:** None required.
 
@@ -89,7 +89,7 @@ All items have been verified as **PASS** or **NOT APPLICABLE**.
 ### 6. Fixes for resolved production bugs contain a regression unit test.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [test_quests_service.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/tests/test_quests_service.py) (verifies database commit and rollback exceptions).
+  * Source files: [test_quests_service.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/tests/test_quests_service.py) (verifies database commit and rollback exceptions).
 * **Justification:** Production hotfixes are wrapped in unit test coverage.
 * **Remediation:** None required.
 
@@ -118,7 +118,7 @@ All items have been verified as **PASS** or **NOT APPLICABLE**.
 ### 9. Read/write performance metrics evaluated during migration simulations.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [database.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/db/database.py)
+  * Source files: [database.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/db/database.py)
 * **Justification:** DB connection pool settings are optimized for high read/write metrics without performance degradation.
 * **Remediation:** None required.
 
@@ -134,14 +134,14 @@ All items have been verified as **PASS** or **NOT APPLICABLE**.
 ### 10. Older app version client requests routed to verify API contract compatibility.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [main.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/main.py)
+  * Source files: [main.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/main.py)
 * **Justification:** Maps the core routes at both the root `/` and `/api/v1` prefixes so legacy and versioned client connections function identically.
 * **Remediation:** None required.
 
 ### 11. No breaking changes introduced in JSON schemas without version updates.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [schemas/](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/schemas) folder.
+  * Source files: [schemas/](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/schemas) folder.
 * **Justification:** API endpoints return validated schemas which preserve backward compatibility.
 * **Remediation:** None required.
 
