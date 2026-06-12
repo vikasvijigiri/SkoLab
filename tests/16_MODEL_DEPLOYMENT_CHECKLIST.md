@@ -23,7 +23,7 @@ All items have been verified as **PASS** or **NOT APPLICABLE**.
 
 | Pillar & Item | Status | Action/Resolution Detail |
 |---|---|---|
-| **Pillar 1 — Prompts Versioning** | **PASS** | Prompts are isolated in the [prompts/](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/prompts) package and version-controlled via Git. |
+| **Pillar 1 — Prompts Versioning** | **PASS** | Prompts are isolated in the [prompts/](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/prompts) package and version-controlled via Git. |
 | **Pillar 3 — Timeouts** | **PASS** | Request timeouts (`settings.llm_timeout_seconds` defaulting to `30s`) prevent runaway queries before client socket drops. |
 | **Pillar 5 — Token Metrics** | **NOT APPLICABLE** | Billing token metrics are monitored on provider consoles (Groq/OpenRouter), which is not applicable to local code. |
 
@@ -34,7 +34,7 @@ All items have been verified as **PASS** or **NOT APPLICABLE**.
 ### 1. Prompts are isolated in versioned modules or configuration files (no inline string templates).
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [prompts/](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/prompts) folder.
+  * Source files: [prompts/](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/prompts) folder.
   * Verification: Prompts (such as `JSON_PARSER_SYSTEM_PROMPT` in `scraping_prompts.py`, `QUESTS_GENERATION_PROMPT_TEMPLATE` in `quest_prompts.py`, and other agent/pipeline prompts) are isolated and imported into services rather than hardcoded in service implementations.
 * **Justification:** Decouples prompt templates from business logic.
 * **Remediation:** Isolated all inline templates from `quests_service.py`, `pipeline_services.py`, and `summarization_service.py` to `app/prompts/` and fixed the daily feed formatting mismatch.
@@ -81,7 +81,7 @@ All items have been verified as **PASS** or **NOT APPLICABLE**.
 ### 5. API keys, domains, and gateway credentials loaded from secure environment variables.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [config.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/core/config.py)
+  * Source files: [config.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/core/config.py)
   * Verification: Secrets are loaded from environment variables (`GROQ_API`, `OPENROUTER_API_KEY`) and managed using Settings.
 * **Justification:** Secrets are loaded dynamically at runtime.
 * **Remediation:** None required.
@@ -89,7 +89,7 @@ All items have been verified as **PASS** or **NOT APPLICABLE**.
 ### 6. Request timeouts are set to abort slow LLM queries before web client timeouts occur.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [llm_service.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/services/llm_service.py) (uses `settings.llm_timeout_seconds` parameter).
+  * Source files: [llm_service.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/services/llm_service.py) (uses `settings.llm_timeout_seconds` parameter).
   * Verification: LLM service timeouts default to 30 seconds to prevent client-side socket dropouts.
 * **Justification:** Request timeouts are validated.
 * **Remediation:** None required.
@@ -113,7 +113,7 @@ All items have been verified as **PASS** or **NOT APPLICABLE**.
 ### 8. Caching models results configured to prevent redundant gateway requests.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [pg_cache.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/db/pg_cache.py) (cache layer configuration).
+  * Source files: [pg_cache.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/db/pg_cache.py) (cache layer configuration).
   * Verification: LLM responses (e.g. daily feed items, conjecture, roadmap metrics) are cached in `PgBackedCache` to prevent redundant network latency and costs.
 * **Justification:** Caching mitigates latency spikes.
 * **Remediation:** None required.
@@ -136,7 +136,7 @@ All items have been verified as **PASS** or **NOT APPLICABLE**.
 ### 10. Request counts are capped per user tier to prevent billing spikes.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [UserPreferences.kt](file:///c:/Users/VikasVijigiri/Documents/QyRus/android-app/app/src/main/java/com.company.skolab/data/UserPreferences.kt) (tracks `subscriptionTypeKey` like `Basic`/`Pro`).
+  * Source files: [UserPreferences.kt](file:///c:/Users/VikasVijigiri/Documents/SkoLab/android-app/app/src/main/java/com.company.skolab/data/UserPreferences.kt) (tracks `subscriptionTypeKey` like `Basic`/`Pro`).
   * Verification: Mobile client restricts or limits user requests depending on membership configurations.
 * **Justification:** Request throttling is enforced.
 * **Remediation:** None required.

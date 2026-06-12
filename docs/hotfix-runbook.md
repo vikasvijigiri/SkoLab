@@ -39,7 +39,7 @@ If a critical app crash occurs in production, execute an expedited hotfix releas
 1. **Code Patch:**
    Apply the fix in the Android Kotlin codebase.
 2. **Increment Build Version:**
-   In [build.gradle.kts](file:///c:/Users/VikasVijigiri/Documents/QyRus/android-app/app/build.gradle.kts#L19-L20), increment both `versionCode` and `versionName`:
+   In [build.gradle.kts](file:///c:/Users/VikasVijigiri/Documents/SkoLab/android-app/app/build.gradle.kts#L19-L20), increment both `versionCode` and `versionName`:
    * Example: `versionCode = 3`, `versionName = "1.1.1-skolab"`
 3. **Generate Signed Release APK:**
    Run Gradle build to generate the production release APK:

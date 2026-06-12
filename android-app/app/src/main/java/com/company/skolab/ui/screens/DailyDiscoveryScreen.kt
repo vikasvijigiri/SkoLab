@@ -68,7 +68,7 @@ fun DailyDiscoveryScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(EntropiColors.Background)
+            .background(SkoLabColors.Background)
     ) {
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -92,7 +92,7 @@ fun DailyDiscoveryScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = errorMessage,
-                        color = EntropiColors.Text2,
+                        color = SkoLabColors.Text2,
                         textAlign = TextAlign.Center,
                         fontSize = 14.sp
                     )
@@ -124,14 +124,14 @@ fun DailyDiscoveryScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = EntropiColors.Text1
+                            tint = SkoLabColors.Text1
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
                             text = "Daily Discovery Feed",
-                            color = EntropiColors.Text1,
+                            color = SkoLabColors.Text1,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.ExtraBold,
                             fontFamily = SpaceGroteskFontFamily
@@ -305,7 +305,7 @@ fun DiscoveryCard(
                     ) {
                         Text(
                             text = "${item.journal} (${item.year})",
-                            color = EntropiColors.Text2,
+                            color = SkoLabColors.Text2,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
                             maxLines = 1,
@@ -346,7 +346,7 @@ fun DiscoveryCard(
                 // Title
                 MarkdownText(
                     markdown = item.title,
-                    color = EntropiColors.Text1,
+                    color = SkoLabColors.Text1,
                     fontSize = 20.sp,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -375,7 +375,7 @@ fun DiscoveryCard(
                             Text(
                                 text = tag,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                color = EntropiColors.Text2,
+                                color = SkoLabColors.Text2,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium
                             )
@@ -388,7 +388,7 @@ fun DiscoveryCard(
                 // Abstract details section
                 Text(
                     text = "ABSTRACT & INSIGHTS",
-                    color = EntropiColors.Text3,
+                    color = SkoLabColors.Text3,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp
@@ -396,7 +396,7 @@ fun DiscoveryCard(
 
                 MarkdownText(
                     markdown = item.abstractText,
-                    color = EntropiColors.Text2,
+                    color = SkoLabColors.Text2,
                     fontSize = 14.sp,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -430,7 +430,7 @@ fun DiscoveryCard(
                         )
                     }
                     Spacer(Modifier.height(4.dp))
-                    Text("Discuss", color = EntropiColors.Text3, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text("Discuss", color = SkoLabColors.Text3, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
 
                 // Read PDF / Web Reader button
@@ -462,7 +462,7 @@ fun DiscoveryCard(
                         )
                     }
                     Spacer(Modifier.height(4.dp))
-                    Text("Read PDF", color = if (!item.pdfUrl.isNullOrBlank()) EntropiColors.Text3 else Color.White.copy(alpha = 0.2f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text("Read PDF", color = if (!item.pdfUrl.isNullOrBlank()) SkoLabColors.Text3 else Color.White.copy(alpha = 0.2f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
 
                 // Save button
@@ -482,12 +482,12 @@ fun DiscoveryCard(
                         Icon(
                             imageVector = if (isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                             contentDescription = "Save",
-                            tint = if (isSaved) accentColor else EntropiColors.Text1,
+                            tint = if (isSaved) accentColor else SkoLabColors.Text1,
                             modifier = Modifier.size(20.dp)
                         )
                     }
                     Spacer(Modifier.height(4.dp))
-                    Text(if (isSaved) "Saved" else "Save", color = EntropiColors.Text3, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text(if (isSaved) "Saved" else "Save", color = SkoLabColors.Text3, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
 
                 // Share button
@@ -509,7 +509,7 @@ fun DiscoveryCard(
                         )
                     }
                     Spacer(Modifier.height(4.dp))
-                    Text("Share", color = EntropiColors.Text3, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text("Share", color = SkoLabColors.Text3, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

@@ -34,7 +34,7 @@ All items have been verified as **PASS** or **NOT APPLICABLE**.
 ### 1. Android app functionality verified on APIs 29 through 35 (Android 10 to 15).
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [build.gradle.kts](file:///c:/Users/VikasVijigiri/Documents/QyRus/android-app/app/build.gradle.kts)
+  * Source files: [build.gradle.kts](file:///c:/Users/VikasVijigiri/Documents/SkoLab/android-app/app/build.gradle.kts)
   * Verification: Configured target targetSdk is `35` and minSdk is `26`, which covers the APIs 29 through 35 range.
 * **Justification:** Gradle configuration gates the compilation range safely.
 * **Remediation:** None required.
@@ -42,7 +42,7 @@ All items have been verified as **PASS** or **NOT APPLICABLE**.
 ### 2. SDK dependencies are checked for compatibility across minimum target versions.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [build.gradle.kts](file:///c:/Users/VikasVijigiri/Documents/QyRus/android-app/app/build.gradle.kts)
+  * Source files: [build.gradle.kts](file:///c:/Users/VikasVijigiri/Documents/SkoLab/android-app/app/build.gradle.kts)
   * Verification: Standard library components (Firebase, Ktor, Jetpack Compose) are compatible with Android SDK level 26+.
 * **Justification:** Dependencies align with target version constraints.
 * **Remediation:** None required.

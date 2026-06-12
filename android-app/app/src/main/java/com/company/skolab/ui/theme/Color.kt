@@ -52,13 +52,13 @@ fun isDarkThemeActive(): Boolean = isDarkThemeActiveState
 // ── Core Surfaces ─────────────────────────────────────────────────────────────
 
 val PAGE_BACKGROUND: Color
-    get() = if (isDarkThemeActive()) Color(0xFF080E1C) else Color(0xFFF5F7FA)
+    get() = if (isDarkThemeActive()) Color(0xFF080E1C) else Color(0xFFF7F3ED)
 
 val SURFACE: Color
     get() = if (isDarkThemeActive()) Color(0xFF0F1829) else Color(0xFFFFFFFF)
 
 val SURFACE_SUBTLE: Color
-    get() = if (isDarkThemeActive()) Color(0xFF162035) else Color(0xFFEEF2F6)
+    get() = if (isDarkThemeActive()) Color(0xFF162035) else Color(0xFFF0EBE3)
 
 // ── Brand Primary — Electric Blue (universally #1 liked color) ────────────────
 
@@ -256,8 +256,8 @@ val QuantumPurple                = VIOLET
 val ProGradientSurface: List<Color> get() = listOf(BgCard, BgSubtle)
 val ProGradientPrimary: List<Color> get() = TealGradient
 
-// ── EntropiColors ─────────────────────────────────────────────────
-object EntropiColors {
+// ── SkoLabColors ─────────────────────────────────────────────────
+object SkoLabColors {
     val Background: Color  get() = PAGE_BACKGROUND
     val Card: Color        get() = SURFACE
     val Card2: Color       get() = SURFACE_SUBTLE

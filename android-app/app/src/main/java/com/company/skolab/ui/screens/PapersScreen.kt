@@ -73,7 +73,7 @@ fun PapersScreen(
             item {
                 Text(
                     text = "Papers",
-                    color = EntropiColors.Text,
+                    color = SkoLabColors.Text,
                     fontFamily = SyneFontFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 24.sp,
@@ -134,9 +134,9 @@ fun PapersScreen(
                 items(uiState.trendingPapers, key = { it.id }) { paper ->
                     Box(modifier = Modifier.padding(horizontal = 20.dp)) {
                         val accentColor = when (uiState.trendingPapers.indexOf(paper) % 3) {
-                            0 -> EntropiColors.Gold1
-                            1 -> EntropiColors.Cyan
-                            else -> EntropiColors.Red
+                            0 -> SkoLabColors.Gold1
+                            1 -> SkoLabColors.Cyan
+                            else -> SkoLabColors.Red
                         }
                         PaperFeedCard(
                             paper = paper,
@@ -193,8 +193,8 @@ fun PapersScreen(
                             listState.animateScrollToItem(0)
                         }
                     },
-                    containerColor = EntropiColors.Gold1,
-                    contentColor = EntropiColors.Background,
+                    containerColor = SkoLabColors.Gold1,
+                    contentColor = SkoLabColors.Background,
                     shape = CircleShape,
                     modifier = Modifier.size(48.dp)
                 ) {
@@ -225,8 +225,8 @@ fun PapersFilterRail(
             Surface(
                 onClick = { onFilterSelect(filter) },
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-                color = if (isActive) EntropiColors.Gold1.copy(alpha = 0.12f) else EntropiColors.Card2,
-                border = androidx.compose.foundation.BorderStroke(1.dp, if (isActive) EntropiColors.Gold1 else EntropiColors.Border)
+                color = if (isActive) SkoLabColors.Gold1.copy(alpha = 0.12f) else SkoLabColors.Card2,
+                border = androidx.compose.foundation.BorderStroke(1.dp, if (isActive) SkoLabColors.Gold1 else SkoLabColors.Border)
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -243,7 +243,7 @@ fun PapersFilterRail(
                         fontFamily = SpaceGroteskFontFamily,
                         fontSize = 11.sp,
                         fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isActive) EntropiColors.Gold2 else EntropiColors.Text2
+                        color = if (isActive) SkoLabColors.Gold2 else SkoLabColors.Text2
                     )
                 }
             }

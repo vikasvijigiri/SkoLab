@@ -372,7 +372,7 @@ fun ExternalInviteScreen(
                 )
             )
         },
-        containerColor = EntropiColors.Background
+        containerColor = SkoLabColors.Background
     ) { paddingValues ->
         Column(
             modifier = Modifier

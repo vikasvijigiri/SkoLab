@@ -270,7 +270,7 @@ class AgentService:
             structured_message = f"<user_query>\n{sanitized_message}\n</user_query>"
             messages.append({"role": "user", "content": structured_message})
 
-            models = None
+            # models = None
             if is_llm_working():
                 chosen_model = None
                 max_turns = 5

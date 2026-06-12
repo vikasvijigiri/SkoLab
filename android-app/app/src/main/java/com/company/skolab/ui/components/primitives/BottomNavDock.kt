@@ -70,7 +70,7 @@ fun BottomNavDock(
         modifier = modifier.fillMaxWidth(),
         color = BgPrimary
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -80,8 +80,7 @@ fun BottomNavDock(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .height(56.dp),
+                    .height(48.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -123,8 +122,8 @@ fun BottomNavDock(
                             if (selected) {
                                 Box(
                                     modifier = Modifier
-                                        .size(width = 44.dp, height = 30.dp)
-                                        .background(PRIMARY.copy(alpha = 0.12f), RoundedCornerShape(15.dp))
+                                        .size(width = 44.dp, height = 24.dp)
+                                        .background(PRIMARY.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
                                 )
                             }
                             Box {
@@ -133,7 +132,7 @@ fun BottomNavDock(
                                         painter = painterResource(id = item.drawableResId),
                                         contentDescription = null,
                                         modifier = Modifier
-                                            .size(19.dp)
+                                            .size(18.dp)
                                             .padding(horizontal = 1.dp),
                                         alpha = if (selected) 1f else 0.5f
                                     )
@@ -142,7 +141,7 @@ fun BottomNavDock(
                                         imageVector = item.icon,
                                         contentDescription = null,
                                         modifier = Modifier
-                                            .size(19.dp)
+                                            .size(18.dp)
                                             .padding(horizontal = 1.dp),
                                         tint = tint
                                     )

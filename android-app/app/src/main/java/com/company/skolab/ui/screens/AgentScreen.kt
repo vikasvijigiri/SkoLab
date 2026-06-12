@@ -109,7 +109,7 @@ fun AgentScreen(initialQuery: String = "") {
 
     Scaffold(
         modifier = Modifier.imePadding(),
-        containerColor = EntropiColors.Background,
+        containerColor = SkoLabColors.Background,
         topBar = {
             AgentTopBar(
                 currentProject = uiState.currentProject,
@@ -200,7 +200,7 @@ fun AgentScreen(initialQuery: String = "") {
                             .background(
                                 Brush.radialGradient(
                                     colors = listOf(
-                                        EntropiColors.Gold1.copy(alpha = 0.25f),
+                                        SkoLabColors.Gold1.copy(alpha = 0.25f),
                                         Color.Transparent
                                     )
                                 ),
@@ -221,7 +221,7 @@ fun AgentScreen(initialQuery: String = "") {
                     val greeting = uiState.personalizedGreeting
                     Text(
                         text = if (greeting.isNotEmpty()) greeting else "Ask Skolar",
-                        color = EntropiColors.Text,
+                        color = SkoLabColors.Text,
                         fontSize = if (greeting.length > 40) 16.sp else 20.sp,
                         fontWeight = FontWeight.ExtraBold,
                         fontFamily = SyneFontFamily,
@@ -236,7 +236,7 @@ fun AgentScreen(initialQuery: String = "") {
                             "Personalised to your research in ${uiState.memoryProfile.topTopics.take(2).joinToString(" · ")}"
                         else
                             "Your AI research partner. Ask anything.",
-                        color = EntropiColors.Text3,
+                        color = SkoLabColors.Text3,
                         fontSize = 13.sp,
                         lineHeight = 19.sp,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -331,7 +331,7 @@ fun AgentScreen(initialQuery: String = "") {
                         Spacer(Modifier.height(24.dp))
                         Text(
                             text = "REMINDERS",
-                            color = EntropiColors.Text3,
+                            color = SkoLabColors.Text3,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.5.sp,
@@ -350,8 +350,8 @@ fun AgentScreen(initialQuery: String = "") {
                                         viewModel.sendMessage("Tell me more: $clean")
                                     },
                                     shape = RoundedCornerShape(12.dp),
-                                    color = EntropiColors.Card,
-                                    border = BorderStroke(0.5.dp, EntropiColors.Border),
+                                    color = SkoLabColors.Card,
+                                    border = BorderStroke(0.5.dp, SkoLabColors.Border),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Row(
@@ -363,7 +363,7 @@ fun AgentScreen(initialQuery: String = "") {
                                     ) {
                                         Text(
                                             text = reminder,
-                                            color = EntropiColors.Text2,
+                                            color = SkoLabColors.Text2,
                                             fontSize = 13.sp,
                                             modifier = Modifier.weight(1f),
                                             maxLines = 1,
@@ -389,27 +389,27 @@ fun AgentScreen(initialQuery: String = "") {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(EntropiColors.Card)
-                                .border(BorderStroke(0.5.dp, EntropiColors.Border), RoundedCornerShape(12.dp))
+                                .background(SkoLabColors.Card)
+                                .border(BorderStroke(0.5.dp, SkoLabColors.Border), RoundedCornerShape(12.dp))
                                 .padding(vertical = 12.dp),
                             horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
                             if (mem.totalPapersRead > 0) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(mem.totalPapersRead.toString(), color = com.company.skolab.ui.theme.PRIMARY, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
-                                    Text("Papers Read", color = EntropiColors.Text3, fontSize = 10.sp)
+                                    Text("Papers Read", color = SkoLabColors.Text3, fontSize = 10.sp)
                                 }
                             }
                             if (mem.streakDays > 0) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text("${mem.streakDays}🔥", color = com.company.skolab.ui.theme.PRIMARY, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
-                                    Text("Day Streak", color = EntropiColors.Text3, fontSize = 10.sp)
+                                    Text("Day Streak", color = SkoLabColors.Text3, fontSize = 10.sp)
                                 }
                             }
                             if (mem.avgReadMinutes > 0f) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text("${mem.avgReadMinutes.toInt()}m", color = com.company.skolab.ui.theme.PRIMARY, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
-                                    Text("Avg Read", color = EntropiColors.Text3, fontSize = 10.sp)
+                                    Text("Avg Read", color = SkoLabColors.Text3, fontSize = 10.sp)
                                 }
                             }
                         }
@@ -463,9 +463,9 @@ fun AgentScreen(initialQuery: String = "") {
     if (showClearConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showClearConfirmDialog = false },
-            containerColor = EntropiColors.Card,
-            title = { Text("Wipe All Conversations?", color = EntropiColors.Text, fontWeight = FontWeight.Bold) },
-            text = { Text("This will permanently delete all Ask Skolar chat sessions. You cannot undo this.", color = EntropiColors.Text2) },
+            containerColor = SkoLabColors.Card,
+            title = { Text("Wipe All Conversations?", color = SkoLabColors.Text, fontWeight = FontWeight.Bold) },
+            text = { Text("This will permanently delete all Ask Skolar chat sessions. You cannot undo this.", color = SkoLabColors.Text2) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -482,7 +482,7 @@ fun AgentScreen(initialQuery: String = "") {
             },
             dismissButton = {
                 TextButton(onClick = { showClearConfirmDialog = false }) {
-                    Text("Cancel", color = EntropiColors.Text3)
+                    Text("Cancel", color = SkoLabColors.Text3)
                 }
             }
         )
@@ -499,12 +499,13 @@ fun AgentTopBar(
     onNewChatClick: () -> Unit
 ) {
     Surface(
-        color = EntropiColors.Background,
-        border = BorderStroke(0.5.dp, EntropiColors.Border.copy(alpha = 0.5f))
+        color = SkoLabColors.Background,
+        border = BorderStroke(0.5.dp, SkoLabColors.Border.copy(alpha = 0.5f))
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .statusBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -526,7 +527,7 @@ fun AgentTopBar(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Ask Skolar",
-                    color = EntropiColors.Text,
+                    color = SkoLabColors.Text,
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp,
                     fontFamily = SyneFontFamily
@@ -542,7 +543,7 @@ fun AgentTopBar(
                     )
                     Text(
                         text = "Online",
-                        color = EntropiColors.Text3,
+                        color = SkoLabColors.Text3,
                         fontSize = 10.sp
                     )
                 }
@@ -552,14 +553,14 @@ fun AgentTopBar(
             Surface(
                 onClick = onModeToggle,
                 color = if (activeMode == AgentMode.CODING)
-                    EntropiColors.Cyan.copy(alpha = 0.1f)
+                    SkoLabColors.Cyan.copy(alpha = 0.1f)
                 else
-                    EntropiColors.Gold1.copy(alpha = 0.1f),
+                    SkoLabColors.Gold1.copy(alpha = 0.1f),
                 shape = RoundedCornerShape(20.dp),
                 border = BorderStroke(
                     1.dp,
-                    if (activeMode == AgentMode.CODING) EntropiColors.Cyan.copy(alpha = 0.4f)
-                    else EntropiColors.Gold1.copy(alpha = 0.4f)
+                    if (activeMode == AgentMode.CODING) SkoLabColors.Cyan.copy(alpha = 0.4f)
+                    else SkoLabColors.Gold1.copy(alpha = 0.4f)
                 )
             ) {
                 Row(
@@ -571,11 +572,11 @@ fun AgentTopBar(
                         imageVector = if (activeMode == AgentMode.CODING) Icons.Default.Code else Icons.Default.Science,
                         contentDescription = null,
                         modifier = Modifier.size(11.dp),
-                        tint = if (activeMode == AgentMode.CODING) EntropiColors.Cyan else EntropiColors.Gold1
+                        tint = if (activeMode == AgentMode.CODING) SkoLabColors.Cyan else SkoLabColors.Gold1
                     )
                     Text(
                         text = activeMode.name,
-                        color = if (activeMode == AgentMode.CODING) EntropiColors.Cyan else EntropiColors.Gold1,
+                        color = if (activeMode == AgentMode.CODING) SkoLabColors.Cyan else SkoLabColors.Gold1,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.5.sp
@@ -590,7 +591,7 @@ fun AgentTopBar(
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = "New Chat",
-                    tint = EntropiColors.Gold1,
+                    tint = SkoLabColors.Gold1,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -602,7 +603,7 @@ fun AgentTopBar(
                 Icon(
                     imageVector = Icons.Default.History,
                     contentDescription = "History",
-                    tint = EntropiColors.Text2,
+                    tint = SkoLabColors.Text2,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -651,7 +652,7 @@ fun AgentMessageBubble(
                 ) {
                     MarkdownText(
                         markdown = message.content,
-                        color = EntropiColors.Text,
+                        color = SkoLabColors.Text,
                         fontSize = 15.sp
                     )
                 }
@@ -666,9 +667,9 @@ fun AgentMessageBubble(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     if (message.isStarred) {
-                        Icon(Icons.Default.Star, null, tint = EntropiColors.Gold1, modifier = Modifier.size(9.dp))
+                        Icon(Icons.Default.Star, null, tint = SkoLabColors.Gold1, modifier = Modifier.size(9.dp))
                     }
-                    Text(timestamp, color = EntropiColors.Text3, fontSize = 10.sp)
+                    Text(timestamp, color = SkoLabColors.Text3, fontSize = 10.sp)
                     Icon(Icons.Default.DoneAll, null, tint = AccentTeal.copy(alpha = 0.8f), modifier = Modifier.size(12.dp))
                 }
             }
@@ -714,7 +715,7 @@ fun AgentMessageBubble(
                 Column(modifier = Modifier.weight(1f)) {
                     MarkdownText(
                         markdown = message.content,
-                        color = EntropiColors.Text,
+                        color = SkoLabColors.Text,
                         fontSize = 15.sp,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -724,9 +725,9 @@ fun AgentMessageBubble(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         if (message.isStarred) {
-                            Icon(Icons.Default.Star, null, tint = EntropiColors.Gold1, modifier = Modifier.size(9.dp))
+                            Icon(Icons.Default.Star, null, tint = SkoLabColors.Gold1, modifier = Modifier.size(9.dp))
                         }
-                        Text(timestamp, color = EntropiColors.Text3, fontSize = 10.sp)
+                        Text(timestamp, color = SkoLabColors.Text3, fontSize = 10.sp)
                         if (!message.reaction.isNullOrEmpty()) {
                             ReactionBadge(reaction = message.reaction)
                         }
@@ -810,7 +811,7 @@ fun AgentInputBar(
     focusRequester: androidx.compose.ui.focus.FocusRequester? = null
 ) {
     Surface(
-        color = EntropiColors.Background,
+        color = SkoLabColors.Background,
         shadowElevation = 8.dp,
         tonalElevation = 0.dp
     ) {
@@ -827,7 +828,7 @@ fun AgentInputBar(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .background(EntropiColors.Card2)
+                            .background(SkoLabColors.Card2)
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -846,14 +847,14 @@ fun AgentInputBar(
                             )
                             Text(
                                 text = replyingToMessage.content,
-                                color = EntropiColors.Text2,
+                                color = SkoLabColors.Text2,
                                 fontSize = 12.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
                         IconButton(onClick = onClearReply, modifier = Modifier.size(20.dp)) {
-                            Icon(Icons.Default.Close, null, tint = EntropiColors.Text3, modifier = Modifier.size(14.dp))
+                            Icon(Icons.Default.Close, null, tint = SkoLabColors.Text3, modifier = Modifier.size(14.dp))
                         }
                     }
                 }
@@ -874,13 +875,13 @@ fun AgentInputBar(
                         Surface(
                             onClick = { onQuickPrompt(prompt) },
                             shape = RoundedCornerShape(20.dp),
-                            color = EntropiColors.Card2,
-                            border = BorderStroke(0.5.dp, EntropiColors.Border)
+                            color = SkoLabColors.Card2,
+                            border = BorderStroke(0.5.dp, SkoLabColors.Border)
                         ) {
                             Text(
                                 text = prompt,
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                                color = EntropiColors.Text2,
+                                color = SkoLabColors.Text2,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
                                 maxLines = 1,
@@ -897,7 +898,7 @@ fun AgentInputBar(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
-                        .background(EntropiColors.Card2)
+                        .background(SkoLabColors.Card2)
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -905,7 +906,7 @@ fun AgentInputBar(
                     Spacer(Modifier.width(8.dp))
                     Text(
                         text = if (isAttachingFile) "Extracting…" else attachedFileName ?: "",
-                        color = EntropiColors.Text2,
+                        color = SkoLabColors.Text2,
                         fontSize = 12.sp,
                         modifier = Modifier.weight(1f),
                         maxLines = 1,
@@ -919,7 +920,7 @@ fun AgentInputBar(
                         )
                     } else {
                         IconButton(onClick = onClearAttachment, modifier = Modifier.size(20.dp)) {
-                            Icon(Icons.Default.Close, null, tint = EntropiColors.Text3, modifier = Modifier.size(13.dp))
+                            Icon(Icons.Default.Close, null, tint = SkoLabColors.Text3, modifier = Modifier.size(13.dp))
                         }
                     }
                 }
@@ -931,13 +932,13 @@ fun AgentInputBar(
                     .fillMaxWidth()
                     .heightIn(min = 48.dp, max = 140.dp)
                     .clip(RoundedCornerShape(26.dp))
-                    .background(EntropiColors.Card2)
+                    .background(SkoLabColors.Card2)
                     .border(
                         width = if (text.isNotBlank()) 1.dp else 0.5.dp,
                         brush = if (text.isNotBlank())
                             Brush.horizontalGradient(listOf(AccentTeal, AccentViolet))
                         else
-                            Brush.horizontalGradient(listOf(EntropiColors.Border, EntropiColors.Border)),
+                            Brush.horizontalGradient(listOf(SkoLabColors.Border, SkoLabColors.Border)),
                         shape = RoundedCornerShape(26.dp)
                     )
                     .padding(start = 6.dp, end = 6.dp),
@@ -948,7 +949,7 @@ fun AgentInputBar(
                     Icon(
                         Icons.Default.Add,
                         contentDescription = "Attach",
-                        tint = EntropiColors.Text3,
+                        tint = SkoLabColors.Text3,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -958,7 +959,7 @@ fun AgentInputBar(
                     value = text,
                     onValueChange = onTextChanged,
                     textStyle = TextStyle(
-                        color = EntropiColors.Text,
+                        color = SkoLabColors.Text,
                         fontSize = 15.sp,
                         lineHeight = 22.sp
                     ),
@@ -971,7 +972,7 @@ fun AgentInputBar(
                             if (text.isEmpty()) {
                                 Text(
                                     "Message Ask Skolar…",
-                                    color = EntropiColors.Text3,
+                                    color = SkoLabColors.Text3,
                                     fontSize = 15.sp
                                 )
                             }
@@ -1018,7 +1019,7 @@ fun AgentInputBar(
                             Icon(
                                 Icons.Default.Mic,
                                 contentDescription = "Voice",
-                                tint = EntropiColors.Text3,
+                                tint = SkoLabColors.Text3,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -1044,8 +1045,8 @@ fun AgentHistoryBottomSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
-        containerColor = EntropiColors.Background,
-        dragHandle = { BottomSheetDefaults.DragHandle(color = EntropiColors.Border) }
+        containerColor = SkoLabColors.Background,
+        dragHandle = { BottomSheetDefaults.DragHandle(color = SkoLabColors.Border) }
     ) {
         Column(
             modifier = Modifier
@@ -1059,7 +1060,7 @@ fun AgentHistoryBottomSheet(
             ) {
                 Text(
                     text = "Conversation History",
-                    color = EntropiColors.Text,
+                    color = SkoLabColors.Text,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = SyneFontFamily
@@ -1080,7 +1081,7 @@ fun AgentHistoryBottomSheet(
                 ) {
                     Text(
                         text = "No past conversations found.",
-                        color = EntropiColors.Text3,
+                        color = SkoLabColors.Text3,
                         fontSize = 14.sp
                     )
                 }
@@ -1099,8 +1100,8 @@ fun AgentHistoryBottomSheet(
                                 onDismissRequest()
                             },
                             shape = RoundedCornerShape(12.dp),
-                            color = if (isCurrent) EntropiColors.Gold1.copy(alpha = 0.12f) else EntropiColors.Card,
-                            border = if (isCurrent) BorderStroke(1.dp, EntropiColors.Gold1.copy(alpha = 0.6f)) else BorderStroke(0.5.dp, EntropiColors.Border),
+                            color = if (isCurrent) SkoLabColors.Gold1.copy(alpha = 0.12f) else SkoLabColors.Card,
+                            border = if (isCurrent) BorderStroke(1.dp, SkoLabColors.Gold1.copy(alpha = 0.6f)) else BorderStroke(0.5.dp, SkoLabColors.Border),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -1112,13 +1113,13 @@ fun AgentHistoryBottomSheet(
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.Chat,
                                     contentDescription = null,
-                                    tint = if (isCurrent) EntropiColors.Gold1 else EntropiColors.Text3,
+                                    tint = if (isCurrent) SkoLabColors.Gold1 else SkoLabColors.Text3,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(Modifier.width(12.dp))
                                 Text(
                                     text = title,
-                                    color = if (isCurrent) EntropiColors.Gold1 else EntropiColors.Text,
+                                    color = if (isCurrent) SkoLabColors.Gold1 else SkoLabColors.Text,
                                     fontSize = 14.sp,
                                     fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
                                     modifier = Modifier.weight(1f),

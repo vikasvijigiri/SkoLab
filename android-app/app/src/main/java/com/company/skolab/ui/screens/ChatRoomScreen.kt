@@ -596,13 +596,12 @@ fun ChatRoomScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .padding(start = 4.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                        .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Back button + Avatar Clickable Row (WhatsApp style)
                     Row(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(24.dp))
+                            .clip(RoundedCornerShape(20.dp))
                             .clickable { onBack() }
                             .padding(vertical = 4.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -611,15 +610,12 @@ fun ChatRoomScreen(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
                             tint = TextPrimary,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(20.dp)
                         )
-                        
                         Spacer(Modifier.width(4.dp))
-                        
-                        // Avatar (Circular Profile Pic with Online Dot option)
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
+                                .size(32.dp)
                                 .clip(CircleShape)
                                 .background(color.copy(alpha = 0.15f)),
                             contentAlignment = Alignment.Center
@@ -628,38 +624,34 @@ fun ChatRoomScreen(
                                 text = peerName.take(1).uppercase(),
                                 color = color,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
+                                fontSize = 13.sp,
                                 fontFamily = DisplayFontFamily
                             )
-                            
-                            // Online Indicator Green Dot (WhatsApp style)
                             val peer = peerUserData
                             if (isPeerTyping || (peer?.isOnline == true && peer.emailVerified == true)) {
                                 Box(
                                     modifier = Modifier
-                                        .size(10.dp)
+                                        .size(8.dp)
                                         .align(Alignment.BottomEnd)
-                                        .border(1.5.dp, BgCard, CircleShape)
+                                        .border(1.dp, BgCard, CircleShape)
                                         .background(AccentEmerald, CircleShape)
                                 )
                             }
                         }
                     }
 
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(6.dp))
 
-                    // Name and Status (WhatsApp style, also clickable to go back/view)
                     Column(
                         modifier = Modifier
                             .weight(1f)
                             .clickable { onBack() }
-                            .padding(vertical = 4.dp)
                     ) {
                         Text(
                             text = peerName,
                             color = TextPrimary,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
+                            fontSize = 14.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             fontFamily = DisplayFontFamily
@@ -677,50 +669,26 @@ fun ChatRoomScreen(
                             "online" -> AccentEmerald
                             else -> TextSecondary
                         }
-                        Text(
-                            text = statusText,
-                            color = statusColor,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Normal
-                        )
+                        Text(text = statusText, color = statusColor, fontSize = 10.sp)
                     }
-                    
-                    // Action icons
+
                     IconButton(
                         onClick = {
-                            if (isPeerSkoLab) {
-                                callingOverlayMode = "video"
-                                callState = "calling"
-                                showCallingOverlay = true
-                            } else {
-                                selectedCallTypeForDialog = "video"
-                                showNonSkoLabDialog = true
-                            }
-                        }
+                            if (isPeerSkoLab) { callingOverlayMode = "video"; callState = "calling"; showCallingOverlay = true }
+                            else { selectedCallTypeForDialog = "video"; showNonSkoLabDialog = true }
+                        },
+                        modifier = Modifier.size(36.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Videocam,
-                            contentDescription = "Video Call",
-                            tint = if (isPeerSkoLab) AccentTeal else TextSecondary.copy(alpha = 0.38f)
-                        )
+                        Icon(Icons.Default.Videocam, "Video Call", tint = if (isPeerSkoLab) AccentTeal else TextSecondary.copy(alpha = 0.38f), modifier = Modifier.size(20.dp))
                     }
                     IconButton(
                         onClick = {
-                            if (isPeerSkoLab) {
-                                callingOverlayMode = "voice"
-                                callState = "calling"
-                                showCallingOverlay = true
-                            } else {
-                                selectedCallTypeForDialog = "voice"
-                                showNonSkoLabDialog = true
-                            }
-                        }
+                            if (isPeerSkoLab) { callingOverlayMode = "voice"; callState = "calling"; showCallingOverlay = true }
+                            else { selectedCallTypeForDialog = "voice"; showNonSkoLabDialog = true }
+                        },
+                        modifier = Modifier.size(36.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Call,
-                            contentDescription = "Voice Call",
-                            tint = if (isPeerSkoLab) AccentTeal else TextSecondary.copy(alpha = 0.38f)
-                        )
+                        Icon(Icons.Default.Call, "Voice Call", tint = if (isPeerSkoLab) AccentTeal else TextSecondary.copy(alpha = 0.38f), modifier = Modifier.size(20.dp))
                     }
                 }
             }
@@ -832,22 +800,32 @@ fun ChatRoomScreen(
                     }
 
                     if (isPeerSkoLab) {
+                        val isMessageEmpty = messageText.trim().isEmpty()
+                        val sendButtonBg by animateColorAsState(
+                            targetValue = if (isMessageEmpty) BgSubtle else AccentEmerald,
+                            label = "sendBg"
+                        )
+                        val sendButtonTint by animateColorAsState(
+                            targetValue = if (isMessageEmpty) TextMuted else TextOnAccent,
+                            label = "sendTint"
+                        )
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.Bottom,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            // Rounded Text Field Container (WhatsApp style)
+                            // Multi-line auto-expanding input row
                             Row(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .heightIn(min = 36.dp, max = 100.dp)
-                                    .clip(RoundedCornerShape(24.dp))
+                                    .heightIn(min = 40.dp, max = 120.dp)
+                                    .clip(RoundedCornerShape(20.dp))
                                     .background(BgElevated)
-                                    .border(BorderStroke(1.dp, BorderLight.copy(alpha = 0.4f)), RoundedCornerShape(24.dp))
-                                    .padding(horizontal = 14.dp, vertical = 2.dp),
+                                    .border(BorderStroke(0.5.dp, BorderLight), RoundedCornerShape(20.dp))
+                                    .padding(horizontal = 10.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 IconButton(
@@ -858,88 +836,85 @@ fun ChatRoomScreen(
                                         }
                                         showMediaPanel = !showMediaPanel
                                     },
-                                    modifier = Modifier.size(26.dp)
+                                    modifier = Modifier.size(24.dp)
                                 ) {
                                     Icon(
                                         imageVector = if (showMediaPanel) Icons.Default.Keyboard else Icons.Default.SentimentSatisfiedAlt,
                                         contentDescription = "Toggle Media Panel",
-                                        tint = if (showMediaPanel) AccentTeal else TextMuted
+                                        tint = if (showMediaPanel) AccentTeal else TextMuted,
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
-                                
-                                Spacer(Modifier.width(6.dp))
-                                
-                                BasicTextField(
-                                    value = messageText,
-                                    onValueChange = { messageText = it },
-                                    textStyle = TextStyle(
-                                        color = TextPrimary, 
-                                        fontSize = 14.5.sp,
-                                        fontFamily = DisplayFontFamily
-                                    ),
-                                    cursorBrush = SolidColor(AccentTeal),
+
+                                Spacer(Modifier.width(4.dp))
+
+                                Box(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .padding(vertical = 8.dp)
-                                        .focusRequester(focusRequester)
-                                        .onFocusChanged { focusState ->
-                                            if (focusState.isFocused) {
-                                                showMediaPanel = false
+                                        .padding(vertical = 4.dp),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    BasicTextField(
+                                        value = messageText,
+                                        onValueChange = { messageText = it },
+                                        singleLine = false,
+                                        maxLines = 5,
+                                        textStyle = TextStyle(
+                                            color = TextPrimary,
+                                            fontSize = 13.sp,
+                                            fontFamily = DisplayFontFamily
+                                        ),
+                                        cursorBrush = SolidColor(AccentTeal),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .focusRequester(focusRequester)
+                                            .onFocusChanged { if (it.isFocused) showMediaPanel = false },
+                                        decorationBox = { innerTextField ->
+                                            Box(contentAlignment = Alignment.CenterStart) {
+                                                if (messageText.isEmpty()) Text("Message", color = TextMuted, fontSize = 13.sp)
+                                                innerTextField()
                                             }
-                                        },
-                                    decorationBox = { innerTextField ->
-                                        Box(contentAlignment = Alignment.CenterStart) {
-                                            if (messageText.isEmpty()) {
-                                                Text("Message", color = TextMuted, fontSize = 14.5.sp)
-                                            }
-                                            innerTextField()
                                         }
-                                    }
-                                )
-                                
-                                Spacer(Modifier.width(6.dp))
-                                
-                                IconButton(onClick = {}, modifier = Modifier.size(26.dp)) {
-                                    Icon(Icons.Default.AttachFile, null, tint = TextMuted, modifier = Modifier.size(20.dp))
+                                    )
                                 }
+
                                 Spacer(Modifier.width(4.dp))
-                                IconButton(onClick = {}, modifier = Modifier.size(26.dp)) {
-                                    Icon(Icons.Default.CameraAlt, null, tint = TextMuted, modifier = Modifier.size(20.dp))
+
+                                IconButton(onClick = {}, modifier = Modifier.size(24.dp)) {
+                                    Icon(Icons.Default.AttachFile, null, tint = TextMuted, modifier = Modifier.size(17.dp))
                                 }
                             }
-                            
-                            // Circular Green Send FAB with Shadow
-                            FloatingActionButton(
-                                onClick = {
-                                    if (messageText.isNotBlank()) {
-                                        val userMsg = if (replyingToMessage != null) {
-                                            "> ${replyingToMessage!!.content.replace("\n", "\n> ")}\n\n${messageText.trim()}"
-                                        } else {
-                                            messageText.trim()
-                                        }
-                                        replyingToMessage = null
-                                        
-                                        val updatedHistory = chatHistory + ChatMessage(role = "user", content = userMsg)
-                                        chatHistory = updatedHistory
-                                        chatStorage?.saveChatHistory(peerId, updatedHistory)
-                                        messageText = ""
-                                        
-                                        // Trigger peer reply
-                                        triggerPeerResponse(userMsg, updatedHistory)
-                                    }
-                                },
-                                containerColor = AccentEmerald,
-                                contentColor = TextOnAccent,
-                                shape = CircleShape,
+
+                            // Send button — same 40dp circle
+                            Box(
                                 modifier = Modifier
                                     .size(40.dp)
-                                    .graphicsLayer {
-                                        shadowElevation = 4f
-                                        shape = CircleShape
-                                        clip = true
-                                    }
+                                    .clip(CircleShape)
+                                    .background(sendButtonBg)
+                                    .then(
+                                        if (!isMessageEmpty) {
+                                            Modifier.clickable {
+                                                if (messageText.isNotBlank()) {
+                                                    val userMsg = if (replyingToMessage != null) {
+                                                        "> ${replyingToMessage!!.content.replace("\n", "\n> ")}\n\n${messageText.trim()}"
+                                                    } else {
+                                                        messageText.trim()
+                                                    }
+                                                    replyingToMessage = null
+                                                    val updatedHistory = chatHistory + ChatMessage(role = "user", content = userMsg)
+                                                    chatHistory = updatedHistory
+                                                    chatStorage?.saveChatHistory(peerId, updatedHistory)
+                                                    messageText = ""
+                                                    triggerPeerResponse(userMsg, updatedHistory)
+                                                }
+                                            }
+                                        } else {
+                                            Modifier
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.Send, "Send", modifier = Modifier.size(18.dp))
+                                Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = sendButtonTint, modifier = Modifier.size(17.dp))
                             }
                         }
                     } else {
@@ -1402,7 +1377,7 @@ fun ChatRoomScreen(
 
                     // --- SECTION 1: INVITATION CHANNELS ---
                     Text(
-                        text = "INVITE TO SKOLAB",
+                        text = "INVITE",
                         color = TextMuted,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,

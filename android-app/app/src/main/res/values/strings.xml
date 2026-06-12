@@ -39,4 +39,10 @@
     <string name="onboarding_terms_title">Terms of Service</string>
     <string name="onboarding_terms_body">By using SkoLab, you agree to comply with our academic integrity policies. You may not scrape our services or abuse LLM endpoint access.</string>
     <string name="onboarding_dismiss">Dismiss</string>
+    
+    <!-- CoLab Workspace Screen Strings -->
+    <plurals name="active_co_authors">
+        <item quantity="one">%1$d active co-author</item>
+        <item quantity="other">%1$d active co-authors</item>
+    </plurals>
 </resources>

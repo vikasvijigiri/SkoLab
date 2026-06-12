@@ -29,6 +29,10 @@ import com.company.skolab.ui.theme.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.ImeAction
+import com.company.skolab.ui.theme.SkoLabWarning
 
 data class ArXivDiscipline(
     val name: String,
@@ -73,6 +77,45 @@ fun ProfileSetupScreen(
     // OpenAlex match state
     var matchState by remember { mutableStateOf<OpenAlexMatchState>(OpenAlexMatchState.Idle) }
     var debounceJob by remember { mutableStateOf<Job?>(null) }
+
+    val onBuildIndex = {
+        val trimmedName = nameInput.trim()
+        val discipline = selectedDiscipline
+        if (trimmedName.isNotEmpty() && discipline != null && !isSaving) {
+            isSaving = true
+            scope.launch {
+                try {
+                    val uid = authManager.currentUser?.uid ?: "user_default"
+                    val email = authManager.currentUser?.email ?: ""
+
+                    // If OpenAlex confirmed a match, use the canonical display_name as the stored name
+                    val resolvedName = when (val s = matchState) {
+                        is OpenAlexMatchState.Found -> s.suggestion.display_name
+                        else -> trimmedName
+                    }
+                    
+                    userPrefs.cacheUser(
+                        SkoLabUser(
+                            uid = uid,
+                            name = resolvedName,
+                            email = email,
+                            researchFocus = discipline.name,
+                            complexityScore = 0.5f,
+                            savedPapers = emptyList()
+                        )
+                    )
+
+                    authManager.updateUserProfile(resolvedName, discipline.name)
+                    SkoLabAnalytics.logOnboardingCompleted(discipline.name)
+                    onSetupComplete()
+                } catch (e: Exception) {
+                    android.util.Log.e("ProfileSetupScreen", "Failed to save profile", e)
+                } finally {
+                    isSaving = false
+                }
+            }
+        }
+    }
 
     // Pre-populate name if already present in firebase auth
     LaunchedEffect(cachedUser) {
@@ -234,7 +277,11 @@ fun ProfileSetupScreen(
                     },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    singleLine = true
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(
+                        onDone = { onBuildIndex() }
+                    )
                 )
 
                 // ── OpenAlex match feedback banner ─────────────────────────────
@@ -372,44 +419,7 @@ fun ProfileSetupScreen(
 
             // Action button
             Button(
-                onClick = {
-                    val trimmedName = nameInput.trim()
-                    val discipline = selectedDiscipline
-                    if (trimmedName.isNotEmpty() && discipline != null) {
-                        isSaving = true
-                        scope.launch {
-                            try {
-                                val uid = authManager.currentUser?.uid ?: "user_default"
-                                val email = authManager.currentUser?.email ?: ""
-
-                                // If OpenAlex confirmed a match, use the canonical display_name as the stored name
-                                val resolvedName = when (val s = matchState) {
-                                    is OpenAlexMatchState.Found -> s.suggestion.display_name
-                                    else -> trimmedName
-                                }
-                                
-                                userPrefs.cacheUser(
-                                    SkoLabUser(
-                                        uid = uid,
-                                        name = resolvedName,
-                                        email = email,
-                                        researchFocus = discipline.name,
-                                        complexityScore = 0.5f,
-                                        savedPapers = emptyList()
-                                    )
-                                )
-
-                                authManager.updateUserProfile(resolvedName, discipline.name)
-                                SkoLabAnalytics.logOnboardingCompleted(discipline.name)
-                                onSetupComplete()
-                            } catch (e: Exception) {
-                                android.util.Log.e("ProfileSetupScreen", "Failed to save profile", e)
-                            } finally {
-                                isSaving = false
-                            }
-                        }
-                    }
-                },
+                onClick = onBuildIndex,
                 enabled = nameInput.trim().isNotEmpty() && selectedDiscipline != null && !isSaving,
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = PRIMARY),

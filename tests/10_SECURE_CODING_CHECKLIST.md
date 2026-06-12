@@ -34,7 +34,7 @@ An end-to-end security audit was conducted on the Skolab backend and Android cli
 ### 1. SqlAlchemy parameter binding prevents SQL Injection; raw queries are forbidden.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [database.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/db/database.py), [user_models.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/models/user_models.py)
+  * Source files: [database.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/db/database.py), [user_models.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/models/user_models.py)
   * Verification: Verified database queries across all services (`quests_service.py`, `user_memory_service.py`, etc.) utilize the SQLAlchemy ORM query interface. There are no raw SQL string formatting or concatenations in production endpoints.
 * **Justification:** SQLAlchemy's ORM model mapping and query execution automatically compile queries with parameterized placeholder binding, making SQL injection impossible.
 * **Remediation:** None required.
@@ -50,7 +50,7 @@ An end-to-end security audit was conducted on the Skolab backend and Android cli
 ### 3. HTML inputs, parameters, and queries are sanitized before processing to prevent XSS.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [scraping_service.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/services/scraping_service.py) (Class: `HTMLTextExtractor`)
+  * Source files: [scraping_service.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/services/scraping_service.py) (Class: `HTMLTextExtractor`)
   * Verification: External HTML inputs retrieved by the scraper are fed into `HTMLTextExtractor` (extending standard `HTMLParser`) which completely discards structural tags like `<script>`, `<style>`, `<head>`, `<meta>`, and `<noscript>` before return.
 * **Justification:** Strict client and server-side tag stripping blocks XSS vector execution from external websites.
 * **Remediation:** None required.
@@ -68,7 +68,7 @@ An end-to-end security audit was conducted on the Skolab backend and Android cli
 ### 4. Password hashes use secure algorithms (bcrypt / Argon2); plain text passwords are never stored.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [AuthManager.kt](file:///c:/Users/VikasVijigiri/Documents/QyRus/android-app/app/src/main/java/com.company.skolab/auth/AuthManager.kt), [AuthScreen.kt](file:///c:/Users/VikasVijigiri/Documents/QyRus/android-app/app/src/main/java/com.company.skolab/ui/screens/AuthScreen.kt)
+  * Source files: [AuthManager.kt](file:///c:/Users/VikasVijigiri/Documents/SkoLab/android-app/app/src/main/java/com.company.skolab/auth/AuthManager.kt), [AuthScreen.kt](file:///c:/Users/VikasVijigiri/Documents/SkoLab/android-app/app/src/main/java/com.company.skolab/ui/screens/AuthScreen.kt)
   * Verification: Identity verification and user sign-in are managed through Firebase Authentication. The client app and Python backend never prompt for, store, or process raw password hashes.
 * **Justification:** Handled entirely by Firebase infrastructure, utilizing highly secure, cloud-managed hashing algorithms.
 * **Remediation:** None required.
@@ -100,7 +100,7 @@ An end-to-end security audit was conducted on the Skolab backend and Android cli
 ### 7. Sensitive data stored on client devices uses EncryptedSharedPreferences.
 * **Status:** PASS (Remediated)
 * **Evidence:**
-  * Source files: [EncryptedPreferences.kt](file:///c:/Users/VikasVijigiri/Documents/QyRus/android-app/app/src/main/java/com.company.skolab/data/EncryptedPreferences.kt), [UserPreferences.kt](file:///c:/Users/VikasVijigiri/Documents/QyRus/android-app/app/src/main/java/com.company.skolab/data/UserPreferences.kt), [build.gradle.kts](file:///c:/Users/VikasVijigiri/Documents/QyRus/android-app/app/build.gradle.kts)
+  * Source files: [EncryptedPreferences.kt](file:///c:/Users/VikasVijigiri/Documents/SkoLab/android-app/app/src/main/java/com.company.skolab/data/EncryptedPreferences.kt), [UserPreferences.kt](file:///c:/Users/VikasVijigiri/Documents/SkoLab/android-app/app/src/main/java/com.company.skolab/data/UserPreferences.kt), [build.gradle.kts](file:///c:/Users/VikasVijigiri/Documents/SkoLab/android-app/app/build.gradle.kts)
   * Verification: Sensitive values (`user_uid`, `user_email`) were previously stored in plain text. Integrated `androidx.security:security-crypto` and routed those keys to `EncryptedSharedPreferences`. Android app compiles successfully with the new dependency.
 * **Justification:** EncryptedSharedPreferences encrypts both keys and values using AES-256-SIV and AES-256-GCM backed by Android's hardware Keystore.
 * **Remediation:** Migrated sensitive client configuration from plaintext Datastore to Keystore-backed `EncryptedPreferences`.
@@ -108,7 +108,7 @@ An end-to-end security audit was conducted on the Skolab backend and Android cli
 ### 8. Environment passwords and API tokens are encrypted in transit and at rest.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [config.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/core/config.py), [llm_service.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/services/llm_service.py)
+  * Source files: [config.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/core/config.py), [llm_service.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/services/llm_service.py)
   * Verification: API keys (`GROQ_API`, `OPENALEX_API_KEY`) are fetched dynamically at runtime from environment variables and never checked into source control. Communication routes strictly use HTTPS.
 * **Justification:** Secret values are kept out of source code at rest and encrypted in transit using standard TLS.
 * **Remediation:** None required.
@@ -116,8 +116,8 @@ An end-to-end security audit was conducted on the Skolab backend and Android cli
 ### 9. Databases encrypt PII data columns (e.g., author emails) using AEAD ciphers.
 * **Status:** PASS (Remediated)
 * **Evidence:**
-  * Source files: [encrypted_type.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/db/encrypted_type.py), [user_models.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/models/user_models.py)
-  * Test case: [test_encrypted_type.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/tests/test_encrypted_type.py)
+  * Source files: [encrypted_type.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/db/encrypted_type.py), [user_models.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/models/user_models.py)
+  * Test case: [test_encrypted_type.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/tests/test_encrypted_type.py)
   * Verification: Created a custom SQLAlchemy `TypeDecorator` called `EncryptedString` wrapping Fernet (AES-128-CBC + HMAC-SHA256, an AEAD scheme). Changed the database schema `email` column in the `User` model to use `EncryptedString`.
 * **Justification:** Verified via unit test that SQL queries directly writing/reading user emails encrypt the string on write at the database layer and decrypt it on read.
 * **Remediation:** Replaced plaintext DB storage of user emails with automatic symmetric encryption at rest using Fernet keys.
@@ -135,7 +135,7 @@ An end-to-end security audit was conducted on the Skolab backend and Android cli
 ### 10. CORS policies restrict access to trusted origins only (no wildcard '*' allowed).
 * **Status:** PASS (Remediated)
 * **Evidence:**
-  * Source file: [main.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/main.py)
+  * Source file: [main.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/main.py)
   * Verification: CORS origins configuration restricts access to a list of allowed origins (`localhost`, `127.0.0.1`, settings-defined `app_base_url`, and custom `CORS_ORIGINS` environment variables). Wildcard `*` origins are completely disabled.
 * **Justification:** Preventing CORS wildcards when credentials are allowed stops unauthorized cross-origin sites from accessing private APIs.
 * **Remediation:** Restricted the CORSMiddleware origins whitelist in `main.py`.
@@ -143,7 +143,7 @@ An end-to-end security audit was conducted on the Skolab backend and Android cli
 ### 11. Web scraping limits resources requests rates to respect host limits.
 * **Status:** PASS (Remediated)
 * **Evidence:**
-  * Source file: [scraping_service.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/services/scraping_service.py)
+  * Source file: [scraping_service.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/services/scraping_service.py)
   * Verification: Injected `await asyncio.sleep(0.5)` in the asynchronous loop before making external calls in `scrape_url`, `search_web`, and `search_portal`.
 * **Justification:** Enforces a minimum time delay between request cycles to avoid hitting host rate limits or triggering DDoS guards.
 * **Remediation:** Added rate-limit delays in web scraping functions.
@@ -151,7 +151,7 @@ An end-to-end security audit was conducted on the Skolab backend and Android cli
 ### 12. Request headers disguise bot behaviors using rotating agent identifiers.
 * **Status:** PASS (Remediated)
 * **Evidence:**
-  * Source file: [scraping_service.py](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/services/scraping_service.py)
+  * Source file: [scraping_service.py](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/services/scraping_service.py)
   * Verification: Configured a pool of modern browser `USER_AGENTS` and implemented `get_random_user_agent()` to dynamically assign User-Agent headers on outbound scraper requests.
 * **Justification:** Prevents identification and automatic IP blocking of bot scraper behavior.
 * **Remediation:** Added rotating User-Agent list and injected headers dynamically.
@@ -176,7 +176,7 @@ An end-to-end security audit was conducted on the Skolab backend and Android cli
 ### 14. Input parameters validate length, type, and character boundaries.
 * **Status:** PASS
 * **Evidence:**
-  * Source files: [schemas/](file:///c:/Users/VikasVijigiri/Documents/QyRus/backend/app/schemas) folder.
+  * Source files: [schemas/](file:///c:/Users/VikasVijigiri/Documents/SkoLab/backend/app/schemas) folder.
   * Verification: All request models are mapped using Pydantic schemas which enforce strict typing, size, and presence constraints before reaching business logic.
 * **Justification:** Pydantic validation acts as a secure parameter validation filter for all API routers.
 * **Remediation:** None required.

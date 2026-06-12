@@ -29,6 +29,11 @@ import com.company.skolab.ui.theme.TextMuted
 import com.company.skolab.ui.theme.TextPrimary
 import com.company.skolab.ui.theme.TextSecondary
 import kotlinx.coroutines.tasks.await
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import com.company.skolab.ui.theme.SkoLabWarning
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,6 +50,71 @@ fun InviteMemberScreen(
     var projectName by remember { mutableStateOf("") }
     var currentMembers by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
     var currentMemberUids by remember { mutableStateOf<List<String>>(emptyList()) }
+    var emailError by remember { mutableStateOf<String?>(null) }
+
+    val onInvite: () -> Unit = {
+        val emailToSearch = inviteEmailInput.trim()
+        if (emailToSearch.isBlank()) {
+            emailError = "Email cannot be empty"
+        } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(emailToSearch).matches()) {
+            emailError = "Please enter a valid email address"
+        } else {
+            emailError = null
+            // Check if already a member
+            val alreadyMember = currentMembers.any { 
+                val memberEmail = it["email"] as? String ?: ""
+                memberEmail.equals(emailToSearch, ignoreCase = true) 
+            }
+            if (alreadyMember) {
+                Toast.makeText(context, "User is already a member of this project.", Toast.LENGTH_SHORT).show()
+            } else {
+                isInvitingMember = true
+                db.collection("researchers")
+                    .whereEqualTo("email", emailToSearch)
+                    .get()
+                    .addOnSuccessListener { querySnapshot ->
+                        val doc = querySnapshot.documents.firstOrNull()
+                        if (doc != null) {
+                            val researcher = doc.toObject(SkoLabUser::class.java)
+                            if (researcher != null) {
+                                val newMember = mapOf(
+                                    "uid" to researcher.uid,
+                                    "name" to researcher.name,
+                                    "email" to researcher.email
+                                )
+                                val updatedMembers = currentMembers + newMember
+                                val updatedUids = currentMemberUids + researcher.uid
+
+                                db.collection("collabs_groups").document(projectId)
+                                    .update(
+                                        "members", updatedMembers,
+                                        "memberUids", updatedUids
+                                    )
+                                    .addOnSuccessListener {
+                                        isInvitingMember = false
+                                        Toast.makeText(context, "${researcher.name} added to project!", Toast.LENGTH_SHORT).show()
+                                        onBack()
+                                    }
+                                    .addOnFailureListener { e ->
+                                        isInvitingMember = false
+                                        Toast.makeText(context, "Failed to update project: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                            } else {
+                                isInvitingMember = false
+                                Toast.makeText(context, "Error parsing user data.", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            isInvitingMember = false
+                            Toast.makeText(context, "This user is not registered in the app.", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    .addOnFailureListener { e ->
+                        isInvitingMember = false
+                        Toast.makeText(context, "Error looking up user: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+            }
+        }
+    }
 
     LaunchedEffect(projectId) {
         try {
@@ -89,7 +159,7 @@ fun InviteMemberScreen(
                 )
             )
         },
-        containerColor = com.company.skolab.ui.theme.EntropiColors.Background
+        containerColor = com.company.skolab.ui.theme.SkoLabColors.Background
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -120,84 +190,47 @@ fun InviteMemberScreen(
 
                         OutlinedTextField(
                             value = inviteEmailInput,
-                            onValueChange = { inviteEmailInput = it },
+                            onValueChange = { 
+                                inviteEmailInput = it 
+                                if (it.isNotBlank()) emailError = null
+                            },
                             placeholder = { Text("collaborator@example.com", color = TextMuted) },
+                            isError = emailError != null,
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = TextPrimary,
                                 unfocusedTextColor = TextPrimary,
                                 focusedBorderColor = AccentTeal,
                                 unfocusedBorderColor = BorderLight,
                                 focusedContainerColor = BgElevated,
-                                unfocusedContainerColor = BgElevated
+                                unfocusedContainerColor = BgElevated,
+                                errorBorderColor = SkoLabWarning,
+                                errorLabelColor = SkoLabWarning
                             ),
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(10.dp),
-                            singleLine = true
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Email,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onDone = { onInvite() }
+                            )
                         )
+                        if (emailError != null) {
+                            Text(
+                                text = emailError ?: "",
+                                color = SkoLabWarning,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(start = 8.dp)
+                            )
+                        }
 
                         Button(
-                            onClick = {
-                                if (inviteEmailInput.isBlank()) return@Button
-                                val emailToSearch = inviteEmailInput.trim()
-                                
-                                // Check if already a member
-                                val alreadyMember = currentMembers.any { 
-                                    val memberEmail = it["email"] as? String ?: ""
-                                    memberEmail.equals(emailToSearch, ignoreCase = true) 
-                                }
-                                if (alreadyMember) {
-                                    Toast.makeText(context, "User is already a member of this project.", Toast.LENGTH_SHORT).show()
-                                    return@Button
-                                }
-
-                                isInvitingMember = true
-                                db.collection("researchers")
-                                    .whereEqualTo("email", emailToSearch)
-                                    .get()
-                                    .addOnSuccessListener { querySnapshot ->
-                                        val doc = querySnapshot.documents.firstOrNull()
-                                        if (doc != null) {
-                                            val researcher = doc.toObject(SkoLabUser::class.java)
-                                            if (researcher != null) {
-                                                val newMember = mapOf(
-                                                    "uid" to researcher.uid,
-                                                    "name" to researcher.name,
-                                                    "email" to researcher.email
-                                                )
-                                                val updatedMembers = currentMembers + newMember
-                                                val updatedUids = currentMemberUids + researcher.uid
-
-                                                db.collection("collabs_groups").document(projectId)
-                                                    .update(
-                                                        "members", updatedMembers,
-                                                        "memberUids", updatedUids
-                                                    )
-                                                    .addOnSuccessListener {
-                                                        isInvitingMember = false
-                                                        Toast.makeText(context, "${researcher.name} added to project!", Toast.LENGTH_SHORT).show()
-                                                        onBack()
-                                                    }
-                                                    .addOnFailureListener { e ->
-                                                        isInvitingMember = false
-                                                        Toast.makeText(context, "Failed to update project: ${e.message}", Toast.LENGTH_SHORT).show()
-                                                    }
-                                            } else {
-                                                isInvitingMember = false
-                                                Toast.makeText(context, "Error parsing user data.", Toast.LENGTH_SHORT).show()
-                                            }
-                                        } else {
-                                            isInvitingMember = false
-                                            Toast.makeText(context, "This user is not registered in the app.", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                    .addOnFailureListener { e ->
-                                        isInvitingMember = false
-                                        Toast.makeText(context, "Error looking up user: ${e.message}", Toast.LENGTH_SHORT).show()
-                                    }
-                            },
+                            onClick = onInvite,
                             colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
                             shape = RoundedCornerShape(12.dp),
-                            enabled = !isInvitingMember && inviteEmailInput.isNotBlank() && !isLoadingProject,
+                            enabled = !isInvitingMember && !isLoadingProject,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(56.dp)

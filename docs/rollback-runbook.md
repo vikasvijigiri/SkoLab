@@ -55,4 +55,4 @@ Mobile applications cannot be rolled back directly once downloaded by users. If 
 1. **Halt Staged Rollout:**
    Immediately access the Google Play Console, go to **Release Overview**, select the active release track, and click **Halt Rollout**. This prevents further users from updating.
 2. **Prepare Hotfix Build:**
-   Follow the [Hotfix Runbook](file:///c:/Users/VikasVijigiri/Documents/QyRus/docs/hotfix-runbook.md) to build and deploy an expedited recovery build (incrementing the version number).
+   Follow the [Hotfix Runbook](file:///c:/Users/VikasVijigiri/Documents/SkoLab/docs/hotfix-runbook.md) to build and deploy an expedited recovery build (incrementing the version number).
