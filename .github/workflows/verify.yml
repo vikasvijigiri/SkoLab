@@ -67,10 +67,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Create Dummy google-services.json
+      - name: Decode Google Services Configuration from Secrets
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
           mkdir -p apps/android-app/app
-          echo '{"project_info":{"project_number":"123456789","project_id":"dummy-project"},"client":[{"client_info":{"mobilesdk_app_id":"1:123456789:android:12345","android_client_info":{"package_name":"com.company.skolab"}},"api_key":[{"current_key":"dummy_api_key"}],"services":{}}],"configuration_version":"3"}' > apps/android-app/app/google-services.json
+          if [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > apps/android-app/app/google-services.json
+          else
+            echo "WARNING: GOOGLE_SERVICES_JSON secret is empty or not set. Build may fail."
+          fi
 
       - name: Make Gradlew Executable
         working-directory: apps/android-app
