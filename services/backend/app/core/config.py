@@ -55,8 +55,9 @@ class Settings:
     port: int = field(default_factory=lambda: int(os.environ.get("PORT", "8000")))
     lan_ip: str = field(default_factory=_lan_ip)
     force_https: bool = field(
-        default_factory=lambda: os.environ.get("FORCE_HTTPS", "False").lower()
-        in ("true", "1")
+        default_factory=lambda: (
+            os.environ.get("FORCE_HTTPS", "False").lower() in ("true", "1")
+        )
     )
 
     # ── Environment (development | staging | production) ──────────────────────
