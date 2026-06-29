@@ -631,6 +631,13 @@ class ApiService {
     }
 
     suspend fun searchAuthor(name: String, id: String? = null, forceRefresh: Boolean = false, focus: String? = null): AuthorResponse? {
+        if (!forceRefresh) {
+            val cacheKey = id ?: name
+            getCachedAuthorProfile(cacheKey)?.let {
+                Log.d(tag, "Cache hit for author profile: $cacheKey")
+                return it
+            }
+        }
         val mappedName = name
         val base = baseUrl()
         if (base == null) {
