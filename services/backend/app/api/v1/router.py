@@ -9,6 +9,7 @@ from app.api.v1.endpoints import (
     industry_academic,
 )
 from app.domains.quest.router import router as quest_router
+from app.domains.recommendation.router import router as recommendation_router
 
 api_router = APIRouter()
 
@@ -21,3 +22,4 @@ api_router.include_router(authors.router, tags=["Authors"])
 # user_memory endpoints fully migrated to Go gateway (internal/handlers/memory.go)
 api_router.include_router(support.router, prefix="/support", tags=["Support"])
 api_router.include_router(industry_academic.router, tags=["Industry Academic"])
+api_router.include_router(recommendation_router, tags=["Recommendations"])
