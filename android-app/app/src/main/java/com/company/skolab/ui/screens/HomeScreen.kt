@@ -118,39 +118,18 @@ fun HomeScreen(
     val currentProject = projects.getOrNull(selectedProjectIndex)
     var showProjectDropdown by remember { mutableStateOf(false) }
 
-    // Network, orbit, and suggestions data — all cached in ViewModel (survives navigation)
+    // All network data owned by ViewModel — pre-fetched from init, survives navigation
     val networkUiState by homeViewModel.networkState.collectAsStateWithLifecycle()
     val networkCollaborators = networkUiState.networkCollaborators
     val orbitMetrics = networkUiState.orbitMetrics
     val isLoadingOrbitMetrics = networkUiState.isLoadingNetwork
     val isLoadingSuggestions = networkUiState.isLoadingSuggestions
+    val isLoadingMemory = networkUiState.isLoadingMemory
     val suggestedCollaborators = networkUiState.suggestedCollaborators.take(4)
+    val userMemoryProfile = networkUiState.userMemoryProfile
 
-    // Trigger ViewModel loads — these are no-ops if data is already cached
-    LaunchedEffect(currentUserName, userFocus) {
-        if (currentUserName.isNotBlank() && currentUserName != "SkoLab User") {
-            homeViewModel.loadNetworkData(currentUserName, userFocus, excludeName = currentUserName)
-        }
-    }
-
-    LaunchedEffect(userFocus) {
-        homeViewModel.loadSuggestions(userFocus)
-    }
-
-    val apiService = com.company.skolab.di.AppDependencies.apiService
-    var userMemoryProfile by remember { mutableStateOf<com.company.skolab.network.UserMemoryProfileResponse?>(null) }
-    LaunchedEffect(currentUserId) {
-        if (currentUserId.isNotEmpty()) {
-            try {
-                val profile = apiService.getUserMemory(currentUserId)
-                if (profile != null) {
-                    userMemoryProfile = profile
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("HomeScreen", "Failed to fetch user memory profile", e)
-            }
-        }
-    }
+    // Drives the offline banner — true once mDNS resolves the backend
+    val isBackendAvailable by com.company.skolab.network.ServerLocator.isBackendAvailable.collectAsStateWithLifecycle()
 
     var membersPresence by remember { mutableStateOf<Map<String, com.company.skolab.model.SkoLabUser>>(emptyMap()) }
 
@@ -279,11 +258,33 @@ fun HomeScreen(
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0.dp),
         topBar = {
             Column(modifier = Modifier.background(BgPrimary)) {
+                // Offline banner — slides in when backend hasn't been discovered yet
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = !isBackendAvailable,
+                    enter = androidx.compose.animation.expandVertically(),
+                    exit = androidx.compose.animation.shrinkVertically()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(com.company.skolab.ui.theme.AccentAmber.copy(alpha = 0.85f))
+                            .padding(vertical = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        androidx.compose.material3.Text(
+                            text = "Connecting to server...",
+                            color = androidx.compose.ui.graphics.Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                        )
+                    }
+                }
                 HomeTopWidget(
                     recentPapers = userMemoryProfile?.recently_read_papers.orEmpty().take(5),
                     skolabConnections = membersPresence.values.filter { it.uid != currentUserId }.take(4),
                     networkCollaborators = networkCollaborators.take(5),
                     isLoadingNetwork = isLoadingOrbitMetrics,
+                    isLoadingMemory = isLoadingMemory,
                     onNavigateToChat = onNavigateToChat,
                     onInviteClick = onNavigateToExternalInvite,
                     onAuthorClick = onAuthorClick
@@ -363,483 +364,44 @@ fun HomeScreen(
                 }
                 
                 "workspaces" -> {
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        Surface(
-                            color = SURFACE_SUBTLE,
-                            border = BorderStroke(0.5.dp, BORDER),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .clickable(enabled = currentProject != null) {
-                                            showProjectDropdown = !showProjectDropdown
-                                        }
-                                        .padding(vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Workspaces,
-                                        contentDescription = null,
-                                        tint = PRIMARY,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = currentProject?.name ?: "No Active Workspace",
-                                        color = TEXT_PRIMARY,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.widthIn(max = 180.dp)
-                                    )
-                                    if (currentProject != null) {
-                                        Spacer(modifier = Modifier.width(2.dp))
-                                        Icon(
-                                            imageVector = if (showProjectDropdown) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
-                                            contentDescription = null,
-                                            tint = PRIMARY,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                    }
-                                }
-
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    IconButton(
-                                        onClick = { onNavigateToCreateProject() },
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(SURFACE)
-                                    ) {
-                                        Icon(Icons.Default.Add, contentDescription = null, tint = PRIMARY, modifier = Modifier.size(14.dp))
-                                    }
-
-                                    IconButton(
-                                        onClick = {
-                                            val proj = currentProject
-                                            if (proj == null) {
-                                                Toast.makeText(context, "Please create a project first.", Toast.LENGTH_SHORT).show()
-                                            } else if (proj.id.startsWith("default_")) {
-                                                Toast.makeText(context, "Call sync requires registered SkoLab co-authors.", Toast.LENGTH_SHORT).show()
-                                            } else {
-                                                showVideoSync = true
-                                                callConnectedTime = 0
-                                            }
-                                        },
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(if (currentProject != null) PRIMARY else BORDER)
-                                    ) {
-                                        Icon(Icons.Default.Videocam, contentDescription = null, tint = if (currentProject != null) TEXT_ON_PRIMARY else TEXT_MUTED, modifier = Modifier.size(14.dp))
-                                    }
-                                }
-                            }
-
-                            // Project selection dropdown
-                            if (currentProject != null) {
-                                DropdownMenu(
-                                    expanded = showProjectDropdown,
-                                    onDismissRequest = { showProjectDropdown = false },
-                                    modifier = Modifier
-                                        .background(SURFACE)
-                                        .border(BorderStroke(0.5.dp, BORDER), RoundedCornerShape(12.dp))
-                                ) {
-                                    projects.forEachIndexed { index, proj ->
-                                        DropdownMenuItem(
-                                            text = {
-                                                Column(modifier = Modifier.padding(vertical = 2.dp)) {
-                                                    Text(text = proj.name, color = TEXT_PRIMARY, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                                    Text(text = proj.description, color = TEXT_SECONDARY, fontSize = 10.sp)
-                                                }
-                                            },
-                                            onClick = {
-                                                selectedProjectIndex = index
-                                                showProjectDropdown = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        LazyColumn(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth(),
-                            contentPadding = PaddingValues(top = 12.dp, bottom = 80.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp)
-                        ) {
-                            val proj = currentProject
-                            if (proj == null) {
-                                item {
-                                    Surface(
-                                        color = SURFACE,
-                                        shape = RoundedCornerShape(16.dp),
-                                        border = BorderStroke(1.dp, BORDER),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(20.dp),
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Workspaces,
-                                                contentDescription = null,
-                                                tint = PRIMARY.copy(alpha = 0.5f),
-                                                modifier = Modifier.size(40.dp)
-                                            )
-                                            Text(
-                                                text = "No Active Workspace",
-                                                color = TEXT_PRIMARY,
-                                                fontSize = 16.sp,
-                                                fontWeight = FontWeight.ExtraBold
-                                            )
-                                            Text(
-                                                text = "Create shared paper drafts, interactive roadmaps, equations blackboard, and dynamic group discussions with your co-authors.",
-                                                color = TEXT_SECONDARY,
-                                                fontSize = 12.sp,
-                                                textAlign = TextAlign.Center,
-                                                lineHeight = 17.sp
-                                            )
-                                            Button(
-                                                onClick = { onNavigateToCreateProject() },
-                                                shape = RoundedCornerShape(8.dp),
-                                                colors = ButtonDefaults.buttonColors(containerColor = PRIMARY)
-                                            ) {
-                                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
-                                                Spacer(Modifier.width(4.dp))
-                                                Text("Create Workspace Project", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                            }
-                                        }
-                                    }
-                                }
+                    WorkspacesTab(
+                        currentUserId = currentUserId,
+                        currentUserName = currentUserName,
+                        projects = projects,
+                        currentProject = currentProject,
+                        tasks = tasks,
+                        chatMessages = chatMessages,
+                        membersPresence = membersPresence,
+                        selectedProjectIndex = selectedProjectIndex,
+                        onProjectSelected = { selectedProjectIndex = it },
+                        onNavigateToCreateProject = onNavigateToCreateProject,
+                        onNavigateToWorkspace = onNavigateToWorkspace,
+                        onNavigateToChat = onNavigateToChat,
+                        onNavigateToInviteMember = onNavigateToInviteMember,
+                        onNavigateToCreateTask = onNavigateToCreateTask,
+                        onTaskToggle = { task ->
+                            val proj = currentProject ?: return@WorkspacesTab
+                            if (proj.id.startsWith("default_")) {
+                                // Handled purely in memory for default projects
+                                tasks = tasks.map { if (it.id == task.id) it.copy(isCompleted = !it.isCompleted) else it }
                             } else {
-                                // Collaborators profiles horizontal ring
-                                item {
-                                    Text(
-                                        text = "ACTIVE COLLABORATORS",
-                                        color = TEXT_MUTED,
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.5.sp
-                                    )
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .horizontalScroll(rememberScrollState())
-                                    ) {
-                                        // You Avatar
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            val myInitials = remember(currentUserName) {
-                                                currentUserName.split(" ")
-                                                    .filter { it.isNotEmpty() }
-                                                    .take(2)
-                                                    .map { it.first() }
-                                                    .joinToString("")
-                                                    .uppercase()
-                                            }
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(40.dp)
-                                                    .clip(CircleShape)
-                                                    .background(PRIMARY.copy(alpha = 0.1f))
-                                                    .border(1.dp, PRIMARY, CircleShape),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(myInitials.ifEmpty { "ME" }, color = PRIMARY, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                            }
-                                            Spacer(modifier = Modifier.height(2.dp))
-                                            Text("You", color = TEXT_PRIMARY, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                        }
-
-                                        // Co-authors
-                                        val otherMembers = proj.members.filter {
-                                            it.uid != currentUserId && it.name.lowercase() != "you" && !it.name.equals(currentUserName, ignoreCase = true)
-                                        }
-
-                                        otherMembers.forEach { member ->
-                                            val initials = member.name.split(" ").map { it.take(1) }.joinToString("").uppercase()
-                                            val presence = membersPresence[member.uid]
-                                            val isOnline = presence?.isOnline == true
-
-                                            Column(
-                                                horizontalAlignment = Alignment.CenterHorizontally,
-                                                modifier = Modifier.clickable { onNavigateToChat(member.name, member.uid) }
-                                            ) {
-                                                Box(contentAlignment = Alignment.BottomEnd) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(40.dp)
-                                                            .clip(CircleShape)
-                                                            .background(SURFACE_SUBTLE)
-                                                            .border(1.dp, BORDER, CircleShape),
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        Text(initials.ifEmpty { "U" }, color = TEXT_PRIMARY, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                                    }
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(8.dp)
-                                                            .clip(CircleShape)
-                                                            .background(if (isOnline) WhatsAppTealGreen else Color.Gray)
-                                                            .border(1.dp, SURFACE, CircleShape)
-                                                    )
-                                                }
-                                                Spacer(modifier = Modifier.height(2.dp))
-                                                Text(member.name.split(" ").firstOrNull() ?: member.name, color = TEXT_SECONDARY, fontSize = 9.sp)
-                                            }
-                                        }
-
-                                        // Add collaborator button
-                                        IconButton(
-                                            onClick = { onNavigateToInviteMember(proj.id) },
-                                            modifier = Modifier
-                                                .size(40.dp)
-                                                .clip(CircleShape)
-                                                .background(SURFACE)
-                                                .border(1.dp, BORDER, CircleShape)
-                                        ) {
-                                            Icon(Icons.Default.PersonAdd, contentDescription = null, tint = PRIMARY, modifier = Modifier.size(16.dp))
-                                        }
-                                    }
-                                }
-
-                                // Blackboard math equation
-                                item {
-                                    Surface(
-                                        color = SURFACE,
-                                        shape = RoundedCornerShape(14.dp),
-                                        border = BorderStroke(1.dp, BORDER),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { onNavigateToWorkspace(proj.name) }
-                                    ) {
-                                        Column(modifier = Modifier.padding(14.dp)) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Icon(Icons.Default.EditNote, contentDescription = null, tint = PRIMARY, modifier = Modifier.size(16.dp))
-                                                    Spacer(modifier = Modifier.width(4.dp))
-                                                    Text("Blackboard Latex Draft", color = TEXT_PRIMARY, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                                }
-                                            }
-                                            Spacer(modifier = Modifier.height(8.dp))
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clip(RoundedCornerShape(8.dp))
-                                                    .background(PremiumDarkSpace)
-                                                    .padding(10.dp)
-                                            ) {
-                                                MarkdownText(
-                                                    markdown = "$$" + proj.recentEquations + "$$",
-                                                    color = PremiumLightText,
-                                                    fontSize = 12.sp
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.height(8.dp))
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween
-                                            ) {
-                                                Text("Manuscript Draft Progress", color = TEXT_SECONDARY, fontSize = 11.sp)
-                                                Text("${(proj.manuscriptProgress * 100).toInt()}%", color = PRIMARY, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                            }
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            LinearProgressIndicator(
-                                                progress = { proj.manuscriptProgress },
-                                                color = PRIMARY,
-                                                trackColor = SURFACE_SUBTLE,
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .height(4.dp)
-                                                    .clip(CircleShape)
-                                            )
-                                        }
-                                    }
-                                }
-
-                                // Roadmap Tasks Checklist
-                                item {
-                                    Surface(
-                                        color = SURFACE,
-                                        shape = RoundedCornerShape(14.dp),
-                                        border = BorderStroke(1.dp, BORDER),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Column(modifier = Modifier.padding(14.dp)) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text("ROADMAP & TASKS", color = TEXT_PRIMARY, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                                Icon(
-                                                    imageVector = Icons.Default.AddCircleOutline,
-                                                    contentDescription = null,
-                                                    tint = PRIMARY,
-                                                    modifier = Modifier
-                                                        .size(18.dp)
-                                                        .clickable { onNavigateToCreateTask(proj.id) }
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.height(8.dp))
-                                            tasks.forEach { task ->
-                                                Row(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .clickable {
-                                                            if (proj.id.startsWith("default_")) {
-                                                                tasks = tasks.map { if (it.id == task.id) it.copy(isCompleted = !it.isCompleted) else it }
-                                                            } else {
-                                                                db.collection("collabs_groups").document(proj.id)
-                                                                    .collection("tasks").document(task.id)
-                                                                    .update("isCompleted", !task.isCompleted)
-                                                            }
-                                                        }
-                                                        .padding(vertical = 6.dp),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Icon(
-                                                        imageVector = if (task.isCompleted) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                                                        contentDescription = null,
-                                                        tint = if (task.isCompleted) WhatsAppTealGreen else TEXT_MUTED,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                    Spacer(modifier = Modifier.width(8.dp))
-                                                    Column {
-                                                        Text(
-                                                            text = task.title,
-                                                            color = if (task.isCompleted) TEXT_MUTED else TEXT_PRIMARY,
-                                                            fontSize = 11.sp,
-                                                            fontWeight = FontWeight.Bold
-                                                        )
-                                                        Text(text = "Assignee: ${task.assignee}", color = TEXT_SECONDARY, fontSize = 9.sp)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // In-Workspace Group Discussion Chat board
-                                item {
-                                    Surface(
-                                        color = SURFACE,
-                                        shape = RoundedCornerShape(14.dp),
-                                        border = BorderStroke(1.dp, BORDER),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Column(modifier = Modifier.padding(14.dp)) {
-                                            Text("DISCUSSION BOARD", color = TEXT_PRIMARY, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                            Spacer(modifier = Modifier.height(8.dp))
-                                            chatMessages.forEach { msg ->
-                                                val splitMsg = msg.split(": ")
-                                                val sender = splitMsg.getOrNull(0) ?: ""
-                                                val body = splitMsg.getOrNull(1) ?: msg
-                                                Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                                                    Text(sender, color = PRIMARY, fontWeight = FontWeight.Bold, fontSize = 10.sp)
-                                                    Text(body, color = TEXT_PRIMARY, fontSize = 11.sp)
-                                                }
-                                            }
-                                            Spacer(modifier = Modifier.height(8.dp))
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                OutlinedTextField(
-                                                    value = groupMessageInput,
-                                                    onValueChange = { groupMessageInput = it },
-                                                    placeholder = { Text("Post to chat...", fontSize = 11.sp) },
-                                                    shape = RoundedCornerShape(8.dp),
-                                                    modifier = Modifier.weight(1f),
-                                                    colors = OutlinedTextFieldDefaults.colors(
-                                                        focusedBorderColor = PRIMARY,
-                                                        unfocusedBorderColor = BORDER
-                                                    )
-                                                )
-                                                IconButton(
-                                                    onClick = {
-                                                        if (groupMessageInput.isNotBlank()) {
-                                                            val text = groupMessageInput.trim()
-                                                            groupMessageInput = ""
-                                                            if (proj.id.startsWith("default_")) {
-                                                                chatMessages.add("You: $text")
-                                                            } else {
-                                                                val msgId = db.collection("collabs_groups").document(proj.id).collection("messages").document().id
-                                                                db.collection("collabs_groups").document(proj.id).collection("messages").document(msgId).set(
-                                                                    hashMapOf("id" to msgId, "senderName" to currentUserName, "text" to text, "timestamp" to System.currentTimeMillis())
-                                                                )
-                                                            }
-                                                        }
-                                                    },
-                                                    modifier = Modifier
-                                                        .size(36.dp)
-                                                        .clip(CircleShape)
-                                                        .background(PRIMARY)
-                                                ) {
-                                                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, tint = TEXT_ON_PRIMARY, modifier = Modifier.size(14.dp))
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Activity logs
-                                item {
-                                    Surface(
-                                        color = SURFACE,
-                                        shape = RoundedCornerShape(14.dp),
-                                        border = BorderStroke(1.dp, BORDER),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Column(modifier = Modifier.padding(14.dp)) {
-                                            Text("COLLABORATION ACTIVITY LOGS", color = TEXT_PRIMARY, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                            Spacer(modifier = Modifier.height(8.dp))
-                                            timelineLogs.forEach { log ->
-                                                Row(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .padding(vertical = 4.dp)
-                                                ) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .padding(top = 4.dp)
-                                                            .size(5.dp)
-                                                            .clip(CircleShape)
-                                                            .background(PRIMARY)
-                                                    )
-                                                    Spacer(modifier = Modifier.width(8.dp))
-                                                    Column {
-                                                        Text("${log.author} - ${log.time}", color = TEXT_SECONDARY, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                                        Text(log.action, color = TEXT_PRIMARY, fontSize = 11.sp)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                                db.collection("collabs_groups").document(proj.id)
+                                    .collection("tasks").document(task.id)
+                                    .update("isCompleted", !task.isCompleted)
+                            }
+                        },
+                        onSendMessage = { text ->
+                            val proj = currentProject ?: return@WorkspacesTab
+                            if (proj.id.startsWith("default_")) {
+                                chatMessages.add("You: $text")
+                            } else {
+                                val msgId = db.collection("collabs_groups").document(proj.id).collection("messages").document().id
+                                db.collection("collabs_groups").document(proj.id).collection("messages").document(msgId).set(
+                                    hashMapOf("id" to msgId, "senderName" to currentUserName, "text" to text, "timestamp" to System.currentTimeMillis())
+                                )
                             }
                         }
-                    }
+                    )
                 }
                 
                 "orbit" -> {
@@ -1185,6 +747,7 @@ fun HomeTopWidget(
     skolabConnections: List<com.company.skolab.model.SkoLabUser>,
     networkCollaborators: List<com.company.skolab.network.NetworkCollaborator>,
     isLoadingNetwork: Boolean = false,
+    isLoadingMemory: Boolean = false,
     onNavigateToChat: (String, String) -> Unit,
     onInviteClick: (String) -> Unit,
     onAuthorClick: (String) -> Unit = {}
@@ -1192,7 +755,9 @@ fun HomeTopWidget(
     val hasActiveConnections = skolabConnections.isNotEmpty()
     val hasInviteCandidates = networkCollaborators.isNotEmpty()
     val showNetwork = hasActiveConnections || hasInviteCandidates || isLoadingNetwork
-    if (recentPapers.isEmpty() && !showNetwork) return
+    val showPapers = recentPapers.isNotEmpty() || isLoadingMemory
+    // Nothing to show and nothing loading — widget is genuinely empty
+    if (!showPapers && !showNetwork) return
 
     Column(
         modifier = Modifier
@@ -1203,7 +768,7 @@ fun HomeTopWidget(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         // ── Trending papers ──────────────────────────────────────────────────
-        if (recentPapers.isNotEmpty()) {
+        if (showPapers) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1219,18 +784,39 @@ fun HomeTopWidget(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    recentPapers.forEach { paper ->
-                        val label = if (paper.length > 28) paper.take(26) + "…" else paper
-                        Row(
-                            modifier = Modifier
-                                .background(SURFACE, RoundedCornerShape(8.dp))
-                                .border(0.5.dp, BORDER, RoundedCornerShape(8.dp))
-                                .padding(horizontal = 8.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(Icons.Default.Book, null, tint = TEXT_MUTED, modifier = Modifier.size(10.dp))
-                            Text(label, color = TEXT_SECONDARY, fontSize = 10.sp)
+                    if (isLoadingMemory && recentPapers.isEmpty()) {
+                        // Skeleton chips — same height/shape as real chips, no layout shift on arrival
+                        val shimmerTransition = rememberInfiniteTransition(label = "paperChipSkeleton")
+                        val shimmerAlpha by shimmerTransition.animateFloat(
+                            initialValue = 0.25f, targetValue = 0.6f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(900, easing = FastOutSlowInEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ), label = "chipAlpha"
+                        )
+                        repeat(4) {
+                            Box(
+                                modifier = Modifier
+                                    .width(110.dp)
+                                    .height(26.dp)
+                                    .background(SURFACE_SUBTLE.copy(alpha = shimmerAlpha), RoundedCornerShape(8.dp))
+                                    .border(0.5.dp, BORDER, RoundedCornerShape(8.dp))
+                            )
+                        }
+                    } else {
+                        recentPapers.forEach { paper ->
+                            val label = if (paper.length > 28) paper.take(26) + "…" else paper
+                            Row(
+                                modifier = Modifier
+                                    .background(SURFACE, RoundedCornerShape(8.dp))
+                                    .border(0.5.dp, BORDER, RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 8.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(Icons.Default.Book, null, tint = TEXT_MUTED, modifier = Modifier.size(10.dp))
+                                Text(label, color = TEXT_SECONDARY, fontSize = 10.sp)
+                            }
                         }
                     }
                 }

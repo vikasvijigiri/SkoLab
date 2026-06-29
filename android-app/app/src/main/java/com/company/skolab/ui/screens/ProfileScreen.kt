@@ -70,7 +70,8 @@ import androidx.compose.material.icons.filled.Delete
 @Composable
 fun ProfileScreen(
     onBack: () -> Unit = {},
-    onNavigateToProWorkspace: () -> Unit = {}
+    onNavigateToProWorkspace: () -> Unit = {},
+    onNavigateToEditProfile: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -127,6 +128,7 @@ fun ProfileScreen(
             ProfileContent(
                 skolabUser = displayUser,
                 onNavigateToProWorkspace = onNavigateToProWorkspace,
+                onNavigateToEditProfile = onNavigateToEditProfile,
                 onSignOut = {
                     scope.launch {
                         SkoLabAnalytics.clearIdentity()
@@ -218,6 +220,7 @@ fun LoginContent(onSignInClick: () -> Unit, onBack: () -> Unit) {
 fun ProfileContent(
     skolabUser: com.company.skolab.model.SkoLabUser?,
     onNavigateToProWorkspace: () -> Unit,
+    onNavigateToEditProfile: () -> Unit,
     onSignOut: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -238,14 +241,9 @@ fun ProfileContent(
     val dynamicColorEnabled by userPrefs.dynamicColorEnabled.collectAsStateWithLifecycle(initialValue = false)
     var aiProfile by remember { mutableStateOf<com.company.skolab.network.AuthorResponse?>(null) }
     var isLoadingProfile by remember { mutableStateOf(false) }
-    var showEditFocusDialog by remember { mutableStateOf(false) }
     var showPolicyDialog by remember { mutableStateOf(false) }
     var showFeedbackDialog by remember { mutableStateOf(false) }
     var feedbackText by remember { mutableStateOf("") }
-    var editFocusText by remember { mutableStateOf("") }
-    var editNameText by remember { mutableStateOf("") }
-    var editStatusText by remember { mutableStateOf("") }
-    var editAboutText by remember { mutableStateOf("") }
     var showDeleteAccountDialog by remember { mutableStateOf(false) }
     var isDeletingAccount by remember { mutableStateOf(false) }
 
@@ -466,13 +464,7 @@ fun ProfileContent(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable {
-                            editNameText = activeUser?.name ?: ""
-                            editFocusText = fieldOfStudy
-                            editStatusText = activeUser?.academicStatus ?: "Researcher"
-                            editAboutText = activeUser?.about ?: ""
-                            showEditFocusDialog = true
-                        }
+                        .clickable { onNavigateToEditProfile() }
                         .background(AccentTeal.copy(alpha = 0.08f))
                         .padding(vertical = 4.dp, horizontal = 8.dp)
                 ) {
@@ -579,13 +571,7 @@ fun ProfileContent(
                         tint = AccentTeal,
                         modifier = Modifier
                             .size(16.dp)
-                            .clickable {
-                                editNameText = activeUser?.name ?: ""
-                                editFocusText = fieldOfStudy
-                                editStatusText = activeUser?.academicStatus ?: "Researcher"
-                                editAboutText = activeUser?.about ?: ""
-                                showEditFocusDialog = true
-                            }
+                            .clickable { onNavigateToEditProfile() }
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
@@ -1165,207 +1151,6 @@ fun ProfileContent(
             Spacer(modifier = Modifier.navigationBarsPadding())
         }
 
-        if (showEditFocusDialog) {
-            AlertDialog(
-                onDismissRequest = { showEditFocusDialog = false },
-                title = {
-                    Text(
-                        text = "Edit Academic Profile",
-                        fontFamily = DisplayFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = TextPrimary
-                    )
-                },
-                text = {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = editNameText,
-                            onValueChange = { editNameText = it },
-                            label = { Text("Display Name", color = TextMuted) },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary,
-                                focusedBorderColor = AccentTeal,
-                                unfocusedBorderColor = BorderLight,
-                                focusedContainerColor = BgCard,
-                                unfocusedContainerColor = BgCard
-                            ),
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp),
-                            singleLine = true
-                        )
-
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(
-                                text = "Academic Status",
-                                color = TextSecondary,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            
-                            val statusOptions = listOf(
-                                "PhD Candidate",
-                                "Postdoctoral Fellow",
-                                "Professor",
-                                "Researcher",
-                                "Student"
-                            )
-                            
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                statusOptions.forEach { statusOption ->
-                                    val isSelected = editStatusText.trim().equals(statusOption, ignoreCase = true)
-                                    Surface(
-                                        onClick = { editStatusText = statusOption },
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = if (isSelected) AccentTeal.copy(alpha = 0.15f) else BgSubtle.copy(alpha = 0.5f),
-                                        border = BorderStroke(
-                                            0.5.dp,
-                                            if (isSelected) AccentTeal else BorderLight
-                                        ),
-                                        modifier = Modifier.padding(1.dp)
-                                    ) {
-                                        Text(
-                                            text = statusOption,
-                                            color = if (isSelected) AccentTeal else TextSecondary,
-                                            fontSize = 11.sp,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        OutlinedTextField(
-                            value = editFocusText,
-                            onValueChange = { editFocusText = it },
-                            label = { Text("Research Focus / Discipline", color = TextMuted) },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary,
-                                focusedBorderColor = AccentTeal,
-                                unfocusedBorderColor = BorderLight,
-                                focusedContainerColor = BgCard,
-                                unfocusedContainerColor = BgCard
-                            ),
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp),
-                            singleLine = true
-                        )
-                        
-                        Text(
-                            text = "Quick suggestions:",
-                            color = TextMuted,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        
-                        val suggestionsList = listOf(
-                            "Computational Neuroscience",
-                            "Machine Learning",
-                            "Quantum Computing",
-                            "Genomics",
-                            "Physics",
-                            "Chemistry"
-                        )
-                        
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            suggestionsList.forEach { sug ->
-                                val isSelected = editFocusText.trim().equals(sug, ignoreCase = true)
-                                Surface(
-                                    onClick = { editFocusText = sug },
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = if (isSelected) AccentTeal.copy(alpha = 0.15f) else BgSubtle.copy(alpha = 0.5f),
-                                    border = BorderStroke(
-                                        0.5.dp,
-                                        if (isSelected) AccentTeal else BorderLight
-                                    ),
-                                    modifier = Modifier.padding(1.dp)
-                                ) {
-                                    Text(
-                                        text = sug,
-                                        color = if (isSelected) AccentTeal else TextSecondary,
-                                        fontSize = 11.sp,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
-                        }
-
-                        OutlinedTextField(
-                            value = editAboutText,
-                            onValueChange = { editAboutText = it },
-                            label = { Text("About / Bio", color = TextMuted) },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary,
-                                focusedBorderColor = AccentTeal,
-                                unfocusedBorderColor = BorderLight,
-                                focusedContainerColor = BgCard,
-                                unfocusedContainerColor = BgCard
-                            ),
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp),
-                            minLines = 3,
-                            maxLines = 5
-                        )
-                    }
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            val trimmedName = editNameText.trim()
-                            val trimmedFocus = editFocusText.trim()
-                            val trimmedStatus = editStatusText.trim()
-                            val trimmedAbout = editAboutText.trim()
-                            if (trimmedName.isNotBlank() && trimmedFocus.isNotBlank()) {
-                                scope.launch {
-                                    authManager.updateAcademicProfile(
-                                        name = trimmedName,
-                                        focus = trimmedFocus,
-                                        academicStatus = trimmedStatus,
-                                        about = trimmedAbout
-                                    )
-                                    skolabUserMutable = activeUser?.copy(
-                                        name = trimmedName,
-                                        researchFocus = trimmedFocus,
-                                        academicStatus = trimmedStatus,
-                                        about = trimmedAbout
-                                    )
-                                    showEditFocusDialog = false
-                                }
-                            }
-                        },
-                        colors = ButtonDefaults.textButtonColors(contentColor = AccentTeal)
-                    ) {
-                        Text("Save", fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showEditFocusDialog = false }) {
-                        Text("Cancel", color = TextMuted)
-                    }
-                },
-                containerColor = BgCard,
-                shape = RoundedCornerShape(16.dp)
-            )
-        }
-
         if (showPolicyDialog) {
             AlertDialog(
                 onDismissRequest = { showPolicyDialog = false },
@@ -1573,30 +1358,26 @@ fun ProfileContent(
                                 isDeletingAccount = true
                                 scope.launch {
                                     try {
-                                        // 1. Call backend delete endpoint
-                                        val apiDeleted = apiService.deleteUserAccount(uid)
-                                        if (apiDeleted) {
-                                            // 2. Delete from Firebase Auth if authenticated
-                                            val fbUser = authManager.currentUser
-                                            if (fbUser != null) {
-                                                try {
-                                                    fbUser.delete().await()
-                                                } catch (e: Exception) {
-                                                    Log.w("ProfileScreen", "Firebase Auth user delete failed (may require recent login)", e)
-                                                }
+                                        // 1. Delete Firebase Auth first — this is the real account removal
+                                        val fbUser = authManager.currentUser
+                                        if (fbUser != null) {
+                                            try {
+                                                fbUser.delete().await()
+                                            } catch (e: Exception) {
+                                                Log.w("ProfileScreen", "Firebase Auth delete failed (re-auth may be needed)", e)
+                                                // Re-auth required — still clear local session below
                                             }
-
-                                            // 3. Clear local session, cache, and sign out
-                                            SkoLabAnalytics.clearIdentity()
-                                            authManager.signOut()
-                                            credentialManager.clearCredentialState(androidx.credentials.ClearCredentialStateRequest())
-                                            android.widget.Toast.makeText(context, "Account permanently deleted.", android.widget.Toast.LENGTH_LONG).show()
-                                        } else {
-                                            android.widget.Toast.makeText(context, "Failed to delete account from server. Please try again.", android.widget.Toast.LENGTH_LONG).show()
                                         }
+
+                                        // 2. Backend cleanup — best-effort, never blocks the user
+                                        try { apiService.deleteUserAccount(uid) } catch (_: Exception) {}
+
+                                        // 3. Clear local session regardless
+                                        SkoLabAnalytics.clearIdentity()
+                                        authManager.signOut()
+                                        credentialManager.clearCredentialState(androidx.credentials.ClearCredentialStateRequest())
                                     } catch (e: Exception) {
                                         Log.e("ProfileScreen", "Error during account deletion", e)
-                                        android.widget.Toast.makeText(context, "Error: ${e.localizedMessage}", android.widget.Toast.LENGTH_LONG).show()
                                     } finally {
                                         isDeletingAccount = false
                                         showDeleteAccountDialog = false

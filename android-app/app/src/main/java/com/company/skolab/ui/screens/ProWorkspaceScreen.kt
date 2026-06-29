@@ -1241,7 +1241,9 @@ fun SchedulerTab(isEnabled: Boolean) {
     val currentUserName = cachedUser?.name ?: "SkoLab User"
 
     var selectedDay by remember { mutableStateOf(24) }
-    
+    var calendarYear by remember { mutableStateOf(2026) }
+    var calendarMonth0 by remember { mutableStateOf(4) }  // 0-indexed; 4 = May
+
     // Core dynamic event list
     val eventsList = remember(currentUserName) {
         mutableStateListOf(
@@ -1327,11 +1329,18 @@ fun SchedulerTab(isEnabled: Boolean) {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = {}) {
+                        IconButton(onClick = {
+                            if (calendarMonth0 == 0) { calendarMonth0 = 11; calendarYear -= 1 }
+                            else calendarMonth0 -= 1
+                        }) {
                             Icon(Icons.Default.ChevronLeft, contentDescription = null, tint = TextPrimary)
                         }
-                        Text("MAY 2026", fontWeight = FontWeight.Black, color = TextPrimary, fontSize = 15.sp, letterSpacing = 1.sp)
-                        IconButton(onClick = {}) {
+                        val monthNames = listOf("JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC")
+                        Text("${monthNames[calendarMonth0]} $calendarYear", fontWeight = FontWeight.Black, color = TextPrimary, fontSize = 15.sp, letterSpacing = 1.sp)
+                        IconButton(onClick = {
+                            if (calendarMonth0 == 11) { calendarMonth0 = 0; calendarYear += 1 }
+                            else calendarMonth0 += 1
+                        }) {
                             Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextPrimary)
                         }
                     }
@@ -1352,8 +1361,10 @@ fun SchedulerTab(isEnabled: Boolean) {
                     Spacer(modifier = Modifier.height(8.dp))
                     
                     // Grid cells
-                    val daysInMonth = 31
-                    val startPadding = 4 // May 1, 2026 is Friday
+                    val calGrid = java.util.Calendar.getInstance().apply { set(calendarYear, calendarMonth0, 1) }
+                    val daysInMonth = calGrid.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+                    // DAY_OF_WEEK: 1=Sun,2=Mon,...,7=Sat → Mon=0 basis
+                    val startPadding = (calGrid.get(java.util.Calendar.DAY_OF_WEEK) - 2 + 7) % 7
                     val totalCells = daysInMonth + startPadding
                     val rows = (totalCells + 6) / 7
                     

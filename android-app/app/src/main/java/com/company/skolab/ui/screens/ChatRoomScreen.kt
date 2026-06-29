@@ -251,7 +251,7 @@ fun ChatRoomScreen(
             isResolvingEmail = true
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 try {
-                    val base = ServerLocator.baseUrl.value ?: "http://10.0.2.2:8000"
+                    val base = ServerLocator.baseUrl.value ?: "http://10.0.2.2:8080"
                     val url = "$base/api/v1/authors/resolve_email?name=" + 
                               android.net.Uri.encode(peerName)
                     val client = okhttp3.OkHttpClient.Builder()
@@ -880,7 +880,9 @@ fun ChatRoomScreen(
 
                                 Spacer(Modifier.width(4.dp))
 
-                                IconButton(onClick = {}, modifier = Modifier.size(24.dp)) {
+                                IconButton(onClick = {
+                                    Toast.makeText(context, "File sharing coming soon.", Toast.LENGTH_SHORT).show()
+                                }, modifier = Modifier.size(24.dp)) {
                                     Icon(Icons.Default.AttachFile, null, tint = TextMuted, modifier = Modifier.size(17.dp))
                                 }
                             }

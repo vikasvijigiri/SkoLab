@@ -6,7 +6,7 @@ import httpx
 from app.main import app
 
 # Ensure scripts folder is importable
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "scripts", "ops"))
 
 # Import pre_shift_check functions
 import pre_shift_check

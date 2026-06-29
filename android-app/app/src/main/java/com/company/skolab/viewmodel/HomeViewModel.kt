@@ -2,11 +2,14 @@ package com.company.skolab.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.company.skolab.auth.AuthManager
+import com.company.skolab.di.AppDependencies
 import com.company.skolab.network.ApiService
 import com.company.skolab.network.AuthorSuggestion
 import com.company.skolab.network.NetworkCollaborator
 import com.company.skolab.network.OpenAlexWork
 import com.company.skolab.network.OrbitMetrics
+import com.company.skolab.network.UserMemoryProfileResponse
 import com.company.skolab.network.getJournalOrFallback
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,11 +36,17 @@ data class NetworkUiState(
     val networkCollaborators: List<NetworkCollaborator> = emptyList(),
     val suggestedCollaborators: List<AuthorSuggestion> = emptyList(),
     val orbitMetrics: OrbitMetrics? = null,
-    val isLoadingNetwork: Boolean = false,
-    val isLoadingSuggestions: Boolean = false
+    val userMemoryProfile: UserMemoryProfileResponse? = null,
+    // Pessimistic defaults — skeletons show immediately, cleared when loads complete
+    val isLoadingNetwork: Boolean = true,
+    val isLoadingSuggestions: Boolean = false,
+    val isLoadingMemory: Boolean = true
 )
 
-class HomeViewModel(private val api: ApiService = com.company.skolab.di.AppDependencies.apiService) : ViewModel() {
+class HomeViewModel(
+    private val api: ApiService = AppDependencies.apiService,
+    private val authManager: AuthManager = AppDependencies.authManager
+) : ViewModel() {
 
     private val _trendingState = MutableStateFlow<TrendingUiState>(TrendingUiState.Loading)
     val trendingState: StateFlow<TrendingUiState> = _trendingState.asStateFlow()
@@ -45,12 +54,26 @@ class HomeViewModel(private val api: ApiService = com.company.skolab.di.AppDepen
     private val _networkState = MutableStateFlow(NetworkUiState())
     val networkState: StateFlow<NetworkUiState> = _networkState.asStateFlow()
 
-    // Track which identity we last fetched for — avoids redundant re-fetches
     private var lastNetworkUser: String = ""
     private var lastSuggestionsField: String = ""
 
     init {
         loadTrending()
+        // React to user identity — starts loading before any composable renders
+        viewModelScope.launch {
+            authManager.cachedUser.collect { user ->
+                if (user == null || user.name.isBlank() || user.name == "SkoLab User") {
+                    _networkState.value = _networkState.value.copy(
+                        isLoadingNetwork = false,
+                        isLoadingMemory = false
+                    )
+                    return@collect
+                }
+                loadNetworkData(user.name, user.researchFocus, excludeName = user.name)
+                loadSuggestions(user.researchFocus)
+                if (user.uid.isNotBlank()) loadUserMemory(user.uid)
+            }
+        }
     }
 
     fun loadTrending() {
@@ -71,10 +94,6 @@ class HomeViewModel(private val api: ApiService = com.company.skolab.di.AppDepen
         }
     }
 
-    /**
-     * Loads orbit metrics, network collaborators, and suggestions.
-     * Skips re-fetching if already cached for the same identity.
-     */
     fun loadNetworkData(userName: String, userFocus: String, excludeName: String = userName) {
         val key = "$userName|$userFocus"
         if (key == lastNetworkUser && _networkState.value.networkCollaborators.isNotEmpty()) return
@@ -86,7 +105,6 @@ class HomeViewModel(private val api: ApiService = com.company.skolab.di.AppDepen
                 val profile = api.searchAuthor(userName, focus = userFocus.ifBlank { null })
                 val authorId = profile?.id ?: ""
                 if (authorId.isNotBlank()) {
-                    // Fetch orbit metrics and collaborators in parallel
                     val metricsDeferred = async { runCatching { api.getOrbitMetrics(authorId) }.getOrNull() }
                     val collabsDeferred = async {
                         runCatching {
@@ -124,6 +142,22 @@ class HomeViewModel(private val api: ApiService = com.company.skolab.di.AppDepen
             } catch (e: Exception) {
                 android.util.Log.e("HomeViewModel", "Failed to load suggestions", e)
                 _networkState.value = _networkState.value.copy(isLoadingSuggestions = false)
+            }
+        }
+    }
+
+    private fun loadUserMemory(userId: String) {
+        viewModelScope.launch {
+            _networkState.value = _networkState.value.copy(isLoadingMemory = true)
+            try {
+                val profile = api.getUserMemory(userId)
+                _networkState.value = _networkState.value.copy(
+                    userMemoryProfile = profile,
+                    isLoadingMemory = false
+                )
+            } catch (e: Exception) {
+                android.util.Log.e("HomeViewModel", "Failed to load user memory", e)
+                _networkState.value = _networkState.value.copy(isLoadingMemory = false)
             }
         }
     }

@@ -557,22 +557,13 @@ class ApiService {
     private fun baseUrl(): String? = ServerLocator.baseUrl.value
 
     private fun handleNetworkException(e: Exception, base: String?) {
-        if (e is kotlinx.coroutines.CancellationException) {
-            return
-        }
-        if (base != null && (e is java.io.IOException || 
-            e.javaClass.name.contains("Timeout") || 
+        if (e is kotlinx.coroutines.CancellationException) return
+        if (base != null && (e is java.io.IOException ||
+            e.javaClass.name.contains("Timeout") ||
             e.javaClass.name.contains("Connect"))) {
             ServerLocator.reportFailure(base)
         }
-        
-        ServerLocator.appContext?.let { context ->
-            val handler = android.os.Handler(android.os.Looper.getMainLooper())
-            handler.post {
-                val msg = "Backend Exception: ${e.localizedMessage ?: e.toString()}"
-                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
-            }
-        }
+        android.util.Log.w("ApiService", "Backend unreachable: ${e.localizedMessage ?: e.toString()}")
     }
 
     // ── Backend endpoints ─────────────────────────────────────────────────────

@@ -73,6 +73,7 @@ import com.company.skolab.ui.screens.AuthorDetailScreen
 import com.company.skolab.ui.screens.DiscoveryScreen
 import com.company.skolab.ui.screens.FeedScreen
 import com.company.skolab.ui.screens.ProfileScreen
+import com.company.skolab.ui.screens.EditProfileScreen
 import com.company.skolab.ui.screens.LibraryScreen
 import com.company.skolab.ui.screens.MetricsScreen
 import com.company.skolab.ui.screens.OnboardingScreen
@@ -131,17 +132,15 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
 
-        // Remove and disable Firestore offline cache/persistence globally
+        // Persistent disk cache — data loads instantly from disk on reopen, then refreshes in background
         try {
             val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
             val settings = com.google.firebase.firestore.FirebaseFirestoreSettings.Builder()
-                .setLocalCacheSettings(com.google.firebase.firestore.memoryCacheSettings {})
+                .setLocalCacheSettings(com.google.firebase.firestore.persistentCacheSettings {})
                 .build()
             db.firestoreSettings = settings
-            db.clearPersistence()
-            android.util.Log.i("MainActivity", "Firestore offline cache successfully disabled & cleared.")
         } catch (e: Exception) {
-            android.util.Log.e("MainActivity", "Failed to disable Firestore persistence", e)
+            android.util.Log.e("MainActivity", "Failed to configure Firestore persistence", e)
         }
 
         userPrefsForTheme = UserPreferences(applicationContext)
@@ -244,16 +243,9 @@ fun SkoLabMainApp() {
         }
     }
     var isFeedLoading by remember { mutableStateOf(true) }
-    var isLlmActive by remember { mutableStateOf(true) }
-    // Use the application-scoped ApiService singleton
-    val apiService = AppDependencies.apiService
-
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        while(true) {
-            isLlmActive = apiService.checkAiStatus()
-            kotlinx.coroutines.delay(30000)
-        }
-    }
+    // isLlmActive is now directly tied to the global WebSocket connection status.
+    // When the WebSocket drops, it instantly updates this state to false.
+    val isLlmActive by com.company.skolab.network.GlobalSocketManager.isConnected.collectAsStateWithLifecycle()
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, authManager.currentUser) {
@@ -627,13 +619,29 @@ fun SkoLabMainApp() {
                 ) {
                     SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.DETAIL) {
                         ProfileScreen(
-                            onBack = {
-                                navController.popBackStack()
-                            },
-                            onNavigateToProWorkspace = {
-                                navController.navigate("pro_workspace")
-                            }
+                            onBack = { navController.popBackStack() },
+                            onNavigateToProWorkspace = { navController.navigate("pro_workspace") },
+                            onNavigateToEditProfile = { navController.navigate("edit_profile") }
                         )
+                    }
+                }
+                composable(
+                    route = "edit_profile",
+                    enterTransition = {
+                        if (ValueAnimator.areAnimatorsEnabled()) {
+                            slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300, easing = EaseOutCubic)) +
+                            fadeIn(animationSpec = tween(300, easing = EaseOutCubic))
+                        } else EnterTransition.None
+                    },
+                    exitTransition = {
+                        if (ValueAnimator.areAnimatorsEnabled()) {
+                            slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(250, easing = EaseOutCubic)) +
+                            fadeOut(animationSpec = tween(250))
+                        } else ExitTransition.None
+                    }
+                ) {
+                    SkoLabScreen(scaffoldPadding, com.company.skolab.ui.layout.ScreenType.DETAIL) {
+                        EditProfileScreen(onBack = { navController.popBackStack() })
                     }
                 }
                 composable(
@@ -912,7 +920,13 @@ fun SkoLabMainApp() {
                     ) {
                         CoLabWorkspaceScreen(
                             projectName = projectName,
-                            onBack = { navController.popBackStack() }
+                            onBack = { navController.popBackStack() },
+                            onNavigateToInviteMember = { projectId ->
+                                navController.navigate("invite_member/${projectId.encodeForRoute()}")
+                            },
+                            onNavigateToCreateTask = { projectId ->
+                                navController.navigate("create_task/${projectId.encodeForRoute()}")
+                            }
                         )
                     }
                 }

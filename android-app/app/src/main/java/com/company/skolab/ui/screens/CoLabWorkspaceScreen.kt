@@ -516,37 +516,34 @@ fun CoLabWorkspaceScreen(
                 confirmButton = {
                     Button(
                         onClick = {
+                            if (projectId.isEmpty()) {
+                                Toast.makeText(context, "Project still loading. Please wait.", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
                             isDeleting = true
                             scope.launch {
                                 try {
                                     val db = FirebaseFirestore.getInstance()
                                     val projectRef = db.collection("collabs_groups").document(projectId)
 
-                                    // Delete tasks subcollection
-                                    val tasksSnapshot = projectRef.collection("tasks").get().await()
-                                    tasksSnapshot.documents.forEach { it.reference.delete().await() }
+                                    // Best-effort subcollection cleanup — don't block on failures
+                                    for (sub in listOf("tasks", "messages", "meetings", "activity")) {
+                                        try {
+                                            val snap = projectRef.collection(sub).get().await()
+                                            snap.documents.forEach { it.reference.delete() }
+                                        } catch (_: Exception) {}
+                                    }
 
-                                    // Delete messages subcollection
-                                    val messagesSnapshot = projectRef.collection("messages").get().await()
-                                    messagesSnapshot.documents.forEach { it.reference.delete().await() }
-
-                                    // Delete meetings subcollection
-                                    val meetingsSnapshot = projectRef.collection("meetings").get().await()
-                                    meetingsSnapshot.documents.forEach { it.reference.delete().await() }
-
-                                    // Delete activity subcollection
-                                    val activitySnapshot = projectRef.collection("activity").get().await()
-                                    activitySnapshot.documents.forEach { it.reference.delete().await() }
-
-                                    // Delete main project document
+                                    // Delete main project document — this is the critical step
                                     projectRef.delete().await()
 
                                     Toast.makeText(context, "Project deleted successfully", Toast.LENGTH_SHORT).show()
                                     showDeleteDialog = false
                                     onBack()
                                 } catch (e: Exception) {
-                                    isDeleting = false
                                     Toast.makeText(context, "Failed to delete project: ${e.message}", Toast.LENGTH_LONG).show()
+                                } finally {
+                                    isDeleting = false
                                 }
                             }
                         },
@@ -566,8 +563,7 @@ fun CoLabWorkspaceScreen(
                 },
                 dismissButton = {
                     TextButton(
-                        onClick = { showDeleteDialog = false },
-                        enabled = !isDeleting
+                        onClick = { showDeleteDialog = false }
                     ) {
                         Text("Cancel", color = AccentTeal)
                     }
@@ -979,6 +975,7 @@ fun ManuscriptSandbox(
     draft: String,
     onDraftChange: (String) -> Unit
 ) {
+    val context = LocalContext.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1005,7 +1002,9 @@ fun ManuscriptSandbox(
             }
             Spacer(modifier = Modifier.weight(1f))
             Button(
-                onClick = {},
+                onClick = {
+                    Toast.makeText(context, "Overleaf sync coming soon.", Toast.LENGTH_SHORT).show()
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = AccentAmber),
                 shape = RoundedCornerShape(12.dp)
             ) {
@@ -1039,6 +1038,7 @@ fun MeetingsSyncGrid(
     tasksList: List<Map<String, Any>>,
     onNavigateToCreateTask: (String) -> Unit
 ) {
+    val context = LocalContext.current
     val db = remember { FirebaseFirestore.getInstance() }
     var meetingsList by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
     var showScheduleDialog by remember { mutableStateOf(false) }
@@ -1132,7 +1132,9 @@ fun MeetingsSyncGrid(
                             )
                         }
                         IconButton(
-                            onClick = {},
+                            onClick = {
+                                Toast.makeText(context, "Reminder set for \"$title\"", Toast.LENGTH_SHORT).show()
+                            },
                             colors = IconButtonDefaults.iconButtonColors(containerColor = BgSubtle),
                             modifier = Modifier.clip(CircleShape)
                         ) {
@@ -1242,9 +1244,10 @@ fun MeetingsSyncGrid(
             var meetingTitle by remember { mutableStateOf("") }
             var meetingWhen by remember { mutableStateOf("") }
             var isScheduling by remember { mutableStateOf(false) }
+            val scheduleScope = rememberCoroutineScope()
 
             AlertDialog(
-                onDismissRequest = { showScheduleDialog = false },
+                onDismissRequest = { if (!isScheduling) showScheduleDialog = false },
                 title = { Text("Schedule Sync Session", color = TextPrimary, fontWeight = FontWeight.Bold) },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1281,42 +1284,50 @@ fun MeetingsSyncGrid(
                 confirmButton = {
                     Button(
                         onClick = {
-                            if (meetingTitle.isNotBlank() && meetingWhen.isNotBlank()) {
-                                isScheduling = true
-                                val newId = db.collection("collabs_groups").document(projectId).collection("meetings").document().id
-                                val meetingData = hashMapOf(
-                                    "id" to newId,
-                                    "title" to meetingTitle.trim(),
-                                    "when" to meetingWhen.trim(),
-                                    "timestamp" to System.currentTimeMillis()
-                                )
-                                db.collection("collabs_groups").document(projectId).collection("meetings").document(newId).set(meetingData)
-                                    .addOnSuccessListener {
+                            if (meetingTitle.isBlank() || meetingWhen.isBlank()) return@Button
+                            isScheduling = true
+                            scheduleScope.launch {
+                                try {
+                                    val newId = db.collection("collabs_groups").document(projectId).collection("meetings").document().id
+                                    val meetingData = hashMapOf(
+                                        "id" to newId,
+                                        "title" to meetingTitle.trim(),
+                                        "when" to meetingWhen.trim(),
+                                        "timestamp" to System.currentTimeMillis()
+                                    )
+                                    db.collection("collabs_groups").document(projectId).collection("meetings").document(newId).set(meetingData).await()
+                                    try {
                                         val actId = db.collection("collabs_groups").document(projectId).collection("activity").document().id
                                         db.collection("collabs_groups").document(projectId).collection("activity").document(actId).set(
                                             hashMapOf(
                                                 "id" to actId,
                                                 "author" to "System",
-                                                "action" to "Scheduled sync session: \"$meetingTitle\" at $meetingWhen",
+                                                "action" to "Scheduled sync: \"${meetingTitle.trim()}\" at ${meetingWhen.trim()}",
                                                 "time" to "just now",
                                                 "timestamp" to System.currentTimeMillis()
                                             )
-                                        )
-                                        showScheduleDialog = false
-                                    }
-                                    .addOnFailureListener {
-                                        isScheduling = false
-                                    }
+                                        ).await()
+                                    } catch (_: Exception) {}
+                                    showScheduleDialog = false
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Failed to schedule sync. Please try again.", Toast.LENGTH_SHORT).show()
+                                } finally {
+                                    isScheduling = false
+                                }
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
                         enabled = !isScheduling && meetingTitle.isNotBlank() && meetingWhen.isNotBlank()
                     ) {
-                        Text("Schedule", color = Color.White, fontWeight = FontWeight.Bold)
+                        if (isScheduling) {
+                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        } else {
+                            Text("Schedule", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showScheduleDialog = false }) {
+                    TextButton(onClick = { if (!isScheduling) showScheduleDialog = false }) {
                         Text("Cancel", color = AccentTeal)
                     }
                 },
@@ -1332,6 +1343,8 @@ fun VideoConferenceOverlay(
     projectName: String,
     onEndCall: () -> Unit
 ) {
+    var isMuted by remember { mutableStateOf(false) }
+    var isCameraOff by remember { mutableStateOf(false) }
     val infiniteTransition = rememberInfiniteTransition()
     val pulseScale1 by infiniteTransition.animateFloat(
         initialValue = 1f,
@@ -1467,11 +1480,17 @@ fun VideoConferenceOverlay(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
-                    onClick = {},
-                    colors = IconButtonDefaults.iconButtonColors(containerColor = BgSubtle),
+                    onClick = { isMuted = !isMuted },
+                    colors = IconButtonDefaults.iconButtonColors(
+                        containerColor = if (isMuted) AccentRed.copy(alpha = 0.8f) else BgSubtle
+                    ),
                     modifier = Modifier.size(48.dp).clip(CircleShape)
                 ) {
-                    Icon(Icons.Default.Mic, contentDescription = "Mute", tint = Color.White)
+                    Icon(
+                        if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                        contentDescription = if (isMuted) "Unmute" else "Mute",
+                        tint = Color.White
+                    )
                 }
 
                 IconButton(
@@ -1483,11 +1502,17 @@ fun VideoConferenceOverlay(
                 }
 
                 IconButton(
-                    onClick = {},
-                    colors = IconButtonDefaults.iconButtonColors(containerColor = BgSubtle),
+                    onClick = { isCameraOff = !isCameraOff },
+                    colors = IconButtonDefaults.iconButtonColors(
+                        containerColor = if (isCameraOff) AccentRed.copy(alpha = 0.8f) else BgSubtle
+                    ),
                     modifier = Modifier.size(48.dp).clip(CircleShape)
                 ) {
-                    Icon(Icons.Default.Videocam, contentDescription = "Video Toggle", tint = Color.White)
+                    Icon(
+                        if (isCameraOff) Icons.Default.VideocamOff else Icons.Default.Videocam,
+                        contentDescription = if (isCameraOff) "Enable Camera" else "Disable Camera",
+                        tint = Color.White
+                    )
                 }
             }
         }

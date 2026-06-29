@@ -39,6 +39,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 data class CreateProjectMember(val uid: String, val name: String, val email: String)
 
@@ -324,38 +325,44 @@ fun CreateProjectScreen(
                         nameError = "Project name cannot be empty"
                         return@Button
                     }
-                    isSaving = true
-                    val newId = db.collection("collabs_groups").document().id
-                    
-                    val memberMaps = membersList.map { 
-                        mapOf("uid" to it.uid, "name" to it.name, "email" to it.email) 
+                    if (currentUserId.isBlank()) {
+                        Toast.makeText(context, "Still loading your account. Please wait a moment.", Toast.LENGTH_SHORT).show()
+                        return@Button
                     }
-                    val allMembers = listOf(mapOf("uid" to currentUserId, "name" to currentUserName, "email" to currentUserEmail)) + memberMaps
-                    val allUids = listOf(currentUserId) + membersList.map { it.uid }
+                    isSaving = true
+                    scope.launch {
+                        try {
+                            val newId = db.collection("collabs_groups").document().id
+                            val memberMaps = membersList.map {
+                                mapOf("uid" to it.uid, "name" to it.name, "email" to it.email)
+                            }
+                            val allMembers = listOf(
+                                mapOf("uid" to currentUserId, "name" to currentUserName, "email" to currentUserEmail)
+                            ) + memberMaps
+                            val allUids = listOf(currentUserId) + membersList.map { it.uid }
 
-                    val projectData = hashMapOf(
-                        "id" to newId,
-                        "name" to newProjName.trim(),
-                        "description" to newProjDesc.trim(),
-                        "ownerUid" to currentUserId,
-                        "ownerName" to currentUserName,
-                        "members" to allMembers,
-                        "memberUids" to allUids,
-                        "recentEquations" to newProjEq.trim().ifBlank { "\\mathcal{H} = J \\sum \\mathbf{S}_i \\cdot \\mathbf{S}_j" },
-                        "manuscriptProgress" to 0.0f,
-                        "createdAt" to System.currentTimeMillis()
-                    )
-                    
-                    db.collection("collabs_groups").document(newId).set(projectData)
-                        .addOnSuccessListener {
-                            Toast.makeText(context, "Project group created!", Toast.LENGTH_SHORT).show()
-                            isSaving = false
+                            val projectData = hashMapOf(
+                                "id" to newId,
+                                "name" to newProjName.trim(),
+                                "description" to newProjDesc.trim(),
+                                "ownerUid" to currentUserId,
+                                "ownerName" to currentUserName,
+                                "members" to allMembers,
+                                "memberUids" to allUids,
+                                "recentEquations" to newProjEq.trim().ifBlank { "\\mathcal{H} = J \\sum \\mathbf{S}_i \\cdot \\mathbf{S}_j" },
+                                "manuscriptProgress" to 0.0f,
+                                "createdAt" to System.currentTimeMillis()
+                            )
+
+                            db.collection("collabs_groups").document(newId).set(projectData).await()
+                            Toast.makeText(context, "Project created!", Toast.LENGTH_SHORT).show()
                             onBack()
-                        }
-                        .addOnFailureListener {
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Failed to create project. Please try again.", Toast.LENGTH_SHORT).show()
+                        } finally {
                             isSaving = false
-                            Toast.makeText(context, "Failed to create: ${it.message}", Toast.LENGTH_SHORT).show()
                         }
+                    }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
                 shape = RoundedCornerShape(12.dp),

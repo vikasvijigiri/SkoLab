@@ -65,6 +65,7 @@ fun PaperDetailScreen(
     val savedIds by libraryViewModel.savedIds.collectAsStateWithLifecycle()
     val isSaved = savedIds.contains(paperId)
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var showConfetti by remember { mutableStateOf(false) }
 
     LaunchedEffect(paperId) {
@@ -101,7 +102,18 @@ fun PaperDetailScreen(
                             }
                         )
                     }
-                    IconButton(onClick = { }) { Icon(Icons.Default.Share, null, tint = SkoLabTextPrimary) }
+                    IconButton(onClick = {
+                        val paper = (uiState as? PaperUiState.Success)?.paper
+                        val title = paper?.title ?: "Research Paper"
+                        val doi = paper?.doi?.takeIf { it.isNotBlank() }
+                        val shareText = if (doi != null) "$title\nhttps://doi.org/$doi" else title
+                        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                            putExtra(android.content.Intent.EXTRA_SUBJECT, title)
+                        }
+                        context.startActivity(android.content.Intent.createChooser(intent, "Share Paper"))
+                    }) { Icon(Icons.Default.Share, null, tint = SkoLabTextPrimary) }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
