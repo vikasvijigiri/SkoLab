@@ -1,0 +1,108 @@
+# Alertmanager Configuration
+# SkoLab On-Call Alert Routing
+# ---------------------------------------------------------------------------
+# This file defines how Prometheus alerts are routed to on-call SREs.
+# Receivers are configured with PagerDuty integration keys and SMTP email.
+# Before each rotation cycle, the SRE team must verify that:
+#   1. The primary and backup receiver integration keys are active.
+#   2. The on-call roster has been updated in the pager system.
+#   3. A test page has been triggered and acknowledged by the incoming SRE.
+# ---------------------------------------------------------------------------
+
+global:
+  # How long to wait before re-sending an alert that has not been silenced.
+  resolve_timeout: 5m
+  # SMTP Configuration for email receivers
+  smtp_smarthost: "smtp.skolab.open:587"
+  smtp_from: "alerts@skolab.open"
+  smtp_auth_username: "alerts@skolab.open"
+  smtp_auth_password: "${SMTP_AUTH_PASSWORD}"  # Inject via secret manager
+  smtp_require_tls: true
+
+# ---------------------------------------------------------------------------
+# Routing Tree
+# ---------------------------------------------------------------------------
+route:
+  # Default grouping keys — all alerts from the same service/severity are grouped.
+  group_by: ["alertname", "severity"]
+  # Wait 30 seconds to collect more alerts before sending the first notification.
+  group_wait: 30s
+  # Wait 5 minutes before sending a notification for alerts added to an existing group.
+  group_interval: 5m
+  # Wait 4 hours before re-notifying about an ongoing alert.
+  repeat_interval: 4h
+  # Default receiver: primary on-call SRE via PagerDuty.
+  receiver: "primary-oncall-pagerduty"
+
+  routes:
+    # Critical/P0 alerts → immediate PagerDuty page
+    - match:
+        severity: critical
+      receiver: "primary-oncall-pagerduty"
+      continue: true   # Also fan out to email
+
+    # Warning/P2 alerts → email notification only
+    - match:
+        severity: warning
+      receiver: "oncall-email"
+
+    # Database-specific alerts → escalate directly to DB SRE Lead
+    - match_re:
+        alertname: ".*Disk.*|.*Database.*|.*Replication.*"
+      receiver: "db-sre-pagerduty"
+
+# ---------------------------------------------------------------------------
+# Inhibition Rules
+# During P0 (complete outage), suppress lower severity warning alerts to
+# prevent SRE notification fatigue.
+# ---------------------------------------------------------------------------
+inhibit_rules:
+  - source_match:
+      severity: "critical"
+    target_match:
+      severity: "warning"
+    # Only inhibit when the alertname is the same or alerts are from same instance.
+    equal: ["alertname"]
+
+# ---------------------------------------------------------------------------
+# Receivers
+# ---------------------------------------------------------------------------
+receivers:
+  # Primary On-Call SRE — PagerDuty Integration
+  - name: "primary-oncall-pagerduty"
+    pagerduty_configs:
+      - routing_key: "${PAGERDUTY_PRIMARY_ONCALL_KEY}"  # Set in secret vault
+        description: "{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}"
+        severity: "{{ if eq .GroupLabels.severity \"critical\" }}critical{{ else }}warning{{ end }}"
+        details:
+          description: "{{ range .Alerts }}{{ .Annotations.description }}{{ end }}"
+          runbook_url: "https://github.com/skolab/resqit/blob/main/docs/runbooks/incident.md"
+
+  # Database SRE Lead — PagerDuty Integration
+  - name: "db-sre-pagerduty"
+    pagerduty_configs:
+      - routing_key: "${PAGERDUTY_DB_SRE_KEY}"  # Set in secret vault
+        description: "{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}"
+        severity: critical
+        details:
+          description: "{{ range .Alerts }}{{ .Annotations.description }}{{ end }}"
+          runbook_url: "https://github.com/skolab/resqit/blob/main/docs/runbooks/disaster_recovery.md"
+
+  # Email receiver — warning alerts and secondary fan-out
+  - name: "oncall-email"
+    email_configs:
+      - to: "backend-lead@skolab.open"
+        headers:
+          Subject: "[SkoLab Alert] {{ .GroupLabels.alertname }} — {{ .GroupLabels.severity }}"
+        html: |
+          <html>
+          <body>
+          <h2>SkoLab Alert: {{ .GroupLabels.alertname }}</h2>
+          <p><b>Severity:</b> {{ .GroupLabels.severity }}</p>
+          {{ range .Alerts }}
+          <p><b>Summary:</b> {{ .Annotations.summary }}</p>
+          <p><b>Description:</b> {{ .Annotations.description }}</p>
+          {{ end }}
+          <p><a href="https://github.com/skolab/resqit/blob/main/docs/runbooks/incident.md">Open Runbook</a></p>
+          </body>
+          </html>

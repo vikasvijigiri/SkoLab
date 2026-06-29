@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Blue ramp -->
+    <color name="blue_50">#F7F9FF</color>
+    <color name="blue_100">#EEF3FE</color>
+    <color name="blue_200">#D4E2F8</color>
+    <color name="blue_300">#A8C4F0</color>
+    <color name="blue_400">#4A6FA5</color>
+    <color name="blue_500">#2D6BE4</color>
+    <color name="blue_600">#1A4FA8</color>
+    <color name="blue_700">#0D2E6B</color>
+
+    <!-- Functional accents -->
+    <color name="accent_streak">#A8FF3E</color>
+    <color name="accent_gold_bg">#FFF7E0</color>
+    <color name="accent_gold_text">#A07800</color>
+    <color name="accent_error">#D42B2B</color>
+    <color name="accent_error_bg">#FFF0F0</color>
+
+    <!-- Neutrals (blue-tinted, never pure gray) -->
+    <color name="white">#FFFFFF</color>
+    <color name="black_text">#0D2E6B</color>
+</resources>

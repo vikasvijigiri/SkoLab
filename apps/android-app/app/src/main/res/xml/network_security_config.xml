@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Network Security Configuration
+
+  KNOWN LIMITATION: Android's network_security_config.xml does not support IP wildcards,
+  so private RFC-1918 ranges (10.x, 192.168.x, 172.16-31.x) cannot be expressed as a
+  single rule. The app uses mDNS/NsdManager to discover the backend at a dynamic LAN IP,
+  so cleartext must remain permitted until the local backend is served over HTTPS.
+
+  ACTION REQUIRED before v1 production release:
+    1. Deploy backend behind TLS (e.g., nginx reverse proxy with a cert from Let's Encrypt
+       or a self-signed cert trusted via this config's <certificates src="raw"/> entry).
+    2. Set cleartextTrafficPermitted="false" in base-config.
+    3. Add certificate pinning for the production API domain.
+
+  Current state: cleartext allowed for LAN + localhost only (debug user CAs also trusted
+  in debug builds so HTTPS inspection via Charles/Proxyman still works).
+-->
+<network-security-config>
+
+    <!--
+      External production backend must use HTTPS.
+      Replace "api.skolab.app" with the actual production hostname before launch.
+    -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">api.skolab.app</domain>
+        <domain includeSubdomains="true">skolab.app</domain>
+        <domain includeSubdomains="true">openalexapi.s3.amazonaws.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+
+    <!-- Loopback: emulator + local dev -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">::1</domain>
+    </domain-config>
+
+    <!--
+      Base fallback: cleartext permitted because mDNS-discovered LAN IPs are dynamic
+      and cannot be enumerated here. Remove this once local backend uses HTTPS.
+    -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Debug-only: also trust user-installed CAs (Charles, Proxyman, mitmproxy) -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+
+</network-security-config>

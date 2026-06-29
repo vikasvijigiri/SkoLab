@@ -1,0 +1,50 @@
+{
+  "_comment": "Cloudflare Zone-Level Settings — Apply via Cloudflare API or Terraform cloudflare_zone_settings_override resource.",
+  "_instructions": "1. Import zone ID from Cloudflare dashboard. 2. Apply with: curl -X PATCH 'https://api.cloudflare.com/client/v4/zones/{ZONE_ID}/settings' -H 'Authorization: Bearer {TOKEN}' -d @cloudflare-settings.json",
+
+  "ssl": {
+    "value": "strict",
+    "_note": "Full (Strict) — origin must present a valid CA-signed certificate. Never use 'flexible' (sends plaintext to origin)."
+  },
+  "always_use_https": {
+    "value": "on",
+    "_note": "Redirect all HTTP requests to HTTPS at the edge."
+  },
+  "min_tls_version": {
+    "value": "1.2",
+    "_note": "Reject TLS 1.0 and 1.1 connections."
+  },
+  "tls_1_3": {
+    "value": "zrt",
+    "_note": "Enable TLS 1.3 with 0-RTT."
+  },
+  "security_level": {
+    "value": "medium",
+    "_note": "Challenge visitors with suspicious reputation scores. Tune to 'high' if DDoS is detected."
+  },
+  "bot_management": {
+    "fight_mode": true,
+    "_note": "Enable Super Bot Fight Mode. This requires a Cloudflare Pro plan or higher. Googlebot bypass is configured in cloudflare-waf-rules.json."
+  },
+  "ddos_protection": {
+    "sensitivity_level": "high",
+    "_note": "Cloudflare will alert and challenge at lower thresholds. Configure Cloudflare Notifications > DDoS Attack Alert to page on-call SRE team."
+  },
+  "http3": {
+    "value": "on",
+    "_note": "Enable QUIC / HTTP3 for improved mobile network performance."
+  },
+  "early_hints": {
+    "value": "on",
+    "_note": "Send 103 Early Hints for faster resource preloading."
+  },
+  "browser_cache_ttl": {
+    "value": 14400,
+    "_note": "4-hour browser cache for non-versioned responses. Versioned assets override this via Cache-Control immutable header."
+  },
+  "origin_shield": {
+    "enabled": true,
+    "region": "iad",
+    "_note": "Enable Argo Tiered Caching / Origin Shield. Choose region closest to your origin server. Cache misses proxy to this PoP before hitting origin."
+  }
+}
