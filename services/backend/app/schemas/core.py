@@ -100,9 +100,6 @@ class ConjectureResponse(BaseModel):
     explanation: str
 
 
-
-
-
 class AgentChatRequest(BaseModel):
     message: str = Field(..., max_length=2000)
     history: list[dict[str, str]] = []
@@ -168,4 +165,3 @@ class TieupIdea(BaseModel):
 class IndustryAcademicTieupsResponse(BaseModel):
     trending: List[TieupIdea] = []
     futuristic: List[TieupIdea] = []
-

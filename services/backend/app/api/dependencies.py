@@ -41,6 +41,7 @@ async def get_verified_user(
             cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
             if cred_path and os.path.exists(cred_path):
                 from firebase_admin import credentials as fb_credentials
+
                 firebase_admin.initialize_app(fb_credentials.Certificate(cred_path))
             else:
                 firebase_admin.initialize_app()

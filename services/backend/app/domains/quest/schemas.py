@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List
+
 
 class Quest(BaseModel):
     id: str

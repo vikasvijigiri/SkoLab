@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 
@@ -36,12 +36,12 @@ async def test_get_tieups_cache_hit(
                         "year": 2024,
                         "journal": "Nature Quantum",
                         "citations": 150,
-                        "authors": ["Alice", "Bob"]
+                        "authors": ["Alice", "Bob"],
                     }
-                ]
+                ],
             }
         ],
-        "futuristic": []
+        "futuristic": [],
     }
     mock_cache.get = AsyncMock(return_value=cached_data)
 
@@ -51,7 +51,6 @@ async def test_get_tieups_cache_hit(
     assert result == cached_data
     mock_cache.get.assert_called_once_with("user_123")
     MockUserMemory.return_value.get_user_memory.assert_not_called()
-
 
 
 @pytest.mark.asyncio
@@ -71,7 +70,7 @@ async def test_get_tieups_cache_miss_success(
         user_id="user_123",
         top_topics=["Quantum Computing", "Cryptography"],
         last_active_topic="Quantum Computing",
-        researcher_bio="A researcher in quantum mechanics."
+        researcher_bio="A researcher in quantum mechanics.",
     )
     mock_user_memory_inst = AsyncMock()
     mock_user_memory_inst.get_user_memory = AsyncMock(return_value=mock_memory_profile)
@@ -109,14 +108,8 @@ async def test_get_tieups_cache_miss_success(
         "doi": "https://doi.org/999",
         "publication_year": 2025,
         "cited_by_count": 42,
-        "authorships": [
-            {
-                "author": {"display_name": "Charlie"}
-            }
-        ],
-        "primary_location": {
-            "source": {"display_name": "Journal of Space Optics"}
-        }
+        "authorships": [{"author": {"display_name": "Charlie"}}],
+        "primary_location": {"source": {"display_name": "Journal of Space Optics"}},
     }
     mock_openalex_inst.search_works = AsyncMock(return_value=[mock_paper])
     MockOpenAlex.return_value = mock_openalex_inst
@@ -144,10 +137,10 @@ def test_api_endpoint_success(monkeypatch):
                 "title": "AI in Drug Discovery",
                 "description": "Generative chemistry models for faster drug matching.",
                 "search_queries": ["generative chemistry drugs"],
-                "papers": []
+                "papers": [],
             }
         ],
-        "futuristic": []
+        "futuristic": [],
     }
 
     async def mock_get_tieups(self, user_id: str):
@@ -157,7 +150,7 @@ def test_api_endpoint_success(monkeypatch):
 
     client = TestClient(app)
     response = client.get("/api/v1/industry_academic_tieups?user_id=user_123")
-    
+
     assert response.status_code == 200
     data = response.json()
     assert len(data["trending"]) == 1

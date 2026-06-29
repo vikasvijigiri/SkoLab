@@ -56,4 +56,3 @@ history_summary_cache = PgBackedCache(
 )
 _user_memory_cache = PgBackedCache(ttl_seconds=3600, name="user_memory")
 industry_academic_cache = PgBackedCache(ttl_seconds=3600, name="industry_academic")
-

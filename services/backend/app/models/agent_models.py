@@ -1,7 +1,10 @@
 import datetime
 
+
 def utcnow():
     return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+
+
 from sqlalchemy import Column, String, Integer, DateTime, Text
 from app.db.database import Base
 
@@ -20,7 +23,9 @@ class AgentHistorySummary(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     cache_key = Column(String(256), unique=True, index=True, nullable=False)
-    user_id = Column(String(100), index=True, nullable=True)  # optional — for future scoping
+    user_id = Column(
+        String(100), index=True, nullable=True
+    )  # optional — for future scoping
     summary = Column(Text, nullable=False)
     created_at = Column(DateTime, default=utcnow)
     expires_at = Column(DateTime, nullable=True)  # 12-hour TTL
@@ -44,4 +49,3 @@ class AgentDocumentUpload(Base):
     file_size_kb = Column(Integer, nullable=True)
     uploaded_at = Column(DateTime, default=utcnow)
     expires_at = Column(DateTime, nullable=True)  # 24-hour TTL
-

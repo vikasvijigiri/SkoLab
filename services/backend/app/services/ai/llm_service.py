@@ -86,7 +86,7 @@ class LLMService:
             self.openrouter_client = OpenRouter(
                 api_key=settings.openrouter_api_key,
                 http_referer=settings.app_base_url,
-                x_open_router_title="SkoLab"
+                x_open_router_title="SkoLab",
             )
         else:
             self.openrouter_client = None
@@ -140,9 +140,13 @@ class LLMService:
                                 "id": getattr(tc, "id", None),
                                 "type": getattr(tc, "type", "function"),
                                 "function": {
-                                    "name": getattr(getattr(tc, "function", None), "name", None),
-                                    "arguments": getattr(getattr(tc, "function", None), "arguments", None)
-                                }
+                                    "name": getattr(
+                                        getattr(tc, "function", None), "name", None
+                                    ),
+                                    "arguments": getattr(
+                                        getattr(tc, "function", None), "arguments", None
+                                    ),
+                                },
                             }
                         tool_calls_dict.append(tc_dict)
 
@@ -152,7 +156,10 @@ class LLMService:
             else:
                 return LLMResponse(content=str(resp), model_used=model)
         except Exception as e:
-            print(f"[LLMService] OpenRouter SDK exception for model {model}: {e}", flush=True)
+            print(
+                f"[LLMService] OpenRouter SDK exception for model {model}: {e}",
+                flush=True,
+            )
             raise e
 
     async def query(
@@ -189,7 +196,7 @@ class LLMService:
         errors_encountered = []
         for model in models_to_try:
             is_or = "/" in model and not model.startswith("groq/")
-            
+
             # Check key and availability before querying
             if is_or and not settings.openrouter_api_key:
                 continue
@@ -209,7 +216,11 @@ class LLMService:
                         tool_choice=tool_choice,
                     )
                 else:
-                    payload = {"model": model, "messages": messages, "temperature": temperature}
+                    payload = {
+                        "model": model,
+                        "messages": messages,
+                        "temperature": temperature,
+                    }
                     if max_tokens is not None:
                         payload["max_tokens"] = max_tokens
                     if response_format is not None:

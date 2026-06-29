@@ -94,7 +94,11 @@ class PhysicsResearcherFetcher:
                 return None
 
             affiliations = author_data.get("affiliations") or []
-            if not affiliations or not any(aff for aff in affiliations if aff and aff.strip().lower() not in ["unknown", "none"]):
+            if not affiliations or not any(
+                aff
+                for aff in affiliations
+                if aff and aff.strip().lower() not in ["unknown", "none"]
+            ):
                 return None
 
             return {

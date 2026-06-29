@@ -47,15 +47,15 @@ def test_llm_limit_exceeded_cooldown():
     # Ensure LLM key is configured for the test context using a mock settings object
     mock_settings = MagicMock()
     mock_settings.configure_mock(groq_api_key="dummy", openrouter_api_key="")
-    
+
     with patch("app.services.ai.llm_service.settings", mock_settings):
         set_llm_limit_exceeded(False)
         assert is_llm_working() is True
-        
+
         # Trip the limit switch
         set_llm_limit_exceeded(True)
         assert is_llm_working() is False
-        
+
         # Reset the limit switch
         set_llm_limit_exceeded(False)
         assert is_llm_working() is True

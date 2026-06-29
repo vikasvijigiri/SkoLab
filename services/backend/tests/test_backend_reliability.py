@@ -39,13 +39,14 @@ async def test_upload_document_success():
     """Verify that a valid PDF file upload works successfully."""
     # Mock agent_service to avoid writing file to disk
     mock_agent_service = MagicMock()
-    
+
     async def dummy_process(content, filename, content_type):
         return {"id": 123, "filename": filename, "extracted_text": "Sample text"}
 
     mock_agent_service.process_upload_document = dummy_process
 
     from app.api.dependencies import get_agent_service
+
     app.dependency_overrides[get_agent_service] = lambda: mock_agent_service
     try:
         async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:

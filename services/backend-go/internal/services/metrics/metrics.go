@@ -222,21 +222,21 @@ func ResearchConsistency(citationsPerYear []int) float64 {
 
 // Input holds all inputs for a single batch calculation.
 type Input struct {
-	N1, N2, N3       int
-	YearlyCitations  []int
-	EarlyCitations   int
-	JournalScore     float64
-	HIndex           int
-	TopicCounts      map[string]int
-	PolicyCites      int
-	PatentCites      int
-	HasCode          bool
-	HasData          bool
-	IsOpenAccess     bool
-	HasPreprint      bool
-	Countries        []string
-	Embedding        []float64
-	PeerEmbeddings   [][]float64
+	N1, N2, N3      int
+	YearlyCitations []int
+	EarlyCitations  int
+	JournalScore    float64
+	HIndex          int
+	TopicCounts     map[string]int
+	PolicyCites     int
+	PatentCites     int
+	HasCode         bool
+	HasData         bool
+	IsOpenAccess    bool
+	HasPreprint     bool
+	Countries       []string
+	Embedding       []float64
+	PeerEmbeddings  [][]float64
 }
 
 // Result holds all 10 computed metrics.

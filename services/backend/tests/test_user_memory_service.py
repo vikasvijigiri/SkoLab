@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.services.user.user_memory_service import UserMemoryService

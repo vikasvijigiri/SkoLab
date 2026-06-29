@@ -24,6 +24,7 @@ def read_root():
 async def ai_status():
     """Checks if the AI services have valid API keys and are reachable."""
     import os
+
     groq_key = os.getenv("GROQ_API")
     has_key = groq_key is not None and len(groq_key) > 10
     llm_ok = is_llm_working()
@@ -44,6 +45,7 @@ async def get_system_status():
     # Check Database
     from app.db.database import AsyncSessionLocal
     from sqlalchemy import text
+
     try:
         async with AsyncSessionLocal() as session:
             await session.execute(text("SELECT 1"))
@@ -53,6 +55,7 @@ async def get_system_status():
 
     # Check Cache
     from app.core.cache import suggestions_cache
+
     try:
         await suggestions_cache.set("status_ping", "1")
         val = await suggestions_cache.get("status_ping")

@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
@@ -227,18 +227,26 @@ async def get_semantic_trending(
         try:
             from app.models.user_models import ResearcherProfile
             from sqlalchemy.future import select as sa_select
-            stmt = sa_select(ResearcherProfile).where(ResearcherProfile.openalex_id == clean_id)
+
+            stmt = sa_select(ResearcherProfile).where(
+                ResearcherProfile.openalex_id == clean_id
+            )
             res = await db.execute(stmt)
             rp = res.scalars().first()
             if rp and rp.concepts:
                 stored = rp.concepts if isinstance(rp.concepts, list) else []
                 author_concept_names = [c for c in stored if isinstance(c, str)][:5]
-                top_concepts = [{"id": "", "display_name": n, "score": 1.0} for n in author_concept_names]
+                top_concepts = [
+                    {"id": "", "display_name": n, "score": 1.0}
+                    for n in author_concept_names
+                ]
                 author_concept_ids = set()
         except HTTPException:
             raise
         except Exception as e:
-            print(f"[SemanticTrending] ResearcherProfile fallback error: {e}", flush=True)
+            print(
+                f"[SemanticTrending] ResearcherProfile fallback error: {e}", flush=True
+            )
 
     if not top_concepts:
         empty = {"author_concepts": [], "papers": []}
@@ -353,7 +361,11 @@ async def get_semantic_trending(
             doi_val = w.get("doi") or ""
             pdf_val = loc.get("pdf_url") or ""
             landing_val = loc.get("landing_page_url") or ""
-            if "arxiv" in doi_val.lower() or "arxiv.org" in pdf_val.lower() or "arxiv.org" in landing_val.lower():
+            if (
+                "arxiv" in doi_val.lower()
+                or "arxiv.org" in pdf_val.lower()
+                or "arxiv.org" in landing_val.lower()
+            ):
                 journal_name = "arXiv Preprint"
             else:
                 concepts_list = w.get("concepts") or w.get("topics") or []

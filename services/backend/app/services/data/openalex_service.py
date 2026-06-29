@@ -207,7 +207,6 @@ class OpenAlexService:
         return []
 
     async def search_works(
-
         self, query: str, per_page: int = 20, sort: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """

@@ -1,4 +1,4 @@
-﻿import numpy as np
+import numpy as np
 import networkx as nx
 from typing import List, Dict, Optional
 import math

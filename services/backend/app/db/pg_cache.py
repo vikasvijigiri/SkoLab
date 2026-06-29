@@ -37,22 +37,32 @@ from app.models.user_models import CacheEntry
 _redis_client: aioredis.Redis | None = None
 _redis_active = False
 
+
 async def init_redis() -> None:
     """Initialize Redis connection for distributed L2 cache."""
     global _redis_client, _redis_active
     redis_url = os.environ.get("REDIS_URL")
     if not redis_url:
-        print("[Redis] REDIS_URL not configured. Using database for L2 caching.", flush=True)
+        print(
+            "[Redis] REDIS_URL not configured. Using database for L2 caching.",
+            flush=True,
+        )
         return
     try:
         _redis_client = aioredis.from_url(redis_url, socket_timeout=1.0)
         await _redis_client.ping()
         _redis_active = True
-        print(f"[Redis] Connected successfully to L2 distributed cache: {redis_url}", flush=True)
+        print(
+            f"[Redis] Connected successfully to L2 distributed cache: {redis_url}",
+            flush=True,
+        )
     except Exception as e:
         _redis_client = None
         _redis_active = False
-        print(f"[Redis] Connection failed (falling back to database L2 cache): {e}", flush=True)
+        print(
+            f"[Redis] Connection failed (falling back to database L2 cache): {e}",
+            flush=True,
+        )
 
 
 class PgBackedCache:
@@ -126,7 +136,9 @@ class PgBackedCache:
                     self._l1_set(key, decoded)  # warm L1
                     return decoded
             except Exception as exc:
-                print(f"[RedisCache:{self.name}] GET error for '{key}': {exc}", flush=True)
+                print(
+                    f"[RedisCache:{self.name}] GET error for '{key}': {exc}", flush=True
+                )
 
         # L2 — Database Fallback
         now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
@@ -143,7 +155,10 @@ class PgBackedCache:
                     self._l1_set(key, value)  # warm L1
                     return value
             except Exception as exc:
-                print(f"[DatabaseCache:{self.name}] GET error for '{key}': {exc}", flush=True)
+                print(
+                    f"[DatabaseCache:{self.name}] GET error for '{key}': {exc}",
+                    flush=True,
+                )
         return None
 
     async def set(self, key: str, value: Any) -> None:
@@ -156,10 +171,14 @@ class PgBackedCache:
         # L2 — Redis
         if _redis_active and _redis_client:
             try:
-                await _redis_client.set(db_key, json.dumps(normalized_value), ex=self.ttl)
+                await _redis_client.set(
+                    db_key, json.dumps(normalized_value), ex=self.ttl
+                )
                 return
             except Exception as exc:
-                print(f"[RedisCache:{self.name}] SET error for '{key}': {exc}", flush=True)
+                print(
+                    f"[RedisCache:{self.name}] SET error for '{key}': {exc}", flush=True
+                )
 
         # L2 — Database Fallback
         now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
@@ -185,7 +204,10 @@ class PgBackedCache:
                     session.add(entry)
                 await session.commit()
             except Exception as exc:
-                print(f"[DatabaseCache:{self.name}] SET error for '{key}': {exc}", flush=True)
+                print(
+                    f"[DatabaseCache:{self.name}] SET error for '{key}': {exc}",
+                    flush=True,
+                )
                 await session.rollback()
 
     async def delete(self, key: str) -> None:
@@ -199,7 +221,10 @@ class PgBackedCache:
                 await _redis_client.delete(db_key)
                 return
             except Exception as exc:
-                print(f"[RedisCache:{self.name}] DELETE error for '{key}': {exc}", flush=True)
+                print(
+                    f"[RedisCache:{self.name}] DELETE error for '{key}': {exc}",
+                    flush=True,
+                )
 
         # L2 — Database Fallback
         async with AsyncSessionLocal() as session:
@@ -209,7 +234,10 @@ class PgBackedCache:
                 )
                 await session.commit()
             except Exception as exc:
-                print(f"[DatabaseCache:{self.name}] DELETE error for '{key}': {exc}", flush=True)
+                print(
+                    f"[DatabaseCache:{self.name}] DELETE error for '{key}': {exc}",
+                    flush=True,
+                )
                 await session.rollback()
 
     async def clear(self) -> None:
@@ -234,6 +262,7 @@ class PgBackedCache:
         async with AsyncSessionLocal() as session:
             try:
                 from sqlalchemy import text
+
                 await session.execute(
                     text("DELETE FROM cache_entries WHERE cache_key LIKE :prefix"),
                     {"prefix": prefix + "%"},

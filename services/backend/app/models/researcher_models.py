@@ -1,7 +1,9 @@
 import datetime
 
+
 def utcnow():
     return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+
 
 import re
 from typing import Optional
@@ -22,6 +24,7 @@ from app.db.database import Base
 # Standard DOI format regex: starts with 10. followed by 4 or more digits, a slash, and character sequence
 DOI_REGEX = re.compile(r"^10\.\d{4,9}/[-._;()/:A-Za-z0-9]+$")
 
+
 def clean_and_validate_doi(doi: Optional[str]) -> Optional[str]:
     if not doi:
         return None
@@ -29,7 +32,7 @@ def clean_and_validate_doi(doi: Optional[str]) -> Optional[str]:
     clean = doi
     for prefix in ["https://doi.org/", "http://doi.org/", "doi:"]:
         if clean.startswith(prefix):
-            clean = clean[len(prefix):]
+            clean = clean[len(prefix) :]
     if not DOI_REGEX.match(clean):
         raise ValueError(f"Invalid DOI format: {doi}")
     return clean
@@ -47,7 +50,9 @@ class ResearcherWork(Base):
     author_openalex_id = Column(
         String(100), index=True, nullable=False
     )  # e.g. "A5020214245"
-    work_openalex_id = Column(String(100), index=True, nullable=False)  # e.g. "W2101..."
+    work_openalex_id = Column(
+        String(100), index=True, nullable=False
+    )  # e.g. "W2101..."
     title = Column(Text, nullable=False)
     publication_year = Column(Integer, nullable=True)
     doi = Column(String(255), nullable=True)
@@ -65,9 +70,7 @@ class ResearcherWork(Base):
     semantic_novelty = Column(Float, default=0.0)
     open_science_score = Column(Float, default=0.0)
 
-    last_synced = Column(
-        DateTime, default=utcnow, onupdate=utcnow
-    )
+    last_synced = Column(DateTime, default=utcnow, onupdate=utcnow)
     expires_at = Column(DateTime, nullable=True)  # 7-day TTL
 
     __table_args__ = (
@@ -134,9 +137,7 @@ class ResearcherMetrics(Base):
     metrics_computed = Column(Boolean, default=False)
 
     last_teleported = Column(Float, nullable=True)  # unix timestamp
-    last_synced = Column(
-        DateTime, default=utcnow, onupdate=utcnow
-    )
+    last_synced = Column(DateTime, default=utcnow, onupdate=utcnow)
     expires_at = Column(DateTime, nullable=True)  # 7-day TTL
 
     @validates("expertise")
@@ -156,4 +157,3 @@ class ResearcherMetrics(Base):
             else:
                 raise ValueError("Expertise list must contain only strings")
         return clean_list
-

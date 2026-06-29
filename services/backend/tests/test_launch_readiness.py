@@ -6,7 +6,9 @@ import httpx
 from app.main import app
 
 # Ensure scripts folder is importable
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "..", "scripts", "ops"))
+sys.path.append(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "scripts", "ops")
+)
 
 # Import pre_shift_check functions
 import pre_shift_check  # type: ignore
@@ -28,7 +30,7 @@ def test_pre_shift_check_env_vars_success():
         "OPENROUTER_API_KEY": "sk-or-v1-somekeyvalue",
         "GOOGLE_APPLICATION_CREDENTIALS": "service-account.json",
         "PAGERDUTY_PRIMARY_ONCALL_KEY": "pd_key_primary_active",
-        "PAGERDUTY_DB_SRE_KEY": "pd_key_db_sre_active"
+        "PAGERDUTY_DB_SRE_KEY": "pd_key_db_sre_active",
     }
     with patch.dict(os.environ, mock_env, clear=True):
         ok, msg = pre_shift_check.check_env_variables()
@@ -51,12 +53,12 @@ def test_pre_shift_check_env_vars_weak_key():
     """Verify check_env_variables fails if database key is the insecure default."""
     mock_env = {
         "DATABASE_URL": "postgresql+asyncpg://postgres:pass@127.0.0.1:5432/skolab",
-        "DATABASE_ENCRYPTION_KEY": "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MTI=", # weak default
+        "DATABASE_ENCRYPTION_KEY": "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MTI=",  # weak default
         "GROQ_API": "gsk_somekeyvaluelargerthan10chars",
         "OPENROUTER_API_KEY": "sk-or-v1-somekeyvalue",
         "GOOGLE_APPLICATION_CREDENTIALS": "service-account.json",
         "PAGERDUTY_PRIMARY_ONCALL_KEY": "pd_key_primary_active",
-        "PAGERDUTY_DB_SRE_KEY": "pd_key_db_sre_active"
+        "PAGERDUTY_DB_SRE_KEY": "pd_key_db_sre_active",
     }
     with patch.dict(os.environ, mock_env, clear=True):
         ok, msg = pre_shift_check.check_env_variables()
@@ -68,7 +70,7 @@ def test_pre_shift_check_pagerduty_keys_success():
     """Verify check_pagerduty_keys passes with valid keys."""
     mock_env = {
         "PAGERDUTY_PRIMARY_ONCALL_KEY": "pd_key_primary_active",
-        "PAGERDUTY_DB_SRE_KEY": "pd_key_db_sre_active"
+        "PAGERDUTY_DB_SRE_KEY": "pd_key_db_sre_active",
     }
     with patch.dict(os.environ, mock_env, clear=True):
         ok, msg = pre_shift_check.check_pagerduty_keys()
@@ -79,7 +81,7 @@ def test_pre_shift_check_pagerduty_keys_placeholder():
     """Verify check_pagerduty_keys fails when values are placeholders."""
     mock_env = {
         "PAGERDUTY_PRIMARY_ONCALL_KEY": "${PAGERDUTY_PRIMARY_ONCALL_KEY}",
-        "PAGERDUTY_DB_SRE_KEY": "pd_key_db_sre_active"
+        "PAGERDUTY_DB_SRE_KEY": "pd_key_db_sre_active",
     }
     with patch.dict(os.environ, mock_env, clear=True):
         ok, msg = pre_shift_check.check_pagerduty_keys()

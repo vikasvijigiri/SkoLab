@@ -1,7 +1,10 @@
 import datetime
 
+
 def utcnow():
     return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+
+
 from sqlalchemy import (
     Column,
     String,
@@ -48,13 +51,16 @@ class UserSettings(Base):
     preferred_fields = Column(JSON, nullable=True)  # list[str]
     # Timestamps
     created_at = Column(DateTime, default=utcnow)
-    updated_at = Column(
-        DateTime, default=utcnow, onupdate=utcnow
-    )
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     __table_args__ = (
-        CheckConstraint("theme IN ('dark', 'light', 'system')", name="chk_user_settings_theme"),
-        CheckConstraint("profile_visibility IN ('public', 'connections', 'private')", name="chk_user_settings_visibility"),
+        CheckConstraint(
+            "theme IN ('dark', 'light', 'system')", name="chk_user_settings_theme"
+        ),
+        CheckConstraint(
+            "profile_visibility IN ('public', 'connections', 'private')",
+            name="chk_user_settings_visibility",
+        ),
     )
 
 
@@ -114,10 +120,7 @@ class AuthorSearchLog(Base):
     openalex_id = Column(String(100), index=True, nullable=False)
     display_name = Column(String(255), nullable=False)
     search_count = Column(Integer, default=1)
-    last_searched_at = Column(
-        DateTime, default=utcnow, onupdate=utcnow
-    )
+    last_searched_at = Column(DateTime, default=utcnow, onupdate=utcnow)
     first_searched_at = Column(DateTime, default=utcnow)
 
     __table_args__ = (Index("ix_asl_openalex_id", "openalex_id", unique=True),)
-

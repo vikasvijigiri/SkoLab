@@ -33,7 +33,7 @@ SEVERITY_LEVELS: Dict[str, Dict[str, Any]] = {
         "description": "Non-functional bugs, documentation typos, or minor styling issues.",
         "target_resolution_time": "7 days",
         "pager_escalation_delay_minutes": 120,
-    }
+    },
 }
 
 # ── SRE / Engineering Contacts ────────────────────────────────────────────────
@@ -52,7 +52,7 @@ ENGINEERING_CONTACTS: Dict[str, Dict[str, str]] = {
         "name": "Security & Compliance Lead",
         "email": "security@skolab.open",
         "phone": "+1-555-0194",
-    }
+    },
 }
 
 # ── Alert Routing & Escalation Matrix ─────────────────────────────────────────
@@ -73,5 +73,5 @@ ALERT_ROUTING: Dict[str, Any] = {
         "primary_on_call",
         "secondary_on_call",
         "backend_lead",
-    ]
+    ],
 }

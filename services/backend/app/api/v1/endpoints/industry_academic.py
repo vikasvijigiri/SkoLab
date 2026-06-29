@@ -1,4 +1,4 @@
-﻿from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.core import IndustryAcademicTieupsResponse
@@ -26,5 +26,5 @@ async def get_industry_academic_tieups(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to generate industry-academic tie-ups: {str(e)}"
+            detail=f"Failed to generate industry-academic tie-ups: {str(e)}",
         )

@@ -43,7 +43,7 @@ func VerifyUser() gin.HandlerFunc {
 		}
 
 		idToken := strings.TrimPrefix(authHeader, "Bearer ")
-		
+
 		if authClient == nil {
 			log.Println("WARNING: authClient is nil, bypassing auth for development.")
 			c.Set("user_id", "dev_user")

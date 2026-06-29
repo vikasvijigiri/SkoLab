@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 import httpx
 from unittest.mock import patch, MagicMock
 from app.main import app
@@ -30,13 +30,15 @@ async def test_assistant_professor_roadmap_mocked():
             "display_name": "Albert Einstein",
             "id": "https://openalex.org/A12345678",
             "works_count": 50,
-            "summary_stats": {
-                "h_index": 25,
-                "cited_by_count": 1500
-            }
+            "summary_stats": {"h_index": 25, "cited_by_count": 1500},
         }
-        with patch("app.services.data.openalex_service.OpenAlexService.fetch_author_by_id", return_value=mock_author):
-            response = await ac.get("/api/v1/assistant_professor_roadmap?author_id=A12345678&focus=Physics")
+        with patch(
+            "app.services.data.openalex_service.OpenAlexService.fetch_author_by_id",
+            return_value=mock_author,
+        ):
+            response = await ac.get(
+                "/api/v1/assistant_professor_roadmap?author_id=A12345678&focus=Physics"
+            )
             assert response.status_code == 200
             data = response.json()
             assert data["userName"] == "Albert Einstein"
@@ -46,7 +48,10 @@ async def test_assistant_professor_roadmap_mocked():
             assert "templates" in data
             assert len(data["templates"]) == 3
             # Check download links are present
-            assert "downloads/research_statement_template.md" in data["templates"][0]["downloadUrl"]
+            assert (
+                "downloads/research_statement_template.md"
+                in data["templates"][0]["downloadUrl"]
+            )
 
 
 @pytest.mark.anyio
@@ -57,19 +62,21 @@ async def test_daily_conjecture_mocked():
             "display_name": "Albert Einstein",
             "id": "https://openalex.org/A12345678",
             "works_count": 50,
-            "summary_stats": {
-                "h_index": 25,
-                "cited_by_count": 1500
-            }
+            "summary_stats": {"h_index": 25, "cited_by_count": 1500},
         }
         mock_works = [
             {
                 "title": "On the Electrodynamics of Moving Bodies",
-                "abstract_inverted_index": {"The": [0]}
+                "abstract_inverted_index": {"The": [0]},
             }
         ]
-        with patch("app.services.data.openalex_service.OpenAlexService.fetch_author_by_id", return_value=mock_author), \
-             patch("app.services.data.openalex_service.OpenAlexService.fetch_author_works", return_value=mock_works):
+        with patch(
+            "app.services.data.openalex_service.OpenAlexService.fetch_author_by_id",
+            return_value=mock_author,
+        ), patch(
+            "app.services.data.openalex_service.OpenAlexService.fetch_author_works",
+            return_value=mock_works,
+        ):
             response = await ac.get("/api/v1/daily_conjecture?author_id=A12345678")
             assert response.status_code == 200
             data = response.json()
@@ -87,10 +94,13 @@ async def test_network_collaborators_mocked():
                 "name": "Dr. Sarah Jenkins",
                 "institution": "Stanford Department of Physics",
                 "field": "Physics",
-                "match": "94%"
+                "match": "94%",
             }
         ]
-        with patch("app.services.platform.pipeline_services.PipelineServices.get_network_collaborators", return_value=mock_collaborators):
+        with patch(
+            "app.services.platform.pipeline_services.PipelineServices.get_network_collaborators",
+            return_value=mock_collaborators,
+        ):
             response = await ac.get("/api/v1/network_collaborators?author_id=A12345678")
             assert response.status_code == 200
             data = response.json()

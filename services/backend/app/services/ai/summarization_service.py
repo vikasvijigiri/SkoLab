@@ -1,4 +1,4 @@
-﻿"""
+"""
 Skolab Paper Intelligence Engine
 ================================
 Reads the FULL text of scientific papers (via open-access PDF) and runs a
