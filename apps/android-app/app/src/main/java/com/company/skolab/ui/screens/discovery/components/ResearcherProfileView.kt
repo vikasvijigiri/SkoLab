@@ -234,7 +234,7 @@ fun ResearcherProfileView(
                     )
                 }
 
-                items(author.works.sortedByDescending { it.year ?: 0 }, key = { it.id ?: it.hashCode() }) { work ->
+                items(author.works.sortedByDescending { it.year ?: 0 }, key = { if (!it.id.isNullOrBlank()) it.id else "work_${it.title.orEmpty()}_${it.year ?: 0}_${it.hashCode()}" }) { work ->
                     LightPublicationCard(
                         work = work,
                         apiService = apiService,
