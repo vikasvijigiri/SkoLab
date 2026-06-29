@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<transitionSet xmlns:android="http://schemas.android.com/apk/res/android"
+    android:transitionOrdering="together">
+    <changeBounds>
+        <pathMotion class="android.transition.ArcMotion" />
+    </changeBounds>
+    <changeTransform />
+    <changeClipBounds>
+        <targets>
+            <target android:targetId="@id/card_container" />
+        </targets>
+    </changeClipBounds>
+</transitionSet>

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base grid unit: 4dp -->
+    <dimen name="space_1">4dp</dimen>
+    <dimen name="space_2">8dp</dimen>
+    <dimen name="space_3">12dp</dimen>
+    <dimen name="space_4">16dp</dimen>
+    <dimen name="space_5">20dp</dimen>
+    <dimen name="space_6">24dp</dimen>
+    <dimen name="space_8">32dp</dimen>
+    <dimen name="space_10">40dp</dimen>
+    <dimen name="space_12">48dp</dimen>
+
+    <!-- Corner radii -->
+    <dimen name="radius_sm">8dp</dimen>
+    <dimen name="radius_md">12dp</dimen>
+    <dimen name="radius_lg">16dp</dimen>
+    <dimen name="radius_xl">24dp</dimen>
+    <dimen name="radius_pill">100dp</dimen>
+    <dimen name="radius_circle">50dp</dimen>
+
+    <!-- Component heights -->
+    <dimen name="height_button_primary">52dp</dimen>
+    <dimen name="height_button_ghost">52dp</dimen>
+    <dimen name="height_input">52dp</dimen>
+    <dimen name="height_chip">32dp</dimen>
+    <dimen name="height_nav_bar">64dp</dimen>
+    <dimen name="height_top_bar">56dp</dimen>
+    <dimen name="height_hero_card">120dp</dimen>
+    <dimen name="height_divider">0.5dp</dimen>
+
+    <!-- Card internals -->
+    <dimen name="card_padding_horizontal">16dp</dimen>
+    <dimen name="card_padding_vertical">14dp</dimen>
+    <dimen name="card_border_width">0.5dp</dimen>
+    <dimen name="card_gap">8dp</dimen>
+
+    <!-- Screen margins -->
+    <dimen name="screen_margin_horizontal">16dp</dimen>
+    <dimen name="screen_margin_top">12dp</dimen>
+
+    <!-- Avatar sizes -->
+    <dimen name="avatar_sm">28dp</dimen>
+    <dimen name="avatar_md">40dp</dimen>
+    <dimen name="avatar_lg">56dp</dimen>
+
+    <!-- Icon sizes -->
+    <dimen name="icon_sm">16dp</dimen>
+    <dimen name="icon_md">20dp</dimen>
+    <dimen name="icon_lg">24dp</dimen>
+
+    <!-- Notification badge -->
+    <dimen name="badge_size">18dp</dimen>
+    <dimen name="badge_size_large">22dp</dimen>
+
+    <!-- Progress bars -->
+    <dimen name="progress_height_thin">4dp</dimen>
+    <dimen name="progress_height_thick">8dp</dimen>
+</resources>

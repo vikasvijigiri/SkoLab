@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Widget.Skolab.BottomNav" parent="Widget.Material3.BottomNavigationView">
+        <item name="android:background">@color/color_bg_surface</item>
+        <item name="itemIconTint">@drawable/nav_item_color</item>
+        <item name="itemTextColor">@drawable/nav_item_color</item>
+        <item name="itemActiveIndicatorColor">@color/color_bg_subtle</item>
+        <item name="elevation">0dp</item>
+    </style>
+
+    <style name="Widget.Skolab.TopBar" parent="Widget.Material3.Toolbar">
+        <item name="android:background">@color/color_bg_page</item>
+        <item name="titleTextAppearance">@style/TextAppearance.Skolab.H1</item>
+        <item name="navigationIconTint">@color/color_primary</item>
+        <item name="elevation">0dp</item>
+    </style>
+</resources>

@@ -1,0 +1,68 @@
+{
+  "colors": {
+    "page_background": {
+      "light": "#F4F0E8",
+      "dark": "#0F172A"
+    },
+    "surface": {
+      "light": "#FEFCF7",
+      "dark": "#1E293B"
+    },
+    "surface_subtle": {
+      "light": "#EAE2D0",
+      "dark": "#334155"
+    },
+    "primary": {
+      "light": "#2D6BE4",
+      "dark": "#38BDF8"
+    },
+    "primary_dark": {
+      "light": "#1A4FA8",
+      "dark": "#0284C7"
+    },
+    "primary_deeper": {
+      "light": "#0D2E6B",
+      "dark": "#0C1D3A"
+    },
+    "text_primary": {
+      "light": "#1C1208",
+      "dark": "#CBD5E1"
+    },
+    "text_secondary": {
+      "light": "#6B5440",
+      "dark": "#94A3B8"
+    },
+    "text_muted": {
+      "light": "#8A725C",
+      "dark": "#64748B"
+    },
+    "text_on_primary": {
+      "light": "#FFFFFF",
+      "dark": "#0F172A"
+    },
+    "border": {
+      "light": "#D6C9B0",
+      "dark": "#334155"
+    }
+  },
+  "spacing": {
+    "xs": "4.dp",
+    "sm": "8.dp",
+    "md": "12.dp",
+    "lg": "16.dp",
+    "xl": "24.dp",
+    "xxl": "32.dp"
+  },
+  "shapes": {
+    "sm": "RoundedCornerShape(8.dp)",
+    "md": "RoundedCornerShape(12.dp)",
+    "lg": "RoundedCornerShape(16.dp)",
+    "pill": "RoundedCornerShape(32.dp)",
+    "orb": "RoundedCornerShape(50)"
+  },
+  "motion": {
+    "fast": 150,
+    "normal": 300,
+    "slow": 400
+  }
+}

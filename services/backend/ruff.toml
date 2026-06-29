@@ -1,0 +1,25 @@
+# Ruff configuration file
+
+# Exclude directories
+exclude = [
+    ".git",
+    ".pytest_cache",
+    ".ruff_cache",
+    "venv",
+]
+
+# Basic settings
+line-length = 88
+indent-width = 4
+
+[lint]
+# Enable Pyflakes (`F`) and pycodestyle (`E`, `W`) codes by default.
+select = ["E", "F", "W"]
+ignore = ["E501", "E402", "W293", "E741"]
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[lint.per-file-ignores]
+# Ignore all linting rules in tests.
+"tests/**/*.py" = ["ALL"]

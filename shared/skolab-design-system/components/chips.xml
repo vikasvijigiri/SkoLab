@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Widget.Skolab.Chip.Default" parent="Widget.Material3.Chip.Suggestion">
+        <item name="chipBackgroundColor">@color/color_bg_subtle</item>
+        <item name="android:textColor">@color/color_primary</item>
+        <item name="android:textAppearance">@style/TextAppearance.Skolab.Micro</item>
+        <item name="chipStrokeWidth">0dp</item>
+        <item name="chipCornerRadius">@dimen/radius_pill</item>
+        <item name="chipMinHeight">@dimen/height_chip</item>
+    </style>
+
+    <style name="Widget.Skolab.Chip.Selected" parent="Widget.Skolab.Chip.Default">
+        <item name="chipBackgroundColor">@color/color_primary</item>
+        <item name="android:textColor">@color/color_text_on_primary</item>
+    </style>
+
+    <style name="Widget.Skolab.Chip.Match" parent="Widget.Skolab.Chip.Default">
+        <item name="chipBackgroundColor">@color/color_accent_match_bg</item>
+        <item name="android:textColor">@color/color_accent_match_text</item>
+    </style>
+</resources>

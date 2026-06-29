@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Widget.Skolab.Card" parent="Widget.Material3.CardView.Outlined">
+        <item name="cardBackgroundColor">@color/color_bg_surface</item>
+        <item name="strokeColor">@color/color_border</item>
+        <item name="strokeWidth">@dimen/card_border_width</item>
+        <item name="cardCornerRadius">@dimen/radius_md</item>
+        <item name="cardElevation">0dp</item>
+        <item name="android:padding">@dimen/card_padding_horizontal</item>
+    </style>
+
+    <style name="Widget.Skolab.Card.Hero" parent="Widget.Skolab.Card">
+        <item name="cardBackgroundColor">@color/color_bg_hero</item>
+        <item name="strokeColor">@android:color/transparent</item>
+        <item name="cardCornerRadius">@dimen/radius_lg</item>
+    </style>
+
+    <style name="Widget.Skolab.Card.Subtle" parent="Widget.Skolab.Card">
+        <item name="cardBackgroundColor">@color/color_bg_subtle</item>
+        <item name="strokeColor">@android:color/transparent</item>
+    </style>
+
+    <style name="Widget.Skolab.Card.Prediction" parent="Widget.Skolab.Card">
+        <item name="cardBackgroundColor">@color/color_bg_subtle</item>
+        <item name="strokeColor">@color/color_primary</item>
+        <item name="strokeWidth">2dp</item>
+        <item name="cardCornerRadius">0dp</item>
+    </style>
+</resources>

@@ -1,0 +1,75 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+# ── Log Push Targets ─────────────────────────────────────────────────────────
+# Primary: Local Loki instance (Docker Compose / self-hosted)
+# Remote:  Loki Cloud (Grafana Cloud) endpoint — set LOKI_PUSH_URL and
+#          LOKI_CLOUD_TOKEN in environment or Docker secrets.
+#
+# To enable Grafana Cloud remote drain, set:
+#   LOKI_PUSH_URL=https://logs-prod-us-central1.grafana.net/loki/api/v1/push
+#   LOKI_CLOUD_USER=<your grafana cloud org id>
+#   LOKI_CLOUD_TOKEN=<your grafana cloud API token>
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    # Local sink — always active in Docker Compose
+
+  - url: ${LOKI_PUSH_URL:-}
+    # Remote Loki Cloud / Grafana Cloud sink — active only when LOKI_PUSH_URL is set.
+    # Leave LOKI_PUSH_URL empty to disable (empty string = no-op in Promtail).
+    basic_auth:
+      username: ${LOKI_CLOUD_USER:-}
+      password: ${LOKI_CLOUD_TOKEN:-}
+    tenant_id: skolab-backend
+    external_labels:
+      environment: ${APP_ENV:-development}
+      app: skolab-backend
+
+scrape_configs:
+  - job_name: skolab-logs
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: [__meta_docker_container_name]
+        regex: /(skolab_backend|skolab_postgres)
+        target_label: container
+      - source_labels: [__meta_docker_container_log_stream]
+        target_label: stream
+
+    pipeline_stages:
+      # Parse the structured JSON emitted by JSONFormatter in main.py
+      - json:
+          expressions:
+            timestamp: timestamp
+            level: level
+            message: message
+            request_id: request_id
+            user_id: user_id
+            latency_ms: latency_ms
+            status_code: status_code
+            endpoint: endpoint
+            environment: environment
+            error_type: error_type
+
+      # Promote key fields to Loki stream labels (queryable in Grafana)
+      - labels:
+          level:
+          status_code:
+          endpoint:
+          environment:
+
+      # Add numeric latency_ms as a structured metadata field for range queries
+      - structured_metadata:
+          latency_ms:
+          request_id:
+          user_id:
+          error_type:
+
+      # Drop health-check and metrics polls from the log stream to reduce noise
+      - drop:
+          expression: '(endpoint =~ "/health|/metrics") and (level == "INFO")'

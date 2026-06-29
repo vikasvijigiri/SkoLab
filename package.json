@@ -1,0 +1,21 @@
+{
+  "name": "skolab-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "shared/skolab-design-system"
+  ],
+  "scripts": {
+    "dev:backend": "cd services/backend && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
+    "dev:go": "cd services/backend-go && go run main.go",
+    "build:android": "powershell -ExecutionPolicy Bypass -File scripts/build-and-install.ps1",
+    "compile:tokens": "node shared/skolab-design-system/compile-tokens.js",
+    "test:load:baseline": "k6 run tests/load/baseline.js",
+    "test:load:rampup": "k6 run tests/load/ramp_up.js",
+    "test:load:soak": "k6 run tests/load/soak.js",
+    "test:load:spike": "k6 run tests/load/spike.js"
+  },
+  "devDependencies": {
+    "nx": "^19.0.0"
+  }
+}

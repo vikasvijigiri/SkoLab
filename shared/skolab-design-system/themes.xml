@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Skolab" parent="Theme.Material3.DayNight.NoActionBar">
+
+        <!-- Brand colors -->
+        <item name="colorPrimary">@color/color_primary</item>
+        <item name="colorPrimaryVariant">@color/color_primary_pressed</item>
+        <item name="colorOnPrimary">@color/color_text_on_primary</item>
+        <item name="colorSecondary">@color/color_bg_subtle</item>
+        <item name="colorOnSecondary">@color/color_text_primary</item>
+        <item name="colorTertiary">@color/color_primary_deep</item>
+        <item name="colorOnTertiary">@color/white</item>
+
+        <!-- Backgrounds -->
+        <item name="android:colorBackground">@color/color_bg_page</item>
+        <item name="colorSurface">@color/color_bg_surface</item>
+        <item name="colorOnSurface">@color/color_text_primary</item>
+        <item name="colorSurfaceVariant">@color/color_bg_subtle</item>
+        <item name="colorOnSurfaceVariant">@color/color_text_secondary</item>
+
+        <!-- Errors -->
+        <item name="colorError">@color/color_error</item>
+        <item name="colorOnError">@color/white</item>
+
+        <!-- Text -->
+        <item name="android:textColorPrimary">@color/color_text_primary</item>
+        <item name="android:textColorSecondary">@color/color_text_secondary</item>
+        <item name="android:textColorHint">@color/color_text_muted</item>
+
+        <!-- System bars -->
+        <item name="android:statusBarColor">@color/color_bg_page</item>
+        <item name="android:navigationBarColor">@color/color_bg_surface</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+
+        <!-- Shapes -->
+        <item name="shapeAppearanceSmallComponent">@style/ShapeAppearance.Skolab.Small</item>
+        <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.Skolab.Medium</item>
+        <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.Skolab.Large</item>
+
+        <!-- Component overrides -->
+        <item name="materialButtonStyle">@style/Widget.Skolab.Button.Primary</item>
+        <item name="bottomNavigationStyle">@style/Widget.Skolab.BottomNav</item>
+        <item name="toolbarStyle">@style/Widget.Skolab.TopBar</item>
+        <item name="chipStyle">@style/Widget.Skolab.Chip.Default</item>
+    </style>
+
+    <style name="ShapeAppearance.Skolab.Small" parent="ShapeAppearance.Material3.SmallComponent">
+        <item name="cornerSize">8dp</item>
+    </style>
+
+    <style name="ShapeAppearance.Skolab.Medium" parent="ShapeAppearance.Material3.MediumComponent">
+        <item name="cornerSize">12dp</item>
+    </style>
+
+    <style name="ShapeAppearance.Skolab.Large" parent="ShapeAppearance.Material3.LargeComponent">
+        <item name="cornerSize">16dp</item>
+    </style>
+</resources>
