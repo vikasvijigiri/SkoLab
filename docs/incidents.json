@@ -1,0 +1,47 @@
+[
+  {
+    "id": "inc-2026-001",
+    "title": "OpenAlex Upstream API Outage",
+    "status": "resolved",
+    "severity": "high",
+    "created_at": "2026-06-03T10:00:00Z",
+    "resolved_at": "2026-06-03T11:30:00Z",
+    "duration_minutes": 90,
+    "summary": "OpenAlex search queries returned 502/503 errors due to upstream provider outage. Fallback cache handled cached user requests successfully. SRE applied kill switch after 18-minute cascade window.",
+    "dau_impacted": 120,
+    "api_errors": 350,
+    "sla_breached": false,
+    "postmortem_path": "docs/postmortems/inc-2026-001_openalex_outage.md",
+    "review_meeting_at": "2026-06-06T10:00:00Z",
+    "corrective_actions": [
+      "CA-001: Implement circuit breaker on OpenAlex httpx client",
+      "CA-002: Add OpenAlexApiHighErrorRate Prometheus alert rule",
+      "CA-003: Add OpenAlex failure runbook section to incident.md",
+      "CA-004: Track OpenAlex API per-status-code metrics"
+    ],
+    "root_cause": "No circuit breaker on OpenAlex API client — upstream outage cascaded to HTTP 502 errors for 18 minutes before manual kill switch was applied."
+  },
+  {
+    "id": "inc-2026-002",
+    "title": "LLM Service Rate Limits Exhaustion",
+    "status": "resolved",
+    "severity": "medium",
+    "created_at": "2026-06-04T05:00:00Z",
+    "resolved_at": "2026-06-04T06:15:00Z",
+    "duration_minutes": 75,
+    "summary": "Groq API daily token quota exhausted by concurrent background enrichment jobs and user-facing agent chat. Traffic failed over to OpenRouter models after a 15-minute error window.",
+    "dau_impacted": 50,
+    "api_errors": 75,
+    "sla_breached": false,
+    "postmortem_path": "docs/postmortems/inc-2026-002_llm_rate_limits.md",
+    "review_meeting_at": "2026-06-07T10:00:00Z",
+    "corrective_actions": [
+      "CA-001: Add groq_tokens_consumed_total Prometheus metric",
+      "CA-002: Add LlmApiQuotaApproaching early-warning Prometheus alert",
+      "CA-003: Rate-limit background enrichment jobs to 30% of daily Groq quota",
+      "CA-004: Separate Groq API keys for background vs live traffic",
+      "CA-005: Add LLM rate limit runbook section to incident.md"
+    ],
+    "root_cause": "Background profile enrichment jobs and live user-facing agent chat shared the same Groq API key with no token quota coordination, causing daily quota exhaustion."
+  }
+]

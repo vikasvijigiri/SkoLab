@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Backgrounds -->
+    <color name="color_bg_page">@color/sand_50</color>       <!-- parchment page -->
+    <color name="color_bg_surface">@color/cream</color>      <!-- warm cream cards -->
+    <color name="color_bg_subtle">@color/sand_100</color>    <!-- warm tan chips/inputs -->
+    <color name="color_bg_hero">@color/blue_500</color>
+    <color name="color_bg_hero_deep">@color/blue_600</color>
+
+    <!-- Text -->
+    <color name="color_text_primary">@color/sand_700</color>
+    <color name="color_text_secondary">@color/sand_400</color>
+    <color name="color_text_muted">@color/sand_300</color>
+    <color name="color_text_on_primary">@color/white</color>
+    <color name="color_text_on_primary_sub">#BDD4F8</color>
+
+    <!-- Brand -->
+    <color name="color_primary">@color/blue_500</color>
+    <color name="color_primary_pressed">@color/blue_600</color>
+    <color name="color_primary_deep">@color/blue_700</color>
+
+    <!-- Border -->
+    <color name="color_border">@color/sand_200</color>
+
+    <!-- Accents (restricted use) -->
+    <color name="color_accent_streak">@color/accent_streak</color>
+    <color name="color_accent_badge">@color/accent_error</color>
+    <color name="color_accent_match_bg">@color/accent_gold_bg</color>
+    <color name="color_accent_match_text">@color/accent_gold_text</color>
+
+    <!-- States -->
+    <color name="color_error">@color/accent_error</color>
+    <color name="color_error_bg">@color/accent_error_bg</color>
+    <color name="color_disabled_bg">@color/sand_100</color>
+    <color name="color_disabled_text">@color/sand_300</color>
+</resources>
+

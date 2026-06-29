@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Sand ramp (parchment → cream → tan → brown) -->
+    <color name="sand_50">#F4F0E8</color>   <!-- parchment page background -->
+    <color name="sand_100">#EAE2D0</color>  <!-- warm tan chips/inputs -->
+    <color name="sand_200">#D6C9B0</color>  <!-- warm tan border -->
+    <color name="sand_300">#A08870</color>  <!-- warm muted text -->
+    <color name="sand_400">#6B5440</color>  <!-- warm mid-brown text -->
+    <color name="sand_700">#1C1208</color>  <!-- deep warm brown-black text -->
+    <color name="cream">#FEFCF7</color>     <!-- warm cream card surface -->
+
+    <!-- Ink blue accent ramp (cool contrast on warm bg) -->
+    <color name="blue_500">#2D6BE4</color>
+    <color name="blue_600">#1A4FA8</color>
+    <color name="blue_700">#0D2E6B</color>
+
+    <!-- Functional accents -->
+    <color name="accent_streak">#B8A832</color>   <!-- warm gold -->
+    <color name="accent_gold_bg">#FFF0CC</color>  <!-- amber chip bg -->
+    <color name="accent_gold_text">#8A6400</color> <!-- amber chip text -->
+    <color name="accent_error">#CC3333</color>    <!-- terracotta red -->
+    <color name="accent_error_bg">#FFF0F0</color>
+
+    <!-- Neutrals -->
+    <color name="white">#FEFCF7</color>       <!-- warm cream (not stark white) -->
+    <color name="black_text">#1C1208</color>  <!-- deep warm brown-black -->
+</resources>
