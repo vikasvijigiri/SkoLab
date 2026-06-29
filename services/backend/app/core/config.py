@@ -47,11 +47,7 @@ def _downloads_dir() -> Path:
 @dataclass(frozen=True)
 class Settings:
     # ── Server ──────────────────────────────────────────────────────────────
-    host: str = field(
-        default_factory=lambda: (
-            os.environ["HOST"] if "HOST" in os.environ else "0.0.0.0"  # nosec B104
-        )
-    )
+    host: str = field(default_factory=lambda: os.environ.get("HOST", "0.0.0.0"))  # nosec B104
     port: int = field(default_factory=lambda: int(os.environ.get("PORT", "8000")))
     lan_ip: str = field(default_factory=_lan_ip)
     force_https: bool = field(
