@@ -1,8 +1,12 @@
-﻿from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
 from app.schemas.core import AgentChatRequest, ChatRequest
 from app.services.ai.agent_service import AgentService
 from app.services.platform.pipeline_services import PipelineServices
-from app.api.dependencies import get_agent_service, get_pipeline_services, get_verified_user
+from app.api.dependencies import (
+    get_agent_service,
+    get_pipeline_services,
+    get_verified_user,
+)
 
 router = APIRouter()
 
@@ -32,7 +36,9 @@ async def upload_document(
         content = await file.read()
         # 10MB limit
         if len(content) > 10 * 1024 * 1024:
-            raise HTTPException(status_code=400, detail="File size exceeds the 10MB limit.")
+            raise HTTPException(
+                status_code=400, detail="File size exceeds the 10MB limit."
+            )
 
         allowed_types = ["application/pdf", "text/plain", "text/markdown", "text/csv"]
         content_type = file.content_type or ""
@@ -47,7 +53,7 @@ async def upload_document(
         if not is_valid:
             raise HTTPException(
                 status_code=400,
-                detail="Unsupported file type. Only PDF, TXT, MD, and CSV files are allowed."
+                detail="Unsupported file type. Only PDF, TXT, MD, and CSV files are allowed.",
             )
 
         return await agent_service.process_upload_document(

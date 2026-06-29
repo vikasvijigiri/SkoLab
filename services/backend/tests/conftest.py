@@ -7,13 +7,17 @@ from dotenv import load_dotenv
 backend_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 load_dotenv(os.path.join(backend_root, ".env"))
 
-db_url = os.environ.get("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/skolab")
+db_url = os.environ.get(
+    "DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/skolab"
+)
+
 
 def check_postgres_connection(url: str) -> bool:
     if "postgresql" not in url and "postgres" not in url:
         return False
     import asyncio
     import asyncpg
+
     async def try_connect():
         try:
             # Swap asyncpg driver name to clean postgres URL format
@@ -23,10 +27,12 @@ def check_postgres_connection(url: str) -> bool:
             return True
         except Exception:
             return False
+
     try:
         return asyncio.run(try_connect())
     except Exception:
         return False
+
 
 # Swapping out DATABASE_URL if Postgres is unavailable
 if not check_postgres_connection(db_url):
@@ -36,13 +42,16 @@ if not check_postgres_connection(db_url):
             os.remove(temp_db_path)
         except Exception:
             pass
-    print(f"\n[conftest] PostgreSQL offline. Gracefully falling back to shared SQLite: {temp_db_path}")
+    print(
+        f"\n[conftest] PostgreSQL offline. Gracefully falling back to shared SQLite: {temp_db_path}"
+    )
     os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{temp_db_path}"
 
     # Initialize SQLite database tables immediately
     os.environ["TESTING"] = "True"
     from app.db.database import init_db
     import asyncio
+
     try:
         asyncio.run(init_db())
         print("[conftest] SQLite database tables initialized successfully.")
@@ -50,12 +59,14 @@ if not check_postgres_connection(db_url):
         print(f"[conftest] SQLite database tables initialization failed: {exc}")
 
     import pytest
+
     @pytest.fixture(scope="session", autouse=True)
     def cleanup_temp_db():
         yield
         if os.path.exists(temp_db_path):
             try:
                 import gc
+
                 gc.collect()
                 os.remove(temp_db_path)
             except Exception:

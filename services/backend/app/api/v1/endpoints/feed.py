@@ -1,4 +1,4 @@
-﻿from typing import Optional
+from typing import Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 
 from app.schemas.core import ConjectureResponse

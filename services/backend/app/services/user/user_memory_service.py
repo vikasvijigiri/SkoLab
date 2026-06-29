@@ -1,4 +1,4 @@
-﻿import datetime
+import datetime
 import time
 from collections import Counter
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,7 +44,9 @@ class UserMemoryService:
             meta = event.model_dump(exclude_none=True)
 
             # Parse timestamp safely
-            created_at = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+            created_at = datetime.datetime.now(datetime.timezone.utc).replace(
+                tzinfo=None
+            )
             if event.timestamp:
                 try:
                     created_at = datetime.datetime.fromtimestamp(
@@ -194,9 +196,12 @@ class UserMemoryService:
         last_active_topic = top_topics[0] if top_topics else ""
 
         # Dynamically generate semantic biography using LLM reflection
-        researcher_bio = "An active researcher currently focused on exploratory academic topics."
+        researcher_bio = (
+            "An active researcher currently focused on exploratory academic topics."
+        )
         try:
             from app.services.ai.llm_service import LLMService, is_llm_working
+
             if is_llm_working():
                 llm = LLMService()
                 prompt = (
@@ -212,16 +217,21 @@ class UserMemoryService:
                 )
                 res = await llm.query(
                     messages=[
-                        {"role": "system", "content": "You are a professional academic career assistant."},
-                        {"role": "user", "content": prompt}
+                        {
+                            "role": "system",
+                            "content": "You are a professional academic career assistant.",
+                        },
+                        {"role": "user", "content": prompt},
                     ],
                     temperature=0.3,
-                    max_tokens=256
+                    max_tokens=256,
                 )
                 if res.content:
                     researcher_bio = res.content.strip()
         except Exception as e:
-            print(f"[UserMemoryService] Failed to generate semantic bio: {e}", flush=True)
+            print(
+                f"[UserMemoryService] Failed to generate semantic bio: {e}", flush=True
+            )
 
         profile = UserMemoryProfileResponse(
             user_id=user_id,

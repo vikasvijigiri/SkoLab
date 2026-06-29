@@ -142,6 +142,7 @@ class QuestsService:
                 self.db.add(pref)
                 if not is_mock_db:
                     from app.db.database import generate_record_signature
+
                     sig_value = generate_record_signature(user_id, default_quests)
                     sig_pref = UserPreference(
                         user_id=user_id,
@@ -161,15 +162,23 @@ class QuestsService:
             if not is_mock_db:
                 sig_stmt = select(UserPreference).where(
                     UserPreference.preference_key == "quests_signature",
-                    UserPreference.user_id == user_id
+                    UserPreference.user_id == user_id,
                 )
                 sig_res = await self.db.execute(sig_stmt)
                 sig_pref = sig_res.scalars().first()
 
-                from app.db.database import generate_record_signature, verify_record_signature
+                from app.db.database import (
+                    generate_record_signature,
+                    verify_record_signature,
+                )
+
                 if sig_pref:
-                    if not verify_record_signature(user_id, quests_data, str(sig_pref.preference_value)):
-                        raise ValueError("Database integrity verification failed: Quests data has been tampered with!")
+                    if not verify_record_signature(
+                        user_id, quests_data, str(sig_pref.preference_value)
+                    ):
+                        raise ValueError(
+                            "Database integrity verification failed: Quests data has been tampered with!"
+                        )
                 else:
                     new_sig = generate_record_signature(user_id, quests_data)
                     sig_pref = UserPreference(
@@ -191,7 +200,7 @@ class QuestsService:
                 id=str(q.get("id", "")),
                 title=str(q.get("title", "")),
                 reward_entropy=int(q.get("reward_entropy", 25)),
-                is_completed=bool(q.get("is_completed", False))
+                is_completed=bool(q.get("is_completed", False)),
             )
             for q in quests_data
             if isinstance(q, dict)
@@ -223,15 +232,23 @@ class QuestsService:
             if not is_mock_db:
                 sig_stmt = select(UserPreference).where(
                     UserPreference.preference_key == "quests_signature",
-                    UserPreference.user_id == user_id
+                    UserPreference.user_id == user_id,
                 )
                 sig_res = await self.db.execute(sig_stmt)
                 sig_pref = sig_res.scalars().first()
 
-                from app.db.database import generate_record_signature, verify_record_signature
+                from app.db.database import (
+                    generate_record_signature,
+                    verify_record_signature,
+                )
+
                 if sig_pref:
-                    if not verify_record_signature(user_id, quests_data, str(sig_pref.preference_value)):
-                        raise ValueError("Database integrity verification failed: Quests data has been tampered with!")
+                    if not verify_record_signature(
+                        user_id, quests_data, str(sig_pref.preference_value)
+                    ):
+                        raise ValueError(
+                            "Database integrity verification failed: Quests data has been tampered with!"
+                        )
 
             quests = list(pref.preference_value) if pref.preference_value else []
             updated = False
@@ -248,6 +265,7 @@ class QuestsService:
 
                 if not is_mock_db:
                     from app.db.database import generate_record_signature
+
                     new_sig = generate_record_signature(user_id, quests)
                     if sig_pref:
                         sig_pref.preference_value = new_sig

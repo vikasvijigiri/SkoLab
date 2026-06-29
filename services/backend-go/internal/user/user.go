@@ -342,11 +342,11 @@ func aggregateMemory(userID string, logs []logRow) UserMemoryProfile {
 	searchTerms := topN(searchTermsCtr, 5)
 
 	var (
-		avgReadMinutes   float64
-		readingPace      = "unknown"
-		unfinished       []string
-		recentlyRead     []string
-		totalPapersRead  int
+		avgReadMinutes  float64
+		readingPace     = "unknown"
+		unfinished      []string
+		recentlyRead    []string
+		totalPapersRead int
 	)
 
 	if len(paperSessions) > 0 {
@@ -521,7 +521,7 @@ type rowSource struct {
 	idx  int
 }
 
-func newRowSource(rows [][]any) *rowSource { return &rowSource{rows: rows} }
-func (r *rowSource) Next() bool            { r.idx++; return r.idx <= len(r.rows) }
+func newRowSource(rows [][]any) *rowSource  { return &rowSource{rows: rows} }
+func (r *rowSource) Next() bool             { r.idx++; return r.idx <= len(r.rows) }
 func (r *rowSource) Values() ([]any, error) { return r.rows[r.idx-1], nil }
 func (r *rowSource) Err() error             { return nil }

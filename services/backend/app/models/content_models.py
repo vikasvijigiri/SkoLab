@@ -1,7 +1,10 @@
 import datetime
 
+
 def utcnow():
     return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+
+
 from sqlalchemy import (
     Column,
     String,
@@ -29,7 +32,9 @@ class DailyFeedItem(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     author_openalex_id = Column(String(100), index=True, nullable=False)
-    work_openalex_id = Column(String(100), nullable=True)  # can be null for LLM-only items
+    work_openalex_id = Column(
+        String(100), nullable=True
+    )  # can be null for LLM-only items
     title = Column(Text, nullable=False)
     abstract_snippet = Column(Text, nullable=True)
     journal = Column(String(255), nullable=True)
@@ -112,6 +117,7 @@ class ScrapedOpportunity(Base):
     created_at = Column(DateTime, default=utcnow)
 
     __table_args__ = (
-        CheckConstraint("status IN ('Active', 'Inactive')", name="chk_scraped_opportunity_status"),
+        CheckConstraint(
+            "status IN ('Active', 'Inactive')", name="chk_scraped_opportunity_status"
+        ),
     )
-

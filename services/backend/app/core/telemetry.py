@@ -5,8 +5,11 @@ import contextvars
 
 logger = logging.getLogger("skolab.telemetry")
 
-trace_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("trace_id", default="")
+trace_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "trace_id", default=""
+)
 span_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("span_id", default="")
+
 
 class Span:
     def __init__(self, name: str):
@@ -29,15 +32,17 @@ class Span:
                 "endpoint": self.name,
                 "method": "SPAN",
                 "status_code": 500 if exc_type else 200,
-                "latency_ms": latency_ms
-            }
+                "latency_ms": latency_ms,
+            },
         )
         trace_id_var.reset(self.trace_token)
         span_id_var.reset(self.span_token)
 
+
 class Tracer:
     def start_as_current_span(self, name: str) -> Span:
         return Span(name)
+
 
 tracer = Tracer()
 
@@ -57,6 +62,7 @@ try:
         if "openalex.org" in url_str:
             try:
                 from app.main import metrics_store
+
                 metrics_store.increment_openalex_requests_sync()
             except Exception:
                 pass
@@ -77,7 +83,10 @@ try:
                 latency_ms = int((time.perf_counter() - start_time) * 1000)
                 try:
                     from app.main import metrics_store
-                    metrics_store.record_outbound_request(request.url.host, status_code, latency_ms)
+
+                    metrics_store.record_outbound_request(
+                        request.url.host, status_code, latency_ms
+                    )
                 except Exception:
                     pass
 
@@ -89,6 +98,7 @@ try:
         if "openalex.org" in url_str:
             try:
                 from app.main import metrics_store
+
                 metrics_store.increment_openalex_requests_sync()
             except Exception:
                 pass
@@ -109,13 +119,17 @@ try:
                 latency_ms = int((time.perf_counter() - start_time) * 1000)
                 try:
                     from app.main import metrics_store
-                    metrics_store.record_outbound_request(request.url.host, status_code, latency_ms)
+
+                    metrics_store.record_outbound_request(
+                        request.url.host, status_code, latency_ms
+                    )
                 except Exception:
                     pass
 
     httpx.AsyncClient.send = _traced_async_send
     httpx.Client.send = _traced_sync_send
-    logger.info("OpenTelemetry trace wrapper successfully registered for httpx HTTP clients.")
+    logger.info(
+        "OpenTelemetry trace wrapper successfully registered for httpx HTTP clients."
+    )
 except ImportError:
     pass
-

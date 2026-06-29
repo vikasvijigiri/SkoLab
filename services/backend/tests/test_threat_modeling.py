@@ -23,6 +23,7 @@ except AttributeError:
 
 from app.main import rate_limiter
 
+
 @pytest.fixture(autouse=True)
 async def cleanup_test_context():
     """Reset rate limiter and dispose engine after each test."""
@@ -30,6 +31,7 @@ async def cleanup_test_context():
     yield
     rate_limiter.buckets.clear()
     await engine.dispose()
+
 
 async def force_cleanup_user(db, user_id):
     """Clean up all tables containing user_id directly or indirectly."""
@@ -41,6 +43,7 @@ async def force_cleanup_user(db, user_id):
     if user_obj:
         await db.delete(user_obj)
     await db.commit()
+
 
 @pytest.mark.anyio
 async def test_scraper_user_agent_blocking():
@@ -55,6 +58,7 @@ async def test_scraper_user_agent_blocking():
         response_valid = await ac.get("/", headers=headers_valid)
         assert response_valid.status_code == 200
 
+
 @pytest.mark.anyio
 async def test_admin_access_guard():
     """Verify SRE/admin endpoints (/metrics, /ai_status) require local IP or SRE token."""
@@ -67,6 +71,7 @@ async def test_admin_access_guard():
         headers_token = {"X-SRE-Token": "sre_bypass_secret_2026"}
         response_token = await ac.get("/metrics", headers=headers_token)
         assert response_token.status_code == 200
+
 
 @pytest.mark.anyio
 async def test_device_signature_validation():
@@ -81,18 +86,22 @@ async def test_device_signature_validation():
         # Since it has no user_id query/header (or X-User-Id), it is bypassable (doesn't trigger sig middleware)
         # But if we provide X-User-Id, it must have signature
         headers_missing = {"X-User-Id": user_id}
-        response_missing = await ac.post(f"/api/v1/users/{user_id}/export", headers=headers_missing)
+        response_missing = await ac.post(
+            f"/api/v1/users/{user_id}/export", headers=headers_missing
+        )
         assert response_missing.status_code == 401
         assert "Missing device signature headers" in response_missing.json()["detail"]
 
         # POST request with expired signature
-        expired_ts = str(int(time.time()) - 400) # expired (>300s window)
+        expired_ts = str(int(time.time()) - 400)  # expired (>300s window)
         headers_expired = {
             "X-User-Id": user_id,
             "X-Device-Timestamp": expired_ts,
-            "X-Device-Signature": "dummy_sig"
+            "X-Device-Signature": "dummy_sig",
         }
-        response_expired = await ac.post(f"/api/v1/users/{user_id}/export", headers=headers_expired)
+        response_expired = await ac.post(
+            f"/api/v1/users/{user_id}/export", headers=headers_expired
+        )
         assert response_expired.status_code == 401
         assert "Device signature timestamp expired" in response_expired.json()["detail"]
 
@@ -101,22 +110,27 @@ async def test_device_signature_validation():
         headers_invalid = {
             "X-User-Id": user_id,
             "X-Device-Timestamp": valid_ts,
-            "X-Device-Signature": "invalid_hmac_hash"
+            "X-Device-Signature": "invalid_hmac_hash",
         }
-        response_invalid = await ac.post(f"/api/v1/users/{user_id}/export", headers=headers_invalid)
+        response_invalid = await ac.post(
+            f"/api/v1/users/{user_id}/export", headers=headers_invalid
+        )
         assert response_invalid.status_code == 401
         assert "Invalid device signature" in response_invalid.json()["detail"]
 
         # POST request with VALID signature — device sig middleware passes, endpoint logic runs → 404 no user
         from app.core.config import settings
+
         device_secret = str(settings.database_encryption_key).encode("utf-8")
         payload = f"{user_id}:{valid_ts}"
-        valid_sig = hmac.new(device_secret, payload.encode("utf-8"), hashlib.sha256).hexdigest()
+        valid_sig = hmac.new(
+            device_secret, payload.encode("utf-8"), hashlib.sha256
+        ).hexdigest()
 
         headers_valid = {
             "X-User-Id": user_id,
             "X-Device-Timestamp": valid_ts,
-            "X-Device-Signature": valid_sig
+            "X-Device-Signature": valid_sig,
         }
 
         async def _mock_verified_user():
@@ -124,10 +138,15 @@ async def test_device_signature_validation():
 
         app.dependency_overrides[get_verified_user] = _mock_verified_user
         try:
-            response_valid = await ac.post(f"/api/v1/users/{user_id}/export", headers=headers_valid)
-            assert response_valid.status_code == 404  # Reached endpoint logic, user not found
+            response_valid = await ac.post(
+                f"/api/v1/users/{user_id}/export", headers=headers_valid
+            )
+            assert (
+                response_valid.status_code == 404
+            )  # Reached endpoint logic, user not found
         finally:
             app.dependency_overrides.pop(get_verified_user, None)
+
 
 @pytest.mark.anyio
 async def test_path_specific_rate_limiting():
@@ -142,10 +161,11 @@ async def test_path_specific_rate_limiting():
                 responses.append(res)
             except Exception:
                 pass
-        
+
         # Verify at least one 429 was returned
         status_codes = [r.status_code for r in responses]
         assert 429 in status_codes
+
 
 @pytest.mark.anyio
 async def test_input_length_validation():
@@ -154,13 +174,14 @@ async def test_input_length_validation():
     with pytest.raises(ValidationError):
         AgentChatRequest(message=long_msg, history=[])
 
+
 @pytest.mark.anyio
 async def test_quest_database_tampering_check():
     """Verify database integrity checks detect quest record modifications."""
     user_id = "test_tampering_user"
     async with AsyncSessionLocal() as db:
         await force_cleanup_user(db, user_id)
-        
+
         # Insert a user
         u = User(id=user_id, display_name="Test Tamper")
         db.add(u)
@@ -170,13 +191,22 @@ async def test_quest_database_tampering_check():
         # We will mock openalex and generate mock quests instead of LLM to keep test fast
         service = QuestsService(db)
         mock_quests = [
-            {"id": "q1", "title": "Read 5 papers", "reward_entropy": 25, "is_completed": False}
+            {
+                "id": "q1",
+                "title": "Read 5 papers",
+                "reward_entropy": 25,
+                "is_completed": False,
+            }
         ]
-        
+
         sig = generate_record_signature(user_id, mock_quests)
-        
-        pref = UserPreference(user_id=user_id, preference_key="quests", preference_value=mock_quests)
-        sig_pref = UserPreference(user_id=user_id, preference_key="quests_signature", preference_value=sig)
+
+        pref = UserPreference(
+            user_id=user_id, preference_key="quests", preference_value=mock_quests
+        )
+        sig_pref = UserPreference(
+            user_id=user_id, preference_key="quests_signature", preference_value=sig
+        )
         db.add_all([pref, sig_pref])
         await db.commit()
 
@@ -194,9 +224,15 @@ async def test_quest_database_tampering_check():
         res = await db.execute(stmt)
         pref_obj = res.scalars().first()
         pref_obj.preference_value = [
-            {"id": "q1", "title": "Read 5 papers", "reward_entropy": 1000, "is_completed": True} # Tampered reward/status
+            {
+                "id": "q1",
+                "title": "Read 5 papers",
+                "reward_entropy": 1000,
+                "is_completed": True,
+            }  # Tampered reward/status
         ]
         from sqlalchemy.orm.attributes import flag_modified
+
         flag_modified(pref_obj, "preference_value")
         await db.commit()
 

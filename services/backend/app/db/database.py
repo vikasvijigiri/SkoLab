@@ -31,7 +31,9 @@ DATABASE_URL: str = _raw_db_url
 from sqlalchemy.pool import NullPool
 
 if os.environ.get("TESTING") == "True":
-    connect_args = {} if DATABASE_URL.startswith("sqlite") else {"command_timeout": 30.0}
+    connect_args = (
+        {} if DATABASE_URL.startswith("sqlite") else {"command_timeout": 30.0}
+    )
     engine = create_async_engine(
         DATABASE_URL,
         echo=False,
@@ -56,13 +58,19 @@ from app.core.telemetry import tracer
 
 db_logger = logging.getLogger("skolab.db")
 
+
 @event.listens_for(engine.sync_engine, "before_cursor_execute")
 def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
     context._query_start_time = time.perf_counter()
     # Execute within a trace span
-    span_name = f"DB {statement.strip().split()[0].upper()}" if statement.strip() else "DB Query"
+    span_name = (
+        f"DB {statement.strip().split()[0].upper()}"
+        if statement.strip()
+        else "DB Query"
+    )
     context._db_span = tracer.start_as_current_span(span_name)
     context._db_span.__enter__()
+
 
 @event.listens_for(engine.sync_engine, "after_cursor_execute")
 def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
@@ -80,8 +88,8 @@ def after_cursor_execute(conn, cursor, statement, parameters, context, executema
             extra={
                 "latency_ms": int(total_time_ms),
                 "statement": statement,
-                "query_slow": True
-            }
+                "query_slow": True,
+            },
         )
         # Execute EXPLAIN automatically (avoid infinite recursion by checking statement)
         if not statement.strip().upper().startswith("EXPLAIN"):
@@ -91,7 +99,10 @@ def after_cursor_execute(conn, cursor, statement, parameters, context, executema
                 plan = "\n".join(row[0] for row in res.fetchall())
                 db_logger.info(f"EXPLAIN Plan for slow query:\n{plan}")
             except Exception as explain_exc:
-                db_logger.warning(f"Failed to execute EXPLAIN automatically: {explain_exc}")
+                db_logger.warning(
+                    f"Failed to execute EXPLAIN automatically: {explain_exc}"
+                )
+
 
 @event.listens_for(engine.sync_engine, "handle_error")
 def handle_error(exception_context):
@@ -144,17 +155,22 @@ import hmac
 import hashlib
 import json
 
+
 def generate_record_signature(user_id: str, record_data: list | dict) -> str:
     """
     Generate an HMAC-SHA256 signature for a database record using the database encryption key.
     """
     from app.core.config import settings
+
     key = str(settings.database_encryption_key).encode("utf-8")
     serialized = json.dumps(record_data, sort_keys=True)
     payload = f"{user_id}:{serialized}"
     return hmac.new(key, payload.encode("utf-8"), hashlib.sha256).hexdigest()
 
-def verify_record_signature(user_id: str, record_data: list | dict, signature: str) -> bool:
+
+def verify_record_signature(
+    user_id: str, record_data: list | dict, signature: str
+) -> bool:
     """
     Verify if the provided signature matches the computed HMAC-SHA256 signature.
     """

@@ -46,7 +46,7 @@ type Institution struct {
 }
 
 type SummaryStats struct {
-	HIndex  int `json:"h_index"`
+	HIndex   int `json:"h_index"`
 	I10Index int `json:"i10_index"`
 }
 
@@ -92,16 +92,16 @@ type Authorship struct {
 }
 
 type Work struct {
-	ID                  string          `json:"id"`
-	Title               string          `json:"title"`
-	DOI                 string          `json:"doi"`
-	PublicationYear     int             `json:"publication_year"`
-	CitedByCount        int             `json:"cited_by_count"`
-	PrimaryLocation     PrimaryLocation `json:"primary_location"`
-	OpenAccess          OpenAccess      `json:"open_access"`
-	Authorships         []Authorship    `json:"authorships"`
-	Concepts            []Concept       `json:"concepts"`
-	Topics              []Topic         `json:"topics"`
+	ID                    string           `json:"id"`
+	Title                 string           `json:"title"`
+	DOI                   string           `json:"doi"`
+	PublicationYear       int              `json:"publication_year"`
+	CitedByCount          int              `json:"cited_by_count"`
+	PrimaryLocation       PrimaryLocation  `json:"primary_location"`
+	OpenAccess            OpenAccess       `json:"open_access"`
+	Authorships           []Authorship     `json:"authorships"`
+	Concepts              []Concept        `json:"concepts"`
+	Topics                []Topic          `json:"topics"`
 	AbstractInvertedIndex map[string][]int `json:"abstract_inverted_index"`
 }
 

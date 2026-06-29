@@ -1,4 +1,4 @@
-﻿"""
+"""
 researcher_worker.py
 ====================
 Background worker that enriches researcher profiles with:
@@ -348,13 +348,24 @@ async def teleport_researcher(author_id: str) -> None:
             return
 
         display_name: str = author_data.get("display_name") or ""
-        if not display_name.strip() or display_name.lower().strip() in ["unknown", "anonymous"]:
-            logger.warning("[teleport] Dropping academic profile %s: missing or placeholder display name.", clean_id)
+        if not display_name.strip() or display_name.lower().strip() in [
+            "unknown",
+            "anonymous",
+        ]:
+            logger.warning(
+                "[teleport] Dropping academic profile %s: missing or placeholder display name.",
+                clean_id,
+            )
             return
 
         last_insts: List[Dict] = author_data.get("last_known_institutions") or []
-        if not last_insts or not any(inst.get("display_name") for inst in last_insts if isinstance(inst, dict)):
-            logger.warning("[teleport] Dropping academic profile %s: missing last known institution.", clean_id)
+        if not last_insts or not any(
+            inst.get("display_name") for inst in last_insts if isinstance(inst, dict)
+        ):
+            logger.warning(
+                "[teleport] Dropping academic profile %s: missing last known institution.",
+                clean_id,
+            )
             return
 
         institution = last_insts[0].get("display_name") or "Independent Researcher"
@@ -364,7 +375,6 @@ async def teleport_researcher(author_id: str) -> None:
         i10_index: int = int(stats.get("i10_index") or 0)
         works_count: int = int(author_data.get("works_count") or 0)
         cited_by_count: int = int(author_data.get("cited_by_count") or 0)
-
 
         from app.services.data.openalex_service import extract_field_and_expertise
 

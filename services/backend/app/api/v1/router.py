@@ -21,4 +21,3 @@ api_router.include_router(authors.router, tags=["Authors"])
 # user_memory endpoints fully migrated to Go gateway (internal/handlers/memory.go)
 api_router.include_router(support.router, prefix="/support", tags=["Support"])
 api_router.include_router(industry_academic.router, tags=["Industry Academic"])
-

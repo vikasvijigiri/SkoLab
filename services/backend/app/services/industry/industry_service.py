@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 import datetime
 import uuid
 import asyncio
@@ -46,7 +46,9 @@ async def fetch_industry_opportunities(
     if db is not None:
         try:
             # Clean up stale items (> 6 hours old)
-            stale_threshold = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) - datetime.timedelta(hours=6)
+            stale_threshold = datetime.datetime.now(datetime.timezone.utc).replace(
+                tzinfo=None
+            ) - datetime.timedelta(hours=6)
             delete_stmt = delete(ScrapedOpportunity).where(
                 ScrapedOpportunity.created_at < stale_threshold
             )

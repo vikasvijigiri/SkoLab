@@ -1,10 +1,23 @@
 import datetime
 
+
 def utcnow():
     return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
 
+
 import re
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, JSON, Text, CheckConstraint, UniqueConstraint, Float
+from sqlalchemy import (
+    Column,
+    String,
+    Integer,
+    DateTime,
+    ForeignKey,
+    JSON,
+    Text,
+    CheckConstraint,
+    UniqueConstraint,
+    Float,
+)
 from sqlalchemy.orm import relationship, validates
 from app.db.database import Base
 from app.db.encrypted_type import EncryptedString
@@ -40,7 +53,9 @@ class User(Base):
         if address is not None:
             if len(address) > 255:
                 raise ValueError("Email exceeds maximum length of 255 characters")
-            EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+            EMAIL_REGEX = re.compile(
+                r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+            )
             if not EMAIL_REGEX.match(address):
                 raise ValueError(f"Invalid email format: {address}")
         return address
@@ -50,7 +65,9 @@ class UserPreference(Base):
     __tablename__ = "user_preferences"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(100), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    user_id = Column(
+        String(100), ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
     preference_key = Column(String(255), nullable=False)
     preference_value = Column(
         JSON, nullable=True
@@ -67,7 +84,9 @@ class Connection(Base):
     __tablename__ = "connections"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(100), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    user_id = Column(
+        String(100), ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
     connected_user_id = Column(
         String(100), ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
@@ -82,7 +101,9 @@ class Connection(Base):
     )
 
     __table_args__ = (
-        CheckConstraint("status IN ('pending', 'accepted', 'blocked')", name="chk_connection_status"),
+        CheckConstraint(
+            "status IN ('pending', 'accepted', 'blocked')", name="chk_connection_status"
+        ),
     )
 
 
@@ -90,8 +111,12 @@ class Message(Base):
     __tablename__ = "messages"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    sender_id = Column(String(100), ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    receiver_id = Column(String(100), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    sender_id = Column(
+        String(100), ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    receiver_id = Column(
+        String(100), ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
     content = Column(String(4000), nullable=False)
     timestamp = Column(DateTime, default=utcnow)
 
@@ -111,7 +136,9 @@ class AgentChatHistory(Base):
     timestamp = Column(DateTime, default=utcnow)
 
     __table_args__ = (
-        CheckConstraint("role IN ('user', 'assistant', 'system')", name="chk_agent_chat_role"),
+        CheckConstraint(
+            "role IN ('user', 'assistant', 'system')", name="chk_agent_chat_role"
+        ),
     )
 
 
@@ -121,9 +148,7 @@ class CacheEntry(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     cache_key = Column(String(512), unique=True, index=True, nullable=False)
     data = Column(JSON, nullable=False)
-    last_synced = Column(
-        DateTime, default=utcnow, onupdate=utcnow
-    )
+    last_synced = Column(DateTime, default=utcnow, onupdate=utcnow)
     # Optional TTL: if set, the entry is considered stale after this datetime
     expires_at = Column(DateTime, nullable=True)
 
@@ -137,7 +162,9 @@ class ResearcherProfile(Base):
 
     __tablename__ = "researcher_profiles"
 
-    openalex_id = Column(String(100), primary_key=True, index=True)  # e.g. "A5020214245"
+    openalex_id = Column(
+        String(100), primary_key=True, index=True
+    )  # e.g. "A5020214245"
     display_name = Column(String(255), nullable=False)
     institution = Column(String(255), nullable=True)
     field_of_study = Column(String(255), nullable=True)
@@ -145,9 +172,7 @@ class ResearcherProfile(Base):
     works_count = Column(Integer, nullable=True)
     concepts = Column(JSON, nullable=True)  # list of concept display names
     raw_profile = Column(JSON, nullable=True)  # full OpenAlex author JSON blob
-    last_synced = Column(
-        DateTime, default=utcnow, onupdate=utcnow
-    )
+    last_synced = Column(DateTime, default=utcnow, onupdate=utcnow)
     expires_at = Column(DateTime, nullable=True)  # refresh after 7 days
 
 
@@ -161,13 +186,23 @@ class UserCircle(Base):
     __tablename__ = "user_circles"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(100), ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
-    peer_id = Column(String(100), ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    user_id = Column(
+        String(100),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    peer_id = Column(
+        String(100),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
     # "spark_session" | "same_field" | "collab" | "manual"
     relationship_type = Column(String(50), nullable=False, default="same_field")
-    field_tags = Column(JSON, nullable=True)          # overlapping research tags
-    spark_sessions_count = Column(Integer, default=0) # times they've helped each other
-    relevance_score = Column(Float, default=0.5)      # 0–1, higher = closer match
+    field_tags = Column(JSON, nullable=True)  # overlapping research tags
+    spark_sessions_count = Column(Integer, default=0)  # times they've helped each other
+    relevance_score = Column(Float, default=0.5)  # 0–1, higher = closer match
     last_interacted = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=utcnow)
 
@@ -205,4 +240,3 @@ class ResearcherConnection(Base):
     h_index = Column(Integer, nullable=True)
     last_synced = Column(DateTime, default=utcnow)
     expires_at = Column(DateTime, nullable=True)  # refresh after 24 hours
-

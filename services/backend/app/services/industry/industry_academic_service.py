@@ -1,4 +1,4 @@
-﻿import json
+import json
 import logging
 import asyncio
 from typing import Dict, Any
@@ -23,7 +23,9 @@ class IndustryAcademicService:
         try:
             cached = await industry_academic_cache.get(user_id)
             if cached is not None:
-                logger.info(f"Loaded industry-academic tie-ups from cache for {user_id}")
+                logger.info(
+                    f"Loaded industry-academic tie-ups from cache for {user_id}"
+                )
                 return cached
         except Exception as e:
             logger.error(f"Cache lookup failed for industry-academic tieups: {e}")
@@ -48,6 +50,7 @@ class IndustryAcademicService:
             try:
                 from app.models.user_models import ResearcherProfile, User
                 from sqlalchemy.future import select as sa_select
+
                 # user_id may be Firebase UID or OpenAlex ID
                 openalex_id = user_id
                 if not user_id.startswith("A") or not user_id[1:].isdigit():
@@ -56,12 +59,16 @@ class IndustryAcademicService:
                     user_row = res.scalars().first()
                     if user_row and user_row.openalex_id:
                         openalex_id = user_row.openalex_id
-                stmt = sa_select(ResearcherProfile).where(ResearcherProfile.openalex_id == openalex_id)
+                stmt = sa_select(ResearcherProfile).where(
+                    ResearcherProfile.openalex_id == openalex_id
+                )
                 res = await self.db.execute(stmt)
                 rp = res.scalars().first()
                 if rp:
                     focus_domain = rp.field_of_study or (
-                        rp.concepts[0] if isinstance(rp.concepts, list) and rp.concepts else ""
+                        rp.concepts[0]
+                        if isinstance(rp.concepts, list) and rp.concepts
+                        else ""
                     )
             except Exception as e:
                 logger.error(f"ResearcherProfile lookup failed for tieups: {e}")
@@ -103,11 +110,14 @@ class IndustryAcademicService:
             try:
                 res = await self.llm_service.query(
                     messages=[
-                        {"role": "system", "content": "You are a professional assistant that outputs only valid, raw JSON data matching the requested schema."},
-                        {"role": "user", "content": prompt}
+                        {
+                            "role": "system",
+                            "content": "You are a professional assistant that outputs only valid, raw JSON data matching the requested schema.",
+                        },
+                        {"role": "user", "content": prompt},
                     ],
                     temperature=0.7,
-                    response_format={"type": "json_object"}
+                    response_format={"type": "json_object"},
                 )
                 if res.content:
                     content = res.content.strip()
@@ -145,16 +155,18 @@ class IndustryAcademicService:
                             primary_loc = r.get("primary_location") or {}
                             source = primary_loc.get("source") or {}
                             venue = source.get("display_name") or "Conference/Journal"
-                            
-                            papers.append({
-                                "id": work_id,
-                                "title": r.get("title") or "Untitled Paper",
-                                "doi": r.get("doi") or "",
-                                "year": r.get("publication_year"),
-                                "journal": venue,
-                                "citations": r.get("cited_by_count", 0),
-                                "authors": author_names[:3]
-                            })
+
+                            papers.append(
+                                {
+                                    "id": work_id,
+                                    "title": r.get("title") or "Untitled Paper",
+                                    "doi": r.get("doi") or "",
+                                    "year": r.get("publication_year"),
+                                    "journal": venue,
+                                    "citations": r.get("cited_by_count", 0),
+                                    "authors": author_names[:3],
+                                }
+                            )
                 except Exception as e:
                     logger.error(f"Failed to fetch papers for query '{q}': {e}")
             idea["papers"] = papers
@@ -168,14 +180,10 @@ class IndustryAcademicService:
         futuristic_tasks = [fetch_papers_for_idea(idea) for idea in futuristic_ideas]
 
         results = await asyncio.gather(
-            asyncio.gather(*trending_tasks),
-            asyncio.gather(*futuristic_tasks)
+            asyncio.gather(*trending_tasks), asyncio.gather(*futuristic_tasks)
         )
 
-        final_response = {
-            "trending": results[0],
-            "futuristic": results[1]
-        }
+        final_response = {"trending": results[0], "futuristic": results[1]}
 
         # 5. Cache result
         try:
@@ -192,14 +200,20 @@ def get_fallback_tieups(domain: str) -> Dict[str, Any]:
             {
                 "title": f"Industrialization of {domain}",
                 "description": f"Translating theoretical concepts in {domain} to commercial-grade software and enterprise deployment pipelines.",
-                "search_queries": [f"{domain} industrial applications", f"{domain} production systems"]
+                "search_queries": [
+                    f"{domain} industrial applications",
+                    f"{domain} production systems",
+                ],
             }
         ],
         "futuristic": [
             {
                 "title": f"Autonomous Research Agents in {domain}",
                 "description": f"Designing self-correcting AI systems that autonomously formulate hypotheses, search literature, and run simulations for {domain}.",
-                "search_queries": [f"autonomous scientific discovery {domain}", f"AI scientist {domain}"]
+                "search_queries": [
+                    f"autonomous scientific discovery {domain}",
+                    f"AI scientist {domain}",
+                ],
             }
-        ]
+        ],
     }

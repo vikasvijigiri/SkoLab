@@ -1,4 +1,3 @@
-﻿import re
 from typing import List, Optional, Union
 from fastapi import APIRouter, Depends, Query, BackgroundTasks, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,7 +8,6 @@ from app.services.platform.metrics_service import compute_author_metrics
 from app.services.ai.summarization_service import is_llm_working
 from app.services.data.openalex_service import OpenAlexService
 from app.api.dependencies import get_pipeline_services, get_openalex_service, get_db
-from app.core.config import settings
 from app.core.cache import (
     suggestions_cache,
     profile_cache,
@@ -34,6 +32,7 @@ except ImportError:
 async def track_teleport_researcher(author_id: str):
     if teleport_researcher is not None:
         from app.main import metrics_store
+
         await metrics_store.increment_background_tasks()
         try:
             await teleport_researcher(author_id)
@@ -51,14 +50,14 @@ def compute_query_match_score(query: str, concepts: list) -> int:
     if not query_tokens:
         return 75
     concepts_normalized = {c.strip().lower() for c in concepts if c.strip()}
-    
+
     match_count = 0
     for q_t in query_tokens:
         for c in concepts_normalized:
             if q_t in c or c in q_t:
                 match_count += 1
                 break
-                
+
     union_len = len(query_tokens.union(concepts_normalized))
     similarity = match_count / union_len if union_len > 0 else 0.0
     return min(99, max(60, int(60 + similarity * 100)))
@@ -183,6 +182,7 @@ async def fetch_similar_authors(
 
 
 # GET /author_suggestions — migrated to Go (internal/handlers/authors.go)
+
 
 @router.get("/refresh_author")
 async def refresh_author(

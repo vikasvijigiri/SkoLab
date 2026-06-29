@@ -55,16 +55,27 @@ import contextvars
 import re
 
 # Context variables for logging context
-request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="")
+request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "request_id", default=""
+)
 user_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("user_id", default="")
 from app.core.telemetry import trace_id_var, span_id_var
 
 # PII Masking regex patterns
 PII_PATTERNS = [
     (re.compile(r"[\w\.-]+@[\w\.-]+\.\w+"), "[MASKED_EMAIL]"),
-    (re.compile(r"\+?\d{1,4}[-.\s]?\(?\d{1,3}\)?[-.\s]?\d{1,4}[-.\s]?\d{1,4}[-.\s]?\d{1,9}"), "[MASKED_PHONE]"),
-    (re.compile(r"(bearer\s+)[A-Za-z0-9\-\._~\+\/]+=*", re.IGNORECASE), r"\1[MASKED_TOKEN]"),
+    (
+        re.compile(
+            r"\+?\d{1,4}[-.\s]?\(?\d{1,3}\)?[-.\s]?\d{1,4}[-.\s]?\d{1,4}[-.\s]?\d{1,9}"
+        ),
+        "[MASKED_PHONE]",
+    ),
+    (
+        re.compile(r"(bearer\s+)[A-Za-z0-9\-\._~\+\/]+=*", re.IGNORECASE),
+        r"\1[MASKED_TOKEN]",
+    ),
 ]
+
 
 def mask_pii(text: str) -> str:
     if not isinstance(text, str):
@@ -72,6 +83,7 @@ def mask_pii(text: str) -> str:
     for pattern, replacement in PII_PATTERNS:
         text = pattern.sub(replacement, text)
     return text
+
 
 class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
@@ -126,7 +138,9 @@ logger = logging.getLogger("skolab")
 
 # Override builtins.print to route stdout to JSON logging
 import builtins
+
 _original_print = builtins.print
+
 
 def schoolab_print(*args, **kwargs):
     file = kwargs.get("file", None)
@@ -137,11 +151,13 @@ def schoolab_print(*args, **kwargs):
     message = sep.join(str(arg) for arg in args)
     logger.info(message)
 
+
 builtins.print = schoolab_print
 
 # Re-entrancy flag so schoolab_print never recurses if the logging system itself
 # tries to call print (e.g. from handleError / traceback.print_exception).
 _in_schoolab_print = False
+
 
 def schoolab_print_safe(*args, **kwargs):
     global _in_schoolab_print
@@ -155,6 +171,7 @@ def schoolab_print_safe(*args, **kwargs):
     finally:
         _in_schoolab_print = False
 
+
 builtins.print = schoolab_print_safe
 
 from contextlib import asynccontextmanager
@@ -162,9 +179,11 @@ import asyncio
 import socket
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+
 try:
     from zeroconf import ServiceInfo
     from zeroconf.asyncio import AsyncZeroconf
+
     _ZEROCONF_AVAILABLE = True
 except (ImportError, Exception) as _zeroconf_import_err:
     _ZEROCONF_AVAILABLE = False
@@ -194,6 +213,7 @@ _mdns_info: ServiceInfo | None = None
 async def lifespan(app: FastAPI):
     # 1. Redis Cache & Postgres Schema
     from app.db.pg_cache import init_redis
+
     await init_redis()
 
     from app.db.database import init_db
@@ -268,8 +288,11 @@ async def lifespan(app: FastAPI):
     import traceback
 
     if not _ZEROCONF_AVAILABLE:
-        print("[mDNS] Skipped — zeroconf library unavailable (likely blocked by antivirus). "
-              "Android clients will connect via manual IP or emulator loopback.", flush=True)
+        print(
+            "[mDNS] Skipped — zeroconf library unavailable (likely blocked by antivirus). "
+            "Android clients will connect via manual IP or emulator loopback.",
+            flush=True,
+        )
     else:
         try:
             ips = []
@@ -311,6 +334,7 @@ async def lifespan(app: FastAPI):
     # Start SRE Host Disk Capacity Monitor background task
     async def monitor_disk_space():
         import shutil
+
         while True:
             try:
                 disk = shutil.disk_usage("/")
@@ -318,7 +342,7 @@ async def lifespan(app: FastAPI):
                 if pct > 80.0:
                     logger.critical(
                         f"[CRITICAL_ALERT] Disk capacity crossed 80% boundary! Current usage: {pct:.1f}%",
-                        extra={"disk_usage_percent": pct}
+                        extra={"disk_usage_percent": pct},
                     )
             except Exception as e:
                 logger.error(f"Disk space monitor failed: {e}")
@@ -353,12 +377,18 @@ app = FastAPI(
     version="1.1.0",
     lifespan=lifespan,
     openapi_tags=[
-        {"name": "agent",   "description": "AI research agent — chat, document upload, cover letters."},
-        {"name": "papers",  "description": "Paper search, feed, and recommendations."},
-        {"name": "authors", "description": "Researcher profiles, metrics, and co-author graphs."},
-        {"name": "users",   "description": "User account management and GDPR deletion."},
-        {"name": "feed",    "description": "Personalised daily feed and trending items."},
-        {"name": "system",  "description": "Health, metrics, and AI status endpoints."},
+        {
+            "name": "agent",
+            "description": "AI research agent — chat, document upload, cover letters.",
+        },
+        {"name": "papers", "description": "Paper search, feed, and recommendations."},
+        {
+            "name": "authors",
+            "description": "Researcher profiles, metrics, and co-author graphs.",
+        },
+        {"name": "users", "description": "User account management and GDPR deletion."},
+        {"name": "feed", "description": "Personalised daily feed and trending items."},
+        {"name": "system", "description": "Health, metrics, and AI status endpoints."},
     ],
     swagger_ui_parameters={"persistAuthorization": True},
 )
@@ -395,6 +425,7 @@ app.add_middleware(
 
 if settings.force_https:
     from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
+
     app.add_middleware(HTTPSRedirectMiddleware)
 
 
@@ -427,12 +458,15 @@ class RateLimiter:
         self.last_cleanup = time.perf_counter()
         self.lock = asyncio.Lock()
 
-    async def check_rate_limit(self, client_ip: str, capacity: float = None, refill_rate: float = None) -> bool:
+    async def check_rate_limit(
+        self, client_ip: str, capacity: float = None, refill_rate: float = None
+    ) -> bool:
         cap = capacity if capacity is not None else self.capacity
         refill = refill_rate if refill_rate is not None else self.refill_rate
 
         # ── Distributed Redis Rate Limiter ──
         from app.db.pg_cache import _redis_active, _redis_client
+
         if _redis_active and _redis_client:
             try:
                 key = f"ratelimit:{client_ip}:{int(cap)}"
@@ -447,14 +481,17 @@ class RateLimiter:
                     await _redis_client.incr(key)
                     return True
             except Exception as e:
-                logger.warning(f"Redis rate limiter failed: {e}. Falling back to in-memory.")
+                logger.warning(
+                    f"Redis rate limiter failed: {e}. Falling back to in-memory."
+                )
 
         # ── Local Token Bucket Fallback ──
         async with self.lock:
             now = time.perf_counter()
             if now - self.last_cleanup > 60.0:
                 inactive_keys = [
-                    key for key, bucket in self.buckets.items()
+                    key
+                    for key, bucket in self.buckets.items()
                     if now - bucket.last_update > 300.0
                 ]
                 for key in inactive_keys:
@@ -476,24 +513,42 @@ async def security_guard_middleware(request: Request, call_next):
     path = request.url.path.lower()
 
     # 1. Kill Switch Guard
-    kill_switches = [x.strip().lower() for x in os.environ.get("KILL_SWITCHES", "").split(",") if x.strip()]
+    kill_switches = [
+        x.strip().lower()
+        for x in os.environ.get("KILL_SWITCHES", "").split(",")
+        if x.strip()
+    ]
     if path not in ["/", "/health", "/health/", "/metrics", "/metrics/"]:
         for feature in kill_switches:
             if feature in path:
                 from fastapi.responses import JSONResponse
+
                 return JSONResponse(
                     status_code=503,
-                    content={"detail": f"Feature '{feature}' is temporarily disabled via SRE kill switch."}
+                    content={
+                        "detail": f"Feature '{feature}' is temporarily disabled via SRE kill switch."
+                    },
                 )
 
     # 2. Scraper Blocking Guard
     user_agent = request.headers.get("user-agent", "").lower()
-    bot_keywords = ["python-requests", "urllib", "curl", "wget", "scrapy", "playwright", "puppeteer"]
+    bot_keywords = [
+        "python-requests",
+        "urllib",
+        "curl",
+        "wget",
+        "scrapy",
+        "playwright",
+        "puppeteer",
+    ]
     if any(keyword in user_agent for keyword in bot_keywords):
         from fastapi.responses import JSONResponse
+
         return JSONResponse(
             status_code=403,
-            content={"detail": "Access Denied: Automated scraping signatures detected."}
+            content={
+                "detail": "Access Denied: Automated scraping signatures detected."
+            },
         )
 
     # 3. Input Sanitization (WAF XSS) Guard
@@ -501,13 +556,22 @@ async def security_guard_middleware(request: Request, call_next):
     xss_patterns = ["<script", "javascript:", "onload=", "onerror=", "<iframe", "<img"]
     if any(pat in query_string for pat in xss_patterns):
         from fastapi.responses import JSONResponse
+
         return JSONResponse(
             status_code=400,
-            content={"detail": "Bad Request: Malicious input signatures (XSS) detected."}
+            content={
+                "detail": "Bad Request: Malicious input signatures (XSS) detected."
+            },
         )
 
     # 4. Admin Access Guard
-    if path in ["/metrics", "/metrics/", "/ai_status", "/ai_status/", "/api/v1/ai_status"]:
+    if path in [
+        "/metrics",
+        "/metrics/",
+        "/ai_status",
+        "/ai_status/",
+        "/api/v1/ai_status",
+    ]:
         client_ip = request.client.host if request.client else "unknown"
         is_private = False
         if client_ip in ["127.0.0.1", "::1", "localhost", "testserver"]:
@@ -526,64 +590,95 @@ async def security_guard_middleware(request: Request, call_next):
         expected_token = os.environ.get("SRE_SECURITY_TOKEN", "sre_bypass_secret_2026")
         if not is_private and sre_token != expected_token:
             from fastapi.responses import JSONResponse
+
             return JSONResponse(
                 status_code=403,
-                content={"detail": "Forbidden: Administrative access restricted to local subnet or valid SRE VPN context."}
+                content={
+                    "detail": "Forbidden: Administrative access restricted to local subnet or valid SRE VPN context."
+                },
             )
 
     # 5. Device Signature Verification Guard
     if request.method in ["POST", "PUT", "DELETE", "PATCH"]:
         import hmac
         import hashlib
-        user_id = request.headers.get("X-User-Id") or request.query_params.get("user_id") or request.query_params.get("userId")
+
+        user_id = (
+            request.headers.get("X-User-Id")
+            or request.query_params.get("user_id")
+            or request.query_params.get("userId")
+        )
         if user_id:
             timestamp_str = request.headers.get("X-Device-Timestamp")
             signature = request.headers.get("X-Device-Signature")
             if not timestamp_str or not signature:
                 from fastapi.responses import JSONResponse
+
                 return JSONResponse(
                     status_code=401,
-                    content={"detail": "Unauthorized: Missing device signature headers."}
+                    content={
+                        "detail": "Unauthorized: Missing device signature headers."
+                    },
                 )
             try:
                 timestamp = int(timestamp_str)
                 if abs(time.time() - timestamp) > 300:
                     from fastapi.responses import JSONResponse
+
                     return JSONResponse(
                         status_code=401,
-                        content={"detail": "Unauthorized: Device signature timestamp expired."}
+                        content={
+                            "detail": "Unauthorized: Device signature timestamp expired."
+                        },
                     )
                 device_secret = str(settings.database_encryption_key).encode("utf-8")
                 payload = f"{user_id}:{timestamp_str}"
-                expected = hmac.new(device_secret, payload.encode("utf-8"), hashlib.sha256).hexdigest()
+                expected = hmac.new(
+                    device_secret, payload.encode("utf-8"), hashlib.sha256
+                ).hexdigest()
                 if not hmac.compare_digest(signature, expected):
                     from fastapi.responses import JSONResponse
+
                     return JSONResponse(
                         status_code=401,
-                        content={"detail": "Unauthorized: Invalid device signature."}
+                        content={"detail": "Unauthorized: Invalid device signature."},
                     )
             except Exception:
                 from fastapi.responses import JSONResponse
+
                 return JSONResponse(
                     status_code=401,
-                    content={"detail": "Unauthorized: Invalid device signature format."}
+                    content={
+                        "detail": "Unauthorized: Invalid device signature format."
+                    },
                 )
 
     # 6. Rate Limiting Guard
     if path not in ["/", "/health", "/health/"]:
         client_ip = request.client.host if request.client else "unknown"
-        strict_paths = ["/api/v1/agent/chat", "/api/v1/papers/search", "/api/v1/authors/search", "/api/v1/users/download-export", "/export"]
+        strict_paths = [
+            "/api/v1/agent/chat",
+            "/api/v1/papers/search",
+            "/api/v1/authors/search",
+            "/api/v1/users/download-export",
+            "/export",
+        ]
         is_strict = any(sp in path for sp in strict_paths)
         if is_strict:
-            allowed = await rate_limiter.check_rate_limit(client_ip, capacity=5.0, refill_rate=5.0/60.0)
+            allowed = await rate_limiter.check_rate_limit(
+                client_ip, capacity=5.0, refill_rate=5.0 / 60.0
+            )
         else:
-            allowed = await rate_limiter.check_rate_limit(client_ip, capacity=60.0, refill_rate=1.0)
+            allowed = await rate_limiter.check_rate_limit(
+                client_ip, capacity=60.0, refill_rate=1.0
+            )
         if not allowed:
             from fastapi.responses import JSONResponse
+
             return JSONResponse(
                 status_code=429,
                 content={"detail": "Too many requests. Please try again later."},
-                headers={"Retry-After": "5"}
+                headers={"Retry-After": "5"},
             )
 
     return await call_next(request)
@@ -598,12 +693,28 @@ class MetricsStore:
         self.openalex_api_requests_total = 0  # Counter
         self.error_counts = 0
         # Buckets for latency histogram: 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0
-        self.latency_buckets = [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0]
+        self.latency_buckets = [
+            0.005,
+            0.01,
+            0.025,
+            0.05,
+            0.075,
+            0.1,
+            0.25,
+            0.5,
+            0.75,
+            1.0,
+            2.5,
+            5.0,
+            7.5,
+            10.0,
+        ]
         self.histogram_buckets = {}  # (method, endpoint, le) -> count
         self.lock = asyncio.Lock()
 
         # Outbound HTTP Client metrics (thread-safe for sync/async wrappers)
         import threading
+
         self.outbound_lock = threading.Lock()
         self.outbound_request_counts = {}
         self.outbound_request_latency = {}
@@ -612,7 +723,9 @@ class MetricsStore:
         latency_sec = latency_ms / 1000.0
         with self.outbound_lock:
             key = (host, str(status))
-            self.outbound_request_counts[key] = self.outbound_request_counts.get(key, 0) + 1
+            self.outbound_request_counts[key] = (
+                self.outbound_request_counts.get(key, 0) + 1
+            )
 
             if host not in self.outbound_request_latency:
                 self.outbound_request_latency[host] = []
@@ -643,7 +756,9 @@ class MetricsStore:
     def increment_openalex_requests_sync(self):
         self.openalex_api_requests_total += 1
 
-    async def record_request(self, method: str, endpoint: str, status: int, latency_ms: float):
+    async def record_request(
+        self, method: str, endpoint: str, status: int, latency_ms: float
+    ):
         latency_sec = latency_ms / 1000.0
         async with self.lock:
             key = (method, endpoint, str(status))
@@ -660,13 +775,16 @@ class MetricsStore:
             for bucket in self.latency_buckets:
                 bucket_key = (method, endpoint, f"{bucket:.3f}")
                 if latency_sec <= bucket:
-                    self.histogram_buckets[bucket_key] = self.histogram_buckets.get(bucket_key, 0) + 1
+                    self.histogram_buckets[bucket_key] = (
+                        self.histogram_buckets.get(bucket_key, 0) + 1
+                    )
             # Add +Inf bucket
             inf_key = (method, endpoint, "+Inf")
             self.histogram_buckets[inf_key] = self.histogram_buckets.get(inf_key, 0) + 1
 
             if status >= 400:
                 self.error_counts += 1
+
 
 metrics_store = MetricsStore()
 
@@ -682,7 +800,11 @@ async def structured_log_middleware(request: Request, call_next):
             trace_id = parts[1]
 
     if not trace_id:
-        trace_id = request.headers.get("x-trace-id") or request.headers.get("x-request-id") or str(uuid.uuid4()).replace("-", "")
+        trace_id = (
+            request.headers.get("x-trace-id")
+            or request.headers.get("x-request-id")
+            or str(uuid.uuid4()).replace("-", "")
+        )
 
     # Set context variables temporarily so telemetry Span initialization reads them
     trace_id_token = trace_id_var.set(trace_id)
@@ -691,11 +813,14 @@ async def structured_log_middleware(request: Request, call_next):
     request_id_token = request_id_var.set(request_id)
 
     # Try to extract user ID from query parameters
-    user_id = request.query_params.get("user_id") or request.query_params.get("userId") or ""
+    user_id = (
+        request.query_params.get("user_id") or request.query_params.get("userId") or ""
+    )
     user_id_token = user_id_var.set(user_id)
 
     # Start a span for the router path
     from app.core.telemetry import tracer
+
     span_name = f"{request.method} {request.url.path}"
 
     await metrics_store.increment_active_requests()
@@ -717,13 +842,15 @@ async def structured_log_middleware(request: Request, call_next):
                     "method": request.method,
                     "status_code": 500,
                     "latency_ms": latency_ms,
-                }
+                },
             )
             raise e
         finally:
             latency_ms = int((time.perf_counter() - start_time) * 1000)
             status_code = response.status_code if response else 500
-            await metrics_store.record_request(request.method, request.url.path, status_code, latency_ms)
+            await metrics_store.record_request(
+                request.method, request.url.path, status_code, latency_ms
+            )
             await metrics_store.decrement_active_requests()
 
             logger.info(
@@ -733,11 +860,13 @@ async def structured_log_middleware(request: Request, call_next):
                     "method": request.method,
                     "status_code": status_code,
                     "latency_ms": latency_ms,
-                }
+                },
             )
             if response:
                 response.headers["X-Request-ID"] = request_id
-                response.headers["traceparent"] = f"00-{span.trace_id}-{span.span_id}-01"
+                response.headers["traceparent"] = (
+                    f"00-{span.trace_id}-{span.span_id}-01"
+                )
             request_id_var.reset(request_id_token)
             user_id_var.reset(user_id_token)
             trace_id_var.reset(trace_id_token)
@@ -747,6 +876,7 @@ async def structured_log_middleware(request: Request, call_next):
 # never relative to CWD so it works regardless of where uvicorn is launched from.
 from fastapi.staticfiles import StaticFiles
 
+
 class CacheControlledStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope) -> Response:
         response = await super().get_response(path, scope)
@@ -755,7 +885,11 @@ class CacheControlledStaticFiles(StaticFiles):
 
 
 _DOWNLOADS_DIR = settings.downloads_dir  # resolved absolute path from config
-app.mount("/downloads", CacheControlledStaticFiles(directory=str(_DOWNLOADS_DIR)), name="downloads")
+app.mount(
+    "/downloads",
+    CacheControlledStaticFiles(directory=str(_DOWNLOADS_DIR)),
+    name="downloads",
+)
 
 # Include aggregate router under /api/v1 (for versioned compatibility)
 app.include_router(api_router, prefix="/api/v1")
@@ -776,6 +910,7 @@ async def health():
     # Check Database
     from app.db.database import AsyncSessionLocal
     from sqlalchemy import text
+
     try:
         async with AsyncSessionLocal() as session:
             await session.execute(text("SELECT 1"))
@@ -797,13 +932,15 @@ async def health():
         status_code = 503  # Service Unavailable
 
     return Response(
-        content=json.dumps({
-            "status": "healthy" if status_code == 200 else "unhealthy",
-            "database": db_status,
-            "cache": cache_status
-        }),
+        content=json.dumps(
+            {
+                "status": "healthy" if status_code == 200 else "unhealthy",
+                "database": db_status,
+                "cache": cache_status,
+            }
+        ),
         media_type="application/json",
-        status_code=status_code
+        status_code=status_code,
     )
 
 
@@ -816,7 +953,9 @@ async def metrics():
     lines.append("# HELP http_requests_total Total number of HTTP requests.")
     lines.append("# TYPE http_requests_total counter")
     for (method, endpoint, status), count in metrics_store.request_counts.items():
-        lines.append(f'http_requests_total{{method="{method}",endpoint="{endpoint}",status="{status}"}} {count}')
+        lines.append(
+            f'http_requests_total{{method="{method}",endpoint="{endpoint}",status="{status}"}} {count}'
+        )
 
     # http_active_requests
     lines.append("# HELP http_active_requests Current number of active HTTP requests.")
@@ -824,7 +963,9 @@ async def metrics():
     lines.append(f"http_active_requests {metrics_store.active_requests}")
 
     # http_request_duration_seconds (Histogram)
-    lines.append("# HELP http_request_duration_seconds HTTP request duration histogram.")
+    lines.append(
+        "# HELP http_request_duration_seconds HTTP request duration histogram."
+    )
     lines.append("# TYPE http_request_duration_seconds histogram")
     for (method, endpoint), latencies in metrics_store.request_latency.items():
         if latencies:
@@ -834,24 +975,38 @@ async def metrics():
             for bucket in metrics_store.latency_buckets:
                 bucket_key = (method, endpoint, f"{bucket:.3f}")
                 bucket_count = metrics_store.histogram_buckets.get(bucket_key, 0)
-                lines.append(f'http_request_duration_seconds_bucket{{method="{method}",endpoint="{endpoint}",le="{bucket:.3f}"}} {bucket_count}')
+                lines.append(
+                    f'http_request_duration_seconds_bucket{{method="{method}",endpoint="{endpoint}",le="{bucket:.3f}"}} {bucket_count}'
+                )
             # Output +Inf
             inf_key = (method, endpoint, "+Inf")
             inf_count = metrics_store.histogram_buckets.get(inf_key, count)
-            lines.append(f'http_request_duration_seconds_bucket{{method="{method}",endpoint="{endpoint}",le="+Inf"}} {inf_count}')
+            lines.append(
+                f'http_request_duration_seconds_bucket{{method="{method}",endpoint="{endpoint}",le="+Inf"}} {inf_count}'
+            )
             # Sum and Count
-            lines.append(f'http_request_duration_seconds_sum{{method="{method}",endpoint="{endpoint}"}} {total_duration:.6f}')
-            lines.append(f'http_request_duration_seconds_count{{method="{method}",endpoint="{endpoint}"}} {count}')
+            lines.append(
+                f'http_request_duration_seconds_sum{{method="{method}",endpoint="{endpoint}"}} {total_duration:.6f}'
+            )
+            lines.append(
+                f'http_request_duration_seconds_count{{method="{method}",endpoint="{endpoint}"}} {count}'
+            )
 
     # background_tasks_active
-    lines.append("# HELP background_tasks_active Current number of active background worker tasks.")
+    lines.append(
+        "# HELP background_tasks_active Current number of active background worker tasks."
+    )
     lines.append("# TYPE background_tasks_active gauge")
     lines.append(f"background_tasks_active {metrics_store.background_tasks_active}")
 
     # openalex_api_requests_total
-    lines.append("# HELP openalex_api_requests_total Total number of external requests to OpenAlex API.")
+    lines.append(
+        "# HELP openalex_api_requests_total Total number of external requests to OpenAlex API."
+    )
     lines.append("# TYPE openalex_api_requests_total counter")
-    lines.append(f"openalex_api_requests_total {metrics_store.openalex_api_requests_total}")
+    lines.append(
+        f"openalex_api_requests_total {metrics_store.openalex_api_requests_total}"
+    )
 
     # system_errors_total
     lines.append("# HELP system_errors_total Total number of error responses.")
@@ -862,6 +1017,7 @@ async def metrics():
     try:
         import psutil
         import shutil
+
         cpu_usage = psutil.cpu_percent(interval=None)
         mem = psutil.virtual_memory()
         disk = shutil.disk_usage("/")
@@ -875,30 +1031,41 @@ async def metrics():
         lines.append(f"host_memory_used_percent {mem.percent:.1f}")
 
         disk_used_pct = (disk.used / disk.total) * 100
-        lines.append("# HELP host_disk_used_percent Host disk capacity used percentage.")
+        lines.append(
+            "# HELP host_disk_used_percent Host disk capacity used percentage."
+        )
         lines.append("# TYPE host_disk_used_percent gauge")
         lines.append(f"host_disk_used_percent {disk_used_pct:.1f}")
     except Exception as e:
         logger.error(f"Failed to gather host metrics: {e}")
 
     # outbound metrics
-    lines.append("# HELP outbound_http_requests_total Total number of outbound HTTP requests.")
+    lines.append(
+        "# HELP outbound_http_requests_total Total number of outbound HTTP requests."
+    )
     lines.append("# TYPE outbound_http_requests_total counter")
     with metrics_store.outbound_lock:
         for (host, status), count in metrics_store.outbound_request_counts.items():
-            lines.append(f'outbound_http_requests_total{{host="{host}",status="{status}"}} {count}')
+            lines.append(
+                f'outbound_http_requests_total{{host="{host}",status="{status}"}} {count}'
+            )
 
-    lines.append("# HELP outbound_http_request_duration_seconds Outbound HTTP request duration summary.")
+    lines.append(
+        "# HELP outbound_http_request_duration_seconds Outbound HTTP request duration summary."
+    )
     lines.append("# TYPE outbound_http_request_duration_seconds summary")
     with metrics_store.outbound_lock:
         for host, latencies in metrics_store.outbound_request_latency.items():
             if latencies:
                 total_duration = sum(latencies)
                 count = len(latencies)
-                lines.append(f'outbound_http_request_duration_seconds_sum{{host="{host}"}} {total_duration:.6f}')
-                lines.append(f'outbound_http_request_duration_seconds_count{{host="{host}"}} {count}')
+                lines.append(
+                    f'outbound_http_request_duration_seconds_sum{{host="{host}"}} {total_duration:.6f}'
+                )
+                lines.append(
+                    f'outbound_http_request_duration_seconds_count{{host="{host}"}} {count}'
+                )
 
     return Response(
-        content="\n".join(lines) + "\n",
-        media_type="text/plain; version=0.0.4"
+        content="\n".join(lines) + "\n", media_type="text/plain; version=0.0.4"
     )

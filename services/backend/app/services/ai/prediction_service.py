@@ -1,4 +1,4 @@
-﻿from typing import List
+from typing import List
 from app.services.ai.llm_service import is_llm_working
 from app.prompts import PREDICTION_SYSTEM_PROMPT
 

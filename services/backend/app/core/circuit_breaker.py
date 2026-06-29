@@ -11,6 +11,7 @@ Usage:
         async with httpx.AsyncClient() as c:
             return await c.get(url)
 """
+
 import asyncio
 import logging
 import time
@@ -22,13 +23,14 @@ logger = logging.getLogger("skolab.circuit_breaker")
 
 
 class CircuitState(Enum):
-    CLOSED = "closed"       # Normal operation — all requests pass through
-    OPEN = "open"           # Tripped — all requests rejected immediately
-    HALF_OPEN = "half_open" # Probing — one trial request allowed to test recovery
+    CLOSED = "closed"  # Normal operation — all requests pass through
+    OPEN = "open"  # Tripped — all requests rejected immediately
+    HALF_OPEN = "half_open"  # Probing — one trial request allowed to test recovery
 
 
 class CircuitBreakerOpenError(Exception):
     """Raised when a call is attempted while the circuit is OPEN."""
+
     def __init__(self, name: str, retry_after: float):
         self.name = name
         self.retry_after = retry_after
@@ -121,6 +123,7 @@ class CircuitBreaker:
 
     def call(self, func: Callable):
         """Decorator — wraps an async callable with circuit-breaker logic."""
+
         @wraps(func)
         async def wrapper(*args, **kwargs):
             await self._check_state()
@@ -131,6 +134,7 @@ class CircuitBreaker:
             except self.expected_exception as exc:
                 await self._on_failure(exc)
                 raise
+
         return wrapper
 
 

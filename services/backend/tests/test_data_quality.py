@@ -13,7 +13,13 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from app.db.database import AsyncSessionLocal
-from app.models.user_models import User, UserPreference, Connection, CacheEntry, AgentChatHistory
+from app.models.user_models import (
+    User,
+    UserPreference,
+    Connection,
+    CacheEntry,
+    AgentChatHistory,
+)
 from app.models.researcher_models import ResearcherWork, ResearcherMetrics
 from app.models.content_models import DailyFeedItem, ScrapedOpportunity
 from app.models.analytics_models import UserSettings
@@ -22,17 +28,26 @@ from app.services.data.researcher_fetcher import PhysicsResearcherFetcher
 
 # Dynamically import hyphenated scripts
 import importlib.util
+
+
 def import_hyphenated_module(module_name, filepath):
     spec = importlib.util.spec_from_file_location(module_name, filepath)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
-consistency_path = os.path.join(project_root, "scripts", "database", "data-consistency-check.py")
-data_consistency_check = import_hyphenated_module("data_consistency_check", consistency_path)
+
+consistency_path = os.path.join(
+    project_root, "scripts", "database", "data-consistency-check.py"
+)
+data_consistency_check = import_hyphenated_module(
+    "data_consistency_check", consistency_path
+)
 run_checks = data_consistency_check.run_checks
 
-cleanup_path = os.path.join(project_root, "scripts", "database", "db-cleanup-retention.py")
+cleanup_path = os.path.join(
+    project_root, "scripts", "database", "db-cleanup-retention.py"
+)
 db_cleanup_retention = import_hyphenated_module("db_cleanup_retention", cleanup_path)
 offload_and_prune = db_cleanup_retention.offload_and_prune
 
@@ -63,7 +78,7 @@ async def test_doi_validation():
         author_openalex_id="A1",
         work_openalex_id="W1",
         title="Paper 1",
-        doi="https://doi.org/10.1038/s41586-021-03819-2"
+        doi="https://doi.org/10.1038/s41586-021-03819-2",
     )
     # Checks cleaning of prefix
     assert rw1.doi == "10.1038/s41586-021-03819-2"
@@ -73,7 +88,7 @@ async def test_doi_validation():
         author_openalex_id="A2",
         work_openalex_id="W2",
         title="Paper 2",
-        doi="10.1103/PhysRevLett.116.061102"
+        doi="10.1103/PhysRevLett.116.061102",
     )
     assert rw2.doi == "10.1103/PhysRevLett.116.061102"
 
@@ -83,7 +98,7 @@ async def test_doi_validation():
             author_openalex_id="A3",
             work_openalex_id="W3",
             title="Paper 3",
-            doi="not_a_doi"
+            doi="not_a_doi",
         )
 
 
@@ -93,7 +108,12 @@ async def test_expertise_sanitization():
     rm = ResearcherMetrics(
         openalex_id="A99",
         display_name="Researcher",
-        expertise=["Quantum Physics", "AI-Safety!", "Clean-Text (v2)", "Malicious <script> tag"]
+        expertise=[
+            "Quantum Physics",
+            "AI-Safety!",
+            "Clean-Text (v2)",
+            "Malicious <script> tag",
+        ],
     )
     # "AI-Safety!" and "Malicious <script> tag" have invalid characters (!, <, >)
     # Valid expertise items should remain: "Quantum Physics", "Clean-Text (v2)"
@@ -114,7 +134,11 @@ async def test_database_check_constraints():
         await db.commit()
 
         # Connection with invalid status
-        conn = Connection(user_id="dq_user_c1", connected_user_id="dq_user_c2", status="invalid_status")
+        conn = Connection(
+            user_id="dq_user_c1",
+            connected_user_id="dq_user_c2",
+            status="invalid_status",
+        )
         db.add(conn)
         with pytest.raises(IntegrityError):
             await db.commit()
@@ -135,10 +159,14 @@ async def test_database_unique_constraints():
         db.add(u)
         await db.commit()
 
-        pref1 = UserPreference(user_id="dq_user_p1", preference_key="theme", preference_value="dark")
-        pref2 = UserPreference(user_id="dq_user_p1", preference_key="theme", preference_value="light")
+        pref1 = UserPreference(
+            user_id="dq_user_p1", preference_key="theme", preference_value="dark"
+        )
+        pref2 = UserPreference(
+            user_id="dq_user_p1", preference_key="theme", preference_value="light"
+        )
         db.add_all([pref1, pref2])
-        
+
         with pytest.raises(IntegrityError):
             await db.commit()
         await db.rollback()
@@ -157,20 +185,31 @@ async def test_data_ingest_filters_researcher_worker(monkeypatch):
     class MockLogger:
         def warning(self, msg, *args):
             dropped_logs.append(msg % args)
+
         def info(self, msg, *args):
             pass
+
         def error(self, msg, *args):
             pass
 
     import app.services.data.researcher_worker as rw
+
     monkeypatch.setattr(rw, "logger", MockLogger())
 
     # Mock openalex fetch functions
     async def mock_fetch_author(author_id):
         if "bad_name" in author_id:
-            return {"id": author_id, "display_name": "Unknown", "last_known_institutions": [{"display_name": "MIT"}]}
+            return {
+                "id": author_id,
+                "display_name": "Unknown",
+                "last_known_institutions": [{"display_name": "MIT"}],
+            }
         elif "bad_inst" in author_id:
-            return {"id": author_id, "display_name": "John Doe", "last_known_institutions": []}
+            return {
+                "id": author_id,
+                "display_name": "John Doe",
+                "last_known_institutions": [],
+            }
         return None
 
     monkeypatch.setattr(rw, "_fetch_author_from_openalex", mock_fetch_author)
@@ -191,14 +230,11 @@ async def test_data_ingest_filters_researcher_fetcher(monkeypatch):
     # Mock SS query response
     class MockResponse:
         status_code = 200
+
         def json(self):
             return {
                 "data": [
-                    {
-                        "authorId": "123",
-                        "name": "Unknown",
-                        "affiliations": ["MIT"]
-                    }
+                    {"authorId": "123", "name": "Unknown", "affiliations": ["MIT"]}
                 ]
             }
 
@@ -209,18 +245,15 @@ async def test_data_ingest_filters_researcher_fetcher(monkeypatch):
     # Mock missing affiliations
     class MockResponseNoAff:
         status_code = 200
+
         def json(self):
             return {
-                "data": [
-                    {
-                        "authorId": "123",
-                        "name": "Jane Doe",
-                        "affiliations": []
-                    }
-                ]
+                "data": [{"authorId": "123", "name": "Jane Doe", "affiliations": []}]
             }
 
-    monkeypatch.setattr(fetcher.client, "get", lambda *args, **kwargs: MockResponseNoAff())
+    monkeypatch.setattr(
+        fetcher.client, "get", lambda *args, **kwargs: MockResponseNoAff()
+    )
     res2 = await fetcher.get_researcher_details("Some Name")
     assert res2 is None
 
@@ -236,8 +269,12 @@ async def test_db_cleanup_retention_runs():
     """Verify that the db pruning and cleanup retention script runs successfully."""
     async with AsyncSessionLocal() as db:
         # Expired cache entry
-        past = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) - datetime.timedelta(days=1)
-        expired_cache = CacheEntry(cache_key="profile::expired_test", data={"v": {}}, expires_at=past)
+        past = datetime.datetime.now(datetime.timezone.utc).replace(
+            tzinfo=None
+        ) - datetime.timedelta(days=1)
+        expired_cache = CacheEntry(
+            cache_key="profile::expired_test", data={"v": {}}, expires_at=past
+        )
         db.add(expired_cache)
         await db.commit()
 
@@ -246,5 +283,7 @@ async def test_db_cleanup_retention_runs():
 
     # Assert cache entry was deleted
     async with AsyncSessionLocal() as db:
-        res = await db.execute(select(CacheEntry).where(CacheEntry.cache_key == "profile::expired_test"))
+        res = await db.execute(
+            select(CacheEntry).where(CacheEntry.cache_key == "profile::expired_test")
+        )
         assert res.scalar_one_or_none() is None

@@ -106,4 +106,3 @@ Convert the paper DNA into a professional 7-slide outline.
 STRUCTURE: Title, Problem, Methodology, Key Discovery, Complexity, Application, Future.
 Each slide: 'title' + 3-4 'bullets'. Use $$LaTeX$$ for formulas.
 Return JSON: { "slides": [{ "title": "...", "bullets": ["..."] }] }"""
-

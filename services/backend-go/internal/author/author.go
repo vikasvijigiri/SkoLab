@@ -33,13 +33,13 @@ var (
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type AuthorSuggestion struct {
-	ID           string  `json:"id"`
-	DisplayName  string  `json:"display_name"`
-	Institution  string  `json:"institution"`
-	FieldOfStudy *string `json:"field_of_study"`
-	HIndex       *int    `json:"h_index"`
-	InnovationScore int  `json:"innovation_score"`
-	WorksCount   *int    `json:"works_count"`
+	ID              string  `json:"id"`
+	DisplayName     string  `json:"display_name"`
+	Institution     string  `json:"institution"`
+	FieldOfStudy    *string `json:"field_of_study"`
+	HIndex          *int    `json:"h_index"`
+	InnovationScore int     `json:"innovation_score"`
+	WorksCount      *int    `json:"works_count"`
 }
 
 type OrbitMetrics struct {
@@ -122,13 +122,13 @@ func GetAuthorSuggestions(c *gin.Context) {
 		wc := a.WorksCount
 		fPtr := &field
 		suggestions = append(suggestions, AuthorSuggestion{
-			ID:           a.ID,
-			DisplayName:  name,
-			Institution:  inst,
-			FieldOfStudy: fPtr,
-			HIndex:       &h,
+			ID:              a.ID,
+			DisplayName:     name,
+			Institution:     inst,
+			FieldOfStudy:    fPtr,
+			HIndex:          &h,
 			InnovationScore: score,
-			WorksCount:   &wc,
+			WorksCount:      &wc,
 		})
 		seen[a.ID] = true
 		if len(suggestions) >= 10 {
@@ -170,9 +170,9 @@ func GetAuthorSuggestions(c *gin.Context) {
 					}
 					seen[a.ID] = true
 					suggestions = append(suggestions, AuthorSuggestion{
-						ID:          a.ID,
-						DisplayName: a.DisplayName,
-						Institution: inst,
+						ID:              a.ID,
+						DisplayName:     a.DisplayName,
+						Institution:     inst,
 						InnovationScore: score,
 					})
 					if len(suggestions) >= 10 {
@@ -209,11 +209,11 @@ func GetOrbitMetrics(c *gin.Context) {
 
 	// Fetch author detail and recent works concurrently.
 	var (
-		author     *openalex.Author
-		works      []openalex.Work
-		authorErr  error
-		worksErr   error
-		wg         sync.WaitGroup
+		author    *openalex.Author
+		works     []openalex.Work
+		authorErr error
+		worksErr  error
+		wg        sync.WaitGroup
 	)
 
 	wg.Add(2)
@@ -437,12 +437,12 @@ func pgSearchSuggestions(ctx context.Context, query string, limit int) ([]Author
 				inst = *institution
 			}
 			suggestions = append(suggestions, AuthorSuggestion{
-				ID:           id,
-				DisplayName:  name,
-				Institution:  inst,
-				FieldOfStudy: field,
-				HIndex:       hIndex,
-				WorksCount:   worksCount,
+				ID:              id,
+				DisplayName:     name,
+				Institution:     inst,
+				FieldOfStudy:    field,
+				HIndex:          hIndex,
+				WorksCount:      worksCount,
 				InnovationScore: 75,
 			})
 		}

@@ -10,6 +10,7 @@ try:
 except AttributeError:
     client_args = {"app": app}
 
+
 @pytest.mark.anyio
 async def test_metrics_endpoint_host_metrics():
     """Verify `/metrics` endpoint exports host CPU, memory, and disk metrics."""
@@ -20,6 +21,7 @@ async def test_metrics_endpoint_host_metrics():
         assert "host_cpu_usage_percent" in content
         assert "host_memory_used_percent" in content
         assert "host_disk_used_percent" in content
+
 
 @pytest.mark.anyio
 async def test_status_endpoint():
@@ -36,11 +38,12 @@ async def test_status_endpoint():
         assert len(data["incidents"]) > 0
         assert data["incidents"][0]["title"] == "OpenAlex Upstream API Outage"
 
+
 @pytest.mark.anyio
 async def test_outbound_metrics_collection():
     """Verify outbound HTTP requests through `httpx` record latency and status code metrics."""
     from app.main import metrics_store
-    
+
     # Reset outbound metrics before test
     with metrics_store.outbound_lock:
         metrics_store.outbound_request_counts.clear()
