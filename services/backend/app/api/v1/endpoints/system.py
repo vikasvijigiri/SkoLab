@@ -8,10 +8,18 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Incidents file is at <repo_root>/docs/incidents.json.
-# This file lives at <repo_root>/backend/app/api/v1/endpoints/system.py,
-# so we need to go up 6 directories to reach the repo root.
-_REPO_ROOT = Path(__file__).resolve().parents[6]
+def _find_repo_root() -> Path:
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / ".git").exists() or (parent / "docs" / "incidents.json").exists():
+            return parent
+    # Fallback to backend root
+    for parent in current.parents:
+        if parent.name == "backend":
+            return parent
+    return current.parents[min(len(current.parents) - 1, 3)]
+
+_REPO_ROOT = _find_repo_root()
 _INCIDENTS_PATH = _REPO_ROOT / "docs" / "incidents.json"
 
 
