@@ -34,6 +34,7 @@ skolab-*.json
 # Logs and system dumps
 *.log
 *.txt
+!requirements.txt
 logcat_dump.txt
 logcat_dump_utf8.txt
 fresh_logcat.txt

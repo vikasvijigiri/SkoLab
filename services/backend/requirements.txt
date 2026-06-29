@@ -1,0 +1,21 @@
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
+httpx
+firebase-admin
+numpy
+networkx
+zeroconf
+pdfplumber
+python-multipart
+tenacity
+# Database
+sqlalchemy[asyncio]
+asyncpg
+alembic
+openrouter
+defusedxml
+psutil
+redis
+aiosqlite
