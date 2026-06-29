@@ -6,14 +6,6 @@ workspace = r"c:\Users\VikasVijigiri\Documents\SkoLab"
 # Extensions to check
 exts = {".kt", ".py", ".md", ".xml", ".gradle", ".kts", ".json", ".properties", ".txt"}
 
-def replace_skolab(match):
-    val = match.group(0)
-    if val.isupper():
-        return "SKOLAB"
-    elif val[0].isupper():
-        return "SkoLab"
-    else:
-        return "skolab"
 
 def replace_skolab(match):
     val = match.group(0)
@@ -23,6 +15,17 @@ def replace_skolab(match):
         return "SkoLab"
     else:
         return "skolab"
+
+
+def replace_skolab(match):
+    val = match.group(0)
+    if val.isupper():
+        return "SKOLAB"
+    elif val[0].isupper():
+        return "SkoLab"
+    else:
+        return "skolab"
+
 
 # Replacements in order
 replacements = [
@@ -36,7 +39,21 @@ modified_files = []
 
 for root, dirs, files in os.walk(workspace):
     # Exclude build, gradle, git, venv, idea directories
-    dirs[:] = [d for d in dirs if d not in {".git", ".gradle", ".idea", "build", "node_modules", "venv", "venv_stable", ".venv"}]
+    dirs[:] = [
+        d
+        for d in dirs
+        if d
+        not in {
+            ".git",
+            ".gradle",
+            ".idea",
+            "build",
+            "node_modules",
+            "venv",
+            "venv_stable",
+            ".venv",
+        }
+    ]
     for file in files:
         filepath = os.path.join(root, file)
         ext = os.path.splitext(file)[1].lower()
@@ -44,16 +61,16 @@ for root, dirs, files in os.walk(workspace):
             try:
                 with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
                     content = f.read()
-                
+
                 new_content = content
                 has_match = False
-                
+
                 # Check for matches
                 for pattern, repl in replacements:
                     if pattern.search(new_content):
                         new_content = pattern.sub(repl, new_content)
                         has_match = True
-                
+
                 if has_match:
                     with open(filepath, "w", encoding="utf-8") as f:
                         f.write(new_content)

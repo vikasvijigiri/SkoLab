@@ -7,6 +7,7 @@ in backend/.env — no IDs hardcoded anywhere.
 Usage:
     python add_monitors.py --username admin --password yourpass
 """
+
 import sys
 import re
 import argparse
@@ -25,8 +26,8 @@ from uptime_kuma_api import UptimeKumaApi, MonitorType
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 FASTAPI_BASE = "http://localhost:8000"
-UPTIME_KUMA  = "http://localhost:3002"
-DOCKER_HOST  = "http://host.docker.internal:8000"
+UPTIME_KUMA = "http://localhost:3002"
+DOCKER_HOST = "http://host.docker.internal:8000"
 
 HEADERS = {"User-Agent": "SkoLab-Monitor/1.0 (internal health check)"}
 
@@ -43,8 +44,9 @@ def _resolve_openalex_id(name: str) -> str:
     url = "https://api.openalex.org/authors"
     params = {"search": name, "per-page": 1, "mailto": email}
     try:
-        resp = requests.get(url, params=params, timeout=10,
-                            headers={"User-Agent": "SkoLab-Monitor/1.0"})
+        resp = requests.get(
+            url, params=params, timeout=10, headers={"User-Agent": "SkoLab-Monitor/1.0"}
+        )
         resp.raise_for_status()
         results = resp.json().get("results", [])
         if results:
@@ -61,8 +63,8 @@ def _resolve_author_context(author_id: str) -> tuple[str, str]:
     Used so all monitor params are real, not dummy values.
     """
     email = settings.openalex_email or "monitor@skolab.local"
-    hdrs  = {"User-Agent": "SkoLab-Monitor/1.0"}
-    top_title   = ""
+    hdrs = {"User-Agent": "SkoLab-Monitor/1.0"}
+    top_title = ""
     top_concept = ""
 
     if not author_id:
@@ -72,9 +74,14 @@ def _resolve_author_context(author_id: str) -> tuple[str, str]:
     try:
         r = requests.get(
             "https://api.openalex.org/works",
-            params={"filter": f"authorships.author.id:{author_id}",
-                    "sort": "cited_by_count:desc", "per_page": 1, "mailto": email},
-            timeout=10, headers=hdrs,
+            params={
+                "filter": f"authorships.author.id:{author_id}",
+                "sort": "cited_by_count:desc",
+                "per_page": 1,
+                "mailto": email,
+            },
+            timeout=10,
+            headers=hdrs,
         )
         r.raise_for_status()
         results = r.json().get("results", [])
@@ -89,11 +96,12 @@ def _resolve_author_context(author_id: str) -> tuple[str, str]:
         r = requests.get(
             f"https://api.openalex.org/authors/{author_id}",
             params={"mailto": email},
-            timeout=10, headers=hdrs,
+            timeout=10,
+            headers=hdrs,
         )
         r.raise_for_status()
         data = r.json()
-        topics   = data.get("topics") or []
+        topics = data.get("topics") or []
         concepts = data.get("x_concepts") or []
         if topics:
             top_concept = topics[0].get("display_name", "")
@@ -111,14 +119,16 @@ _AUTHOR_TOP_TITLE, _AUTHOR_TOP_CONCEPT = _resolve_author_context(AUTHOR_OPENALEX
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def _fetch_routes() -> list[tuple[str, str]]:
-    spec = requests.get(f"{FASTAPI_BASE}/openapi.json", timeout=30, headers=HEADERS).json()
+    spec = requests.get(
+        f"{FASTAPI_BASE}/openapi.json", timeout=30, headers=HEADERS
+    ).json()
     return [(m.upper(), p) for p, ms in spec.get("paths", {}).items() for m in ms]
 
 
 def _is_monitorable(method: str, path: str) -> bool:
     if method != "GET":
         return False
-    if re.search(r"\{[^}]+\}", path):   # skip dynamic path segments
+    if re.search(r"\{[^}]+\}", path):  # skip dynamic path segments
         return False
     return True
 
@@ -143,14 +153,18 @@ def _build_url(path: str) -> str | None:
 
     # author_id-based endpoints
     author_id_paths = {
-        "/author_metrics", "/citation_heatmap", "/journal_advisor",
-        "/match_grants", "/network_collaborators", "/orbit_metrics",
+        "/author_metrics",
+        "/citation_heatmap",
+        "/journal_advisor",
+        "/match_grants",
+        "/network_collaborators",
+        "/orbit_metrics",
         "/semantic_trending",
     }
     norm = re.sub(r"^/api/v1", "", path)
     if norm in author_id_paths:
         if not aid:
-            return f"{DOCKER_HOST}{path}"   # fallback — will return 422
+            return f"{DOCKER_HOST}{path}"  # fallback — will return 422
         return f"{DOCKER_HOST}{path}?author_id={aid}"
 
     if norm == "/collaborator_synergy":
@@ -198,8 +212,10 @@ def _build_url(path: str) -> str | None:
         focus_val = _AUTHOR_TOP_CONCEPT or settings.monitor_author_name
         if not focus_val:
             return f"{DOCKER_HOST}{path}?author_id={aid}"
-        return (f"{DOCKER_HOST}{path}"
-                f"?author_id={aid}&focus={requests.utils.quote(focus_val)}")
+        return (
+            f"{DOCKER_HOST}{path}"
+            f"?author_id={aid}&focus={requests.utils.quote(focus_val)}"
+        )
 
     return f"{DOCKER_HOST}{path}"
 
@@ -212,9 +228,13 @@ def main():
     args = parser.parse_args()
 
     if AUTHOR_OPENALEX_ID:
-        print(f"Resolved OpenAlex ID for '{settings.monitor_author_name}': {AUTHOR_OPENALEX_ID}")
+        print(
+            f"Resolved OpenAlex ID for '{settings.monitor_author_name}': {AUTHOR_OPENALEX_ID}"
+        )
     else:
-        print("WARNING: Could not resolve OpenAlex author ID — author endpoints will fall back to 422.")
+        print(
+            "WARNING: Could not resolve OpenAlex author ID — author endpoints will fall back to 422."
+        )
 
     print(f"\nFetching routes from {FASTAPI_BASE} ...")
     try:
@@ -246,8 +266,8 @@ def main():
     for m in all_monitors:
         base = m["url"].split("?")[0]
         existing_monitors[base] = m
-        alt = re.sub(r"^http://[^/]+", "", base)        # path only
-        alt_no_prefix = re.sub(r"^/api/v1", "", alt)   # strip /api/v1
+        alt = re.sub(r"^http://[^/]+", "", base)  # path only
+        alt_no_prefix = re.sub(r"^/api/v1", "", alt)  # strip /api/v1
         alt_url = f"{DOCKER_HOST}{alt_no_prefix}"
         existing_monitors.setdefault(alt_url, m)
 

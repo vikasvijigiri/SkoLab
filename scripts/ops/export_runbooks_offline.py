@@ -37,7 +37,8 @@ def export_runbooks() -> bool:
 
     # Collect runbook markdown files (exclude the offline_backup directory itself)
     runbook_files = [
-        f for f in os.listdir(RUNBOOKS_SRC)
+        f
+        for f in os.listdir(RUNBOOKS_SRC)
         if f.endswith(".md") and os.path.isfile(os.path.join(RUNBOOKS_SRC, f))
     ]
 
@@ -56,7 +57,7 @@ def export_runbooks() -> bool:
     # Write an index file in the backup directory
     index_path = os.path.join(backup_dir, "INDEX.md")
     with open(index_path, "w", encoding="utf-8") as f:
-        f.write(f"# SkoLab Runbook Offline Backup\n\n")
+        f.write("# SkoLab Runbook Offline Backup\n\n")
         f.write(f"**Exported at:** {timestamp}\n\n")
         f.write("## Contents\n\n")
         for name in sorted(exported):
@@ -80,10 +81,13 @@ def _prune_old_backups(backup_base: str, keep: int = 5) -> None:
     if not os.path.isdir(backup_base):
         return
 
-    subdirs = sorted([
-        d for d in os.listdir(backup_base)
-        if os.path.isdir(os.path.join(backup_base, d))
-    ])
+    subdirs = sorted(
+        [
+            d
+            for d in os.listdir(backup_base)
+            if os.path.isdir(os.path.join(backup_base, d))
+        ]
+    )
 
     to_remove = subdirs[: max(0, len(subdirs) - keep)]
     for d in to_remove:

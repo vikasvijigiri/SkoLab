@@ -30,7 +30,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
 # Load backend/.env — this is where production credentials live
 _ENV_CANDIDATES = [
-    os.path.join(PROJECT_ROOT, "backend", ".env"),
+    os.path.join(PROJECT_ROOT, "services", "backend", ".env"),
     os.path.join(PROJECT_ROOT, ".env"),
 ]
 for _env_file in _ENV_CANDIDATES:
@@ -80,7 +80,7 @@ PLACEHOLDER_PATTERNS = [
     r"^todo$",
     r"^example$",
     r"^replace[-_]me$",
-    r"^\${.*}$",   # Un-substituted shell variable references like ${VAR}
+    r"^\${.*}$",  # Un-substituted shell variable references like ${VAR}
 ]
 
 # Minimum lengths for security-critical secrets
@@ -94,6 +94,7 @@ MIN_LENGTH_KEYS = {
 # ---------------------------------------------------------------------------
 # Audit Checks
 # ---------------------------------------------------------------------------
+
 
 def check_required_keys() -> list:
     """Verify all required environment variables are set and non-empty."""
@@ -169,7 +170,7 @@ def check_gcp_credentials_file() -> list:
     if creds_path:
         # Resolve relative paths against the backend directory
         if not os.path.isabs(creds_path):
-            backend_dir = os.path.join(PROJECT_ROOT, "backend")
+            backend_dir = os.path.join(PROJECT_ROOT, "services", "backend")
             creds_path = os.path.join(backend_dir, creds_path)
         if not os.path.isfile(creds_path):
             failures.append(
@@ -182,6 +183,7 @@ def check_gcp_credentials_file() -> list:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def run_audit() -> bool:
     print("=" * 60)

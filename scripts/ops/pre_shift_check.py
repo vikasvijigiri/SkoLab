@@ -39,7 +39,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
 # Load backend/.env — this is where production credentials live
 _ENV_CANDIDATES = [
-    os.path.join(PROJECT_ROOT, "backend", ".env"),
+    os.path.join(PROJECT_ROOT, "services", "backend", ".env"),
     os.path.join(PROJECT_ROOT, ".env"),
 ]
 for _env_file in _ENV_CANDIDATES:
@@ -59,6 +59,7 @@ for _env_file in _ENV_CANDIDATES:
 # HTTP Helper
 # ---------------------------------------------------------------------------
 
+
 def _http_get(url: str, timeout: int = 5) -> tuple[int, str]:
     """Perform a GET request. Returns (status_code, body_text)."""
     try:
@@ -74,12 +75,16 @@ def _http_get(url: str, timeout: int = 5) -> tuple[int, str]:
 # Individual Checks
 # ---------------------------------------------------------------------------
 
+
 def check_backend_health(backend_url: str) -> tuple[bool, str]:
     url = backend_url.rstrip("/") + "/health"
     status, body = _http_get(url)
     if status == 200:
         return True, f"HTTP {status} — backend /health OK"
-    return False, f"HTTP {status} — backend /health not OK (expected 200). Body: {body[:100]}"
+    return (
+        False,
+        f"HTTP {status} — backend /health not OK (expected 200). Body: {body[:100]}",
+    )
 
 
 def check_prometheus(prom_url: str) -> tuple[bool, str]:
@@ -114,7 +119,10 @@ def check_env_variables() -> tuple:
     # Check DATABASE_ENCRYPTION_KEY is not the known weak default
     weak_default = "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MTI="
     if os.environ.get("DATABASE_ENCRYPTION_KEY", "") == weak_default:
-        return False, "DATABASE_ENCRYPTION_KEY is still the insecure hardcoded default. Rotate it."
+        return (
+            False,
+            "DATABASE_ENCRYPTION_KEY is still the insecure hardcoded default. Rotate it.",
+        )
     return True, "All required environment variables are set"
 
 
@@ -181,9 +189,15 @@ def run_checks(backend_url: str, prom_url: str, am_url: str) -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="SkoLab pre-shift readiness gate")
-    parser.add_argument("--host", default="http://127.0.0.1:8000", help="Backend base URL")
-    parser.add_argument("--prom", default="http://127.0.0.1:9090", help="Prometheus base URL")
-    parser.add_argument("--am", default="http://127.0.0.1:9093", help="Alertmanager base URL")
+    parser.add_argument(
+        "--host", default="http://127.0.0.1:8000", help="Backend base URL"
+    )
+    parser.add_argument(
+        "--prom", default="http://127.0.0.1:9090", help="Prometheus base URL"
+    )
+    parser.add_argument(
+        "--am", default="http://127.0.0.1:9093", help="Alertmanager base URL"
+    )
     args = parser.parse_args()
 
     ok = run_checks(args.host, args.prom, args.am)

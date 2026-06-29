@@ -15,11 +15,7 @@ def fetch_author_and_works(author_name, max_works=50):
     print("🔍 Searching for author...")
     author_url = f"{BASE_URL}/authors?api_key={os.getenv('openalex_api')}"
 
-    params = {
-        "search": author_name,
-        "per_page": 1,
-        "mailto": "support@skolab.open"
-    }
+    params = {"search": author_name, "per_page": 1, "mailto": "support@skolab.open"}
 
     res = requests.get(author_url, params=params)
 
@@ -49,7 +45,7 @@ def fetch_author_and_works(author_name, max_works=50):
         "filter": f"authorships.author.id:{author_id}",
         "per_page": 25,
         "cursor": "*",
-        "mailto": "your_email@example.com"
+        "mailto": "your_email@example.com",
     }
 
     works = []
@@ -66,11 +62,13 @@ def fetch_author_and_works(author_name, max_works=50):
         data = res.json()
 
         for w in data.get("results", []):
-            works.append({
-                "title": w.get("title"),
-                "year": w.get("publication_year"),
-                "doi": w.get("doi")
-            })
+            works.append(
+                {
+                    "title": w.get("title"),
+                    "year": w.get("publication_year"),
+                    "doi": w.get("doi"),
+                }
+            )
 
             if len(works) >= max_works:
                 break
