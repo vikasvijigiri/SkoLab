@@ -67,6 +67,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - name: Create Dummy google-services.json
+        run: |
+          mkdir -p apps/android-app/app
+          echo '{"project_info":{"project_number":"123456789","project_id":"dummy-project"},"client":[{"client_info":{"mobilesdk_app_id":"1:123456789:android:12345","android_client_info":{"package_name":"com.company.skolab"}},"api_key":[{"current_key":"dummy_api_key"}],"services":{}}],"configuration_version":"3"}' > apps/android-app/app/google-services.json
+
       - name: Make Gradlew Executable
         working-directory: apps/android-app
         run: chmod +x gradlew
