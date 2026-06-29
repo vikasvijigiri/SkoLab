@@ -149,6 +149,17 @@ fun DiscoveryScreen(
             val peers = apiService.getSimilarAuthors(researchFocus, limit = 5)
             suggestedPeers = peers
 
+            // Speculatively pre-fetch suggested peers' profiles in the background to achieve instant clicks
+            peers.forEach { peer ->
+                launch {
+                    try {
+                        apiService.searchAuthor(peer.display_name, peer.id)
+                    } catch (e: Exception) {
+                        Log.w("DiscoveryScreen", "Speculative pre-fetch failed for ${peer.display_name}", e)
+                    }
+                }
+            }
+
             val mapToWork: (OpenAlexWork) -> Work = { w ->
                 Work(
                     title = w.title ?: "Untitled Paper",
