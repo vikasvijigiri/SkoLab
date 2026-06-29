@@ -23,7 +23,6 @@ Output:
 
 import argparse
 import json
-import os
 import re
 import sys
 import datetime
@@ -181,19 +180,31 @@ def update_incidents_json(
         json.dump(incidents, f, indent=2)
         f.write("\n")
 
-    print(f"[PASS] incidents.json updated with postmortem_path and review_meeting_at")
+    print("[PASS] incidents.json updated with postmortem_path and review_meeting_at")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Scaffold a SkoLab postmortem document")
+    parser = argparse.ArgumentParser(
+        description="Scaffold a SkoLab postmortem document"
+    )
     parser.add_argument("--id", required=True, help="Incident ID, e.g. inc-2026-003")
     parser.add_argument("--title", required=True, help="Incident title")
     parser.add_argument(
-        "--severity", required=True, choices=["P0", "P1", "P2", "P3"],
-        help="Incident severity"
+        "--severity",
+        required=True,
+        choices=["P0", "P1", "P2", "P3"],
+        help="Incident severity",
     )
-    parser.add_argument("--detected", required=True, help="Detection timestamp ISO8601 UTC, e.g. 2026-06-10T14:00:00Z")
-    parser.add_argument("--resolved", required=True, help="Resolution timestamp ISO8601 UTC, e.g. 2026-06-10T16:30:00Z")
+    parser.add_argument(
+        "--detected",
+        required=True,
+        help="Detection timestamp ISO8601 UTC, e.g. 2026-06-10T14:00:00Z",
+    )
+    parser.add_argument(
+        "--resolved",
+        required=True,
+        help="Resolution timestamp ISO8601 UTC, e.g. 2026-06-10T16:30:00Z",
+    )
     args = parser.parse_args()
 
     print("=" * 60)
@@ -218,7 +229,9 @@ def main() -> None:
     print()
     print(f"Review meeting pre-filled for: {review_date}")
     print("Next steps:")
-    print(f"  1. Fill in the timeline, 5-Whys, impact, and corrective actions in: {output_path.name}")
+    print(
+        f"  1. Fill in the timeline, 5-Whys, impact, and corrective actions in: {output_path.name}"
+    )
     print(f"  2. Schedule the review meeting at the pre-filled date: {review_date}")
     print("  3. Publish lessons to #engineering channel when complete.")
     print("  4. Add lessons to: docs/lessons_learned.md")
