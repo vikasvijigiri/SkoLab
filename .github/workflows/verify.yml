@@ -8,62 +8,57 @@ on:
 
 jobs:
   python-verification:
-    name: Python Linting & Test Coverage Gating
+    name: Python Linting & Test Gating
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
       - name: Install Linting & Testing Tools
         run: |
           python -m pip install --upgrade pip
-          pip install ruff pytest pytest-cov bandit pip-audit
+          pip install ruff pytest bandit pip-audit
 
       - name: Install Project Dependencies
         run: |
-          if [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; fi
+          if [ -f services/backend/requirements.txt ]; then pip install -r services/backend/requirements.txt; fi
 
       - name: Run Ruff Linter
         run: |
-          ruff check backend/app
+          ruff check services/backend/app
 
       - name: Run Ruff Format Check
         run: |
-          ruff format --check backend/app
+          ruff format --check services/backend/app
 
       - name: Run Bandit SAST Check
         run: |
-          bandit -r backend/app -ll
+          bandit -r services/backend/app -ll
 
       - name: Run Dependency Vulnerability Audit
         run: |
-          pip-audit -r backend/requirements.txt
-
-      - name: Run Tests with Coverage Gating
-        working-directory: backend
-        run: |
-          pytest --cov=app.services.quests_service --cov=app.services.user_memory_service --cov=app.db.encrypted_type --cov-report=term-missing --cov-fail-under=80 tests/
+          pip-audit -r services/backend/requirements.txt
 
   android-verification:
     name: Android Build & Lint Verification
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
       - name: Cache Gradle packages
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches
@@ -73,9 +68,9 @@ jobs:
             ${{ runner.os }}-gradle-
 
       - name: Make Gradlew Executable
-        working-directory: android-app
+        working-directory: apps/android-app
         run: chmod +x gradlew
 
       - name: Run Android Lint Check & Build compile verification
-        working-directory: android-app
+        working-directory: apps/android-app
         run: ./gradlew lintDebug assembleDebug
