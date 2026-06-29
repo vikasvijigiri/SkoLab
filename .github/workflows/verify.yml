@@ -73,4 +73,4 @@ jobs:
 
       - name: Run Android Lint Check & Build compile verification
         working-directory: apps/android-app
-        run: ./gradlew lintDebug assembleDebug
+        run: ./gradlew lintDevDebug assembleDevDebug
