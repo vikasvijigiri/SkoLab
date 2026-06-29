@@ -90,18 +90,18 @@ class IndustryAcademicService:
                 f"3. Search Queries: Provide 1-2 distinct search query strings (each 3-5 keywords, no boolean operators like AND/OR, just terms) that can be run on a paper search engine (like OpenAlex) to find highly relevant academic papers for this specific tie-up.\n\n"
                 f"Provide your response in raw JSON format matching this schema:\n"
                 f"{{\n"
-                f"  \"trending\": [\n"
+                f'  "trending": [\n'
                 f"    {{\n"
-                f"      \"title\": \"Title\",\n"
-                f"      \"description\": \"Description\",\n"
-                f"      \"search_queries\": [\"query 1\", \"query 2\"]\n"
+                f'      "title": "Title",\n'
+                f'      "description": "Description",\n'
+                f'      "search_queries": ["query 1", "query 2"]\n'
                 f"    }}\n"
                 f"  ],\n"
-                f"  \"futuristic\": [\n"
+                f'  "futuristic": [\n'
                 f"    {{\n"
-                f"      \"title\": \"Title\",\n"
-                f"      \"description\": \"Description\",\n"
-                f"      \"search_queries\": [\"query 1\", \"query 2\"]\n"
+                f'      "title": "Title",\n'
+                f'      "description": "Description",\n'
+                f'      "search_queries": ["query 1", "query 2"]\n'
                 f"    }}\n"
                 f"  ]\n"
                 f"}}\n"
