@@ -1,4 +1,4 @@
-﻿import os
+import os
 import pytest
 import httpx
 from unittest.mock import patch, MagicMock
@@ -44,8 +44,11 @@ async def test_kill_switch_middleware_bypass_health():
 
 def test_llm_limit_exceeded_cooldown():
     """Verify that is_llm_working checks and respects the limit exceeded state."""
-    # Ensure LLM key is configured for the test context
-    with patch.dict(os.environ, {"GROQ_API": "gsk_valid_key_long_value", "OPENROUTER_API_KEY": ""}):
+    # Ensure LLM key is configured for the test context using a mock settings object
+    mock_settings = MagicMock()
+    mock_settings.configure_mock(groq_api_key="dummy", openrouter_api_key="")
+    
+    with patch("app.services.ai.llm_service.settings", mock_settings):
         set_llm_limit_exceeded(False)
         assert is_llm_working() is True
         

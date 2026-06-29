@@ -9,8 +9,6 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgrespassword
       POSTGRES_DB: skolab
-    ports:
-      - "127.0.0.1:5432:5432"
     networks:
       - private-net
     volumes:
@@ -25,7 +23,7 @@ services:
 
   web:
     build: .
-    container_name: skolab_backend
+    container_name: skolab_python_ai
     restart: always
     ports:
       - "8000:8000"
@@ -44,8 +42,34 @@ services:
         reservations:
           memory: 512m
 
+  gateway:
+    build: ../backend-go
+    container_name: skolab_go_gateway
+    restart: always
+    ports:
+      - "8080:8080"
+    networks:
+      - public-net
+      - private-net
+    environment:
+      - PYTHON_BACKEND_URL=http://web:8000
+    depends_on:
+      - web
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: skolab_uptime_kuma
+    restart: always
+    ports:
+      - "3005:3001"
+    volumes:
+      - uptime_kuma_data:/app/data
+    networks:
+      - public-net
+
 volumes:
   postgres_data:
+  uptime_kuma_data:
 
 networks:
   public-net:

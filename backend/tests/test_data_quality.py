@@ -1,4 +1,4 @@
-﻿import datetime
+import datetime
 import pytest
 import re
 import sys
@@ -28,11 +28,11 @@ def import_hyphenated_module(module_name, filepath):
     spec.loader.exec_module(module)
     return module
 
-consistency_path = os.path.join(project_root, "scripts", "data-consistency-check.py")
+consistency_path = os.path.join(project_root, "scripts", "database", "data-consistency-check.py")
 data_consistency_check = import_hyphenated_module("data_consistency_check", consistency_path)
 run_checks = data_consistency_check.run_checks
 
-cleanup_path = os.path.join(project_root, "scripts", "db-cleanup-retention.py")
+cleanup_path = os.path.join(project_root, "scripts", "database", "db-cleanup-retention.py")
 db_cleanup_retention = import_hyphenated_module("db_cleanup_retention", cleanup_path)
 offload_and_prune = db_cleanup_retention.offload_and_prune
 

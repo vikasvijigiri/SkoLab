@@ -120,8 +120,7 @@ fun PapersScreen(
             // Trending Now (Full List)
             stickyHeader {
                 SectionHeader(
-                    title = "🔥 Trending Now",
-                    onSeeAll = {} // Hide "See all" on this screen
+                    title = "🔥 Trending Now"
                 )
             }
             if (uiState.isLoading && uiState.trendingPapers.isEmpty()) {
@@ -151,8 +150,7 @@ fun PapersScreen(
             if (uiState.continueReading.isNotEmpty()) {
                 stickyHeader {
                     SectionHeader(
-                        title = "📖 Continue Reading",
-                        onSeeAll = {}
+                        title = "📖 Continue Reading"
                     )
                 }
                 item {

@@ -1,330 +1,226 @@
 package com.company.skolab.network
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.os.Build
 import android.util.Log
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
+import kotlin.math.min
+import kotlin.math.pow
 
-/**
- * ServerLocator — discovers the SkoLab backend on the local network automatically
- * using Android's built-in Network Service Discovery (NSD / mDNS).
- *
- * No IP address or port is ever hardcoded here.  The backend advertises itself
- * via zeroconf; this class finds it by matching [AppConfig.MDNS_SERVICE_NAME].
- *
- * Usage:
- *  - Call [start] once (in Application.onCreate) to begin discovery.
- *  - Observe [baseUrl] (a StateFlow<String?>) wherever you need the server URL.
- *    null means "not yet discovered".
- *  - Call [stop] when the app goes away.
- */
 object ServerLocator {
-
     private const val TAG = "ServerLocator"
 
-    // ── Public state ─────────────────────────────────────────────────────────
     private val _baseUrl = MutableStateFlow<String?>(null)
+    private val _isBackendAvailable = MutableStateFlow(false)
 
-    /**
-     * The discovered backend base URL, e.g. "http://192.168.0.19:8000".
-     * Emits null until the backend is found on the network.
-     */
     val baseUrl: StateFlow<String?> = _baseUrl.asStateFlow()
+    val isBackendAvailable: StateFlow<Boolean> = _isBackendAvailable.asStateFlow()
 
-    // ── Internal NSD state ───────────────────────────────────────────────────
     private var nsdManager: NsdManager? = null
     private var discoveryListener: NsdManager.DiscoveryListener? = null
     private var resolveListener: NsdManager.ResolveListener? = null
     private var resolveInProgress = false
-    private var probeThread: Thread? = null
     internal var appContext: Context? = null
+    private var lastFailureReportTime = 0L
 
-    // ── Lifecycle ────────────────────────────────────────────────────────────
+    // Coroutine Scope for local background tasks
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var probeJob: Job? = null
+    
+    // Connectivity
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private var isNetworkSuitable = false
 
-    /** Update baseUrl and persist it to SharedPreferences cache */
     private fun updateBaseUrl(url: String) {
+        if (_baseUrl.value == url) return
         _baseUrl.value = url
+        _isBackendAvailable.value = true
         appContext?.let { ctx ->
             try {
                 val prefs = ctx.getSharedPreferences("server_locator_prefs", Context.MODE_PRIVATE)
                 prefs.edit().putString("last_resolved_url", url).apply()
-                Log.d(TAG, "Saved resolved URL to cache: $url")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to save URL to SharedPreferences", e)
-            }
+            } catch (e: Exception) {}
         }
+        GlobalSocketManager.connect(url)
     }
 
-    /** Begin scanning the LAN for the SkoLab backend service. */
     fun start(context: Context) {
-        if (nsdManager != null) return  // already started
+        if (appContext != null) return // already started
 
         appContext = context.applicationContext
-        
+
         val isEmulator = Build.FINGERPRINT.contains("generic") || Build.MODEL.contains("Emulator")
         if (com.company.skolab.BuildConfig.DEBUG && isEmulator) {
-            _baseUrl.value = "http://10.0.2.2:8000"
-            Log.i(TAG, "Emulator detected. Forcing baseUrl to http://10.0.2.2:8000")
+            updateBaseUrl("http://10.0.2.2:8080")
             return
         }
 
-        nsdManager = appContext?.getSystemService(Context.NSD_SERVICE) as? NsdManager
-
-        // Load cached URL from SharedPreferences as immediate fallback
         try {
             val prefs = context.applicationContext.getSharedPreferences("server_locator_prefs", Context.MODE_PRIVATE)
             val cachedUrl = prefs.getString("last_resolved_url", null)
             if (cachedUrl != null && _baseUrl.value == null) {
                 _baseUrl.value = cachedUrl
-                Log.i(TAG, "Initialized baseUrl from SharedPreferences cache → $cachedUrl")
+                _isBackendAvailable.value = true
+                GlobalSocketManager.connect(cachedUrl)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to read cached URL from SharedPreferences", e)
+        } catch (e: Exception) {}
+
+        setupNetworkCallback(context.applicationContext)
+    }
+
+    private fun setupNetworkCallback(context: Context) {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val request = NetworkRequest.Builder()
+            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+            .addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET)
+            .build()
+
+        networkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                Log.i(TAG, "Suitable local network connected. Starting discovery.")
+                isNetworkSuitable = true
+                startDiscovery()
+            }
+            override fun onLost(network: Network) {
+                Log.w(TAG, "Suitable local network lost. Pausing discovery.")
+                isNetworkSuitable = false
+                stopDiscovery()
+                // Do NOT reset baseUrl immediately, rely on WebSocket dropping to handle actual disconnects
+            }
+        }
+        connectivityManager.registerNetworkCallback(request, networkCallback!!)
+
+        val activeNetwork = connectivityManager.activeNetwork
+        val caps = connectivityManager.getNetworkCapabilities(activeNetwork)
+        if (caps != null && (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))) {
+            isNetworkSuitable = true
+            startDiscovery()
+        }
+    }
+
+    private fun startDiscovery() {
+        if (!isNetworkSuitable || _baseUrl.value != null) return
+
+        appContext?.let { ctx ->
+            if (nsdManager == null) {
+                nsdManager = ctx.getSystemService(Context.NSD_SERVICE) as? NsdManager
+                discoveryListener = buildDiscoveryListener()
+                try {
+                    nsdManager?.discoverServices(AppConfig.MDNS_SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
+                } catch (e: Exception) {
+                    Log.e(TAG, "NsdManager discover failed", e)
+                }
+            }
         }
 
-        discoveryListener = buildDiscoveryListener()
-        nsdManager?.discoverServices(
-            AppConfig.MDNS_SERVICE_TYPE,
-            NsdManager.PROTOCOL_DNS_SD,
-            discoveryListener
-        )
-        Log.i(TAG, "Service discovery started for '${AppConfig.MDNS_SERVICE_NAME}'")
-
-        // Start background probing as fallback for emulator/local testing when mDNS is unavailable
-        probeThread = Thread {
+        probeJob?.cancel()
+        probeJob = scope.launch {
             val candidates = mutableListOf<String>()
             appContext?.let { ctx ->
                 try {
-                    val prefs = ctx.getSharedPreferences("server_locator_prefs", Context.MODE_PRIVATE)
-                    prefs.getString("last_resolved_url", null)?.let {
-                        candidates.add(it)
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to read cached URL in probe thread: ${e.message}")
-                }
+                    ctx.getSharedPreferences("server_locator_prefs", Context.MODE_PRIVATE)
+                        .getString("last_resolved_url", null)?.let { candidates.add(it) }
+                } catch (e: Exception) {}
             }
-            if (com.company.skolab.BuildConfig.DEBUG && !isEmulator) {
-                // Prioritize local debugging address for physical devices
+            if (com.company.skolab.BuildConfig.DEBUG) {
                 candidates.add("http://127.0.0.1:8000")
             }
             candidates.addAll(listOf(
-                "http://10.0.2.2:8000",
-                "http://127.0.0.1:8000",
-                "http://10.0.2.2:8001",
-                "http://127.0.0.1:8001",
-                "http://10.0.2.2:8002",
-                "http://127.0.0.1:8002"
+                "http://10.0.2.2:8080", "http://127.0.0.1:8080",
+                "http://10.0.2.2:8000", "http://127.0.0.1:8000"
             ))
             val uniqueCandidates = candidates.distinct()
 
-            while (!Thread.currentThread().isInterrupted && nsdManager != null && _baseUrl.value == null) {
+            var attempts = 0
+            while (isActive && _baseUrl.value == null) {
                 for (url in uniqueCandidates) {
-                    if (_baseUrl.value != null || Thread.currentThread().isInterrupted) break
+                    if (!isActive || _baseUrl.value != null) break
                     if (probeUrl(url)) {
-                        Log.i(TAG, "Backend resolved via probe fallback → $url")
                         updateBaseUrl(url)
                         break
                     }
                 }
-                try {
-                    Thread.sleep(4000)
-                } catch (e: InterruptedException) {
-                    break
+
+                attempts++
+                // Exponential backoff: 2s, 4s, 8s, 16s, 32s
+                val delayMs = min(32000.0, 2000.0 * 2.0.pow(attempts - 1)).toLong()
+
+                // If we reach 6 attempts (approx 1 min), stop mDNS to save battery
+                if (attempts >= 6) {
+                    Log.w(TAG, "Max probe attempts reached. Stopping mDNS.")
+                    stopMdns()
                 }
+
+                delay(delayMs)
             }
-        }.apply {
-            isDaemon = true
-            start()
         }
     }
 
-    /** Stop discovery and release resources (call in Application.onTerminate or similar). */
-    fun stop() {
+    private fun stopMdns() {
         try {
             discoveryListener?.let { nsdManager?.stopServiceDiscovery(it) }
-        } catch (e: Exception) {
-            Log.w(TAG, "stopServiceDiscovery: ${e.message}")
-        }
-        try {
-            probeThread?.interrupt()
-        } catch (e: Exception) {
-            Log.w(TAG, "interruptProbeThread: ${e.message}")
-        }
+        } catch (e: Exception) {}
         nsdManager = null
         discoveryListener = null
-        probeThread = null
-        appContext = null
-        Log.i(TAG, "Service discovery stopped")
     }
 
-    /**
-     * Reports that a network request to the given URL failed.
-     * If this matches the current baseUrl, we reset it to null to trigger rediscovery.
-     */
+    private fun stopDiscovery() {
+        stopMdns()
+        probeJob?.cancel()
+        probeJob = null
+    }
+
+    fun stop() {
+        stopDiscovery()
+        appContext?.let { ctx ->
+            val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            networkCallback?.let { cb -> cm.unregisterNetworkCallback(cb) }
+        }
+        networkCallback = null
+        appContext = null
+        GlobalSocketManager.disconnect()
+        Log.i(TAG, "Service discovery stopped entirely")
+    }
+
     fun reportFailure(url: String) {
         val isEmulator = Build.FINGERPRINT.contains("generic") || Build.MODEL.contains("Emulator")
-        if (com.company.skolab.BuildConfig.DEBUG && isEmulator) {
-            Log.d(TAG, "Failure reported in debug mode for emulator, keeping forced debug URL active.")
-            return
-        }
+        if (com.company.skolab.BuildConfig.DEBUG && isEmulator) return
+
         val current = _baseUrl.value ?: return
         if (url.startsWith(current) || current.startsWith(url)) {
             Log.w(TAG, "Reported failure for active backend URL: $url. Resetting baseUrl to null.")
+            _isBackendAvailable.value = false
             _baseUrl.value = null
-            // Also invalidate SharedPreferences cache
+            GlobalSocketManager.disconnect()
+
             appContext?.let { ctx ->
                 try {
                     val prefs = ctx.getSharedPreferences("server_locator_prefs", Context.MODE_PRIVATE)
                     prefs.edit().remove("last_resolved_url").apply()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to clear SharedPreferences cache", e)
-                }
-                
-                // Restart discovery to scan again
-                Log.i(TAG, "Restarting server discovery...")
-                stop()
-                start(ctx)
-            }
-        }
-    }
+                } catch (e: Exception) {}
 
-    // ── Listeners ────────────────────────────────────────────────────────────
-
-    private fun buildDiscoveryListener() = object : NsdManager.DiscoveryListener {
-
-        override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
-            Log.e(TAG, "Discovery start failed: error $errorCode")
-        }
-
-        override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
-            Log.w(TAG, "Discovery stop failed: error $errorCode")
-        }
-
-        override fun onDiscoveryStarted(serviceType: String) {
-            Log.d(TAG, "Discovery started for $serviceType")
-        }
-
-        override fun onDiscoveryStopped(serviceType: String) {
-            Log.d(TAG, "Discovery stopped for $serviceType")
-        }
-
-        override fun onServiceFound(service: NsdServiceInfo) {
-            if (service.serviceName == AppConfig.MDNS_SERVICE_NAME) {
-                Log.i(TAG, "Backend found: ${service.serviceName} — resolving…")
-                resolveService(service)
-            }
-        }
-
-        override fun onServiceLost(service: NsdServiceInfo) {
-            if (service.serviceName == AppConfig.MDNS_SERVICE_NAME) {
-                Log.w(TAG, "Backend service lost (ignored to keep fallback active)")
-            }
-        }
-    }
-
-    @Suppress("DEPRECATION")
-    private fun resolveService(service: NsdServiceInfo) {
-        if (resolveInProgress) {
-            Log.d(TAG, "Resolve already in progress, queuing…")
-            return
-        }
-        resolveInProgress = true
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            // API 34+ — modern, non-deprecated path
-            nsdManager?.registerServiceInfoCallback(
-                service,
-                Executors.newSingleThreadExecutor(),
-                object : NsdManager.ServiceInfoCallback {
-                    override fun onServiceInfoCallbackRegistrationFailed(errorCode: Int) {
-                        resolveInProgress = false
-                        Log.e(TAG, "ServiceInfoCallback registration failed: $errorCode")
-                    }
-
-                    override fun onServiceUpdated(serviceInfo: NsdServiceInfo) {
-                        val hostAddresses = serviceInfo.hostAddresses
-                        val port = serviceInfo.port
-                        val callbackInstance = this
-                        Executors.newSingleThreadExecutor().execute {
-                            var resolvedUrl: String? = null
-                            for (addr in hostAddresses) {
-                                val host = addr.hostAddress ?: continue
-                                val url = "http://$host:$port"
-                                Log.d(TAG, "Probing resolved address: $url")
-                                if (probeUrl(url)) {
-                                    resolvedUrl = url
-                                    break
-                                }
-                            }
-                            resolveInProgress = false
-                            if (resolvedUrl != null) {
-                                Log.i(TAG, "Backend resolved and verified → $resolvedUrl")
-                                updateBaseUrl(resolvedUrl)
-                                try {
-                                    nsdManager?.unregisterServiceInfoCallback(callbackInstance)
-                                } catch (e: Exception) {
-                                    Log.w(TAG, "Failed to unregister service info callback: ${e.message}")
-                                }
-                            } else {
-                                Log.w(TAG, "None of the resolved addresses are reachable")
-                            }
-                        }
-                    }
-
-                    override fun onServiceLost() {
-                        Log.w(TAG, "Backend service lost (callback, ignored to keep fallback active)")
-                    }
-
-                    override fun onServiceInfoCallbackUnregistered() {
-                        Log.d(TAG, "ServiceInfoCallback unregistered")
-                    }
-                }
-            )
-        } else {
-            // API < 34 — legacy path (still works, just deprecated on newer APIs)
-            resolveListener = object : NsdManager.ResolveListener {
-                override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-                    resolveInProgress = false
-                    Log.e(TAG, "Resolve failed: error $errorCode")
-                }
-
-                override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
-                    resolveInProgress = false
-                    val port = serviceInfo.port
-                    val hostAddresses = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                        serviceInfo.hostAddresses
-                    } else {
-                        @Suppress("DEPRECATION")
-                        listOfNotNull(serviceInfo.host)
-                    }
-                    Executors.newSingleThreadExecutor().execute {
-                        var resolvedUrl: String? = null
-                        for (addr in hostAddresses) {
-                            val host = addr.hostAddress ?: continue
-                            val url = "http://$host:$port"
-                            Log.d(TAG, "Probing resolved address (legacy): $url")
-                            if (probeUrl(url)) {
-                                resolvedUrl = url
-                                break
-                            }
-                        }
-                        if (resolvedUrl != null) {
-                            Log.i(TAG, "Backend resolved and verified (legacy) → $resolvedUrl")
-                            updateBaseUrl(resolvedUrl)
-                        } else {
-                            Log.w(TAG, "None of the legacy resolved addresses are reachable")
-                        }
+                val now = System.currentTimeMillis()
+                if (now - lastFailureReportTime > 15_000) {
+                    lastFailureReportTime = now
+                    if (isNetworkSuitable) {
+                        Log.i(TAG, "Restarting server discovery...")
+                        stopDiscovery()
+                        startDiscovery()
                     }
                 }
             }
-            nsdManager?.resolveService(service, resolveListener)
         }
     }
 
@@ -336,18 +232,98 @@ object ServerLocator {
             connection.requestMethod = "GET"
             connection.connectTimeout = 3000
             connection.readTimeout = 3000
-            val responseCode = connection.responseCode
-            if (responseCode == 200) {
-                val text = connection.inputStream.bufferedReader().use { it.readText() }
-                val lowerText = text.lowercase()
-                lowerText.contains("api") || lowerText.contains("skolab") || lowerText.contains("entro")
-            } else {
-                false
-            }
+            connection.responseCode in 200..299
         } catch (e: Exception) {
             false
         } finally {
             connection?.disconnect()
+        }
+    }
+
+    private fun buildDiscoveryListener() = object : NsdManager.DiscoveryListener {
+        override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
+            Log.e(TAG, "Discovery start failed: error $errorCode")
+        }
+        override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
+            Log.w(TAG, "Discovery stop failed: error $errorCode")
+        }
+        override fun onDiscoveryStarted(serviceType: String) {}
+        override fun onDiscoveryStopped(serviceType: String) {}
+        override fun onServiceFound(service: NsdServiceInfo) {
+            if (service.serviceName == AppConfig.MDNS_SERVICE_NAME) {
+                resolveService(service)
+            }
+        }
+        override fun onServiceLost(service: NsdServiceInfo) {}
+    }
+
+    @Suppress("DEPRECATION")
+    private fun resolveService(service: NsdServiceInfo) {
+        if (resolveInProgress) return
+        resolveInProgress = true
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            nsdManager?.registerServiceInfoCallback(
+                service,
+                Executors.newSingleThreadExecutor(),
+                object : NsdManager.ServiceInfoCallback {
+                    override fun onServiceInfoCallbackRegistrationFailed(errorCode: Int) {
+                        resolveInProgress = false
+                    }
+                    override fun onServiceUpdated(serviceInfo: NsdServiceInfo) {
+                        val hostAddresses = serviceInfo.hostAddresses
+                        val port = serviceInfo.port
+                        val callbackInstance = this
+                        Executors.newSingleThreadExecutor().execute {
+                            var resolvedUrl: String? = null
+                            for (addr in hostAddresses) {
+                                val host = addr.hostAddress ?: continue
+                                val url = "http://$host:$port"
+                                if (probeUrl(url)) {
+                                    resolvedUrl = url
+                                    break
+                                }
+                            }
+                            resolveInProgress = false
+                            if (resolvedUrl != null) {
+                                updateBaseUrl(resolvedUrl)
+                                try {
+                                    nsdManager?.unregisterServiceInfoCallback(callbackInstance)
+                                } catch (e: Exception) {}
+                            }
+                        }
+                    }
+                    override fun onServiceLost() {}
+                    override fun onServiceInfoCallbackUnregistered() {}
+                }
+            )
+        } else {
+            resolveListener = object : NsdManager.ResolveListener {
+                override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+                    resolveInProgress = false
+                }
+                override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
+                    resolveInProgress = false
+                    val port = serviceInfo.port
+                    @Suppress("DEPRECATION")
+                    val hostAddresses = listOfNotNull(serviceInfo.host)
+                    Executors.newSingleThreadExecutor().execute {
+                        var resolvedUrl: String? = null
+                        for (addr in hostAddresses) {
+                            val host = addr.hostAddress ?: continue
+                            val url = "http://$host:$port"
+                            if (probeUrl(url)) {
+                                resolvedUrl = url
+                                break
+                            }
+                        }
+                        if (resolvedUrl != null) {
+                            updateBaseUrl(resolvedUrl)
+                        }
+                    }
+                }
+            }
+            nsdManager?.resolveService(service, resolveListener)
         }
     }
 }

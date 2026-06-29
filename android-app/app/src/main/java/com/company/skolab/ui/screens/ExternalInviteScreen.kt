@@ -57,7 +57,7 @@ fun ExternalInviteScreen(
             isResolvingEmail = true
             withContext(Dispatchers.IO) {
                 try {
-                    val base = ServerLocator.baseUrl.value ?: "http://10.0.2.2:8000"
+                    val base = ServerLocator.baseUrl.value ?: "http://10.0.2.2:8080"
                     val url = "$base/api/v1/authors/resolve_email?name=" +
                               android.net.Uri.encode(collaboratorName)
                     val client = okhttp3.OkHttpClient.Builder()
