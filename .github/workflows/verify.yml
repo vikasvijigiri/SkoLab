@@ -42,7 +42,7 @@ jobs:
 
       - name: Run Dependency Vulnerability Audit
         run: |
-          pip-audit
+          pip-audit --local
 
   android-verification:
     name: Android Build & Lint Verification
