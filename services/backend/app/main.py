@@ -319,13 +319,13 @@ async def lifespan(app: FastAPI):
                 type_=settings.mdns_service_type,
                 name=settings.mdns_service_name,
                 addresses=addresses,
-                port=settings.port,
+                port=settings.mdns_port,
                 properties={"path": "/", "version": "1"},
             )
             _zeroconf = AsyncZeroconf()
             await _zeroconf.async_register_service(_mdns_info, allow_name_change=True)
             print(
-                f"[mDNS] '{settings.mdns_service_name}' registered at {ips}:{settings.port}"
+                f"[mDNS] '{settings.mdns_service_name}' registered at {ips}:{settings.mdns_port}"
             )
         except Exception as exc:
             print(f"[mDNS] Registration failed: {exc}")
@@ -891,8 +891,9 @@ app.mount(
     name="downloads",
 )
 
-# Include aggregate router under /api/v1 (for versioned compatibility)
+# Include aggregate router under /api/v1 and at root (for client URL compatibility and legacy fallbacks)
 app.include_router(api_router, prefix="/api/v1")
+app.include_router(api_router)
 
 
 @app.get("/")

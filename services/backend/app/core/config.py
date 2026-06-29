@@ -79,6 +79,9 @@ class Settings:
     mdns_service_name: str = field(
         default_factory=lambda: os.environ.get("MDNS_SERVICE_NAME", "SkoLabBackend")
     )
+    mdns_port: int = field(
+        default_factory=lambda: int(os.environ.get("MDNS_PORT", "8080"))
+    )
 
     # ── External API keys ────────────────────────────────────────────────────
     groq_api_key: str = field(default_factory=lambda: os.environ.get("GROQ_API", ""))

@@ -280,7 +280,7 @@ fun DiscoveryDashboard(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        items(collaboratorsArticles, key = { it.id ?: it.hashCode() }) { work ->
+                        items(collaboratorsArticles, key = { if (!it.id.isNullOrBlank()) it.id else "work_${it.title.orEmpty()}_${it.year ?: 0}_${it.hashCode()}" }) { work ->
                             DashboardFriendArticleCard(
                                 work = work,
                                 onOpenPaper = {
@@ -310,7 +310,7 @@ fun DiscoveryDashboard(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        items(suggestedPeersArticles, key = { it.id ?: it.hashCode() }) { work ->
+                        items(suggestedPeersArticles, key = { if (!it.id.isNullOrBlank()) it.id else "work_${it.title.orEmpty()}_${it.year ?: 0}_${it.hashCode()}" }) { work ->
                             DashboardFriendArticleCard(
                                 work = work,
                                 onOpenPaper = {
@@ -340,7 +340,7 @@ fun DiscoveryDashboard(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        items(trendingPapers, key = { it.id ?: it.hashCode() }) { work ->
+                        items(trendingPapers, key = { if (!it.id.isNullOrBlank()) it.id else "work_${it.title.orEmpty()}_${it.year ?: 0}_${it.hashCode()}" }) { work ->
                             DashboardFriendArticleCard(
                                 work = work,
                                 onOpenPaper = {
