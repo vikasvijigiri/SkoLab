@@ -86,6 +86,19 @@ fun CreateProjectScreen(
     var allDeviceContacts by remember { mutableStateOf<List<DeviceContact>>(emptyList()) }
     var syncTrigger by remember { mutableStateOf(0) }
 
+    val inlineContacts = remember(memberEmailInput, allDeviceContacts) {
+        val q = memberEmailInput.lowercase().trim()
+        if (q.isEmpty()) {
+            allDeviceContacts
+        } else {
+            allDeviceContacts.filter {
+                it.name.lowercase().contains(q) ||
+                it.email.lowercase().contains(q) ||
+                it.phone.contains(q)
+            }
+        }
+    }
+
     val onAddPhoneMember: () -> Unit = {
         val phone = memberPhoneInput.trim()
         if (phone.isNotBlank()) {
@@ -482,76 +495,45 @@ fun CreateProjectScreen(
             }
         }
     ) { padding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             // Project Identity
-            OutlinedTextField(
-                value = newProjName,
-                onValueChange = { 
-                    newProjName = it 
-                    if (it.isNotBlank()) nameError = null
-                },
-                label = { Text("Co-Lab Name", color = TextMuted) },
-                isError = nameError != null,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary,
-                    focusedBorderColor = AccentTeal,
-                    unfocusedBorderColor = BorderLight,
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    errorBorderColor = SkoLabWarning
-                ),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                singleLine = true
-            )
-            
-            OutlinedTextField(
-                value = newProjDesc,
-                onValueChange = { newProjDesc = it },
-                label = { Text("Objective (Optional)", color = TextMuted) },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary,
-                    focusedBorderColor = AccentTeal,
-                    unfocusedBorderColor = BorderLight,
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent
-                ),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                singleLine = false,
-                maxLines = 3
-            )
-
-            // Members Input
-            Text(
-                "Collaborators",
-                color = TextSecondary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(top = 8.dp)
-            )
-
-            // Unified Collaborator Row (Email or Phone)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            item {
                 OutlinedTextField(
-                    value = memberEmailInput,
-                    onValueChange = { memberEmailInput = it },
-                    placeholder = { Text("Search, email, or phone number", color = TextMuted) },
+                    value = newProjName,
+                    onValueChange = { 
+                        newProjName = it 
+                        if (it.isNotBlank()) nameError = null
+                    },
+                    label = { Text("Co-Lab Name", color = TextMuted) },
+                    isError = nameError != null,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        focusedBorderColor = AccentTeal,
+                        unfocusedBorderColor = BorderLight,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        errorBorderColor = SkoLabWarning
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+            }
+            
+            item {
+                OutlinedTextField(
+                    value = newProjDesc,
+                    onValueChange = { newProjDesc = it },
+                    label = { Text("Objective (Optional)", color = TextMuted) },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = TextPrimary,
                         unfocusedTextColor = TextPrimary,
@@ -560,134 +542,144 @@ fun CreateProjectScreen(
                         focusedContainerColor = Color.Transparent,
                         unfocusedContainerColor = Color.Transparent
                     ),
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Text,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onDone = { onAddMember() }
-                    )
+                    singleLine = false,
+                    maxLines = 3
                 )
-                IconButton(
-                    onClick = onAddMember,
-                    modifier = Modifier
-                        .background(BgElevated, RoundedCornerShape(12.dp))
-                        .size(56.dp),
-                    enabled = !isSearchingMember
+            }
+
+            // Members Input Header
+            item {
+                Text(
+                    "Collaborators",
+                    color = TextSecondary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+
+            // Unified Collaborator Row (Email or Phone)
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (isSearchingMember) {
-                        CircularProgressIndicator(color = AccentTeal, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Default.PersonAdd, "Add Collaborator", tint = AccentTeal)
+                    OutlinedTextField(
+                        value = memberEmailInput,
+                        onValueChange = { memberEmailInput = it },
+                        placeholder = { Text("Search, email, or phone number", color = TextMuted) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            focusedBorderColor = AccentTeal,
+                            unfocusedBorderColor = BorderLight,
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent
+                        ),
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Text,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = { onAddMember() }
+                        )
+                    )
+                    IconButton(
+                        onClick = onAddMember,
+                        modifier = Modifier
+                            .background(BgElevated, RoundedCornerShape(12.dp))
+                            .size(56.dp),
+                        enabled = !isSearchingMember
+                    ) {
+                        if (isSearchingMember) {
+                            CircularProgressIndicator(color = AccentTeal, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Default.PersonAdd, "Add Collaborator", tint = AccentTeal)
+                        }
                     }
                 }
             }
 
             // Autocomplete dropdown matching Gmail contacts & similar registered researchers
-            AnimatedVisibility(visible = filteredSuggestions.isNotEmpty()) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    color = BgElevated,
-                    border = BorderStroke(1.dp, BorderLight),
-                    shadowElevation = 4.dp
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+            item {
+                AnimatedVisibility(visible = filteredSuggestions.isNotEmpty()) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        color = BgElevated,
+                        border = BorderStroke(1.dp, BorderLight),
+                        shadowElevation = 4.dp
                     ) {
-                        filteredSuggestions.take(5).forEach { suggestion ->
-                            val descText = if (suggestion.isRegistered) {
-                                "Registered • ${suggestion.researchFocus}"
-                            } else {
-                                "Gmail Contact"
-                            }
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        if (membersList.none { it.email == suggestion.email }) {
-                                            membersList = membersList + CreateProjectMember(
-                                                uid = if (suggestion.isRegistered) suggestion.uid else "pending_${System.currentTimeMillis()}",
-                                                name = suggestion.name,
-                                                email = suggestion.email
-                                            )
-                                            // Log invitation to backend recommendation engine in background
-                                            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                                try {
-                                                    val base = com.company.skolab.network.ServerLocator.baseUrl.value ?: "http://10.0.2.2:8080"
-                                                    val url = "$base/api/v1/recommendations/peers/invite"
-                                                    val client = OkHttpClient()
-                                                    val jsonBody = JSONObject().apply {
-                                                        put("user_id", currentUserId)
-                                                        put("peer_email", suggestion.email)
-                                                        if (suggestion.isRegistered) {
-                                                            put("peer_uid", suggestion.uid)
-                                                        }
-                                                    }
-                                                    val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
-                                                    val requestBody = jsonBody.toString().toRequestBody(mediaType)
-                                                    val request = Request.Builder().url(url).post(requestBody).build()
-                                                    client.newCall(request).execute().use { /* ignore */ }
-                                                } catch (e: Exception) {
-                                                    e.printStackTrace()
-                                                }
-                                            }
-                                        } else {
-                                            Toast.makeText(context, "User already added to the list", Toast.LENGTH_SHORT).show()
-                                        }
-                                        memberEmailInput = ""
-                                    }
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (suggestion.isRegistered) Icons.Default.PersonAdd else Icons.Default.Person,
-                                    contentDescription = "Select Suggestion",
-                                    tint = AccentTeal,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Column {
-                                    val displayName = if (suggestion.isRegistered && suggestion.username.isNotEmpty()) {
-                                        "${suggestion.name} (@${suggestion.username})"
-                                    } else {
-                                        suggestion.name
-                                    }
-                                    Text(displayName, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                    Text("${suggestion.email} • $descText", color = TextMuted, fontSize = 11.sp)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            AnimatedVisibility(visible = membersList.isNotEmpty()) {
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    membersList.forEach { member ->
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = BgElevated,
-                            border = BorderStroke(1.dp, BorderLight)
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)
-                            ) {
-                                Text(member.name, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                                Spacer(modifier = Modifier.width(4.dp))
-                                IconButton(
-                                    onClick = { membersList = membersList.filter { it.uid != member.uid } },
-                                    modifier = Modifier.size(20.dp)
+                            filteredSuggestions.take(5).forEach { suggestion ->
+                                val descText = if (suggestion.isRegistered) {
+                                    "Registered • ${suggestion.researchFocus}"
+                                } else {
+                                    "Gmail Contact"
+                                }
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            if (membersList.none { it.email == suggestion.email }) {
+                                                membersList = membersList + CreateProjectMember(
+                                                    uid = if (suggestion.isRegistered) suggestion.uid else "pending_${System.currentTimeMillis()}",
+                                                    name = suggestion.name,
+                                                    email = suggestion.email
+                                                )
+                                                // Log invitation to backend recommendation engine in background
+                                                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                                    try {
+                                                        val base = com.company.skolab.network.ServerLocator.baseUrl.value ?: "http://10.0.2.2:8080"
+                                                        val url = "$base/api/v1/recommendations/peers/invite"
+                                                        val client = OkHttpClient()
+                                                        val jsonBody = JSONObject().apply {
+                                                            put("user_id", currentUserId)
+                                                            put("peer_email", suggestion.email)
+                                                            if (suggestion.isRegistered) {
+                                                                put("peer_uid", suggestion.uid)
+                                                            }
+                                                        }
+                                                        val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
+                                                        val requestBody = jsonBody.toString().toRequestBody(mediaType)
+                                                        val request = Request.Builder().url(url).post(requestBody).build()
+                                                        client.newCall(request).execute().use { /* ignore */ }
+                                                    } catch (e: Exception) {
+                                                        e.printStackTrace()
+                                                    }
+                                                }
+                                            } else {
+                                                Toast.makeText(context, "User already added to the list", Toast.LENGTH_SHORT).show()
+                                            }
+                                            memberEmailInput = ""
+                                        }
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    Icon(Icons.Default.Close, "Remove", tint = TextMuted, modifier = Modifier.size(14.dp))
+                                    Icon(
+                                        imageVector = if (suggestion.isRegistered) Icons.Default.PersonAdd else Icons.Default.Person,
+                                        contentDescription = "Select Suggestion",
+                                        tint = AccentTeal,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Column {
+                                        val displayName = if (suggestion.isRegistered && suggestion.username.isNotEmpty()) {
+                                            "${suggestion.name} (@${suggestion.username})"
+                                        } else {
+                                            suggestion.name
+                                        }
+                                        Text(displayName, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                        Text("${suggestion.email} • $descText", color = TextMuted, fontSize = 11.sp)
+                                    }
                                 }
                             }
                         }
@@ -695,124 +687,145 @@ fun CreateProjectScreen(
                 }
             }
 
-            val inlineContacts = remember(memberEmailInput, allDeviceContacts) {
-                val q = memberEmailInput.lowercase().trim()
-                if (q.isEmpty()) {
-                    allDeviceContacts
-                } else {
-                    allDeviceContacts.filter {
-                        it.name.lowercase().contains(q) ||
-                        it.email.lowercase().contains(q) ||
-                        it.phone.contains(q)
+            // Chips List of Selected Members
+            item {
+                AnimatedVisibility(visible = membersList.isNotEmpty()) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        membersList.forEach { member ->
+                            Surface(
+                                shape = RoundedCornerShape(20.dp),
+                                color = BgElevated,
+                                border = BorderStroke(1.dp, BorderLight)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)
+                                ) {
+                                    Text(member.name, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    IconButton(
+                                        onClick = { membersList = membersList.filter { it.uid != member.uid } },
+                                        modifier = Modifier.size(20.dp)
+                                    ) {
+                                        Icon(Icons.Default.Close, "Remove", tint = TextMuted, modifier = Modifier.size(14.dp))
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Contacts",
-                    fontFamily = SyneFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                    fontSize = 16.sp
-                )
-                IconButton(
-                    onClick = { syncTrigger++ },
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Sync Contacts",
-                        tint = AccentTeal,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-
-            if (inlineContacts.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
-                    contentAlignment = Alignment.Center
+            // Contacts Header Row
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (hasContactsPermission) "No contacts found" else "Contacts permission not granted",
-                        color = TextMuted,
-                        fontSize = 14.sp
+                        text = "Contacts",
+                        fontFamily = SyneFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary,
+                        fontSize = 16.sp
                     )
+                    IconButton(
+                        onClick = { syncTrigger++ },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Sync Contacts",
+                            tint = AccentTeal,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+
+            // Inline Contacts list (Unlimited, performance backed by LazyColumn)
+            if (inlineContacts.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (hasContactsPermission) "No contacts found" else "Contacts permission not granted",
+                            color = TextMuted,
+                            fontSize = 14.sp
+                        )
+                    }
                 }
             } else {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    inlineContacts.take(20).forEach { contact ->
+                items(inlineContacts) { contact ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(BgElevated, RoundedCornerShape(12.dp))
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(BgElevated, RoundedCornerShape(12.dp))
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            modifier = Modifier.weight(1f),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Icon(Icons.Default.Person, null, tint = AccentTeal, modifier = Modifier.size(20.dp))
-                                Column {
-                                    Text(contact.name, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        if (contact.email.isNotEmpty()) {
-                                            Text("✉️ ${contact.email}", color = TextMuted, fontSize = 11.sp)
-                                        }
-                                        if (contact.phone.isNotEmpty()) {
-                                            Text("📱 ${contact.phone}", color = TextMuted, fontSize = 11.sp)
-                                        }
+                            Icon(Icons.Default.Person, null, tint = AccentTeal, modifier = Modifier.size(20.dp))
+                            Column {
+                                Text(contact.name, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    if (contact.email.isNotEmpty()) {
+                                        Text("✉️ ${contact.email}", color = TextMuted, fontSize = 11.sp)
+                                    }
+                                    if (contact.phone.isNotEmpty()) {
+                                        Text("📱 ${contact.phone}", color = TextMuted, fontSize = 11.sp)
                                     }
                                 }
                             }
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                if (contact.email.isNotEmpty()) {
-                                    IconButton(
-                                        onClick = {
-                                            if (membersList.none { it.email == contact.email }) {
-                                                membersList = membersList + CreateProjectMember(
-                                                    uid = "pending_${System.currentTimeMillis()}",
-                                                    name = contact.name,
-                                                    email = contact.email
-                                                )
-                                            } else {
-                                                Toast.makeText(context, "Email already added", Toast.LENGTH_SHORT).show()
-                                            }
-                                        },
-                                        modifier = Modifier.size(36.dp).background(AccentTeal.copy(alpha = 0.1f), CircleShape)
-                                    ) {
-                                        Icon(Icons.Default.Email, "Add Email", tint = AccentTeal, modifier = Modifier.size(16.dp))
-                                    }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            if (contact.email.isNotEmpty()) {
+                                IconButton(
+                                    onClick = {
+                                        if (membersList.none { it.email == contact.email }) {
+                                            membersList = membersList + CreateProjectMember(
+                                                uid = "pending_${System.currentTimeMillis()}",
+                                                name = contact.name,
+                                                email = contact.email
+                                            )
+                                        } else {
+                                            Toast.makeText(context, "Email already added", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    modifier = Modifier.size(36.dp).background(AccentTeal.copy(alpha = 0.1f), CircleShape)
+                                ) {
+                                    Icon(Icons.Default.Email, "Add Email", tint = AccentTeal, modifier = Modifier.size(16.dp))
                                 }
-                                if (contact.phone.isNotEmpty()) {
-                                    IconButton(
-                                        onClick = {
-                                            if (membersList.none { it.phone == contact.phone }) {
-                                                membersList = membersList + CreateProjectMember(
-                                                    uid = "phone_${System.currentTimeMillis()}",
-                                                    name = contact.name,
-                                                    email = "",
-                                                    phone = contact.phone
-                                                )
-                                            } else {
-                                                Toast.makeText(context, "Phone already added", Toast.LENGTH_SHORT).show()
-                                            }
-                                        },
-                                        modifier = Modifier.size(36.dp).background(AccentTeal.copy(alpha = 0.1f), CircleShape)
-                                    ) {
-                                        Icon(Icons.Default.Phone, "Add Phone", tint = AccentTeal, modifier = Modifier.size(16.dp))
-                                    }
+                            }
+                            if (contact.phone.isNotEmpty()) {
+                                IconButton(
+                                    onClick = {
+                                        if (membersList.none { it.phone == contact.phone }) {
+                                            membersList = membersList + CreateProjectMember(
+                                                uid = "phone_${System.currentTimeMillis()}",
+                                                name = contact.name,
+                                                email = "",
+                                                phone = contact.phone
+                                            )
+                                        } else {
+                                            Toast.makeText(context, "Phone already added", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    modifier = Modifier.size(36.dp).background(AccentTeal.copy(alpha = 0.1f), CircleShape)
+                                ) {
+                                    Icon(Icons.Default.Phone, "Add Phone", tint = AccentTeal, modifier = Modifier.size(16.dp))
                                 }
                             }
                         }
@@ -820,7 +833,9 @@ fun CreateProjectScreen(
                 }
             }
             
-            Spacer(modifier = Modifier.height(100.dp)) // padding for FAB
+            item {
+                Spacer(modifier = Modifier.height(100.dp)) // padding for FAB
+            }
         }
     }
 }
