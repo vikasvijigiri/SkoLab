@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -83,7 +84,7 @@ fun CreateProjectScreen(
     var isSaving by remember { mutableStateOf(false) }
 
     var allDeviceContacts by remember { mutableStateOf<List<DeviceContact>>(emptyList()) }
-    var showContactsDialog by remember { mutableStateOf(false) }
+    var syncTrigger by remember { mutableStateOf(0) }
 
     val onAddPhoneMember: () -> Unit = {
         val phone = memberPhoneInput.trim()
@@ -126,7 +127,7 @@ fun CreateProjectScreen(
         }
     }
 
-    LaunchedEffect(hasContactsPermission) {
+    LaunchedEffect(hasContactsPermission, syncTrigger) {
         if (hasContactsPermission) {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 val tempMap = mutableMapOf<String, DeviceContact>()
@@ -328,57 +329,73 @@ fun CreateProjectScreen(
     }
 
     val onAddMember: () -> Unit = {
-        val email = memberEmailInput.trim()
-        if (email.isNotBlank() && !isSearchingMember) {
-            isSearchingMember = true
-            db.collection("researchers")
-                .whereEqualTo("email", email)
-                .get()
-                .addOnSuccessListener { querySnapshot ->
-                    isSearchingMember = false
-                    val doc = querySnapshot.documents.firstOrNull()
-                    if (doc != null) {
-                        val researcher = doc.toObject(SkoLabUser::class.java)
-                        if (researcher != null) {
-                            if (researcher.uid == currentUserId) {
-                                Toast.makeText(context, "You are automatically added as the owner.", Toast.LENGTH_SHORT).show()
-                            } else if (membersList.none { it.email == researcher.email }) {
-                                membersList = membersList + CreateProjectMember(
-                                    uid = researcher.uid,
-                                    name = researcher.name,
-                                    email = researcher.email
-                                )
-                                memberEmailInput = ""
+        val input = memberEmailInput.trim()
+        if (input.isNotBlank()) {
+            if (input.contains("@")) {
+                if (!isSearchingMember) {
+                    isSearchingMember = true
+                    db.collection("researchers")
+                        .whereEqualTo("email", input)
+                        .get()
+                        .addOnSuccessListener { querySnapshot ->
+                            isSearchingMember = false
+                            val doc = querySnapshot.documents.firstOrNull()
+                            if (doc != null) {
+                                val researcher = doc.toObject(SkoLabUser::class.java)
+                                if (researcher != null) {
+                                    if (researcher.uid == currentUserId) {
+                                        Toast.makeText(context, "You are automatically added as the owner.", Toast.LENGTH_SHORT).show()
+                                    } else if (membersList.none { it.email == researcher.email }) {
+                                        membersList = membersList + CreateProjectMember(
+                                            uid = researcher.uid,
+                                            name = researcher.name,
+                                            email = researcher.email
+                                        )
+                                        memberEmailInput = ""
+                                    } else {
+                                        Toast.makeText(context, "User already added to the list", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
                             } else {
-                                Toast.makeText(context, "User already added to the list", Toast.LENGTH_SHORT).show()
+                                if (membersList.none { it.email == input }) {
+                                    membersList = membersList + CreateProjectMember(
+                                        uid = "pending_${System.currentTimeMillis()}",
+                                        name = input.substringBefore("@"),
+                                        email = input
+                                    )
+                                    memberEmailInput = ""
+                                    Toast.makeText(context, "Added external invite for $input", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "User already added to the list", Toast.LENGTH_SHORT).show()
+                                }
                             }
                         }
-                    } else {
-                        // Not registered, but allow adding as a pending external email invitation
-                        if (membersList.none { it.email == email }) {
-                            membersList = membersList + CreateProjectMember(
-                                uid = "pending_${System.currentTimeMillis()}",
-                                name = email.substringBefore("@"),
-                                email = email
-                            )
-                            memberEmailInput = ""
-                            Toast.makeText(context, "Added external invite for $email", Toast.LENGTH_SHORT).show()
-                        } else {
-                            Toast.makeText(context, "User already added to the list", Toast.LENGTH_SHORT).show()
+                        .addOnFailureListener {
+                            isSearchingMember = false
+                            if (membersList.none { it.email == input }) {
+                                membersList = membersList + CreateProjectMember(
+                                    uid = "pending_${System.currentTimeMillis()}",
+                                    name = input.substringBefore("@"),
+                                    email = input
+                                )
+                                memberEmailInput = ""
+                            }
                         }
-                    }
                 }
-                .addOnFailureListener {
-                    isSearchingMember = false
-                    if (membersList.none { it.email == email }) {
-                        membersList = membersList + CreateProjectMember(
-                            uid = "pending_${System.currentTimeMillis()}",
-                            name = email.substringBefore("@"),
-                            email = email
-                        )
-                        memberEmailInput = ""
-                    }
+            } else {
+                if (membersList.none { it.phone == input }) {
+                    membersList = membersList + CreateProjectMember(
+                        uid = "phone_${System.currentTimeMillis()}",
+                        name = input,
+                        email = "",
+                        phone = input
+                    )
+                    memberEmailInput = ""
+                    Toast.makeText(context, "Added phone collaborator: $input", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "User already added to the list", Toast.LENGTH_SHORT).show()
                 }
+            }
         }
     }
 
@@ -525,7 +542,7 @@ fun CreateProjectScreen(
                 modifier = Modifier.padding(top = 8.dp)
             )
 
-            // Email Row
+            // Unified Collaborator Row (Email or Phone)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -534,7 +551,7 @@ fun CreateProjectScreen(
                 OutlinedTextField(
                     value = memberEmailInput,
                     onValueChange = { memberEmailInput = it },
-                    placeholder = { Text("Invite by email", color = TextMuted) },
+                    placeholder = { Text("Search, email, or phone number", color = TextMuted) },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = TextPrimary,
                         unfocusedTextColor = TextPrimary,
@@ -547,7 +564,7 @@ fun CreateProjectScreen(
                     shape = RoundedCornerShape(12.dp),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Email,
+                        keyboardType = KeyboardType.Text,
                         imeAction = ImeAction.Done
                     ),
                     keyboardActions = KeyboardActions(
@@ -555,13 +572,7 @@ fun CreateProjectScreen(
                     )
                 )
                 IconButton(
-                    onClick = {
-                        if (memberEmailInput.isBlank()) {
-                            showContactsDialog = true
-                        } else {
-                            onAddMember()
-                        }
-                    },
+                    onClick = onAddMember,
                     modifier = Modifier
                         .background(BgElevated, RoundedCornerShape(12.dp))
                         .size(56.dp),
@@ -570,8 +581,7 @@ fun CreateProjectScreen(
                     if (isSearchingMember) {
                         CircularProgressIndicator(color = AccentTeal, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     } else {
-                        val icon = if (memberEmailInput.isBlank()) Icons.Default.Contacts else Icons.Default.PersonAdd
-                        Icon(icon, "Add Collaborator", tint = AccentTeal)
+                        Icon(Icons.Default.PersonAdd, "Add Collaborator", tint = AccentTeal)
                     }
                 }
             }
@@ -655,45 +665,6 @@ fun CreateProjectScreen(
                 }
             }
 
-            // Phone Row (Both fields present)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedTextField(
-                    value = memberPhoneInput,
-                    onValueChange = { memberPhoneInput = it },
-                    placeholder = { Text("Invite by phone number", color = TextMuted) },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary,
-                        focusedBorderColor = AccentTeal,
-                        unfocusedBorderColor = BorderLight,
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent
-                    ),
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Phone,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onDone = { onAddPhoneMember() }
-                    )
-                )
-                IconButton(
-                    onClick = onAddPhoneMember,
-                    modifier = Modifier
-                        .background(BgElevated, RoundedCornerShape(12.dp))
-                        .size(56.dp)
-                ) {
-                    Icon(Icons.Default.PersonAdd, "Add Phone Member", tint = AccentTeal)
-                }
-            }
-
             AnimatedVisibility(visible = membersList.isNotEmpty()) {
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
@@ -724,149 +695,129 @@ fun CreateProjectScreen(
                 }
             }
 
-            if (showContactsDialog) {
-                var searchQuery by remember { mutableStateOf("") }
-                val filteredContacts = remember(searchQuery, allDeviceContacts) {
-                    if (searchQuery.isBlank()) {
-                        allDeviceContacts
-                    } else {
-                        allDeviceContacts.filter {
-                            it.name.lowercase().contains(searchQuery.lowercase()) ||
-                            it.email.lowercase().contains(searchQuery.lowercase()) ||
-                            it.phone.contains(searchQuery)
-                        }
+            val inlineContacts = remember(memberEmailInput, allDeviceContacts) {
+                val q = memberEmailInput.lowercase().trim()
+                if (q.isEmpty()) {
+                    allDeviceContacts
+                } else {
+                    allDeviceContacts.filter {
+                        it.name.lowercase().contains(q) ||
+                        it.email.lowercase().contains(q) ||
+                        it.phone.contains(q)
                     }
                 }
+            }
 
-                AlertDialog(
-                    onDismissRequest = { showContactsDialog = false },
-                    title = {
-                        Text(
-                            text = "Select Collaborators",
-                            fontFamily = SyneFontFamily,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                    },
-                    text = {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Contacts",
+                    fontFamily = SyneFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary,
+                    fontSize = 16.sp
+                )
+                IconButton(
+                    onClick = { syncTrigger++ },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Sync Contacts",
+                        tint = AccentTeal,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            if (inlineContacts.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (hasContactsPermission) "No contacts found" else "Contacts permission not granted",
+                        color = TextMuted,
+                        fontSize = 14.sp
+                    )
+                }
+            } else {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    inlineContacts.take(20).forEach { contact ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(BgElevated, RoundedCornerShape(12.dp))
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            OutlinedTextField(
-                                value = searchQuery,
-                                onValueChange = { searchQuery = it },
-                                placeholder = { Text("Search by name, email, or phone...", color = TextMuted) },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(8.dp),
-                                singleLine = true,
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = TextPrimary,
-                                    unfocusedTextColor = TextPrimary,
-                                    focusedBorderColor = AccentTeal,
-                                    unfocusedBorderColor = BorderLight
-                                )
-                            )
-
-                            if (filteredContacts.isEmpty()) {
-                                Box(
-                                    modifier = Modifier.fillMaxWidth().weight(1f).padding(vertical = 20.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = if (hasContactsPermission) "No contacts found matching \"$searchQuery\"" else "Contacts permission not granted",
-                                        color = TextMuted,
-                                        fontSize = 14.sp
-                                    )
-                                }
-                            } else {
-                                LazyColumn(
-                                    modifier = Modifier.fillMaxWidth().weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    items(filteredContacts) { contact ->
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .background(BgElevated, RoundedCornerShape(8.dp))
-                                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.weight(1f),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                            ) {
-                                                Icon(Icons.Default.Person, null, tint = AccentTeal, modifier = Modifier.size(20.dp))
-                                                Column {
-                                                    Text(contact.name, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                                        if (contact.email.isNotEmpty()) {
-                                                            Text("✉️ ${contact.email}", color = TextMuted, fontSize = 11.sp)
-                                                        }
-                                                        if (contact.phone.isNotEmpty()) {
-                                                            Text("📱 ${contact.phone}", color = TextMuted, fontSize = 11.sp)
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                                if (contact.email.isNotEmpty()) {
-                                                    IconButton(
-                                                        onClick = {
-                                                            if (membersList.none { it.email == contact.email }) {
-                                                                membersList = membersList + CreateProjectMember(
-                                                                    uid = "pending_${System.currentTimeMillis()}",
-                                                                    name = contact.name,
-                                                                    email = contact.email
-                                                                )
-                                                            } else {
-                                                                Toast.makeText(context, "Email already added", Toast.LENGTH_SHORT).show()
-                                                            }
-                                                            showContactsDialog = false
-                                                        },
-                                                        modifier = Modifier.size(36.dp).background(AccentTeal.copy(alpha = 0.1f), CircleShape)
-                                                    ) {
-                                                        Icon(Icons.Default.Email, "Add Email", tint = AccentTeal, modifier = Modifier.size(16.dp))
-                                                    }
-                                                }
-                                                if (contact.phone.isNotEmpty()) {
-                                                    IconButton(
-                                                        onClick = {
-                                                            if (membersList.none { it.phone == contact.phone }) {
-                                                                membersList = membersList + CreateProjectMember(
-                                                                    uid = "phone_${System.currentTimeMillis()}",
-                                                                    name = contact.name,
-                                                                    email = "",
-                                                                    phone = contact.phone
-                                                                )
-                                                            } else {
-                                                                Toast.makeText(context, "Phone already added", Toast.LENGTH_SHORT).show()
-                                                            }
-                                                            showContactsDialog = false
-                                                        },
-                                                        modifier = Modifier.size(36.dp).background(AccentTeal.copy(alpha = 0.1f), CircleShape)
-                                                    ) {
-                                                        Icon(Icons.Default.Phone, "Add Phone", tint = AccentTeal, modifier = Modifier.size(16.dp))
-                                                    }
-                                                }
-                                            }
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(Icons.Default.Person, null, tint = AccentTeal, modifier = Modifier.size(20.dp))
+                                Column {
+                                    Text(contact.name, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        if (contact.email.isNotEmpty()) {
+                                            Text("✉️ ${contact.email}", color = TextMuted, fontSize = 11.sp)
+                                        }
+                                        if (contact.phone.isNotEmpty()) {
+                                            Text("📱 ${contact.phone}", color = TextMuted, fontSize = 11.sp)
                                         }
                                     }
                                 }
                             }
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                if (contact.email.isNotEmpty()) {
+                                    IconButton(
+                                        onClick = {
+                                            if (membersList.none { it.email == contact.email }) {
+                                                membersList = membersList + CreateProjectMember(
+                                                    uid = "pending_${System.currentTimeMillis()}",
+                                                    name = contact.name,
+                                                    email = contact.email
+                                                )
+                                            } else {
+                                                Toast.makeText(context, "Email already added", Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
+                                        modifier = Modifier.size(36.dp).background(AccentTeal.copy(alpha = 0.1f), CircleShape)
+                                    ) {
+                                        Icon(Icons.Default.Email, "Add Email", tint = AccentTeal, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                                if (contact.phone.isNotEmpty()) {
+                                    IconButton(
+                                        onClick = {
+                                            if (membersList.none { it.phone == contact.phone }) {
+                                                membersList = membersList + CreateProjectMember(
+                                                    uid = "phone_${System.currentTimeMillis()}",
+                                                    name = contact.name,
+                                                    email = "",
+                                                    phone = contact.phone
+                                                )
+                                            } else {
+                                                Toast.makeText(context, "Phone already added", Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
+                                        modifier = Modifier.size(36.dp).background(AccentTeal.copy(alpha = 0.1f), CircleShape)
+                                    ) {
+                                        Icon(Icons.Default.Phone, "Add Phone", tint = AccentTeal, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            }
                         }
-                    },
-                    confirmButton = {},
-                    dismissButton = {
-                        TextButton(onClick = { showContactsDialog = false }) {
-                            Text("Close", color = AccentTeal)
-                        }
-                    },
-                    containerColor = BgPrimary,
-                    shape = RoundedCornerShape(16.dp)
-                )
+                    }
+                }
             }
             
             Spacer(modifier = Modifier.height(100.dp)) // padding for FAB
