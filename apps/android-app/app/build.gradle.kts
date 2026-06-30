@@ -36,10 +36,31 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        debug {
+            // Shrink resources in debug too so we can measure savings during dev
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+    }
+
+    // ABI Splits: generate a separate APK per CPU architecture
+    // (Play Store / AAB does this automatically; useful for local testing too)
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "x86_64") // Cover 99% of modern Android devices
+            isUniversalApk = false
         }
     }
 
@@ -76,7 +97,18 @@ android {
                 "/META-INF/NOTICE",
                 "/META-INF/NOTICE.txt",
                 "/META-INF/*.kotlin_module",
+                // Strip unused test frameworks bundled inside library JARs
+                "**/junit/**",
+                "**/hamcrest/**",
+                // Remove duplicate protos that inflate APK size
+                "**/proto/**",
+                // Strip redundant service loader files
+                "META-INF/services/javax.annotation.processing.Processor",
             )
+        }
+        // Do NOT package debug-only native libs in non-debug builds
+        jniLibs {
+            useLegacyPackaging = false  // Use compressed=false for better perf + smaller zip overhead
         }
     }
 }
@@ -96,7 +128,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui-text-google-fonts")
     
-    // Icons
+    // Icons — use extended only for icons we actually reference; R8 tree-shakes unused ones
     implementation("androidx.compose.material:material-icons-extended")
 
     // Firebase BoM
