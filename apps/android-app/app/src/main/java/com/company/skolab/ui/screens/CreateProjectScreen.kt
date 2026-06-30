@@ -21,6 +21,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -74,6 +77,9 @@ fun CreateProjectScreen(
 
     var isSaving by remember { mutableStateOf(false) }
 
+    var allDeviceEmailContacts by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    var showContactsDialog by remember { mutableStateOf(false) }
+
     val onAddPhoneMember: () -> Unit = {
         val phone = memberPhoneInput.trim()
         if (phone.isNotBlank()) {
@@ -112,6 +118,42 @@ fun CreateProjectScreen(
     LaunchedEffect(Unit) {
         if (!hasContactsPermission) {
             requestPermissionLauncher.launch(android.Manifest.permission.READ_CONTACTS)
+        }
+    }
+
+    LaunchedEffect(hasContactsPermission) {
+        if (hasContactsPermission) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val results = mutableListOf<Pair<String, String>>()
+                try {
+                    val contentResolver = context.contentResolver
+                    val emailUri = ContactsContract.CommonDataKinds.Email.CONTENT_URI
+                    val emailProjection = arrayOf(
+                        ContactsContract.CommonDataKinds.Email.ADDRESS,
+                        ContactsContract.CommonDataKinds.Email.DISPLAY_NAME
+                    )
+                    val cursor = contentResolver.query(
+                        emailUri,
+                        emailProjection,
+                        null, null,
+                        "${ContactsContract.CommonDataKinds.Email.DISPLAY_NAME} ASC"
+                    )
+                    cursor?.use { c ->
+                        val addrIdx = c.getColumnIndex(ContactsContract.CommonDataKinds.Email.ADDRESS)
+                        val nameIdx = c.getColumnIndex(ContactsContract.CommonDataKinds.Email.DISPLAY_NAME)
+                        while (c.moveToNext()) {
+                            val email = if (addrIdx >= 0) c.getString(addrIdx) ?: "" else ""
+                            val name = if (nameIdx >= 0) c.getString(nameIdx) ?: "" else ""
+                            if (email.isNotEmpty()) {
+                                results.add(name.ifEmpty { "Device Contact" } to email)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                allDeviceEmailContacts = results.distinctBy { it.second }
+            }
         }
     }
 
@@ -487,7 +529,13 @@ fun CreateProjectScreen(
                     )
                 )
                 IconButton(
-                    onClick = onAddMember,
+                    onClick = {
+                        if (memberEmailInput.isBlank()) {
+                            showContactsDialog = true
+                        } else {
+                            onAddMember()
+                        }
+                    },
                     modifier = Modifier
                         .background(BgElevated, RoundedCornerShape(12.dp))
                         .size(56.dp),
@@ -496,7 +544,8 @@ fun CreateProjectScreen(
                     if (isSearchingMember) {
                         CircularProgressIndicator(color = AccentTeal, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     } else {
-                        Icon(Icons.Default.PersonAdd, "Add Member", tint = AccentTeal)
+                        val icon = if (memberEmailInput.isBlank()) Icons.Default.Contacts else Icons.Default.PersonAdd
+                        Icon(icon, "Add Collaborator", tint = AccentTeal)
                     }
                 }
             }
@@ -650,6 +699,108 @@ fun CreateProjectScreen(
                         }
                     }
                 }
+            }
+
+            if (showContactsDialog) {
+                var searchQuery by remember { mutableStateOf("") }
+                val filteredContacts = remember(searchQuery, allDeviceEmailContacts) {
+                    if (searchQuery.isBlank()) {
+                        allDeviceEmailContacts
+                    } else {
+                        allDeviceEmailContacts.filter {
+                            it.first.lowercase().contains(searchQuery.lowercase()) ||
+                            it.second.lowercase().contains(searchQuery.lowercase())
+                        }
+                    }
+                }
+
+                AlertDialog(
+                    onDismissRequest = { showContactsDialog = false },
+                    title = {
+                        Text(
+                            text = "Select Gmail Contacts",
+                            fontFamily = SyneFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                    },
+                    text = {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                placeholder = { Text("Search contacts...", color = TextMuted) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp),
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary,
+                                    focusedBorderColor = AccentTeal,
+                                    unfocusedBorderColor = BorderLight
+                                )
+                            )
+
+                            if (filteredContacts.isEmpty()) {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().weight(1f).padding(vertical = 20.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (hasContactsPermission) "No contacts found matching \"$searchQuery\"" else "Contacts permission not granted",
+                                        color = TextMuted,
+                                        fontSize = 14.sp
+                                    )
+                                }
+                            } else {
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxWidth().weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    items(filteredContacts) { contact ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(BgElevated, RoundedCornerShape(8.dp))
+                                                .clickable {
+                                                    if (membersList.none { it.email == contact.second }) {
+                                                        membersList = membersList + CreateProjectMember(
+                                                            uid = "pending_${System.currentTimeMillis()}",
+                                                            name = contact.first,
+                                                            email = contact.second
+                                                        )
+                                                    } else {
+                                                        Toast.makeText(context, "Contact already added", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                    showContactsDialog = false
+                                                }
+                                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Icon(Icons.Default.Person, null, tint = AccentTeal, modifier = Modifier.size(20.dp))
+                                            Column {
+                                                Text(contact.first, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                                Text(contact.second, color = TextMuted, fontSize = 11.sp)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {},
+                    dismissButton = {
+                        TextButton(onClick = { showContactsDialog = false }) {
+                            Text("Close", color = AccentTeal)
+                        }
+                    },
+                    containerColor = BgPrimary,
+                    shape = RoundedCornerShape(16.dp)
+                )
             }
             
             Spacer(modifier = Modifier.height(100.dp)) // padding for FAB
