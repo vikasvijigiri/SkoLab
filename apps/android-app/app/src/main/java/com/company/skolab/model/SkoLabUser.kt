@@ -3,7 +3,10 @@ package com.company.skolab.model
 data class SkoLabUser(
     val uid: String = "",
     val name: String = "",
+    val username: String = "",
+    val authorName: String = "",
     val email: String = "",
+    val phone: String = "",
     val researchFocus: String = "",
     val complexityScore: Float = 0f,
     val savedPapers: List<String> = emptyList(),
