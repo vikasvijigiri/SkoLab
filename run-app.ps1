@@ -28,7 +28,14 @@ adb -s $targetDevice reverse tcp:8080 tcp:8080
 
 # 4. Install the APK
 Write-Host "[*] Installing APK..." -ForegroundColor Cyan
-adb -s $targetDevice install -r apps/android-app/app/build/outputs/apk/dev/debug/app-dev-debug.apk
+$apkFile = Get-ChildItem -Path "apps/android-app/app/build/outputs/apk/dev/debug" -Filter "*.apk" | Select-Object -First 1
+if ($apkFile -ne $null) {
+    Write-Host "[OK] Installing: $($apkFile.Name)" -ForegroundColor Green
+    adb -s $targetDevice install -r $apkFile.FullName
+} else {
+    Write-Host "[ERROR] Compiled APK not found in build outputs." -ForegroundColor Red
+    exit 1
+}
 
 # 5. Launch the app
 Write-Host "[*] Launching SkoLab on phone..." -ForegroundColor Cyan
