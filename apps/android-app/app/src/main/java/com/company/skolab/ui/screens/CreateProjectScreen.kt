@@ -1,6 +1,9 @@
 package com.company.skolab.ui.screens
 
 import android.widget.Toast
+import android.provider.ContactsContract
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -35,7 +38,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
-data class CreateProjectMember(val uid: String, val name: String, val email: String)
+data class CreateProjectMember(val uid: String, val name: String, val email: String, val phone: String = "")
+data class CollaboratorSuggestion(val name: String, val email: String, val isRegistered: Boolean, val researchFocus: String = "", val uid: String = "")
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -58,13 +62,52 @@ fun CreateProjectScreen(
     var nameError by remember { mutableStateOf<String?>(null) }
 
     var memberEmailInput by remember { mutableStateOf("") }
+    var memberPhoneInput by remember { mutableStateOf("") }
     var isSearchingMember by remember { mutableStateOf(false) }
     var membersList by remember { mutableStateOf<List<CreateProjectMember>>(emptyList()) }
 
     var isSaving by remember { mutableStateOf(false) }
 
+    val onAddPhoneMember: () -> Unit = {
+        val phone = memberPhoneInput.trim()
+        if (phone.isNotBlank()) {
+            if (membersList.any { it.phone == phone }) {
+                Toast.makeText(context, "Phone number already added", Toast.LENGTH_SHORT).show()
+            } else {
+                membersList = membersList + CreateProjectMember(
+                    uid = "phone_${System.currentTimeMillis()}",
+                    name = phone,
+                    email = "",
+                    phone = phone
+                )
+                memberPhoneInput = ""
+            }
+        }
+    }
+
     // Suggested users close to the user's research focus
     var suggestedUsers by remember { mutableStateOf<List<SkoLabUser>>(emptyList()) }
+
+    var hasContactsPermission by remember {
+        mutableStateOf(
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.READ_CONTACTS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    val requestPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasContactsPermission = isGranted
+    }
+
+    LaunchedEffect(Unit) {
+        if (!hasContactsPermission) {
+            requestPermissionLauncher.launch(android.Manifest.permission.READ_CONTACTS)
+        }
+    }
 
     LaunchedEffect(cachedUser) {
         val focus = cachedUser?.researchFocus
@@ -86,22 +129,80 @@ fun CreateProjectScreen(
         }
     }
 
-    val query = memberEmailInput.lowercase().trim()
-    val filteredSuggestions = remember(memberEmailInput, suggestedUsers) {
-        if (query.isEmpty()) {
+    var deviceContactSuggestions by remember { mutableStateOf<List<CollaboratorSuggestion>>(emptyList()) }
+
+    LaunchedEffect(memberEmailInput, hasContactsPermission) {
+        val q = memberEmailInput.trim()
+        if (hasContactsPermission && q.length >= 2) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val results = mutableListOf<CollaboratorSuggestion>()
+                try {
+                    val contentResolver = context.contentResolver
+                    val emailUri = ContactsContract.CommonDataKinds.Email.CONTENT_URI
+                    val emailProjection = arrayOf(
+                        ContactsContract.CommonDataKinds.Email.ADDRESS,
+                        ContactsContract.CommonDataKinds.Email.DISPLAY_NAME
+                    )
+                    val cursor = contentResolver.query(
+                        emailUri,
+                        emailProjection,
+                        "${ContactsContract.CommonDataKinds.Email.ADDRESS} LIKE ? OR ${ContactsContract.CommonDataKinds.Email.DISPLAY_NAME} LIKE ?",
+                        arrayOf("%$q%", "%$q%"),
+                        null
+                    )
+                    cursor?.use { c ->
+                        val addrIdx = c.getColumnIndex(ContactsContract.CommonDataKinds.Email.ADDRESS)
+                        val nameIdx = c.getColumnIndex(ContactsContract.CommonDataKinds.Email.DISPLAY_NAME)
+                        while (c.moveToNext()) {
+                            val email = if (addrIdx >= 0) c.getString(addrIdx) ?: "" else ""
+                            val name = if (nameIdx >= 0) c.getString(nameIdx) ?: "" else ""
+                            if (email.isNotEmpty()) {
+                                results.add(
+                                    CollaboratorSuggestion(
+                                        name = name.ifEmpty { "Device Contact" },
+                                        email = email,
+                                        isRegistered = false
+                                    )
+                                )
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                deviceContactSuggestions = results.distinctBy { it.email }.take(8)
+            }
+        } else {
+            deviceContactSuggestions = emptyList()
+        }
+    }
+
+    val filteredSuggestions = remember(memberEmailInput, suggestedUsers, deviceContactSuggestions) {
+        val q = memberEmailInput.lowercase().trim()
+        if (q.isEmpty()) {
             emptyList()
         } else {
-            suggestedUsers.filter {
-                it.name.lowercase().contains(query) || it.email.lowercase().contains(query)
-            }
+            val registeredList = suggestedUsers
+                .filter { it.name.lowercase().contains(q) || it.email.lowercase().contains(q) }
+                .map {
+                    CollaboratorSuggestion(
+                        name = it.name,
+                        email = it.email,
+                        isRegistered = true,
+                        researchFocus = it.researchFocus,
+                        uid = it.uid
+                    )
+                }
+            (registeredList + deviceContactSuggestions).distinctBy { it.email }
         }
     }
 
     val onAddMember: () -> Unit = {
-        if (memberEmailInput.isNotBlank() && !isSearchingMember) {
+        val email = memberEmailInput.trim()
+        if (email.isNotBlank() && !isSearchingMember) {
             isSearchingMember = true
             db.collection("researchers")
-                .whereEqualTo("email", memberEmailInput.trim())
+                .whereEqualTo("email", email)
                 .get()
                 .addOnSuccessListener { querySnapshot ->
                     isSearchingMember = false
@@ -111,7 +212,7 @@ fun CreateProjectScreen(
                         if (researcher != null) {
                             if (researcher.uid == currentUserId) {
                                 Toast.makeText(context, "You are automatically added as the owner.", Toast.LENGTH_SHORT).show()
-                            } else if (membersList.none { it.uid == researcher.uid }) {
+                            } else if (membersList.none { it.email == researcher.email }) {
                                 membersList = membersList + CreateProjectMember(
                                     uid = researcher.uid,
                                     name = researcher.name,
@@ -123,12 +224,30 @@ fun CreateProjectScreen(
                             }
                         }
                     } else {
-                        Toast.makeText(context, "This user is not registered in the app.", Toast.LENGTH_SHORT).show()
+                        // Not registered, but allow adding as a pending external email invitation
+                        if (membersList.none { it.email == email }) {
+                            membersList = membersList + CreateProjectMember(
+                                uid = "pending_${System.currentTimeMillis()}",
+                                name = email.substringBefore("@"),
+                                email = email
+                            )
+                            memberEmailInput = ""
+                            Toast.makeText(context, "Added external invite for $email", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "User already added to the list", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }
                 .addOnFailureListener {
                     isSearchingMember = false
-                    Toast.makeText(context, "Error looking up user: ${it.message}", Toast.LENGTH_SHORT).show()
+                    if (membersList.none { it.email == email }) {
+                        membersList = membersList + CreateProjectMember(
+                            uid = "pending_${System.currentTimeMillis()}",
+                            name = email.substringBefore("@"),
+                            email = email
+                        )
+                        memberEmailInput = ""
+                    }
                 }
         }
     }
@@ -173,10 +292,10 @@ fun CreateProjectScreen(
                         try {
                             val newId = db.collection("collabs_groups").document().id
                             val memberMaps = membersList.map {
-                                mapOf("uid" to it.uid, "name" to it.name, "email" to it.email)
+                                mapOf("uid" to it.uid, "name" to it.name, "email" to it.email, "phone" to it.phone)
                             }
                             val allMembers = listOf(
-                                mapOf("uid" to currentUserId, "name" to currentUserName, "email" to currentUserEmail)
+                                mapOf("uid" to currentUserId, "name" to currentUserName, "email" to currentUserEmail, "phone" to "")
                             ) + memberMaps
                             val allUids = listOf(currentUserId) + membersList.map { it.uid }
 
@@ -276,6 +395,7 @@ fun CreateProjectScreen(
                 modifier = Modifier.padding(top = 8.dp)
             )
 
+            // Email Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -319,6 +439,7 @@ fun CreateProjectScreen(
                 }
             }
 
+            // Autocomplete dropdown matching Gmail contacts & similar registered researchers
             AnimatedVisibility(visible = filteredSuggestions.isNotEmpty()) {
                 Surface(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
@@ -330,16 +451,21 @@ fun CreateProjectScreen(
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                     ) {
-                        filteredSuggestions.take(5).forEach { user ->
+                        filteredSuggestions.take(5).forEach { suggestion ->
+                            val descText = if (suggestion.isRegistered) {
+                                "Registered • ${suggestion.researchFocus}"
+                            } else {
+                                "Gmail Contact"
+                            }
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        if (membersList.none { it.uid == user.uid }) {
+                                        if (membersList.none { it.email == suggestion.email }) {
                                             membersList = membersList + CreateProjectMember(
-                                                uid = user.uid,
-                                                name = user.name,
-                                                email = user.email
+                                                uid = if (suggestion.isRegistered) suggestion.uid else "pending_${System.currentTimeMillis()}",
+                                                name = suggestion.name,
+                                                email = suggestion.email
                                             )
                                         } else {
                                             Toast.makeText(context, "User already added to the list", Toast.LENGTH_SHORT).show()
@@ -350,14 +476,58 @@ fun CreateProjectScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Icon(Icons.Default.PersonAdd, null, tint = AccentTeal, modifier = Modifier.size(18.dp))
+                                Icon(
+                                    imageVector = if (suggestion.isRegistered) Icons.Default.PersonAdd else Icons.Default.ContactPage,
+                                    contentDescription = "Select Suggestion",
+                                    tint = AccentTeal,
+                                    modifier = Modifier.size(18.dp)
+                                )
                                 Column {
-                                    Text(user.name, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                    Text("${user.email} • ${user.researchFocus}", color = TextMuted, fontSize = 11.sp)
+                                    Text(suggestion.name, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    Text("${suggestion.email} • $descText", color = TextMuted, fontSize = 11.sp)
                                 }
                             }
                         }
                     }
+                }
+            }
+
+            // Phone Row (Both fields present)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = memberPhoneInput,
+                    onValueChange = { memberPhoneInput = it },
+                    placeholder = { Text("Invite by phone number", color = TextMuted) },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        focusedBorderColor = AccentTeal,
+                        unfocusedBorderColor = BorderLight,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
+                    ),
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Phone,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = { onAddPhoneMember() }
+                    )
+                )
+                IconButton(
+                    onClick = onAddPhoneMember,
+                    modifier = Modifier
+                        .background(BgElevated, RoundedCornerShape(12.dp))
+                        .size(56.dp)
+                ) {
+                    Icon(Icons.Default.PersonAdd, "Add Phone Member", tint = AccentTeal)
                 }
             }
 
