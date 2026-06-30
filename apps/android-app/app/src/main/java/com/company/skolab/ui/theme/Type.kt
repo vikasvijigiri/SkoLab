@@ -15,10 +15,10 @@ val provider = GoogleFont.Provider(
     certificates = R.array.com_google_android_gms_fonts_certs
 )
 
-val DisplayFontName = GoogleFont("Lora")
-val MetricsFontName = GoogleFont("IBM Plex Mono")
+val DisplayFontName = GoogleFont("Space Grotesk")
+val MetricsFontName = GoogleFont("JetBrains Mono")
 val BodyFontName = GoogleFont("Inter")
-val SyneFontName = GoogleFont("Syne")
+val SyneFontName = GoogleFont("Space Grotesk")
 val SpaceGroteskFontName = GoogleFont("Space Grotesk")
 val JetBrainsMonoFontName = GoogleFont("JetBrains Mono")
 
@@ -29,8 +29,9 @@ val DisplayFontFamily = FontFamily(
 )
 
 val SyneFontFamily = FontFamily(
-    Font(googleFont = SyneFontName, fontProvider = provider, weight = FontWeight.ExtraBold),
-    Font(googleFont = SyneFontName, fontProvider = provider, weight = FontWeight.Bold)
+    Font(googleFont = SyneFontName, fontProvider = provider, weight = FontWeight.Bold),
+    Font(googleFont = SyneFontName, fontProvider = provider, weight = FontWeight.SemiBold),
+    Font(googleFont = SyneFontName, fontProvider = provider, weight = FontWeight.Medium)
 )
 
 val SpaceGroteskFontFamily = FontFamily(
