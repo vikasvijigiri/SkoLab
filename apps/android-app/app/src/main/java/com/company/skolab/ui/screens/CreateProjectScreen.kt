@@ -5,11 +5,13 @@ import android.provider.ContactsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,7 +44,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 data class CreateProjectMember(val uid: String, val name: String, val email: String, val phone: String = "")
-data class CollaboratorSuggestion(val name: String, val email: String, val isRegistered: Boolean, val researchFocus: String = "", val uid: String = "")
+data class CollaboratorSuggestion(val name: String, val email: String, val isRegistered: Boolean, val researchFocus: String = "", val uid: String = "", val username: String = "")
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -199,7 +201,7 @@ fun CreateProjectScreen(
                     val request = Request.Builder().url(url).build()
                     client.newCall(request).execute().use { response ->
                         if (response.isSuccessful) {
-                            val bodyStr = response.body()?.string()
+                            val bodyStr = response.body?.string()
                             if (bodyStr != null) {
                                 val jsonArray = JSONArray(bodyStr)
                                 val list = mutableListOf<CollaboratorSuggestion>()
@@ -539,8 +541,9 @@ fun CreateProjectScreen(
                                                             put("peer_uid", suggestion.uid)
                                                         }
                                                     }
+                                                    val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
                                                     val requestBody = RequestBody.create(
-                                                        MediaType.parse("application/json; charset=utf-8"),
+                                                        mediaType,
                                                         jsonBody.toString()
                                                     )
                                                     val request = Request.Builder().url(url).post(requestBody).build()
@@ -559,7 +562,7 @@ fun CreateProjectScreen(
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 Icon(
-                                    imageVector = if (suggestion.isRegistered) Icons.Default.PersonAdd else Icons.Default.ContactPage,
+                                    imageVector = if (suggestion.isRegistered) Icons.Default.PersonAdd else Icons.Default.Person,
                                     contentDescription = "Select Suggestion",
                                     tint = AccentTeal,
                                     modifier = Modifier.size(18.dp)
