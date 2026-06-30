@@ -2,10 +2,12 @@ package com.company.skolab.ui.theme
 
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 // ─── SkoLab Spacing Scale ─────────────────────────────────────────────────────
-// Follows an 4dp base grid — same scale used by Google, Meta, Apple HIG
+// Follows a 4dp base grid — same scale used by Google, Meta, Apple HIG
 data class SkoLabSpacing(
     val xs:  Dp = 4.dp,
     val sm:  Dp = 8.dp,
@@ -48,22 +50,18 @@ object SkoLabRadius {
 
 // ─── Typography Size Constants ────────────────────────────────────────────────
 // Named semantic sizes — use these instead of hardcoded sp values in composables
-import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.unit.sp
-
 object SkoLabFontSize {
-    val micro:     TextUnit = 9.sp   // legal text, timestamps
-    val xxs:       TextUnit = 10.sp  // badges, compact metadata
-    val xs:        TextUnit = 11.sp  // caption, sub-labels
-    val sm:        TextUnit = 12.sp  // secondary body, chips
-    val body:      TextUnit = 13.sp  // primary list body
-    val bodyLg:    TextUnit = 14.sp  // standard body text
-    val subtitle:  TextUnit = 15.sp  // card subtitles
-    val title:     TextUnit = 16.sp  // section titles
-    val heading:   TextUnit = 18.sp  // screen headings
-    val display:   TextUnit = 22.sp  // large display text
-    val hero:      TextUnit = 28.sp  // hero/onboarding text
+    val micro:    TextUnit = 9.sp   // legal text, timestamps
+    val xxs:      TextUnit = 10.sp  // badges, compact metadata
+    val xs:       TextUnit = 11.sp  // caption, sub-labels
+    val sm:       TextUnit = 12.sp  // secondary body, chips
+    val body:     TextUnit = 13.sp  // primary list body
+    val bodyLg:   TextUnit = 14.sp  // standard body text
+    val subtitle: TextUnit = 15.sp  // card subtitles
+    val title:    TextUnit = 16.sp  // section titles
+    val heading:  TextUnit = 18.sp  // screen headings
+    val display:  TextUnit = 22.sp  // large display text
+    val hero:     TextUnit = 28.sp  // hero/onboarding text
 }
 
 val LocalSkoLabSpacing = staticCompositionLocalOf { SkoLabSpacing() }
-
