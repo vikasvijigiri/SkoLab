@@ -116,7 +116,9 @@ android {
 dependencies {
     implementation("androidx.core:core-ktx:1.18.0")
     implementation("androidx.core:core-splashscreen:1.0.1")
-    // appcompat and legacy material removed — app is 100% Jetpack Compose + Material 3
+    // material provides XML Theme.Material3.* resources consumed by themes.xml at runtime
+    // (Compose material3 artifact does NOT include these XML styles)
+    implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
     implementation("androidx.activity:activity-compose:1.13.0")
