@@ -22,6 +22,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.filled.Contacts
@@ -50,6 +53,7 @@ import kotlinx.coroutines.tasks.await
 
 data class CreateProjectMember(val uid: String, val name: String, val email: String, val phone: String = "")
 data class CollaboratorSuggestion(val name: String, val email: String, val isRegistered: Boolean, val researchFocus: String = "", val uid: String = "", val username: String = "")
+data class DeviceContact(val name: String, val email: String = "", val phone: String = "")
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -78,7 +82,7 @@ fun CreateProjectScreen(
 
     var isSaving by remember { mutableStateOf(false) }
 
-    var allDeviceEmailContacts by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    var allDeviceContacts by remember { mutableStateOf<List<DeviceContact>>(emptyList()) }
     var showContactsDialog by remember { mutableStateOf(false) }
 
     val onAddPhoneMember: () -> Unit = {
@@ -125,35 +129,56 @@ fun CreateProjectScreen(
     LaunchedEffect(hasContactsPermission) {
         if (hasContactsPermission) {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                val results = mutableListOf<Pair<String, String>>()
+                val tempMap = mutableMapOf<String, DeviceContact>()
                 try {
                     val contentResolver = context.contentResolver
+                    
+                    // 1. Fetch all phone contacts
+                    val phoneUri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI
+                    val phoneProjection = arrayOf(
+                        ContactsContract.CommonDataKinds.Phone.NUMBER,
+                        ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME
+                    )
+                    val phoneCursor = contentResolver.query(phoneUri, phoneProjection, null, null, null)
+                    phoneCursor?.use { c ->
+                        val numIdx = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                        val nameIdx = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                        while (c.moveToNext()) {
+                            val number = if (numIdx >= 0) c.getString(numIdx) ?: "" else ""
+                            val name = if (nameIdx >= 0) c.getString(nameIdx) ?: "" else ""
+                            if (name.isNotEmpty() && number.isNotEmpty()) {
+                                tempMap[name] = DeviceContact(name = name, phone = number)
+                            }
+                        }
+                    }
+
+                    // 2. Fetch all email contacts
                     val emailUri = ContactsContract.CommonDataKinds.Email.CONTENT_URI
                     val emailProjection = arrayOf(
                         ContactsContract.CommonDataKinds.Email.ADDRESS,
                         ContactsContract.CommonDataKinds.Email.DISPLAY_NAME
                     )
-                    val cursor = contentResolver.query(
-                        emailUri,
-                        emailProjection,
-                        null, null,
-                        "${ContactsContract.CommonDataKinds.Email.DISPLAY_NAME} ASC"
-                    )
-                    cursor?.use { c ->
+                    val emailCursor = contentResolver.query(emailUri, emailProjection, null, null, null)
+                    emailCursor?.use { c ->
                         val addrIdx = c.getColumnIndex(ContactsContract.CommonDataKinds.Email.ADDRESS)
                         val nameIdx = c.getColumnIndex(ContactsContract.CommonDataKinds.Email.DISPLAY_NAME)
                         while (c.moveToNext()) {
                             val email = if (addrIdx >= 0) c.getString(addrIdx) ?: "" else ""
                             val name = if (nameIdx >= 0) c.getString(nameIdx) ?: "" else ""
-                            if (email.isNotEmpty()) {
-                                results.add(name.ifEmpty { "Device Contact" } to email)
+                            if (name.isNotEmpty() && email.isNotEmpty()) {
+                                val existing = tempMap[name]
+                                if (existing != null) {
+                                    tempMap[name] = existing.copy(email = email)
+                                } else {
+                                    tempMap[name] = DeviceContact(name = name, email = email)
+                                }
                             }
                         }
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
-                allDeviceEmailContacts = results.distinctBy { it.second }
+                allDeviceContacts = tempMap.values.toList().sortedBy { it.name }
             }
         }
     }
@@ -701,13 +726,14 @@ fun CreateProjectScreen(
 
             if (showContactsDialog) {
                 var searchQuery by remember { mutableStateOf("") }
-                val filteredContacts = remember(searchQuery, allDeviceEmailContacts) {
+                val filteredContacts = remember(searchQuery, allDeviceContacts) {
                     if (searchQuery.isBlank()) {
-                        allDeviceEmailContacts
+                        allDeviceContacts
                     } else {
-                        allDeviceEmailContacts.filter {
-                            it.first.lowercase().contains(searchQuery.lowercase()) ||
-                            it.second.lowercase().contains(searchQuery.lowercase())
+                        allDeviceContacts.filter {
+                            it.name.lowercase().contains(searchQuery.lowercase()) ||
+                            it.email.lowercase().contains(searchQuery.lowercase()) ||
+                            it.phone.contains(searchQuery)
                         }
                     }
                 }
@@ -716,7 +742,7 @@ fun CreateProjectScreen(
                     onDismissRequest = { showContactsDialog = false },
                     title = {
                         Text(
-                            text = "Select Gmail Contacts",
+                            text = "Select Collaborators",
                             fontFamily = SyneFontFamily,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary
@@ -730,7 +756,7 @@ fun CreateProjectScreen(
                             OutlinedTextField(
                                 value = searchQuery,
                                 onValueChange = { searchQuery = it },
-                                placeholder = { Text("Search contacts...", color = TextMuted) },
+                                placeholder = { Text("Search by name, email, or phone...", color = TextMuted) },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(8.dp),
                                 singleLine = true,
@@ -763,26 +789,68 @@ fun CreateProjectScreen(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .background(BgElevated, RoundedCornerShape(8.dp))
-                                                .clickable {
-                                                    if (membersList.none { it.email == contact.second }) {
-                                                        membersList = membersList + CreateProjectMember(
-                                                            uid = "pending_${System.currentTimeMillis()}",
-                                                            name = contact.first,
-                                                            email = contact.second
-                                                        )
-                                                    } else {
-                                                        Toast.makeText(context, "Contact already added", Toast.LENGTH_SHORT).show()
-                                                    }
-                                                    showContactsDialog = false
-                                                }
                                                 .padding(horizontal = 12.dp, vertical = 10.dp),
                                             verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
-                                            Icon(Icons.Default.Person, null, tint = AccentTeal, modifier = Modifier.size(20.dp))
-                                            Column {
-                                                Text(contact.first, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                                Text(contact.second, color = TextMuted, fontSize = 11.sp)
+                                            Row(
+                                                modifier = Modifier.weight(1f),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                Icon(Icons.Default.Person, null, tint = AccentTeal, modifier = Modifier.size(20.dp))
+                                                Column {
+                                                    Text(contact.name, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                                        if (contact.email.isNotEmpty()) {
+                                                            Text("✉️ ${contact.email}", color = TextMuted, fontSize = 11.sp)
+                                                        }
+                                                        if (contact.phone.isNotEmpty()) {
+                                                            Text("📱 ${contact.phone}", color = TextMuted, fontSize = 11.sp)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                if (contact.email.isNotEmpty()) {
+                                                    IconButton(
+                                                        onClick = {
+                                                            if (membersList.none { it.email == contact.email }) {
+                                                                membersList = membersList + CreateProjectMember(
+                                                                    uid = "pending_${System.currentTimeMillis()}",
+                                                                    name = contact.name,
+                                                                    email = contact.email
+                                                                )
+                                                            } else {
+                                                                Toast.makeText(context, "Email already added", Toast.LENGTH_SHORT).show()
+                                                            }
+                                                            showContactsDialog = false
+                                                        },
+                                                        modifier = Modifier.size(36.dp).background(AccentTeal.copy(alpha = 0.1f), CircleShape)
+                                                    ) {
+                                                        Icon(Icons.Default.Email, "Add Email", tint = AccentTeal, modifier = Modifier.size(16.dp))
+                                                    }
+                                                }
+                                                if (contact.phone.isNotEmpty()) {
+                                                    IconButton(
+                                                        onClick = {
+                                                            if (membersList.none { it.phone == contact.phone }) {
+                                                                membersList = membersList + CreateProjectMember(
+                                                                    uid = "phone_${System.currentTimeMillis()}",
+                                                                    name = contact.name,
+                                                                    email = "",
+                                                                    phone = contact.phone
+                                                                )
+                                                            } else {
+                                                                Toast.makeText(context, "Phone already added", Toast.LENGTH_SHORT).show()
+                                                            }
+                                                            showContactsDialog = false
+                                                        },
+                                                        modifier = Modifier.size(36.dp).background(AccentTeal.copy(alpha = 0.1f), CircleShape)
+                                                    ) {
+                                                        Icon(Icons.Default.Phone, "Add Phone", tint = AccentTeal, modifier = Modifier.size(16.dp))
+                                                    }
+                                                }
                                             }
                                         }
                                     }
