@@ -1,6 +1,8 @@
 package com.company.skolab.ui.screens
 
 import android.widget.Toast
+import android.content.Intent
+import android.net.Uri
 import android.provider.ContactsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -998,6 +1000,36 @@ fun CreateProjectScreen(
                                                         email = contact.email,
                                                         phone = contact.phone
                                                     )
+                                                    // 1. Log invitation to recommendation engine
+                                                    scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                                        try {
+                                                            val base = com.company.skolab.network.ServerLocator.baseUrl.value ?: "http://10.0.2.2:8080"
+                                                            val url = "$base/api/v1/recommendations/peers/invite"
+                                                            val client = OkHttpClient()
+                                                            val jsonBody = JSONObject().apply {
+                                                                put("user_id", currentUserId)
+                                                                put("peer_email", contact.email)
+                                                            }
+                                                            val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
+                                                            val requestBody = jsonBody.toString().toRequestBody(mediaType)
+                                                            val request = Request.Builder().url(url).post(requestBody).build()
+                                                            client.newCall(request).execute().use { /* ignore */ }
+                                                        } catch (e: Exception) {
+                                                            e.printStackTrace()
+                                                        }
+                                                    }
+                                                    // 2. Launch Email invite intent
+                                                    try {
+                                                        val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
+                                                            data = Uri.parse("mailto:")
+                                                            putExtra(Intent.EXTRA_EMAIL, arrayOf(contact.email))
+                                                            putExtra(Intent.EXTRA_SUBJECT, "Join my research Co-Lab on SkoLab!")
+                                                            putExtra(Intent.EXTRA_TEXT, "Hey ${contact.name},\n\nI'm creating a new Co-Lab group for our research project on SkoLab. Join me here to collaborate: http://10.0.2.2:8080/invite")
+                                                        }
+                                                        context.startActivity(Intent.createChooser(emailIntent, "Send Invite Email"))
+                                                    } catch (e: Exception) {
+                                                        Toast.makeText(context, "Could not open email app", Toast.LENGTH_SHORT).show()
+                                                    }
                                                 } else if (contact.phone.isNotEmpty()) {
                                                     membersList = membersList + CreateProjectMember(
                                                         uid = "phone_${System.currentTimeMillis()}",
@@ -1005,6 +1037,16 @@ fun CreateProjectScreen(
                                                         email = "",
                                                         phone = contact.phone
                                                     )
+                                                    // 2. Launch SMS invite intent
+                                                    try {
+                                                        val smsIntent = Intent(Intent.ACTION_SENDTO).apply {
+                                                            data = Uri.parse("smsto:${contact.phone}")
+                                                            putExtra("sms_body", "Hey ${contact.name}, I'm creating a new Co-Lab research group on SkoLab. Join me here: http://10.0.2.2:8080/invite")
+                                                        }
+                                                        context.startActivity(smsIntent)
+                                                    } catch (e: Exception) {
+                                                        Toast.makeText(context, "Could not open SMS app", Toast.LENGTH_SHORT).show()
+                                                    }
                                                 }
                                                 Toast.makeText(context, "Invited ${contact.name}", Toast.LENGTH_SHORT).show()
                                             },
