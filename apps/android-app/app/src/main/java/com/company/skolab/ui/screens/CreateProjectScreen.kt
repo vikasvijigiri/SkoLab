@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import androidx.compose.animation.*
@@ -592,10 +593,7 @@ fun CreateProjectScreen(
                                                         }
                                                     }
                                                     val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
-                                                    val requestBody = RequestBody.create(
-                                                        mediaType,
-                                                        jsonBody.toString()
-                                                    )
+                                                    val requestBody = jsonBody.toString().toRequestBody(mediaType)
                                                     val request = Request.Builder().url(url).post(requestBody).build()
                                                     client.newCall(request).execute().use { /* ignore */ }
                                                 } catch (e: Exception) {
