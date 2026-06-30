@@ -4,12 +4,12 @@ Recommendation System Router — router.py
 Exposes GET /recommendations with mode filtering.
 """
 
-from typing import Optional
+from typing import Optional, List
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_db
-from app.domains.recommendation.schemas import RecommendationResponse
+from app.domains.recommendation.schemas import RecommendationResponse, PeerRecommendation, PeerInviteLogRequest
 from app.domains.recommendation.service import RecommendationService
 
 router = APIRouter(prefix="/recommendations", tags=["Recommendations"])
@@ -48,3 +48,31 @@ async def get_recommendations(
         mode=mode,
     )
     return result
+
+
+@router.get(
+    "/peers",
+    response_model=List[PeerRecommendation],
+    summary="Get peer recommendations for autocomplete",
+    description="Search and rank registered and cached researchers matching query criteria.",
+)
+async def get_peer_recommendations(
+    query: str = Query(..., description="Query name, username, email, phone, or focus"),
+    user_id: Optional[str] = Query(None, description="Current logged-in user ID for personalized ranking"),
+    db: AsyncSession = Depends(get_db),
+) -> List[PeerRecommendation]:
+    service = RecommendationService(db=db)
+    return await service.get_peer_recommendations(query=query, user_id=user_id)
+
+
+@router.post(
+    "/peers/invite",
+    summary="Log peer invitation to update recommendation engine scores",
+)
+async def log_peer_invite(
+    request: PeerInviteLogRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    service = RecommendationService(db=db)
+    success = await service.log_peer_invite(request)
+    return {"success": success}
