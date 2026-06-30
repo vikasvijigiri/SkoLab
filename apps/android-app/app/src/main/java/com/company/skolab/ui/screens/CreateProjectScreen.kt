@@ -539,7 +539,7 @@ fun CreateProjectScreen(
                 Color.Transparent
             ),
             startY = 0f,
-            endY = 800f
+            endY = 600f
         )
         Box(
             modifier = Modifier
@@ -550,7 +550,7 @@ fun CreateProjectScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(300.dp)
+                    .height(200.dp)
                     .background(backgroundBrush)
             )
 
@@ -558,18 +558,18 @@ fun CreateProjectScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // Category Tag
                 item {
                     Text(
                         text = "NEW SPACE CREATION",
                         color = AccentTeal,
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = SyneFontFamily,
-                        letterSpacing = 1.5.sp,
+                        letterSpacing = 1.2.sp,
                         modifier = Modifier.padding(bottom = 2.dp)
                     )
                 }
@@ -582,9 +582,10 @@ fun CreateProjectScreen(
                             newProjName = it 
                             if (it.isNotBlank()) nameError = null
                         },
-                        label = { Text("Co-Lab Name", color = TextMuted) },
+                        label = { Text("Co-Lab Name", color = TextMuted, fontSize = 12.sp) },
                         isError = nameError != null,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                        textStyle = LocalTextStyle.current.copy(fontSize = 13.sp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = TextPrimary,
                             unfocusedTextColor = TextPrimary,
@@ -595,7 +596,7 @@ fun CreateProjectScreen(
                             errorBorderColor = SkoLabWarning
                         ),
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(12.dp),
                         singleLine = true
                     )
                 }
@@ -604,8 +605,9 @@ fun CreateProjectScreen(
                     OutlinedTextField(
                         value = newProjDesc,
                         onValueChange = { newProjDesc = it },
-                        label = { Text("Objective / Research Scope", color = TextMuted) },
+                        label = { Text("Objective / Research Scope", color = TextMuted, fontSize = 12.sp) },
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                        textStyle = LocalTextStyle.current.copy(fontSize = 13.sp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = TextPrimary,
                             unfocusedTextColor = TextPrimary,
@@ -615,7 +617,7 @@ fun CreateProjectScreen(
                             unfocusedContainerColor = BgElevated.copy(alpha = 0.2f)
                         ),
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(12.dp),
                         singleLine = false,
                         maxLines = 3
                     )
@@ -626,10 +628,10 @@ fun CreateProjectScreen(
                     Text(
                         "Collaborators",
                         color = TextSecondary,
-                        fontSize = 14.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = SyneFontFamily,
-                        modifier = Modifier.padding(top = 8.dp)
+                        modifier = Modifier.padding(top = 4.dp)
                     )
                 }
 
@@ -638,12 +640,13 @@ fun CreateProjectScreen(
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         OutlinedTextField(
                             value = memberEmailInput,
                             onValueChange = { memberEmailInput = it },
-                            placeholder = { Text("Search, email, or phone number", color = TextMuted) },
+                            placeholder = { Text("Search, email, or phone number", color = TextMuted, fontSize = 12.sp) },
+                            textStyle = LocalTextStyle.current.copy(fontSize = 13.sp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = TextPrimary,
                                 unfocusedTextColor = TextPrimary,
@@ -653,7 +656,7 @@ fun CreateProjectScreen(
                                 unfocusedContainerColor = BgElevated.copy(alpha = 0.2f)
                             ),
                             modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(12.dp),
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(
                                 keyboardType = KeyboardType.Text,
@@ -666,14 +669,14 @@ fun CreateProjectScreen(
                         IconButton(
                             onClick = onAddMember,
                             modifier = Modifier
-                                .background(BgElevated, RoundedCornerShape(14.dp))
-                                .size(56.dp),
+                                .background(BgElevated, RoundedCornerShape(12.dp))
+                                .size(48.dp),
                             enabled = !isSearchingMember
                         ) {
                             if (isSearchingMember) {
-                                CircularProgressIndicator(color = AccentTeal, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                CircularProgressIndicator(color = AccentTeal, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                             } else {
-                                Icon(Icons.Default.PersonAdd, "Add Collaborator", tint = AccentTeal)
+                                Icon(Icons.Default.PersonAdd, "Add Collaborator", tint = AccentTeal, modifier = Modifier.size(18.dp))
                             }
                         }
                     }
@@ -684,13 +687,13 @@ fun CreateProjectScreen(
                     AnimatedVisibility(visible = filteredSuggestions.isNotEmpty()) {
                         Surface(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(12.dp),
                             color = BgElevated,
                             border = BorderStroke(1.dp, BorderLight),
-                            shadowElevation = 6.dp
+                            shadowElevation = 4.dp
                         ) {
                             Column(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                             ) {
                                 filteredSuggestions.take(5).forEach { suggestion ->
                                     val descText = if (suggestion.isRegistered) {
@@ -734,12 +737,12 @@ fun CreateProjectScreen(
                                                 }
                                                 memberEmailInput = ""
                                             }
-                                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                                            .padding(horizontal = 12.dp, vertical = 8.dp),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
-                                        // Premium initials avatar for suggestions
-                                        ContactAvatar(suggestion.name, modifier = Modifier.size(36.dp))
+                                        // Compact avatar inside autocomplete suggestion list
+                                        ContactAvatar(suggestion.name, modifier = Modifier.size(30.dp))
                                         
                                         Column(modifier = Modifier.weight(1f)) {
                                             val displayName = if (suggestion.isRegistered && suggestion.username.isNotEmpty()) {
@@ -747,8 +750,8 @@ fun CreateProjectScreen(
                                             } else {
                                                 suggestion.name
                                             }
-                                            Text(displayName, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                            Text("${suggestion.email} • $descText", color = TextMuted, fontSize = 11.sp)
+                                            Text(displayName, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                            Text("${suggestion.email} • $descText", color = TextMuted, fontSize = 10.sp)
                                         }
                                     }
                                 }
@@ -757,33 +760,33 @@ fun CreateProjectScreen(
                     }
                 }
 
-                // Chips List of Selected Members (Slack Style)
+                // Chips List of Selected Members (Slack Style - Compacted)
                 item {
                     AnimatedVisibility(visible = membersList.isNotEmpty()) {
                         FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             membersList.forEach { member ->
                                 Surface(
-                                    shape = RoundedCornerShape(20.dp),
+                                    shape = RoundedCornerShape(12.dp),
                                     color = BgElevated,
                                     border = BorderStroke(1.dp, AccentTeal.copy(alpha = 0.3f))
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(start = 8.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        modifier = Modifier.padding(start = 6.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        // Dynamic small avatar inside the Slack-style chip
-                                        ContactAvatar(member.name, modifier = Modifier.size(24.dp))
-                                        Text(member.name, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                        // Compacted avatar inside selection chip
+                                        ContactAvatar(member.name, modifier = Modifier.size(20.dp))
+                                        Text(member.name, color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                                         IconButton(
                                             onClick = { membersList = membersList.filter { it.uid != member.uid } },
-                                            modifier = Modifier.size(20.dp)
+                                            modifier = Modifier.size(18.dp)
                                         ) {
-                                            Icon(Icons.Default.Close, "Remove", tint = TextMuted, modifier = Modifier.size(14.dp))
+                                            Icon(Icons.Default.Close, "Remove", tint = TextMuted, modifier = Modifier.size(12.dp))
                                         }
                                     }
                                 }
@@ -792,12 +795,12 @@ fun CreateProjectScreen(
                     }
                 }
 
-                // Contacts Header Row
+                // Contacts Header Row (Compacted)
                 item {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 16.dp, bottom = 4.dp),
+                            .padding(top = 8.dp, bottom = 2.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -806,17 +809,17 @@ fun CreateProjectScreen(
                             fontFamily = SyneFontFamily,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary,
-                            fontSize = 16.sp
+                            fontSize = 14.sp
                         )
                         IconButton(
                             onClick = { syncTrigger++ },
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(28.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Refresh,
                                 contentDescription = "Sync Contacts",
                                 tint = AccentTeal,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
@@ -828,13 +831,13 @@ fun CreateProjectScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 30.dp),
+                                .padding(vertical = 20.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = if (hasContactsPermission) "No contacts found" else "Contacts permission not granted",
                                 color = TextMuted,
-                                fontSize = 14.sp
+                                fontSize = 13.sp
                             )
                         }
                     }
@@ -843,36 +846,36 @@ fun CreateProjectScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(BgElevated.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
-                                .border(1.dp, BorderLight.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                                .background(BgElevated.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                .border(1.dp, BorderLight.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(
                                 modifier = Modifier.weight(1f),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                // Initials based Colorful Gradient Circle Avatar
-                                ContactAvatar(contact.name, modifier = Modifier.size(42.dp))
+                                // Compact Colorful Initials Circle Avatar
+                                ContactAvatar(contact.name, modifier = Modifier.size(34.dp))
                                 
                                 Column {
-                                    Text(contact.name, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    Text(contact.name, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                     Row(
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         if (contact.email.isNotEmpty()) {
-                                            Text("✉️ ${contact.email}", color = TextMuted, fontSize = 11.sp)
+                                            Text("✉️ ${contact.email}", color = TextMuted, fontSize = 10.sp)
                                         }
                                         if (contact.phone.isNotEmpty()) {
-                                            Text("📱 ${contact.phone}", color = TextMuted, fontSize = 11.sp)
+                                            Text("📱 ${contact.phone}", color = TextMuted, fontSize = 10.sp)
                                         }
                                     }
                                 }
                             }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 if (contact.email.isNotEmpty()) {
                                     IconButton(
                                         onClick = {
@@ -887,10 +890,10 @@ fun CreateProjectScreen(
                                             }
                                         },
                                         modifier = Modifier
-                                            .size(36.dp)
+                                            .size(32.dp)
                                             .background(AccentTeal.copy(alpha = 0.1f), CircleShape)
                                     ) {
-                                        Icon(Icons.Default.Email, "Add Email", tint = AccentTeal, modifier = Modifier.size(16.dp))
+                                        Icon(Icons.Default.Email, "Add Email", tint = AccentTeal, modifier = Modifier.size(14.dp))
                                     }
                                 }
                                 if (contact.phone.isNotEmpty()) {
@@ -908,10 +911,10 @@ fun CreateProjectScreen(
                                             }
                                         },
                                         modifier = Modifier
-                                            .size(36.dp)
+                                            .size(32.dp)
                                             .background(AccentTeal.copy(alpha = 0.1f), CircleShape)
                                     ) {
-                                        Icon(Icons.Default.Phone, "Add Phone", tint = AccentTeal, modifier = Modifier.size(16.dp))
+                                        Icon(Icons.Default.Phone, "Add Phone", tint = AccentTeal, modifier = Modifier.size(14.dp))
                                     }
                                 }
                             }
