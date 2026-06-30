@@ -1,4 +1,5 @@
 # ─── SkoLab ProGuard / R8 Rules ───────────────────────────────────────────────
+# Tightly scoped to let R8 tree-shake everything we don't explicitly need.
 
 # ── Kotlin ─────────────────────────────────────────────────────────────────────
 -keepattributes *Annotation*, InnerClasses, Signature, EnclosingMethod
@@ -6,13 +7,8 @@
 -keep class kotlin.Metadata { *; }
 
 # ── Kotlin Serialization ───────────────────────────────────────────────────────
-# Keep all @Serializable data classes so kotlinx.serialization can reflect on them
 -keepattributes RuntimeVisibleAnnotations
 -keep @kotlinx.serialization.Serializable class ** { *; }
--keep class kotlinx.serialization.** { *; }
--dontwarn kotlinx.serialization.**
-
-# Keep generated serializer companion objects (named $serializer)
 -keepclassmembers class ** {
     @kotlinx.serialization.SerialName <fields>;
 }
@@ -20,43 +16,49 @@
     static ** Companion;
     static ** $serializer;
 }
+-dontwarn kotlinx.serialization.**
 
 # ── SkoLab data models (used in JSON deserialization) ─────────────────────────
 -keep class com.company.skolab.model.** { *; }
 -keep class com.company.skolab.network.** { *; }
+-keep class com.company.skolab.data.** { *; }
 
-# ── Ktor ───────────────────────────────────────────────────────────────────────
+# ── Compose: stability annotations (required for @Stable/@Immutable) ──────────
+-keep @androidx.compose.runtime.Stable class * { *; }
+-keep @androidx.compose.runtime.Immutable class * { *; }
+-dontwarn androidx.compose.**
+
+# ── Ktor: keep only client + serialization; let R8 drop unused engines ─────────
+-keep class io.ktor.client.** { *; }
+-keep class io.ktor.http.** { *; }
+-keep class io.ktor.serialization.** { *; }
 -dontwarn io.ktor.**
--keep class io.ktor.** { *; }
--keep interface io.ktor.** { *; }
 
-# ── OkHttp ─────────────────────────────────────────────────────────────────────
+# ── OkHttp: keep reflection targets only; let R8 strip the rest ────────────────
+-keepnames class okhttp3.internal.publicsuffix.PublicSuffixDatabase
 -dontwarn okhttp3.**
 -dontwarn okio.**
--keep class okhttp3.** { *; }
--keep interface okhttp3.** { *; }
 
-# ── Firebase ───────────────────────────────────────────────────────────────────
--keep class com.google.firebase.** { *; }
--keep class com.google.android.gms.** { *; }
+# ── Firebase: keep only what is used; R8 strips the rest ──────────────────────
+-keep class com.google.firebase.FirebaseApp { *; }
+-keep class com.google.firebase.auth.** { *; }
+-keep class com.google.firebase.firestore.** { *; }
+-keep class com.google.firebase.crashlytics.** { *; }
 -dontwarn com.google.firebase.**
+-dontwarn com.google.android.gms.**
 
-# ── Firebase Crashlytics ───────────────────────────────────────────────────────
+# ── Crashlytics: preserve stack traces ────────────────────────────────────────
 -keepattributes SourceFile, LineNumberTable
 -keep public class * extends java.lang.Exception
--keep class com.google.firebase.crashlytics.** { *; }
+-renamesourcefileattribute SourceFile
 
 # ── AndroidX DataStore ─────────────────────────────────────────────────────────
--keep class androidx.datastore.** { *; }
+-keepnames class androidx.datastore.** { *; }
 -dontwarn androidx.datastore.**
 
-# ── AndroidX Security Crypto (EncryptedSharedPreferences) ─────────────────────
--keep class androidx.security.crypto.** { *; }
+# ── AndroidX Security Crypto ───────────────────────────────────────────────────
+-keepnames class androidx.security.crypto.** { *; }
 -dontwarn androidx.security.crypto.**
-
-# ── Jetpack Compose ────────────────────────────────────────────────────────────
--dontwarn androidx.compose.**
--keep class androidx.compose.** { *; }
 
 # ── Coroutines ─────────────────────────────────────────────────────────────────
 -keepclassmembers class kotlinx.coroutines.** {
@@ -64,7 +66,7 @@
 }
 -dontwarn kotlinx.coroutines.**
 
-# ── Enums — preserve name() and values() which kotlinx.serialization uses ──────
+# ── Enums ──────────────────────────────────────────────────────────────────────
 -keepclassmembers enum * {
     public static **[] values();
     public static ** valueOf(java.lang.String);
@@ -80,6 +82,10 @@
 -keep class com.google.android.libraries.identity.** { *; }
 -dontwarn com.google.android.libraries.identity.**
 
-# ── R8 source line preservation (required for crash stack traces) ──────────────
--keepattributes SourceFile, LineNumberTable
--renamesourcefileattribute SourceFile
+# ── Strip verbose logging in release builds (saves ~50KB) ─────────────────────
+-assumenosideeffects class android.util.Log {
+    public static boolean isLoggable(java.lang.String, int);
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+}
