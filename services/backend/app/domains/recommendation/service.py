@@ -22,6 +22,7 @@ from app.domains.recommendation.schemas import (
     PaperRecommendation,
     RecommendationResponse,
     PeerRecommendation,
+    PeerInviteLogRequest,
 )
 from app.domains.recommendation.engine import (
     build_time_weighted_profile,
