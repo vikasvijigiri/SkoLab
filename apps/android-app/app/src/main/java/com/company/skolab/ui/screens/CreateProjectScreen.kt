@@ -63,6 +63,40 @@ fun CreateProjectScreen(
 
     var isSaving by remember { mutableStateOf(false) }
 
+    // Suggested users close to the user's research focus
+    var suggestedUsers by remember { mutableStateOf<List<SkoLabUser>>(emptyList()) }
+
+    LaunchedEffect(cachedUser) {
+        val focus = cachedUser?.researchFocus
+        if (!focus.isNullOrBlank()) {
+            db.collection("researchers")
+                .limit(100)
+                .get()
+                .addOnSuccessListener { snapshot ->
+                    val list = snapshot.toObjects(SkoLabUser::class.java)
+                    val currentWords = focus.lowercase().split("\\s+".toRegex()).filter { it.length > 3 }
+                    suggestedUsers = list.filter { other ->
+                        other.uid != currentUserId && (
+                            other.researchFocus.lowercase().contains(focus.lowercase()) ||
+                            focus.lowercase().contains(other.researchFocus.lowercase()) ||
+                            currentWords.any { word -> other.researchFocus.lowercase().contains(word) }
+                        )
+                    }
+                }
+        }
+    }
+
+    val query = memberEmailInput.lowercase().trim()
+    val filteredSuggestions = remember(memberEmailInput, suggestedUsers) {
+        if (query.isEmpty()) {
+            emptyList()
+        } else {
+            suggestedUsers.filter {
+                it.name.lowercase().contains(query) || it.email.lowercase().contains(query)
+            }
+        }
+    }
+
     val onAddMember: () -> Unit = {
         if (memberEmailInput.isNotBlank() && !isSearchingMember) {
             isSearchingMember = true
@@ -281,6 +315,48 @@ fun CreateProjectScreen(
                         CircularProgressIndicator(color = AccentTeal, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     } else {
                         Icon(Icons.Default.PersonAdd, "Add Member", tint = AccentTeal)
+                    }
+                }
+            }
+
+            AnimatedVisibility(visible = filteredSuggestions.isNotEmpty()) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = BgElevated,
+                    border = BorderStroke(1.dp, BorderLight),
+                    shadowElevation = 4.dp
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                    ) {
+                        filteredSuggestions.take(5).forEach { user ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        if (membersList.none { it.uid == user.uid }) {
+                                            membersList = membersList + CreateProjectMember(
+                                                uid = user.uid,
+                                                name = user.name,
+                                                email = user.email
+                                            )
+                                        } else {
+                                            Toast.makeText(context, "User already added to the list", Toast.LENGTH_SHORT).show()
+                                        }
+                                        memberEmailInput = ""
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(Icons.Default.PersonAdd, null, tint = AccentTeal, modifier = Modifier.size(18.dp))
+                                Column {
+                                    Text(user.name, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    Text("${user.email} • ${user.researchFocus}", color = TextMuted, fontSize = 11.sp)
+                                }
+                            }
+                        }
                     }
                 }
             }
