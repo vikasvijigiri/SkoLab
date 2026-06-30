@@ -4,6 +4,9 @@ import android.widget.Toast
 import android.provider.ContactsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import okhttp3.*
+import org.json.JSONArray
+import org.json.JSONObject
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -177,23 +180,79 @@ fun CreateProjectScreen(
         }
     }
 
-    val filteredSuggestions = remember(memberEmailInput, suggestedUsers, deviceContactSuggestions) {
+    var backendSuggestions by remember { mutableStateOf<List<CollaboratorSuggestion>>(emptyList()) }
+
+    LaunchedEffect(memberEmailInput) {
+        val q = memberEmailInput.trim()
+        if (q.length >= 2) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    val base = com.company.skolab.network.ServerLocator.baseUrl.value ?: "http://10.0.2.2:8080"
+                    val url = "$base/api/v1/recommendations/peers?query=" +
+                              android.net.Uri.encode(q) +
+                              "&user_id=" + android.net.Uri.encode(currentUserId)
+                              
+                    val client = OkHttpClient.Builder()
+                        .connectTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
+                        .readTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
+                        .build()
+                    val request = Request.Builder().url(url).build()
+                    client.newCall(request).execute().use { response ->
+                        if (response.isSuccessful) {
+                            val bodyStr = response.body()?.string()
+                            if (bodyStr != null) {
+                                val jsonArray = JSONArray(bodyStr)
+                                val list = mutableListOf<CollaboratorSuggestion>()
+                                for (i in 0 until jsonArray.length()) {
+                                    val obj = jsonArray.getJSONObject(i)
+                                    list.add(
+                                        CollaboratorSuggestion(
+                                            name = obj.getString("name"),
+                                            email = obj.optString("email"),
+                                            isRegistered = obj.getBoolean("is_registered"),
+                                            researchFocus = obj.optString("research_focus"),
+                                            uid = obj.optString("uid"),
+                                            username = obj.optString("username")
+                                        )
+                                    )
+                                }
+                                backendSuggestions = list
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        } else {
+            backendSuggestions = emptyList()
+        }
+    }
+
+    val filteredSuggestions = remember(memberEmailInput, suggestedUsers, deviceContactSuggestions, backendSuggestions) {
         val q = memberEmailInput.lowercase().trim()
         if (q.isEmpty()) {
             emptyList()
         } else {
             val registeredList = suggestedUsers
-                .filter { it.name.lowercase().contains(q) || it.email.lowercase().contains(q) }
+                .filter {
+                    it.name.lowercase().contains(q) ||
+                    it.email.lowercase().contains(q) ||
+                    it.username.lowercase().contains(q) ||
+                    it.authorName.lowercase().contains(q) ||
+                    it.phone.contains(q)
+                }
                 .map {
                     CollaboratorSuggestion(
                         name = it.name,
                         email = it.email,
                         isRegistered = true,
                         researchFocus = it.researchFocus,
-                        uid = it.uid
+                        uid = it.uid,
+                        username = it.username
                     )
                 }
-            (registeredList + deviceContactSuggestions).distinctBy { it.email }
+            (backendSuggestions + registeredList + deviceContactSuggestions).distinctBy { it.email }
         }
     }
 
@@ -467,6 +526,29 @@ fun CreateProjectScreen(
                                                 name = suggestion.name,
                                                 email = suggestion.email
                                             )
+                                            // Log invitation to backend recommendation engine in background
+                                            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                                try {
+                                                    val base = com.company.skolab.network.ServerLocator.baseUrl.value ?: "http://10.0.2.2:8080"
+                                                    val url = "$base/api/v1/recommendations/peers/invite"
+                                                    val client = OkHttpClient()
+                                                    val jsonBody = JSONObject().apply {
+                                                        put("user_id", currentUserId)
+                                                        put("peer_email", suggestion.email)
+                                                        if (suggestion.isRegistered) {
+                                                            put("peer_uid", suggestion.uid)
+                                                        }
+                                                    }
+                                                    val requestBody = RequestBody.create(
+                                                        MediaType.parse("application/json; charset=utf-8"),
+                                                        jsonBody.toString()
+                                                    )
+                                                    val request = Request.Builder().url(url).post(requestBody).build()
+                                                    client.newCall(request).execute().use { /* ignore */ }
+                                                } catch (e: Exception) {
+                                                    e.printStackTrace()
+                                                }
+                                            }
                                         } else {
                                             Toast.makeText(context, "User already added to the list", Toast.LENGTH_SHORT).show()
                                         }
@@ -483,7 +565,12 @@ fun CreateProjectScreen(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Column {
-                                    Text(suggestion.name, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    val displayName = if (suggestion.isRegistered && suggestion.username.isNotEmpty()) {
+                                        "${suggestion.name} (@${suggestion.username})"
+                                    } else {
+                                        suggestion.name
+                                    }
+                                    Text(displayName, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                                     Text("${suggestion.email} • $descText", color = TextMuted, fontSize = 11.sp)
                                 }
                             }
