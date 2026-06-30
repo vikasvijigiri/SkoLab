@@ -61,11 +61,13 @@ data class DeviceContact(val name: String, val email: String = "", val phone: St
 
 @Composable
 fun ContactAvatar(name: String, modifier: Modifier = Modifier) {
-    val initials = name.split("\\s+".toRegex())
-        .filter { it.isNotBlank() }
-        .take(2)
-        .map { it.first().uppercase() }
-        .joinToString("")
+    val initials = remember(name) {
+        name.split("\\s+".toRegex())
+            .filter { it.isNotBlank() }
+            .take(2)
+            .map { it.first().uppercase() }
+            .joinToString("")
+    }
     
     val colors = remember(name) {
         val hash = name.hashCode()
@@ -869,7 +871,10 @@ fun CreateProjectScreen(
                         }
                     }
                 } else {
-                    items(inlineContacts) { contact ->
+                    items(
+                        items = inlineContacts,
+                        key = { contact -> contact.phone + "_" + contact.email + "_" + contact.name }
+                    ) { contact ->
                         val isAlreadyAdded = membersList.any { 
                             (contact.email.isNotEmpty() && it.email == contact.email) || 
                             (contact.phone.isNotEmpty() && it.phone == contact.phone) 
