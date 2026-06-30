@@ -29,7 +29,11 @@ class User(Base):
     id = Column(String(100), primary_key=True, index=True)  # e.g. "user_uid"
     openalex_id = Column(String(100), index=True, nullable=True)  # e.g. "A5020214245"
     display_name = Column(String(255), nullable=False)
+    username = Column(String(100), unique=True, index=True, nullable=True)
+    author_name = Column(String(255), nullable=True)
     email = Column(EncryptedString, nullable=True)
+    phone = Column(String(50), nullable=True)
+    research_focus = Column(Text, nullable=True)
     created_at = Column(DateTime, default=utcnow)
 
     preferences = relationship(
