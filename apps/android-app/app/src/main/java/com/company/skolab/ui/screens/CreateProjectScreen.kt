@@ -255,27 +255,71 @@ fun CreateProjectScreen(
                 allDeviceContacts = combined.distinctBy { it.email.ifEmpty { it.phone } }.sortedBy { it.name.lowercase() }
             }
 
-            // 2. Fetch registered researchers to decorate and sort the list
-            db.collection("researchers").get().addOnSuccessListener { snapshot ->
-                val emails = mutableSetOf<String>()
-                val phones = mutableSetOf<String>()
-                for (doc in snapshot.documents) {
-                    doc.getString("email")?.lowercase()?.trim()?.let { emails.add(it) }
-                    doc.getString("phone")?.trim()?.let { phones.add(it) }
+            // 2. Fetch registered researchers from backend to decorate and sort the list
+            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    val emailsList = allDeviceContacts.mapNotNull { it.email.ifEmpty { null } }
+                    val phonesList = allDeviceContacts.mapNotNull { it.phone.ifEmpty { null } }
+                    
+                    val base = com.company.skolab.network.ServerLocator.baseUrl.value ?: "http://10.0.2.2:8080"
+                    val url = "$base/api/v1/recommendations/peers/check-registered"
+                    
+                    val jsonBody = org.json.JSONObject().apply {
+                        val emailsArr = org.json.JSONArray()
+                        emailsList.forEach { emailsArr.put(it) }
+                        put("emails", emailsArr)
+                        
+                        val phonesArr = org.json.JSONArray()
+                        phonesList.forEach { phonesArr.put(it) }
+                        put("phones", phonesArr)
+                    }
+                    
+                    val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
+                    val requestBody = jsonBody.toString().toRequestBody(mediaType)
+                    val request = Request.Builder().url(url).post(requestBody).build()
+                    
+                    val client = OkHttpClient.Builder()
+                        .connectTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
+                        .readTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
+                        .build()
+                        
+                    client.newCall(request).execute().use { response ->
+                        if (response.isSuccessful) {
+                            val bodyStr = response.body?.string()
+                            if (bodyStr != null) {
+                                val resObj = org.json.JSONObject(bodyStr)
+                                val regEmailsArr = resObj.getJSONArray("registered_emails")
+                                val regPhonesArr = resObj.getJSONArray("registered_phones")
+                                
+                                val emailsSet = mutableSetOf<String>()
+                                for (i in 0 until regEmailsArr.length()) {
+                                    emailsSet.add(regEmailsArr.getString(i).lowercase().trim())
+                                }
+                                val phonesSet = mutableSetOf<String>()
+                                for (i in 0 until regPhonesArr.length()) {
+                                    phonesSet.add(regPhonesArr.getString(i).trim())
+                                }
+                                
+                                // Map registered state and resort
+                                val decorated = allDeviceContacts.map { contact ->
+                                    val isReg = (contact.email.isNotEmpty() && emailsSet.contains(contact.email.lowercase().trim())) ||
+                                                (contact.phone.isNotEmpty() && phonesSet.contains(contact.phone.trim()))
+                                    contact.copy(isRegistered = isReg)
+                                }
+                                
+                                // Update state on main thread
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                    allDeviceContacts = decorated.sortedWith(
+                                        compareByDescending<DeviceContact> { it.isRegistered }
+                                            .thenBy { it.name.lowercase() }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
-                
-                // Map registered state and resort
-                val decorated = allDeviceContacts.map { contact ->
-                    val isReg = (contact.email.isNotEmpty() && emails.contains(contact.email.lowercase().trim())) ||
-                                (contact.phone.isNotEmpty() && phones.contains(contact.phone.trim()))
-                    contact.copy(isRegistered = isReg)
-                }
-                allDeviceContacts = decorated.sortedWith(
-                    compareByDescending<DeviceContact> { it.isRegistered }
-                        .thenBy { it.name.lowercase() }
-                )
-            }.addOnFailureListener {
-                // If firestore fails, just ignore and keep the alphabetical list
             }
         }
     }

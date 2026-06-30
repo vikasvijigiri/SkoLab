@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_db
-from app.domains.recommendation.schemas import RecommendationResponse, PeerRecommendation, PeerInviteLogRequest
+from app.domains.recommendation.schemas import RecommendationResponse, PeerRecommendation, PeerInviteLogRequest, RegisteredCheckRequest, RegisteredCheckResponse
 from app.domains.recommendation.service import RecommendationService
 
 router = APIRouter(prefix="/recommendations", tags=["Recommendations"])
@@ -76,3 +76,17 @@ async def log_peer_invite(
     service = RecommendationService(db=db)
     success = await service.log_peer_invite(request)
     return {"success": success}
+
+
+@router.post(
+    "/peers/check-registered",
+    response_model=RegisteredCheckResponse,
+    summary="Check which emails/phones are registered in SkoLab",
+)
+async def check_registered_peers(
+    request: RegisteredCheckRequest,
+    db: AsyncSession = Depends(get_db),
+) -> RegisteredCheckResponse:
+    service = RecommendationService(db=db)
+    return await service.check_registered_peers(request)
+

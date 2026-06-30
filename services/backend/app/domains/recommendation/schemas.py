@@ -77,3 +77,14 @@ class PeerInviteLogRequest(BaseModel):
     peer_email: Optional[str] = None
     peer_phone: Optional[str] = None
     peer_uid: Optional[str] = None
+
+
+class RegisteredCheckRequest(BaseModel):
+    emails: List[str]
+    phones: List[str]
+
+
+class RegisteredCheckResponse(BaseModel):
+    registered_emails: List[str]
+    registered_phones: List[str]
+
