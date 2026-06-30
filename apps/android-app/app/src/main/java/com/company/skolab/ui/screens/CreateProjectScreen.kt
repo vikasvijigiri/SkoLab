@@ -57,7 +57,7 @@ import kotlinx.coroutines.tasks.await
 
 data class CreateProjectMember(val uid: String, val name: String, val email: String, val phone: String = "")
 data class CollaboratorSuggestion(val name: String, val email: String, val isRegistered: Boolean, val researchFocus: String = "", val uid: String = "", val username: String = "")
-data class DeviceContact(val name: String, val email: String = "", val phone: String = "")
+data class DeviceContact(val name: String, val email: String = "", val phone: String = "", val isRegistered: Boolean = false)
 
 @Composable
 fun ContactAvatar(name: String, modifier: Modifier = Modifier) {
@@ -179,14 +179,16 @@ fun CreateProjectScreen(
         }
     }
 
+
+
+
     LaunchedEffect(hasContactsPermission, syncTrigger) {
         if (hasContactsPermission) {
+            // 1. Instantly parse device contacts offline
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 val tempMap = mutableMapOf<String, DeviceContact>()
                 try {
                     val contentResolver = context.contentResolver
-                    
-                    // 1. Fetch all phone contacts
                     val phoneUri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI
                     val phoneProjection = arrayOf(
                         ContactsContract.CommonDataKinds.Phone.NUMBER,
@@ -205,7 +207,6 @@ fun CreateProjectScreen(
                         }
                     }
 
-                    // 2. Fetch all email contacts
                     val emailUri = ContactsContract.CommonDataKinds.Email.CONTENT_URI
                     val emailProjection = arrayOf(
                         ContactsContract.CommonDataKinds.Email.ADDRESS,
@@ -231,7 +232,32 @@ fun CreateProjectScreen(
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
-                allDeviceContacts = tempMap.values.toList().sortedBy { it.name }
+                
+                // Show offline alphabetical list first
+                allDeviceContacts = tempMap.values.toList().sortedBy { it.name.lowercase() }
+            }
+
+            // 2. Fetch registered researchers to decorate and sort the list
+            db.collection("researchers").get().addOnSuccessListener { snapshot ->
+                val emails = mutableSetOf<String>()
+                val phones = mutableSetOf<String>()
+                for (doc in snapshot.documents) {
+                    doc.getString("email")?.lowercase()?.trim()?.let { emails.add(it) }
+                    doc.getString("phone")?.trim()?.let { phones.add(it) }
+                }
+                
+                // Map registered state and resort
+                val decorated = allDeviceContacts.map { contact ->
+                    val isReg = (contact.email.isNotEmpty() && emails.contains(contact.email.lowercase().trim())) ||
+                                (contact.phone.isNotEmpty() && phones.contains(contact.phone.trim()))
+                    contact.copy(isRegistered = isReg)
+                }
+                allDeviceContacts = decorated.sortedWith(
+                    compareByDescending<DeviceContact> { it.isRegistered }
+                        .thenBy { it.name.lowercase() }
+                )
+            }.addOnFailureListener {
+                // If firestore fails, just ignore and keep the alphabetical list
             }
         }
     }
@@ -844,83 +870,158 @@ fun CreateProjectScreen(
                     }
                 } else {
                     items(inlineContacts) { contact ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(BgElevated.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                                .border(1.dp, BorderLight.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
+                        val isAlreadyAdded = membersList.any { 
+                            (contact.email.isNotEmpty() && it.email == contact.email) || 
+                            (contact.phone.isNotEmpty() && it.phone == contact.phone) 
+                        }
+                        
+                        Column(modifier = Modifier.fillMaxWidth()) {
                             Row(
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                // Compact Colorful Initials Circle Avatar
-                                ContactAvatar(contact.name, modifier = Modifier.size(34.dp))
-                                
-                                Column {
-                                    Text(contact.name, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        if (contact.email.isNotEmpty()) {
-                                            Text("✉️ ${contact.email}", color = TextMuted, fontSize = 10.sp)
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    // Compact Colorful Initials Circle Avatar
+                                    ContactAvatar(contact.name, modifier = Modifier.size(32.dp))
+                                    
+                                    Column {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Text(contact.name, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                            if (contact.isRegistered) {
+                                                // Premium FAANG-style badge indicating registered SkoLab researcher
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = AccentTeal.copy(alpha = 0.15f),
+                                                    modifier = Modifier.padding(top = 1.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "REG",
+                                                        color = AccentTeal,
+                                                        fontSize = 8.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                    )
+                                                }
+                                            }
                                         }
-                                        if (contact.phone.isNotEmpty()) {
-                                            Text("📱 ${contact.phone}", color = TextMuted, fontSize = 10.sp)
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            if (contact.email.isNotEmpty()) {
+                                                Text(contact.email, color = TextMuted, fontSize = 10.sp)
+                                            }
+                                            if (contact.phone.isNotEmpty()) {
+                                                Text(contact.phone, color = TextMuted, fontSize = 10.sp)
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                if (isAlreadyAdded) {
+                                    // Already added checkmark feedback
+                                    IconButton(
+                                        onClick = {
+                                            membersList = membersList.filter { 
+                                                !(contact.email.isNotEmpty() && it.email == contact.email) &&
+                                                !(contact.phone.isNotEmpty() && it.phone == contact.phone)
+                                            }
+                                            Toast.makeText(context, "Removed ${contact.name}", Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .background(AccentTeal.copy(alpha = 0.2f), CircleShape)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = "Added",
+                                            tint = AccentTeal,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                } else {
+                                    if (contact.isRegistered) {
+                                        // Registered user - show PersonAdd icon button
+                                        IconButton(
+                                            onClick = {
+                                                if (contact.email.isNotEmpty()) {
+                                                    membersList = membersList + CreateProjectMember(
+                                                        uid = "pending_${System.currentTimeMillis()}",
+                                                        name = contact.name,
+                                                        email = contact.email,
+                                                        phone = contact.phone
+                                                    )
+                                                } else if (contact.phone.isNotEmpty()) {
+                                                    membersList = membersList + CreateProjectMember(
+                                                        uid = "phone_${System.currentTimeMillis()}",
+                                                        name = contact.name,
+                                                        email = "",
+                                                        phone = contact.phone
+                                                    )
+                                                }
+                                                Toast.makeText(context, "Added ${contact.name}", Toast.LENGTH_SHORT).show()
+                                            },
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .background(AccentTeal.copy(alpha = 0.1f), CircleShape)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.PersonAdd,
+                                                contentDescription = "Add",
+                                                tint = AccentTeal,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    } else {
+                                        // Unregistered user - show compact FAANG-style Invite button
+                                        Button(
+                                            onClick = {
+                                                if (contact.email.isNotEmpty()) {
+                                                    membersList = membersList + CreateProjectMember(
+                                                        uid = "pending_${System.currentTimeMillis()}",
+                                                        name = contact.name,
+                                                        email = contact.email,
+                                                        phone = contact.phone
+                                                    )
+                                                } else if (contact.phone.isNotEmpty()) {
+                                                    membersList = membersList + CreateProjectMember(
+                                                        uid = "phone_${System.currentTimeMillis()}",
+                                                        name = contact.name,
+                                                        email = "",
+                                                        phone = contact.phone
+                                                    )
+                                                }
+                                                Toast.makeText(context, "Invited ${contact.name}", Toast.LENGTH_SHORT).show()
+                                            },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = Color.Transparent,
+                                                contentColor = AccentTeal
+                                            ),
+                                            border = BorderStroke(1.dp, AccentTeal.copy(alpha = 0.4f)),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                            modifier = Modifier.height(24.dp),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Text("Invite", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                         }
                                     }
                                 }
                             }
-                            val isAlreadyAdded = membersList.any { 
-                                (contact.email.isNotEmpty() && it.email == contact.email) || 
-                                (contact.phone.isNotEmpty() && it.phone == contact.phone) 
-                            }
-                            IconButton(
-                                onClick = {
-                                    if (isAlreadyAdded) {
-                                        membersList = membersList.filter { 
-                                            !(contact.email.isNotEmpty() && it.email == contact.email) &&
-                                            !(contact.phone.isNotEmpty() && it.phone == contact.phone)
-                                        }
-                                        Toast.makeText(context, "Removed ${contact.name}", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        if (contact.email.isNotEmpty()) {
-                                            membersList = membersList + CreateProjectMember(
-                                                uid = "pending_${System.currentTimeMillis()}",
-                                                name = contact.name,
-                                                email = contact.email,
-                                                phone = contact.phone
-                                            )
-                                        } else if (contact.phone.isNotEmpty()) {
-                                            membersList = membersList + CreateProjectMember(
-                                                uid = "phone_${System.currentTimeMillis()}",
-                                                name = contact.name,
-                                                email = "",
-                                                phone = contact.phone
-                                            )
-                                        }
-                                        Toast.makeText(context, "Added ${contact.name}", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .background(
-                                        if (isAlreadyAdded) AccentTeal.copy(alpha = 0.2f) else AccentTeal.copy(alpha = 0.1f), 
-                                        CircleShape
-                                    )
-                            ) {
-                                Icon(
-                                    imageVector = if (isAlreadyAdded) Icons.Default.Check else Icons.Default.PersonAdd,
-                                    contentDescription = if (isAlreadyAdded) "Remove" else "Add",
-                                    tint = AccentTeal,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
+                            HorizontalDivider(
+                                color = BorderLight.copy(alpha = 0.15f),
+                                thickness = 0.5.dp,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+                            )
                         }
                     }
                 }
