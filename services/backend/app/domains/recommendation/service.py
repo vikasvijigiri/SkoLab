@@ -23,6 +23,8 @@ from app.domains.recommendation.schemas import (
     RecommendationResponse,
     PeerRecommendation,
     PeerInviteLogRequest,
+    RegisteredCheckRequest,
+    RegisteredCheckResponse,
 )
 from app.domains.recommendation.engine import (
     build_time_weighted_profile,
@@ -541,6 +543,40 @@ class RecommendationService:
             
         await self.db.commit()
         return True
+
+    async def check_registered_peers(
+        self, req: RegisteredCheckRequest
+    ) -> RegisteredCheckResponse:
+        from app.models.user_models import User
+        from sqlalchemy import select, or_
+        
+        emails_clean = [e.strip().lower() for e in req.emails if e.strip()]
+        phones_clean = [p.strip() for p in req.phones if p.strip()]
+        
+        reg_emails = []
+        reg_phones = []
+        
+        if emails_clean or phones_clean:
+            conditions = []
+            if emails_clean:
+                conditions.append(User.email.in_(emails_clean))
+            if phones_clean:
+                conditions.append(User.phone.in_(phones_clean))
+                
+            stmt = select(User).where(or_(*conditions))
+            res = await self.db.execute(stmt)
+            users = res.scalars().all()
+            
+            for user in users:
+                if user.email:
+                    reg_emails.append(user.email.lower())
+                if user.phone:
+                    reg_phones.append(user.phone)
+                    
+        return RegisteredCheckResponse(
+            registered_emails=reg_emails,
+            registered_phones=reg_phones
+        )
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
