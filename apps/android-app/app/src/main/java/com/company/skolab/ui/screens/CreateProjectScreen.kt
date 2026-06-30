@@ -32,6 +32,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -875,48 +876,50 @@ fun CreateProjectScreen(
                                     }
                                 }
                             }
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                if (contact.email.isNotEmpty()) {
-                                    IconButton(
-                                        onClick = {
-                                            if (membersList.none { it.email == contact.email }) {
-                                                membersList = membersList + CreateProjectMember(
-                                                    uid = "pending_${System.currentTimeMillis()}",
-                                                    name = contact.name,
-                                                    email = contact.email
-                                                )
-                                            } else {
-                                                Toast.makeText(context, "Email already added", Toast.LENGTH_SHORT).show()
-                                            }
-                                        },
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .background(AccentTeal.copy(alpha = 0.1f), CircleShape)
-                                    ) {
-                                        Icon(Icons.Default.Email, "Add Email", tint = AccentTeal, modifier = Modifier.size(14.dp))
+                            val isAlreadyAdded = membersList.any { 
+                                (contact.email.isNotEmpty() && it.email == contact.email) || 
+                                (contact.phone.isNotEmpty() && it.phone == contact.phone) 
+                            }
+                            IconButton(
+                                onClick = {
+                                    if (isAlreadyAdded) {
+                                        membersList = membersList.filter { 
+                                            !(contact.email.isNotEmpty() && it.email == contact.email) &&
+                                            !(contact.phone.isNotEmpty() && it.phone == contact.phone)
+                                        }
+                                        Toast.makeText(context, "Removed ${contact.name}", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        if (contact.email.isNotEmpty()) {
+                                            membersList = membersList + CreateProjectMember(
+                                                uid = "pending_${System.currentTimeMillis()}",
+                                                name = contact.name,
+                                                email = contact.email,
+                                                phone = contact.phone
+                                            )
+                                        } else if (contact.phone.isNotEmpty()) {
+                                            membersList = membersList + CreateProjectMember(
+                                                uid = "phone_${System.currentTimeMillis()}",
+                                                name = contact.name,
+                                                email = "",
+                                                phone = contact.phone
+                                            )
+                                        }
+                                        Toast.makeText(context, "Added ${contact.name}", Toast.LENGTH_SHORT).show()
                                     }
-                                }
-                                if (contact.phone.isNotEmpty()) {
-                                    IconButton(
-                                        onClick = {
-                                            if (membersList.none { it.phone == contact.phone }) {
-                                                membersList = membersList + CreateProjectMember(
-                                                    uid = "phone_${System.currentTimeMillis()}",
-                                                    name = contact.name,
-                                                    email = "",
-                                                    phone = contact.phone
-                                                )
-                                            } else {
-                                                Toast.makeText(context, "Phone already added", Toast.LENGTH_SHORT).show()
-                                            }
-                                        },
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .background(AccentTeal.copy(alpha = 0.1f), CircleShape)
-                                    ) {
-                                        Icon(Icons.Default.Phone, "Add Phone", tint = AccentTeal, modifier = Modifier.size(14.dp))
-                                    }
-                                }
+                                },
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .background(
+                                        if (isAlreadyAdded) AccentTeal.copy(alpha = 0.2f) else AccentTeal.copy(alpha = 0.1f), 
+                                        CircleShape
+                                    )
+                            ) {
+                                Icon(
+                                    imageVector = if (isAlreadyAdded) Icons.Default.Check else Icons.Default.PersonAdd,
+                                    contentDescription = if (isAlreadyAdded) "Remove" else "Add",
+                                    tint = AccentTeal,
+                                    modifier = Modifier.size(16.dp)
+                                )
                             }
                         }
                     }
