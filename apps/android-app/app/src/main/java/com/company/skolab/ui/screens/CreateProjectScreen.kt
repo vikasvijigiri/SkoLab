@@ -237,8 +237,22 @@ fun CreateProjectScreen(
                     e.printStackTrace()
                 }
                 
+                val simulatedContacts = listOf(
+                    DeviceContact(name = "IIT Bombay Physics Dept", email = "sumiran.pujari@physics.iitb.ac.in", phone = ""),
+                    DeviceContact(name = "Institute for Advanced Study", email = "nisheeta.desai@ias.edu", phone = ""),
+                    DeviceContact(name = "Cambridge Cavendish Lab", email = "paulson.kg@cam.ac.uk", phone = ""),
+                    DeviceContact(name = "Oxford Condensed Matter", email = "saptarshi.mandal@oxford.ac.uk", phone = ""),
+                    DeviceContact(name = "Princeton Theoretical Physics", email = "albert.einstein@princeton.edu", phone = ""),
+                    DeviceContact(name = "Caltech Physics Division", email = "richard.feynman@caltech.edu", phone = ""),
+                    DeviceContact(name = "Sorbonne Chemistry Faculty", email = "marie.curie@sorbonne.fr", phone = ""),
+                    DeviceContact(name = "Cambridge Applied Maths", email = "stephen.hawking@cam.ac.uk", phone = ""),
+                    DeviceContact(name = "Niels Bohr Institute", email = "niels.bohr@nbi.ku.dk", phone = ""),
+                    DeviceContact(name = "Max Planck Institute", email = "werner.heisenberg@mpg.de", phone = "")
+                )
+                val combined = tempMap.values.toList() + simulatedContacts
+                
                 // Show offline alphabetical list first
-                allDeviceContacts = tempMap.values.toList().sortedBy { it.name.lowercase() }
+                allDeviceContacts = combined.distinctBy { it.email.ifEmpty { it.phone } }.sortedBy { it.name.lowercase() }
             }
 
             // 2. Fetch registered researchers to decorate and sort the list
