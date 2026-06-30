@@ -53,6 +53,7 @@ import com.company.skolab.di.AppDependencies
 import com.company.skolab.network.OrbitMetrics
 import com.company.skolab.ui.components.MarkdownText
 import com.company.skolab.viewmodel.HomeViewModel
+import com.company.skolab.viewmodel.TrendingUiState
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -127,6 +128,30 @@ fun HomeScreen(
     val isLoadingMemory = networkUiState.isLoadingMemory
     val suggestedCollaborators = networkUiState.suggestedCollaborators.take(4)
     val userMemoryProfile = networkUiState.userMemoryProfile
+
+    val trendingUiState by homeViewModel.trendingState.collectAsState()
+
+    // Fallback: if user has no recently read papers, show active trending papers from OpenAlex
+    val recentPapers = remember(userMemoryProfile, trendingUiState) {
+        val memoryPapers = userMemoryProfile?.recently_read_papers.orEmpty()
+        if (memoryPapers.isNotEmpty()) {
+            memoryPapers
+        } else {
+            when (val state = trendingUiState) {
+                is TrendingUiState.Success -> state.papers.map { it.title }
+                else -> emptyList()
+            }
+        }
+    }
+
+    val isLoadingTrending = remember(userMemoryProfile, trendingUiState) {
+        val memoryPapers = userMemoryProfile?.recently_read_papers.orEmpty()
+        if (memoryPapers.isNotEmpty()) {
+            false
+        } else {
+            trendingUiState is TrendingUiState.Loading
+        }
+    }
 
     // Drives the offline banner — true once mDNS resolves the backend
     val isBackendAvailable by com.company.skolab.network.ServerLocator.isBackendAvailable.collectAsState()
@@ -280,14 +305,15 @@ fun HomeScreen(
                     }
                 }
                 HomeTopWidget(
-                    recentPapers = userMemoryProfile?.recently_read_papers.orEmpty().take(5),
+                    recentPapers = recentPapers.take(5),
                     skolabConnections = membersPresence.values.filter { it.uid != currentUserId }.take(4),
                     networkCollaborators = networkCollaborators.take(5),
                     isLoadingNetwork = isLoadingOrbitMetrics,
-                    isLoadingMemory = isLoadingMemory,
+                    isLoadingMemory = isLoadingMemory || isLoadingTrending,
                     onNavigateToChat = onNavigateToChat,
                     onInviteClick = onNavigateToExternalInvite,
-                    onAuthorClick = onAuthorClick
+                    onAuthorClick = onAuthorClick,
+                    onPaperClick = onPaperClick
                 )
                 // Tab Selection
                 Row(
@@ -750,7 +776,8 @@ fun HomeTopWidget(
     isLoadingMemory: Boolean = false,
     onNavigateToChat: (String, String) -> Unit,
     onInviteClick: (String) -> Unit,
-    onAuthorClick: (String) -> Unit = {}
+    onAuthorClick: (String) -> Unit = {},
+    onPaperClick: (String) -> Unit = {}
 ) {
     val hasActiveConnections = skolabConnections.isNotEmpty()
     val hasInviteCandidates = networkCollaborators.isNotEmpty()
@@ -810,6 +837,7 @@ fun HomeTopWidget(
                                 modifier = Modifier
                                     .background(SURFACE, RoundedCornerShape(8.dp))
                                     .border(0.5.dp, BORDER, RoundedCornerShape(8.dp))
+                                    .clickable { onPaperClick(paper) }
                                     .padding(horizontal = 8.dp, vertical = 5.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
