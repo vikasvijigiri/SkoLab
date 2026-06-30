@@ -2,9 +2,11 @@
 # Automates building, reversing ports, installing, and launching SkoLab on the active device.
 
 # 1. Compile the Android app
-Write-Host "[*] Compiling Android app..." -ForegroundColor Cyan
+Write-Host "[*] Stopping existing Gradle daemons to release file locks..." -ForegroundColor Yellow
 cd apps/android-app
-./gradlew assembleDevDebug
+./gradlew --stop
+Write-Host "[*] Compiling Android app (clean build)..." -ForegroundColor Cyan
+./gradlew clean assembleDevDebug
 cd ../..
 
 # 2. Find the active ADB device
