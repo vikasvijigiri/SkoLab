@@ -436,6 +436,10 @@ async def teleport_researcher(author_id: str) -> None:
             h_index=h_index,
         )
         interdisciplinary = ms.calculate_interdisciplinary_index(all_topic_counts)
+        # No policy/patent citation data source is integrated yet (would need e.g. Overton
+        # or Lens.org) — this always evaluates to 0 for every researcher, not a real score.
+        # Kept as a stub so the field exists for when that integration lands; the frontend
+        # should not present this as a measured value in the meantime.
         policy_patent = ms.calculate_policy_patent_score(policy_cites=0, patent_cites=0)
         open_science = ms.calculate_open_science_score(
             code=False,
@@ -450,6 +454,10 @@ async def teleport_researcher(author_id: str) -> None:
         )
         network_centrality = round(min(h_index * 2.5, 100.0), 1)
 
+        # These aren't independent measurements — they're aliases of the metrics above,
+        # kept for API/schema backward-compatibility. Don't present them as distinct
+        # signals in the UI (e.g. alongside "Novelty"/"Interdisciplinary") since they're
+        # always numerically identical to those fields.
         avg_creativity = semantic_novelty
         avg_complexity = interdisciplinary
         avg_skill = open_science

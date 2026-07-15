@@ -34,6 +34,14 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import com.company.skolab.ui.theme.SkoLabWarning
+import com.company.skolab.di.AppDependencies
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import org.json.JSONObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,6 +51,8 @@ fun InviteMemberScreen(
 ) {
     val context = LocalContext.current
     val db = remember { FirebaseFirestore.getInstance() }
+    val scope = rememberCoroutineScope()
+    val currentUserId = remember { AppDependencies.authManager.currentUser?.uid ?: "" }
     
     var inviteEmailInput by remember { mutableStateOf("") }
     var isInvitingMember by remember { mutableStateOf(false) }
@@ -91,6 +101,27 @@ fun InviteMemberScreen(
                                         "memberUids", updatedUids
                                     )
                                     .addOnSuccessListener {
+                                        // Log invitation to backend recommendation engine in background
+                                        if (currentUserId.isNotEmpty()) {
+                                            scope.launch(Dispatchers.IO) {
+                                                try {
+                                                    val base = com.company.skolab.network.ServerLocator.baseUrl.value ?: "http://10.0.2.2:8080"
+                                                    val url = "$base/api/v1/recommendations/peers/invite"
+                                                    val client = OkHttpClient()
+                                                    val jsonBody = JSONObject().apply {
+                                                        put("user_id", currentUserId)
+                                                        put("peer_email", researcher.email)
+                                                        put("peer_uid", researcher.uid)
+                                                    }
+                                                    val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
+                                                    val requestBody = jsonBody.toString().toRequestBody(mediaType)
+                                                    val request = Request.Builder().url(url).post(requestBody).build()
+                                                    client.newCall(request).execute().use { /* ignore */ }
+                                                } catch (e: Exception) {
+                                                    e.printStackTrace()
+                                                }
+                                            }
+                                        }
                                         isInvitingMember = false
                                         Toast.makeText(context, "${researcher.name} added to project!", Toast.LENGTH_SHORT).show()
                                         onBack()

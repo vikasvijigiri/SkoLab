@@ -3,21 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { Home, Search, FolderKanban, CircleUserRound } from "lucide-react";
+import { Search as SearchIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/hooks/AuthProvider";
+import { useCommandPalette } from "@/components/command/CommandPaletteProvider";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
-
-const NAV_ITEMS = [
-  { href: "/home", label: "Home", Icon: Home },
-  { href: "/discovery", label: "Discovery", Icon: Search },
-  { href: "/workspace", label: "CoLab", Icon: FolderKanban },
-  { href: "/profile", label: "Profile", Icon: CircleUserRound },
-] as const;
+import { NAV_ITEMS } from "@/lib/nav";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, signOut } = useAuth();
+  const { toggle: toggleCommandPalette } = useCommandPalette();
 
   return (
     <div className="flex h-dvh w-full overflow-hidden">
@@ -26,8 +22,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <span className="font-display text-[20px] font-bold text-text-primary">SkoLab</span>
           <ThemeToggle />
         </div>
+        <div className="px-3 pb-2">
+          <button
+            onClick={toggleCommandPalette}
+            className="flex w-full cursor-pointer items-center gap-2 rounded-md border border-border bg-surface-subtle px-2.5 py-2 font-body text-[12.5px] text-text-muted transition-colors duration-[var(--motion-fast)] hover:border-primary/40 hover:text-text-primary"
+            style={{ transitionTimingFunction: "var(--ease-standard)" }}
+          >
+            <SearchIcon size={14} />
+            <span className="flex-1 text-left">Search...</span>
+            <kbd className="rounded border border-border px-1 py-0.5 font-mono text-[10px]">⌘K</kbd>
+          </button>
+        </div>
         <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
-          {NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.filter((item) => item.href !== "/profile").map((item) => {
             const active = pathname?.startsWith(item.href);
             return (
               <Link
@@ -35,7 +42,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 href={item.href}
                 className={cn(
                   "relative flex items-center gap-3 rounded-md px-3 py-2.5 font-body text-[14px] font-medium transition-colors duration-[var(--motion-fast)]",
-                  active ? "text-primary" : "text-text-muted hover:text-text-primary"
+                  active ? "text-primary" : "text-text-muted hover:bg-surface-subtle hover:text-text-primary"
                 )}
                 style={{ transitionTimingFunction: "var(--ease-standard)" }}
               >
@@ -53,24 +60,34 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="border-t border-border px-3 py-4">
-          <div className="flex items-center gap-3 px-3">
-            <div
-              className="flex h-9 w-9 items-center justify-center rounded-full font-display text-[13px] font-bold text-white shadow-card"
-              style={{ background: "var(--gradient-hero)" }}
-            >
-              {(user?.displayName ?? user?.email ?? "?").slice(0, 1).toUpperCase()}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-body text-[13px] font-medium text-text-primary">
-                {user?.displayName ?? "Researcher"}
-              </p>
-              <button
-                onClick={() => signOut()}
-                className="font-body text-[12px] text-text-muted hover:text-primary"
+          <div
+            className={cn(
+              "rounded-md px-3 py-2 transition-colors duration-[var(--motion-fast)]",
+              pathname?.startsWith("/profile") ? "bg-primary/10" : "hover:bg-surface-subtle"
+            )}
+            style={{ transitionTimingFunction: "var(--ease-standard)" }}
+          >
+            {/* Link and the Sign out button are siblings, not nested — an <a> can't contain another interactive element. */}
+            <Link href="/profile" className="flex items-center gap-3">
+              <div
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display text-[13px] font-bold text-white shadow-card"
+                style={{ background: "var(--gradient-hero)" }}
               >
-                Sign out
-              </button>
-            </div>
+                {(user?.displayName ?? user?.email ?? "?").slice(0, 1).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-body text-[13px] font-medium text-text-primary">
+                  {user?.displayName ?? "Researcher"}
+                </p>
+              </div>
+            </Link>
+            <button
+              onClick={() => signOut()}
+              className="ml-12 cursor-pointer font-body text-[12px] text-text-muted transition-colors duration-[var(--motion-fast)] hover:text-primary"
+              style={{ transitionTimingFunction: "var(--ease-standard)" }}
+            >
+              Sign out
+            </button>
           </div>
         </div>
       </aside>
@@ -89,9 +106,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 font-body text-[10px] font-medium",
-                  active ? "text-primary" : "text-text-muted"
+                  "flex flex-col items-center gap-0.5 rounded-md px-2 py-1 font-body text-[10px] font-medium transition-[color,transform] duration-[var(--motion-fast)] active:scale-90",
+                  active ? "text-primary" : "text-text-muted hover:text-text-primary"
                 )}
+                style={{ transitionTimingFunction: "var(--ease-standard)" }}
               >
                 <item.Icon size={20} strokeWidth={1.8} />
                 {item.label}

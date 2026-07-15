@@ -214,6 +214,34 @@ body {
   font-family: var(--font-body);
 }
 
+/* Command palette (Radix Dialog via cmdk) — entrance/exit driven by data-state, which Radix sets automatically. */
+.cmdk-overlay {
+  transition: opacity var(--motion-normal) var(--ease-standard);
+}
+.cmdk-overlay[data-state="closed"] {
+  opacity: 0;
+}
+@starting-style {
+  .cmdk-overlay[data-state="open"] {
+    opacity: 0;
+  }
+}
+
+.cmdk-content {
+  transform: translate(-50%, 0) scale(1);
+  transition: opacity var(--motion-normal) var(--ease-standard), transform var(--motion-normal) var(--ease-standard);
+}
+.cmdk-content[data-state="closed"] {
+  opacity: 0;
+  transform: translate(-50%, -8px) scale(0.98);
+}
+@starting-style {
+  .cmdk-content[data-state="open"] {
+    opacity: 0;
+    transform: translate(-50%, -8px) scale(0.98);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

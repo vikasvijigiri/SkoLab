@@ -122,7 +122,6 @@ fun FeedScreen(
     var showSetupFocusDialog by remember { mutableStateOf(false) }
     var setupNameText by remember { mutableStateOf("") }
     var setupFocusText by remember { mutableStateOf("") }
-    var savedFeedItemIds by remember { mutableStateOf(setOf<String>()) }
 
     val context = LocalContext.current
     val authManager = com.company.skolab.di.AppDependencies.authManager
@@ -130,6 +129,9 @@ fun FeedScreen(
     val apiService = com.company.skolab.di.AppDependencies.apiService
     val cachedUser by authManager.cachedUser.collectAsState(initial = null)
     val connectionsList by userPrefs.userConnections.collectAsState(initial = emptyList())
+    // Persistent saved paper IDs — synced with DataStore
+    val persistedSavedIds by userPrefs.savedPaperIds.collectAsState(initial = emptyList())
+    val savedFeedItemIds: Set<String> = persistedSavedIds.toSet()
 
     // ── Active Collabs: Firestore live listener ──────────────────────────────
     val currentUserId = remember(cachedUser) { cachedUser?.uid ?: "" }
@@ -255,12 +257,21 @@ fun FeedScreen(
                     }
                 }
 
+                // Shimmer loading state — shown on initial load before any feed items arrive
+                if (uiState.isLoading && uiState.dailyFeedItems.isEmpty()) {
+                    item { PaperShimmerCard() }
+                    item { PaperShimmerCard() }
+                    item { PaperShimmerCard() }
+                }
+
                 if (uiState.suggestedConnections.isNotEmpty()) {
                     item {
-                        PeerMomentumStrip(
-                            peers = uiState.suggestedConnections.take(4),
-                            onAuthorClick = onAuthorClick
-                        )
+                        Box(modifier = Modifier.padding(top = 12.dp)) {
+                            PeerMomentumStrip(
+                                peers = uiState.suggestedConnections.take(4),
+                                onAuthorClick = onAuthorClick
+                            )
+                        }
                     }
                 }
 
@@ -268,9 +279,57 @@ fun FeedScreen(
                 item {
                     Box(modifier = Modifier.padding(horizontal = 20.dp)) {
                         StreakCard(
-                            onClick = onNavigateToLogicEngine
+                            onClick = {
+                                scope.launch { userPrefs.incrementStreakAndCheckIn() }
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onNavigateToLogicEngine()
+                                onTabNavigate("logic_engine")
+                            }
                         )
                     }
+                }
+
+                // Daily Challenge Card (Conjecture)
+                val dailyConjecture = uiState.dailyConjecture
+                if (dailyConjecture != null) {
+                    item {
+                        Box(modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)) {
+                            DailyChallengeCard(
+                                conjecture = dailyConjecture,
+                                onOpenChallenge = {
+                                    onTabNavigate("logic_engine")
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // Research Quick-Action Rail — Ask Agent, Team Pulse, Papers, Discovery etc.
+                item {
+                    ResearchActionRail(
+                        onNavigateToAgent = { onTabNavigate("agent") },
+                        onNavigateToCollabs = onNavigateToCollabs,
+                        onNavigateToMetrics = { onTabNavigate("logic_engine") },
+                        onNavigateToIndustry = { onTabNavigate("industry") },
+                        onNavigateToPapers = { onTabNavigate("papers") },
+                        onNavigateToDailyDiscovery = onNavigateToDailyDiscovery
+                    )
+                }
+
+                // AI Daily Brief Card
+                if (uiState.aiBriefText.isNotEmpty() || uiState.isLoading) {
+                    item {
+                        AIDailyBriefCard(
+                            briefText = uiState.aiBriefText,
+                            isLoading = uiState.isLoading && uiState.aiBriefText.isEmpty(),
+                            userId = currentUserId
+                        )
+                    }
+                }
+
+                // Frontier Pulse Card (Metrics overview)
+                item {
+                    FrontierPulseCard(metrics = uiState.frontierMetrics)
                 }
 
                 // Continue Reading
@@ -278,7 +337,7 @@ fun FeedScreen(
                     item {
                         SectionHeader(
                             title = "📖 Continue Reading",
-                            onSeeAll = {}
+                            onSeeAll = { onTabNavigate("papers") }
                         )
                     }
                     item {
@@ -322,12 +381,11 @@ fun FeedScreen(
                                 onTabNavigate("agent?query=${android.net.Uri.encode(discussPrompt)}")
                             },
                             onSaveClick = {
-                                val willSave = !savedFeedItemIds.contains(item1.id)
-                                savedFeedItemIds = if (willSave) savedFeedItemIds + item1.id else savedFeedItemIds - item1.id
-                                if (willSave) {
-                                    SkoLabAnalytics.logPaperSaved(item1.id)
+                                scope.launch {
+                                    val added = userPrefs.toggleSavedPaper(item1.id)
+                                    if (added) SkoLabAnalytics.logPaperSaved(item1.id)
+                                    android.widget.Toast.makeText(context, if (added) "Saved to Vault" else "Removed from Vault", android.widget.Toast.LENGTH_SHORT).show()
                                 }
-                                android.widget.Toast.makeText(context, if (willSave) "Saved to Vault" else "Removed from Vault", android.widget.Toast.LENGTH_SHORT).show()
                             },
                             isSaved = savedFeedItemIds.contains(item1.id),
                             onShareClick = {
@@ -508,6 +566,7 @@ fun FeedScreen(
                                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         },
                                         onChatClick = { onNavigateToChat(conn.author.name, conn.author.id) },
+                                        onCollabClick = onNavigateToCreateProject,
                                         onAuthorClick = {
                                             onAuthorClick("${conn.author.name}|${conn.author.id}")
                                         }
@@ -550,12 +609,11 @@ fun FeedScreen(
                                 onTabNavigate("agent?query=${android.net.Uri.encode(discussPrompt)}")
                             },
                             onSaveClick = {
-                                val willSave = !savedFeedItemIds.contains(item2.id)
-                                savedFeedItemIds = if (willSave) savedFeedItemIds + item2.id else savedFeedItemIds - item2.id
-                                if (willSave) {
-                                    SkoLabAnalytics.logPaperSaved(item2.id)
+                                scope.launch {
+                                    val added = userPrefs.toggleSavedPaper(item2.id)
+                                    if (added) SkoLabAnalytics.logPaperSaved(item2.id)
+                                    android.widget.Toast.makeText(context, if (added) "Saved to Vault" else "Removed from Vault", android.widget.Toast.LENGTH_SHORT).show()
                                 }
-                                android.widget.Toast.makeText(context, if (willSave) "Saved to Vault" else "Removed from Vault", android.widget.Toast.LENGTH_SHORT).show()
                             },
                             isSaved = savedFeedItemIds.contains(item2.id),
                             onShareClick = {
@@ -826,12 +884,11 @@ fun FeedScreen(
                                 onTabNavigate("agent?query=${android.net.Uri.encode(discussPrompt)}")
                             },
                             onSaveClick = {
-                                val willSave = !savedFeedItemIds.contains(item3.id)
-                                savedFeedItemIds = if (willSave) savedFeedItemIds + item3.id else savedFeedItemIds - item3.id
-                                if (willSave) {
-                                    SkoLabAnalytics.logPaperSaved(item3.id)
+                                scope.launch {
+                                    val added = userPrefs.toggleSavedPaper(item3.id)
+                                    if (added) SkoLabAnalytics.logPaperSaved(item3.id)
+                                    android.widget.Toast.makeText(context, if (added) "Saved to Vault" else "Removed from Vault", android.widget.Toast.LENGTH_SHORT).show()
                                 }
-                                android.widget.Toast.makeText(context, if (willSave) "Saved to Vault" else "Removed from Vault", android.widget.Toast.LENGTH_SHORT).show()
                             },
                             isSaved = savedFeedItemIds.contains(item3.id),
                             onShareClick = {
@@ -886,7 +943,7 @@ fun FeedScreen(
                 val trendingFeedList = (uiState.trendingPapers + uiState.hotPapers).distinctBy { it.id }
                 if (trendingFeedList.isNotEmpty()) {
                     item {
-                        Column(modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp)) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 20.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
@@ -937,16 +994,21 @@ fun FeedScreen(
                                 onTabNavigate("agent?query=${android.net.Uri.encode(discussPrompt)}")
                             },
                             onSaveClick = {
-                                val willSave = !savedFeedItemIds.contains(paper.id)
-                                savedFeedItemIds = if (willSave) savedFeedItemIds + paper.id else savedFeedItemIds - paper.id
-                                if (willSave) {
-                                    SkoLabAnalytics.logPaperSaved(paper.id)
+                                scope.launch {
+                                    val added = userPrefs.toggleSavedPaper(paper.id)
+                                    if (added) SkoLabAnalytics.logPaperSaved(paper.id)
+                                    android.widget.Toast.makeText(context, if (added) "Saved to Vault" else "Removed from Vault", android.widget.Toast.LENGTH_SHORT).show()
                                 }
-                                android.widget.Toast.makeText(context, if (willSave) "Saved to Vault" else "Removed from Vault", android.widget.Toast.LENGTH_SHORT).show()
                             },
                             isSaved = savedFeedItemIds.contains(paper.id),
                             onShareClick = {
-                                android.widget.Toast.makeText(context, "Link copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+                                val shareText = "📄 ${paper.title}\nPublished in ${paper.journal} (${paper.year})\n\nShared via SkoLab"
+                                val sendIntent = android.content.Intent().apply {
+                                    action = android.content.Intent.ACTION_SEND
+                                    putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                                    type = "text/plain"
+                                }
+                                context.startActivity(android.content.Intent.createChooser(sendIntent, "Share Paper"))
                             }
                         )
                     }
@@ -1114,284 +1176,8 @@ fun FeedScreen(
 
 
 
-// ── PulseConnectionCard: Portrait card for horizontal PYMK scroll ─────────────
+// ── Components now imported from com.company.skolab.ui.screens.feed.components ──
 
-// ── COMPONENT 2: FrontierPulseCard ───────────────────────────────────────────
-@Composable
-fun FrontierPulseCard(metrics: FrontierMetrics) {
-    val dProgress by animateFloatAsState(
-        targetValue = metrics.dIndex,
-        animationSpec = tween(800, easing = FastOutSlowInEasing),
-        label = "dProgress"
-    )
-    val sProgress by animateFloatAsState(
-        targetValue = metrics.sIndex,
-        animationSpec = tween(800, easing = FastOutSlowInEasing),
-        label = "sProgress"
-    )
-    val influenceScore = ((dProgress + sProgress) / 2f).coerceIn(0f, 1f)
-
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = SkoLabColors.Card,
-        border = BorderStroke(1.dp, SkoLabColors.Border),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .drawBehind {
-                    // radial Gold glow top-right
-                    drawRect(
-                        brush = Brush.radialGradient(
-                            colors = listOf(SkoLabColors.Gold1.copy(alpha = 0.08f), Color.Transparent),
-                            center = Offset(size.width * 0.9f, size.height * 0.1f),
-                            radius = size.width * 0.4f
-                        )
-                    )
-                    // radial Blue glow bottom-left
-                    drawRect(
-                        brush = Brush.radialGradient(
-                            colors = listOf(SkoLabColors.Blue1.copy(alpha = 0.08f), Color.Transparent),
-                            center = Offset(size.width * 0.1f, size.height * 0.9f),
-                            radius = size.width * 0.4f
-                        )
-                    )
-                }
-                .padding(16.dp)
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                // Header
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    val infiniteTransition = rememberInfiniteTransition(label = "dotPulse")
-                    val alpha by infiniteTransition.animateFloat(
-                        initialValue = 0.4f, targetValue = 1f,
-                        animationSpec = infiniteRepeatable(tween(1000), RepeatMode.Reverse),
-                        label = "pulseAlpha"
-                    )
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .background(SkoLabColors.Gold1.copy(alpha = alpha), CircleShape)
-                    )
-                    Text(
-                        text = "FRONTIER PULSE · LIVE",
-                        fontFamily = SpaceGroteskFontFamily,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = SkoLabColors.Gold1,
-                        letterSpacing = 1.2.sp
-                    )
-                }
-
-                // Three Metrics Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // D-Index
-                    Column(horizontalAlignment = Alignment.Start) {
-                        Text(
-                            text = String.format("%.2f", metrics.dIndex),
-                            fontFamily = SyneFontFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 28.sp,
-                            color = SkoLabColors.Gold2
-                        )
-                        Text("D-INDEX", fontFamily = SpaceGroteskFontFamily, fontSize = 9.sp, color = SkoLabColors.Text3, fontWeight = FontWeight.Bold)
-                        Text("+${String.format("%.2f", metrics.dIndexDelta)} delta", fontFamily = JetBrainsMonoFontFamily, fontSize = 9.sp, color = SkoLabColors.Green)
-                    }
-
-                    Box(modifier = Modifier.size(width = 1.dp, height = 36.dp).background(SkoLabColors.Border))
-
-                    // S-Index
-                    Column(horizontalAlignment = Alignment.Start) {
-                        Text(
-                            text = String.format("%.2f", metrics.sIndex),
-                            fontFamily = SyneFontFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 28.sp,
-                            color = SkoLabColors.Blue2
-                        )
-                        Text("S-INDEX", fontFamily = SpaceGroteskFontFamily, fontSize = 9.sp, color = SkoLabColors.Text3, fontWeight = FontWeight.Bold)
-                        Text("+${String.format("%.2f", metrics.sIndexDelta)} delta", fontFamily = JetBrainsMonoFontFamily, fontSize = 9.sp, color = SkoLabColors.Green)
-                    }
-
-                    Box(modifier = Modifier.size(width = 1.dp, height = 36.dp).background(SkoLabColors.Border))
-
-                    // Total Papers
-                    Column(horizontalAlignment = Alignment.Start) {
-                        Text(
-                            text = metrics.papersCount.toString(),
-                            fontFamily = SyneFontFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 28.sp,
-                            color = SkoLabColors.Purple2
-                        )
-                        Text("PAPERS", fontFamily = SpaceGroteskFontFamily, fontSize = 9.sp, color = SkoLabColors.Text3, fontWeight = FontWeight.Bold)
-                        Text("+${metrics.papersDelta} new", fontFamily = JetBrainsMonoFontFamily, fontSize = 9.sp, color = SkoLabColors.Green)
-                    }
-                }
-
-                // Arc meters row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(SkoLabColors.Card2, RoundedCornerShape(8.dp))
-                            .border(1.dp, SkoLabColors.Border, RoundedCornerShape(8.dp))
-                            .padding(vertical = 10.dp, horizontal = 4.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        ScoreArcMeter(score = dProgress, label = "Disruption", size = 52.dp, color = SkoLabColors.Gold1)
-                    }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(SkoLabColors.Card2, RoundedCornerShape(8.dp))
-                            .border(1.dp, SkoLabColors.Border, RoundedCornerShape(8.dp))
-                            .padding(vertical = 10.dp, horizontal = 4.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        ScoreArcMeter(score = sProgress, label = "Novelty", size = 52.dp, color = SkoLabColors.Cyan)
-                    }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(SkoLabColors.Card2, RoundedCornerShape(8.dp))
-                            .border(1.dp, SkoLabColors.Border, RoundedCornerShape(8.dp))
-                            .padding(vertical = 10.dp, horizontal = 4.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        ScoreArcMeter(score = influenceScore, label = "Influence", size = 52.dp, color = SkoLabColors.Purple2)
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ── COMPONENT 3: AIDailyBriefCard ────────────────────────────────────────────
-@Composable
-fun AIDailyBriefCard(
-    briefText: String,
-    isLoading: Boolean,
-    userId: String
-) {
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = SkoLabColors.Card,
-        border = BorderStroke(1.dp, SkoLabColors.Purple1.copy(alpha = 0.35f)),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .drawBehind {
-                    // radial Purple glow top-right
-                    drawRect(
-                        brush = Brush.radialGradient(
-                            colors = listOf(SkoLabColors.Purple1.copy(alpha = 0.1f), Color.Transparent),
-                            center = Offset(size.width * 0.85f, size.height * 0.15f),
-                            radius = size.width * 0.45f
-                        )
-                    )
-                }
-                .padding(16.dp)
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                // Header
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(26.dp)
-                            .background(SkoLabColors.Purple1.copy(alpha = 0.12f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = "AI Brain",
-                            tint = SkoLabColors.Purple2,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                    Text(
-                        text = "AI DAILY BRIEF",
-                        fontFamily = SpaceGroteskFontFamily,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = SkoLabColors.Purple2,
-                        letterSpacing = 1.sp
-                    )
-                    Spacer(Modifier.weight(1f))
-                    Text(
-                        text = "Today",
-                        fontFamily = SpaceGroteskFontFamily,
-                        fontSize = 10.sp,
-                        color = SkoLabColors.Text3,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-
-                if (isLoading) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ShimmerBar(Modifier.fillMaxWidth().height(12.dp))
-                        ShimmerBar(Modifier.fillMaxWidth(0.85f).height(12.dp))
-                        ShimmerBar(Modifier.fillMaxWidth(0.5f).height(12.dp))
-                    }
-                } else {
-                    val annotatedString = buildAnnotatedString {
-                        val parts = briefText.split("**")
-                        parts.forEachIndexed { index, part ->
-                            if (index % 2 == 1) {
-                                withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = SkoLabColors.Gold2)) {
-                                    append(part)
-                                }
-                            } else {
-                                append(part)
-                            }
-                        }
-                    }
-
-                    Text(
-                        text = annotatedString,
-                        fontFamily = SpaceGroteskFontFamily,
-                        fontSize = 12.sp,
-                        lineHeight = 17.sp,
-                        color = SkoLabColors.Text
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ShimmerBar(modifier: Modifier = Modifier) {
-    val infiniteTransition = rememberInfiniteTransition(label = "shimmerBar")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.12f, targetValue = 0.35f,
-        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse),
-        label = "shimmerAlpha"
-    )
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(SkoLabColors.Text3.copy(alpha = alpha))
-    )
-}
 
 // ── COMPONENT 4: QuickFilterRail ─────────────────────────────────────────────
 @Composable
@@ -2558,14 +2344,21 @@ fun ResumeCard(
                         fontFamily = JetBrainsMonoFontFamily,
                         fontWeight = FontWeight.Bold
                     )
-                    Text(
-                        text = "Resume →",
-                        color = SkoLabColors.Blue2,
-                        fontFamily = SpaceGroteskFontFamily,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.clickable { onResume() }
-                    )
+                    Surface(
+                        onClick = onResume,
+                        shape = RoundedCornerShape(8.dp),
+                        color = SkoLabColors.Blue2.copy(alpha = 0.08f),
+                        border = BorderStroke(0.5.dp, SkoLabColors.Blue2.copy(alpha = 0.2f))
+                    ) {
+                        Text(
+                            text = "Resume →",
+                            color = SkoLabColors.Blue2,
+                            fontFamily = SpaceGroteskFontFamily,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
                 }
             }
         }
@@ -2673,168 +2466,8 @@ private fun getCountdownText(): String {
     return "Resets in $daysLeft days"
 }
 
-private data class HomeAction(
-    val label: String,
-    val icon: ImageVector,
-    val tint: Color,
-    val onClick: () -> Unit
-)
+// ── Actions and challenge components now imported from com.company.skolab.ui.screens.feed.components ──
 
-@Composable
-fun ResearchActionRail(
-    onNavigateToAgent: () -> Unit,
-    onNavigateToCollabs: () -> Unit,
-    onNavigateToMetrics: () -> Unit,
-    onNavigateToIndustry: () -> Unit,
-    onNavigateToPapers: () -> Unit,
-    onNavigateToDailyDiscovery: () -> Unit
-) {
-    val actions = listOf(
-        HomeAction("Ask Agent", Icons.Default.AutoAwesome, AccentViolet, onNavigateToAgent),
-        HomeAction("Team Pulse", Icons.Default.People, AccentTeal, onNavigateToCollabs),
-        HomeAction("Metrics", Icons.Default.AutoGraph, AccentAmber, onNavigateToMetrics),
-        HomeAction("Industry", Icons.Default.BusinessCenter, AccentEmerald, onNavigateToIndustry),
-        HomeAction("Papers", Icons.AutoMirrored.Filled.Article, AccentRose, onNavigateToPapers),
-        HomeAction("Discovery", Icons.Default.Search, AccentIndigo, onNavigateToDailyDiscovery)
-    )
-
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(horizontal = 20.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        items(actions) { action ->
-            Surface(
-                onClick = action.onClick,
-                shape = RoundedCornerShape(16.dp),
-                color = BgCard,
-                border = BorderStroke(1.dp, action.tint.copy(alpha = 0.25f))
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(26.dp)
-                            .background(action.tint.copy(alpha = 0.12f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = action.icon,
-                            contentDescription = action.label,
-                            tint = action.tint,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                    Text(
-                        text = action.label,
-                        color = TextPrimary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun DailyChallengeCard(
-    conjecture: Conjecture,
-    onOpenChallenge: () -> Unit
-) {
-    Surface(
-        onClick = onOpenChallenge,
-        shape = RoundedCornerShape(18.dp),
-        color = BgCard,
-        border = BorderStroke(1.dp, AccentAmber.copy(alpha = 0.25f)),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(26.dp)
-                        .background(AccentAmber.copy(alpha = 0.12f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.School,
-                        contentDescription = "Daily challenge",
-                        tint = AccentAmber,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Today's challenge",
-                        color = AccentAmber,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
-                    Text(
-                        text = conjecture.category,
-                        color = TextMuted,
-                        fontSize = 10.sp
-                    )
-                }
-                Surface(
-                    shape = RoundedCornerShape(999.dp),
-                    color = AccentAmber.copy(alpha = 0.12f)
-                ) {
-                    Text(
-                        text = "Open",
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        color = AccentAmber,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            Text(
-                text = conjecture.title,
-                color = TextPrimary,
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                lineHeight = 18.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = conjecture.hypothesis,
-                color = TextMuted,
-                fontSize = 11.sp,
-                lineHeight = 15.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                conjecture.options.take(2).forEach { option ->
-                    Surface(
-                        shape = RoundedCornerShape(999.dp),
-                        color = AccentTeal.copy(alpha = 0.08f)
-                    ) {
-                        Text(
-                            text = option,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            color = AccentTeal,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
 
 
 // ── PulseFeedCard: LinkedIn-style feed card ──

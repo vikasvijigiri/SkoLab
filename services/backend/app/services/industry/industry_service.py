@@ -349,7 +349,13 @@ async def get_openalex_funders_as_opps(
                         "2. Submit preliminary abstract proposal",
                         "3. Final grant application submission with budget outline",
                     ],
-                    "deadline": "Mar 31, 2027",
+                    # This fallback path (OpenAlex funder lookup, used only when live
+                    # scraping+extraction returns nothing) has no real deadline data —
+                    # a specific hardcoded date here would silently go stale and could
+                    # mislead someone into missing (or chasing a nonexistent) deadline.
+                    # Unlike the scraped path above, which extracts a real date from
+                    # source text, be honest that this one is unverified.
+                    "deadline": "See funder site — not independently verified",
                     "status": "Active",
                     "requiredSkills": ["Grant Writing", "Research Proposal"],
                     "matchScore": 84,
