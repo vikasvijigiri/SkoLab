@@ -1,5 +1,6 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
+from pydantic import BaseModel
 
 import re
 
@@ -26,6 +27,27 @@ async def get_daily_feed(
             author_id, query_fallback=query_fallback
         )
         return data
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class DismissFeedItemRequest(BaseModel):
+    author_id: str
+    work_id: str
+
+
+@router.post("/daily_feed/dismiss")
+async def dismiss_daily_feed_item(
+    request: DismissFeedItemRequest,
+    pipeline_services: PipelineServices = Depends(get_pipeline_services),
+):
+    try:
+        await pipeline_services.dismiss_recommendation(
+            request.author_id, request.work_id
+        )
+        return {"success": True}
     except HTTPException:
         raise
     except Exception as e:

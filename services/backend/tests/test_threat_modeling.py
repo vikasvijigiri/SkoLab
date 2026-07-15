@@ -1,3 +1,4 @@
+import asyncio
 import os
 import time
 import hmac
@@ -25,12 +26,12 @@ from app.main import rate_limiter
 
 
 @pytest.fixture(autouse=True)
-async def cleanup_test_context():
+def cleanup_test_context():
     """Reset rate limiter and dispose engine after each test."""
     rate_limiter.buckets.clear()
     yield
     rate_limiter.buckets.clear()
-    await engine.dispose()
+    asyncio.get_event_loop().run_until_complete(engine.dispose())
 
 
 async def force_cleanup_user(db, user_id):
@@ -45,7 +46,7 @@ async def force_cleanup_user(db, user_id):
     await db.commit()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_scraper_user_agent_blocking():
     """Verify that requests from common scraper User-Agents are blocked with 403."""
     async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
@@ -59,7 +60,7 @@ async def test_scraper_user_agent_blocking():
         assert response_valid.status_code == 200
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_admin_access_guard():
     """Verify SRE/admin endpoints (/metrics, /ai_status) require local IP or SRE token."""
     async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
@@ -73,7 +74,7 @@ async def test_admin_access_guard():
         assert response_token.status_code == 200
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_device_signature_validation():
     """Verify X-Device-Signature checks for authenticated state-changing requests."""
     user_id = "test_device_sig_user"
@@ -148,7 +149,7 @@ async def test_device_signature_validation():
             app.dependency_overrides.pop(get_verified_user, None)
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_path_specific_rate_limiting():
     """Verify strict rate limits (capacity=5) on critical paths."""
     async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
@@ -167,7 +168,7 @@ async def test_path_specific_rate_limiting():
         assert 429 in status_codes
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_input_length_validation():
     """Verify that chat messages > 2000 characters fail Pydantic model validation."""
     long_msg = "A" * 2001
@@ -175,7 +176,7 @@ async def test_input_length_validation():
         AgentChatRequest(message=long_msg, history=[])
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_quest_database_tampering_check():
     """Verify database integrity checks detect quest record modifications."""
     user_id = "test_tampering_user"

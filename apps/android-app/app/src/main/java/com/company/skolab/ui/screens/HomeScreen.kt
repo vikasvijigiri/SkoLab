@@ -805,10 +805,13 @@ fun HomeTopWidget(
                     color = TEXT_MUTED,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.width(52.dp)
+                    maxLines = 1,
+                    modifier = Modifier.padding(end = 4.dp)
                 )
                 Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    modifier = Modifier
+                        .weight(1f)
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     if (isLoadingMemory && recentPapers.isEmpty()) {

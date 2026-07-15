@@ -4,6 +4,8 @@ import json
 import random
 import asyncio
 import re
+import time
+import numpy as np
 from contextlib import asynccontextmanager
 from typing import List, Dict, Optional, Any, AsyncGenerator, Tuple, Set
 from app.services.ai.llm_service import is_llm_working
@@ -17,6 +19,11 @@ from app.services.data.openalex_service import (
 )
 from app.db.pg_cache import PgBackedCache
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.domains.recommendation.engine import (
+    cosine_similarity as vector_cosine_similarity,
+    mmr_diversify,
+)
+from app.services.ai.embedding_service import embed_texts, embed_query
 from app.prompts import (
     DAILY_FEED_ADVISOR_PROMPT_TEMPLATE,
     METADATA_EXTRACTION_PROMPT_TEMPLATE,
@@ -469,6 +476,11 @@ _pg_journal_advisor_cache = PgBackedCache(
 _pg_network_collab_cache = PgBackedCache(
     ttl_seconds=3600, name="pipeline_network_collab"
 )
+# Effectively-permanent (10y TTL) — a dismissal shouldn't quietly expire and
+# bring a paper the user already rejected back into their feed.
+_pg_dismissed_recs_cache = PgBackedCache(
+    ttl_seconds=315360000, name="pipeline_dismissed_recs"
+)
 
 
 class PipelineServices:
@@ -636,6 +648,94 @@ class PipelineServices:
 
         # Rule-based fallback
         return extract_metadata_from_abstract(title, abstract)
+
+    async def _extract_recent_paper_keywords(
+        self, user_works: List[Dict[str, Any]]
+    ) -> List[str]:
+        """
+        LLM-extracted technical keywords/phrases from the researcher's 5 most
+        recent papers (title + abstract). Sharper and more specific than raw
+        title/concept tokens alone — surfaces the actual methods, models, and
+        sub-topics the researcher is currently working on (e.g. "spin-echo
+        decoherence", "Jaynes-Cummings model") rather than just broad field
+        tags, which is what feeds the embedding query below.
+        """
+        if not is_llm_working() or not user_works:
+            return []
+
+        def sort_key(w: Dict[str, Any]) -> str:
+            return w.get("publication_date") or str(w.get("publication_year") or "0")
+
+        recent = sorted(
+            [w for w in user_works if w.get("title")], key=sort_key, reverse=True
+        )[:5]
+        if not recent:
+            return []
+
+        context_parts = []
+        for w in recent:
+            abstract = w.get("abstract") or w.get("_custom_abstract") or ""
+            if not abstract and w.get("abstract_inverted_index"):
+                abstract = self._reconstruct_abstract(w["abstract_inverted_index"])
+            context_parts.append(f"Title: {w.get('title')}\nAbstract: {abstract[:600]}")
+        context = "\n\n".join(context_parts)
+
+        try:
+            response = await self.llm_service.query(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant that outputs only valid raw JSON.",
+                    },
+                    {
+                        "role": "user",
+                        "content": (
+                            "Extract 10-15 precise technical research keywords/phrases "
+                            "(specific methods, models, phenomena, materials — not generic "
+                            "field names like 'physics' or 'machine learning') that best "
+                            "characterize this researcher's current work, based on their 5 "
+                            "most recent papers below.\n\n"
+                            f"{context}\n\n"
+                            'Return raw JSON: {"keywords": ["...", "..."]}'
+                        ),
+                    },
+                ],
+                temperature=0.2,
+                max_tokens=300,
+                response_format={"type": "json_object"},
+            )
+            if response.content:
+                data = json.loads(response.content)
+                keywords = data.get("keywords")
+                if isinstance(keywords, list):
+                    return [str(k) for k in keywords if k][:15]
+        except Exception as e:
+            print(f"[DailyFeed] LLM keyword extraction failed: {e}", flush=True)
+        return []
+
+    def _find_similar_researchers(
+        self, topic_matched_works: List[Dict[str, Any]], exclude_author_id: Optional[str]
+    ) -> List[str]:
+        """
+        Derives a handful of OpenAlex author IDs from the authorships of papers
+        that already matched the topic/keyword search — i.e. "who wrote the
+        papers that are already known to be on-topic", not an independent
+        author-name search. (OpenAlex's /authors search endpoint does fuzzy
+        matching against author *display names*; feeding it a topic phrase like
+        "CRISPR and Genetic Engineering" returns nothing or garbage, since a
+        concept string doesn't look like a person's name — confirmed by testing
+        it directly.) Entirely generic: driven by whatever candidate works the
+        caller's own topic search actually found, no per-user hardcoding.
+        """
+        exclude_clean = exclude_author_id.split("/")[-1] if exclude_author_id else None
+        seen: List[str] = []
+        for w in topic_matched_works:
+            for authorship in w.get("authorships") or []:
+                aid = (authorship.get("author") or {}).get("id") or ""
+                aid = aid.split("/")[-1]
+                if aid and aid != exclude_clean and aid not in seen:
+                    seen.append(aid)
+        return seen[:4]
 
     async def _resolve_author_concepts_and_name(
         self, author_id: str, doc_id: str
@@ -879,56 +979,24 @@ class PipelineServices:
             return 0.0
         return min(1.0, overlap / union_size)
 
-    def _compute_semantic_similarity(
-        self, user_profile_text: str, paper_title: str, paper_abstract: str
-    ) -> float:
-        import re
+    async def get_dismissed_recommendation_ids(self, author_id: Optional[str]) -> Set[str]:
+        """OpenAlex work IDs this author has explicitly dismissed from their feed."""
+        doc_id = author_id.split("/")[-1] if author_id else "anon"
+        ids = await _pg_dismissed_recs_cache.get(doc_id)
+        return set(ids) if ids else set()
 
-        def tokenize(text: str) -> set:
-            if not text:
-                return set()
-            words = re.findall(r"\b[a-z]{3,15}\b", text.lower())
-            stopwords = {
-                "the",
-                "and",
-                "for",
-                "with",
-                "from",
-                "using",
-                "based",
-                "study",
-                "analysis",
-                "paper",
-                "method",
-                "results",
-                "approach",
-                "effects",
-                "role",
-                "highly",
-                "novel",
-                "new",
-                "efficient",
-                "optimal",
-                "propose",
-                "present",
-                "develop",
-            }
-            return {w for w in words if w not in stopwords}
-
-        user_tokens = tokenize(user_profile_text)
-        paper_tokens = tokenize(paper_title + " " + paper_abstract)
-
-        if not user_tokens or not paper_tokens:
-            return 0.0
-
-        intersection = user_tokens.intersection(paper_tokens)
-        title_tokens = tokenize(paper_title)
-        title_intersection = user_tokens.intersection(title_tokens)
-
-        score = (len(intersection) + len(title_intersection) * 2.0) / len(
-            user_tokens.union(paper_tokens)
-        )
-        return score
+    async def dismiss_recommendation(self, author_id: str, work_id: str) -> None:
+        """
+        Records a dismissal and invalidates the cached feed so the next fetch
+        recomputes without this paper, instead of silently re-serving a stale
+        cached feed that still contains it for up to an hour.
+        """
+        doc_id = author_id.split("/")[-1] if author_id else "anon"
+        current = await self.get_dismissed_recommendation_ids(author_id)
+        current.add(work_id)
+        await _pg_dismissed_recs_cache.set(doc_id, list(current))
+        feed_cache = PgBackedCache(ttl_seconds=3600, name="pipeline")
+        await feed_cache.delete(f"daily_feed_{doc_id}")
 
     async def get_daily_feed(
         self, author_id: Optional[str], query_fallback: Optional[str] = None
@@ -943,16 +1011,48 @@ class PipelineServices:
             doc_id = f"fallback_{re.sub(r'[^a-zA-Z0-9_]', '_', query_fallback.strip().lower())}"
         else:
             doc_id = "default_feed"
+        dismissed_ids = await self.get_dismissed_recommendation_ids(author_id)
         cache_key = f"daily_feed_{doc_id}"
         cached_data = await self._load_from_postgres(cache_key)
         if isinstance(cached_data, dict) and "items" in cached_data:
-            print(f"[Postgres Cache Hit] daily_feeds for doc_id={doc_id}", flush=True)
-            return cached_data["items"]
+            cached_items = cached_data["items"]
+            if not dismissed_ids or not any(
+                it.get("id") in dismissed_ids for it in cached_items
+            ):
+                print(f"[Postgres Cache Hit] daily_feeds for doc_id={doc_id}", flush=True)
+                return cached_items
         _fs_cached = await self._firestore_get_safe("daily_feeds", doc_id, timeout=5.0)
         if isinstance(_fs_cached, dict) and "items" in _fs_cached:
-            print(f"[Firestore Cache Hit] daily_feeds for doc_id={doc_id}", flush=True)
-            await self._save_to_postgres(cache_key, {"items": _fs_cached["items"]})
-            return _fs_cached["items"]
+            # Firestore itself has no TTL/expiry — unlike the Postgres L2 cache above,
+            # an entry here is served forever unless we check its age ourselves. Without
+            # this, once the Postgres cache expires (1h), it would just re-read this same
+            # Firestore doc and re-seed Postgres with it, making a bad cached feed
+            # permanent regardless of any future fix to the generation logic below.
+            last_synced = _fs_cached.get("last_synced")
+            is_fresh = False
+            if last_synced is not None:
+                try:
+                    now = datetime.datetime.now(datetime.timezone.utc)
+                    synced_at = (
+                        last_synced
+                        if last_synced.tzinfo
+                        else last_synced.replace(tzinfo=datetime.timezone.utc)
+                    )
+                    is_fresh = (now - synced_at).total_seconds() < 3600
+                except Exception:
+                    is_fresh = False
+            fs_items = _fs_cached["items"]
+            fs_has_dismissed = dismissed_ids and any(
+                it.get("id") in dismissed_ids for it in fs_items
+            )
+            if is_fresh and not fs_has_dismissed:
+                print(f"[Firestore Cache Hit] daily_feeds for doc_id={doc_id}", flush=True)
+                await self._save_to_postgres(cache_key, {"items": fs_items})
+                return fs_items
+            print(
+                f"[Firestore Cache Stale] daily_feeds for doc_id={doc_id} — recomputing",
+                flush=True,
+            )
 
         # Fetch user publications if profile exists
         user_works = []
@@ -991,35 +1091,84 @@ class PipelineServices:
                 author_id, doc_id
             )
 
-        # Merge concepts
+        # Merge concepts — ORDER MATTERS: only the first 3 unique entries become the
+        # actual search queries below, and `combined_concepts[0]` becomes the
+        # discipline-relevance filter. `concepts` (author-level OpenAlex *topics*,
+        # e.g. "Advanced Condensed Matter Physics") are curated and specific by
+        # construction. `user_concepts` (per-work OpenAlex *concept* tags) are a mix
+        # of specific (e.g. "Heisenberg model", "Quantum Monte Carlo") and generic
+        # (e.g. "Physics", "Quantum mechanics") — and since near-every physics paper
+        # carries the generic ones, they used to win the "first 3 unique" race almost
+        # every time, so the search ended up querying something as broad as "Physics"
+        # instead of the far more specific signal sitting right next to it. Priority
+        # is now: curated topics -> specific work concepts -> generic ones last.
+        GENERIC_CONCEPT_TERMS = {
+            "physics", "science", "biology", "chemistry", "mathematics",
+            "engineering", "computer science", "medicine", "quantum mechanics",
+            "materials science", "quantum",
+        }
         combined_concepts = []
-        for c in user_concepts:
-            if c not in combined_concepts:
-                combined_concepts.append(c)
         for c in concepts:
             if c not in combined_concepts:
                 combined_concepts.append(c)
+        for c in user_concepts:
+            if c.lower() not in GENERIC_CONCEPT_TERMS and c not in combined_concepts:
+                combined_concepts.append(c)
+        for c in user_concepts:
+            if c not in combined_concepts:
+                combined_concepts.append(c)
 
-        # Build dynamic search queries based on user's concepts
+        # LLM-extracted keywords from the researcher's 5 most recent papers (see
+        # docstring on _extract_recent_paper_keywords). Computed here — before
+        # search_queries — specifically so they can drive *retrieval* itself,
+        # not just softly nudge the embedding profile text further downstream.
+        # Previously that was the gap: sharp, specific keywords existed but only
+        # ever fed a similarity average, never actually widened or focused what
+        # got fetched in the first place.
+        recent_keywords = await self._extract_recent_paper_keywords(user_works)
+
+        # Build dynamic search queries: concepts (broader field coverage) +
+        # recent keywords (sharp, current-work-specific terms) — deduped,
+        # capped so fan-out below stays bounded. Previously only the top 3
+        # concepts drove retrieval, which is why the candidate pool was a thin,
+        # somewhat arbitrary ~20-40 papers instead of a genuinely representative
+        # sample of the relevant literature. Capped at 6 terms total (4 concepts
+        # + 2 keywords) — wider (10) measured ~2m48s cold-compute latency, too
+        # slow for a synchronous first-load wait; this keeps most of the pool
+        # breadth gain while landing closer to the original ~40-80s.
         search_queries = []
-        if combined_concepts:
-            search_queries = combined_concepts[:3]
-        elif query_fallback:
-            search_queries = [query_fallback]
-        else:
-            search_queries = ["research"]
+        for term in combined_concepts[:4] + recent_keywords[:2]:
+            if term and term not in search_queries:
+                search_queries.append(term)
+        if not search_queries:
+            search_queries = [query_fallback] if query_fallback else ["research"]
 
         candidates = []
         seen_titles = set()
-        discipline = query_fallback or (
-            combined_concepts[0] if combined_concepts else "STEM"
+        # Same priority as search_queries above: prefer the author's real OpenAlex
+        # concepts over query_fallback whenever concepts exist. query_fallback is
+        # only a topic hint when there's nothing better — it must never be treated
+        # as authoritative over real profile data, since callers may pass something
+        # that isn't a topic at all (see get_daily_feed's caller).
+        discipline = (
+            combined_concepts[0] if combined_concepts else (query_fallback or "STEM")
+        )
+        print(
+            f"[DailyFeed][DEBUG] discipline={discipline!r} combined_concepts={combined_concepts[:8]!r} search_queries={search_queries!r}",
+            flush=True,
         )
 
         def add_candidate_if_valid(w: Dict[str, Any]) -> None:
-            if len(candidates) >= 40:
+            # Raised from 40 — search_queries now spans up to 10 terms (6 concepts
+            # + 4 recent keywords) plus a similar-researchers channel, so the raw
+            # fetch is much larger than before; capping too low here would throw
+            # most of that broader pool away before it ever reaches scoring.
+            if len(candidates) >= 200:
                 return
             title = w.get("title", "")
             if not title:
+                return
+            if w.get("id") in dismissed_ids:
                 return
             title_norm = title.strip().lower().rstrip(".")
             abstract_index = w.get("abstract_inverted_index")
@@ -1062,6 +1211,7 @@ class PipelineServices:
                 )
             )
 
+        _t0 = time.monotonic()
         try:
             results_list = await asyncio.gather(*tasks, return_exceptions=True)
             for res in results_list:
@@ -1072,6 +1222,47 @@ class PipelineServices:
                     print(f"[DailyFeed] Gather query failed: {res}", flush=True)
         except Exception as e:
             print(f"Error fetching papers for daily feed: {e}", flush=True)
+        print(
+            f"[DailyFeed][TIMING] main_gather={time.monotonic()-_t0:.1f}s tasks={len(tasks)} candidates={len(candidates)}",
+            flush=True,
+        )
+
+        # Pull in recent works from researchers who authored papers already
+        # found by the topic search above — widens the pool beyond exact
+        # keyword matches (a paper can be a perfect topical match while using
+        # different terminology than any of our search queries). Generic: the
+        # source works came from search_queries, themselves derived entirely
+        # from whichever profile is logged in.
+        _t0 = time.monotonic()
+        similar_researcher_ids = self._find_similar_researchers(
+            candidates[:20], author_id
+        )
+        try:
+            if similar_researcher_ids:
+                peer_works_tasks = [
+                    self.openalex_service.fetch_author_works(
+                        peer_id, per_page=5, sort="publication_date:desc"
+                    )
+                    for peer_id in similar_researcher_ids
+                ]
+                peer_results = await asyncio.gather(
+                    *peer_works_tasks, return_exceptions=True
+                )
+                for res in peer_results:
+                    if isinstance(res, list):
+                        for w in res:
+                            add_candidate_if_valid(w)
+                    elif isinstance(res, Exception):
+                        print(
+                            f"[DailyFeed] Similar-researcher works fetch failed: {res}",
+                            flush=True,
+                        )
+        except Exception:
+            pass
+        print(
+            f"[DailyFeed][TIMING] similar_researchers={time.monotonic()-_t0:.1f}s peers={len(similar_researcher_ids)} candidates={len(candidates)}",
+            flush=True,
+        )
 
         # Fallbacks if candidates < 15
         if len(candidates) < 15:
@@ -1168,27 +1359,142 @@ class PipelineServices:
                 f"Could not retrieve at least 3 real, unique publications from OpenAlex/arXiv matching queries '{search_queries}'."
             )
 
-        # Build user profile string for semantic similarity
-        user_profile_text = " ".join(user_titles) + " " + " ".join(combined_concepts)
+        # Build user profile string for semantic similarity — includes the
+        # researcher's own abstracts (not just titles/concepts) plus LLM-extracted
+        # keywords from their 5 most recent papers. Two papers can share almost no
+        # title vocabulary while being topically identical; the abstract is where
+        # the real shared technical terms live, and the extracted keywords surface
+        # specific current-work signals (methods, models, sub-topics) that get
+        # diluted inside a long, generic abstract.
+        user_abstracts = []
+        for w in user_works[:5]:
+            u_abstract = w.get("abstract") or w.get("_custom_abstract") or ""
+            if not u_abstract and w.get("abstract_inverted_index"):
+                u_abstract = self._reconstruct_abstract(w["abstract_inverted_index"])
+            if u_abstract:
+                user_abstracts.append(u_abstract)
+        # recent_keywords already computed earlier (it now drives search_queries too).
+        # Capped at 2500 chars — same reasoning as CANDIDATE_TEXT_CHAR_LIMIT below:
+        # a single very long sequence still costs real compute under attention's
+        # quadratic scaling, and titles+concepts+keywords (the sharpest signal)
+        # come first, so truncation only ever trims the lower-value abstract tail.
+        user_profile_text = (
+            " ".join(user_titles)
+            + " "
+            + " ".join(combined_concepts)
+            + " "
+            + " ".join(recent_keywords)
+            + " "
+            + " ".join(user_abstracts)
+        )[:2500]
+        print(
+            f"[DailyFeed][DEBUG] recent_keywords={recent_keywords!r} "
+            f"user_titles={user_titles[:5]!r} profile_text_len={len(user_profile_text)}",
+            flush=True,
+        )
+
+        # Pre-extract each candidate's abstract once, then embed the user profile
+        # + every candidate (title+abstract) with a self-hosted sentence-transformer
+        # model (BAAI/bge-small-en-v1.5) and score via cosine similarity — real
+        # neural semantic similarity rather than sparse term-overlap, and it
+        # understands paraphrase/synonymy that TF-IDF structurally cannot (e.g.
+        # "spin-echo dephasing" vs "coherence loss under refocusing pulses").
+        # Candidates are embedded in one batched forward pass for speed, not
+        # one-by-one.
+        # Truncated to ~300 chars (title + first 1-2 sentences of abstract) —
+        # plenty for topic-similarity purposes; the rest of a long abstract
+        # (methodology detail, specific numeric results) contributes
+        # diminishing returns to "is this the same general topic". Critical for
+        # speed: sentence-transformers pads every text in a batch to the length
+        # of the *longest* text in it, so even a handful of long abstracts among
+        # ~150 candidates multiplies the cost of the *entire* batch — measured:
+        # untruncated abstracts (some 1000+ chars) pushed a 144-item batch to
+        # 90-180s; capping at 600 chars still cost ~70-80s with real scientific-
+        # text tokenization (denser than plain English), hence the tighter cap.
+        CANDIDATE_TEXT_CHAR_LIMIT = 300
+        candidate_texts: Dict[int, str] = {}
+        for w in candidates:
+            w_abstract = w.get("abstract") or w.get("_custom_abstract") or ""
+            if not w_abstract and w.get("abstract_inverted_index"):
+                w_abstract = self._reconstruct_abstract(w["abstract_inverted_index"])
+            text = (w.get("title") or "") + " " + w_abstract
+            candidate_texts[id(w)] = text[:CANDIDATE_TEXT_CHAR_LIMIT]
+
+        _t0 = time.monotonic()
+        query_vec = await embed_query(user_profile_text)
+        candidate_ids = [id(w) for w in candidates]
+        candidate_vecs_arr = await embed_texts(
+            [candidate_texts[cid] for cid in candidate_ids]
+        )
+        print(
+            f"[DailyFeed][TIMING] embedding={time.monotonic()-_t0:.1f}s candidates={len(candidate_ids)}",
+            flush=True,
+        )
+
+        # Raw (uncentered) similarity, captured before centering below, is used
+        # only for the *displayed* match % (see relevance_score in process_paper).
+        # Centering is right for *ranking* (best-of-this-pool), but wrong for a
+        # user-facing percentage — it guarantees roughly half the pool scores
+        # "below average" every single request, which manufactures an artificial
+        # cliff (e.g. 96% / 80% / 66%) even when hundreds of papers are
+        # genuinely, comparably relevant. The raw score is calibrated against a
+        # fixed scale instead, so it reflects absolute match quality.
+        query_vec_raw = query_vec.copy()
+        candidate_vecs_raw = dict(zip(candidate_ids, candidate_vecs_arr.copy()))
+
+        # Mean-center before comparing. Sentence-embedding spaces (bge included)
+        # are anisotropic — cosine similarity between two *unrelated* documents
+        # commonly still lands ~0.4-0.6 instead of ~0, which flattens every
+        # candidate's score into a narrow high band and destroys discrimination
+        # between a great match and a mediocre one. Subtracting the pool mean
+        # (a standard whitening step for sentence embeddings) re-centers "average
+        # relevance to this candidate pool" at 0, so cosine similarity actually
+        # spreads across the range instead of clustering near the ceiling.
+        pool = np.vstack([query_vec[None, :], candidate_vecs_arr])
+        mean_vec = pool.mean(axis=0)
+
+        def _center_and_norm(v: np.ndarray) -> np.ndarray:
+            c = v - mean_vec
+            norm = np.linalg.norm(c)
+            return c / norm if norm > 0 else c
+
+        query_vec = _center_and_norm(query_vec)
+        candidate_vecs_arr = np.array([_center_and_norm(v) for v in candidate_vecs_arr])
+        candidate_vecs = dict(zip(candidate_ids, candidate_vecs_arr))
 
         # Score and sort candidates
+        current_year = datetime.datetime.now().year
         scored_candidates = []
         for w in candidates:
             primary_loc = w.get("primary_location") or {}
             source_obj = primary_loc.get("source") or {} if primary_loc else {}
             journal = source_obj.get("display_name") or ""
             is_prest = is_prestigious_journal(journal)
-            is_rel = is_work_relevant_to_discipline(w, discipline)
             citations = w.get("cited_by_count") or 0
 
-            # Dynamic semantic similarity score
-            w_abstract = w.get("abstract") or w.get("_custom_abstract") or ""
-            if not w_abstract and w.get("abstract_inverted_index"):
-                w_abstract = self._reconstruct_abstract(w["abstract_inverted_index"])
-
-            similarity_score = self._compute_semantic_similarity(
-                user_profile_text, w.get("title", ""), w_abstract
+            candidate_vec = candidate_vecs[id(w)]
+            similarity_score = vector_cosine_similarity(candidate_vec, query_vec)
+            raw_similarity_score = vector_cosine_similarity(
+                candidate_vecs_raw[id(w)], query_vec_raw
             )
+            # Relevance is now decided by the same mean-centered embedding signal
+            # that's actually built from the researcher's recent-paper keywords,
+            # abstracts, and concepts (see user_profile_text above) — not by
+            # is_work_relevant_to_discipline's generic substring matching against
+            # a single discipline string (e.g. "physics" triggers on "energy",
+            # "matter", "optical", "mechanics"... which is nearly every hard-
+            # science abstract, including totally unrelated fields). similarity_score
+            # > 0 means "above this candidate pool's average relevance" post-centering.
+            is_rel = similarity_score > 0
+
+            # Decays linearly to 0 over a 10-year window — see get_sort_key below for
+            # why this needs to dominate the ranking rather than just break ties.
+            pub_date = w.get("publication_date") or "1970-01-01"
+            try:
+                pub_year = int(pub_date[:4])
+            except (ValueError, TypeError):
+                pub_year = 1970
+            recency_score = max(0.0, min(1.0, (pub_year - (current_year - 10)) / 10))
 
             scored_candidates.append(
                 {
@@ -1197,27 +1503,82 @@ class PipelineServices:
                     "is_relevant": is_rel,
                     "citations": citations,
                     "similarity_score": similarity_score,
+                    "raw_similarity_score": raw_similarity_score,
+                    "recency_score": recency_score,
+                    "vec": candidate_vec,
                 }
             )
 
         # Sorting strategy:
-        # 1. Relevance: is_relevant (True vs False)
-        # 2. Semantic similarity_score (descending)
-        # 3. Recency: publication_date (descending)
+        # 1. Relevance: is_relevant (True vs False) — hard gate, unchanged.
+        # 2. Blended (recency-weighted similarity) — recency is the dominant signal
+        #    among relevant candidates, not a last-resort tiebreaker. Previously
+        #    pub_date only broke *exact* similarity_score ties, which almost never
+        #    happen with a continuous token-overlap score — so a well-cited decade-old
+        #    paper on an established topic (lots of shared terminology with the
+        #    author's own older works) would always outrank a genuinely new paper,
+        #    even when the whole point is "what's new in your field". recency_score
+        #    decays linearly to 0 over a 10-year window and is weighted 2x against a
+        #    mean-centered similarity_score (0 for below-pool-average candidates, up
+        #    to ~0.5 for standout ones — see the embedding centering step above), so
+        #    recent papers dominate by default — but an exceptional old match can
+        #    still surface if nothing recent is relevant, instead of the list going
+        #    empty.
+        # 3. publication_date (descending) — tiebreaker for near-equal blended scores.
         # 4. Prestige: is_prestigious (True vs False)
         # 5. Citations: citations (descending)
         def get_sort_key(item):
             rel = 1 if item["is_relevant"] else 0
-            sim_score = item["similarity_score"]
+            blended = item["recency_score"] * 2.0 + item["similarity_score"]
             pub_date = item["work"].get("publication_date") or "1970-01-01"
             prest = 1 if item["is_prestigious"] else 0
             citations = item["citations"]
-            return (rel, sim_score, pub_date, prest, citations)
+            return (rel, blended, pub_date, prest, citations)
 
         scored_candidates.sort(key=get_sort_key, reverse=True)
-        papers = [item["work"] for item in scored_candidates[:3]]
 
-        async def process_paper(i: int, paper: Dict[str, Any]) -> Dict[str, Any]:
+        # Re-ranking pass: rather than trusting the raw top-3 by blended score
+        # (which tends to cluster on near-duplicate papers about the same narrow
+        # sub-topic — several arXiv preprints citing each other, say), pull a
+        # broader shortlist and let MMR diversification pick the final 3. MMR
+        # balances relevance to the user's TF-IDF profile against redundancy with
+        # papers already selected, so the feed doesn't just show 3 versions of
+        # the same paper. Raised from 15 to 30 alongside the larger candidate
+        # pool above, so MMR has a genuinely representative set of strong
+        # matches to choose diversity from, not just whatever the top 15 of a
+        # ~20-paper pool happened to be.
+        shortlist = scored_candidates[:30]
+
+        # MMR must only diversify among candidates that are actually relevant —
+        # its redundancy penalty rewards picking whatever is most *different*
+        # from what's already selected, so if the truly on-topic candidates are
+        # few (say only 2 papers with above-average similarity), MMR will happily
+        # fill the last slot with a totally unrelated paper specifically because
+        # it's maximally dissimilar. similarity_score is mean-centered (see
+        # above), so 0 already means "at or below this candidate pool's average
+        # relevance" — those get excluded from MMR's input entirely and only
+        # backfilled (in blended-sort_key order, i.e. best-remaining-first) if
+        # there aren't 3 genuinely relevant candidates to choose from.
+        relevant_pool = [it for it in shortlist if it["similarity_score"] > 0]
+        mmr_input = relevant_pool if len(relevant_pool) >= 3 else shortlist
+
+        scored_by_work_id = {id(item["work"]): item for item in shortlist}
+        mmr_papers = mmr_diversify(
+            [(item["work"], item["vec"]) for item in mmr_input], query_vec, k=3
+        )
+        top_candidates = [
+            scored_by_work_id[id(p)] for p in mmr_papers if id(p) in scored_by_work_id
+        ]
+        if len(top_candidates) < 3:
+            seen_ids = {id(item["work"]) for item in top_candidates}
+            for item in shortlist:
+                if len(top_candidates) >= 3:
+                    break
+                if id(item["work"]) not in seen_ids:
+                    top_candidates.append(item)
+
+        async def process_paper(i: int, scored: Dict[str, Any]) -> Dict[str, Any]:
+            paper = scored["work"]
             title = paper.get("title", "Untitled Research Paper")
             authors = [
                 a.get("author", {}).get("display_name", "Unknown")
@@ -1263,7 +1624,36 @@ class PipelineServices:
                     "recommendation_reason", "Recommended historical literature."
                 )
             else:
-                relevance_score = 90 - i * 3
+                # Displayed match % is deliberately NOT the pool-centered
+                # similarity_score used for ranking (see get_sort_key/MMR above).
+                # Centering answers "best of what we fetched this round" — good
+                # for choosing which 3 to show, bad for a user-facing percentage,
+                # since it guarantees ~half of any pool reads as "below average"
+                # regardless of absolute quality, manufacturing an artificial
+                # cliff between rank 1 and rank 2 even when both are genuinely
+                # strong matches. raw_similarity_score (uncentered bge cosine
+                # similarity) is calibrated instead against a fixed scale —
+                # ~0.45 (weak/generic overlap) to ~0.80 (excellent, closely
+                # on-topic) — so the percentage reflects absolute match quality
+                # and doesn't collapse when hundreds of candidates are all
+                # legitimately relevant.
+                raw_similarity_score = scored["raw_similarity_score"]
+                recency_score = scored["recency_score"]
+                is_relevant = scored["is_relevant"]
+                is_prestigious = scored["is_prestigious"]
+                calibrated = 40 + (raw_similarity_score - 0.45) / 0.35 * 57
+                relevance_score = round(
+                    min(
+                        97,
+                        max(
+                            40,
+                            calibrated
+                            + recency_score * 3
+                            + (3 if is_relevant else -10)
+                            + (2 if is_prestigious else 0),
+                        ),
+                    )
+                )
                 recommendation_reason = "Recommended based on your research profile."
                 llm_ok = is_llm_working()
 
@@ -1356,8 +1746,13 @@ class PipelineServices:
                 "key_findings": meta.get("key_findings", ""),
             }
 
-        tasks = [process_paper(i, paper) for i, paper in enumerate(papers[:3])]
+        _t0 = time.monotonic()
+        tasks = [process_paper(i, scored) for i, scored in enumerate(top_candidates)]
         feed_items = list(await asyncio.gather(*tasks))
+        print(
+            f"[DailyFeed][TIMING] process_paper_llm={time.monotonic()-_t0:.1f}s papers={len(feed_items)}",
+            flush=True,
+        )
 
         if feed_items:
             try:

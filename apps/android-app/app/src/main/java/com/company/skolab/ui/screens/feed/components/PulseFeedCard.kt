@@ -108,6 +108,7 @@ fun PulseFeedCard(
     var isLiked by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val scale by animateFloatAsState(
         targetValue = if (isLiked) 1.2f else 1.0f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
@@ -477,7 +478,10 @@ fun PulseFeedCard(
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable { isLiked = !isLiked }
+                        .clickable {
+                            isLiked = !isLiked
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
                         .padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)

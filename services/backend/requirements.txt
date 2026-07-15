@@ -5,6 +5,7 @@ python-dotenv
 httpx
 firebase-admin
 numpy
+sentence-transformers
 networkx
 zeroconf
 pdfplumber
