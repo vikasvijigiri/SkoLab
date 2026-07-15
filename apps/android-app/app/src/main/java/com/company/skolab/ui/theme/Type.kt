@@ -18,7 +18,7 @@ val provider = GoogleFont.Provider(
 val DisplayFontName = GoogleFont("Space Grotesk")
 val MetricsFontName = GoogleFont("JetBrains Mono")
 val BodyFontName = GoogleFont("Inter")
-val SyneFontName = GoogleFont("Space Grotesk")
+val SyneFontName = GoogleFont("Syne")                  // Display / headline font — distinct from body
 val SpaceGroteskFontName = GoogleFont("Space Grotesk")
 val JetBrainsMonoFontName = GoogleFont("JetBrains Mono")
 
@@ -37,13 +37,16 @@ val SyneFontFamily = FontFamily(
 val SpaceGroteskFontFamily = FontFamily(
     Font(googleFont = SpaceGroteskFontName, fontProvider = provider, weight = FontWeight.Normal),
     Font(googleFont = SpaceGroteskFontName, fontProvider = provider, weight = FontWeight.Medium),
-    Font(googleFont = SpaceGroteskFontName, fontProvider = provider, weight = FontWeight.SemiBold)
+    Font(googleFont = SpaceGroteskFontName, fontProvider = provider, weight = FontWeight.SemiBold),
+    Font(googleFont = SpaceGroteskFontName, fontProvider = provider, weight = FontWeight.Bold),
+    Font(googleFont = SpaceGroteskFontName, fontProvider = provider, weight = FontWeight.ExtraBold)
 )
 
 val JetBrainsMonoFontFamily = FontFamily(
     Font(googleFont = JetBrainsMonoFontName, fontProvider = provider, weight = FontWeight.Normal),
     Font(googleFont = JetBrainsMonoFontName, fontProvider = provider, weight = FontWeight.Medium),
-    Font(googleFont = JetBrainsMonoFontName, fontProvider = provider, weight = FontWeight.Bold)
+    Font(googleFont = JetBrainsMonoFontName, fontProvider = provider, weight = FontWeight.Bold),
+    Font(googleFont = JetBrainsMonoFontName, fontProvider = provider, weight = FontWeight.ExtraBold)
 )
 
 val MonoFontFamily = FontFamily(

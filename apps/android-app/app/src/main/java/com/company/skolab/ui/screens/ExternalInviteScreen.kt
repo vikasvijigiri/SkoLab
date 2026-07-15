@@ -37,6 +37,9 @@ import com.company.skolab.ui.components.primitives.SkoLabTextField
 import com.company.skolab.utils.PhoneVisualTransformation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import com.company.skolab.di.AppDependencies
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,11 +48,50 @@ fun ExternalInviteScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val currentUserId = remember { AppDependencies.authManager.currentUser?.uid ?: "" }
 
     var emailInput by remember { mutableStateOf(collaboratorName.lowercase().replace(" ", "") + "@university.edu") }
     var phoneInput by remember { mutableStateOf("") }
     var resolvedInstitution by remember { mutableStateOf("") }
     var isResolvingEmail by remember { mutableStateOf(false) }
+
+    var registeredEmails by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var registeredPhones by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var isCheckingRegistered by remember { mutableStateOf(false) }
+
+    val logInvite: (String?, String?) -> Unit = { email, phone ->
+        if (currentUserId.isNotEmpty()) {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val base = ServerLocator.baseUrl.value ?: "http://10.0.2.2:8080"
+                    val url = "$base/api/v1/recommendations/peers/invite"
+                    val jsonReq = org.json.JSONObject().apply {
+                        put("user_id", currentUserId)
+                        if (!email.isNullOrBlank()) put("peer_email", email.trim())
+                        if (!phone.isNullOrBlank()) put("peer_phone", phone.trim())
+                    }
+                    val requestBody = okhttp3.RequestBody.create(
+                        "application/json; charset=utf-8".toMediaTypeOrNull(),
+                        jsonReq.toString()
+                    )
+                    val request = okhttp3.Request.Builder()
+                        .url(url)
+                        .post(requestBody)
+                        .build()
+                    okhttp3.OkHttpClient().newCall(request).execute().use { response ->
+                        if (response.isSuccessful) {
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, "✅ Invitation logged on SkoLab!", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
 
     // Dynamic backend OpenAlex/Scraping lookup for collaborator's email
     LaunchedEffect(collaboratorName) {
@@ -173,6 +215,74 @@ fun ExternalInviteScreen(
             }
         } else {
             allDeviceContacts = emptyList()
+        }
+    }
+
+    LaunchedEffect(allDeviceContacts) {
+        if (allDeviceContacts.isNotEmpty()) {
+            isCheckingRegistered = true
+            withContext(Dispatchers.IO) {
+                try {
+                    val base = ServerLocator.baseUrl.value ?: "http://10.0.2.2:8080"
+                    val url = "$base/api/v1/recommendations/peers/check-registered"
+                    
+                    val emailList = allDeviceContacts.map { it.third }.filter { it.isNotEmpty() }
+                    val phoneList = allDeviceContacts.map { it.second }.filter { it.isNotEmpty() }
+                    
+                    val jsonReq = org.json.JSONObject().apply {
+                        val emailsArr = org.json.JSONArray()
+                        emailList.forEach { emailsArr.put(it) }
+                        put("emails", emailsArr)
+                        
+                        val phonesArr = org.json.JSONArray()
+                        phoneList.forEach { phonesArr.put(it) }
+                        put("phones", phonesArr)
+                    }
+                    
+                    val requestBody = okhttp3.RequestBody.create(
+                        "application/json; charset=utf-8".toMediaTypeOrNull(),
+                        jsonReq.toString()
+                    )
+                    
+                    val client = okhttp3.OkHttpClient()
+                    val request = okhttp3.Request.Builder()
+                        .url(url)
+                        .post(requestBody)
+                        .build()
+                        
+                    client.newCall(request).execute().use { response ->
+                        if (response.isSuccessful) {
+                            val bodyStr = response.body?.string()
+                            if (bodyStr != null) {
+                                val json = org.json.JSONObject(bodyStr)
+                                val regEmailsArr = json.optJSONArray("registered_emails")
+                                val regPhonesArr = json.optJSONArray("registered_phones")
+                                
+                                val regEmails = mutableSetOf<String>()
+                                if (regEmailsArr != null) {
+                                    for (i in 0 until regEmailsArr.length()) {
+                                        regEmails.add(regEmailsArr.getString(i).lowercase())
+                                    }
+                                }
+                                
+                                val regPhones = mutableSetOf<String>()
+                                if (regPhonesArr != null) {
+                                    for (i in 0 until regPhonesArr.length()) {
+                                        regPhones.add(regPhonesArr.getString(i))
+                                    }
+                                }
+                                
+                                registeredEmails = regEmails
+                                registeredPhones = regPhones
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                } finally {
+                    isCheckingRegistered = false
+                }
+            }
         }
     }
 
@@ -560,12 +670,36 @@ fun ExternalInviteScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = contact.first,
-                                                color = TextPrimary,
-                                                fontSize = 14.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
+                                            val isRegistered = remember(contact, registeredEmails, registeredPhones) {
+                                                (contact.third.isNotEmpty() && registeredEmails.contains(contact.third.lowercase())) ||
+                                                (contact.second.isNotEmpty() && registeredPhones.contains(contact.second))
+                                            }
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = contact.first,
+                                                    color = TextPrimary,
+                                                    fontSize = 14.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                if (isRegistered) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .clip(RoundedCornerShape(20.dp))
+                                                            .background(Color(0xFF3DD68C).copy(alpha = 0.15f))
+                                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = "On SkoLab",
+                                                            color = Color(0xFF3DD68C),
+                                                            fontSize = 9.sp,
+                                                            fontWeight = FontWeight.Bold
+                                                        )
+                                                    }
+                                                }
+                                            }
                                             Row(
                                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                                                 verticalAlignment = Alignment.CenterVertically
@@ -624,6 +758,7 @@ fun ExternalInviteScreen(
                     ) {
                         Button(
                             onClick = {
+                                logInvite(emailInput, null)
                                 val subject = "Invitation to collaborate on SkoLab"
                                 val body = "Hi $collaboratorName,\n\nI would love to collaborate with you on our research papers using SkoLab. SkoLab offers secure, encrypted voice/video synchronization, real-time LaTeX blackboards, and joint manuscript editing.\n\nJoin me on SkoLab here: https://skolab.open/invite\n\nBest regards,\nResearcher"
                                 val intent = Intent(Intent.ACTION_SENDTO).apply {
@@ -649,6 +784,7 @@ fun ExternalInviteScreen(
 
                         Button(
                             onClick = {
+                                logInvite(null, phoneInput)
                                 val smsText = "Hi $collaboratorName, join me on SkoLab for secure, encrypted audio/video calling, real-time LaTeX blackboards, and joint manuscript editing: https://skolab.open/invite"
                                 val intent = Intent(Intent.ACTION_SENDTO).apply {
                                     data = android.net.Uri.parse("smsto:${phoneInput.trim()}")

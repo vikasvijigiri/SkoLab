@@ -23,7 +23,7 @@ import (
 func main() {
 	pythonBackendURL := os.Getenv("PYTHON_BACKEND_URL")
 	if pythonBackendURL == "" {
-		pythonBackendURL = "http://localhost:8001"
+		pythonBackendURL = "http://localhost:8000"
 	}
 
 	// Structured JSON logging in production.
@@ -43,6 +43,7 @@ func main() {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(requestLogger())
+	r.Use(middleware.CORS())
 
 	// ── Rate limiting: 120 req/s per IP, burst of 30 ─────────────────────────
 	rl := middleware.NewRateLimiter(rate.Limit(120), 30)
@@ -84,7 +85,12 @@ func main() {
 	// ── Author endpoints — Go PG + OpenAlex, no AI ───────────────────────────
 	r.GET("/api/v1/author_suggestions", author.GetAuthorSuggestions)
 	r.GET("/api/v1/orbit_metrics", author.GetOrbitMetrics)
+	r.GET("/orbit_metrics", author.GetOrbitMetrics)
+	r.GET("/api/v1/authors/orbit_metrics", author.GetOrbitMetrics)
 	r.GET("/api/v1/resolve_email", author.ResolveAuthorEmail)
+	r.GET("/api/v1/authors/resolve_email", author.ResolveAuthorEmail)
+	r.GET("/authors/resolve_email", author.ResolveAuthorEmail)
+	r.GET("/resolve_email", author.ResolveAuthorEmail)
 
 	// ── Leaderboard — PG query only ───────────────────────────────────────────
 	r.GET("/api/v1/leaderboard/:field", quest.GetLeaderboard)
@@ -130,6 +136,19 @@ func reverseProxy(target string) gin.HandlerFunc {
 		orig(req)
 		req.Header.Set("X-Forwarded-Host", req.Header.Get("Host"))
 		req.Header.Set("X-Gateway", "go")
+	}
+	// The Python backend sets its own CORS headers (see services/backend/app/main.py).
+	// The Go gateway is the sole CORS authority for browser-facing responses
+	// (middleware.CORS() already set them), so drop the upstream's copies here —
+	// otherwise ReverseProxy appends them alongside the gateway's, producing duplicate
+	// Access-Control-Allow-Origin/Vary values that browsers reject as invalid CORS.
+	proxy.ModifyResponse = func(resp *http.Response) error {
+		resp.Header.Del("Access-Control-Allow-Origin")
+		resp.Header.Del("Access-Control-Allow-Credentials")
+		resp.Header.Del("Access-Control-Allow-Methods")
+		resp.Header.Del("Access-Control-Allow-Headers")
+		resp.Header.Del("Vary")
+		return nil
 	}
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 		slog.Error("proxy error", "path", r.URL.Path, "err", err)

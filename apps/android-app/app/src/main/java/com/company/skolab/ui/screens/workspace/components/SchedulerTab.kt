@@ -508,7 +508,7 @@ fun SchedulerTab(isEnabled: Boolean) {
                         }
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = AccentRose,
+                            color = AccentRoseLight,
                             border = BorderStroke(0.5.dp, AccentRose)
                         ) {
                             Text(

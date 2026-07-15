@@ -295,8 +295,12 @@ fun CoLabWorkspaceScreen(
                             IconButton(
                                 onClick = {
                                     val id = activeProjectDetails["id"] as? String ?: ""
-                                    if (id.isNotEmpty() && id != "project_nexus_mock" && id != "Project Nexus") {
-                                        onNavigateToInviteMember(id)
+                                    if (id.isNotEmpty()) {
+                                        if (id == "project_nexus_mock" || id == "Project Nexus") {
+                                            Toast.makeText(context, "Mock project doesn't support adding members", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            onNavigateToInviteMember(id)
+                                        }
                                     }
                                 },
                                 modifier = Modifier.size(32.dp).background(BgSubtle, CircleShape)
@@ -308,8 +312,12 @@ fun CoLabWorkspaceScreen(
                             IconButton(
                                 onClick = {
                                     val id = activeProjectDetails["id"] as? String ?: ""
-                                    if (id.isNotEmpty() && id != "project_nexus_mock" && id != "Project Nexus") {
-                                        onNavigateToCreateTask(id)
+                                    if (id.isNotEmpty()) {
+                                        if (id == "project_nexus_mock" || id == "Project Nexus") {
+                                            Toast.makeText(context, "Mock project doesn't support task creation", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            onNavigateToCreateTask(id)
+                                        }
                                     }
                                 },
                                 modifier = Modifier.size(32.dp).background(BgSubtle, CircleShape)
@@ -930,8 +938,8 @@ fun SharedEquationsBlackboard(
                         )
                         Spacer(modifier = Modifier.height(20.dp))
                         MarkdownText(
-                            markdown = "$$" + equation + "$$",
-                            color = DarkChalkGreenText,
+                            markdown = "$$" + (if (equation.isBlank()) "f(x) = \\int_{-\\infty}^{\\infty} e^{-x^2} dx" else equation) + "$$",
+                            color = if (equation.isBlank()) DarkChalkGreenText.copy(alpha = 0.4f) else DarkChalkGreenText,
                             fontSize = 18.sp,
                             modifier = Modifier.fillMaxWidth()
                         )

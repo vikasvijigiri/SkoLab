@@ -326,12 +326,13 @@ def test_recommendation_response_schema_fields():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Test 11 — Caching: L1 in-memory cache works
+# Test 11 — Caching: recommendations_cache works
 # ──────────────────────────────────────────────────────────────────────────────
 
-def test_l1_cache_stores_and_returns_result():
-    """L1 in-memory cache should store and return a result within TTL."""
-    from app.domains.recommendation.service import _l1_get, _l1_set
+@pytest.mark.asyncio
+async def test_recommendations_cache_stores_and_returns_result():
+    """recommendations_cache (PgBackedCache) should store and return a result."""
+    from app.domains.recommendation.service import recommendations_cache
     from app.domains.recommendation.schemas import RecommendationResponse
 
     key = "test_cache_key_unique_12345"
@@ -340,10 +341,10 @@ def test_l1_cache_stores_and_returns_result():
     )
 
     # Should be empty initially
-    assert _l1_get(key) is None, "Cache should be empty before setting"
+    assert await recommendations_cache.get(key) is None, "Cache should be empty before setting"
 
-    _l1_set(key, mock_result)
-    retrieved = _l1_get(key)
+    await recommendations_cache.set(key, mock_result)
+    retrieved = await recommendations_cache.get(key)
 
     assert retrieved is not None, "Cache should return result after setting"
-    assert retrieved.algorithm_version == "hybrid-v2"
+    assert retrieved.get("algorithm_version") == "hybrid-v2"

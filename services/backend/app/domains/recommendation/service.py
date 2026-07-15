@@ -39,23 +39,10 @@ from app.domains.recommendation.engine import (
     compute_novelty_score,
 )
 
-# ── L1 in-process cache (author_id → (timestamp, result)) ────────────────────
-_L1_CACHE: Dict[str, tuple] = {}
-_L1_TTL_SECONDS = 300  # 5 minutes
+from app.db.pg_cache import PgBackedCache
 
-
-def _l1_get(key: str) -> Optional[RecommendationResponse]:
-    entry = _L1_CACHE.get(key)
-    if entry:
-        ts, data = entry
-        if (datetime.datetime.now(datetime.timezone.utc) - ts).total_seconds() < _L1_TTL_SECONDS:
-            return data
-        del _L1_CACHE[key]
-    return None
-
-
-def _l1_set(key: str, value: RecommendationResponse) -> None:
-    _L1_CACHE[key] = (datetime.datetime.now(datetime.timezone.utc), value)
+# Two-level PostgreSQL/Redis-backed cache (L1 in-memory 30s, L2 persistent Redis/DB 5m)
+recommendations_cache = PgBackedCache(ttl_seconds=300, name="recommendations")
 
 
 class RecommendationService:
@@ -81,11 +68,12 @@ class RecommendationService:
         """
         cache_key = f"rec_{author_id or 'anon'}_{query_fallback or 'none'}_{mode}"
 
-        # L1 cache hit
-        cached = _l1_get(cache_key)
-        if cached:
-            cached.cached = True
-            return cached
+        # L1/L2 Cache Lookup
+        cached_dict = await recommendations_cache.get(cache_key)
+        if cached_dict:
+            cached_res = RecommendationResponse(**cached_dict)
+            cached_res.cached = True
+            return cached_res
 
         # Build base result per mode
         papers: List[PaperRecommendation] = []
@@ -109,7 +97,7 @@ class RecommendationService:
             cached=False,
         )
 
-        _l1_set(cache_key, result)
+        await recommendations_cache.set(cache_key, result)
         return result
 
     # ── Paper recommendations ─────────────────────────────────────────────────

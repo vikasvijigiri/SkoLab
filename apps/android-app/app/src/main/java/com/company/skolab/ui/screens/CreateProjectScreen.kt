@@ -1095,6 +1095,24 @@ fun CreateProjectScreen(
                                                         email = "",
                                                         phone = contact.phone
                                                     )
+                                                    // 1. Log invitation to recommendation engine
+                                                    scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                                        try {
+                                                            val base = com.company.skolab.network.ServerLocator.baseUrl.value ?: "http://10.0.2.2:8080"
+                                                            val url = "$base/api/v1/recommendations/peers/invite"
+                                                            val client = OkHttpClient()
+                                                            val jsonBody = JSONObject().apply {
+                                                                put("user_id", currentUserId)
+                                                                put("peer_phone", contact.phone)
+                                                            }
+                                                            val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
+                                                            val requestBody = jsonBody.toString().toRequestBody(mediaType)
+                                                            val request = Request.Builder().url(url).post(requestBody).build()
+                                                            client.newCall(request).execute().use { /* ignore */ }
+                                                        } catch (e: Exception) {
+                                                            e.printStackTrace()
+                                                        }
+                                                    }
                                                     // 2. Launch SMS invite intent
                                                     try {
                                                         val smsIntent = Intent(Intent.ACTION_SENDTO).apply {

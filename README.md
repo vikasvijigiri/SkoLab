@@ -2,7 +2,7 @@
 
 Skolab (originally structured as SkoLab / Entroπ) is a premium, high-performance scientific discovery platform designed for researchers. It quantifies research quality and impact, predicts career trajectories, provides AI-powered analysis of publications, and links similar research profiles in real-time.
 
-The application consists of a high-performance **FastAPI backend** (with an in-memory caching layer) and an ultra-modern **Jetpack Compose Android app**.
+The application consists of a high-performance **FastAPI backend** (with an in-memory caching layer), an ultra-modern **Jetpack Compose Android app**, and a **Next.js web app** sharing the same backend and design system.
 
 ---
 
@@ -11,7 +11,8 @@ The application consists of a high-performance **FastAPI backend** (with an in-m
 ```
 SkoLab/
 ├── apps/
-│   └── android-app/             # Jetpack Compose Mobile Client (Kotlin)
+│   ├── android-app/             # Jetpack Compose Mobile Client (Kotlin)
+│   └── web/                     # Next.js 16 Web Client (TypeScript, Tailwind)
 ├── services/
 │   ├── backend/                 # FastAPI Enrichment Server (Python)
 │   └── backend-go/              # Gateway Routing & API Proxy (Go)
@@ -112,6 +113,25 @@ powershell -ExecutionPolicy Bypass -File scripts/build/build-and-install.ps1
     ```powershell
     powershell -ExecutionPolicy Bypass -File scripts/build/build-and-install.ps1 -InstallOnly
     ```
+
+### 3. Web App Setup
+The web client lives in [apps/web](file:///c:/Users/VikasVijigiri/Documents/SkoLab/apps/web) — a Next.js 16 (App Router, Turbopack) + TypeScript + Tailwind v4 app that talks to the same Go gateway and FastAPI backend as the Android app, matching its design system (Space Grotesk/Syne display, Inter body, JetBrains Mono metrics; the "Deep Ocean" color palette in both light and dark).
+
+1.  **Configure environment variables** — copy the example file and fill it in:
+    ```bash
+    cd apps/web
+    cp .env.local.example .env.local
+    ```
+    `NEXT_PUBLIC_API_BASE_URL` defaults to `http://localhost:8080` (the Go gateway) and needs no changes for local dev. **Firebase auth and Firestore-backed features (sign-in, Profile, CoLab Workspace) require a Firebase Web app**, which does not exist yet for the `skolab-vvi` project (only the Android app is registered). In the [Firebase console](https://console.firebase.google.com/) → Project settings → Add app → Web, register one and paste the resulting `apiKey`/`authDomain`/`appId` into `.env.local`. Until then, the app builds and runs, but auth/Firestore calls will show a clear "Firebase is not configured" error instead of working.
+
+2.  **Install dependencies and run** (from the repo root, since `apps/web` is an npm workspace):
+    ```bash
+    npm install
+    npm run dev:web       # starts Next.js on http://localhost:3000
+    ```
+    Run the Go gateway (`npm run dev:go`) and Python backend (`npm run dev:backend`) alongside it — the web app calls the Go gateway directly, which proxies AI/enrichment routes to Python. CORS for `http://localhost:3000` is already configured on the Go gateway (`services/backend-go/internal/middleware/cors.go`).
+
+3.  **Architecture note:** CoLab Workspace (projects, chat, shared equations/manuscript, tasks, meetings) and Profile have no REST backend today — the Android app reads/writes them directly via Firestore, and the web app mirrors that so both platforms stay in sync on the same data. Papers search likewise calls OpenAlex directly (proxied server-side through a Next.js route handler instead of from the browser, unlike the Android app).
 
 ---
 
