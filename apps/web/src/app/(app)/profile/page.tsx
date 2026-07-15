@@ -1,0 +1,204 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import { useAuth } from "@/lib/hooks/AuthProvider";
+import { useMyProfile } from "@/lib/hooks/useMyProfile";
+import { updateResearcherProfile, deleteResearcherProfile } from "@/lib/firebase/auth";
+import { syncUserProfile, deleteUserAccount } from "@/lib/api/endpoints";
+
+export default function ProfilePage() {
+  const router = useRouter();
+  const { user, getIdToken, signOut } = useAuth();
+  const { firestoreProfile, author, loading } = useMyProfile();
+
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState("");
+  const [researchFocus, setResearchFocus] = useState("");
+  const [academicStatus, setAcademicStatus] = useState("");
+  const [about, setAbout] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  function startEditing() {
+    setName(firestoreProfile?.name ?? "");
+    setResearchFocus(firestoreProfile?.researchFocus ?? "");
+    setAcademicStatus(firestoreProfile?.academicStatus ?? "Researcher");
+    setAbout(firestoreProfile?.about ?? "");
+    setEditing(true);
+  }
+
+  async function handleSave() {
+    if (!user) return;
+    setSaving(true);
+    try {
+      await updateResearcherProfile(user.uid, { name, researchFocus, academicStatus, about });
+      const idToken = await getIdToken();
+      if (idToken) {
+        await syncUserProfile(idToken, user.uid, name, researchFocus).catch(() => {});
+      }
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteAccount() {
+    if (!user) return;
+    setDeleting(true);
+    try {
+      const idToken = await getIdToken();
+      if (idToken) {
+        await deleteUserAccount(idToken, user.uid).catch(() => {
+          // Best-effort — Postgres cleanup shouldn't block removing the Firestore profile / auth account.
+        });
+      }
+      await deleteResearcherProfile(user.uid).catch(() => {});
+      await user.delete().catch(() => {});
+      await signOut();
+      router.push("/");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-6 md:px-8">
+        <div className="h-64 animate-pulse rounded-[8px] bg-surface-subtle" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto flex max-w-2xl flex-col gap-4 px-4 py-6 md:px-8">
+      <Card accentColor="var(--primary)">
+        <div className="flex items-center gap-4">
+          <div
+            className="flex h-16 w-16 items-center justify-center rounded-full font-display text-[22px] font-bold text-white shadow-card"
+            style={{ background: "var(--gradient-hero)" }}
+          >
+            {(firestoreProfile?.name || user?.displayName || "?").slice(0, 1).toUpperCase()}
+          </div>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate font-display text-[19px] font-bold text-text-primary">
+              {firestoreProfile?.name || user?.displayName || "Researcher"}
+            </h1>
+            <p className="truncate font-body text-[13px] text-text-secondary">{user?.email}</p>
+            <Badge accentColor="var(--accent-teal)" className="mt-1.5 w-fit">
+              {firestoreProfile?.academicStatus ?? "Researcher"}
+            </Badge>
+          </div>
+          {!editing && (
+            <Button variant="outlined" fullWidth={false} onClick={startEditing}>
+              Edit
+            </Button>
+          )}
+        </div>
+      </Card>
+
+      {editing ? (
+        <Card>
+          <h2 className="font-display text-[15px] font-semibold text-text-primary">Edit profile</h2>
+          <div className="mt-3 flex flex-col gap-3">
+            <div>
+              <label className="mb-1.5 block font-body text-[13px] font-medium text-text-secondary">Name</label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div>
+              <label className="mb-1.5 block font-body text-[13px] font-medium text-text-secondary">
+                Research focus
+              </label>
+              <Input value={researchFocus} onChange={(e) => setResearchFocus(e.target.value)} />
+            </div>
+            <div>
+              <label className="mb-1.5 block font-body text-[13px] font-medium text-text-secondary">
+                Academic status
+              </label>
+              <Input value={academicStatus} onChange={(e) => setAcademicStatus(e.target.value)} />
+            </div>
+            <div>
+              <label className="mb-1.5 block font-body text-[13px] font-medium text-text-secondary">About</label>
+              <textarea
+                value={about}
+                onChange={(e) => setAbout(e.target.value)}
+                rows={4}
+                className="w-full rounded-sm border border-transparent bg-surface-subtle px-4 py-3 font-body text-[14px] text-text-primary outline-none focus:border-primary"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleSave} loading={saving}>
+                Save
+              </Button>
+              <Button variant="text" onClick={() => setEditing(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ) : (
+        <Card>
+          <h2 className="font-display text-[15px] font-semibold text-text-primary">Research focus</h2>
+          <p className="mt-1.5 font-body text-[13.5px] text-text-secondary">
+            {firestoreProfile?.researchFocus || "Not set yet."}
+          </p>
+          {firestoreProfile?.about && (
+            <>
+              <h2 className="mt-4 font-display text-[15px] font-semibold text-text-primary">About</h2>
+              <p className="mt-1.5 font-body text-[13.5px] leading-relaxed text-text-secondary">
+                {firestoreProfile.about}
+              </p>
+            </>
+          )}
+        </Card>
+      )}
+
+      {author && (
+        <Card>
+          <h2 className="font-display text-[15px] font-semibold text-text-primary">Metrics snapshot</h2>
+          <div className="mt-3 flex gap-2.5">
+            {[
+              { label: "H-Index", value: author.h_index },
+              { label: "i10-Index", value: author.i10_index },
+              { label: "Works", value: author.works_count },
+              { label: "Citations", value: author.cited_by_count },
+            ].map((s) => (
+              <div key={s.label} className="flex-1 rounded-[8px] bg-surface-subtle px-3 py-2.5 text-center">
+                <p className="font-mono text-[17px] font-semibold text-text-primary">{s.value}</p>
+                <p className="mt-0.5 font-body text-[10.5px] uppercase tracking-wide text-text-muted">
+                  {s.label}
+                </p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <Card>
+        <h2 className="font-display text-[15px] font-semibold text-notification">Danger zone</h2>
+        <p className="mt-1.5 font-body text-[13px] text-text-secondary">
+          Permanently delete your account and all associated data. This can&apos;t be undone.
+        </p>
+        {confirmDelete ? (
+          <div className="mt-3 flex gap-2">
+            <Button variant="primary" error onClick={handleDeleteAccount} loading={deleting}>
+              Confirm delete
+            </Button>
+            <Button variant="text" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </Button>
+          </div>
+        ) : (
+          <Button variant="outlined" error onClick={() => setConfirmDelete(true)} className="mt-3">
+            Delete account
+          </Button>
+        )}
+      </Card>
+    </div>
+  );
+}
