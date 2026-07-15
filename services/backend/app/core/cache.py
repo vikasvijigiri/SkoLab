@@ -12,6 +12,8 @@ suggestions_cache           30 min  (author suggestion search results)
 profile_cache               env: CACHE_TTL_PROFILE_SECONDS    [default 1hr]
 analyze_paper_cache         env: CACHE_TTL_ANALYSIS_SECONDS   [default 6hr]
 daily_feed_cache            env: CACHE_TTL_FEED_SECONDS       [default 1hr]
+daily_conjecture_cache      24 hours (personalized daily conjecture — was uncached, hitting
+                            OpenAlex x2 + a 70B-model LLM call on every single request)
 match_grants_cache          1 hour  (grant recommendations)
 collaborator_synergy_cache  2 hours (pairwise synergy scores)
 citation_heatmap_cache      1 hour  (citation heatmap data)
@@ -47,6 +49,7 @@ author_metrics_cache = PgBackedCache(ttl_seconds=7200, name="author_metrics")
 daily_feed_cache = PgBackedCache(
     ttl_seconds=settings.cache_ttl_feed_seconds, name="daily_feed"
 )
+daily_conjecture_cache = PgBackedCache(ttl_seconds=86400, name="daily_conjecture")
 match_grants_cache = PgBackedCache(ttl_seconds=3600, name="match_grants")
 _semantic_trending_cache = PgBackedCache(ttl_seconds=14400, name="semantic_trending")
 

@@ -1,12 +1,15 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 
+import re
+
 from app.schemas.core import ConjectureResponse
 from app.services.platform.pipeline_services import PipelineServices
 from app.services.industry.industry_service import fetch_industry_opportunities
 from app.services.ai.summarization_service import is_llm_working
 from app.services.data.openalex_service import OpenAlexService
 from app.core.config import settings
+from app.core.cache import daily_conjecture_cache
 from app.api.dependencies import get_pipeline_services, get_openalex_service
 
 router = APIRouter()
@@ -115,6 +118,16 @@ async def get_daily_conjecture(
 
     clean_id = author_id.split("/")[-1] if author_id else None
 
+    # "Daily" conjecture — cache per author/name for 24h. This endpoint previously
+    # hit OpenAlex twice and a 70B-model LLM call on *every single request*.
+    cache_doc_id = clean_id or re.sub(
+        r"[^a-zA-Z0-9_]", "_", (name or "default").strip().lower()
+    )
+    cache_key = f"conjecture_{cache_doc_id}"
+    cached_conjecture = await daily_conjecture_cache.get(cache_key)
+    if cached_conjecture:
+        return ConjectureResponse(**cached_conjecture)
+
     # Step 1: Resolve author
     try:
         if clean_id:
@@ -215,6 +228,7 @@ async def get_daily_conjecture(
 
             raw_content = response.content.strip()
             conjecture_data = json.loads(raw_content)
+            await daily_conjecture_cache.set(cache_key, conjecture_data)
             return ConjectureResponse(**conjecture_data)
         else:
             raise Exception("LLM returned empty content.")
@@ -225,7 +239,9 @@ async def get_daily_conjecture(
             f"[Conjecture] LLM query failed: {e}. Generating high-quality local fallback...",
             flush=True,
         )
-        return generate_fallback_conjecture(author_data)
+        fallback = generate_fallback_conjecture(author_data)
+        await daily_conjecture_cache.set(cache_key, fallback)
+        return fallback
 
 
 from app.db.database import get_db

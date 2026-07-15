@@ -4,9 +4,16 @@
 *.iml
 .gradle/
 .kotlin/
-build/
+/build/
 captures/
 .DS_Store
+
+# Node / JS (apps/web, shared/skolab-design-system) — matches at any depth
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+npm-debug.log*
 
 # Android Specific
 apps/android-app/.gradle/
@@ -46,7 +53,7 @@ backend/ideas.json
 scratch/
 brain/
 services/backend/scratch/
-downloads/
+services/backend/downloads/exports/
 C:/Users/VikasVijigiri/.gemini/
 
 # Test artefacts
