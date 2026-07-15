@@ -1,0 +1,223 @@
+@import "tailwindcss";
+
+/*
+ * SkoLab WEB design tokens — an independent design language from the Android
+ * app. The mobile client is flat/border-only by deliberate constraint; the
+ * web app is a separate surface and free to use real elevation, a bolder
+ * brand color, and richer depth. Raw values live on bare custom properties
+ * below, swapped per color scheme; `@theme inline` maps them into Tailwind's
+ * `--color-*`/`--shadow-*` namespaces so semantic utilities (bg-surface,
+ * text-primary, shadow-card, ...) never need a `dark:` prefix — the
+ * underlying variable itself changes.
+ */
+
+:root {
+  --page-bg: #f7f7f9;
+  --surface: #ffffff;
+  --surface-subtle: #f1f1f4;
+  --primary: #4f46e5;
+  --primary-dark: #4338ca;
+  --primary-deeper: #3730a3;
+  --text-primary: #18181b;
+  --text-secondary: #52525b;
+  --text-muted: #9c9ca6;
+  --text-on-primary: #ffffff;
+  --border-color: #e4e4e7;
+
+  --accent-teal: #0d9488;
+  --accent-teal-dark: #0f766e;
+  --accent-amber: #d97706;
+  --accent-indigo: #2563eb;
+  --accent-emerald: #059669;
+  --accent-rose: #e11d48;
+  --accent-violet: #7c3aed;
+  --accent-orange: #ea580c;
+  --accent-cyan: #0891b2;
+  --accent-pink: #db2777;
+
+  --notification: #ef4444;
+  --match-bg: #eef2ff;
+  --match-text: #4338ca;
+
+  /* Motion — plain vars (used via arbitrary values, e.g. duration-[var(--motion-fast)]) */
+  --motion-fast: 150ms;
+  --motion-normal: 300ms;
+  --motion-slow: 400ms;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --ease-enter: cubic-bezier(0, 0, 0.2, 1);
+
+  /* Elevation — real shadows, not border-only. Layered soft shadows for a premium feel. */
+  --shadow-xs: 0 1px 2px rgba(24, 24, 27, 0.04);
+  --shadow-card: 0 1px 2px rgba(24, 24, 27, 0.04), 0 1px 6px rgba(24, 24, 27, 0.05);
+  --shadow-card-hover: 0 4px 10px rgba(24, 24, 27, 0.06), 0 12px 28px rgba(24, 24, 27, 0.08);
+  --shadow-elevated: 0 12px 24px rgba(24, 24, 27, 0.08), 0 24px 56px rgba(24, 24, 27, 0.12);
+  --shadow-glow-primary: 0 8px 28px color-mix(in srgb, var(--primary) 35%, transparent);
+
+  /* Gradients — indigo/violet brand identity */
+  --gradient-hero: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  --gradient-teal: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+  --gradient-indigo: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  --gradient-warm: linear-gradient(135deg, #d97706 0%, #ea580c 100%);
+  --gradient-mesh: radial-gradient(at 20% 0%, color-mix(in srgb, #4f46e5 16%, transparent) 0px, transparent 50%),
+    radial-gradient(at 80% 0%, color-mix(in srgb, #7c3aed 14%, transparent) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, color-mix(in srgb, #0891b2 10%, transparent) 0px, transparent 50%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page-bg: #0a0a0c;
+    --surface: #17171b;
+    --surface-subtle: #232328;
+    --primary: #818cf8;
+    --primary-dark: #6366f1;
+    --primary-deeper: #4f46e5;
+    --text-primary: #f4f4f5;
+    --text-secondary: #a1a1aa;
+    --text-muted: #6c6c74;
+    --text-on-primary: #0a0a0c;
+    --border-color: #2a2a30;
+
+    --accent-teal: #2dd4bf;
+    --accent-amber: #f59e0b;
+    --accent-indigo: #60a5fa;
+    --accent-rose: #fb7185;
+
+    --match-bg: #1e1b4b;
+    --match-text: #a5b4fc;
+
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 6px rgba(0, 0, 0, 0.4);
+    --shadow-card-hover: 0 4px 10px rgba(0, 0, 0, 0.5), 0 16px 32px rgba(0, 0, 0, 0.55);
+    --shadow-elevated: 0 12px 24px rgba(0, 0, 0, 0.55), 0 24px 64px rgba(0, 0, 0, 0.6);
+    --shadow-glow-primary: 0 8px 28px color-mix(in srgb, var(--primary) 45%, transparent);
+  }
+}
+
+/* Manual override (theme toggle) takes precedence over system preference. */
+:root[data-theme="dark"] {
+  --page-bg: #0a0a0c;
+  --surface: #17171b;
+  --surface-subtle: #232328;
+  --primary: #818cf8;
+  --primary-dark: #6366f1;
+  --primary-deeper: #4f46e5;
+  --text-primary: #f4f4f5;
+  --text-secondary: #a1a1aa;
+  --text-muted: #6c6c74;
+  --text-on-primary: #0a0a0c;
+  --border-color: #2a2a30;
+  --accent-teal: #2dd4bf;
+  --accent-amber: #f59e0b;
+  --accent-indigo: #60a5fa;
+  --accent-rose: #fb7185;
+  --match-bg: #1e1b4b;
+  --match-text: #a5b4fc;
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 6px rgba(0, 0, 0, 0.4);
+  --shadow-card-hover: 0 4px 10px rgba(0, 0, 0, 0.5), 0 16px 32px rgba(0, 0, 0, 0.55);
+  --shadow-elevated: 0 12px 24px rgba(0, 0, 0, 0.55), 0 24px 64px rgba(0, 0, 0, 0.6);
+  --shadow-glow-primary: 0 8px 28px color-mix(in srgb, var(--primary) 45%, transparent);
+}
+
+:root[data-theme="light"] {
+  --page-bg: #f7f7f9;
+  --surface: #ffffff;
+  --surface-subtle: #f1f1f4;
+  --primary: #4f46e5;
+  --primary-dark: #4338ca;
+  --primary-deeper: #3730a3;
+  --text-primary: #18181b;
+  --text-secondary: #52525b;
+  --text-muted: #9c9ca6;
+  --text-on-primary: #ffffff;
+  --border-color: #e4e4e7;
+  --accent-teal: #0d9488;
+  --accent-amber: #d97706;
+  --accent-indigo: #2563eb;
+  --accent-rose: #e11d48;
+  --match-bg: #eef2ff;
+  --match-text: #4338ca;
+  --shadow-xs: 0 1px 2px rgba(24, 24, 27, 0.04);
+  --shadow-card: 0 1px 2px rgba(24, 24, 27, 0.04), 0 1px 6px rgba(24, 24, 27, 0.05);
+  --shadow-card-hover: 0 4px 10px rgba(24, 24, 27, 0.06), 0 12px 28px rgba(24, 24, 27, 0.08);
+  --shadow-elevated: 0 12px 24px rgba(24, 24, 27, 0.08), 0 24px 56px rgba(24, 24, 27, 0.12);
+  --shadow-glow-primary: 0 8px 28px color-mix(in srgb, var(--primary) 35%, transparent);
+  --gradient-hero: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+}
+
+@theme inline {
+  --color-page-bg: var(--page-bg);
+  --color-surface: var(--surface);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-primary: var(--primary);
+  --color-primary-dark: var(--primary-dark);
+  --color-primary-deeper: var(--primary-deeper);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-on-primary: var(--text-on-primary);
+  --color-border: var(--border-color);
+
+  --color-accent-teal: var(--accent-teal);
+  --color-accent-teal-dark: var(--accent-teal-dark);
+  --color-accent-amber: var(--accent-amber);
+  --color-accent-indigo: var(--accent-indigo);
+  --color-accent-emerald: var(--accent-emerald);
+  --color-accent-rose: var(--accent-rose);
+  --color-accent-violet: var(--accent-violet);
+  --color-accent-orange: var(--accent-orange);
+  --color-accent-cyan: var(--accent-cyan);
+  --color-accent-pink: var(--accent-pink);
+
+  --color-notification: var(--notification);
+  --color-match-bg: var(--match-bg);
+  --color-match-text: var(--match-text);
+
+  /* Research/academic metric badge colors (AuthorDetail radar + pills) — pure aliases */
+  --color-metric-disruption: var(--accent-orange);
+  --color-metric-novelty: var(--accent-cyan);
+  --color-metric-future-impact: var(--accent-violet);
+  --color-metric-influence: var(--primary);
+  --color-metric-creativity: var(--accent-pink);
+  --color-metric-complexity: var(--accent-indigo);
+  --color-metric-open-science: var(--accent-emerald);
+  --color-metric-collab: var(--accent-teal);
+  --color-metric-consistency: var(--accent-amber);
+  --color-metric-policy: #64748b;
+
+  --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-syne), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+
+  /* Elevation utilities: shadow-xs, shadow-card, shadow-card-hover, shadow-elevated, shadow-glow-primary */
+  --shadow-xs: var(--shadow-xs);
+  --shadow-card: var(--shadow-card);
+  --shadow-card-hover: var(--shadow-card-hover);
+  --shadow-elevated: var(--shadow-elevated);
+  --shadow-glow-primary: var(--shadow-glow-primary);
+}
+
+/* Static (mode-independent) overrides to Tailwind's default radius scale. */
+@theme {
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+}
+
+body {
+  background: var(--page-bg);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
