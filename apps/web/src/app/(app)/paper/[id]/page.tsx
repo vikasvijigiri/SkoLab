@@ -79,10 +79,14 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
   const [error, setError] = useState<string | null>(null);
   const [intelligence, setIntelligence] = useState<PaperIntelligence | null>(null);
   const [intelLoading, setIntelLoading] = useState(true);
+  const [intelError, setIntelError] = useState<string | null>(null);
   // Bumped by the retry button below — included in the effect's deps so a
   // transient failure (network blip, a slow-to-compile dev route, momentary
   // upstream rate limit) can be recovered from without a full page reload.
   const [retryCount, setRetryCount] = useState(0);
+  // Separate retry counter for just the intelligence section, so retrying it
+  // doesn't re-fetch the (already-successful) paper metadata too.
+  const [intelRetryCount, setIntelRetryCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,15 +99,6 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         if (cancelled) return;
         setWork(data);
         setError(null);
-
-        setIntelLoading(true);
-        const intel = await analyzePaper({ title: data.display_name, doi: data.doi, openalexId: data.id }).catch(
-          () => null
-        );
-        if (!cancelled) {
-          setIntelligence(intel);
-          setIntelLoading(false);
-        }
       } catch (err) {
         if (!cancelled) setError((err as Error).message || "Couldn't load this paper.");
       }
@@ -112,6 +107,31 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
       cancelled = true;
     };
   }, [id, retryCount]);
+
+  useEffect(() => {
+    if (!work) return;
+    let cancelled = false;
+    (async () => {
+      setIntelLoading(true);
+      setIntelError(null);
+      try {
+        const intel = await analyzePaper({ title: work.display_name, doi: work.doi, openalexId: work.id });
+        if (!cancelled) {
+          setIntelligence(intel);
+          setIntelLoading(false);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setIntelError((err as Error).message || "Couldn't analyze this paper.");
+          setIntelLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [work, intelRetryCount]);
 
   if (error && !work) {
     return (
@@ -167,6 +187,15 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         <Card className="mt-4 animate-pulse">
           <div className="h-32 rounded-[8px] bg-surface-subtle" />
         </Card>
+      )}
+
+      {intelError && !intelLoading && (
+        <div className="mt-4">
+          <ErrorBanner
+            message={`Couldn't generate the paper intelligence report — ${intelError}`}
+            onRetry={() => setIntelRetryCount((c) => c + 1)}
+          />
+        </div>
       )}
 
       {intelligence && (

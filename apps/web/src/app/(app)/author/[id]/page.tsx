@@ -1,9 +1,9 @@
 "use client";
 
-import { Suspense, use, useEffect, useState } from "react";
+import { Suspense, use, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   RefreshCw,
   Radar as RadarIcon,
@@ -93,7 +93,6 @@ function AuthorDetailContent({ authorId }: { authorId: string }) {
   const [heatmap, setHeatmap] = useState<CitationHeatmap | null>(null);
   const [journals, setJournals] = useState<JournalRecommendation[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [connectionState, setConnectionState] = useState<"idle" | "connected" | "messaged" | "proposed">("idle");
 
   useEffect(() => {
     let cancelled = false;
@@ -104,15 +103,21 @@ function AuthorDetailContent({ authorId }: { authorId: string }) {
         setAuthor(a);
         setError(null);
 
-        const [collabRes, heatmapRes, journalRes] = await Promise.allSettled([
-          getNetworkCollaborators(a.id, a.field_of_study, a.display_name),
-          getCitationHeatmap(a.id),
-          getJournalAdvisor(a.id),
-        ]);
-        if (cancelled) return;
-        if (collabRes.status === "fulfilled") setCollaborators(collabRes.value);
-        if (heatmapRes.status === "fulfilled") setHeatmap(heatmapRes.value);
-        if (journalRes.status === "fulfilled") setJournals(journalRes.value);
+        // Independent fetches, not Promise.allSettled — previously these 3
+        // secondary sections (collaborators/heatmap/journal advisor) were
+        // batched together, so if any one was slow, all 3 stayed blank even
+        // though each setState below is already independent. Firing them
+        // separately lets each section render as soon as its own data
+        // arrives instead of waiting for the slowest of the three.
+        getNetworkCollaborators(a.id, a.field_of_study, a.display_name)
+          .then((c) => !cancelled && setCollaborators(c))
+          .catch(() => {});
+        getCitationHeatmap(a.id)
+          .then((h) => !cancelled && setHeatmap(h))
+          .catch(() => {});
+        getJournalAdvisor(a.id)
+          .then((j) => !cancelled && setJournals(j))
+          .catch(() => {});
       } catch {
         if (!cancelled) setError("Couldn't load this researcher's profile — the backend may be unreachable.");
       }
@@ -134,6 +139,14 @@ function AuthorDetailContent({ authorId }: { authorId: string }) {
       setRefreshing(false);
     }
   }
+
+  // Re-sorting/re-mapping on every render (including unrelated re-renders
+  // like `refreshing` toggling) was wasted work — memoize on the actual
+  // works array reference instead.
+  const sortedWorks = useMemo(
+    () => (author?.works ? [...author.works].sort((a, b) => (b.year ?? 0) - (a.year ?? 0)) : []),
+    [author?.works]
+  );
 
   if (error && !author) {
     return (
@@ -221,16 +234,13 @@ function AuthorDetailContent({ authorId }: { authorId: string }) {
           </div>
 
           <div className="mt-4 flex gap-2">
-            <Button
-              variant={connectionState === "connected" ? "outlined" : "primary"}
-              onClick={() => setConnectionState("connected")}
-            >
-              {connectionState === "connected" ? "Request sent" : "Connect"}
+            <Button variant="primary" disabled title="Coming soon">
+              Connect
             </Button>
-            <Button variant="outlined" onClick={() => setConnectionState("messaged")}>
+            <Button variant="outlined" disabled title="Coming soon">
               Message
             </Button>
-            <Button variant="ghost" onClick={() => setConnectionState("proposed")}>
+            <Button variant="ghost" disabled title="Coming soon">
               Collaborate
             </Button>
           </div>
@@ -249,7 +259,13 @@ function AuthorDetailContent({ authorId }: { authorId: string }) {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 lg:max-w-6xl">
-      {error && <ErrorBanner message={error} />}
+      <AnimatePresence>
+        {error && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <ErrorBanner message={error} />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <RailShell rail={railContent} railWidth="300px" stickyRail mobileRail="collapsible">
         <div className="flex flex-col gap-4">
@@ -312,7 +328,9 @@ function AuthorDetailContent({ authorId }: { authorId: string }) {
                   <div key={j.journal_name} className="flex items-start justify-between gap-3 rounded-[8px] bg-surface-subtle p-2.5">
                     <div>
                       <p className="font-body text-[13px] font-medium text-text-primary">{j.journal_name}</p>
-                      <p className="mt-0.5 font-body text-[12px] text-text-secondary">{j.submission_tips}</p>
+                      <p className="mt-0.5 font-body text-[12px] text-text-secondary">
+                        <MathText text={j.submission_tips} />
+                      </p>
                     </div>
                     <Badge accentColor="var(--accent-emerald)" className="shrink-0">
                       {j.match_score}%
@@ -335,7 +353,9 @@ function AuthorDetailContent({ authorId }: { authorId: string }) {
                   <div key={c.id} className="flex items-center justify-between gap-3 rounded-[8px] bg-surface-subtle p-2.5">
                     <div className="min-w-0">
                       <p className="truncate font-body text-[13px] font-medium text-text-primary">{c.name}</p>
-                      <p className="truncate font-body text-[12px] text-text-secondary">{c.connection_path}</p>
+                      <p className="truncate font-body text-[12px] text-text-secondary">
+                        <MathText text={c.connection_path} />
+                      </p>
                     </div>
                     <Badge accentColor="var(--accent-teal)" className="shrink-0">
                       {c.relevance_score}%
@@ -370,10 +390,7 @@ function AuthorDetailContent({ authorId }: { authorId: string }) {
               Publications
             </SectionHeading>
             <div className="mt-2.5 flex flex-col divide-y divide-border">
-              {author.works
-                .slice()
-                .sort((a, b) => (b.year ?? 0) - (a.year ?? 0))
-                .map((w) => (
+              {sortedWorks.map((w) => (
                   <Link
                     key={w.id ?? w.title}
                     href={w.id ? `/paper/${encodeURIComponent(w.id)}` : "#"}

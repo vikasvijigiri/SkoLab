@@ -10,6 +10,7 @@ class Quest(BaseModel):
 
 class LeaderboardEntry(BaseModel):
     rank: int
+    id: str
     user_name: str
     institution: str
     entropy_score: int

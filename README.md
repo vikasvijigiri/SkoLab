@@ -6,6 +6,23 @@ The application consists of a high-performance **FastAPI backend** (with an in-m
 
 ---
 
+## 📚 Project Documentation
+
+Beyond this README, the repo root carries a small, deliberately-scoped doc set:
+
+| File / dir | What it's for |
+| :--- | :--- |
+| [`AGENTS.md`](./AGENTS.md) | Cold-start guide — stack, conventions, secrets, gotchas. Start here. |
+| [`PLAN.md`](./PLAN.md) | The original founding plan. Frozen/historical — **not** kept in sync with current reality; see `decisions/` for how things actually changed. |
+| [`decisions/`](./decisions/) | One file per real architectural or scope decision (lightweight ADR style). See [`decisions/README.md`](./decisions/README.md) for the index and format. |
+| [`HANDOFF.md`](./HANDOFF.md) | Current-state snapshot — what's done, what's in flight. Overwritten each session, not a history. |
+| [`LOG.md`](./LOG.md) | Append-only chronological changelog, newest entry at the top. |
+
+If you're an AI agent (or a human) picking up this repo cold, read `AGENTS.md`
+first, then `HANDOFF.md` for what's currently in progress.
+
+---
+
 ## 🛠️ Repository & System Architecture
 
 ```

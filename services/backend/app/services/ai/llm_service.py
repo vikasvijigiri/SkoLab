@@ -58,8 +58,15 @@ class LLMService:
         self.groq_base_url = "https://api.groq.com/openai/v1/chat/completions"
 
         # Prioritized fallback model order. If one fails, the loop continues to the next.
+        # "openrouter/owl-alpha" was removed: it has no active endpoints on
+        # OpenRouter, and every query used to waste a full round-trip on it
+        # before falling back — worse, when combined with
+        # response_format={"type": "json_object"}, OpenRouter returned an
+        # empty `choices` list instead of an error, which query_openrouter
+        # used to treat as a *successful* response (see the fix there), so
+        # analyze_paper's JSON parsing failed on every single call instead of
+        # ever reaching a model that actually works.
         self.default_models = [
-            "openrouter/owl-alpha",
             # Groq models (Primary, fast)
             "llama-3.3-70b-versatile",
             "llama-3.1-8b-instant",
@@ -150,11 +157,21 @@ class LLMService:
                             }
                         tool_calls_dict.append(tc_dict)
 
+                if not content and not tool_calls_dict:
+                    # Some models silently return no usable output instead of
+                    # an HTTP error (observed with dead/unsupported models,
+                    # especially combined with response_format=json_object).
+                    # Raising here — instead of returning a "successful"
+                    # response with garbage content — lets query()'s fallback
+                    # loop actually try the next model.
+                    raise Exception(
+                        f"Model {model} returned an empty completion (no content, no tool calls)."
+                    )
                 return LLMResponse(
                     content=content, tool_calls=tool_calls_dict, model_used=model
                 )
             else:
-                return LLMResponse(content=str(resp), model_used=model)
+                raise Exception(f"Model {model} returned no choices in the response.")
         except Exception as e:
             print(
                 f"[LLMService] OpenRouter SDK exception for model {model}: {e}",
@@ -247,6 +264,13 @@ class LLMService:
                         msg = data["choices"][0]["message"]
                         content = msg.get("content")
                         tool_calls = msg.get("tool_calls")
+                        if not content and not tool_calls:
+                            # Same defensive check as query_openrouter — a 200
+                            # with no usable content should fall through to
+                            # the next model, not be treated as success.
+                            raise Exception(
+                                f"Model {model} returned 200 with an empty completion."
+                            )
                         return LLMResponse(
                             content=content, tool_calls=tool_calls, model_used=model
                         )

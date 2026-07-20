@@ -30,17 +30,34 @@ import type { CollabProject, CollabMessage, CollabTask, CollabMeeting, SkoLabUse
 
 export type SubscribeErrorHandler = (error: FirestoreError) => void;
 
+// `requireDb()` throws synchronously while the query is being *built* —
+// before onSnapshot's own onError callback is ever registered. Without this
+// wrapper, that throw (e.g. "Firebase is not configured") propagates straight
+// out of the subscribe* call, and since there's no error.tsx boundary
+// anywhere in the app, it used to crash the route instead of surfacing
+// through the same friendly-error path as every other Firestore failure.
+function safeSubscribe(run: () => Unsubscribe, onError?: SubscribeErrorHandler): Unsubscribe {
+  try {
+    return run();
+  } catch (err) {
+    onError?.(err as FirestoreError);
+    return () => {};
+  }
+}
+
 export function subscribeProjects(
   uid: string,
   cb: (projects: CollabProject[]) => void,
   onError?: SubscribeErrorHandler
 ): Unsubscribe {
-  const q = query(collection(requireDb(), "collabs_groups"), where("memberUids", "array-contains", uid));
-  return onSnapshot(
-    q,
-    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() } as CollabProject))),
-    onError
-  );
+  return safeSubscribe(() => {
+    const q = query(collection(requireDb(), "collabs_groups"), where("memberUids", "array-contains", uid));
+    return onSnapshot(
+      q,
+      (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() } as CollabProject))),
+      onError
+    );
+  }, onError);
 }
 
 export async function createProject(opts: {
@@ -90,12 +107,14 @@ export function subscribeMessages(
   cb: (messages: CollabMessage[]) => void,
   onError?: SubscribeErrorHandler
 ): Unsubscribe {
-  const q = query(collection(requireDb(), "collabs_groups", projectId, "messages"), orderBy("timestamp", "asc"));
-  return onSnapshot(
-    q,
-    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() } as CollabMessage))),
-    onError
-  );
+  return safeSubscribe(() => {
+    const q = query(collection(requireDb(), "collabs_groups", projectId, "messages"), orderBy("timestamp", "asc"));
+    return onSnapshot(
+      q,
+      (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() } as CollabMessage))),
+      onError
+    );
+  }, onError);
 }
 
 export async function sendMessage(projectId: string, senderUid: string, senderName: string, text: string) {
@@ -112,9 +131,13 @@ export function subscribeTasks(
   cb: (tasks: CollabTask[]) => void,
   onError?: SubscribeErrorHandler
 ): Unsubscribe {
-  return onSnapshot(
-    collection(requireDb(), "collabs_groups", projectId, "tasks"),
-    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() } as CollabTask))),
+  return safeSubscribe(
+    () =>
+      onSnapshot(
+        collection(requireDb(), "collabs_groups", projectId, "tasks"),
+        (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() } as CollabTask))),
+        onError
+      ),
     onError
   );
 }
@@ -136,12 +159,14 @@ export function subscribeMeetings(
   cb: (meetings: CollabMeeting[]) => void,
   onError?: SubscribeErrorHandler
 ): Unsubscribe {
-  const q = query(collection(requireDb(), "collabs_groups", projectId, "meetings"), orderBy("timestamp", "asc"));
-  return onSnapshot(
-    q,
-    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() } as CollabMeeting))),
-    onError
-  );
+  return safeSubscribe(() => {
+    const q = query(collection(requireDb(), "collabs_groups", projectId, "meetings"), orderBy("timestamp", "asc"));
+    return onSnapshot(
+      q,
+      (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() } as CollabMeeting))),
+      onError
+    );
+  }, onError);
 }
 
 export async function scheduleMeeting(projectId: string, title: string, when: string) {

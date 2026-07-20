@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { getAuthorSuggestions, getLeaderboard } from "@/lib/api/endpoints";
 import type { AuthorSuggestion, OpenAlexWork, LeaderboardEntry } from "@/lib/types";
+import { TRANSITION_FAST, DURATION_NORMAL, EASE_STANDARD } from "@/lib/motion";
 
 type Mode = "researchers" | "papers";
 
@@ -34,7 +35,7 @@ function AuthorResultCard({ a, index }: { a: AuthorSuggestion; index: number }) 
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: Math.min(index * 0.05, 0.3), ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: DURATION_NORMAL, delay: Math.min(index * 0.05, 0.3), ease: EASE_STANDARD }}
     >
       <Link href={`/author/${encodeURIComponent(a.id)}?name=${encodeURIComponent(a.display_name)}&focus=${encodeURIComponent(a.field_of_study ?? "")}`}>
         <Card glow interactive className="flex h-full items-center gap-3">
@@ -65,7 +66,7 @@ function PaperResultCard({ w, index }: { w: OpenAlexWork; index: number }) {
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: Math.min(index * 0.05, 0.3), ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: DURATION_NORMAL, delay: Math.min(index * 0.05, 0.3), ease: EASE_STANDARD }}
     >
       <Link href={`/paper/${encodeURIComponent(shortId)}`}>
         <Card glow interactive accentColor="var(--accent-cyan)" className="flex h-full flex-col gap-1.5">
@@ -94,43 +95,39 @@ const MEDAL: Record<number, string> = {
   3: "linear-gradient(135deg, #f0a878, #c2703d)",
 };
 
-function LeaderboardRow({
-  entry,
-  index,
-  onSelect,
-}: {
-  entry: LeaderboardEntry;
-  index: number;
-  onSelect: (name: string) => void;
-}) {
+function LeaderboardRow({ entry, index }: { entry: LeaderboardEntry; index: number }) {
   const medal = MEDAL[entry.rank];
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: Math.min(index * 0.05, 0.3), ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: DURATION_NORMAL, delay: Math.min(index * 0.05, 0.3), ease: EASE_STANDARD }}
     >
-      <Card glow interactive onClick={() => onSelect(entry.user_name)} className="flex h-full items-center gap-3">
-        <div className="relative shrink-0">
-          <div
-            className="flex h-11 w-11 items-center justify-center rounded-full font-display text-[14px] font-bold text-white"
-            style={{ background: medal ?? "var(--primary)" }}
-          >
-            {entry.user_name.slice(0, 1).toUpperCase()}
+      {/* Deep-links straight to the author by id — a name-based search here can
+          resolve to the wrong same-initial person when names collide. */}
+      <Link href={`/author/${encodeURIComponent(entry.id)}?name=${encodeURIComponent(entry.user_name)}`}>
+        <Card glow interactive className="flex h-full items-center gap-3">
+          <div className="relative shrink-0">
+            <div
+              className="flex h-11 w-11 items-center justify-center rounded-full font-display text-[14px] font-bold text-white"
+              style={{ background: medal ?? "var(--primary)" }}
+            >
+              {entry.user_name.slice(0, 1).toUpperCase()}
+            </div>
+            <div
+              className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-surface font-mono text-[10px] font-bold text-white"
+              style={{ background: medal ?? "var(--text-muted)" }}
+            >
+              {entry.rank}
+            </div>
           </div>
-          <div
-            className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-surface font-mono text-[10px] font-bold text-white"
-            style={{ background: medal ?? "var(--text-muted)" }}
-          >
-            {entry.rank}
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-body text-[14px] font-semibold text-text-primary">{entry.user_name}</p>
+            <p className="truncate font-body text-[12.5px] text-text-secondary">{entry.institution}</p>
           </div>
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-body text-[14px] font-semibold text-text-primary">{entry.user_name}</p>
-          <p className="truncate font-body text-[12.5px] text-text-secondary">{entry.institution}</p>
-        </div>
-        <Badge accentColor="var(--primary)">{entry.entropy_score} pts</Badge>
-      </Card>
+          <Badge accentColor="var(--primary)">{entry.entropy_score} pts</Badge>
+        </Card>
+      </Link>
     </motion.div>
   );
 }
@@ -236,7 +233,7 @@ function DiscoveryContent() {
             key={m}
             onClick={() => setMode(m)}
             whileTap={{ scale: 0.96 }}
-            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+            transition={TRANSITION_FAST}
             className={cn(
               "relative flex-1 rounded-full py-2 font-body text-[13px] font-medium capitalize transition-colors duration-[var(--motion-fast)]",
               mode === m
@@ -318,7 +315,13 @@ function DiscoveryContent() {
               </span>
             </div>
 
-            {defaultError && <ErrorBanner message={defaultError} />}
+            <AnimatePresence>
+              {defaultError && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <ErrorBanner message={defaultError} />
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <div className={resultsGridClass}>
               {defaultLoading &&
@@ -330,7 +333,7 @@ function DiscoveryContent() {
                 !defaultError &&
                 mode === "researchers" &&
                 leaderboard.map((entry, i) => (
-                  <LeaderboardRow key={`${entry.rank}-${entry.user_name}`} entry={entry} index={i} onSelect={setQuery} />
+                  <LeaderboardRow key={entry.id} entry={entry} index={i} />
                 ))}
 
               {!defaultLoading &&
@@ -351,7 +354,13 @@ function DiscoveryContent() {
           </div>
         )}
 
-        {error && <ErrorBanner message={error} />}
+        <AnimatePresence>
+          {error && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <ErrorBanner message={error} />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <AnimatePresence>
           {hasQuery && (
