@@ -273,6 +273,34 @@ async def fetch_industry_opportunities(
                     }
                 )
 
+            # The LLM self-reports matchScore as part of the same extraction
+            # pass that writes relevanceExplanation, so the two can disagree —
+            # a job whose own relevanceExplanation admits it's a stretch can
+            # still carry a confident 85+ matchScore. Recompute matchScore
+            # from real embedding similarity between the researcher's
+            # resolved focus/expertise and each opportunity's own text,
+            # instead of trusting the LLM's self-reported number (same
+            # grounding used for pipeline_services.get_journal_advisor and
+            # the daily feed's displayed match %).
+            if scraped_items:
+                try:
+                    from app.services.ai.embedding_service import (
+                        score_candidates_against_profile,
+                    )
+
+                    profile_text = f"{resolved_focus} {' '.join(expertise_keywords)}"
+                    candidate_texts = [
+                        f"{item['title']} {item['description']} {' '.join(item['requiredSkills'])}"
+                        for item in scraped_items
+                    ]
+                    grounded_scores = await score_candidates_against_profile(
+                        profile_text, candidate_texts
+                    )
+                    for item, score in zip(scraped_items, grounded_scores):
+                        item["matchScore"] = score
+                except Exception as e:
+                    logger.error(f"Grounded matchScore scoring failed: {e}")
+
             # Cache in Database
             if db is not None and scraped_items:
                 try:

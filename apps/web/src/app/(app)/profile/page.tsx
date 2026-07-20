@@ -19,7 +19,7 @@ import { syncUserProfile, deleteUserAccount } from "@/lib/api/endpoints";
 export default function ProfilePage() {
   const router = useRouter();
   const { user, getIdToken, signOut } = useAuth();
-  const { firestoreProfile, author, loading } = useMyProfile();
+  const { firestoreProfile, author, loading, error: profileError, refetch } = useMyProfile();
 
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
@@ -48,7 +48,9 @@ export default function ProfilePage() {
       await updateResearcherProfile(user.uid, { name, researchFocus, academicStatus, about });
       const idToken = await getIdToken();
       if (idToken) {
-        await syncUserProfile(idToken, user.uid, name, researchFocus).catch(() => {});
+        await syncUserProfile(idToken, user.uid, name, researchFocus).catch((err) => {
+          console.warn("[Profile] Backend profile sync failed:", err);
+        });
       }
       setEditing(false);
     } catch (err) {
@@ -86,7 +88,13 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="mx-auto grid max-w-2xl grid-cols-1 gap-4 px-4 py-6 md:px-8 lg:max-w-4xl lg:grid-cols-[280px_1fr] lg:items-start lg:gap-6">
+    <div className="mx-auto max-w-2xl px-4 py-6 md:px-8 lg:max-w-4xl">
+      {profileError && (
+        <div className="mb-4">
+          <ErrorBanner message={profileError} onRetry={refetch} />
+        </div>
+      )}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_1fr] lg:items-start lg:gap-6">
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -131,22 +139,17 @@ export default function ProfilePage() {
               </div>
             )}
             <div className="mt-3 flex flex-col gap-3">
-              <div>
-                <label className="mb-1.5 block font-body text-[13px] font-medium text-text-secondary">Name</label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} />
-              </div>
-              <div>
-                <label className="mb-1.5 block font-body text-[13px] font-medium text-text-secondary">
-                  Research focus
-                </label>
-                <Input value={researchFocus} onChange={(e) => setResearchFocus(e.target.value)} />
-              </div>
-              <div>
-                <label className="mb-1.5 block font-body text-[13px] font-medium text-text-secondary">
-                  Academic status
-                </label>
-                <Input value={academicStatus} onChange={(e) => setAcademicStatus(e.target.value)} />
-              </div>
+              <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} />
+              <Input
+                label="Research focus"
+                value={researchFocus}
+                onChange={(e) => setResearchFocus(e.target.value)}
+              />
+              <Input
+                label="Academic status"
+                value={academicStatus}
+                onChange={(e) => setAcademicStatus(e.target.value)}
+              />
               <div>
                 <label className="mb-1.5 block font-body text-[13px] font-medium text-text-secondary">About</label>
                 <textarea
@@ -240,6 +243,7 @@ export default function ProfilePage() {
         </Card>
       </Reveal>
       </div>
+    </div>
     </div>
   );
 }

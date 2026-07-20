@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { TRANSITION_FAST } from "@/lib/motion";
 
 export function GoogleSignInButton({
   onClick,
@@ -17,7 +18,7 @@ export function GoogleSignInButton({
       disabled={loading}
       whileHover={loading ? undefined : { scale: 1.02, boxShadow: "0 6px 18px rgba(0,0,0,0.12)" }}
       whileTap={loading ? undefined : { scale: 0.98 }}
-      transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+      transition={TRANSITION_FAST}
       className={cn(
         "flex h-13 w-full cursor-pointer items-center justify-center gap-3 rounded-md border border-border bg-white font-body text-[14px] font-medium text-[#1f1f1f] transition-opacity duration-[var(--motion-fast)] disabled:opacity-50"
       )}

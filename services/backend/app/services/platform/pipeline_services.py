@@ -23,7 +23,11 @@ from app.domains.recommendation.engine import (
     cosine_similarity as vector_cosine_similarity,
     mmr_diversify,
 )
-from app.services.ai.embedding_service import embed_texts, embed_query
+from app.services.ai.embedding_service import (
+    embed_texts,
+    embed_query,
+    score_candidates_against_profile,
+)
 from app.prompts import (
     DAILY_FEED_ADVISOR_PROMPT_TEMPLATE,
     METADATA_EXTRACTION_PROMPT_TEMPLATE,
@@ -2359,6 +2363,27 @@ class PipelineServices:
             raise ValueError(
                 f"Journal advisor recommendation generation failed: {str(e)}"
             )
+
+        # The LLM self-reports match_score as part of the same freeform
+        # generation that names the journal — nothing grounds it against the
+        # researcher's actual concepts, so an off-topic journal can still come
+        # back with a confident 90+%. Recompute it from real embedding
+        # similarity between the researcher's concepts/prediction and each
+        # venue's own generated text (same calibration as the daily feed's
+        # displayed match %) and use that instead of trusting the LLM's number.
+        try:
+            author_profile_text = (next_prediction + " " + " ".join(concepts))[:1000]
+            candidate_texts = [
+                f"{v.get('journal_name', '')} {v.get('submission_tips', '')}"
+                for v in venues
+            ]
+            grounded_scores = await score_candidates_against_profile(
+                author_profile_text, candidate_texts
+            )
+            for v, score in zip(venues, grounded_scores):
+                v["match_score"] = score
+        except Exception as e:
+            print(f"[JournalAdvisor] Grounded match_score scoring failed: {e}", flush=True)
 
         try:
             await self._save_to_postgres(

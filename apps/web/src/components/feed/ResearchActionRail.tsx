@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Search, Users2, LineChart, FileText } from "lucide-react";
+import { TRANSITION_FAST } from "@/lib/motion";
 
 const ACTIONS = [
   { label: "Discovery", href: "/discovery", accent: "var(--primary)", Icon: Search },
@@ -23,7 +24,7 @@ export function ResearchActionRail() {
           href={a.href}
           whileHover={{ scale: 1.05, boxShadow: `0 4px 14px color-mix(in srgb, ${a.accent} 20%, transparent)` }}
           whileTap={{ scale: 0.95 }}
-          transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+          transition={TRANSITION_FAST}
           className="flex shrink-0 items-center gap-2 rounded-full border border-border bg-surface px-4 py-2 font-body text-[13px] font-medium text-text-primary transition-colors duration-[var(--motion-fast)] hover:border-primary"
         >
           <a.Icon size={14} style={{ color: a.accent }} />

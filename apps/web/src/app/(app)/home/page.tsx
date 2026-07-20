@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Sparkles, FileText, Coins, Briefcase, BookOpen } from "lucide-react";
 import { useAuth } from "@/lib/hooks/AuthProvider";
@@ -19,6 +19,7 @@ import { DailyChallengeCard } from "@/components/feed/DailyChallengeCard";
 import { ResearchActionRail } from "@/components/feed/ResearchActionRail";
 import { PulseFeedCard } from "@/components/feed/PulseFeedCard";
 import type { DailyFeedItem, Conjecture, GrantMatch, JournalRecommendation, IndustryOpportunity } from "@/lib/types";
+import { DURATION_SLOW, EASE_STANDARD } from "@/lib/motion";
 
 /** Each insight is a distinct fact from a distinct source — kept as separate rows
  * rather than joined into one paragraph, which read as a run-on wall of text. */
@@ -81,10 +82,27 @@ export default function HomePage() {
   const { user } = useAuth();
   const { firestoreProfile, author, loading: profileLoading, error: profileError, refetch: refetchProfile } = useMyProfile();
 
+  // Each backend call gets its own state + loading flag instead of one
+  // shared flag gated on Promise.allSettled — previously the whole page sat
+  // in full skeleton state until the *slowest* of 5 independent calls
+  // resolved (live-measured up to 259s for one call, while others returned
+  // in seconds). Now each section reveals the moment its own data arrives.
   const [feed, setFeed] = useState<DailyFeedItem[]>([]);
   const [feedLoading, setFeedLoading] = useState(true);
   const [conjecture, setConjecture] = useState<Conjecture | null>(null);
-  const [briefItems, setBriefItems] = useState<BriefItem[]>([]);
+  const [conjectureLoading, setConjectureLoading] = useState(true);
+  const [topGrant, setTopGrant] = useState<GrantMatch | undefined>(undefined);
+  const [topOpportunity, setTopOpportunity] = useState<IndustryOpportunity | undefined>(undefined);
+  const [topJournal, setTopJournal] = useState<JournalRecommendation | undefined>(undefined);
+  // True until the *first* of the 4 brief-feeding sources settles, so the
+  // Daily Brief appears as soon as anything is ready instead of waiting for
+  // all four — remaining rows fill in as their own source resolves.
+  const [briefLoading, setBriefLoading] = useState(true);
+
+  const briefItems = useMemo(
+    () => buildBriefItems({ topPaper: feed[0], topGrant, topOpportunity, topJournal }),
+    [feed, topGrant, topOpportunity, topJournal]
+  );
 
   useEffect(() => {
     if (profileLoading) return;
@@ -98,35 +116,39 @@ export default function HomePage() {
     const authorId = author?.id;
 
     let cancelled = false;
-    (async () => {
-      setFeedLoading(true);
-      const [feedRes, conjectureRes, grantsRes, oppsRes, journalsRes] = await Promise.allSettled([
-        getDailyFeed(authorId, topic),
-        getDailyConjecture(authorId, name),
-        authorId ? getMatchGrants(authorId) : Promise.resolve([]),
-        getIndustryOpportunities(topic || "AI", name),
-        authorId ? getJournalAdvisor(authorId) : Promise.resolve([]),
-      ]);
-      if (cancelled) return;
+    const revealBrief = () => {
+      if (!cancelled) setBriefLoading(false);
+    };
 
-      const feedItems = feedRes.status === "fulfilled" ? feedRes.value : [];
-      const conj = conjectureRes.status === "fulfilled" ? conjectureRes.value : null;
-      const grants = grantsRes.status === "fulfilled" ? grantsRes.value : [];
-      const opps = oppsRes.status === "fulfilled" ? oppsRes.value : [];
-      const journals = journalsRes.status === "fulfilled" ? journalsRes.value : [];
+    setFeedLoading(true);
+    getDailyFeed(authorId, topic)
+      .then((items) => !cancelled && setFeed(items))
+      .catch(() => !cancelled && setFeed([]))
+      .finally(() => {
+        if (!cancelled) setFeedLoading(false);
+        revealBrief();
+      });
 
-      setFeed(feedItems);
-      setConjecture(conj);
-      setBriefItems(
-        buildBriefItems({
-          topPaper: feedItems[0],
-          topGrant: grants[0],
-          topOpportunity: opps[0],
-          topJournal: journals[0],
-        })
-      );
-      setFeedLoading(false);
-    })();
+    setConjectureLoading(true);
+    getDailyConjecture(authorId, name)
+      .then((c) => !cancelled && setConjecture(c))
+      .catch(() => !cancelled && setConjecture(null))
+      .finally(() => !cancelled && setConjectureLoading(false));
+
+    (authorId ? getMatchGrants(authorId) : Promise.resolve([]))
+      .then((grants) => !cancelled && setTopGrant(grants[0]))
+      .catch(() => {})
+      .finally(revealBrief);
+
+    getIndustryOpportunities(topic || "AI", name)
+      .then((opps) => !cancelled && setTopOpportunity(opps[0]))
+      .catch(() => {})
+      .finally(revealBrief);
+
+    (authorId ? getJournalAdvisor(authorId) : Promise.resolve([]))
+      .then((journals) => !cancelled && setTopJournal(journals[0]))
+      .catch(() => {})
+      .finally(revealBrief);
 
     return () => {
       cancelled = true;
@@ -146,8 +168,8 @@ export default function HomePage() {
 
   const sections = [
     <FrontierPulseCard key="pulse" author={author} loading={profileLoading} error={profileError} onRetry={refetchProfile} />,
-    <AIDailyBriefCard key="brief" items={briefItems} loading={feedLoading} />,
-    <DailyChallengeCard key="challenge" conjecture={conjecture} loading={feedLoading} />,
+    <AIDailyBriefCard key="brief" items={briefItems} loading={briefLoading} />,
+    <DailyChallengeCard key="challenge" conjecture={conjecture} loading={conjectureLoading} />,
   ];
 
   return (
@@ -170,7 +192,7 @@ export default function HomePage() {
               key={i}
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.1 + i * 0.08, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: DURATION_SLOW, delay: 0.1 + i * 0.08, ease: EASE_STANDARD }}
             >
               {section}
             </motion.div>
@@ -200,7 +222,7 @@ export default function HomePage() {
                 key={item.id}
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: 0.34 + i * 0.06, ease: [0.22, 1, 0.36, 1] }}
+                transition={{ duration: DURATION_SLOW, delay: 0.34 + i * 0.06, ease: EASE_STANDARD }}
               >
                 <PulseFeedCard
                   item={item}

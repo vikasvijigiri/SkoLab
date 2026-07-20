@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Card } from "@/components/ui/Card";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 import type { AuthorResponse } from "@/lib/types";
+import { TRANSITION_FAST } from "@/lib/motion";
 
 function Stat({ label, value, accent }: { label: string; value: number; accent: string }) {
   return (
@@ -49,7 +50,7 @@ export function FrontierPulseCard({
             onClick={onRetry}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.94 }}
-            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+            transition={TRANSITION_FAST}
             className="flex shrink-0 items-center gap-1 rounded-full border border-border px-2.5 py-1 font-body text-[11.5px] font-medium text-text-secondary transition-colors duration-[var(--motion-fast)] hover:border-primary/40 hover:text-text-primary"
           >
             <RotateCw size={11} />

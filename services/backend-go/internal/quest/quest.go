@@ -23,6 +23,7 @@ type Quest struct {
 
 type LeaderboardEntry struct {
 	Rank         int    `json:"rank"`
+	ID           string `json:"id"`
 	UserName     string `json:"user_name"`
 	Institution  string `json:"institution"`
 	EntropyScore int    `json:"entropy_score"`
@@ -49,7 +50,7 @@ func GetLeaderboard(c *gin.Context) {
 
 	if fieldLower == "" || fieldLower == "all fields" || fieldLower == "all" || fieldLower == "any" {
 		rows, err = db.Pool.Query(ctx, `
-			SELECT display_name, current_institution, innovation_score
+			SELECT openalex_id, display_name, current_institution, innovation_score
 			FROM researcher_metrics
 			WHERE innovation_score IS NOT NULL
 			ORDER BY innovation_score DESC
@@ -57,7 +58,7 @@ func GetLeaderboard(c *gin.Context) {
 		`)
 	} else {
 		rows, err = db.Pool.Query(ctx, `
-			SELECT display_name, current_institution, innovation_score
+			SELECT openalex_id, display_name, current_institution, innovation_score
 			FROM researcher_metrics
 			WHERE innovation_score IS NOT NULL
 			  AND field_of_study ILIKE $1
@@ -86,10 +87,11 @@ func GetLeaderboard(c *gin.Context) {
 	entries := make([]LeaderboardEntry, 0, 10)
 	rank := 1
 	for pgr.Next() {
+		var id string
 		var name string
 		var institution *string
 		var score *float64
-		if err := pgr.Scan(&name, &institution, &score); err != nil {
+		if err := pgr.Scan(&id, &name, &institution, &score); err != nil {
 			continue
 		}
 		inst := "Independent Researcher"
@@ -102,6 +104,7 @@ func GetLeaderboard(c *gin.Context) {
 		}
 		entries = append(entries, LeaderboardEntry{
 			Rank:         rank,
+			ID:           id,
 			UserName:     name,
 			Institution:  inst,
 			EntropyScore: entropyScore,

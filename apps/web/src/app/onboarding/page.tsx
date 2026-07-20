@@ -10,6 +10,7 @@ import { friendlyFirestoreError } from "@/components/ui/ErrorBanner";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import { updateResearcherProfile } from "@/lib/firebase/auth";
 import { syncUserProfile } from "@/lib/api/endpoints";
+import { TRANSITION_FAST } from "@/lib/motion";
 
 const FOCUS_OPTIONS = [
   "Machine Learning",
@@ -43,8 +44,10 @@ export default function OnboardingPage() {
       });
       const idToken = await getIdToken();
       if (idToken) {
-        await syncUserProfile(idToken, user.uid, user.displayName ?? "", focus).catch(() => {
-          // Best-effort backend sync — profile already lives in Firestore either way.
+        await syncUserProfile(idToken, user.uid, user.displayName ?? "", focus).catch((err) => {
+          // Best-effort backend sync — profile already lives in Firestore either way,
+          // but a silent failure here previously had zero visibility.
+          console.warn("[Onboarding] Backend profile sync failed:", err);
         });
       }
       router.push("/home");
@@ -77,7 +80,7 @@ export default function OnboardingPage() {
                 onClick={() => setFocus(opt)}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+                transition={TRANSITION_FAST}
                 className={`cursor-pointer rounded-full px-3 py-1.5 font-body text-[12px] font-medium transition-colors duration-[var(--motion-fast)] ${
                   focus === opt ? "bg-primary text-text-on-primary" : "bg-surface-subtle text-text-secondary"
                 }`}
@@ -89,12 +92,12 @@ export default function OnboardingPage() {
           </div>
         </div>
 
-        <div>
-          <label className="mb-1.5 block font-body text-[13px] font-medium text-text-secondary">
-            Academic status
-          </label>
-          <Input value={status} onChange={(e) => setStatus(e.target.value)} placeholder="e.g. PhD Candidate" />
-        </div>
+        <Input
+          label="Academic status"
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          placeholder="e.g. PhD Candidate"
+        />
 
         {error && <p className="font-body text-[13px] text-notification">{error}</p>}
 

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { MathText } from "@/components/ui/MathText";
 import { cn } from "@/lib/utils";
 import type { Conjecture } from "@/lib/types";
+import { TRANSITION_FAST } from "@/lib/motion";
 
 export function DailyChallengeCard({ conjecture, loading }: { conjecture: Conjecture | null; loading: boolean }) {
   const [selected, setSelected] = useState<number | null>(null);
@@ -51,7 +52,7 @@ export function DailyChallengeCard({ conjecture, loading }: { conjecture: Conjec
               disabled={revealed}
               whileHover={revealed ? undefined : { scale: 1.015, boxShadow: "0 4px 14px color-mix(in srgb, var(--primary) 18%, transparent)" }}
               whileTap={revealed ? undefined : { scale: 0.985 }}
-              transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+              transition={TRANSITION_FAST}
               className={cn(
                 "cursor-pointer rounded-[8px] border px-3 py-2.5 text-left font-body text-[13px] transition-colors duration-[var(--motion-fast)] disabled:cursor-default",
                 revealed && isCorrect && "border-accent-emerald bg-accent-emerald/10 text-text-primary",

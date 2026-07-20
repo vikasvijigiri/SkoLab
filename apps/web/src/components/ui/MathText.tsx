@@ -1,7 +1,7 @@
 "use client";
 
-import katex from "katex";
-import "katex/dist/katex.min.css";
+import { useEffect, useState } from "react";
+import type Katex from "katex";
 
 // OpenAlex work titles frequently carry semantic markup from the publisher (chemical
 // formulas, isotope/exponent notation) — e.g. "H<sub>2</sub>SQ" or "<i>J</i><sub>1</sub>".
@@ -18,6 +18,24 @@ function escapeHtml(text: string): string {
 
 function sanitizeAcademicHtml(text: string): string {
   return escapeHtml(text).replace(ALLOWED_TAG_PATTERN, (_m, closing, tag) => `<${closing}${tag.toLowerCase()}>`);
+}
+
+// Matches any HTML/XML-shaped tag, allowlisted or not (e.g. "<sub>", "<mml:msub>",
+// "</mml:mi>"). Used to strip tags this component doesn't understand — mainly
+// MathML from OpenAlex chemistry/physics titles/abstracts (e.g. "<mml:math>...
+// <mml:msub><mml:mi>Z</mml:mi><mml:mn>2</mml:mn></mml:msub>...</mml:math>" for
+// "Z₂") — before the escape/sanitize step below. Without this, such markup
+// doesn't match HAS_ALLOWED_TAG and has no "$", so it hit the plain-text
+// early-return path and rendered as literal, escaped tag soup instead of text.
+// This loses MathML's own subscript/superscript fidelity (nested tags just
+// collapse to their concatenated inner text) but never shows raw markup.
+const ANY_TAG_PATTERN = /<\/?([a-zA-Z][a-zA-Z0-9:_-]*)(?:\s[^<>]*)?\/?>/g;
+
+function stripUnknownTags(text: string): string {
+  return text.replace(ANY_TAG_PATTERN, (match, tagName: string) => {
+    const bareName = (tagName.includes(":") ? tagName.split(":").pop()! : tagName).toLowerCase();
+    return ALLOWED_HTML_TAGS.includes(bareName) ? match : "";
+  });
 }
 
 interface Segment {
@@ -87,12 +105,50 @@ function repairBareLatexCommands(tex: string): string {
   return tex.replace(BARE_COMMAND_PATTERN, "\\$1");
 }
 
-function renderKatex(tex: string, display: boolean): string {
+// katex (~260KB) is only needed by the small fraction of text that actually
+// contains LaTeX — lazy-loaded on first real use instead of bundled into
+// every page/component that imports MathText (most callers render plain
+// titles with zero math). Module-level singleton promise so the chunk +
+// its CSS are fetched once per session, not once per rendered formula.
+let katexPromise: Promise<typeof Katex> | null = null;
+function loadKatex(): Promise<typeof Katex> {
+  if (!katexPromise) {
+    katexPromise = Promise.all([import("katex"), import("katex/dist/katex.min.css")]).then(
+      ([mod]) => mod.default
+    );
+  }
+  return katexPromise;
+}
+
+function renderKatex(katex: typeof Katex, tex: string, display: boolean): string {
   try {
     return katex.renderToString(repairBareLatexCommands(tex.trim()), { displayMode: display, throwOnError: false });
   } catch {
     return tex;
   }
+}
+
+/** Renders one math segment, lazy-loading katex on first use. Shows the raw
+ *  (unrendered) source until the chunk resolves — never nothing, never garbled. */
+function MathSegment({ content, display }: { content: string; display: boolean }) {
+  const [html, setHtml] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    loadKatex()
+      .then((katex) => {
+        if (active) setHtml(renderKatex(katex, content, display));
+      })
+      .catch(() => {
+        if (active) setHtml(content);
+      });
+    return () => {
+      active = false;
+    };
+  }, [content, display]);
+
+  if (html === null) return <span>{content}</span>;
+  return <span dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 /**
@@ -103,19 +159,21 @@ function renderKatex(tex: string, display: boolean): string {
  */
 export function MathText({ text, className }: { text: string; className?: string }) {
   if (!text) return null;
-  if (!text.includes("$") && !HAS_ALLOWED_TAG.test(text)) return <span className={className}>{text}</span>;
+  const cleaned = stripUnknownTags(text);
+  if (!cleaned.includes("$") && !HAS_ALLOWED_TAG.test(cleaned)) {
+    return <span className={className}>{cleaned}</span>;
+  }
 
-  const segments = splitMath(text);
+  const segments = splitMath(cleaned);
   return (
     <span className={className}>
-      {segments.map((seg, i) => (
-        <span
-          key={i}
-          dangerouslySetInnerHTML={{
-            __html: seg.math ? renderKatex(seg.content, seg.display) : sanitizeAcademicHtml(seg.content),
-          }}
-        />
-      ))}
+      {segments.map((seg, i) =>
+        seg.math ? (
+          <MathSegment key={i} content={seg.content} display={seg.display} />
+        ) : (
+          <span key={i} dangerouslySetInnerHTML={{ __html: sanitizeAcademicHtml(seg.content) }} />
+        )
+      )}
     </span>
   );
 }
@@ -141,10 +199,21 @@ export function MarkdownText({ text, className }: { text: string; className?: st
 /** Renders a string that is entirely one LaTeX formula (optionally $/$$-wrapped) in display mode. */
 export function Formula({ tex, className }: { tex: string; className?: string }) {
   const stripped = tex.trim().replace(/^\${1,2}|\${1,2}$/g, "");
-  return (
-    <div
-      className={className}
-      dangerouslySetInnerHTML={{ __html: renderKatex(stripped, true) }}
-    />
-  );
+  const [html, setHtml] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    loadKatex()
+      .then((katex) => {
+        if (active) setHtml(renderKatex(katex, stripped, true));
+      })
+      .catch(() => {
+        if (active) setHtml(stripped);
+      });
+    return () => {
+      active = false;
+    };
+  }, [stripped]);
+
+  return <div className={className} dangerouslySetInnerHTML={{ __html: html ?? stripped }} />;
 }

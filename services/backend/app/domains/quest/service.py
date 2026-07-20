@@ -332,6 +332,7 @@ class QuestsService:
                     results.append(
                         LeaderboardEntry(
                             rank=idx + 1,
+                            id=d.get("openalex_id") or doc.id,
                             user_name=d.get("display_name") or "Unknown Researcher",
                             institution=d.get("current_institution") or "Independent",
                             entropy_score=int(d.get("innovation_score") or 0),
@@ -360,6 +361,7 @@ class QuestsService:
                     results.append(
                         LeaderboardEntry(
                             rank=idx + 1,
+                            id=r.openalex_id,
                             user_name=r.display_name,
                             institution=r.current_institution
                             or "Independent Researcher",
