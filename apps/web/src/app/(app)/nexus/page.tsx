@@ -7,10 +7,11 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge, Chip } from "@/components/ui/Badge";
-import { MathText } from "@/components/ui/MathText";
+import { MathText, MarkdownText } from "@/components/ui/MathText";
 import { apiRequest } from "@/lib/api/client";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { cn } from "@/lib/utils";
+import { TRANSITION_FAST } from "@/lib/motion";
 
 interface WorkspacePaper {
   id: string;
@@ -49,8 +50,28 @@ export default function NexusPage() {
   const [userMsg, setUserMsg] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [resultsDismissed, setResultsDismissed] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  // Close the floating search dropdown on an outside click or Escape.
+  useEffect(() => {
+    function handlePointerDown(e: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setResultsDismissed(true);
+      }
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setResultsDismissed(true);
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -65,6 +86,7 @@ export default function NexusPage() {
     }
 
     let active = true;
+    setResultsDismissed(false);
     (async () => {
       setSearching(true);
       try {
@@ -181,7 +203,7 @@ export default function NexusPage() {
             key={p}
             onClick={() => setMobilePane(p)}
             whileTap={{ scale: 0.96 }}
-            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+            transition={TRANSITION_FAST}
             className={cn(
               "relative flex-1 rounded-md py-1.5 font-body text-[12.5px] font-medium transition-colors duration-[var(--motion-fast)]",
               mobilePane === p ? "text-text-on-primary" : "text-text-secondary"
@@ -222,7 +244,7 @@ export default function NexusPage() {
           </p>
 
           {/* Search bar */}
-          <div className="relative mt-1">
+          <div className="relative mt-1" ref={searchContainerRef}>
             <Input
               leadingIcon={searching ? <Loader2 size={15} className="animate-spin text-primary" /> : <Search size={15} />}
               placeholder="Search literature to add..."
@@ -233,7 +255,7 @@ export default function NexusPage() {
 
             {/* Floating search results */}
             <AnimatePresence>
-              {searchResults.length > 0 && (
+              {searchResults.length > 0 && !resultsDismissed && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -246,8 +268,17 @@ export default function NexusPage() {
                     return (
                       <div
                         key={paper.id}
+                        role="button"
+                        tabIndex={isAdded ? -1 : 0}
+                        aria-disabled={isAdded}
                         onClick={() => !isAdded && handleAddPaper(paper)}
-                        className={`flex items-start justify-between gap-3 rounded p-2.5 text-left transition-colors font-body text-[12.5px] ${
+                        onKeyDown={(e) => {
+                          if ((e.key === "Enter" || e.key === " ") && !isAdded) {
+                            e.preventDefault();
+                            handleAddPaper(paper);
+                          }
+                        }}
+                        className={`flex items-start justify-between gap-3 rounded p-2.5 text-left transition-colors font-body text-[12.5px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
                           isAdded ? "bg-surface-subtle opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-surface-subtle"
                         }`}
                       >
@@ -264,7 +295,7 @@ export default function NexusPage() {
                           type="button"
                           whileHover={isAdded ? undefined : { scale: 1.12 }}
                           whileTap={isAdded ? undefined : { scale: 0.9 }}
-                          transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+                          transition={TRANSITION_FAST}
                           className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors duration-[var(--motion-fast)] hover:bg-primary hover:text-text-on-primary disabled:cursor-not-allowed"
                           disabled={isAdded}
                         >
@@ -306,7 +337,7 @@ export default function NexusPage() {
                       onClick={() => handleRemovePaper(p.id)}
                       whileHover={{ scale: 1.12 }}
                       whileTap={{ scale: 0.9 }}
-                      transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+                      transition={TRANSITION_FAST}
                       className="absolute right-2 top-2 h-6 w-6 rounded flex items-center justify-center text-text-muted transition-colors duration-[var(--motion-fast)] hover:bg-notification/10 hover:text-notification opacity-0 group-hover:opacity-100 focus:opacity-100"
                     >
                       <Trash2 size={13} />
@@ -381,7 +412,7 @@ export default function NexusPage() {
                     onClick={() => handleSendChat(prompt)}
                     whileHover={{ y: -2, boxShadow: "var(--shadow-card-hover)" }}
                     whileTap={{ scale: 0.98 }}
-                    transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                    transition={TRANSITION_FAST}
                     className="w-full text-left p-3 rounded-lg border border-border bg-surface/40 hover:bg-surface/90 hover:border-primary/30 transition-colors duration-[var(--motion-fast)] font-body text-[12.5px] text-text-secondary flex items-center justify-between"
                   >
                     <span>{prompt}</span>
@@ -404,9 +435,12 @@ export default function NexusPage() {
                         : "bg-surface border border-border text-text-primary rounded-bl-none"
                     }`}
                   >
-                    {/* Preserve line breaks for formatted markdown-like replies */}
+                    {/* Preserve line breaks for formatted markdown-like replies.
+                        MarkdownText (not MathText) — LLM replies reliably use
+                        **bold** headers/lists, which MathText doesn't understand
+                        and used to render as literal asterisks. */}
                     <div className="whitespace-pre-wrap">
-                      <MathText text={msg.content} />
+                      <MarkdownText text={msg.content} />
                     </div>
                   </div>
                 </div>

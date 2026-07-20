@@ -59,6 +59,7 @@ export default function SignupPage() {
 
       <form onSubmit={handleSignup} className="mt-6 flex flex-col gap-3">
         <Input
+          label="Full name"
           type="text"
           placeholder="Full name"
           required
@@ -66,6 +67,7 @@ export default function SignupPage() {
           onChange={(e) => setName(e.target.value)}
         />
         <Input
+          label="Email"
           type="email"
           placeholder="Email"
           required
@@ -73,6 +75,7 @@ export default function SignupPage() {
           onChange={(e) => setEmail(e.target.value)}
         />
         <Input
+          label="Password"
           type="password"
           placeholder="Password (min. 6 characters)"
           required

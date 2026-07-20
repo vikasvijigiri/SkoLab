@@ -158,27 +158,19 @@ export default function HorizonPage() {
             <Card accentColor="var(--primary)" className="border-border/50 bg-surface/60 backdrop-blur-md">
               <form onSubmit={handlePredict} className="flex flex-col gap-5">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="font-body text-[12.5px] font-bold text-text-secondary">
-                      Scientific or Technological Field
-                    </label>
-                    <Input
-                      placeholder="e.g. CRISPR gene editing, Neuromorphic chips"
-                      required
-                      value={field}
-                      onChange={(e) => setField(e.target.value)}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="font-body text-[12.5px] font-bold text-text-secondary">
-                      Focus Area / Sub-discipline (Optional)
-                    </label>
-                    <Input
-                      placeholder="e.g. Cancer therapeutics, Edge robotics"
-                      value={focusArea}
-                      onChange={(e) => setFocusArea(e.target.value)}
-                    />
-                  </div>
+                  <Input
+                    label="Scientific or Technological Field"
+                    placeholder="e.g. CRISPR gene editing, Neuromorphic chips"
+                    required
+                    value={field}
+                    onChange={(e) => setField(e.target.value)}
+                  />
+                  <Input
+                    label="Focus Area / Sub-discipline (Optional)"
+                    placeholder="e.g. Cancer therapeutics, Edge robotics"
+                    value={focusArea}
+                    onChange={(e) => setFocusArea(e.target.value)}
+                  />
                 </div>
 
                 <div className="flex justify-end pt-2">
@@ -231,10 +223,16 @@ export default function HorizonPage() {
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="flex items-center gap-2 rounded-md border border-notification/20 bg-notification/10 p-3 text-notification"
+                className="flex items-center gap-2.5 rounded-md border border-notification/20 bg-notification/10 p-3 text-notification"
               >
-                <AlertCircle size={16} />
-                <span className="font-body text-[13px] font-medium">{error}</span>
+                <AlertCircle size={16} className="shrink-0" />
+                <span className="min-w-0 flex-1 font-body text-[13px] font-medium">{error}</span>
+                <button
+                  onClick={() => handlePredict()}
+                  className="shrink-0 cursor-pointer rounded-md border border-notification/30 px-2.5 py-1 font-body text-[12px] font-medium text-notification transition-colors duration-[var(--motion-fast)] hover:bg-notification/10"
+                >
+                  Retry
+                </button>
               </motion.div>
             )}
           </motion.div>

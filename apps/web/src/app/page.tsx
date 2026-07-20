@@ -13,6 +13,7 @@ import { Orbs } from "@/components/ui/Orbs";
 import { Reveal } from "@/components/ui/Reveal";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 import { MagneticCTA } from "@/components/ui/MagneticCTA";
+import { EASE_STANDARD } from "@/lib/motion";
 
 const FEATURES = [
   {
@@ -43,8 +44,7 @@ const FEATURES = [
 
 const STATS = [
   { to: 8, suffix: "", label: "Impact Metric Axes" },
-  { to: 4, suffix: "", label: "Live Collab Modes" },
-  { to: 100, suffix: "%", label: "Open Research Data" },
+  { to: 5, suffix: "", label: "Live Collab Modes" },
 ];
 
 export default function LandingPage() {
@@ -94,7 +94,7 @@ export default function LandingPage() {
         <motion.h1
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.6, delay: 0.1, ease: EASE_STANDARD }}
           className="max-w-3xl font-display text-[40px] font-bold leading-[1.1] tracking-tight text-text-primary md:text-[56px]"
         >
           Quantify research impact.
@@ -112,7 +112,7 @@ export default function LandingPage() {
         <motion.p
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.6, delay: 0.2, ease: EASE_STANDARD }}
           className="mt-6 max-w-xl font-body text-[16px] leading-relaxed text-text-secondary"
         >
           SkoLab links researchers, papers, and institutions in real time — AI-scored metrics,
@@ -122,15 +122,13 @@ export default function LandingPage() {
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.6, delay: 0.3, ease: EASE_STANDARD }}
           className="mt-9 flex flex-col items-center gap-3 sm:flex-row"
         >
-          <Link href="/signup">
-            <MagneticCTA>
-              Get started free
-              <ArrowRight size={16} />
-            </MagneticCTA>
-          </Link>
+          <MagneticCTA onClick={() => router.push("/signup")}>
+            Get started free
+            <ArrowRight size={16} />
+          </MagneticCTA>
           <Link href="/login">
             <Button variant="outlined" className="sm:w-56">
               I already have an account

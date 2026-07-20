@@ -3,6 +3,7 @@
 import { ButtonHTMLAttributes, forwardRef, useState } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { TRANSITION_FAST } from "@/lib/motion";
 
 type Variant = "primary" | "outlined" | "ghost" | "text";
 
@@ -78,7 +79,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         onHoverEnd={() => setHovered(false)}
         whileHover={isInert ? undefined : { scale: 1.025, boxShadow: HOVER_GLOW[variant] }}
         whileTap={isInert ? undefined : { scale: 0.97 }}
-        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+        transition={TRANSITION_FAST}
         className={cn(
           base,
           variants[variant],

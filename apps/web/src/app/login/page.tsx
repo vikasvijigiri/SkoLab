@@ -71,6 +71,7 @@ export default function LoginPage() {
 
       <form onSubmit={handleEmailLogin} className="mt-6 flex flex-col gap-3">
         <Input
+          label="Email"
           type="email"
           placeholder="Email"
           required
@@ -78,6 +79,7 @@ export default function LoginPage() {
           onChange={(e) => setEmail(e.target.value)}
         />
         <Input
+          label="Password"
           type="password"
           placeholder="Password"
           required

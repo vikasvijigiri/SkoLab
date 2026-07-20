@@ -1,6 +1,7 @@
 import { HTMLAttributes } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { TRANSITION_FAST } from "@/lib/motion";
 
 interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   accentColor?: string;
@@ -38,7 +39,7 @@ export function Chip({ selected = false, className, children, ...props }: ChipPr
       type="button"
       whileHover={{ scale: 1.05, boxShadow: "0 4px 14px color-mix(in srgb, var(--primary) 25%, transparent)" }}
       whileTap={{ scale: 0.95 }}
-      transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+      transition={TRANSITION_FAST}
       className={cn(
         "inline-flex h-8 cursor-pointer items-center rounded-full px-3 font-body text-[12px] font-medium transition-colors duration-[var(--motion-fast)]",
         selected ? "bg-primary text-text-on-primary" : "bg-surface-subtle text-primary",

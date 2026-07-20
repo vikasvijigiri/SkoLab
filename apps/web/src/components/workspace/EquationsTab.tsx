@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { updateEquations } from "@/lib/firebase/workspace";
 import { Button } from "@/components/ui/Button";
 import { ErrorBanner, friendlyFirestoreError } from "@/components/ui/ErrorBanner";
@@ -32,7 +33,13 @@ export function EquationsTab({ projectId, initialLatex }: { projectId: string; i
       <p className="font-body text-[12.5px] text-text-muted">
         Shared LaTeX blackboard — last write wins, same as the mobile app.
       </p>
-      {error && <ErrorBanner message={error} />}
+      <AnimatePresence>
+        {error && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <ErrorBanner message={error} />
+          </motion.div>
+        )}
+      </AnimatePresence>
       <textarea
         value={value}
         onChange={(e) => setValue(e.target.value)}

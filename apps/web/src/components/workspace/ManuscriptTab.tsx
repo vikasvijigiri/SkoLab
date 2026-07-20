@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { updateManuscript } from "@/lib/firebase/workspace";
 import { Button } from "@/components/ui/Button";
 import { ErrorBanner, friendlyFirestoreError } from "@/components/ui/ErrorBanner";
@@ -48,7 +49,13 @@ export function ManuscriptTab({
           className="mt-1.5 w-full accent-accent-teal"
         />
       </div>
-      {error && <ErrorBanner message={error} />}
+      <AnimatePresence>
+        {error && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <ErrorBanner message={error} />
+          </motion.div>
+        )}
+      </AnimatePresence>
       <textarea
         value={draft}
         onChange={(e) => setDraft(e.target.value)}

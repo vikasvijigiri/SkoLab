@@ -103,3 +103,32 @@ async def embed_text(text: str) -> np.ndarray:
 async def embed_query(text: str) -> np.ndarray:
     """Embeds a search/profile query with the bge instruction prefix."""
     return await embed_text(QUERY_PREFIX + text)
+
+
+async def score_candidates_against_profile(
+    profile_text: str, candidate_texts: List[str]
+) -> List[int]:
+    """
+    Calibrated 40-98 relevance scores for candidate_texts against profile_text,
+    via embedding cosine similarity. Used to ground LLM- or scraper-reported
+    "match scores" (journal advisor, industry opportunities) in a real semantic
+    signal instead of trusting a self-reported number — the same embedding
+    model, mean-centering, and 40+((raw-0.45)/0.35*57) calibration already used
+    for the daily feed's displayed match % (see
+    pipeline_services.get_daily_feed's process_paper for the full rationale on
+    why raw, not mean-centered, similarity is what a user-facing score should
+    reflect).
+    """
+    if not candidate_texts:
+        return []
+    from app.domains.recommendation.engine import cosine_similarity
+
+    query_vec = await embed_query(profile_text)
+    candidate_vecs = await embed_texts(candidate_texts)
+
+    scores = []
+    for cvec in candidate_vecs:
+        raw_sim = cosine_similarity(cvec, query_vec)
+        calibrated = 40 + (raw_sim - 0.45) / 0.35 * 57
+        scores.append(round(min(98, max(40, calibrated))))
+    return scores

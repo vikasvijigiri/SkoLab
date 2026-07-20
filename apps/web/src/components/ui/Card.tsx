@@ -3,6 +3,7 @@
 import { HTMLAttributes, forwardRef } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { TRANSITION_NORMAL } from "@/lib/motion";
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   /** Tints a top accent bar + hover glow with this color. */
@@ -34,7 +35,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
               ? `var(--shadow-elevated), 0 0 0 1px color-mix(in srgb, ${accentColor} 25%, transparent)`
               : "var(--shadow-elevated)",
           }}
-          transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+          transition={TRANSITION_NORMAL}
           className={cn("rounded-lg bg-surface p-4 shadow-card", className)}
           style={sharedStyle}
           {...(props as React.ComponentProps<typeof motion.div>)}

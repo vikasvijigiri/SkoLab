@@ -22,6 +22,7 @@ export interface SkoLabUser {
 // GET /api/v1/leaderboard/:field (Go gateway)
 export interface LeaderboardEntry {
   rank: number;
+  id: string;
   user_name: string;
   institution: string;
   entropy_score: number;

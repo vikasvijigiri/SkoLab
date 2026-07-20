@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { applyTheme, initialTheme, nextTheme } from "@/lib/theme";
+import { TRANSITION_FAST, TRANSITION_NORMAL } from "@/lib/motion";
 
 export function ThemeToggle() {
   const [theme, setTheme] = useState(initialTheme);
@@ -24,14 +25,14 @@ export function ThemeToggle() {
       suppressHydrationWarning
       whileHover={{ scale: 1.12, boxShadow: "0 4px 14px color-mix(in srgb, var(--primary) 25%, transparent)" }}
       whileTap={{ scale: 0.92 }}
-      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+      transition={TRANSITION_FAST}
       className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-border bg-surface text-text-muted transition-colors duration-[var(--motion-fast)] hover:text-primary"
       style={{ transitionTimingFunction: "var(--ease-standard)" }}
     >
       <motion.span
         className="flex items-center justify-center"
         animate={{ rotate: hovered ? 25 : 0 }}
-        transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+        transition={TRANSITION_NORMAL}
       >
         {theme === "light" && (
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

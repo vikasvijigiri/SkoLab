@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Plus, FolderKanban, Users2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -11,6 +11,7 @@ import { ErrorBanner, friendlyFirestoreError } from "@/components/ui/ErrorBanner
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import { subscribeProjects, createProject } from "@/lib/firebase/workspace";
 import type { CollabProject } from "@/lib/types";
+import { TRANSITION_FAST, DURATION_SLOW, EASE_STANDARD } from "@/lib/motion";
 
 export default function WorkspaceListPage() {
   const { user } = useAuth();
@@ -76,30 +77,43 @@ export default function WorkspaceListPage() {
         </Button>
       </motion.div>
 
-      {error && <ErrorBanner message={error} />}
+      <AnimatePresence>
+        {error && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <ErrorBanner message={error} />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {creating && (
-        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}>
-          <Card accentColor="var(--accent-teal)">
-            <form onSubmit={handleCreate} className="flex flex-col gap-3">
-              <Input
-                placeholder="Project name"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-              <Input
-                placeholder="Short description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-              <Button type="submit" loading={submitting}>
-                Create project
-              </Button>
-            </form>
-          </Card>
-        </motion.div>
-      )}
+      <AnimatePresence>
+        {creating && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={TRANSITION_FAST}
+          >
+            <Card accentColor="var(--accent-teal)">
+              <form onSubmit={handleCreate} className="flex flex-col gap-3">
+                <Input
+                  placeholder="Project name"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+                <Input
+                  placeholder="Short description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+                <Button type="submit" loading={submitting}>
+                  Create project
+                </Button>
+              </form>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {loading && (
         <div className="flex flex-col gap-3">
@@ -124,7 +138,7 @@ export default function WorkspaceListPage() {
             key={p.id}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: i * 0.06, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: DURATION_SLOW, delay: i * 0.06, ease: EASE_STANDARD }}
           >
             <Link href={`/workspace/${p.id}`} className="block h-full">
               <Card glow interactive accentColor="var(--accent-teal)" className="flex h-full flex-col">
@@ -139,10 +153,12 @@ export default function WorkspaceListPage() {
                   <p className="mt-1 font-body text-[13px] text-text-secondary">{p.description}</p>
                 )}
                 <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-subtle">
+                  {/* scaleX transform instead of animating width — avoids layout
+                      recalculation on every frame (width triggers reflow, transform doesn't). */}
                   <motion.div
-                    className="h-full rounded-full bg-accent-teal"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${Math.round((p.manuscriptProgress ?? 0) * 100)}%` }}
+                    className="h-full w-full origin-left rounded-full bg-accent-teal"
+                    initial={{ scaleX: 0 }}
+                    animate={{ scaleX: (p.manuscriptProgress ?? 0) }}
                     transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
                   />
                 </div>

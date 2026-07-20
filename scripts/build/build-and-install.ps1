@@ -125,9 +125,14 @@ if (-not $InstallOnly) {
     Invoke-DebugBuild -GradleProjectDir $androidDst
 }
 
-$apk = Join-Path $androidDst "app\build\outputs\apk\dev\debug\app-dev-debug.apk"
-if (-not (Test-Path $apk)) {
-    throw "APK not found at $apk. Run without -InstallOnly first."
+$apkDir = Join-Path $androidDst "app\build\outputs\apk\dev\debug"
+$apkFiles = @()
+if (Test-Path $apkDir) {
+    $apkFiles = Get-ChildItem -Path $apkDir -Filter "*.apk"
+}
+
+if ($apkFiles -eq $null -or $apkFiles.Count -eq 0) {
+    throw "No compiled APK found at $apkDir. Run without -InstallOnly first."
 }
 
 Write-Host "Checking connected ADB devices..."
@@ -169,21 +174,39 @@ if ($hasDevice) {
 if (-not $hasDevice) {
     Write-Host ""
     Write-Host "=========================================================================" -ForegroundColor Yellow
-    Write-Host "  ⚠️  [WARNING] No active Android device or emulator was found connected via ADB." -ForegroundColor Yellow
+    Write-Host "  [WARNING] No active Android device or emulator was found connected via ADB." -ForegroundColor Yellow
     Write-Host "=========================================================================" -ForegroundColor Yellow
-    Write-Host "The debug APK was successfully compiled and is located at:"
-    Write-Host "  $apk" -ForegroundColor Green
+    Write-Host "The debug APK was successfully compiled and is located in:"
+    foreach ($file in $apkFiles) {
+        Write-Host "  $($file.FullName)" -ForegroundColor Green
+    }
     Write-Host ""
     Write-Host "Once your device connection is established, you can install it instantly without"
     Write-Host "recompiling the app by running this fast install-only command:"
-    Write-Host "  powershell -ExecutionPolicy Bypass -File scripts/build-and-install.ps1 -InstallOnly" -ForegroundColor Cyan
+    Write-Host "  powershell -ExecutionPolicy Bypass -File scripts/build/build-and-install.ps1 -InstallOnly" -ForegroundColor Cyan
     Write-Host "Or manually via ADB:"
-    Write-Host "  adb install -r `"$apk`"" -ForegroundColor Cyan
+    foreach ($file in $apkFiles) {
+        Write-Host "  adb install -r `"$($file.FullName)`"" -ForegroundColor Cyan
+    }
     Write-Host "=========================================================================" -ForegroundColor Yellow
     Write-Host ""
 } else {
     Write-Host "Installing on device ($targetDevice)..."
-    adb -s $targetDevice install -r $apk
+    
+    $targetApk = $null
+    if ($apkFiles.Count -gt 1) {
+        # Query device ABI to match correct split APK
+        $deviceAbi = (adb -s $targetDevice shell getprop ro.product.cpu.abi).Trim()
+        Write-Host "Device CPU Architecture: $deviceAbi" -ForegroundColor Cyan
+        $targetApk = $apkFiles | Where-Object { $_.Name -like "*$deviceAbi*" } | Select-Object -First 1
+    }
+    
+    if ($targetApk -eq $null) {
+        $targetApk = $apkFiles[0]
+    }
+    
+    Write-Host "Selected APK: $($targetApk.Name)" -ForegroundColor Green
+    adb -s $targetDevice install -r $targetApk.FullName
     if ($LASTEXITCODE -ne 0) { 
         Write-Warning "adb install failed. Please ensure your device is unlocked and screen is on."
     } else {

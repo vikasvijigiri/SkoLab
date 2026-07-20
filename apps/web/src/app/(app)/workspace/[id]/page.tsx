@@ -17,6 +17,7 @@ import { TasksMeetingsTab } from "@/components/workspace/TasksMeetingsTab";
 import { MembersTab } from "@/components/workspace/MembersTab";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import type { CollabProject } from "@/lib/types";
+import { TRANSITION_FAST } from "@/lib/motion";
 
 const TABS = [
   { name: "Chat", Icon: MessageSquare },
@@ -35,6 +36,7 @@ export default function WorkspaceDetailPage({ params }: { params: Promise<{ id: 
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("Chat");
   const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -49,7 +51,6 @@ export default function WorkspaceDetailPage({ params }: { params: Promise<{ id: 
   }, [id]);
 
   async function handleDelete() {
-    if (!confirm("Delete this workspace for everyone? This can't be undone.")) return;
     setDeleting(true);
     try {
       await deleteProject(id);
@@ -81,7 +82,13 @@ export default function WorkspaceDetailPage({ params }: { params: Promise<{ id: 
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6 md:px-8 lg:max-w-5xl">
-      {error && <ErrorBanner message={error} />}
+      <AnimatePresence>
+        {error && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <ErrorBanner message={error} />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <motion.div
         initial={{ opacity: 0, y: -8 }}
@@ -95,18 +102,39 @@ export default function WorkspaceDetailPage({ params }: { params: Promise<{ id: 
             <p className="mt-0.5 font-body text-[13.5px] text-text-secondary">{project.description}</p>
           )}
         </div>
-        {isOwner && (
+        {isOwner && (confirmDelete ? (
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="font-body text-[12.5px] text-text-secondary">Delete for everyone?</span>
+            <motion.button
+              onClick={handleDelete}
+              disabled={deleting}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="cursor-pointer rounded-md px-2.5 py-1.5 font-body text-[12.5px] font-medium text-notification transition-colors hover:bg-notification/10 disabled:opacity-50"
+            >
+              {deleting ? "Deleting…" : "Confirm delete"}
+            </motion.button>
+            <motion.button
+              onClick={() => setConfirmDelete(false)}
+              disabled={deleting}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="cursor-pointer rounded-md px-2.5 py-1.5 font-body text-[12.5px] font-medium text-text-secondary transition-colors hover:bg-surface-subtle disabled:opacity-50"
+            >
+              Cancel
+            </motion.button>
+          </div>
+        ) : (
           <motion.button
-            onClick={handleDelete}
-            disabled={deleting}
+            onClick={() => setConfirmDelete(true)}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 font-body text-[12.5px] font-medium text-notification transition-colors hover:bg-notification/10 disabled:opacity-50"
+            className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 font-body text-[12.5px] font-medium text-notification transition-colors hover:bg-notification/10"
           >
             <Trash2 size={14} />
-            {deleting ? "Deleting…" : "Delete"}
+            Delete
           </motion.button>
-        )}
+        ))}
       </motion.div>
 
       <div className="flex gap-1 overflow-x-auto rounded-full bg-surface-subtle p-1 lg:hidden">
@@ -115,7 +143,7 @@ export default function WorkspaceDetailPage({ params }: { params: Promise<{ id: 
             key={t.name}
             onClick={() => setTab(t.name)}
             whileTap={{ scale: 0.96 }}
-            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+            transition={TRANSITION_FAST}
             className={cn(
               "relative flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 font-body text-[12.5px] font-medium transition-colors duration-[var(--motion-fast)]",
               tab === t.name
@@ -145,7 +173,7 @@ export default function WorkspaceDetailPage({ params }: { params: Promise<{ id: 
                 key={t.name}
                 onClick={() => setTab(t.name)}
                 whileTap={{ scale: 0.97 }}
-                transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+                transition={TRANSITION_FAST}
                 className={cn(
                   "relative flex items-center gap-2 rounded-md px-3 py-2 font-body text-[13px] font-medium transition-colors duration-[var(--motion-fast)]",
                   tab === t.name
