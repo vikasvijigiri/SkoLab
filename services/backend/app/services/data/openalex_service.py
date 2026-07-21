@@ -306,6 +306,45 @@ class OpenAlexService:
             )
         return []
 
+    async def search_sources(
+        self, query: str, per_page: int = 8
+    ) -> List[Dict[str, Any]]:
+        """
+        Searches OpenAlex sources (journals/venues) by query/focus — real
+        display_name, works_count, is_oa, host_organization_name,
+        summary_stats.2yr_mean_citedness, topics. Used to ground journal
+        recommendations in real venues instead of LLM-invented ones.
+        """
+        url = f"{self.base_url}/sources"
+        params = {
+            "search": query,
+            "per_page": per_page,
+            "sort": "works_count:desc",
+            "mailto": self.email,
+        }
+        try:
+            await openalex_breaker._check_state()
+            async with httpx.AsyncClient(
+                timeout=settings.http_timeout_seconds
+            ) as client:
+                res = await client.get(url, params=params, headers=self.headers)
+                if res.status_code == 200:
+                    await openalex_breaker._on_success()
+                    return res.json().get("results", [])
+                else:
+                    await openalex_breaker._on_failure(
+                        Exception(f"HTTP {res.status_code}")
+                    )
+        except CircuitBreakerOpenError:
+            raise
+        except Exception as e:
+            await openalex_breaker._on_failure(e)
+            print(
+                f"[OpenAlexService] Error searching sources for query '{query}': {e}",
+                flush=True,
+            )
+        return []
+
 
 def is_work_relevant_to_discipline(work: dict, discipline: str) -> bool:
     """
