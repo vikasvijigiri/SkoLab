@@ -114,9 +114,11 @@ export interface CitationHeatmap {
 
 export interface JournalRecommendation {
   journal_name: string;
-  estimated_impact_factor: number;
+  works_count: number;
+  is_oa: boolean;
+  citation_impact: number;
   match_score: number;
-  submission_tips: string;
+  rationale: string;
 }
 
 export interface GrantMatch {
