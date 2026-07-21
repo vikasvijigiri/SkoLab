@@ -233,14 +233,14 @@ function AuthorDetailContent({ authorId }: { authorId: string }) {
             </div>
           </div>
 
-          <div className="mt-4 flex gap-2">
-            <Button variant="primary" disabled title="Coming soon">
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button variant="primary" fullWidth={false} disabled title="Coming soon">
               Connect
             </Button>
-            <Button variant="outlined" disabled title="Coming soon">
+            <Button variant="outlined" fullWidth={false} disabled title="Coming soon">
               Message
             </Button>
-            <Button variant="ghost" disabled title="Coming soon">
+            <Button variant="ghost" fullWidth={false} disabled title="Coming soon">
               Collaborate
             </Button>
           </div>

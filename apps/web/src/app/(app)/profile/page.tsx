@@ -160,10 +160,10 @@ export default function ProfilePage() {
                 />
               </div>
               <div className="flex gap-2">
-                <Button onClick={handleSave} loading={saving}>
+                <Button fullWidth={false} onClick={handleSave} loading={saving} className="px-8">
                   Save
                 </Button>
-                <Button variant="text" onClick={() => setEditing(false)}>
+                <Button variant="text" fullWidth={false} onClick={() => setEditing(false)}>
                   Cancel
                 </Button>
               </div>
@@ -228,10 +228,10 @@ export default function ProfilePage() {
           </p>
           {confirmDelete ? (
             <div className="mt-3 flex gap-2">
-              <Button variant="primary" error onClick={handleDeleteAccount} loading={deleting}>
+              <Button variant="primary" error fullWidth={false} onClick={handleDeleteAccount} loading={deleting} className="px-8">
                 Confirm delete
               </Button>
-              <Button variant="text" onClick={() => setConfirmDelete(false)}>
+              <Button variant="text" fullWidth={false} onClick={() => setConfirmDelete(false)}>
                 Cancel
               </Button>
             </div>
