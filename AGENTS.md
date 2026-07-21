@@ -107,6 +107,17 @@ gitignored — keep them that way.
 
 ## Conventions
 
+- **Language boundary per concern — keep it that way when adding features.**
+  Pure AI/ML logic (LLM calls, embeddings, scoring, recommendation pipelines)
+  belongs in `services/backend` (Python) — that's where the model-serving
+  infra (`embedding_service.py`, `llm_service.py`) already lives, and it's
+  the fastest/most direct path to those libraries. Web app logic (UI, data
+  fetching, client state) belongs in `apps/web` (TypeScript/Next.js) — don't
+  reimplement web-facing logic in Python or push it through the Go gateway.
+  Android logic belongs in `apps/android-app` (Kotlin). The Go gateway
+  (`services/backend-go`) is for auth/CORS/proxying/fast-path CRUD, not AI
+  logic. When a new feature needs work in more than one of these, split it
+  along this boundary rather than picking whichever language is convenient.
 - **Never hardcode a specific user/researcher into logic.** Every profile-
   dependent code path (recommendation scoring, feed generation, name
   resolution) must derive everything from the `author_id`/profile passed in
