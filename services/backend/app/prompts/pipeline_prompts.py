@@ -59,21 +59,4 @@ Provide your response in this exact JSON format:
 
 """
 
-JOURNAL_VENUE_ADVISOR_PROMPT_TEMPLATE = """You are an elite journal venue advisor. Recommend the top 3 best-fit peer-reviewed scientific journals for a researcher's next possible paper: '{next_prediction}'.
-The researcher '{author_name}' works in '{concepts}'.
-
-For each journal, generate a match score (70-98%), estimated impact factor, and a specific submission tip.
-
-Tip requirements: Mention what specific aspect of their proposed framework to emphasize (e.g. mathematical rigor, empirical verification). You can use simple LaTeX equations (like $E=mc^2$ or $\\mathcal{{O}}(N)$) in the submission tips.
-
-Provide your response in this exact JSON format:
-[
-  {{
-    "journal_name": "[Full Journal Name]",
-    "estimated_impact_factor": [Float, e.g. 15.2],
-    "match_score": [Int, e.g. 94],
-    "submission_tips": "[Submission tips with optional LaTeX]"
-  }},
-  ...
-]
-"""
+JOURNAL_ADVISOR_RATIONALE_PROMPT_TEMPLATE = "You are a research journal advisor. The researcher '{author_name}' works in '{concepts}'. Explain in 1-2 plain-English sentences (under 40 words, no LaTeX, no equations, no markdown) why '{journal_name}' (a real journal publishing ~{works_count} papers/year, {oa_status}, hosted by {host_organization}) could be a good fit for their next paper."
