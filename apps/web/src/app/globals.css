@@ -214,6 +214,19 @@ body {
   font-family: var(--font-body);
 }
 
+/* Tailwind v3.3+/v4 dropped the automatic pointer cursor on <button> — every
+   button needs cursor-pointer opted in explicitly, which is why it was
+   inconsistent across the app. One base-layer rule covers every button
+   (including framer-motion's motion.button, which renders a real <button>)
+   instead of chasing down each call site; @layer base keeps this below
+   Tailwind's own utilities (e.g. disabled:cursor-not-allowed) in the cascade. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+}
+
 /* Command palette (Radix Dialog via cmdk) — entrance/exit driven by data-state, which Radix sets automatically. */
 .cmdk-overlay {
   transition: opacity var(--motion-normal) var(--ease-standard);
