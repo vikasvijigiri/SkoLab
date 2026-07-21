@@ -319,7 +319,14 @@ class OpenAlexService:
         params = {
             "search": query,
             "per_page": per_page,
-            "sort": "works_count:desc",
+            # No works_count/cited_by_count sort here (unlike search_funders)
+            # — multi-disciplinary mega-journals (Science, PLoS ONE) publish
+            # across every field, so sorting candidates by raw size instead
+            # of OpenAlex's own text-relevance ranking made them dominate
+            # every single query regardless of topic (confirmed live: a
+            # theoretical physicist and an unrelated researcher got the
+            # identical top-3). Default relevance sort surfaces genuinely
+            # topic-specific journals instead.
             "mailto": self.email,
         }
         try:

@@ -326,11 +326,13 @@ function AuthorDetailContent({ authorId }: { authorId: string }) {
               <div className="mt-2.5 flex flex-col gap-2">
                 {journals.map((j) => (
                   <div key={j.journal_name} className="flex items-start justify-between gap-3 rounded-[8px] bg-surface-subtle p-2.5">
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-body text-[13px] font-medium text-text-primary">{j.journal_name}</p>
-                      <p className="mt-0.5 font-body text-[12px] text-text-secondary">
-                        <MathText text={j.submission_tips} />
+                      <p className="mt-0.5 font-body text-[11px] text-text-muted">
+                        ~{j.works_count.toLocaleString()} papers/yr · {j.is_oa ? "Open Access" : "Hybrid/Subscription"}
+                        {j.citation_impact > 0 && ` · ${j.citation_impact} citation impact`}
                       </p>
+                      <p className="mt-1 font-body text-[12px] text-text-secondary">{j.rationale}</p>
                     </div>
                     <Badge accentColor="var(--accent-emerald)" className="shrink-0">
                       {j.match_score}%
