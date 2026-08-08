@@ -13,6 +13,7 @@ Beyond this README, the repo root carries a small, deliberately-scoped doc set:
 | File / dir | What it's for |
 | :--- | :--- |
 | [`AGENTS.md`](./AGENTS.md) | Cold-start guide — stack, conventions, secrets, gotchas. Start here. |
+| [`docs/agent-contract.md`](./docs/agent-contract.md) | Portable agent contract — what every agent should read and what must live in repo-visible docs. |
 | [`PLAN.md`](./PLAN.md) | The original founding plan. Frozen/historical — **not** kept in sync with current reality; see `decisions/` for how things actually changed. |
 | [`decisions/`](./decisions/) | One file per real architectural or scope decision (lightweight ADR style). See [`decisions/README.md`](./decisions/README.md) for the index and format. |
 | [`HANDOFF.md`](./HANDOFF.md) | Current-state snapshot — what's done, what's in flight. Overwritten each session, not a history. |
