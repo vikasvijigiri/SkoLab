@@ -6,6 +6,47 @@ error-recovery skill once a bounded recovery loop reaches a terminal state.
 Format: ## YYYY-MM-DD HH:MM -- <short symptom title>, fields per knowledge-manager's
 ISSUES.md spec. Not preloaded at SessionStart -- consulted on demand. -->
 
+## 2026-08-08 23:10 — test_quests_service leaderboard tests fail with "No leaderboard data available"
+
+- **Phase/Context**: Found while verifying the similar-authors fix; investigated as an
+  independent failure once confirmed pre-existing.
+- **Symptom**: `test_get_leaderboard_firestore` and `test_get_leaderboard_postgres_fallback`
+  both fail with `ValueError: No leaderboard data available for field '<X>' from Firestore
+  or local database.` raised at `quest/service.py:379`.
+- **Diagnosis**: The `ValueError` is the *last* line of `get_leaderboard`, reached only
+  after both the Firestore and PostgreSQL branches fail — and each branch swallows its
+  real error into a `print`, so the message names neither cause. Re-running under
+  `pytest -s` surfaced them: both branches fail on
+  `1 validation error for LeaderboardEntry`.
+  Single shared root cause: **`LeaderboardEntry.id` is a required `str`
+  (`quest/schemas.py:13`) and neither test fixture supplies one.**
+  - Firestore test: the mock docs define `to_dict()` but never set `.id`, so
+    `d.get("openalex_id") or doc.id` yields a `MagicMock`, not a `str`.
+  - Postgres test: the `ResearcherMetrics` rows are built without `openalex_id`, so
+    `id=r.openalex_id` is `None`.
+  **The production code is correct** — `openalex_id` is the primary key on
+  `ResearcherMetrics` (`researcher_models.py:99`) so it is never null for a real row,
+  and a real Firestore document always has a str `.id`. Both fixtures constructed rows
+  that cannot occur in production. Confirmed pre-existing and unrelated to the
+  uncommitted feature diff: `git diff HEAD` is empty for both
+  `tests/test_quests_service.py` and `app/domains/quest/schemas.py`, and the quest
+  service diff touches only quest initialisation, not `get_leaderboard`.
+- **Attempts**:
+  - 1. Suspected the uncommitted `quest/service.py` diff → **wrong**; that diff changes
+    only the quest-init `focus` logic. Proven by `git diff` on the file.
+  - 2. Suspected my own `derive_similar_authors_from_works` hardening → **wrong**;
+    stashed it and the two tests failed identically.
+  - 3. Read the `ValueError` at face value as "no data" → misleading; it is a terminal
+    fallthrough, not the actual error. Re-ran with `-s` to recover the swallowed
+    validation errors, which named the real cause immediately.
+- **Fix**: Test-side only, no production change. Set a real str `.id` on both mock
+  Firestore docs (and an `openalex_id` in one document body, to cover both branches of
+  the `d.get("openalex_id") or doc.id` fallback), and pass `openalex_id` when
+  constructing both `ResearcherMetrics` rows. Added `id` assertions to all three cases,
+  which the fixtures had been silently skipping; mutation-tested one to confirm it
+  fails when wrong.
+- **Status**: `Resolved`
+
 ## 2026-08-08 22:45 — derive_similar_authors_from_works raises on malformed authorship shapes
 
 - **Phase/Context**: Code review of the uncommitted working tree (author-profile /
