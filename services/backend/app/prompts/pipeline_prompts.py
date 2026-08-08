@@ -38,12 +38,14 @@ Guidelines:
 
 """
 
-GRANT_ADVISOR_PROMPT_TEMPLATE = "You are a research grant advisor. Evaluate the grant opportunity '{title}' from agency '{agency}' for the researcher '{author_name}' with h-index {h_index} and expertise in '{concepts}'. Provide a concise 2-sentence rationale of why this is a good fit and how their profile aligns. Keep it under 40 words."
-
 SYNERGY_COUNSELOR_PROMPT_TEMPLATE = """You are an elite academic synergy counselor. Analyze the collaborative potential between:
 Researcher A: {name1} (Expertise: {concepts1})
+Recent papers: {recent_works1}
 
 Researcher B: {name2} (Expertise: {concepts2})
+Recent papers: {recent_works2}
+
+Ground the joint proposal and action plan in what these two researchers are actually working on right now (their recent papers above), not just their general expertise tags.
 
 Provide your response in this exact JSON format:
 

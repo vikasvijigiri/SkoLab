@@ -5,6 +5,7 @@ from app.services.ai.llm_service import is_llm_working
 from app.prompts import PREDICTION_SYSTEM_PROMPT
 from app.prompts.horizon_prompts import HORIZON_SYSTEM_PROMPT, NEXUS_CHAT_SYSTEM_PROMPT
 from app.services.data.openalex_service import OpenAlexService
+from app.services.ai.user_context import build_user_context
 
 
 class PredictionService:
@@ -85,11 +86,19 @@ class PredictionService:
         return response.content.strip()
 
     async def predict_next_big_thing(
-        self, field: str, focus_area: Optional[str] = None
+        self,
+        field: str,
+        focus_area: Optional[str] = None,
+        author_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Fetches pioneering and latest research in the field, reads their abstracts,
         and uses the LLM to predict the next discovery and business value.
+
+        When author_id is provided, the requesting researcher's own concepts/
+        recent-work keywords are added as context so the same typed field/
+        focus_area produces a prediction shaped by who's actually asking —
+        previously this was identical for every user regardless of author_id.
         """
         if not is_llm_working():
             return {
@@ -108,13 +117,22 @@ class PredictionService:
         if focus_area:
             search_query += f" {focus_area}"
 
-        # Fetch pioneering and latest works in parallel
+        # Fetch pioneering/latest works and the requesting researcher's own
+        # context (if any) in parallel.
         pioneer_task = self.openalex_service.search_works(
             query=search_query, per_page=8, sort="cited_by_count:desc"
         )
         latest_task = self.openalex_service.search_works(
             query=search_query, per_page=8, sort="publication_date:desc"
         )
+        user_context: Dict[str, Any] = {}
+        if author_id:
+            try:
+                user_context = await build_user_context(
+                    self.openalex_service, self.llm_service, author_id
+                )
+            except Exception as e:
+                print(f"[Horizon] User context resolution failed: {e}", flush=True)
 
         pioneer_raw, latest_raw = await asyncio.gather(pioneer_task, latest_task)
 
@@ -165,6 +183,14 @@ class PredictionService:
         context_lines.append(f"TARGET FIELD: {field}")
         if focus_area:
             context_lines.append(f"FOCUS AREA: {focus_area}")
+        if user_context.get("query_terms"):
+            context_lines.append(
+                f"REQUESTING RESEARCHER: {user_context.get('author_name', 'Researcher')} "
+                f"— background in {', '.join(user_context['query_terms'][:6])}. "
+                "Shape the breakthrough scenario, business application, and roadmap "
+                "to be a genuinely good fit for this researcher's own background, "
+                "not just a generic answer for the target field."
+            )
         context_lines.append("\n=== PIONEERING PAPERS ===")
         for i, paper in enumerate(pioneer_works):
             context_lines.append(

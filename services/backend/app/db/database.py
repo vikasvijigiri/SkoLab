@@ -161,6 +161,15 @@ async def init_db() -> None:
             except Exception as e:
                 print(f"[init_db] Note: could not alter table for column {col_name}: {e}", flush=True)
 
+        for col_name, col_type in [
+            ("skills", "JSON"),
+            ("tools", "JSON"),
+        ]:
+            try:
+                await conn.execute(text(f"ALTER TABLE researcher_metrics ADD COLUMN IF NOT EXISTS {col_name} {col_type};"))
+            except Exception as e:
+                print(f"[init_db] Note: could not alter table for column {col_name}: {e}", flush=True)
+
 
 import hmac
 import hashlib

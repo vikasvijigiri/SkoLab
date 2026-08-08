@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel
 
@@ -9,6 +9,7 @@ from app.services.platform.pipeline_services import PipelineServices
 from app.services.industry.industry_service import fetch_industry_opportunities
 from app.services.ai.summarization_service import is_llm_working
 from app.services.data.openalex_service import OpenAlexService
+from app.services.ai.user_context import reconstruct_abstract
 from app.core.config import settings
 from app.core.cache import daily_conjecture_cache
 from app.api.dependencies import get_pipeline_services, get_openalex_service
@@ -192,11 +193,20 @@ async def get_daily_conjecture(
             detail=f"Failed to fetch publications from OpenAlex: {str(e)}",
         )
 
-    # Build works context for LLM
+    # Build works context for LLM. Previously stringified the raw
+    # abstract_inverted_index dict directly (e.g. "{'The': [0], 'quick': [1]}")
+    # instead of reconstructing readable text — the "grounding" was noise, not
+    # content.
+    def _abstract_text(w: Dict[str, Any]) -> str:
+        text = w.get("abstract") or w.get("_custom_abstract") or ""
+        if not text and w.get("abstract_inverted_index"):
+            text = reconstruct_abstract(w["abstract_inverted_index"])
+        return text or "No abstract available."
+
     works_context = "\n".join(
         [
-            f"- Paper: {w.get('title')}\n  Abstract: {w.get('abstract_inverted_index') or ''}"
-            for w in works[:3]
+            f"Paper {i+1}: {w.get('title')}\n  Abstract: {_abstract_text(w)[:600]}"
+            for i, w in enumerate(works[:3])
         ]
     )
 
@@ -206,7 +216,8 @@ async def get_daily_conjecture(
             {
                 "role": "system",
                 "content": """You are an elite scientific advisor. Your task is to generate a highly academic, rigorous scientific "conjecture/puzzle" grounded in the research areas of the provided publications.
-                    The conjecture should describe a specific hypothetical scenario or calculation, present a mathematical or conceptual fallacy, and ask the user to identify the correct explanation or fallacy.
+                    Multiple papers are provided only so you can pick the single best-suited one — you MUST select exactly ONE of the numbered papers below and base the entire puzzle solely on that paper's actual subject matter. Do not combine, blend, or borrow terminology, formalism, or methods from any of the other listed papers, and do not invent a hybrid scenario that mixes concepts across papers — that produces a scientifically incoherent question, which is a critical failure of this task. If the chosen paper doesn't give you enough to construct a rigorous scenario, pick a different one from the list rather than filling the gap with unrelated concepts.
+                    The conjecture should describe a specific hypothetical scenario or calculation, present a mathematical or conceptual fallacy, and ask the user to identify the correct explanation or fallacy. Every equation, term, and concept used must be genuinely consistent with the single chosen paper's field — do not fabricate a formula that doesn't correspond to real, established formalism in that field.
                     Format your output as a raw JSON object matching this schema:
                     {
                     "id": "1",
@@ -359,19 +370,27 @@ async def get_assistant_professor_roadmap(
     target_citations = max(citations + 100, 200)
     target_disruption = 0.80 if "phys" in focus.lower() else 0.78
 
-    # Fetch real peer coauthors dynamically from OpenAlex in the focus area
+    # Fetch real peer coauthors dynamically from OpenAlex in the focus area.
+    # `focus` is a topic/field string (e.g. "Condensed Matter Physics"), not a
+    # person's name -- never pass it to search_authors() (OpenAlex's
+    # /authors?search= does display-name fuzzy matching and returns unrelated
+    # authors for a topic phrase). Instead derive peers from the authorships
+    # of papers that already matched this topic. See
+    # decisions/0005-similar-researchers-via-authorship.md.
     coauthors = []
     try:
-        real_peers = await openalex_service.search_authors(focus, per_page=3)
+        from app.services.data.openalex_service import derive_similar_authors_from_works
+
+        topic_matched_works = await openalex_service.search_works(focus, per_page=15)
+        real_peers = derive_similar_authors_from_works(
+            topic_matched_works, resolved_id, limit=3, discipline=focus
+        )
         for idx, peer in enumerate(real_peers):
-            inst = "Independent Scholar"
-            if peer.get("last_known_institutions"):
-                inst = peer["last_known_institutions"][0].get("display_name", inst)
             match_val = 95 - idx * 4
             coauthors.append(
                 {
-                    "name": peer.get("display_name", "Unknown Scholar"),
-                    "institution": inst,
+                    "name": peer["display_name"],
+                    "institution": peer.get("institution") or "Independent Scholar",
                     "field": focus,
                     "match": f"{match_val}%",
                 }
@@ -381,27 +400,9 @@ async def get_assistant_professor_roadmap(
     except Exception as e:
         print(f"[Roadmap] Failed to query OpenAlex peer coauthors: {e}", flush=True)
 
-    if not coauthors:
-        coauthors = [
-            {
-                "name": "Dr. Sarah Jenkins",
-                "institution": f"Stanford Department of {focus}",
-                "field": focus,
-                "match": "94%",
-            },
-            {
-                "name": "Dr. Alexei Romanov",
-                "institution": f"MIT Department of {focus}",
-                "field": focus,
-                "match": "88%",
-            },
-            {
-                "name": "Dr. Priya Patel",
-                "institution": f"Oxford Research Group in {focus}",
-                "field": focus,
-                "match": "85%",
-            },
-        ]
+    # No fabricated fallback here — if the real OpenAlex peer search comes up
+    # empty for this focus, an honest empty `coauthors` list goes to the
+    # frontend rather than three invented names ("Dr. Sarah Jenkins" et al.).
 
     prompt_messages = [
         {
