@@ -13,3 +13,9 @@ this repo. Distinct from Claude Code's own auto-memory index under
   shape-check rather than assume the OpenAlex schema, and must degrade per-entry
   instead of aborting, since it sits behind endpoints whose outer `except Exception`
   turns any escape into a 500. See ISSUES.md 2026-08-08.
+
+- `QuestsService.get_leaderboard`'s `ValueError: No leaderboard data available ...` is a
+  **terminal fallthrough, not a diagnosis**: both the Firestore and PostgreSQL branches
+  swallow their real exception into a `print` and fall through to it, so the message
+  names neither cause. Re-run the failing test with `pytest -s` to recover the actual
+  error before theorising about missing data. See ISSUES.md 2026-08-08.
