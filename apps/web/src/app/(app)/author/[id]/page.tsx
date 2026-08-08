@@ -197,12 +197,12 @@ function AuthorDetailContent({ authorId }: { authorId: string }) {
               className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full font-display text-[22px] font-bold text-white shadow-card"
               style={{ background: "var(--gradient-hero)" }}
             >
-              {author.display_name.slice(0, 1).toUpperCase()}
+              {(author.display_name || "Unknown").slice(0, 1).toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
                 <h1 className="truncate font-display text-[19px] font-bold text-text-primary">
-                  {author.display_name}
+                  {author.display_name || "Unknown Researcher"}
                 </h1>
                 <motion.button
                   onClick={handleRefresh}
@@ -424,11 +424,11 @@ function AuthorDetailContent({ authorId }: { authorId: string }) {
               {author.similar_researchers.slice(0, 5).map((s) => (
                 <Link
                   key={s.id}
-                  href={`/author/${encodeURIComponent(s.id)}?name=${encodeURIComponent(s.display_name)}`}
+                  href={`/author/${encodeURIComponent(s.id)}?name=${encodeURIComponent(s.display_name || "")}`}
                   className="flex items-center justify-between gap-3 rounded-[8px] bg-surface-subtle p-2.5"
                 >
                   <div className="min-w-0">
-                    <p className="truncate font-body text-[13px] font-medium text-text-primary">{s.display_name}</p>
+                    <p className="truncate font-body text-[13px] font-medium text-text-primary">{s.display_name || "Unknown Researcher"}</p>
                     <p className="truncate font-body text-[12px] text-text-secondary">{s.institution}</p>
                   </div>
                 </Link>

@@ -40,6 +40,10 @@ class AuthorResponse(BaseModel):
     institution: str
     field_of_study: Optional[str] = None
     expertise: List[str] = []
+    # Distinct from `expertise` (topic/field tags) — LLM-derived research
+    # skills/tools implied by the researcher's actual papers.
+    skills: List[str] = []
+    tools: List[str] = []
     academic_history: List[str]
     works: List[Work]
     innovation_score: Optional[float] = None

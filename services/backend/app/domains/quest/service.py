@@ -10,6 +10,7 @@ from app.models.user_models import UserPreference, User
 from app.services.data.openalex_service import OpenAlexService
 from app.services.ai.summarization_service import is_llm_working
 from app.services.ai.llm_service import LLMService
+from app.services.ai.user_context import build_user_context
 
 try:
     from app.services.data.researcher_worker import FIRESTORE_AVAILABLE
@@ -62,22 +63,22 @@ class QuestsService:
                     "LLM service is offline or rate-limited. Cannot dynamically initialize user quests."
                 )
 
-            # Try to resolve user's focus area if they have openalex_id
+            # x_concepts is largely empty on current OpenAlex author objects
+            # (deprecated in favor of `topics`) — reading it directly, as
+            # before, silently left `focus` on its generic default for almost
+            # every real user. build_user_context resolves real topics +
+            # sharp recent-paper keywords instead (same fix already proven
+            # for journal advisor/grants/synergy this session).
             focus = "general academic research and literature exploration"
+            llm_service = LLMService()
             if user.openalex_id:
                 try:
                     clean_author_id = user.openalex_id.split("/")[-1]
-                    author_data = await openalex_service.fetch_author_by_id(
-                        clean_author_id
+                    context = await build_user_context(
+                        openalex_service, llm_service, clean_author_id
                     )
-                    if author_data:
-                        concepts = [
-                            c.get("display_name")
-                            for c in author_data.get("x_concepts", [])
-                            if c.get("level") in [1, 2]
-                        ][:3]
-                        if concepts:
-                            focus = f"research in {', '.join(concepts)}"
+                    if context["query_terms"]:
+                        focus = f"research in {', '.join(context['query_terms'][:6])}"
                 except Exception:
                     pass
 
@@ -91,8 +92,6 @@ class QuestsService:
                     "content": f"Generate 3 customized academic quests for a researcher focusing on: {focus}.",
                 },
             ]
-
-            llm_service = LLMService()
 
             try:
                 response = await llm_service.query(

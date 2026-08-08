@@ -1,4 +1,5 @@
 import datetime
+import logging
 import time
 from collections import Counter
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,6 +8,9 @@ from sqlalchemy.future import select
 from app.schemas.core import UserMemoryEventsRequest, UserMemoryProfileResponse
 from app.models.analytics_models import UserActivityLog
 from app.core.cache import _user_memory_cache
+
+logger = logging.getLogger(__name__)
+
 
 
 class UserMemoryService:
@@ -88,7 +92,7 @@ class UserMemoryService:
             if cached is not None:
                 return UserMemoryProfileResponse(**cached)
         except Exception as e:
-            print(f"[UserMemoryService] Cache lookup error: {e}", flush=True)
+            logger.warning(f"Cache lookup error: {e}")
 
         # 2. Query logs from DB and dynamically aggregate
         stmt = (
@@ -229,9 +233,7 @@ class UserMemoryService:
                 if res.content:
                     researcher_bio = res.content.strip()
         except Exception as e:
-            print(
-                f"[UserMemoryService] Failed to generate semantic bio: {e}", flush=True
-            )
+            logger.warning(f"Failed to generate semantic bio: {e}")
 
         profile = UserMemoryProfileResponse(
             user_id=user_id,
@@ -254,6 +256,6 @@ class UserMemoryService:
         try:
             await _user_memory_cache.set(user_id, profile.model_dump())
         except Exception as e:
-            print(f"[UserMemoryService] Cache write error: {e}", flush=True)
+            logger.warning(f"Cache write error: {e}")
 
         return profile
