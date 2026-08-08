@@ -17,16 +17,6 @@ def replace_skolab(match):
         return "skolab"
 
 
-def replace_skolab(match):
-    val = match.group(0)
-    if val.isupper():
-        return "SKOLAB"
-    elif val[0].isupper():
-        return "SkoLab"
-    else:
-        return "skolab"
-
-
 # Replacements in order
 replacements = [
     (re.compile(re.escape("SkoLabColors"), re.IGNORECASE), lambda m: "SkoLabColors"),
@@ -59,7 +49,7 @@ for root, dirs, files in os.walk(workspace):
         ext = os.path.splitext(file)[1].lower()
         if ext in exts:
             try:
-                with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                with open(filepath, encoding="utf-8", errors="ignore") as f:
                     content = f.read()
 
                 new_content = content
