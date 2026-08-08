@@ -72,3 +72,9 @@ jobs:
         cd services/backend-go
         go mod tidy
         go build -o main .
+
+    - name: Run Go Gateway Tests
+      run: |
+        cd services/backend-go
+        go vet ./...
+        go test ./... -v
