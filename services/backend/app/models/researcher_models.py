@@ -109,6 +109,11 @@ class ResearcherMetrics(Base):
     field_of_study = Column(String(255), nullable=True)
     expertise = Column(JSON, nullable=True)  # list[str]
     academic_history = Column(JSON, nullable=True)  # list[str]
+    # Distinct from `expertise` (topic/field tags) — LLM-derived from paper
+    # titles/concepts via compute_author_metrics, e.g. skills=["Quantum Field
+    # Theory", "Numerical Simulation"], tools=["Python", "Mathematica"].
+    skills = Column(JSON, nullable=True)  # list[str]
+    tools = Column(JSON, nullable=True)  # list[str]
 
     # Aggregate averages across works
     average_creativity = Column(Float, default=0.0)
