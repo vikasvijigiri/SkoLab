@@ -1,0 +1,6 @@
+{
+  "_note": "What `the checks pass` means in THIS repository. Read by .claude/hooks/_projectchecks.py, which the auto-commit gates on and which /verify calls. A key takes a command string, a list of them, or false to disable that kind as a stated decision. An absent key means detect it. Written by .claude/install.py; edit it rather than deleting it.",
+  "_first_decision": "If this repository has no tests, set \"test\": false and say why. Until then the auto-commit refuses any change containing code, because a passing check and an absent one are not the same evidence.",
+  "timeout": 300,
+  "max_files": 25
+}
