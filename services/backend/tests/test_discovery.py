@@ -44,8 +44,10 @@ async def test_predict_discovery(mock_prediction_service):
         assert data["breakthrough_name"] == "Test Quantum Super-conductor"
         assert data["time_horizon"] == "5-7 years"
         assert data["feasibility"] == "Medium"
+        # author_id is threaded through from the request body so the prediction
+        # can be shaped by who's asking; absent from this payload, so None.
         mock_prediction_service.predict_next_big_thing.assert_called_once_with(
-            field="Quantum Superconductivity", focus_area=None
+            field="Quantum Superconductivity", focus_area=None, author_id=None
         )
 
 
