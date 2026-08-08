@@ -90,6 +90,20 @@ def venv_bin(venv: Path, name: str) -> Path | None:
 
 # --- prerequisites, each named if missing -----------------------------------
 
+# This suite builds and installs THIS repository as a wheel, so it only means
+# anything in the layer's own source repository. In a product repo that merely
+# consumes the layer there is no pyproject.toml to build, and `build` reports
+# "does not appear to be a Python project" -- a missing prerequisite, not a
+# packaging defect. Naming the skip is the same contract the disk-space and
+# `build`-module checks below follow; failing here instead would make every
+# consumer repo permanently red for something it does not ship.
+if not (ROOT / "pyproject.toml").is_file() and not (ROOT / "setup.py").is_file():
+    skip("the whole suite",
+         f"{ROOT.name} has no pyproject.toml/setup.py -- it consumes the layer "
+         f"rather than packaging it, so there is no wheel of its own to test")
+    print(f"\n{len(skipped)} step(s) skipped, 0 failed")
+    sys.exit(0)
+
 free = shutil.disk_usage(ROOT).free
 if free < MIN_FREE_BYTES:
     skip("the whole suite",

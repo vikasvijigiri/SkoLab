@@ -127,9 +127,17 @@ _files = sorted(WORKFLOWS.glob("*.yml")) + sorted(WORKFLOWS.glob("*.yaml"))
 check("there is at least one workflow", bool(_files))
 for _wf in _files:
     _text = _wf.read_text(encoding="utf-8")
+    # A `run:` block may `cd` before invoking anything, so a reference is not
+    # necessarily relative to the repository root -- ci.yml does
+    # `cd services/backend` before `pip install -r requirements.txt`, and that
+    # file exists exactly there. Resolving only against ROOT reported a correct
+    # workflow as broken, which is the same false-alarm class this check exists
+    # to prevent. A reference counts as resolved if it exists at the root or
+    # under any directory the workflow cds into.
+    _bases = [Path(".")] + [Path(_d) for _d in re.findall(r"^\s*cd\s+([^\s&;|]+)", _text, re.M)]
     for _ref in set(re.findall(r"(?:python |-r )([A-Za-z0-9_./-]+\.(?:py|txt))", _text)):
         check(f"{_wf.name} references a file that exists: {_ref}",
-              (ROOT / _ref).is_file(),
+              any((ROOT / _b / _ref).is_file() for _b in _bases),
               "a workflow step pointing at a deleted path fails every run, and "
               "a red job nobody reads is worse than no job")
 
