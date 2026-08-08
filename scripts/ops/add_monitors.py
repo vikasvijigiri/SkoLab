@@ -8,9 +8,9 @@ Usage:
     python add_monitors.py --username admin --password yourpass
 """
 
-import sys
-import re
 import argparse
+import re
+import sys
 from pathlib import Path
 
 import requests
@@ -21,8 +21,11 @@ _BACKEND_ENV = Path(__file__).resolve().parent / "backend" / ".env"
 load_dotenv(_BACKEND_ENV)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "backend"))
-from app.core.config import settings
-from uptime_kuma_api import UptimeKumaApi, MonitorType
+from app.core.config import settings  # noqa: E402 - must follow the sys.path insert above
+from uptime_kuma_api import (  # noqa: E402 - must follow the sys.path insert above
+    MonitorType,
+    UptimeKumaApi,
+)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 FASTAPI_BASE = "http://localhost:8000"

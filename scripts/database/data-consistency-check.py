@@ -5,9 +5,10 @@ Post-Disaster Recovery Data Consistency Check Script.
 Verifies relational integrity, cache links, and data validity post-restoration.
 """
 
-import sys
 import asyncio
 import os
+import sys
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 

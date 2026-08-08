@@ -22,10 +22,10 @@ Output:
 """
 
 import argparse
+import datetime
 import json
 import re
 import sys
-import datetime
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -86,22 +86,14 @@ def scaffold_postmortem(
         print("       Delete the existing file to regenerate from template.")
         return output_path
 
-    with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
+    with open(TEMPLATE_PATH, encoding="utf-8") as f:
         template = f.read()
 
-    # Replace template placeholders
-    replacements = {
-        "`inc-YYYY-NNN`": f"`{incident_id}`",
-        "Brief, descriptive title": title,
-        "P0 / P1 / P2 / P3": severity,
-        "open / resolved": "open",
-        "`YYYY-MM-DDTHH:MM:SSZ` (detected)": f"`{detected_at}`",
-        "`YYYY-MM-DDTHH:MM:SSZ` (resolved)": f"`{resolved_at}`",
-        "`X hours Y minutes`": duration,
-        "`YYYY-MM-DD HH:MM UTC` (must be within 5 days of resolution)": f"`{review_date}` (within 5 days of resolution)",
-        "`YYYY-MM-DD` (postmortem date)": f"`{datetime.date.today().isoformat()}`",
-    }
-
+    # Placeholder substitution is done by the explicit content.replace() calls
+    # below, which match whole metadata-table rows rather than bare values. An
+    # earlier dict of {placeholder: value} pairs sat here unused and was
+    # removed -- it looked like the substitution table while contributing
+    # nothing to the output.
     content = template
     # Simple substitutions for the metadata table detected/resolved rows
     content = content.replace(
@@ -159,7 +151,7 @@ def update_incidents_json(
         print(f"[WARN] incidents.json not found at: {INCIDENTS_PATH}. Skipping update.")
         return
 
-    with open(INCIDENTS_PATH, "r", encoding="utf-8") as f:
+    with open(INCIDENTS_PATH, encoding="utf-8") as f:
         incidents = json.load(f)
 
     relative_path = str(postmortem_path.relative_to(PROJECT_ROOT)).replace("\\", "/")
