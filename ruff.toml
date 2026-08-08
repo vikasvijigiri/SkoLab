@@ -50,3 +50,13 @@ ignore = [
 # resolvable. Applying the fix would break all nine hooks at once, silently, since
 # an ImportError in a hook is invisible until the moment it matters.
 ".claude/hooks/**" = ["S110", "S112", "I001"]
+# These two files ARE the repository's secret detectors: their bodies are tables
+# of credential regexes (`sk-...`, `AIzaSy...`, PEM headers). Editing them at all
+# makes them staged-file candidates, and .claude/hooks/pre-commit/01-secret-scan.py
+# then matches its own patterns inside them and refuses the commit -- it has no
+# self-exemption, unlike scripts/security/detect_secrets.py:69, which skips itself
+# by filename. Rather than weaken a secret scanner to satisfy import order, the
+# cosmetic rule is off for these two. Remove this once the hook can exempt
+# pattern-defining files.
+"scripts/security/detect_secrets.py" = ["I001"]
+"scripts/security/scan_history_secrets.py" = ["I001"]

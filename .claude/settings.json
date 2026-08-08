@@ -6,16 +6,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/block-raw-gradlew.js\"",
-            "statusMessage": "Checking for raw gradlew invocation..."
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|PowerShell",
-        "hooks": [
-          {
-            "type": "command",
             "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-commit/01-secret-scan.py\"",
             "statusMessage": "Scanning staged files for secrets..."
           },
@@ -49,26 +39,6 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/backend-docker-reminder.js\"",
-            "statusMessage": "Checking if a backend docker rebuild reminder applies..."
-          },
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/openapi-drift-reminder.js\"",
-            "statusMessage": "Checking if API route edits require openapi.yaml update..."
-          },
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/web-tsc-nudge.js\"",
-            "statusMessage": "Checking if frontend web typecheck is needed..."
-          }
-        ]
-      },
-      {
         "matcher": "Edit|Write",
         "hooks": [
           {
@@ -79,27 +49,7 @@
         ]
       }
     ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/mark-prompt-time.js\"",
-            "statusMessage": "Stamping task-log sentinel..."
-          }
-        ]
-      }
-    ],
     "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/task-log-reminder.js\"",
-            "statusMessage": "Checking if task.md needs an entry..."
-          }
-        ]
-      },
       {
         "hooks": [
           {
