@@ -7,14 +7,13 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname, "../.."),
   },
-  // Enables React's View Transitions API integration for route-navigation
-  // card->hero morphs (Discovery/Home cards <-> Paper/Author heroes, etc.).
-  // framer-motion layoutId only bridges simultaneously-mounted elements and
-  // can't survive a full route unmount, which is why this is needed on top
-  // of it for cross-route transitions.
-  experimental: {
-    viewTransition: true,
-  },
+  // `experimental.viewTransition` was removed here when next went 16.2.10 ->
+  // 16.3.0 (the security bump for CVE-affected next/postcss/sharp). The key no
+  // longer exists in 16.3's config schema, so it fails the typecheck, and
+  // nothing depended on it: no `ViewTransition` usage anywhere in src/, and no
+  // `view-transition-name` in the CSS. Cross-route card->hero morphs are still
+  // unbuilt -- framer-motion `layoutId` only bridges simultaneously-mounted
+  // elements. If they are built later, re-enable whatever 16.3 calls this.
 };
 
 export default nextConfig;
