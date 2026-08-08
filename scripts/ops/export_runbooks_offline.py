@@ -14,10 +14,10 @@ Output:
     copies of all runbook markdown files.
 """
 
-import os
-import sys
-import shutil
 import datetime
+import os
+import shutil
+import sys
 
 # Resolve project root relative to this script's location
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))

@@ -1,8 +1,18 @@
-import time
-import os
-import logging
-import urllib.request
 import json
+import logging
+import os
+import time
+import urllib.request
+
+
+def _require_http_url(url: str) -> str:
+    """urlopen honours file:, ftp: and custom schemes, so a URL that arrives
+    from the environment can read a local file instead of making a request.
+    Only http/https are ever intended here (ruff S310)."""
+    if not url.startswith(("http://", "https://")):
+        raise ValueError(f"refusing non-http(s) URL: {url!r}")
+    return url
+
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
@@ -15,12 +25,14 @@ CHECK_INTERVAL_SEC = 60
 
 def run_probe():
     try:
-        req = urllib.request.Request(HEALTH_URL)
+        req = urllib.request.Request(  # noqa: S310 - scheme checked by _require_http_url
+            _require_http_url(HEALTH_URL)
+        )
         # Set dummy SkoLab user agent to pass scraper check if needed
         req.add_header("User-Agent", "SkoLabSyntheticProbe/1.0")
 
         start_time = time.perf_counter()
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=5) as resp:  # noqa: S310 - scheme checked in Request()
             latency_ms = int((time.perf_counter() - start_time) * 1000)
             status_code = resp.status
             body = resp.read().decode("utf-8")
