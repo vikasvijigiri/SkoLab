@@ -1,0 +1,140 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/block-raw-gradlew.js\"",
+            "statusMessage": "Checking for raw gradlew invocation..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-commit/01-secret-scan.py\"",
+            "statusMessage": "Scanning staged files for secrets..."
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-commit/02-branch-guard.py\"",
+            "statusMessage": "Checking commit destination branch..."
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-deploy/01-spend-guard.py\"",
+            "statusMessage": "Running deploy spend guard checks..."
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-commit/03-attribution-guard.py\"",
+            "statusMessage": "Checking the commit message and author for AI attribution..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-edit/01-forbidden-change-guard.py\"",
+            "statusMessage": "Checking the target is not generated or vendored..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/backend-docker-reminder.js\"",
+            "statusMessage": "Checking if a backend docker rebuild reminder applies..."
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/openapi-drift-reminder.js\"",
+            "statusMessage": "Checking if API route edits require openapi.yaml update..."
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/web-tsc-nudge.js\"",
+            "statusMessage": "Checking if frontend web typecheck is needed..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/on-artifact-create/02-hook-self-test-nudge.py\"",
+            "statusMessage": "Checking whether a hook script needs testing..."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/mark-prompt-time.js\"",
+            "statusMessage": "Stamping task-log sentinel..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/task-log-reminder.js\"",
+            "statusMessage": "Checking if task.md needs an entry..."
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-run/03-checkpoint.py\"",
+            "statusMessage": "Writing recovery checkpoint..."
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-run/06-artifact-autocommit.py\"",
+            "statusMessage": "Checkpointing this turn's work..."
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-run/07-layer-drift.py\"",
+            "statusMessage": "Checking capability-layer drift..."
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start/02-bootstrap-docs.py\"",
+            "statusMessage": "Loading knowledge docs into session context..."
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start/03-state-report.py\"",
+            "statusMessage": "Measuring repo state against the branch point..."
+          }
+        ]
+      }
+    ]
+  }
+}
