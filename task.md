@@ -201,3 +201,40 @@
 
 
 
+
+---
+
+## 2026-08-09 — Fail the Go gateway's Firebase auth bypass closed in release
+
+**Asked:** "the Go `dev_user` auth bypass ([firebase.go:47]) is the one I'd take
+first — and I'll scope it" / "okay go ahead with it"
+
+- **Goal**: Make `auth.VerifyUser` fail closed when Firebase credentials are
+  absent and the gateway is running in release mode, so a misconfiguration
+  cannot silently serve every protected route as `dev_user`.
+- **Input**:
+  - `services/backend-go/internal/auth/firebase.go:20-33` (`InitFirebase`,
+    leaves `authClient` nil on error) and `:47-51` (the bypass).
+  - `services/backend-go/main.go:30` — the existing `GIN_MODE == "release"`
+    gate to follow; `:71,:79,:101` — the three guarded route groups.
+  - `services/backend-go/internal/user/user.go:105` — reads `user_id`.
+  - `.env.example:16` — `GIN_MODE=release`.
+- **Output**: `firebase.go` refuses the request instead of setting `dev_user`
+  when `authClient == nil` and release mode is set; dev/CI behaviour unchanged.
+  Plus `internal/auth/firebase_test.go` — the package has no test file today.
+- **Constraints**: Reuse `GIN_MODE`; do not introduce a second environment
+  variable (inferred — no stated preference, but `main.go:30` sets the
+  precedent). Do not alter the Authorization-header check or the
+  `VerifyIDToken` path. No new dependencies.
+- **Done Checks**:
+  - `cd services/backend-go && go vet ./... && go test ./...` exits 0.
+  - New test: `authClient == nil` + `GIN_MODE=release` + header
+    `Authorization: Bearer anything` ⇒ response is 401 or 503 and `user_id` is
+    never set to `dev_user`.
+  - New test: `authClient == nil` + `GIN_MODE` unset ⇒ still sets `dev_user`
+    (dev/CI path preserved).
+- **Out of Scope**: The Python backend's own auth. The other untested Go
+  packages (`author`, `quest`, `db`, `websocket`, `user`). The route groups in
+  `main.go`. Provisioning or rotating any Firebase credential.
+
+**Status:** Done — release now returns 503 instead of dev_user; 4 tests added to internal/auth (was 0). Mutation-tested: the release test fails (200, want 503) against the pre-fix code.
