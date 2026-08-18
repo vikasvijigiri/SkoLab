@@ -513,6 +513,32 @@ async def teleport_researcher(author_id: str) -> None:
                     "[teleport] Prediction failed for %s: %s", display_name, pred_exc
                 )
 
+        # ── 4b. LLM: skills/tools — distinct from `expertise` (topic tags) ────
+        # compute_author_metrics already derives this from paper titles/
+        # concepts; previously only exposed via the orphaned GET /author_metrics
+        # endpoint (Android-only) and never persisted. Computed once here,
+        # alongside the other one-time-per-enrichment LLM calls, instead of
+        # live per page load.
+        skills: List[str] = []
+        tools: List[str] = []
+        if is_llm_working() and works:
+            try:
+                from app.services.platform.metrics_service import compute_author_metrics
+                from app.services.data.openalex_service import OpenAlexService
+
+                author_metrics = await compute_author_metrics(
+                    clean_id, openalex_service=OpenAlexService()
+                )
+                skills = author_metrics.get("skills") or []
+                tools = author_metrics.get("tools") or []
+                logger.info("[teleport] Skills/tools computed for %s", display_name)
+            except Exception as skills_exc:
+                logger.warning(
+                    "[teleport] Skills/tools computation failed for %s: %s",
+                    display_name,
+                    skills_exc,
+                )
+
         # ── 5a. PostgreSQL — fast searchable metadata ─────────────────────────
         # Stored here so author suggestions and search_author can resolve instantly
         # without hitting the network (Firestore).
@@ -546,6 +572,8 @@ async def teleport_researcher(author_id: str) -> None:
                 "research_consistency": research_consist,
                 "innovation_score": innovation_score,
                 "next_prediction": next_prediction,
+                "skills": skills,
+                "tools": tools,
                 "metrics_computed": True,
                 "last_teleported": time.time(),
             },
@@ -616,6 +644,8 @@ async def teleport_researcher(author_id: str) -> None:
                 "research_consistency": research_consist,
                 "innovation_score": innovation_score,
                 "next_prediction": next_prediction,
+                "skills": skills,
+                "tools": tools,
                 "metrics_computed": True,
                 "last_teleported": time.time(),
             },

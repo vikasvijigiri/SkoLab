@@ -57,6 +57,103 @@ def extract_field_and_expertise(
     return field, expertise
 
 
+def _work_topic_matches(work: Dict[str, Any], topic: str) -> bool:
+    """
+    Stricter than is_work_relevant_to_discipline: checks only the work's own
+    *structured* topic/concept/field classification, not freeform title or
+    abstract text. is_work_relevant_to_discipline scans the whole abstract
+    for broad keyword stems (e.g. "energy", "particle", "matter" for physics)
+    -- fine for its original purpose (namesake-author disambiguation on a
+    profile's own works), but too permissive here: a paper on an unrelated
+    topic can still mention one of those words somewhere in a long abstract,
+    which pollutes a similar-researchers candidate pool with unrelated
+    co-authors from that paper.
+    """
+    topic_words = {w for w in topic.lower().split() if len(w) > 3}
+    if not topic_words:
+        return True
+
+    structured_terms = set()
+    for c in work.get("concepts") or work.get("x_concepts") or []:
+        if isinstance(c, dict) and c.get("display_name"):
+            structured_terms.add(c["display_name"].lower())
+    for t in work.get("topics") or []:
+        if isinstance(t, dict):
+            if t.get("display_name"):
+                structured_terms.add(t["display_name"].lower())
+            for key in ("field", "subfield", "domain"):
+                obj = t.get(key)
+                if isinstance(obj, dict) and obj.get("display_name"):
+                    structured_terms.add(obj["display_name"].lower())
+
+    return any(w in term for term in structured_terms for w in topic_words)
+
+
+def derive_similar_authors_from_works(
+    topic_matched_works: List[Dict[str, Any]],
+    exclude_author_id: Optional[str],
+    limit: int = 4,
+    discipline: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Derives distinct {id, display_name, institution} entries from the
+    authorships of works that already matched a topic/keyword search -- i.e.
+    "who wrote the papers that are already known to be on-topic", never an
+    independent author-name search. OpenAlex's /authors search endpoint does
+    fuzzy matching against author *display names*; feeding it a topic phrase
+    (e.g. "Advanced Condensed Matter Physics") returns nothing or garbage,
+    since a concept string doesn't look like a person's name. See
+    decisions/0005-similar-researchers-via-authorship.md.
+
+    `discipline`, if given, filters to works whose own structured topic
+    classification actually matches (via _work_topic_matches) before pulling
+    authors -- a keyword search can still surface a loosely-related,
+    large-author-count paper whose *other* co-authors are from an unrelated
+    field entirely.
+    """
+    # Every element is shape-checked rather than assumed: the daily-feed call
+    # site (pipeline_services._find_similar_researchers) passes a *mixed*
+    # candidate pool -- arXiv-derived dicts, OpenAlex works and related-works
+    # in one list -- where the other two call sites pass pure search_works()
+    # output. A single malformed entry must skip that entry, never abort the
+    # whole derivation and take the caller's request down with it.
+    works = [w for w in (topic_matched_works or []) if isinstance(w, dict)]
+    relevant_works = (
+        [w for w in works if _work_topic_matches(w, discipline)]
+        if discipline
+        else works
+    )
+    exclude_clean = exclude_author_id.split("/")[-1] if exclude_author_id else None
+    seen_ids: List[str] = []
+    out: List[Dict[str, Any]] = []
+    for w in relevant_works:
+        for authorship in w.get("authorships") or []:
+            if not isinstance(authorship, dict):
+                continue
+            author = authorship.get("author")
+            if not isinstance(author, dict):
+                continue
+            aid = (author.get("id") or "").split("/")[-1]
+            if not aid or aid == exclude_clean or aid in seen_ids:
+                continue
+            seen_ids.append(aid)
+            insts = authorship.get("institutions") or []
+            first_inst = insts[0] if insts else None
+            inst_name = (
+                first_inst.get("display_name") if isinstance(first_inst, dict) else None
+            )
+            out.append(
+                {
+                    "id": aid,
+                    "display_name": author.get("display_name") or "Unknown",
+                    "institution": inst_name,
+                }
+            )
+            if len(out) >= limit:
+                return out
+    return out
+
+
 class OpenAlexService:
     """
     Consolidated service mapping API calls and results from the OpenAlex database.

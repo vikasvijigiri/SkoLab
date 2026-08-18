@@ -2,10 +2,12 @@ from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
 from app.schemas.core import AgentChatRequest, ChatRequest
 from app.services.ai.agent_service import AgentService
 from app.services.platform.pipeline_services import PipelineServices
+from typing import Optional
 from app.api.dependencies import (
     get_agent_service,
     get_pipeline_services,
     get_verified_user,
+    get_optional_user,
 )
 
 router = APIRouter()
@@ -69,14 +71,20 @@ async def upload_document(
 async def chat_with_author(
     req: ChatRequest,
     pipeline_services: PipelineServices = Depends(get_pipeline_services),
+    _user: Optional[dict] = Depends(get_optional_user),
 ):
     try:
         hist_dict = [{"role": h.role, "content": h.content} for h in req.history]
+        # Real, server-verified uid — never a client-supplied value — so chat
+        # history is keyed to who's actually authenticated, not shared across
+        # every caller (see chat_with_author's docstring for the prior bug).
+        real_user_id = _user.get("uid") if _user else None
         data = await pipeline_services.chat_with_author(
             author_id=req.author_id,
             paper_title=req.paper_title,
             user_message=req.user_message,
             history=hist_dict,
+            user_id=real_user_id,
         )
         return data
     except HTTPException:

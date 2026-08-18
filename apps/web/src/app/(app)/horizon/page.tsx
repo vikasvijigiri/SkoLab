@@ -10,6 +10,7 @@ import { Badge, Chip } from "@/components/ui/Badge";
 import { MathText } from "@/components/ui/MathText";
 import { apiRequest } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
+import { useMyProfile } from "@/lib/hooks/useMyProfile";
 
 interface PaperSource {
   id: string;
@@ -64,6 +65,7 @@ const LOADING_STEPS = [
 ];
 
 export default function HorizonPage() {
+  const { author } = useMyProfile();
   const [field, setField] = useState("");
   const [focusArea, setFocusArea] = useState("");
   const [loading, setLoading] = useState(false);
@@ -98,7 +100,7 @@ export default function HorizonPage() {
     try {
       const data = await apiRequest<BreakthroughPrediction>("/api/v1/discovery/predict", {
         method: "POST",
-        body: { field, focus_area: focusArea },
+        body: { field, focus_area: focusArea, author_id: author?.id },
       });
       setPrediction(data);
     } catch (err) {
