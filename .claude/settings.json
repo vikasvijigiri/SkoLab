@@ -1,5 +1,42 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start/02-bootstrap-docs.py\"",
+            "statusMessage": "Loading knowledge docs into session context..."
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start/03-state-report.py\"",
+            "statusMessage": "Measuring repo state against the branch point..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-run/03-checkpoint.py\"",
+            "statusMessage": "Writing recovery checkpoint..."
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-run/06-artifact-autocommit.py\"",
+            "statusMessage": "Checkpointing this turn's work..."
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-run/07-layer-drift.py\"",
+            "statusMessage": "Checking capability-layer drift..."
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash|PowerShell",
@@ -45,43 +82,6 @@
             "type": "command",
             "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/on-artifact-create/02-hook-self-test-nudge.py\"",
             "statusMessage": "Checking whether a hook script needs testing..."
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-run/03-checkpoint.py\"",
-            "statusMessage": "Writing recovery checkpoint..."
-          },
-          {
-            "type": "command",
-            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-run/06-artifact-autocommit.py\"",
-            "statusMessage": "Checkpointing this turn's work..."
-          },
-          {
-            "type": "command",
-            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-run/07-layer-drift.py\"",
-            "statusMessage": "Checking capability-layer drift..."
-          }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start/02-bootstrap-docs.py\"",
-            "statusMessage": "Loading knowledge docs into session context..."
-          },
-          {
-            "type": "command",
-            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start/03-state-report.py\"",
-            "statusMessage": "Measuring repo state against the branch point..."
           }
         ]
       }

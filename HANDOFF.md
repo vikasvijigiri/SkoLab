@@ -4,92 +4,59 @@
 > every session. For history, see `LOG.md`; for why a decision was made, see
 > `decisions/`.
 
-**Last updated:** 2026-07-21 17:09
+**Last updated:** 2026-08-18
 
-## What's done
+## Where the repository is
 
-Implemented and live-verified 3 MCP servers, 2 hooks, and 2 skills (the set
-recommended in the prior session's "what would help this repo" table).
+`main` now carries everything that was sitting on
+`fix/similar-authors-shape-hardening` — 11 commits, 208 files. Tag `v1.0.0`
+marks that merge; it is the repository's first tag and it matches the version
+`package.json` already declared.
 
-**Hooks — fully live-verified within-session, no restart needed:**
-- `.claude/settings.json` + `.claude/hooks/block-raw-gradlew.js`
-  (PreToolUse on `Bash|PowerShell`): denies raw `gradlew`/`gradlew.bat`
-  invocations that don't go through `build-and-install.ps1`. Proven live —
-  an actual `./gradlew --version` call was blocked with the expected
-  message.
-- `.claude/hooks/backend-docker-reminder.js` (PostToolUse on `Write|Edit`):
-  reminds that `services/backend/**` edits need
-  `docker compose build web && docker compose up -d --no-deps web` to reach
-  the `skolab_python_ai` container. Proven live via a real Edit + sentinel
-  capture of the hook's stdin payload.
+What landed, oldest first:
+- `2f14a0b` shape-check authorship data in `derive_similar_authors_from_works`
+- `12bf1a9` supply the required `LeaderboardEntry.id` in quest fixtures
+- `1a564e9` the UAIOS agent capability layer and its checks
+- `c65653a` personalize the research surfaces around the requesting user
+- `9e1d116` Go gateway tests, wired into CI, plus layer docs
+- `c50455a` drop the project-native skills/hooks, fix two layer validators
+- `c7aa5f9` timeouts and URL-scheme guards in ops scripts, ruff backlog cleared
+- `1a728dc` next 16.3.0, closing 6 high-severity advisories
+- `3be5e98` the repository recon map
+- `f057dc5` the gateway fails auth closed in release when Firebase is absent
+- `155fa83` that brief recorded in the task log
 
-**MCP servers — added to `.mcp.json` (project scope) / local scope, config
-proven correct via direct protocol-level calls, but NOT yet loaded as
-Claude-native tools in a running session** (see "What's not done"):
-- `postgres` (`crystaldba/postgres-mcp`, restricted/read-only, joined to
-  `backend_private-net`, talks to `db:5432` by internal hostname — the
-  container has no host port published). DB connectivity + credentials
-  verified with a live `psql` query (20 tables in `skolab`). Committed to
-  `.mcp.json` — the dev password is already public in
-  `services/backend/docker-compose.yml`, so no new secret exposure.
-- `grafana` (`mcp/grafana`, joined to `infrastructure_default`) — added at
-  **local** scope (`~/.claude.json`, not committed) because it needs a live
-  Grafana service-account token, unlike Postgres's already-public dev
-  password. Verified end-to-end via a raw `tools/call` to `query_prometheus`
-  returning real data: `up{job="skolab-backend"} = 1`.
-- `playwright` (`@playwright/mcp`). Verified end-to-end via a raw
-  `tools/call` to `browser_navigate` — loaded `http://localhost:3000`, page
-  title confirmed "SkoLab".
+`fix/empty-connections-fallback` is zero commits ahead of `main`. It is fully
+merged and can be deleted whenever its owner wants; nothing depends on it.
 
-**Skills — written, logic-correct, not yet invocable via `/skill` this
-session** (same restart caveat):
-- `.claude/skills/backend-rebuild-verify/SKILL.md`
-- `.claude/skills/android-build/SKILL.md`
+## Verification behind the merge
 
-**Infra side-effects of verification (still running, reversible):**
-- `infrastructure/docker-compose.yml` stack (Prometheus, Alertmanager, Loki,
-  Promtail) was started with the user's explicit sign-off (this directory is
-  flagged in `AGENTS.md` as "don't touch without asking").
-- `grafana/grafana` was run standalone (not via that compose file) on host
-  port **3010** instead of 3000, because 3000 was already bound by the local
-  `npm run dev:web`. Container name `skolab_grafana`.
-- Two datasources were provisioned in that fresh Grafana instance via its
-  API (not committed anywhere, lives only in the container's sqlite state):
-  `Prometheus` → `http://skolab_prometheus:9090`, `Alertmanager` →
-  `http://skolab_alertmanager:9093`.
-- A Grafana service account (`mcp-grafana`, Viewer role) + token were
-  created for the MCP server to authenticate with.
-- `.gitignore` gained two lines: `.playwright-mcp/` (real tool usage writes
-  screenshots/snapshots there) and `.claude/settings.local.json` (personal
-  overrides, none created yet).
+| Check | Result |
+|---|---|
+| `python tools/run_checks.py` | `PASS: 30 check(s) green (lint, test, typecheck)` |
+| `go vet ./... && go test ./...` (`services/backend-go`) | every package `ok` |
+| `pytest services/backend/tests/` | `85 passed, 6 errors` |
 
-## What's not done / blocked
+The six errors are one pre-existing defect, not a regression from this branch:
+`tests/test_threat_modeling.py:34` calls `asyncio.get_event_loop()` in teardown,
+which Python 3.14 refuses. CI pins 3.10 and is green. Logged in `ISSUES.md` and
+still open — it becomes a real CI failure as soon as the pin moves past 3.12.
 
-- **The actual in-Claude-Code tool calls for all 3 MCP servers and both
-  skills are unverified inside a live session** — this is a hard platform
-  limit, not a shortcut: newly-added `.mcp.json`/`.claude/skills` entries
-  only attach at session start. `claude mcp list` still shows all three as
-  "Pending approval" and `ToolSearch`/`Skill` calls for them fail even after
-  writing `enabledMcpjsonServers` into `~/.claude.json` directly. **Next
-  action: restart Claude Code (or otherwise start a fresh session in this
-  project), then re-run a real query/navigate/skill-invoke through the
-  actual tool surface to close this out.**
-- Docker/OnCall-style Grafana alert-grouping tools (`list_alert_groups`)
-  don't apply to this stack — SkoLab uses standalone Prometheus+Alertmanager,
-  not Grafana-managed alerting, so that 404/mismatch is expected, not a bug.
-  Real alert state was confirmed instead via Alertmanager's own API
-  (`/api/v2/status` → cluster ready) and via the Alertmanager datasource now
-  wired into Grafana.
-- No CI enforcement was added — everything above is local/session config.
+## What needs a decision
 
-## Notes
-
-- Reasoning for putting hooks + Postgres MCP in committed `.claude/`/
-  `.mcp.json` vs. Grafana MCP in local/personal scope: only commit config
-  that's safe and portable for every teammate. Postgres's dev password was
-  already public; the Grafana token is a live secret freshly minted for this
-  machine's container, so it stays local.
-- If the Prometheus/Alertmanager/Loki/Promtail stack should keep running
-  between sessions or get folded into normal `docker compose up` habits,
-  that's a call for whoever owns `infrastructure/` — it was started only for
-  this verification, at the user's explicit go-ahead.
+- **`stash@{0}` — layer-bootstrap regressions.** The global SessionStart
+  bootstrap re-installed stock `ruff.toml`, `tools/test_ci_shape.py` and
+  `tools/test_package.py` over the fixes in `c7aa5f9`/`c50455a`. Applying that
+  stash re-breaks 3 checks. It is stashed rather than dropped so the diff stays
+  inspectable; the durable repair is upstream, in the bootstrap's merge
+  behaviour, not here. Drop the stash once that is settled.
+- **`mcp.json` is untracked and inert.** Claude Code reads `.mcp.json`. As
+  named, this file configures nothing. Rename it, commit it, or delete it —
+  but it was not folded into the merge.
+- **`.env` still lacks** `DATABASE_URL`, `GROQ_API`, `PORT`, `LAN_IP`,
+  `PYTHON_BACKEND_URL`, `GIN_MODE`, all present in `.env.example`. These are
+  the owner's own credentials; no agent should fill them in.
+- **`docs/plans/` and `docs/archive/` do not exist.** The docs-structure rule
+  says not to create speculative empty folders, so they were left absent. That
+  drift warning will keep firing until either a real page lands in them or the
+  rule is amended.
