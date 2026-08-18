@@ -107,3 +107,27 @@ ISSUES.md spec. Not preloaded at SessionStart -- consulted on demand. -->
 - **Fix**: Added `author_id=None` to the expected call in `tests/test_discovery.py:49-51`,
   with a comment noting why the argument is present and why it is `None` for this payload.
 - **Status**: `Resolved`
+
+---
+
+## 2026-08-18 — test_threat_modeling errors on Python 3.14 (local only, CI green)
+
+- **Phase/Context**: Found while running the full backend suite before merging
+  `fix/similar-authors-shape-hardening` to `main`.
+- **Symptom**: `pytest services/backend/tests/` → `85 passed, 6 errors`. All six
+  are the same teardown error in `tests/test_threat_modeling.py`:
+  `RuntimeError: There is no current event loop in thread 'MainThread'`
+  (`C:\Python314\Lib\asyncio\events.py:715`).
+- **Diagnosis**: `tests/test_threat_modeling.py:34` calls
+  `asyncio.get_event_loop().run_until_complete(engine.dispose())`. Python 3.14
+  removed the implicit loop creation `get_event_loop()` used to do outside a
+  running loop, so it raises instead of returning a fresh loop. CI pins
+  `python-version: "3.10"` (`.github/workflows/ci.yml:39`), where the old
+  behaviour still holds — which is why CI is green and only the local
+  Python 3.14 run errors. Not caused by this branch: `git diff main...HEAD --
+  services/backend/tests/test_threat_modeling.py` is empty.
+- **Fix**: Not applied — pre-existing, environment-version-specific, and outside
+  the merge's scope. The repair is `asyncio.run(engine.dispose())`, or an
+  explicit `new_event_loop()`/`close()` pair, in that teardown.
+- **Status**: `Open` — will become a real CI failure the moment the pinned
+  Python moves past 3.12.

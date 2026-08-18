@@ -6,6 +6,38 @@
 
 ---
 
+## 2026-08-18 — Agent (Claude)
+
+Merged the 11-commit `fix/similar-authors-shape-hardening` branch to `main`
+via PR, and cut the repository's first tag.
+
+Before merging, found that the working tree's three uncommitted edits were
+not work but **regressions**: the global layer bootstrap had re-installed
+stock copies of `ruff.toml`, `tools/test_ci_shape.py` and
+`tools/test_package.py` over the fixes committed in `c7aa5f9` and `c50455a`.
+Proved it by running the tests against the working tree (`test_ci_shape` ->
+1 failed on `ci.yml references requirements.txt`; `test_package` -> 2 failed
+on "does not appear to be a Python project") and again against `HEAD`
+(both green). Stashed rather than discarded, so they stay recoverable:
+`stash@{0}`.
+
+Verification actually run, not assumed:
+- `python tools/run_checks.py` -> `PASS: 30 check(s) green (lint, test, typecheck)`
+- `cd services/backend-go && go vet ./... && go test ./...` -> all packages `ok`
+- `pytest services/backend/tests/` -> `85 passed, 6 errors` — the six are a
+  pre-existing Python 3.14 event-loop teardown incompatibility in
+  `test_threat_modeling.py`, unchanged by this branch and green on CI's
+  pinned 3.10. Recorded in `ISSUES.md` rather than papered over.
+
+`fix/empty-connections-fallback` needed nothing — it is zero commits ahead of
+`main` and was left in place rather than deleted.
+
+Not done: `mcp.json` (untracked, added 2026-08-09) was left untracked. Claude
+Code reads `.mcp.json`, not `mcp.json`, so as it stands the file is inert;
+renaming it is the owner's call, not a merge-time side effect.
+
+---
+
 ## 2026-07-21 17:09 — Agent (Claude)
 
 Implemented the MCP/hooks/skills set recommended earlier in the session:
