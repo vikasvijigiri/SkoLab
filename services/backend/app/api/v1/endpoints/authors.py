@@ -134,13 +134,37 @@ async def fetch_similar_authors(
         return []
 
     try:
-        results = await openalex_service.search_authors(query_term, per_page=8)
+        import asyncio
+        from app.services.data.openalex_service import (
+            extract_field_and_expertise,
+            derive_similar_authors_from_works,
+        )
+
+        # Derive candidates from authors of papers that already matched this
+        # topic -- never call OpenAlex's author-name search (/authors?search=)
+        # with a topic/concept string like `query_term`; it's a display-name
+        # search, not topic discovery, and reliably surfaces unrelated authors
+        # (see decisions/0005-similar-researchers-via-authorship.md).
+        topic_matched_works = await openalex_service.search_works(
+            query_term, per_page=20
+        )
+        candidates = derive_similar_authors_from_works(
+            topic_matched_works, exclude_id, limit=5, discipline=query_term
+        )
+        if not candidates:
+            return []
+
+        profiles = await asyncio.gather(
+            *(
+                openalex_service.fetch_author_by_id(c["id"])
+                for c in candidates
+            ),
+            return_exceptions=True,
+        )
+
         suggestions = []
-        for author in results:
-            author_id = author.get("id", "")
-            clean_id = author_id.split("/")[-1]
-            clean_exclude_id = exclude_id.split("/")[-1]
-            if clean_id == clean_exclude_id:
+        for author in profiles:
+            if not isinstance(author, dict):
                 continue
 
             last_insts = author.get("last_known_institutions")
@@ -149,8 +173,6 @@ async def fetch_similar_authors(
                 first_inst = last_insts[0]
                 if first_inst and isinstance(first_inst, dict):
                     inst = first_inst.get("display_name") or "Independent Researcher"
-
-            from app.services.data.openalex_service import extract_field_and_expertise
 
             field, expertise = extract_field_and_expertise(
                 author, author.get("display_name", "")
@@ -164,7 +186,7 @@ async def fetch_similar_authors(
 
             suggestions.append(
                 AuthorSuggestion(
-                    id=author_id,
+                    id=author.get("id", ""),
                     display_name=author.get("display_name", "Unknown"),
                     institution=inst,
                     field_of_study=field,
@@ -280,8 +302,14 @@ async def search_author(
                 print(f"[search_author] Firestore works fetch error: {e}", flush=True)
 
         field = pg_row.field_of_study or ""
+        # Prefer the most specific expertise topic over the broad top-level
+        # field for the similar-researchers query -- "Physics and Astronomy"
+        # matches far too broadly (pulls in astronomers for a condensed-matter
+        # profile); "Advanced Condensed Matter Physics" is what actually finds
+        # topically-relevant peers via derive_similar_authors_from_works().
+        similar_query_term = (pg_row.expertise or [None])[0] or field
         similar = await fetch_similar_authors(
-            field, pg_row.openalex_id or clean_id, openalex_service
+            similar_query_term, pg_row.openalex_id or clean_id, openalex_service
         )
         response_data = AuthorResponse(
             id=pg_row.openalex_id,
@@ -294,6 +322,8 @@ async def search_author(
             institution=pg_row.current_institution or "Independent Researcher",
             field_of_study=pg_row.field_of_study or "Multidisciplinary",
             expertise=pg_row.expertise or [],
+            skills=pg_row.skills or [],
+            tools=pg_row.tools or [],
             academic_history=pg_row.academic_history or [],
             works=works_data,
             innovation_score=int(pg_row.innovation_score)
@@ -390,8 +420,12 @@ async def search_author(
                     field = d.get("field_of_study") or (
                         d.get("expertise", [""])[0] if d.get("expertise") else ""
                     )
+                    # Prefer the specific expertise topic over the broad field
+                    # for similar-researchers matching -- see the PG branch
+                    # above for why.
+                    similar_query_term = (d.get("expertise") or [None])[0] or field
                     similar = await fetch_similar_authors(
-                        field, d.get("openalex_id", ""), openalex_service
+                        similar_query_term, d.get("openalex_id", ""), openalex_service
                     )
                     response_data = AuthorResponse(
                         id=d.get("openalex_id", ""),
@@ -405,6 +439,8 @@ async def search_author(
                         or "Independent Researcher",
                         field_of_study=d.get("field_of_study", "Multidisciplinary"),
                         expertise=d.get("expertise", []),
+                        skills=d.get("skills", []),
+                        tools=d.get("tools", []),
                         academic_history=d.get("academic_history", []),
                         works=works_data,
                         innovation_score=d.get("innovation_score"),
@@ -586,8 +622,11 @@ async def search_author(
             for n, y in sorted(hist_map.items(), key=lambda x: x[1][0])
         ]
 
+        # Prefer the specific expertise topic over the broad field for
+        # similar-researchers matching -- see the PG branch above for why.
+        similar_query_term = (expertise or [None])[0] or field
         similar = await fetch_similar_authors(
-            field, author_data.get("id", ""), openalex_service
+            similar_query_term, author_data.get("id", ""), openalex_service
         )
 
         response_data = AuthorResponse(

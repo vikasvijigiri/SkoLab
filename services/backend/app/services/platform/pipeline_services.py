@@ -1,22 +1,23 @@
 import datetime
 import httpx
 import json
+import logging
 import random
 import asyncio
 import re
 import time
 import numpy as np
 from contextlib import asynccontextmanager
+
+logger = logging.getLogger(__name__)
+
 from typing import List, Dict, Optional, Any, AsyncGenerator, Tuple, Set
 from app.services.ai.llm_service import is_llm_working
 from sqlalchemy.future import select
 from app.db.database import AsyncSessionLocal
 from app.core.config import settings
 from app.models.user_models import AgentChatHistory
-from app.services.data.openalex_service import (
-    OpenAlexService,
-    is_work_relevant_to_discipline,
-)
+from app.services.data.openalex_service import OpenAlexService
 from app.db.pg_cache import PgBackedCache
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.domains.recommendation.engine import (
@@ -32,7 +33,6 @@ from app.prompts import (
     DAILY_FEED_ADVISOR_PROMPT_TEMPLATE,
     METADATA_EXTRACTION_PROMPT_TEMPLATE,
     AUTHOR_CHAT_SYSTEM_PROMPT_TEMPLATE,
-    GRANT_ADVISOR_PROMPT_TEMPLATE,
     SYNERGY_COUNSELOR_PROMPT_TEMPLATE,
     JOURNAL_ADVISOR_RATIONALE_PROMPT_TEMPLATE,
 )
@@ -515,7 +515,7 @@ class PipelineServices:
 
             return _firestore.client()
         except Exception as exc:
-            print(f"[PipelineServices] Firestore unavailable: {exc}", flush=True)
+            logger.warning(f"Firestore unavailable: {exc}")
             return None
 
     async def _firestore_get_safe(
@@ -542,14 +542,12 @@ class PipelineServices:
             )
             return result
         except asyncio.TimeoutError:
-            print(
-                f"[PipelineServices] Firestore get timed out ({timeout}s) for {collection}/{doc_id}",
-                flush=True,
+            logger.warning(
+                f"Firestore get timed out ({timeout}s) for {collection}/{doc_id}"
             )
         except Exception as e:
-            print(
-                f"[PipelineServices] Firestore get error for {collection}/{doc_id}: {e}",
-                flush=True,
+            logger.warning(
+                f"Firestore get error for {collection}/{doc_id}: {e}"
             )
         return None
 
@@ -575,14 +573,12 @@ class PipelineServices:
             )
             return True
         except asyncio.TimeoutError:
-            print(
-                f"[PipelineServices] Firestore set timed out ({timeout}s) for {collection}/{doc_id}",
-                flush=True,
+            logger.warning(
+                f"Firestore set timed out ({timeout}s) for {collection}/{doc_id}"
             )
         except Exception as e:
-            print(
-                f"[PipelineServices] Firestore set error for {collection}/{doc_id}: {e}",
-                flush=True,
+            logger.warning(
+                f"Firestore set error for {collection}/{doc_id}: {e}"
             )
         return False
 
@@ -724,22 +720,18 @@ class PipelineServices:
         Derives a handful of OpenAlex author IDs from the authorships of papers
         that already matched the topic/keyword search — i.e. "who wrote the
         papers that are already known to be on-topic", not an independent
-        author-name search. (OpenAlex's /authors search endpoint does fuzzy
-        matching against author *display names*; feeding it a topic phrase like
-        "CRISPR and Genetic Engineering" returns nothing or garbage, since a
-        concept string doesn't look like a person's name — confirmed by testing
-        it directly.) Entirely generic: driven by whatever candidate works the
+        author-name search (see decisions/0005-similar-researchers-via-authorship.md
+        and the shared derive_similar_authors_from_works() helper this delegates
+        to, also reused by the author-profile-page and Roadmap similar-researcher
+        panels). Entirely generic: driven by whatever candidate works the
         caller's own topic search actually found, no per-user hardcoding.
         """
-        exclude_clean = exclude_author_id.split("/")[-1] if exclude_author_id else None
-        seen: List[str] = []
-        for w in topic_matched_works:
-            for authorship in w.get("authorships") or []:
-                aid = (authorship.get("author") or {}).get("id") or ""
-                aid = aid.split("/")[-1]
-                if aid and aid != exclude_clean and aid not in seen:
-                    seen.append(aid)
-        return seen[:4]
+        from app.services.data.openalex_service import derive_similar_authors_from_works
+
+        candidates = derive_similar_authors_from_works(
+            topic_matched_works, exclude_author_id, limit=4
+        )
+        return [c["id"] for c in candidates]
 
     async def _resolve_author_concepts_and_name(
         self, author_id: str, doc_id: str
@@ -1783,9 +1775,38 @@ class PipelineServices:
                 )
         return feed_items
 
+    _GRANT_AGENCY_COLORS = [
+        "#009688", "#3F51B5", "#4CAF50", "#E91E63", "#FF9800", "#9C27B0",
+    ]
+
+    @staticmethod
+    def _parse_grant_days_left(deadline: str) -> Optional[int]:
+        """
+        Best-effort parse of a real scraped deadline string into days-remaining.
+        Returns None (not a fabricated number) for "Rolling"/"Open Now"/anything
+        that doesn't match the specific date format the scraping prompt asks
+        for ("Dec 15, 2026") — the frontend already treats a missing days_left
+        as "no live countdown" rather than inventing one.
+        """
+        if not deadline:
+            return None
+        for fmt in ("%b %d, %Y", "%B %d, %Y", "%Y-%m-%d", "%m/%d/%Y"):
+            try:
+                parsed = datetime.datetime.strptime(deadline.strip(), fmt)
+                delta = (parsed.date() - datetime.datetime.now().date()).days
+                return delta if delta >= 0 else None
+            except ValueError:
+                continue
+        return None
+
     async def match_grants(self, author_id: str) -> List[Dict[str, Any]]:
         """
-        Scores prestigious STEM grant options against the researcher's profile.
+        Matches real, live-scraped funding opportunities (grants/fellowships)
+        against the researcher's real profile — reuses the same real-data
+        scraping + embedding-grounded match-scoring pipeline as
+        fetch_industry_opportunities (which already scrapes both JOB and
+        FUNDING listings from real portals) instead of a hardcoded 6-grant
+        list with static, never-counting-down "days_left" values.
         """
         clean_id = author_id.split("/")[-1]
         cache_key = f"match_grants_{clean_id}"
@@ -1806,161 +1827,40 @@ class PipelineServices:
             )
             await self._save_to_postgres(cache_key, {"items": _fs_cached["items"]})
             return _fs_cached["items"]
-        self._get_firestore_db()
-        profile = await self._fetch_author_profile(author_id)
-        author_name = "Researcher"
-        h_index = 5
-        concepts = ["STEM"]
-        concepts_lower = ["stem"]
-        if profile:
-            author_name = profile.get("display_name", "Researcher")
-            h_index = profile.get("summary_stats", {}).get("h_index", 5)
-            author_name_lower = author_name.lower()
-            x_concepts = profile.get("x_concepts", []) or []
-            # Filter self-name concepts and extract level 1/2
-            valid = [
-                c
-                for c in x_concepts
-                if c.get("display_name")
-                and c.get("display_name").lower() != author_name_lower
-            ]
-            concepts = [
-                c.get("display_name") for c in valid if c.get("level") in [1, 2]
-            ][:3]
-            if not concepts:
-                concepts = [
-                    c.get("display_name") for c in valid[:5] if c.get("display_name")
-                ]
-            if not concepts:
-                topics = profile.get("topics", []) or []
-                concepts = [
-                    t.get("display_name") for t in topics[:3] if t.get("display_name")
-                ]
-            concepts_lower = [c.lower() for c in concepts if c]
-        grants = [
-            {
-                "title": "Core Research Grant (CRG) 2025–26",
-                "agency": "SERB",
-                "agency_color": "#009688",  # Teal
-                "days_left": 23,
-                "amount": "₹50–90 Lakh",
-                "field": "All STEM Fields",
-                "url": "https://www.serbonline.in/",
-            },
-            {
-                "title": "National Science Foundation — CAREER Award",
-                "agency": "NSF",
-                "agency_color": "#3F51B5",  # Indigo
-                "days_left": 41,
-                "amount": "$500K–1M",
-                "field": "CS/Engineering/Basic Sciences",
-                "url": "https://www.nsf.gov/funding/opportunities/career-faculty-early-career-development-program",
-            },
-            {
-                "title": "DST INSPIRE Faculty Award",
-                "agency": "DST",
-                "agency_color": "#4CAF50",  # Emerald
-                "days_left": 58,
-                "amount": "₹35 Lakh/yr",
-                "field": "Science & Tech Innovation",
-                "url": "https://dst.gov.in/scientific-programmes/scientific-engineering-research/inspire",
-            },
-            {
-                "title": "NIH R01 Research Project Grant",
-                "agency": "NIH",
-                "agency_color": "#E91E63",  # Rose
-                "days_left": 67,
-                "amount": "$250K–1.5M",
-                "field": "Biomedical & Life Sciences",
-                "url": "https://grants.nih.gov/grants/funding/r01.htm",
-            },
-            {
-                "title": "Prime Minister's Research Fellows (PMRF)",
-                "agency": "MoE",
-                "agency_color": "#FF9800",  # Amber
-                "days_left": 89,
-                "amount": "₹80K/month + research grants",
-                "field": "Sleek Technical PhD/Post-doc research",
-                "url": "https://www.pmrf.in/",
-            },
-            {
-                "title": "ERC Starting Grants",
-                "agency": "ERC",
-                "agency_color": "#9C27B0",  # Purple
-                "days_left": 105,
-                "amount": "€1.5M",
-                "field": "High-impact pioneering science",
-                "url": "https://erc.europa.eu/apply-funding/starting-grant",
-            },
-        ]
 
-        async def process_grant(grant: Dict[str, Any]) -> Dict[str, Any]:
-            grant_field_lower = grant["field"].lower()
-            # Compute field overlap: how many author concepts match the grant's field
-            field_overlap = sum(
-                1
-                for c in concepts_lower
-                if c
-                and (
-                    c in grant_field_lower
-                    or grant_field_lower in c
-                    or any(
-                        word in grant_field_lower for word in c.split() if len(word) > 3
-                    )
-                )
+        author_name, concepts = await self._resolve_author_concepts_and_name(
+            author_id, clean_id
+        )
+        focus = concepts[0] if concepts else "STEM Research"
+
+        from app.services.industry.industry_service import fetch_industry_opportunities
+
+        async with self._db_session() as session:
+            opportunities = await fetch_industry_opportunities(
+                focus, name=author_name, openalex_service=self.openalex_service, db=session
             )
-            # Deterministic score: base (60) + h_index contribution + field overlap bonus
-            # All STEM grants get at least base score; specific field grants get bonus
-            h_contribution = min(h_index * 2, 20)  # cap at 20 points
-            overlap_bonus = field_overlap * 5  # 5 points per matching concept
-            # Universal grants (SERB, ERC) get a small base bonus
-            universal_bonus = (
-                5 if "all" in grant_field_lower or "pioneer" in grant_field_lower else 0
-            )
-            match_score = min(
-                max(60 + h_contribution + overlap_bonus + universal_bonus, 62), 98
-            )
-            rationale = f"Aligned with your research track in {', '.join(concepts[:2]) if concepts else 'STEM'}."
-            if (
-                is_llm_working()
-            ):  # Decoupled: LLM moved to background addon to unblock core app
-                messages = [
-                    {
-                        "role": "system",
-                        "content": GRANT_ADVISOR_PROMPT_TEMPLATE.format(
-                            title=grant["title"],
-                            agency=grant["agency"],
-                            author_name=author_name,
-                            h_index=h_index,
-                            concepts=", ".join(concepts),
-                        ),
-                    }
-                ]
-                try:
-                    response = await self.llm_service.query(
-                        messages=messages,
-                        models=[self.model],
-                        temperature=0.4,
-                        max_tokens=100,
-                    )
-                    if response.content:
-                        rationale = response.content.strip()
-                except Exception as e:
-                    print(f"Grant rationale generation failed: {e}", flush=True)
-            return {
-                "title": grant["title"],
-                "agency": grant["agency"],
-                "agency_color": grant["agency_color"],
-                "days_left": grant["days_left"],
-                "amount": grant["amount"],
-                "field": grant["field"],
-                "match_score": match_score,
-                "url": grant["url"],
-                "rationale": rationale,
+
+        funding_items = [o for o in opportunities if o.get("type") == "FUNDING"]
+
+        scored_grants = [
+            {
+                "title": opp.get("title") or "Research Funding Opportunity",
+                "agency": opp.get("companyOrFunder") or "Funding Agency",
+                "agency_color": self._GRANT_AGENCY_COLORS[i % len(self._GRANT_AGENCY_COLORS)],
+                "days_left": self._parse_grant_days_left(opp.get("deadline") or ""),
+                "amount": opp.get("amount") or "Varies",
+                "field": (opp.get("tags") or [focus])[0],
+                "match_score": opp.get("matchScore") or 70,
+                "url": opp.get("url") or "",
+                # Already grounded in the real scraped listing text (see
+                # fetch_industry_opportunities' own LLM extraction step) —
+                # reused instead of firing a second LLM call per grant with
+                # GRANT_ADVISOR_PROMPT_TEMPLATE for the same purpose.
+                "rationale": opp.get("relevanceExplanation")
+                or f"Aligned with your research track in {focus}.",
             }
-
-        tasks = [process_grant(grant) for grant in grants]
-        scored_grants = list(await asyncio.gather(*tasks))
+            for i, opp in enumerate(funding_items)
+        ]
         if scored_grants:
             try:
                 await self._save_to_postgres(cache_key, {"items": scored_grants})
@@ -2110,6 +2010,24 @@ class PipelineServices:
             "Machine Learning"
         ]
         overlap_concepts = list(set(concepts1).intersection(set(concepts2)))
+
+        # Ground the joint proposal/action plan in what each researcher is
+        # actually publishing right now, not just their concept-tag lists —
+        # the LLM was previously inventing a proposal from tags alone.
+        async def _recent_titles(aid: str) -> str:
+            try:
+                works = await self.openalex_service.fetch_author_works(
+                    aid, per_page=3, sort="publication_date:desc"
+                )
+                titles = [w.get("title") for w in works if w.get("title")]
+                return "; ".join(titles) if titles else "No recent papers found."
+            except Exception as e:
+                print(f"[CollaboratorSynergy] Recent works fetch failed: {e}", flush=True)
+                return "No recent papers found."
+
+        recent_works1, recent_works2 = await asyncio.gather(
+            _recent_titles(clean_author), _recent_titles(clean_collab)
+        )
         # Deterministic synergy score based on overlap — no random component
         synergy_score = 72 + min(
             len(overlap_concepts) * 5, 20
@@ -2125,8 +2043,10 @@ class PipelineServices:
                     "content": SYNERGY_COUNSELOR_PROMPT_TEMPLATE.format(
                         name1=name1,
                         concepts1=", ".join(concepts1[:4]),
+                        recent_works1=recent_works1,
                         name2=name2,
                         concepts2=", ".join(concepts2[:4]),
+                        recent_works2=recent_works2,
                     ),
                 }
             ]
@@ -3135,38 +3055,49 @@ class PipelineServices:
         paper_title: str,
         user_message: str,
         history: List[Dict[str, str]],
+        user_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Simulates chatting with a specific researcher about their paper using Groq.
+
+        user_id is the real, server-verified caller identity (Firebase uid),
+        resolved by the endpoint — never trust a client-supplied value for
+        this, since it gates which chat history gets read/written. Previously
+        this was a hardcoded literal ("default_local_user") shared by every
+        caller, so two different real users viewing the same author+paper
+        could load and overwrite each other's persisted history. When there's
+        no verified user (anonymous access), history is neither loaded from
+        nor saved to the database — the client's own `history` array is used
+        for that request only, rather than inventing a new shared bucket.
         """
         clean_author = author_id.split("/")[-1]
         sanitized_title = re.sub(r"[^a-zA-Z0-9]", "_", paper_title.lower())[:100]
         doc_id = f"chat_{clean_author}_{sanitized_title}"
-        user_id = "default_local_user"
-        async with self._db_session() as session:
-            if not history:
-                try:
-                    stmt = (
-                        select(AgentChatHistory)
-                        .where(
-                            AgentChatHistory.user_id == user_id,
-                            AgentChatHistory.context_id == doc_id,
+        if user_id:
+            async with self._db_session() as session:
+                if not history:
+                    try:
+                        stmt = (
+                            select(AgentChatHistory)
+                            .where(
+                                AgentChatHistory.user_id == user_id,
+                                AgentChatHistory.context_id == doc_id,
+                            )
+                            .order_by(AgentChatHistory.timestamp.asc())
                         )
-                        .order_by(AgentChatHistory.timestamp.asc())
-                    )
-                    result = await session.execute(stmt)
-                    db_msgs = result.scalars().all()
-                    if db_msgs:
-                        history = [
-                            {"role": msg.role, "content": msg.content}
-                            for msg in db_msgs
-                        ]
-                        print(
-                            f"[Postgres Chat Load] Loaded {len(history)} messages for doc_id={doc_id}",
-                            flush=True,
-                        )
-                except Exception as e:
-                    print(f"[Postgres Chat Load Error] failed: {e}", flush=True)
+                        result = await session.execute(stmt)
+                        db_msgs = result.scalars().all()
+                        if db_msgs:
+                            history = [
+                                {"role": msg.role, "content": msg.content}
+                                for msg in db_msgs
+                            ]
+                            print(
+                                f"[Postgres Chat Load] Loaded {len(history)} messages for doc_id={doc_id}",
+                                flush=True,
+                            )
+                    except Exception as e:
+                        print(f"[Postgres Chat Load Error] failed: {e}", flush=True)
         profile = await self._fetch_author_profile(author_id)
         author_name = "Researcher"
         concepts = ["science"]
@@ -3208,24 +3139,28 @@ class PipelineServices:
                     reply = response.content.strip()
             except Exception as e:
                 print(f"Author chat simulation failed: {e}", flush=True)
-        async with self._db_session() as session:
-            try:
-                user_msg = AgentChatHistory(
-                    user_id=user_id,
-                    context_id=doc_id,
-                    role="user",
-                    content=user_message,
-                )
-                asst_msg = AgentChatHistory(
-                    user_id=user_id, context_id=doc_id, role="assistant", content=reply
-                )
-                session.add(user_msg)
-                session.add(asst_msg)
-                await session.commit()
-                print(
-                    f"[Postgres Chat Save] Saved to chat_history for doc_id={doc_id}",
-                    flush=True,
-                )
-            except Exception as e:
-                print(f"[Postgres Chat Save Error] failed: {e}", flush=True)
+        if user_id:
+            async with self._db_session() as session:
+                try:
+                    user_msg = AgentChatHistory(
+                        user_id=user_id,
+                        context_id=doc_id,
+                        role="user",
+                        content=user_message,
+                    )
+                    asst_msg = AgentChatHistory(
+                        user_id=user_id,
+                        context_id=doc_id,
+                        role="assistant",
+                        content=reply,
+                    )
+                    session.add(user_msg)
+                    session.add(asst_msg)
+                    await session.commit()
+                    print(
+                        f"[Postgres Chat Save] Saved to chat_history for doc_id={doc_id}",
+                        flush=True,
+                    )
+                except Exception as e:
+                    print(f"[Postgres Chat Save Error] failed: {e}", flush=True)
         return {"author_id": author_id, "author_name": author_name, "reply": reply}

@@ -68,6 +68,10 @@ export interface AuthorResponse {
   institution: string;
   field_of_study?: string;
   expertise: string[];
+  /** Distinct from expertise (topic/field tags) — LLM-derived research
+   *  skills/tools implied by the researcher's actual papers. */
+  skills: string[];
+  tools: string[];
   academic_history: string[];
   works: Work[];
   innovation_score?: number;
@@ -125,7 +129,9 @@ export interface GrantMatch {
   title: string;
   agency: string;
   agency_color: string;
-  days_left: number;
+  /** Real days-remaining parsed from a scraped deadline — null when the
+   *  source listing has no parseable date (e.g. "Rolling"/"Open Now"). */
+  days_left: number | null;
   amount: string;
   field: string;
   match_score: number;

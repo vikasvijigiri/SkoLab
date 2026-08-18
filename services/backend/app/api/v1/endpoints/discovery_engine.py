@@ -11,6 +11,12 @@ router = APIRouter()
 class PredictRequest(BaseModel):
     field: str
     focus_area: Optional[str] = None
+    # The requesting researcher's own OpenAlex id (frontend already resolves
+    # this for the logged-in user elsewhere, e.g. useMyProfile) — lets the
+    # prediction be shaped by who's actually asking, not just the typed
+    # field/focus_area, which previously produced identical output for
+    # anyone who typed the same string.
+    author_id: Optional[str] = None
 
 
 class NexusChatRequest(BaseModel):
@@ -28,7 +34,7 @@ async def predict_discovery(
         if not req.field.strip():
             raise HTTPException(status_code=400, detail="Field query cannot be empty.")
         return await prediction_service.predict_next_big_thing(
-            field=req.field, focus_area=req.focus_area
+            field=req.field, focus_area=req.focus_area, author_id=req.author_id
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

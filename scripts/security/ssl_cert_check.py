@@ -1,8 +1,8 @@
+import argparse
+import datetime
 import socket
 import ssl
 import sys
-import datetime
-import argparse
 from urllib.parse import urlparse
 
 
@@ -63,9 +63,8 @@ def main():
     not_before_str = cert.get("notBefore")
 
     not_after = datetime.datetime.strptime(not_after_str, "%b %d %H:%M:%S %Y %Z")
-    not_before = datetime.datetime.strptime(not_before_str, "%b %d %H:%M:%S %Y %Z")
 
-    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    now = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
     days_to_expire = (not_after - now).days
 
     print(f"  - Common Name (CN)   : {subject_cn}")

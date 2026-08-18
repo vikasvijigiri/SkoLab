@@ -1,8 +1,18 @@
-import time
-import os
 import logging
-import urllib.request
+import os
 import re
+import time
+import urllib.request
+
+
+def _require_http_url(url: str) -> str:
+    """urlopen honours file:, ftp: and custom schemes, so a URL that arrives
+    from the environment can read a local file instead of making a request.
+    Only http/https are ever intended here (ruff S310)."""
+    if not url.startswith(("http://", "https://")):
+        raise ValueError(f"refusing non-http(s) URL: {url!r}")
+    return url
+
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
@@ -16,7 +26,9 @@ CHECK_INTERVAL_SEC = 60
 
 def get_error_count():
     try:
-        with urllib.request.urlopen(METRICS_URL, timeout=3) as resp:
+        with urllib.request.urlopen(  # noqa: S310 - scheme checked above
+            _require_http_url(METRICS_URL), timeout=3
+        ) as resp:
             content = resp.read().decode("utf-8")
             match = re.search(r"^system_errors_total\s+(\d+)", content, re.MULTILINE)
             if match:
