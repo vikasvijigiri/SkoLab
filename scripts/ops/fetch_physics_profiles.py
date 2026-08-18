@@ -1,6 +1,7 @@
-import requests
-import time
 import os
+import time
+
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -17,7 +18,7 @@ def fetch_author_and_works(author_name, max_works=50):
 
     params = {"search": author_name, "per_page": 1, "mailto": "support@skolab.open"}
 
-    res = requests.get(author_url, params=params)
+    res = requests.get(author_url, params=params, timeout=30)
 
     if res.status_code != 200:
         print("Error fetching author:", res.status_code, res.text)
@@ -53,7 +54,7 @@ def fetch_author_and_works(author_name, max_works=50):
     print("\n🚀 Fetching works...\n")
 
     while len(works) < max_works:
-        res = requests.get(works_url, params=params)
+        res = requests.get(works_url, params=params, timeout=30)
 
         if res.status_code != 200:
             print("Error fetching works:", res.status_code, res.text)

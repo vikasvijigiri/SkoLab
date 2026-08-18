@@ -4,13 +4,22 @@ scripts/db-cleanup-retention.py
 Cold Storage Offloading and Database Retention Script.
 Offloads log/activity records older than 90 days to local compressed files,
 then prunes them from the database to maintain storage limits.
+
+S608 is suppressed on the three queries below. Only the table/column
+*identifier* is interpolated, and it comes from a literal list defined in
+this file (`tables_to_prune`, `tables_with_expiry`) -- never from input.
+SQL has no placeholder for an identifier, so parameterising it is not
+possible; every actual value is bound (`:cutoff`, `:now`). If either list
+ever stops being a literal, remove these suppressions rather than
+widening them.
 """
 
-import os
 import asyncio
 import datetime
-import json
 import gzip
+import json
+import os
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -42,7 +51,7 @@ async def offload_and_prune():
         for table in tables_to_prune:
             try:
                 # 1. Fetch rows older than 90 days
-                query = text(f"SELECT * FROM {table} WHERE created_at < :cutoff;")
+                query = text(f"SELECT * FROM {table} WHERE created_at < :cutoff;")  # noqa: S608
                 res = await conn.execute(query, {"cutoff": cutoff_date})
                 rows = [dict(row._mapping) for row in res.fetchall()]
 
@@ -73,7 +82,7 @@ async def offload_and_prune():
                 )
 
                 # 3. Delete from database
-                delete_query = text(f"DELETE FROM {table} WHERE created_at < :cutoff;")
+                delete_query = text(f"DELETE FROM {table} WHERE created_at < :cutoff;")  # noqa: S608
                 del_res = await conn.execute(delete_query, {"cutoff": cutoff_date})
                 await conn.commit()
                 print(
@@ -98,7 +107,7 @@ async def offload_and_prune():
         now_utc = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
         for table, col in tables_with_expiry:
             try:
-                delete_query = text(f"DELETE FROM {table} WHERE {col} < :now;")
+                delete_query = text(f"DELETE FROM {table} WHERE {col} < :now;")  # noqa: S608
                 del_res = await conn.execute(delete_query, {"now": now_utc})
                 await conn.commit()
                 if del_res.rowcount > 0:

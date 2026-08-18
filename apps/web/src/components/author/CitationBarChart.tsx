@@ -20,7 +20,7 @@ export function CitationBarChart({ data }: { data: CitationHeatmap }) {
                 title={`${data.citations[i]} citations in ${year}`}
               />
             </div>
-            <span className="font-mono text-[10px] text-text-muted">{String(year).slice(2)}</span>
+            <span className="font-mono text-[10px] text-text-muted">{year}</span>
           </div>
         );
       })}

@@ -6,6 +6,142 @@
 
 ---
 
+## 2026-08-18 — Agent (Claude)
+
+Merged the 11-commit `fix/similar-authors-shape-hardening` branch to `main`
+via PR, and cut the repository's first tag.
+
+Before merging, found that the working tree's three uncommitted edits were
+not work but **regressions**: the global layer bootstrap had re-installed
+stock copies of `ruff.toml`, `tools/test_ci_shape.py` and
+`tools/test_package.py` over the fixes committed in `c7aa5f9` and `c50455a`.
+Proved it by running the tests against the working tree (`test_ci_shape` ->
+1 failed on `ci.yml references requirements.txt`; `test_package` -> 2 failed
+on "does not appear to be a Python project") and again against `HEAD`
+(both green). Stashed rather than discarded, so they stay recoverable:
+`stash@{0}`.
+
+Verification actually run, not assumed:
+- `python tools/run_checks.py` -> `PASS: 30 check(s) green (lint, test, typecheck)`
+- `cd services/backend-go && go vet ./... && go test ./...` -> all packages `ok`
+- `pytest services/backend/tests/` -> `85 passed, 6 errors` — the six are a
+  pre-existing Python 3.14 event-loop teardown incompatibility in
+  `test_threat_modeling.py`, unchanged by this branch and green on CI's
+  pinned 3.10. Recorded in `ISSUES.md` rather than papered over.
+
+`fix/empty-connections-fallback` needed nothing — it is zero commits ahead of
+`main` and was left in place rather than deleted.
+
+Not done: `mcp.json` (untracked, added 2026-08-09) was left untracked. Claude
+Code reads `.mcp.json`, not `mcp.json`, so as it stands the file is inert;
+renaming it is the owner's call, not a merge-time side effect.
+
+---
+
+## 2026-07-21 17:09 — Agent (Claude)
+
+Implemented the MCP/hooks/skills set recommended earlier in the session:
+`postgres` and `playwright` MCP servers (committed, `.mcp.json`), `grafana`
+MCP server (local scope only — needs a live service-account token, unlike
+Postgres's already-public dev password), a PreToolUse hook blocking raw
+`gradlew` (the π-path Gradle crash from `AGENTS.md`), a PostToolUse hook
+reminding about the `skolab_python_ai` docker-rebuild step, and two skills
+(`backend-rebuild-verify`, `android-build`).
+
+Verified every piece for real rather than trusting config: started
+`./gradlew --version` and watched the hook block it; edited a
+`services/backend` file and captured the reminder hook's stdin payload;
+confirmed Postgres connectivity/credentials with a live `psql` query (20
+tables); stood up the `infrastructure/` Prometheus+Alertmanager+Grafana+Loki
+stack (user's explicit go-ahead, since that dir is normally off-limits) and
+called the Grafana MCP's `query_prometheus` tool over raw JSON-RPC, getting
+back real data (`up{job="skolab-backend"}=1`); called Playwright MCP's
+`browser_navigate` the same way and got back page title "SkoLab" from the
+real running dev server.
+
+Hard blocker hit: newly-added `.mcp.json`/`.claude/skills` entries don't
+attach to an already-running Claude Code session — `claude mcp list` still
+shows all three servers "Pending approval" even after writing
+`enabledMcpjsonServers` directly into `~/.claude.json`, and both `ToolSearch`
+and `Skill` fail to find the new entries. The two hooks, by contrast, picked
+up live with no restart (settings.json hooks apparently reload without a
+restart; MCP/skill registration does not). Everything is proven correct one
+layer below the Claude tool surface; the final loop — actually calling these
+as native tools — needs a session restart to close out. See `HANDOFF.md` for
+the full punch list.
+
+---
+
+## 2026-07-21 — Agent (Codex)
+
+Added a portable repo-level agent contract for cross-tool workflow rules:
+`docs/agent-contract.md` captures the shared reading order, portable
+behavior rules, session-end expectations, and what remains tool-specific
+(MCP servers, skills, plugins, global hooks). Linked it from `README.md`
+and clarified the same boundary in `AGENTS.md` so Claude, Codex, and future
+agents have a repo-visible source of truth instead of relying on client-only
+settings.
+
+---
+## 2026-07-21 14:54 — Agent (Claude)
+
+Two related pieces of work: grounding Journal Advisor in real data (planned
+and executed first), then a much larger backend personalization/correctness
+audit prompted by the user asking to check "literally every backend service
+line by line" and make everything "revolve around the user."
+
+**Journal Advisor**: root-caused the garbled-LaTeX bug the user screenshotted
+back to the LLM being asked to write free-text "submission tips" for
+completely invented journals — not a frontend rendering bug (confirmed via
+sandboxed tests that `MathText.tsx`'s own repair/KaTeX pipeline handles bare,
+mixed, and fully-escaped LaTeX correctly). Fixed at the root: real OpenAlex
+journals via a new `search_sources()`, `type == "journal"` filter (an
+unfiltered first pass surfaced "Open Science Framework" and a funding-agency
+repository as "journals"), no size-based sort (an early version let *Science*/
+*PLoS ONE* dominate every query regardless of topic — confirmed live a
+physicist and an unrelated researcher got identical top-3 results before this
+fix), and LLM used only for a short no-LaTeX rationale.
+
+**Personalization audit**: a 3-pass Explore audit mapped every user-facing
+recommendation path in the backend and scored each on how genuinely grounded
+it is in the actual requesting researcher vs. generic/hallucinated. Found and
+fixed: hardcoded fake grants (`match_grants`), Horizon predictions ignoring
+who's asking entirely, a fabricated-coauthor fallback, a real cross-user chat-
+history bug (`chat_with_author` keyed off a hardcoded shared literal user_id),
+a conjecture prompt fed raw dict noise instead of a reconstructed abstract,
+a collaborator-synergy feature inventing proposals from concept tags alone,
+and the same `x_concepts`-is-empty bug (confirmed live: this field is
+basically deprecated/empty on current OpenAlex author objects) independently
+present in three different services. Also discovered a real, working
+per-user "digital twin" foundation already exists (`user_memory_service`,
+Postgres-backed activity tracking + LLM bio summary) but is wired up for
+Android only — flagged and deliberately deferred building the web-side
+equivalent, per the user's explicit call, rather than scope-creeping it in.
+
+Extracted a shared `app/services/ai/user_context.py` module partway through
+(needed for the Horizon fix, then reused for two more of the audit's fixes)
+instead of writing a fourth slightly-different copy of "resolve this
+researcher's concepts and recent-paper keywords" — this is exactly the kind
+of drift that caused the `x_concepts` bug to exist in three places
+independently.
+
+Also persisted a previously-orphaned `skills`/`tools` LLM-derived field
+(existed server-side, Android-only, never saved) to two new
+`researcher_metrics` columns, and added a distinct "Research Areas & Skills"
+section to the profile page — verified end-to-end with a real enrichment run
+(real skills/tools computed and correctly served back through
+`search_author`).
+
+Found (not caused) something worth a permanent note: `PgBackedCache` stores
+keys as `"{name}::{key}"`, not bare — cost real time this session hunting a
+"stale cache" ghost that was actually just a wrong `DELETE` query never
+matching the real row. Documented in `HANDOFF.md`'s gotchas.
+
+Diff: uncommitted at time of writing (spans `services/backend` extensively,
+smaller touches in `apps/web`).
+
+---
+
 ## 2026-07-20 13:48 — Agent (Claude)
 
 Ran two full-app audits (functional-correctness across every page/screen;
@@ -204,3 +340,4 @@ add/remove button, `LazyColumn` perf (stable keys, memoized regex); migrated
 check-registered logic to a high-speed Postgres endpoint.
 
 Diff: [`b7fe563`](https://github.com/NG-VikasV/ResQit/commit/b7fe563)..[`c7ac19d`](https://github.com/NG-VikasV/ResQit/commit/c7ac19d).
+

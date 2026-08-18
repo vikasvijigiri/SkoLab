@@ -1,6 +1,6 @@
+import argparse
 import socket
 import sys
-import argparse
 
 # Default admin/internal ports to audit
 DEFAULT_PORTS = {

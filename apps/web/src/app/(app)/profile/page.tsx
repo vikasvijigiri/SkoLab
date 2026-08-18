@@ -189,6 +189,42 @@ export default function ProfilePage() {
         </Reveal>
       )}
 
+      {author && (author.expertise.length > 0 || author.skills.length > 0) && (
+        <Reveal delay={0.04}>
+          <Card>
+            <h2 className="font-display text-[15px] font-semibold text-text-primary">Research Areas & Skills</h2>
+            {author.expertise.length > 0 && (
+              <div className="mt-3">
+                <h3 className="font-body text-[11px] font-medium uppercase tracking-wide text-text-muted">
+                  Research Areas
+                </h3>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {author.expertise.map((e) => (
+                    <Badge key={e} accentColor="var(--accent-indigo)">
+                      {e}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {author.skills.length > 0 && (
+              <div className="mt-3">
+                <h3 className="font-body text-[11px] font-medium uppercase tracking-wide text-text-muted">
+                  Skills
+                </h3>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {author.skills.map((s) => (
+                    <Badge key={s} accentColor="var(--accent-amber)">
+                      {s}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Card>
+        </Reveal>
+      )}
+
       {author && (
         <Reveal delay={0.08}>
           <Card>

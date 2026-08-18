@@ -12,7 +12,7 @@ def main():
         print(f"Error: design_tokens.json not found at {tokens_path}")
         sys.exit(1)
 
-    with open(tokens_path, "r", encoding="utf-8") as f:
+    with open(tokens_path, encoding="utf-8") as f:
         tokens = json.load(f)
 
     color_kt_path = os.path.join(
@@ -76,7 +76,7 @@ def main():
 
     # 1. Verify spacing tokens
     if os.path.exists(spacing_kt_path):
-        with open(spacing_kt_path, "r", encoding="utf-8") as f:
+        with open(spacing_kt_path, encoding="utf-8") as f:
             spacing_content = f.read()
         for key, val in tokens["spacing"].items():
             pattern = rf"val {key}:\s*Dp\s*=\s*{re.escape(val)}"
@@ -89,7 +89,7 @@ def main():
 
     # 2. Verify shape tokens
     if os.path.exists(shape_kt_path):
-        with open(shape_kt_path, "r", encoding="utf-8") as f:
+        with open(shape_kt_path, encoding="utf-8") as f:
             shape_content = f.read()
         for key, val in tokens["shapes"].items():
             pattern = rf"val {key}\s*=\s*{re.escape(val)}"
@@ -102,7 +102,7 @@ def main():
 
     # 3. Verify motion tokens
     if os.path.exists(motion_kt_path):
-        with open(motion_kt_path, "r", encoding="utf-8") as f:
+        with open(motion_kt_path, encoding="utf-8") as f:
             motion_content = f.read()
         for key, val in tokens["motion"].items():
             pattern = rf"const val {key}\s*=\s*{val}"
@@ -115,7 +115,7 @@ def main():
 
     # 4. Verify color tokens
     if os.path.exists(color_kt_path):
-        with open(color_kt_path, "r", encoding="utf-8") as f:
+        with open(color_kt_path, encoding="utf-8") as f:
             color_content = f.read()
         content_upper = color_content.upper()
         for name, val in tokens["colors"].items():

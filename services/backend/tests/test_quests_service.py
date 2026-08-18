@@ -178,14 +178,20 @@ async def test_get_leaderboard_firestore(mock_firestore_mod, mock_db):
     mock_db_client = MagicMock()
     mock_firestore_mod.client.return_value = mock_db_client
 
+    # doc.id must be a real str, not left as a MagicMock attribute:
+    # get_leaderboard falls back to it when the document body carries no
+    # openalex_id, and LeaderboardEntry.id is a required str.
     mock_doc1 = MagicMock()
+    mock_doc1.id = "A1000000001"
     mock_doc1.to_dict.return_value = {
         "display_name": "Alice",
         "current_institution": "MIT",
         "innovation_score": 95,
     }
     mock_doc2 = MagicMock()
+    mock_doc2.id = "A1000000002"
     mock_doc2.to_dict.return_value = {
+        "openalex_id": "A2000000002",
         "display_name": "Bob",
         "current_institution": "Stanford",
         "innovation_score": 90,
@@ -203,17 +209,29 @@ async def test_get_leaderboard_firestore(mock_firestore_mod, mock_db):
     assert leaderboard[0].rank == 1
     assert leaderboard[0].entropy_score == 95
     assert leaderboard[1].user_name == "Bob"
+    # id falls back to the Firestore document id when the body has no
+    # openalex_id, and prefers the body's openalex_id when it does.
+    assert leaderboard[0].id == "A1000000001"
+    assert leaderboard[1].id == "A2000000002"
 
 
 @pytest.mark.asyncio
 @patch("app.domains.quest.service.FIRESTORE_AVAILABLE", False)
 async def test_get_leaderboard_postgres_fallback(mock_db):
-    # Mock ResearcherMetrics objects
+    # openalex_id is the primary key on ResearcherMetrics, so it is never null
+    # for a real row -- and get_leaderboard maps it straight onto the required
+    # LeaderboardEntry.id, so omitting it here builds a row that cannot occur.
     rm1 = ResearcherMetrics(
-        display_name="Charlie", current_institution="Harvard", innovation_score=85
+        openalex_id="A3000000001",
+        display_name="Charlie",
+        current_institution="Harvard",
+        innovation_score=85,
     )
     rm2 = ResearcherMetrics(
-        display_name="Diana", current_institution="Caltech", innovation_score=80
+        openalex_id="A3000000002",
+        display_name="Diana",
+        current_institution="Caltech",
+        innovation_score=80,
     )
 
     mock_result = MagicMock()
@@ -226,6 +244,7 @@ async def test_get_leaderboard_postgres_fallback(mock_db):
     assert len(leaderboard) == 2
     assert leaderboard[0].user_name == "Charlie"
     assert leaderboard[0].entropy_score == 85
+    assert leaderboard[0].id == "A3000000001"
     assert leaderboard[1].user_name == "Diana"
 
 
