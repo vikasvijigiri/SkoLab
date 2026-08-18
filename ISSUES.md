@@ -131,3 +131,35 @@ ISSUES.md spec. Not preloaded at SessionStart -- consulted on demand. -->
   explicit `new_event_loop()`/`close()` pair, in that teardown.
 - **Status**: `Open` — will become a real CI failure the moment the pinned
   Python moves past 3.12.
+
+---
+
+## 2026-08-18 — three CI jobs red on `main` since 2026-07-15
+
+- **Phase/Context**: Surfaced by PR #2. Not caused by it — all three fail
+  identically on `main` at `4e917c8` and on every run back to `26d37e2`
+  (2026-07-15). Merged anyway, with the owner's explicit go-ahead, because the
+  branch strictly improves the situation rather than worsening it.
+- **Symptom / Diagnosis**, one per job:
+  1. `SkoLab CI Pipeline / build-and-test` — exit 127,
+     `pytest: command not found`. `.github/workflows/ci.yml:66` runs
+     `pytest tests/` inside a venv built only from
+     `services/backend/requirements.txt`, which does not list `pytest`
+     (`grep -c '^pytest' → 0`). The suite has therefore never actually run in
+     this job. Fix: install `pytest` (plus whatever the suite imports —
+     `pytest-asyncio`) in that step, or add it to a dev-requirements file.
+  2. `CI Verification / Android Build & Lint Verification` —
+     `:app:lintAnalyzeDevDebug` and `:app:lintAnalyzeDevDebugUnitTest` fail with
+     `OutOfMemoryError` inside `AndroidLintWorkAction`, thrown while
+     `ComposableStateFlowValueDetector` and `ThreadDetector` load classes. A
+     runner-heap problem, not a lint finding. Fix: raise
+     `org.gradle.jvmargs` / the lint worker heap in `gradle.properties`.
+  3. `CI Verification / Python Linting & Test Gating` —
+     `ruff format --check services/backend/app` (`verify.yml:37`) reports
+     unformatted files. **This is progress**: on `main` the same job dies one
+     step earlier, at `ruff check` with `Found 3 errors` (`verify.yml:33`).
+     `c7aa5f9` cleared those, so the job now advances to the formatter. Fix:
+     run `ruff format services/backend/app` — a large formatting-only diff,
+     deliberately not bundled into PR #2.
+- **Status**: `Open` — all three. The `checks` workflow this branch adds is
+  green (`lint · typecheck · test`, `build · audit · e2e · smoke`, `conclusion`).
