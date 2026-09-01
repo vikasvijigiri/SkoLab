@@ -66,6 +66,12 @@
 
 **Verification model:** Tasks 7 and the Python halves of 2/3/4/8 can only be proven by the CI run on the PR — that is this plan's `## Verification (end to end)` step 7. Local verification done wherever the toolchain allowed.
 
+**PR #3 final state (after 4 CI iterations):** all six jobs green —
+`build-and-test`, `Web Build/Typecheck/Lint`, `Python Linting & Test Gating`,
+`Android Build & Lint Verification`, `lint·typecheck·test`,
+`build·audit·e2e·smoke`. Backend suite: 86 passed, 0 failed. `mergeStateStatus:
+CLEAN`. Both workflows that were red on `main` since 2026-07-15 are green.
+
 ## Constitution gate
 - [x] I Evidence — every task names the exact command and expected output
 - [x] II Test first — Task 6 defines its failing check before the guard; Tasks 4/5/8 are verified by existing suites going green (no new behavior to test-first)
