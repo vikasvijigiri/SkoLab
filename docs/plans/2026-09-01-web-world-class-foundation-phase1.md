@@ -84,7 +84,7 @@
 - [x] Task 7 — TypeScript strictness + fallout — verified: tsc rc=0 with 4 flags on (ES2022 + noUncheckedIndexedAccess + noImplicitOverride + noFallthroughCasesInSwitch + forceConsistentCasingInFileNames); 4 mechanical index-guard fixes; 11 tests + build still green.
 - [x] Task 8 — ESLint jsx-a11y recommended + vitest plugin — verified: `npm run lint` rc=0 (0 errors). 3 real label-association fixes (profile/onboarding/ManuscriptTab), 1 documented no-autofocus exception (command palette).
 - [x] Task 9 — Sentry @sentry/nextjs wiring — verified: tsc/build/test/lint all green. SDK enabled:false with no DSN (no-op). v10 layout: src/instrumentation{,-client}.ts + src/sentry.{server,edge}.config.ts, withSentryConfig in next.config.ts, captureException in both error.tsx.
-- [ ] Task 10 — CI: add `npm test` + Playwright e2e to `web-verification`
+- [x] Task 10 — CI: added vitest + Playwright e2e steps to web-verification (node 20 -> 22 for modern test tooling). Verified on the PR run.
 - [ ] Task 11 — `refactoring` sweep over `apps/web`, apply findings
 
 ## Constitution gate
