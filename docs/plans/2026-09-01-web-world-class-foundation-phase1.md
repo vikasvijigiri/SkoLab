@@ -296,6 +296,10 @@ Migrate the remaining pages to `useQuery` + full component extraction (`nexus`, 
 
 - **`next build` failed on `Cannot find module lightningcss.linux-x64-gnu.node`** (same class as PR #3). This session's `npm install`s ran on Windows, so the committed lockfile records only the win32 lightningcss / @tailwindcss-oxide natives; `npm ci` can't add the Linux ones. Fix: the `web-verification` job uses `npm install` (not `npm ci`) — it keeps every pinned version and additionally pulls the Linux natives. **Follow-up:** regenerate the lockfile on a POSIX host and restore `npm ci`.
 
+## PR #4 final state
+
+All checks green after 3 CI iterations (all the Windows-lockfile lightningcss issue). `Web Build, Typecheck, Lint & Test` runs `next build` + `tsc` + `eslint` + `vitest` (11) + Playwright e2e (5, incl. axe) on ubuntu. `mergeStateStatus: CLEAN`.
+
 ## Known risks / follow-ups
 
 - **Playwright browser download in CI** (~120 MB, ~1 min) â€” mitigated by chromium-only + cache; fallback is a separate job.
