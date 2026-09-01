@@ -250,6 +250,11 @@ actually executes. All handled without scope creep:
   SQLite fallback, and the alembic scripts only patch an assumed-existing
   schema. Fix: `ci.yml` runs `init_db()` (`Base.metadata.create_all`, what
   `conftest` does) before `pytest`.
+- **`init_db()` bare call was flaky** (~1 run in 4: `InFailedSQLTransactionError`,
+  transaction aborted mid-bootstrap). Replaced with
+  `services/backend/ci_bootstrap_db.py` — waits until Postgres answers `SELECT 1`,
+  then retries `init_db()` up to 5×, failing loudly with the last error.
+  Stable green after: `[ci] schema bootstrap ok`, `86 passed`.
 - **Web `next build` failed** — `Cannot find module lightningcss.linux-x64-gnu.node`:
   the Windows-generated `package-lock.json` was missing every `node_modules/
   lightningcss-*` entry. Fixed properly: regenerated the lockfile with npm 11
