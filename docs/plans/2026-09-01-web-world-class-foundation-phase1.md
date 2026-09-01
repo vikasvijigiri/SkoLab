@@ -291,6 +291,11 @@
 
 Migrate the remaining pages to `useQuery` + full component extraction (`nexus`, `horizon`, `discovery`, `paper/[id]`, `home`, `profile`, `workspace`, `workspace/[id]`); move all inline response types to `lib/types.ts`; promote `react-hooks/set-state-in-effect` + `preserve-manual-memoization` to `error`; then the bounded RSC slice from the spec's Phase 2.
 
+
+## CI iteration log (post-push, PR #4)
+
+- **`next build` failed on `Cannot find module lightningcss.linux-x64-gnu.node`** (same class as PR #3). This session's `npm install`s ran on Windows, so the committed lockfile records only the win32 lightningcss / @tailwindcss-oxide natives; `npm ci` can't add the Linux ones. Fix: the `web-verification` job uses `npm install` (not `npm ci`) — it keeps every pinned version and additionally pulls the Linux natives. **Follow-up:** regenerate the lockfile on a POSIX host and restore `npm ci`.
+
 ## Known risks / follow-ups
 
 - **Playwright browser download in CI** (~120 MB, ~1 min) â€” mitigated by chromium-only + cache; fallback is a separate job.
