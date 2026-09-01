@@ -137,6 +137,8 @@
 **Done when:** the file's teardown runs clean on both 3.10 and a 3.12+ interpreter.
 
 ### Task 5: Reformat `services/backend/app` to satisfy `ruff format --check`
+
+**[DEVIATION 2026-09-01]** The plan mandated `ruff==0.3.0` "to match `.pre-commit-config.yaml`". That premise was wrong: **pre-commit is not used in any CI workflow**, and `verify.yml` (the red job) does `pip install ruff` **unpinned** → CI formats with *latest* ruff, not 0.3.0. Formatting with 0.3.0 would leave `verify.yml` red. Corrected by aligning all three on a modern pinned version instead: `ruff==0.16.3` in `requirements-dev.txt`, `rev: v0.16.3` in `.pre-commit-config.yaml`, and `ruff==0.16.3` pinned into `verify.yml`'s install line (also pinned `pytest`/`bandit`/`pip-audit` there while touching it). `services/backend/ruff.toml` has no `required-version`, so nothing else constrains it. Reformatted with `ruff 0.16.3`; 15 files changed; `ruff check` still clean.
 **Purpose:** `CI Verification / Python Linting & Test Gating` advances past `ruff format --check` (`verify.yml:37`)
 **Files:**
 - Modify: `services/backend/app/**/*.py` (formatting only) — output of `python -m ruff format services/backend/app`

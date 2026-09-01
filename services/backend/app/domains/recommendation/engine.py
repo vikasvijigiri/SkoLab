@@ -22,7 +22,11 @@ def cosine_similarity(vec_a: np.ndarray, vec_b: np.ndarray) -> float:
     Compute cosine similarity between two L2-normalized vectors.
     Returns value in [0.0, 1.0].
     """
-    if vec_a.shape != vec_b.shape or np.linalg.norm(vec_a) == 0 or np.linalg.norm(vec_b) == 0:
+    if (
+        vec_a.shape != vec_b.shape
+        or np.linalg.norm(vec_a) == 0
+        or np.linalg.norm(vec_b) == 0
+    ):
         return 0.0
     return float(np.clip(np.dot(vec_a, vec_b), 0.0, 1.0))
 

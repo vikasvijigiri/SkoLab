@@ -88,8 +88,8 @@ async def embed_texts(texts: List[str]) -> np.ndarray:
     )
     _t_encode = time.monotonic()
     print(
-        f"[EmbeddingService][TIMING] get_model={_t_model-_t0:.2f}s "
-        f"to_thread_encode={_t_encode-_t_model:.2f}s n={len(texts)} max_char_len={max_len}",
+        f"[EmbeddingService][TIMING] get_model={_t_model - _t0:.2f}s "
+        f"to_thread_encode={_t_encode - _t_model:.2f}s n={len(texts)} max_char_len={max_len}",
         flush=True,
     )
     return vecs.astype(np.float32)
