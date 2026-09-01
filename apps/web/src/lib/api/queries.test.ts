@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { authorQuery, collaboratorsQuery, authorSuggestionsQuery } from "./queries";
+import {
+  authorQuery,
+  collaboratorsQuery,
+  authorSuggestionsQuery,
+  openAlexWorksQuery,
+  paperAnalysisQuery,
+  matchGrantsQuery,
+} from "./queries";
 import { makeAuthorResponse } from "@/test/fixtures";
 import { server } from "@/test/handlers";
 import { http, HttpResponse } from "msw";
@@ -33,5 +40,28 @@ describe("query option factories", () => {
   it("authorSuggestionsQuery is disabled for short input", () => {
     expect(authorSuggestionsQuery("a").enabled).toBe(false);
     expect(authorSuggestionsQuery("ada").enabled).toBe(true);
+  });
+
+  it("openAlexWorksQuery keys on q+focus and disables when both empty", () => {
+    expect(openAlexWorksQuery({ q: "turing", focus: "cs" }).queryKey).toEqual([
+      "openalex-works",
+      { q: "turing", focus: "cs" },
+    ]);
+    expect(openAlexWorksQuery({}).enabled).toBe(false);
+    expect(openAlexWorksQuery({ q: "  " }).enabled).toBe(false);
+    expect(openAlexWorksQuery({ focus: "physics" }).enabled).toBe(true);
+  });
+
+  it("paperAnalysisQuery keys on the identifiers and gates on at least one", () => {
+    expect(paperAnalysisQuery({ openalexId: "W9" }).queryKey).toEqual([
+      "paper-analysis",
+      { title: null, doi: null, openalexId: "W9" },
+    ]);
+    expect(paperAnalysisQuery({}).enabled).toBe(false);
+  });
+
+  it("matchGrantsQuery scopes its key to the author id", () => {
+    expect(matchGrantsQuery("A1").queryKey).toEqual(["grants", "A1"]);
+    expect(matchGrantsQuery("").enabled).toBe(false);
   });
 });

@@ -7,6 +7,11 @@ import {
   mockHeatmap,
   mockJournals,
   mockSuggestion,
+  mockBreakthroughPrediction,
+  mockGrants,
+  mockIndustryOpportunities,
+  mockOpenAlexWorks,
+  mockPaperIntelligence,
 } from "./fixtures";
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
@@ -33,6 +38,17 @@ export const handlers = [
     }),
   ),
   http.get("https://api.openalex.org/*", () => HttpResponse.json({ results: [] })),
+
+  // Phase 2 pages
+  http.get(`${API}/api/v1/industry_opportunities`, () => HttpResponse.json(mockIndustryOpportunities)),
+  http.get(`${API}/match_grants`, () => HttpResponse.json(mockGrants)),
+  http.get(`${API}/api/v1/analyze_paper`, () => HttpResponse.json(mockPaperIntelligence)),
+  http.post(`${API}/api/v1/discovery/predict`, () => HttpResponse.json(mockBreakthroughPrediction)),
+  http.post(`${API}/api/v1/discovery/nexus-chat`, () =>
+    HttpResponse.json({ content: "Synthesized answer." }),
+  ),
+  // Same-origin Next route handler (not the gateway) — match any host.
+  http.get("*/api/openalex/works", () => HttpResponse.json(mockOpenAlexWorks)),
 ];
 
 export const server = setupServer(...handlers);
