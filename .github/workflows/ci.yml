@@ -65,6 +65,12 @@ jobs:
         pip install -r requirements-dev.txt
         # Create dummy service-account.json to satisfy SRE key audit
         echo '{"type": "service_account"}' > service-account.json
+        # conftest.py only bootstraps the schema on its SQLite fallback. Against
+        # the real CI Postgres it uses the DB as-is, so create the tables here
+        # the same way conftest does -- init_db() runs Base.metadata.create_all
+        # (the alembic scripts assume a pre-existing schema and only patch
+        # indexes/constraints, so `alembic upgrade head` cannot bootstrap).
+        python -c "import asyncio; from app.db.database import init_db; asyncio.run(init_db())"
         pytest tests/
 
     - name: Verify Go Gateway Build
@@ -92,7 +98,15 @@ jobs:
         node-version: 20
 
     - name: Install workspace dependencies
-      run: npm install
+      # The committed package-lock.json was generated on Windows and omits the
+      # Linux platform binaries for lightningcss (a @tailwindcss/postcss dep),
+      # so a lockfile-bound install fails `next build` with
+      # "Cannot find module '../lightningcss.linux-x64-gnu.node'". Resolve fresh
+      # for this runner's platform instead. (Follow-up: regenerate the lockfile
+      # on a POSIX host and switch this back to `npm ci`.)
+      run: |
+        rm -f package-lock.json
+        npm install
 
     # `next build` must run before standalone tsc: it generates `.next/types`,
     # which is where Next 16's `RouteContext` and route param types live. Running
