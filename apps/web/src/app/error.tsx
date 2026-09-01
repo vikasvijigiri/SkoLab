@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
 import { TriangleAlert } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -20,6 +21,7 @@ export default function RootError({
 }) {
   useEffect(() => {
     console.error("[RootError]", error);
+    Sentry.captureException(error);
   }, [error]);
 
   return (
