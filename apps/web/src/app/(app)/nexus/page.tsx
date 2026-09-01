@@ -2,11 +2,11 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageSquare, Plus, Trash2, Send, Search, BookOpen, AlertCircle, Sparkles, X, ChevronRight, HelpCircle, Loader2 } from "lucide-react";
+import { MessageSquare, Plus, Trash2, Send, Search, BookOpen, AlertCircle, Sparkles, ChevronRight, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Badge, Chip } from "@/components/ui/Badge";
+import { Badge } from "@/components/ui/Badge";
 import { MathText, MarkdownText } from "@/components/ui/MathText";
 import { apiRequest } from "@/lib/api/client";
 import { useDebounce } from "@/lib/hooks/useDebounce";
@@ -117,7 +117,7 @@ export default function NexusPage() {
         }
       }
       return words.filter(Boolean).join(" ");
-    } catch (e) {
+    } catch {
       return "Abstract metadata format error.";
     }
   }
