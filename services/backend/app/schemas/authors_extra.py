@@ -1,9 +1,12 @@
 """Response models for the author routes not covered by ``schemas.core``.
 
-Shapes mirror ``apps/web/src/lib/types.ts`` (``NetworkCollaborator``,
-``CitationHeatmap``, ``JournalRecommendation``, ``GrantMatch``) — the live web
-consumers. ``extra="allow"`` keeps any additional backend field flowing through
-rather than being dropped or rejected.
+These wrap routes that were untyped until now and whose live payloads vary
+(cache hits, Firestore docs, scraped grant listings). The models therefore
+declare no required fields and allow extras through (``extra="allow"``) — their
+job is "typed route, no leaked internals, no dropped field", not to reject a
+real response. The authoritative field lists for the web/Android clients live
+in ``apps/web/src/lib/types.ts`` (``NetworkCollaborator``, ``CitationHeatmap``,
+``JournalRecommendation``, ``GrantMatch``).
 """
 
 from __future__ import annotations
@@ -23,15 +26,12 @@ class NetworkCollaborator(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    id: str
-    name: str
-    institution: str = ""
-    field: str = ""
-    connection_path: str = ""
-    relevance_score: float = 0.0
-    papers_collaborated: int | None = None
-    total_publications: int | None = None
-    h_index: int | None = None
+    id: str | None = None
+    name: str | None = None
+    institution: str | None = None
+    field: str | None = None
+    connection_path: str | None = None
+    relevance_score: float | None = None
 
 
 class CollaboratorSynergyResponse(BaseModel):
@@ -57,15 +57,10 @@ class GrantMatch(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    title: str
-    agency: str = ""
-    agency_color: str = ""
-    days_left: int | None = None
-    amount: str = ""
-    field: str = ""
-    match_score: float = 0.0
-    url: str = ""
-    rationale: str = ""
+    title: str | None = None
+    agency: str | None = None
+    match_score: float | None = None
+    url: str | None = None
 
 
 class JournalRecommendation(BaseModel):
@@ -73,12 +68,9 @@ class JournalRecommendation(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    journal_name: str
-    works_count: int = 0
-    is_oa: bool = False
-    citation_impact: float = 0.0
-    match_score: float = 0.0
-    rationale: str = ""
+    journal_name: str | None = None
+    match_score: float | None = None
+    rationale: str | None = None
 
 
 class AuthorMetricsResponse(BaseModel):

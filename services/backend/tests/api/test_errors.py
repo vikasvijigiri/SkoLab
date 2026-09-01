@@ -28,7 +28,7 @@ def _app() -> FastAPI:
 
 @pytest.mark.asyncio
 async def test_unhandled_exception_returns_generic_envelope():
-    transport = httpx.ASGITransport(app=_app())
+    transport = httpx.ASGITransport(app=_app(), raise_app_exceptions=False)
     async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
         r = await c.get("/boom")
 
@@ -43,7 +43,7 @@ async def test_unhandled_exception_returns_generic_envelope():
 
 @pytest.mark.asyncio
 async def test_missing_required_param_returns_validation_envelope():
-    transport = httpx.ASGITransport(app=_app())
+    transport = httpx.ASGITransport(app=_app(), raise_app_exceptions=False)
     async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
         r = await c.get("/needs-param")
 
