@@ -5,6 +5,12 @@ from pydantic import BaseModel
 import re
 
 from app.schemas.core import ConjectureResponse
+from app.schemas.feed_extra import (
+    DailyFeedItem,
+    DismissResponse,
+    IndustryOpportunity,
+    RoadmapResponse,
+)
 from app.services.platform.pipeline_services import PipelineServices
 from app.services.industry.industry_service import fetch_industry_opportunities
 from app.services.ai.summarization_service import is_llm_working
@@ -17,21 +23,19 @@ from app.api.dependencies import get_pipeline_services, get_openalex_service
 router = APIRouter()
 
 
-@router.get("/daily_feed")
+# NOTE: /daily_feed and /industry_opportunities return a bare JSON array (the web
+# client types them as `DailyFeedItem[]` / `IndustryOpportunity[]`). A `Page[T]`
+# envelope would be a response-shape change and break those clients, so they stay
+# `list[T]`; a paginated variant is a coordinated web+backend follow-up.
+@router.get("/daily_feed", response_model=list[DailyFeedItem])
 async def get_daily_feed(
     author_id: Optional[str] = None,
     query_fallback: Optional[str] = None,
     pipeline_services: PipelineServices = Depends(get_pipeline_services),
 ):
-    try:
-        data = await pipeline_services.get_daily_feed(
-            author_id, query_fallback=query_fallback
-        )
-        return data
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return await pipeline_services.get_daily_feed(
+        author_id, query_fallback=query_fallback
+    )
 
 
 class DismissFeedItemRequest(BaseModel):
@@ -39,20 +43,13 @@ class DismissFeedItemRequest(BaseModel):
     work_id: str
 
 
-@router.post("/daily_feed/dismiss")
+@router.post("/daily_feed/dismiss", response_model=DismissResponse)
 async def dismiss_daily_feed_item(
     request: DismissFeedItemRequest,
     pipeline_services: PipelineServices = Depends(get_pipeline_services),
 ):
-    try:
-        await pipeline_services.dismiss_recommendation(
-            request.author_id, request.work_id
-        )
-        return {"success": True}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    await pipeline_services.dismiss_recommendation(request.author_id, request.work_id)
+    return {"success": True}
 
 
 def generate_fallback_conjecture(author_data: dict) -> ConjectureResponse:
@@ -281,25 +278,19 @@ from app.db.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-@router.get("/industry_opportunities")
+@router.get("/industry_opportunities", response_model=list[IndustryOpportunity])
 async def get_industry_opportunities(
     focus: str = Query("AI"),
     name: Optional[str] = Query(None),
     openalex_service: OpenAlexService = Depends(get_openalex_service),
     db: AsyncSession = Depends(get_db),
 ):
-    try:
-        opportunities = await fetch_industry_opportunities(
-            focus, name=name, openalex_service=openalex_service, db=db
-        )
-        return opportunities
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return await fetch_industry_opportunities(
+        focus, name=name, openalex_service=openalex_service, db=db
+    )
 
 
-@router.get("/assistant_professor_roadmap")
+@router.get("/assistant_professor_roadmap", response_model=RoadmapResponse)
 async def get_assistant_professor_roadmap(
     author_id: Optional[str] = Query(None),
     name: Optional[str] = Query(None),

@@ -3,6 +3,11 @@ import json
 from pathlib import Path
 from fastapi import APIRouter
 from app.services.ai.summarization_service import is_llm_working
+from app.schemas.system import (
+    AiStatusResponse,
+    RootResponse,
+    SystemStatusResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +30,12 @@ _REPO_ROOT = _find_repo_root()
 _INCIDENTS_PATH = _REPO_ROOT / "docs" / "incidents.json"
 
 
-@router.get("/")
+@router.get("/", response_model=RootResponse)
 def read_root():
     return {"message": "Welcome to the SkoLab API!"}
 
 
-@router.get("/ai_status")
+@router.get("/ai_status", response_model=AiStatusResponse)
 async def ai_status():
     """Checks if the AI services have valid API keys and are reachable."""
     import os
@@ -46,7 +51,7 @@ async def ai_status():
     }
 
 
-@router.get("/status")
+@router.get("/status", response_model=SystemStatusResponse)
 async def get_system_status():
     """Returns a public system status report detailing service availability and active/past incidents."""
     db_status = "operational"

@@ -2,6 +2,12 @@ from fastapi import APIRouter, Query
 from typing import Dict, Any, List
 from pydantic import BaseModel
 
+from app.schemas.integrations import (
+    ZoteroAuthResponse,
+    ZoteroCallbackResponse,
+    ZoteroSyncResponse,
+)
+
 router = APIRouter()
 
 
@@ -10,7 +16,7 @@ class ZoteroSyncRequest(BaseModel):
     papers: List[Dict[str, Any]]
 
 
-@router.get("/zotero/auth")
+@router.get("/zotero/auth", response_model=ZoteroAuthResponse)
 async def zotero_auth_init(user_id: str = Query(...)):
     """
     Step 1: Returns the Zotero OAuth authorization URL to initiate link flow.
@@ -20,7 +26,7 @@ async def zotero_auth_init(user_id: str = Query(...)):
     return {"authorization_url": oauth_url}
 
 
-@router.get("/zotero/callback")
+@router.get("/zotero/callback", response_model=ZoteroCallbackResponse)
 async def zotero_auth_callback(
     oauth_token: str = Query(...), oauth_verifier: str = Query(...)
 ):
@@ -35,7 +41,7 @@ async def zotero_auth_callback(
     }
 
 
-@router.post("/zotero/sync")
+@router.post("/zotero/sync", response_model=ZoteroSyncResponse)
 async def zotero_sync_papers(payload: ZoteroSyncRequest):
     """
     Step 3: Pushes a list of papers from the SkoLab SwipeVault directly into Zotero via Zotero API.

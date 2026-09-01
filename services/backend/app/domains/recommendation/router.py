@@ -17,6 +17,7 @@ from app.domains.recommendation.schemas import (
     RegisteredCheckRequest,
     RegisteredCheckResponse,
 )
+from app.schemas.recommendation_extra import LogPeerInviteResponse
 from app.domains.recommendation.service import RecommendationService
 
 router = APIRouter(prefix="/recommendations", tags=["Recommendations"])
@@ -41,6 +42,7 @@ async def get_peer_recommendations(
 
 @router.post(
     "/peers/invite",
+    response_model=LogPeerInviteResponse,
     summary="Log peer invitation to update recommendation engine scores",
 )
 async def log_peer_invite(
