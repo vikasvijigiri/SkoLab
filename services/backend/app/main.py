@@ -204,6 +204,8 @@ from app.core.cache import (
     network_collaborators_cache,
 )
 from app.api.v1.router import api_router
+from app.api.errors import register_exception_handlers
+from app.schemas.system import AppInfoResponse
 
 _zeroconf: AsyncZeroconf | None = None
 _mdns_info: ServiceInfo | None = None
@@ -392,6 +394,9 @@ app = FastAPI(
     ],
     swagger_ui_parameters={"persistAuthorization": True},
 )
+
+# App-level error envelope: consistent ErrorResponse shape, no leaked internals.
+register_exception_handlers(app)
 
 # Configure CORS origins dynamically and restrict from wildcard
 import os
@@ -896,7 +901,7 @@ app.include_router(api_router, prefix="/api/v1")
 app.include_router(api_router)
 
 
-@app.get("/")
+@app.get("/", response_model=AppInfoResponse)
 async def root():
     """Root endpoint returning API metadata for mobile client verification and discovery."""
     return {"app": "Skolab API", "status": "online", "version": "1.0.0"}
