@@ -76,7 +76,7 @@
 
 ## Progress
 - [x] Task 1 — Add Phase-1 dependencies, align `eslint-config-next` — verified: `npm ci` clean, `next build` exit 0, lock cross-platform. jsdom pinned ~26 (node-20 compat).
-- [ ] Task 2 — Vitest + RTL + jsdom + MSW harness
+- [x] Task 2 — Vitest + RTL + jsdom + MSW harness — verified: `vitest run` 6 passed (utils + queries). jsdom hoisted to root (workspace nesting broke vitest's env resolution).
 - [ ] Task 3 — Playwright + axe harness
 - [ ] Task 4 — TanStack Query provider, `queries.ts`, `apiRequest` timeout
 - [ ] Task 5 — Migrate `author/[id]` to `useQuery` + extract its sub-components
@@ -150,6 +150,7 @@
 **Done when:** both e2e specs pass locally against `next dev`.
 
 ### Task 4: TanStack Query provider, `queries.ts`, `apiRequest` timeout
+**[DEVIATION 2026-09-01]** `Dependencies` corrected to **1, 2** — Task 4's `queries.test.ts` and its `npm test` verification need Task 2's Vitest harness. `parallel_groups` already schedules Task 2 (round 3) before Task 4 (round 4); the stated dependency line just missed it. Execution order: 2 then 4.
 **Purpose:** the caching data layer exists and is wired at the root
 **Files:**
 - Create: `apps/web/src/components/providers.tsx` — `"use client"`; `QueryClient` with `defaultOptions: { queries: { staleTime: 60_000, retry: 2, refetchOnWindowFocus: false } }`; `<QueryClientProvider>` + `<ReactQueryDevtools initialIsOpen={false} />` (dev only)
