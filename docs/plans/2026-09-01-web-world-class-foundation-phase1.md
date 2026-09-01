@@ -78,7 +78,7 @@
 - [x] Task 1 — Add Phase-1 dependencies, align `eslint-config-next` — verified: `npm ci` clean, `next build` exit 0, lock cross-platform. jsdom pinned ~26 (node-20 compat).
 - [x] Task 2 — Vitest + RTL + jsdom + MSW harness — verified: `vitest run` 6 passed (utils + queries). jsdom hoisted to root (workspace nesting broke vitest's env resolution).
 - [ ] Task 3 — Playwright + axe harness
-- [ ] Task 4 — TanStack Query provider, `queries.ts`, `apiRequest` timeout
+- [x] Task 4 — TanStack Query provider + `queries.ts` + `apiRequest` timeout — verified: `queries.test.ts` 4 passed, tsc rc=0, build rc=0.
 - [ ] Task 5 — Migrate `author/[id]` to `useQuery` + extract its sub-components
 - [x] Task 6 — Remove the 3 unused `endpoints.ts` exports (+ dead `PeerRecommendation` type) — verified: tsc/lint/build exit 0, grep clean.
 - [ ] Task 7 — TypeScript strictness + fallout
