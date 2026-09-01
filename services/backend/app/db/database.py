@@ -150,25 +150,40 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         from sqlalchemy import text
+
         for col_name, col_type in [
             ("username", "VARCHAR(100) UNIQUE"),
             ("author_name", "VARCHAR(255)"),
             ("phone", "VARCHAR(50)"),
-            ("research_focus", "TEXT")
+            ("research_focus", "TEXT"),
         ]:
             try:
-                await conn.execute(text(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col_name} {col_type};"))
+                await conn.execute(
+                    text(
+                        f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col_name} {col_type};"
+                    )
+                )
             except Exception as e:
-                print(f"[init_db] Note: could not alter table for column {col_name}: {e}", flush=True)
+                print(
+                    f"[init_db] Note: could not alter table for column {col_name}: {e}",
+                    flush=True,
+                )
 
         for col_name, col_type in [
             ("skills", "JSON"),
             ("tools", "JSON"),
         ]:
             try:
-                await conn.execute(text(f"ALTER TABLE researcher_metrics ADD COLUMN IF NOT EXISTS {col_name} {col_type};"))
+                await conn.execute(
+                    text(
+                        f"ALTER TABLE researcher_metrics ADD COLUMN IF NOT EXISTS {col_name} {col_type};"
+                    )
+                )
             except Exception as e:
-                print(f"[init_db] Note: could not alter table for column {col_name}: {e}", flush=True)
+                print(
+                    f"[init_db] Note: could not alter table for column {col_name}: {e}",
+                    flush=True,
+                )
 
 
 import hmac

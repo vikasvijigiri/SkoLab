@@ -33,4 +33,3 @@ class RegisteredCheckRequest(BaseModel):
 class RegisteredCheckResponse(BaseModel):
     registered_emails: List[str]
     registered_phones: List[str]
-
