@@ -11,7 +11,12 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_db
-from app.domains.recommendation.schemas import PeerRecommendation, PeerInviteLogRequest, RegisteredCheckRequest, RegisteredCheckResponse
+from app.domains.recommendation.schemas import (
+    PeerRecommendation,
+    PeerInviteLogRequest,
+    RegisteredCheckRequest,
+    RegisteredCheckResponse,
+)
 from app.domains.recommendation.service import RecommendationService
 
 router = APIRouter(prefix="/recommendations", tags=["Recommendations"])
@@ -25,7 +30,9 @@ router = APIRouter(prefix="/recommendations", tags=["Recommendations"])
 )
 async def get_peer_recommendations(
     query: str = Query(..., description="Query name, username, email, phone, or focus"),
-    user_id: Optional[str] = Query(None, description="Current logged-in user ID for personalized ranking"),
+    user_id: Optional[str] = Query(
+        None, description="Current logged-in user ID for personalized ranking"
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> List[PeerRecommendation]:
     service = RecommendationService(db=db)
@@ -56,4 +63,3 @@ async def check_registered_peers(
 ) -> RegisteredCheckResponse:
     service = RecommendationService(db=db)
     return await service.check_registered_peers(request)
-

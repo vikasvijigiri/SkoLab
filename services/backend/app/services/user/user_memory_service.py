@@ -12,7 +12,6 @@ from app.core.cache import _user_memory_cache
 logger = logging.getLogger(__name__)
 
 
-
 class UserMemoryService:
     """
     Service layer for user memory sync and dynamic profile aggregation.
