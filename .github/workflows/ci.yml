@@ -97,13 +97,19 @@ jobs:
         node-version: 22
 
     - name: Install workspace dependencies
-      # `npm install`, not `npm ci`: the committed lockfile is generated on
-      # Windows and records only the win32 build of lightningcss / @tailwindcss
-      # oxide (npm does not cross-populate platform-specific optionalDependencies).
-      # `npm ci` would then fail `next build` on Linux with
-      # "Cannot find module '../lightningcss.linux-x64-gnu.node'". `npm install`
-      # respects every pinned version and additionally pulls the Linux natives.
-      run: npm install
+      # The committed lockfile is generated on Windows and records only the
+      # win32 build of lightningcss / @tailwindcss-oxide. npm does not
+      # cross-populate platform-specific optionalDependencies, and neither
+      # `npm ci` nor a plain `npm install` will swap in the Linux natives once
+      # the win32 one is locked — `next build` then fails with
+      # "Cannot find module '../lightningcss.linux-x64-gnu.node'". Dropping the
+      # lockfile forces a clean resolution for this runner. Every
+      # version-sensitive dep is pinned in package.json, so this stays
+      # reproducible in practice. Follow-up: regenerate the lockfile on a POSIX
+      # host and restore `npm ci`.
+      run: |
+        rm -f package-lock.json
+        npm install
 
     # `next build` must run before standalone tsc: it generates `.next/types`,
     # which is where Next 16's `RouteContext` and route param types live. Running
