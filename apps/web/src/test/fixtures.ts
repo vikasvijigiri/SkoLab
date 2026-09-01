@@ -1,10 +1,15 @@
 import type {
   AuthorResponse,
   AuthorSuggestion,
+  BreakthroughPrediction,
   CitationHeatmap,
   DailyFeedItem,
+  GrantMatch,
+  IndustryOpportunity,
   JournalRecommendation,
   NetworkCollaborator,
+  OpenAlexWork,
+  PaperIntelligence,
 } from "@/lib/types";
 
 export const mockSuggestion: AuthorSuggestion = {
@@ -96,3 +101,68 @@ export const mockDailyFeed: DailyFeedItem[] = [
     recommendation_reason: "Matches your core research area.",
   },
 ];
+
+export const mockOpenAlexWorks: OpenAlexWork[] = [
+  {
+    id: "https://openalex.org/W2000000001",
+    display_name: "A note on machine intelligence",
+    publication_year: 1950,
+    cited_by_count: 12000,
+    authorships: [{ author: { display_name: "A. Turing" } }],
+  },
+];
+
+export const mockBreakthroughPrediction: BreakthroughPrediction = {
+  breakthrough_name: "Programmable matter compilers",
+  description: "Compilers that target reconfigurable physical substrates.",
+  scientific_logic: "Advances in metamaterials + ML control policies converge.",
+  business_application: "On-demand tooling without a factory retool.",
+  time_horizon: "7–10 years",
+  feasibility: "Medium",
+  roadmap_steps: ["Characterise substrates", "Build the IR", "Close the control loop"],
+  pioneering_papers: [
+    { id: "W1", title: "Reconfigurable lattices", authors: ["X. Ren"], year: 2019, cited_by_count: 300 },
+  ],
+  latest_papers: [
+    { id: "W2", title: "Learned actuation policies", authors: ["Y. Li"], year: 2025, cited_by_count: 8 },
+  ],
+};
+
+export const mockIndustryOpportunities: IndustryOpportunity[] = [
+  {
+    id: "IO1",
+    type: "JOB",
+    title: "Research Scientist, Foundation Models",
+    companyOrFunder: "Analytical Engine Labs",
+    tags: ["ML", "NLP"],
+    description: "Work on large-scale model training.",
+  },
+];
+
+export const mockGrants: GrantMatch[] = [
+  {
+    title: "Frontier Compute Grant",
+    agency: "NSF",
+    agency_color: "var(--accent-cyan)",
+    days_left: 30,
+    amount: "$250k",
+    field: "Computer Science",
+    match_score: 0.8,
+    url: "https://example.org/grant",
+    rationale: "Aligns with your compute-heavy research.",
+  },
+];
+
+export const mockPaperIntelligence: PaperIntelligence = {
+  tldr: "A short summary.",
+  key_findings: ["Finding one."],
+  techniques: ["Technique A"],
+  tools_and_software: ["Tool X"],
+  core_concepts: ["Concept"],
+  formulas: [],
+  limitations: ["Small sample."],
+  real_world_impact: "Modest.",
+  future_directions: ["Scale it up."],
+  confidence: "Medium",
+  text_source: "abstract",
+};

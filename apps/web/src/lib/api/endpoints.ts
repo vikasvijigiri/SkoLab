@@ -1,4 +1,4 @@
-import { apiRequest } from "./client";
+import { apiRequest, ApiError } from "./client";
 import type {
   AuthorSuggestion,
   AuthorResponse,
@@ -11,6 +11,10 @@ import type {
   IndustryOpportunity,
   PaperIntelligence,
   LeaderboardEntry,
+  OpenAlexWork,
+  BreakthroughPrediction,
+  NexusChatPaper,
+  NexusMessage,
 } from "@/lib/types";
 
 // ---- Authors / Search / Discovery -----------------------------------------
@@ -89,3 +93,38 @@ export const deleteUserAccount = (idToken: string, userId: string) =>
     method: "DELETE",
     idToken,
   });
+
+// ---- Horizon / Nexus (discovery engine) ------------------------------------
+
+export const getHorizonPrediction = (field: string, focusArea?: string, authorId?: string) =>
+  apiRequest<BreakthroughPrediction>("/api/v1/discovery/predict", {
+    method: "POST",
+    body: { field, focus_area: focusArea, author_id: authorId },
+  });
+
+export const nexusChat = (papers: NexusChatPaper[], messages: NexusMessage[]) =>
+  apiRequest<{ content: string }>("/api/v1/discovery/nexus-chat", {
+    method: "POST",
+    body: { papers, messages },
+  });
+
+/**
+ * OpenAlex works via the same-origin Next route handler (`app/api/openalex/works`),
+ * NOT the Go gateway — so it uses `fetch` directly, not `apiRequest`.
+ */
+export const openAlexWorks = async (opts: { q?: string; focus?: string } = {}): Promise<OpenAlexWork[]> => {
+  const params = new URLSearchParams();
+  if (opts.q) params.set("q", opts.q);
+  if (opts.focus) params.set("focus", opts.focus);
+  const qs = params.toString();
+  const res = await fetch(`/api/openalex/works${qs ? `?${qs}` : ""}`);
+  if (!res.ok) throw new ApiError(res.status, `OpenAlex works request failed with ${res.status}`);
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+};
+
+export const openAlexWorkById = async (id: string): Promise<OpenAlexWork> => {
+  const res = await fetch(`/api/openalex/works/${encodeURIComponent(id)}`);
+  if (!res.ok) throw new ApiError(res.status, `Couldn't load this paper (HTTP ${res.status}).`);
+  return (await res.json()) as OpenAlexWork;
+};

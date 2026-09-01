@@ -7,6 +7,12 @@ import {
   getAuthorSuggestions,
   getDailyFeed,
   getDailyConjecture,
+  getIndustryOpportunities,
+  getMatchGrants,
+  analyzePaper,
+  openAlexWorks,
+  openAlexWorkById,
+  getLeaderboard,
 } from "./endpoints";
 
 /**
@@ -73,4 +79,53 @@ export const dailyConjectureQuery = (authorId?: string, name?: string) =>
     queryKey: ["daily-conjecture", { authorId: authorId ?? null, name: name ?? null }] as const,
     queryFn: () => getDailyConjecture(authorId, name),
     staleTime: 30 * 60_000,
+  });
+
+// ── Discovery / Horizon / Nexus / Paper ──────────────────────────────────
+//   ["openalex-works", { q, focus }]      literature search / field browse
+//   ["paper-analysis", { title, doi, openalexId }]
+//   ["industry-opportunities", { focus, name }] | ["grants", authorId]
+// (Horizon predict and Nexus chat are POST-on-submit → useMutation, no factory.)
+
+export const openAlexWorksQuery = (opts: { q?: string; focus?: string } = {}) =>
+  queryOptions({
+    queryKey: ["openalex-works", { q: opts.q ?? null, focus: opts.focus ?? null }] as const,
+    queryFn: () => openAlexWorks(opts),
+    enabled: Boolean(opts.q?.trim() || opts.focus),
+    staleTime: 5 * 60_000,
+  });
+
+export const paperWorkQuery = (id: string) =>
+  queryOptions({
+    queryKey: ["paper-work", id] as const,
+    queryFn: () => openAlexWorkById(id),
+    enabled: Boolean(id),
+  });
+
+export const paperAnalysisQuery = (opts: { title?: string; doi?: string; openalexId?: string }) =>
+  queryOptions({
+    queryKey: ["paper-analysis", { title: opts.title ?? null, doi: opts.doi ?? null, openalexId: opts.openalexId ?? null }] as const,
+    queryFn: () => analyzePaper(opts),
+    enabled: Boolean(opts.title || opts.doi || opts.openalexId),
+    staleTime: 6 * 60 * 60_000,
+  });
+
+export const industryOpportunitiesQuery = (focus = "AI", name?: string) =>
+  queryOptions({
+    queryKey: ["industry-opportunities", { focus, name: name ?? null }] as const,
+    queryFn: () => getIndustryOpportunities(focus, name),
+  });
+
+export const matchGrantsQuery = (authorId: string) =>
+  queryOptions({
+    queryKey: ["grants", authorId] as const,
+    queryFn: () => getMatchGrants(authorId),
+    enabled: Boolean(authorId),
+  });
+
+export const leaderboardQuery = (field = "all") =>
+  queryOptions({
+    queryKey: ["leaderboard", field] as const,
+    queryFn: () => getLeaderboard(field),
+    staleTime: 5 * 60_000,
   });

@@ -2,36 +2,16 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useMutation } from "@tanstack/react-query";
 import { Sparkles, ArrowRight, ArrowLeft, Compass, AlertCircle, BookOpen, ExternalLink, Star } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { MathText } from "@/components/ui/MathText";
-import { apiRequest } from "@/lib/api/client";
+import { getHorizonPrediction } from "@/lib/api/endpoints";
 import { cn } from "@/lib/utils";
 import { useMyProfile } from "@/lib/hooks/useMyProfile";
-
-interface PaperSource {
-  id: string;
-  title: string;
-  authors: string[];
-  year: number;
-  cited_by_count: number;
-  doi?: string;
-}
-
-interface BreakthroughPrediction {
-  breakthrough_name: string;
-  description: string;
-  scientific_logic: string;
-  business_application: string;
-  time_horizon: string;
-  feasibility: "High" | "Medium" | "Low";
-  roadmap_steps: string[];
-  pioneering_papers: PaperSource[];
-  latest_papers: PaperSource[];
-}
 
 const FRONTIER_DOMAINS = [
   {
@@ -68,47 +48,32 @@ export default function HorizonPage() {
   const { author } = useMyProfile();
   const [field, setField] = useState("");
   const [focusArea, setFocusArea] = useState("");
-  const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState(0);
-  const [prediction, setPrediction] = useState<BreakthroughPrediction | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  // Animate loading text steps sequentially
+  const predict = useMutation({
+    mutationFn: () => getHorizonPrediction(field, focusArea || undefined, author?.id),
+    onMutate: () => setLoadingStep(0),
+  });
+  const loading = predict.isPending;
+  const prediction = predict.data ?? null;
+  const error = predict.isError
+    ? "Foresight engine timed out or encountered an error. Please try again."
+    : null;
+
+  // Cycle the loading captions while the prediction is in flight. No synchronous
+  // setState in the effect body — only inside the interval callback + cleanup.
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (loading) {
-      interval = setInterval(() => {
-        setLoadingStep((prev) => {
-          if (prev < LOADING_STEPS.length - 1) return prev + 1;
-          return prev;
-        });
-      }, 2000);
-    } else {
-      setLoadingStep(0);
-    }
+    if (!loading) return;
+    const interval = setInterval(() => {
+      setLoadingStep((prev) => (prev < LOADING_STEPS.length - 1 ? prev + 1 : prev));
+    }, 2000);
     return () => clearInterval(interval);
   }, [loading]);
 
-  async function handlePredict(e?: React.FormEvent) {
+  function handlePredict(e?: React.FormEvent) {
     if (e) e.preventDefault();
     if (!field.trim()) return;
-
-    setLoading(true);
-    setError(null);
-    setPrediction(null);
-
-    try {
-      const data = await apiRequest<BreakthroughPrediction>("/api/v1/discovery/predict", {
-        method: "POST",
-        body: { field, focus_area: focusArea, author_id: author?.id },
-      });
-      setPrediction(data);
-    } catch (err) {
-      console.error(err);
-      setError("Foresight engine timed out or encountered an error. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+    predict.mutate();
   }
 
   function handleSelectDomain(domainName: string) {
@@ -310,7 +275,7 @@ export default function HorizonPage() {
               <Button
                 variant="outlined"
                 fullWidth={false}
-                onClick={() => setPrediction(null)}
+                onClick={() => predict.reset()}
                 className="h-10 gap-1.5 px-4 py-0"
               >
                 <ArrowLeft size={14} />

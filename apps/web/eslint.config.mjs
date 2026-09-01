@@ -31,14 +31,12 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
   ]),
   {
-    // 2026-09-01 (PR #3): two pre-existing react-hooks findings
-    // (setState-in-effect in home/horizon/nexus, manual-memoization in a few
-    // pages) need component refactors that are Phase 2 of the apps/web
-    // world-class plan. Kept at warn so the rest of the ruleset blocks; Phase 2
-    // migrates the effects and restores these to error.
+    // Phase 2 of the apps/web world-class plan migrated every fetch-in-effect to
+    // TanStack Query, so these two now hold at error (they were parked at warn in
+    // PR #3). Server state belongs in useQuery/useMutation, not a useEffect.
     rules: {
-      "react-hooks/set-state-in-effect": "warn",
-      "react-hooks/preserve-manual-memoization": "warn",
+      "react-hooks/set-state-in-effect": "error",
+      "react-hooks/preserve-manual-memoization": "error",
     },
   },
 ]);
