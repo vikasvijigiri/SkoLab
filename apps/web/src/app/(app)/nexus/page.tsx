@@ -2,55 +2,48 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { MessageSquare, Plus, Trash2, Send, Search, BookOpen, AlertCircle, Sparkles, ChevronRight, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { MathText, MarkdownText } from "@/components/ui/MathText";
-import { apiRequest } from "@/lib/api/client";
+import { nexusChat } from "@/lib/api/endpoints";
+import { openAlexWorksQuery } from "@/lib/api/queries";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import { TRANSITION_FAST } from "@/lib/motion";
-
-interface WorkspacePaper {
-  id: string;
-  title: string;
-  authors: string[];
-  year: number;
-  cited_by_count?: number;
-  abstract: string;
-  doi?: string;
-}
-
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-}
-
-interface OpenAlexSearchResult {
-  id: string;
-  display_name: string;
-  publication_year?: number;
-  doi?: string;
-  cited_by_count?: number;
-  authorships?: { author: { display_name: string } }[];
-  abstract_inverted_index?: Record<string, number[]>;
-}
+import type { NexusCollectionPaper, NexusMessage, OpenAlexWork } from "@/lib/types";
 
 export default function NexusPage() {
   const [mobilePane, setMobilePane] = useState<"collection" | "chat">("collection");
-  const [activeCollection, setActiveCollection] = useState<WorkspacePaper[]>([]);
+  const [activeCollection, setActiveCollection] = useState<NexusCollectionPaper[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearch = useDebounce(searchQuery, 400);
-  const [searchResults, setSearchResults] = useState<OpenAlexSearchResult[]>([]);
-  const [searching, setSearching] = useState(false);
-  
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<NexusMessage[]>([]);
   const [userMsg, setUserMsg] = useState("");
-  const [chatLoading, setChatLoading] = useState(false);
-  const [chatError, setChatError] = useState<string | null>(null);
+  const [guardError, setGuardError] = useState<string | null>(null);
   const [resultsDismissed, setResultsDismissed] = useState(false);
+
+  const search = useQuery({
+    ...openAlexWorksQuery({ q: debouncedSearch }),
+    enabled: debouncedSearch.trim().length >= 3,
+  });
+  const searchResults: OpenAlexWork[] = search.data ?? [];
+  const searching = search.isFetching;
+
+  const chat = useMutation({
+    mutationFn: (msgs: NexusMessage[]) =>
+      nexusChat(
+        activeCollection.map((p) => ({ title: p.title, authors: p.authors, year: p.year, abstract: p.abstract })),
+        msgs,
+      ),
+    onSuccess: (data) => setMessages((prev) => [...prev, { role: "assistant", content: data.content }]),
+  });
+  const chatLoading = chat.isPending;
+  const chatError =
+    guardError ?? (chat.isError ? "Failed to synthesize response. Check backend connection." : null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -78,34 +71,6 @@ export default function NexusPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, chatLoading]);
 
-  // Search papers when query changes
-  useEffect(() => {
-    if (!debouncedSearch.trim() || debouncedSearch.trim().length < 3) {
-      setSearchResults([]);
-      return;
-    }
-
-    let active = true;
-    setResultsDismissed(false);
-    (async () => {
-      setSearching(true);
-      try {
-        const res = await fetch(`/api/openalex/works?q=${encodeURIComponent(debouncedSearch)}`);
-        if (!res.ok) throw new Error("Search failed");
-        const data = await res.json();
-        if (active) setSearchResults(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        if (active) setSearching(false);
-      }
-    })();
-
-    return () => {
-      active = false;
-    };
-  }, [debouncedSearch]);
-
   // Reconstruct abstract from inverted index format returned by OpenAlex
   function reconstructAbstract(invertedIndex?: Record<string, number[]>): string {
     if (!invertedIndex) return "No abstract available.";
@@ -122,70 +87,44 @@ export default function NexusPage() {
     }
   }
 
-  function handleAddPaper(paper: OpenAlexSearchResult) {
+  function handleAddPaper(paper: OpenAlexWork) {
     const shortId = paper.id.split("/").pop() ?? paper.id;
     if (activeCollection.some((p) => p.id === shortId)) return;
 
-    const abstractText = reconstructAbstract(paper.abstract_inverted_index);
-    const authorsList = paper.authorships?.map((a) => a.author.display_name) || [];
-
-    const newPaper: WorkspacePaper = {
+    const newPaper: NexusCollectionPaper = {
       id: shortId,
       title: paper.display_name,
-      authors: authorsList,
+      authors: paper.authorships?.map((a) => a.author.display_name) ?? [],
       year: paper.publication_year ?? 0,
       cited_by_count: paper.cited_by_count,
-      abstract: abstractText,
+      abstract: reconstructAbstract(paper.abstract_inverted_index),
       doi: paper.doi,
     };
 
     setActiveCollection((prev) => [...prev, newPaper]);
     setSearchQuery("");
-    setSearchResults([]);
+    setResultsDismissed(true);
   }
 
   function handleRemovePaper(id: string) {
     setActiveCollection((prev) => prev.filter((p) => p.id !== id));
   }
 
-  async function handleSendChat(textToSend?: string) {
+  function handleSendChat(textToSend?: string) {
     const text = textToSend ?? userMsg;
     if (!text.trim() || chatLoading) return;
 
     if (activeCollection.length === 0) {
-      setChatError("Please add at least one paper to your active collection first.");
+      setGuardError("Please add at least one paper to your active collection first.");
       return;
     }
 
-    setChatError(null);
+    setGuardError(null);
     if (!textToSend) setUserMsg("");
 
-    const newMessages: Message[] = [...messages, { role: "user", content: text }];
+    const newMessages: NexusMessage[] = [...messages, { role: "user", content: text }];
     setMessages(newMessages);
-    setChatLoading(true);
-
-    try {
-      // Send papers and message history to the backend
-      const data = await apiRequest<{ content: string }>("/api/v1/discovery/nexus-chat", {
-        method: "POST",
-        body: {
-          papers: activeCollection.map((p) => ({
-            title: p.title,
-            authors: p.authors,
-            year: p.year,
-            abstract: p.abstract,
-          })),
-          messages: newMessages,
-        },
-      });
-
-      setMessages((prev) => [...prev, { role: "assistant", content: data.content }]);
-    } catch (err) {
-      console.error(err);
-      setChatError("Failed to synthesize response. Check backend connection.");
-    } finally {
-      setChatLoading(false);
-    }
+    chat.mutate(newMessages);
   }
 
   const starterPrompts = [
@@ -249,7 +188,10 @@ export default function NexusPage() {
               leadingIcon={searching ? <Loader2 size={15} className="animate-spin text-primary" /> : <Search size={15} />}
               placeholder="Search literature to add..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setResultsDismissed(false);
+              }}
               className="h-10 text-[13px]"
             />
 
