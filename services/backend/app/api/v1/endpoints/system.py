@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
 def _find_repo_root() -> Path:
     current = Path(__file__).resolve()
     for parent in current.parents:
@@ -18,6 +19,7 @@ def _find_repo_root() -> Path:
         if parent.name == "backend":
             return parent
     return current.parents[min(len(current.parents) - 1, 3)]
+
 
 _REPO_ROOT = _find_repo_root()
 _INCIDENTS_PATH = _REPO_ROOT / "docs" / "incidents.json"

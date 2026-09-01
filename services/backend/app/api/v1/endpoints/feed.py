@@ -205,7 +205,7 @@ async def get_daily_conjecture(
 
     works_context = "\n".join(
         [
-            f"Paper {i+1}: {w.get('title')}\n  Abstract: {_abstract_text(w)[:600]}"
+            f"Paper {i + 1}: {w.get('title')}\n  Abstract: {_abstract_text(w)[:600]}"
             for i, w in enumerate(works[:3])
         ]
     )

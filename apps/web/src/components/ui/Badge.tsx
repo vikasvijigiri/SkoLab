@@ -28,7 +28,13 @@ export function Badge({ accentColor = "var(--primary)", className, style, childr
   );
 }
 
-interface ChipProps extends HTMLAttributes<HTMLButtonElement> {
+// See Button.tsx: framer-motion's motion.button overrides these handlers with
+// gesture signatures that clash with React's DOM types when props are spread.
+interface ChipProps
+  extends Omit<
+    HTMLAttributes<HTMLButtonElement>,
+    "onDrag" | "onDragStart" | "onDragEnd" | "onAnimationStart" | "onAnimationEnd" | "onAnimationIteration"
+  > {
   selected?: boolean;
 }
 
