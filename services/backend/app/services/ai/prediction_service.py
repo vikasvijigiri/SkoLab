@@ -157,7 +157,9 @@ class PredictionService:
                     for word, positions in abstract_inverted.items():
                         for pos in positions:
                             word_positions[pos] = word
-                    abstract = " ".join([word_positions[i] for i in sorted(word_positions.keys())])
+                    abstract = " ".join(
+                        [word_positions[i] for i in sorted(word_positions.keys())]
+                    )
                 except Exception:
                     pass
 
@@ -172,7 +174,7 @@ class PredictionService:
                 "cited_by_count": cited_count,
                 "doi": doi,
                 "abstract": abstract,
-                "source_type": source_type
+                "source_type": source_type,
             }
 
         pioneer_works = [process_paper(p, "pioneering") for p in pioneer_raw]
@@ -194,14 +196,14 @@ class PredictionService:
         context_lines.append("\n=== PIONEERING PAPERS ===")
         for i, paper in enumerate(pioneer_works):
             context_lines.append(
-                f"[{i+1}] Title: {paper['title']}\n"
+                f"[{i + 1}] Title: {paper['title']}\n"
                 f"Year: {paper['year']} | Citations: {paper['cited_by_count']}\n"
                 f"Abstract: {paper['abstract'][:800]}...\n"
             )
         context_lines.append("\n=== LATEST PAPERS ===")
         for i, paper in enumerate(latest_works):
             context_lines.append(
-                f"[{i+1}] Title: {paper['title']}\n"
+                f"[{i + 1}] Title: {paper['title']}\n"
                 f"Year: {paper['year']} | Citations: {paper['cited_by_count']}\n"
                 f"Abstract: {paper['abstract'][:800]}...\n"
             )
@@ -256,7 +258,10 @@ class PredictionService:
                 "business_application": "Failed to generate business applications.",
                 "time_horizon": "5-10 years",
                 "feasibility": "Medium",
-                "roadmap_steps": ["Establish baseline research parameters", "Investigate cross-domain integration"],
+                "roadmap_steps": [
+                    "Establish baseline research parameters",
+                    "Investigate cross-domain integration",
+                ],
                 "pioneering_papers": [
                     {
                         "id": p["id"],
@@ -294,7 +299,7 @@ class PredictionService:
         context_lines = ["Here are the papers currently in the workspace collection:\n"]
         for i, paper in enumerate(papers):
             context_lines.append(
-                f"--- PAPER {i+1} ---\n"
+                f"--- PAPER {i + 1} ---\n"
                 f"Title: {paper.get('title')}\n"
                 f"Authors: {', '.join(paper.get('authors', []))}\n"
                 f"Abstract: {paper.get('abstract', 'No abstract available.')}\n"

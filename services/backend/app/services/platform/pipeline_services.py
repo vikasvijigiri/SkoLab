@@ -546,9 +546,7 @@ class PipelineServices:
                 f"Firestore get timed out ({timeout}s) for {collection}/{doc_id}"
             )
         except Exception as e:
-            logger.warning(
-                f"Firestore get error for {collection}/{doc_id}: {e}"
-            )
+            logger.warning(f"Firestore get error for {collection}/{doc_id}: {e}")
         return None
 
     async def _firestore_set_safe(
@@ -577,9 +575,7 @@ class PipelineServices:
                 f"Firestore set timed out ({timeout}s) for {collection}/{doc_id}"
             )
         except Exception as e:
-            logger.warning(
-                f"Firestore set error for {collection}/{doc_id}: {e}"
-            )
+            logger.warning(f"Firestore set error for {collection}/{doc_id}: {e}")
         return False
 
     async def _save_to_postgres(
@@ -714,7 +710,9 @@ class PipelineServices:
         return []
 
     def _find_similar_researchers(
-        self, topic_matched_works: List[Dict[str, Any]], exclude_author_id: Optional[str]
+        self,
+        topic_matched_works: List[Dict[str, Any]],
+        exclude_author_id: Optional[str],
     ) -> List[str]:
         """
         Derives a handful of OpenAlex author IDs from the authorships of papers
@@ -975,7 +973,9 @@ class PipelineServices:
             return 0.0
         return min(1.0, overlap / union_size)
 
-    async def get_dismissed_recommendation_ids(self, author_id: Optional[str]) -> Set[str]:
+    async def get_dismissed_recommendation_ids(
+        self, author_id: Optional[str]
+    ) -> Set[str]:
         """OpenAlex work IDs this author has explicitly dismissed from their feed."""
         doc_id = author_id.split("/")[-1] if author_id else "anon"
         ids = await _pg_dismissed_recs_cache.get(doc_id)
@@ -1015,7 +1015,9 @@ class PipelineServices:
             if not dismissed_ids or not any(
                 it.get("id") in dismissed_ids for it in cached_items
             ):
-                print(f"[Postgres Cache Hit] daily_feeds for doc_id={doc_id}", flush=True)
+                print(
+                    f"[Postgres Cache Hit] daily_feeds for doc_id={doc_id}", flush=True
+                )
                 return cached_items
         _fs_cached = await self._firestore_get_safe("daily_feeds", doc_id, timeout=5.0)
         if isinstance(_fs_cached, dict) and "items" in _fs_cached:
@@ -1042,7 +1044,9 @@ class PipelineServices:
                 it.get("id") in dismissed_ids for it in fs_items
             )
             if is_fresh and not fs_has_dismissed:
-                print(f"[Firestore Cache Hit] daily_feeds for doc_id={doc_id}", flush=True)
+                print(
+                    f"[Firestore Cache Hit] daily_feeds for doc_id={doc_id}", flush=True
+                )
                 await self._save_to_postgres(cache_key, {"items": fs_items})
                 return fs_items
             print(
@@ -1099,9 +1103,17 @@ class PipelineServices:
         # instead of the far more specific signal sitting right next to it. Priority
         # is now: curated topics -> specific work concepts -> generic ones last.
         GENERIC_CONCEPT_TERMS = {
-            "physics", "science", "biology", "chemistry", "mathematics",
-            "engineering", "computer science", "medicine", "quantum mechanics",
-            "materials science", "quantum",
+            "physics",
+            "science",
+            "biology",
+            "chemistry",
+            "mathematics",
+            "engineering",
+            "computer science",
+            "medicine",
+            "quantum mechanics",
+            "materials science",
+            "quantum",
         }
         combined_concepts = []
         for c in concepts:
@@ -1219,7 +1231,7 @@ class PipelineServices:
         except Exception as e:
             print(f"Error fetching papers for daily feed: {e}", flush=True)
         print(
-            f"[DailyFeed][TIMING] main_gather={time.monotonic()-_t0:.1f}s tasks={len(tasks)} candidates={len(candidates)}",
+            f"[DailyFeed][TIMING] main_gather={time.monotonic() - _t0:.1f}s tasks={len(tasks)} candidates={len(candidates)}",
             flush=True,
         )
 
@@ -1256,7 +1268,7 @@ class PipelineServices:
         except Exception:
             pass
         print(
-            f"[DailyFeed][TIMING] similar_researchers={time.monotonic()-_t0:.1f}s peers={len(similar_researcher_ids)} candidates={len(candidates)}",
+            f"[DailyFeed][TIMING] similar_researchers={time.monotonic() - _t0:.1f}s peers={len(similar_researcher_ids)} candidates={len(candidates)}",
             flush=True,
         )
 
@@ -1423,7 +1435,7 @@ class PipelineServices:
             [candidate_texts[cid] for cid in candidate_ids]
         )
         print(
-            f"[DailyFeed][TIMING] embedding={time.monotonic()-_t0:.1f}s candidates={len(candidate_ids)}",
+            f"[DailyFeed][TIMING] embedding={time.monotonic() - _t0:.1f}s candidates={len(candidate_ids)}",
             flush=True,
         )
 
@@ -1746,7 +1758,7 @@ class PipelineServices:
         tasks = [process_paper(i, scored) for i, scored in enumerate(top_candidates)]
         feed_items = list(await asyncio.gather(*tasks))
         print(
-            f"[DailyFeed][TIMING] process_paper_llm={time.monotonic()-_t0:.1f}s papers={len(feed_items)}",
+            f"[DailyFeed][TIMING] process_paper_llm={time.monotonic() - _t0:.1f}s papers={len(feed_items)}",
             flush=True,
         )
 
@@ -1776,7 +1788,12 @@ class PipelineServices:
         return feed_items
 
     _GRANT_AGENCY_COLORS = [
-        "#009688", "#3F51B5", "#4CAF50", "#E91E63", "#FF9800", "#9C27B0",
+        "#009688",
+        "#3F51B5",
+        "#4CAF50",
+        "#E91E63",
+        "#FF9800",
+        "#9C27B0",
     ]
 
     @staticmethod
@@ -1837,7 +1854,10 @@ class PipelineServices:
 
         async with self._db_session() as session:
             opportunities = await fetch_industry_opportunities(
-                focus, name=author_name, openalex_service=self.openalex_service, db=session
+                focus,
+                name=author_name,
+                openalex_service=self.openalex_service,
+                db=session,
             )
 
         funding_items = [o for o in opportunities if o.get("type") == "FUNDING"]
@@ -1846,7 +1866,9 @@ class PipelineServices:
             {
                 "title": opp.get("title") or "Research Funding Opportunity",
                 "agency": opp.get("companyOrFunder") or "Funding Agency",
-                "agency_color": self._GRANT_AGENCY_COLORS[i % len(self._GRANT_AGENCY_COLORS)],
+                "agency_color": self._GRANT_AGENCY_COLORS[
+                    i % len(self._GRANT_AGENCY_COLORS)
+                ],
                 "days_left": self._parse_grant_days_left(opp.get("deadline") or ""),
                 "amount": opp.get("amount") or "Varies",
                 "field": (opp.get("tags") or [focus])[0],
@@ -2022,7 +2044,9 @@ class PipelineServices:
                 titles = [w.get("title") for w in works if w.get("title")]
                 return "; ".join(titles) if titles else "No recent papers found."
             except Exception as e:
-                print(f"[CollaboratorSynergy] Recent works fetch failed: {e}", flush=True)
+                print(
+                    f"[CollaboratorSynergy] Recent works fetch failed: {e}", flush=True
+                )
                 return "No recent papers found."
 
         recent_works1, recent_works2 = await asyncio.gather(
@@ -2287,7 +2311,10 @@ class PipelineServices:
             try:
                 results = await self.openalex_service.search_sources(term, per_page=8)
             except Exception as e:
-                print(f"[JournalAdvisor] search_sources failed for '{term}': {e}", flush=True)
+                print(
+                    f"[JournalAdvisor] search_sources failed for '{term}': {e}",
+                    flush=True,
+                )
                 continue
             for src in results:
                 src_id = src.get("id")
@@ -2327,7 +2354,9 @@ class PipelineServices:
             for c in candidates
         ]
         try:
-            scores = await score_candidates_against_profile(profile_text, candidate_texts)
+            scores = await score_candidates_against_profile(
+                profile_text, candidate_texts
+            )
         except Exception as e:
             print(f"[JournalAdvisor] Grounded scoring failed: {e}", flush=True)
             scores = [70] * len(candidates)
@@ -2387,7 +2416,9 @@ class PipelineServices:
             )
 
         try:
-            await self._save_to_postgres(cache_key, {"venues": venues}, ttl_seconds=7200)
+            await self._save_to_postgres(
+                cache_key, {"venues": venues}, ttl_seconds=7200
+            )
             print(
                 f"[Postgres Cache Save] journal_advisor for author_id={clean_id}",
                 flush=True,

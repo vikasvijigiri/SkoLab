@@ -155,10 +155,7 @@ async def fetch_similar_authors(
             return []
 
         profiles = await asyncio.gather(
-            *(
-                openalex_service.fetch_author_by_id(c["id"])
-                for c in candidates
-            ),
+            *(openalex_service.fetch_author_by_id(c["id"]) for c in candidates),
             return_exceptions=True,
         )
 

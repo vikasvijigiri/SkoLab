@@ -12,7 +12,10 @@ advisor's x_concepts bug happened earlier this session).
 
 from typing import Any, Dict, List, Tuple
 
-from app.services.data.openalex_service import OpenAlexService, extract_field_and_expertise
+from app.services.data.openalex_service import (
+    OpenAlexService,
+    extract_field_and_expertise,
+)
 from app.services.ai.llm_service import LLMService, is_llm_working
 
 
