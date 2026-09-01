@@ -53,3 +53,25 @@ def test_https_redirection_middleware():
 
     assert response.status_code == 307
     assert response.headers.get("location") == "https://testserver/secure-endpoint"
+
+
+def test_production_rejects_default_encryption_key(monkeypatch):
+    """Settings() must refuse to build in production with the shipped/empty key."""
+    from app.core.config import Settings, _DEFAULT_DB_ENCRYPTION_KEY
+
+    monkeypatch.setenv("APP_ENV", "production")
+
+    monkeypatch.delenv("DATABASE_ENCRYPTION_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="DATABASE_ENCRYPTION_KEY"):
+        Settings()
+
+    monkeypatch.setenv("DATABASE_ENCRYPTION_KEY", _DEFAULT_DB_ENCRYPTION_KEY)
+    with pytest.raises(RuntimeError, match="DATABASE_ENCRYPTION_KEY"):
+        Settings()
+
+    # A real key in production, and any key outside production, build fine.
+    monkeypatch.setenv("DATABASE_ENCRYPTION_KEY", "a-real-deployment-provided-key")
+    Settings()
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.delenv("DATABASE_ENCRYPTION_KEY", raising=False)
+    Settings()
