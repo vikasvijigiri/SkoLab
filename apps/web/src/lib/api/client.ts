@@ -26,19 +26,33 @@ function buildUrl(path: string, params?: RequestOptions["params"]) {
   return url.toString();
 }
 
+/** Default per-request timeout. Override by passing an explicit `signal`. */
+const DEFAULT_TIMEOUT_MS = 15_000;
+
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = "GET", params, body, idToken, signal } = options;
+  const { method = "GET", params, body, idToken } = options;
+  // A caller-supplied signal wins; otherwise every request is bounded so a
+  // hung backend surfaces as a 408 instead of a spinner that never resolves.
+  const signal = options.signal ?? AbortSignal.timeout(DEFAULT_TIMEOUT_MS);
 
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
 
-  const res = await fetch(buildUrl(path, params), {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-    signal,
-  });
+  let res: Response;
+  try {
+    res = await fetch(buildUrl(path, params), {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal,
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "TimeoutError") {
+      throw new ApiError(408, `Request to ${path} timed out after ${DEFAULT_TIMEOUT_MS}ms`);
+    }
+    throw err;
+  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
