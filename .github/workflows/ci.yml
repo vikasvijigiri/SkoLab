@@ -69,7 +69,7 @@ jobs:
         # on its SQLite fallback; alembic scripts only patch an assumed schema).
         # The script waits for the service container to actually accept queries
         # and retries init_db(), which otherwise fails flakily mid-transaction.
-        python scripts/ci_bootstrap_db.py
+        python ci_bootstrap_db.py
         pytest tests/
 
     - name: Verify Go Gateway Build
