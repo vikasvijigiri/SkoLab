@@ -10,7 +10,6 @@ import type {
   Conjecture,
   IndustryOpportunity,
   PaperIntelligence,
-  PeerRecommendation,
   LeaderboardEntry,
 } from "@/lib/types";
 
@@ -42,11 +41,6 @@ export const getJournalAdvisor = (authorId: string) =>
 export const getMatchGrants = (authorId: string) =>
   apiRequest<GrantMatch[]>("/match_grants", { params: { author_id: authorId } });
 
-export const resolveAuthorEmail = (name: string, institution?: string) =>
-  apiRequest<{ name: string; email: string; institution: string }>("/api/v1/resolve_email", {
-    params: { name, institution },
-  });
-
 // ---- Home / Feed ------------------------------------------------------------
 
 export const getDailyFeed = (authorId?: string, queryFallback?: string) =>
@@ -74,17 +68,6 @@ export const analyzePaper = (opts: { title?: string; doi?: string; openalexId?: 
   });
 
 // ---- Recommendations (project/task collaborator autocomplete) ---------------
-
-export const getPeerRecommendations = (query: string, userId: string) =>
-  apiRequest<PeerRecommendation[]>("/api/v1/recommendations/peers", {
-    params: { query, user_id: userId },
-  });
-
-export const checkRegisteredPeers = (emails: string[], phones: string[]) =>
-  apiRequest<{ registered_emails: string[]; registered_phones: string[] }>(
-    "/api/v1/recommendations/peers/check-registered",
-    { method: "POST", body: { emails, phones } }
-  );
 
 export const logPeerInvite = (userId: string, peer: { email?: string; phone?: string; uid?: string }) =>
   apiRequest<{ success: boolean }>("/api/v1/recommendations/peers/invite", {
