@@ -75,7 +75,7 @@
 | `.github/workflows/ci.yml` | Modify | `web-verification`: add `npm test`; add a Playwright e2e step |
 
 ## Progress
-- [ ] Task 1 — Add Phase-1 dependencies, align `eslint-config-next`
+- [x] Task 1 — Add Phase-1 dependencies, align `eslint-config-next` — verified: `npm ci` clean, `next build` exit 0, lock cross-platform. jsdom pinned ~26 (node-20 compat).
 - [ ] Task 2 — Vitest + RTL + jsdom + MSW harness
 - [ ] Task 3 — Playwright + axe harness
 - [ ] Task 4 — TanStack Query provider, `queries.ts`, `apiRequest` timeout
