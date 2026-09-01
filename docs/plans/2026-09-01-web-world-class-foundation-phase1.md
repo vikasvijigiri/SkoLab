@@ -81,7 +81,7 @@
 - [x] Task 4 — TanStack Query provider + `queries.ts` + `apiRequest` timeout — verified: `queries.test.ts` 4 passed, tsc rc=0, build rc=0.
 - [x] Task 5 — Migrate `author/[id]` to `useQuery` + extract sub-components — verified: 11 tests pass, tsc/build rc=0, author page eslint 0 errors + 0 set-state-in-effect warnings. Tested `AuthorDetailContent` directly (default export is just the Next route wrapper).
 - [x] Task 6 — Remove the 3 unused `endpoints.ts` exports (+ dead `PeerRecommendation` type) — verified: tsc/lint/build exit 0, grep clean.
-- [ ] Task 7 — TypeScript strictness + fallout
+- [x] Task 7 — TypeScript strictness + fallout — verified: tsc rc=0 with 4 flags on (ES2022 + noUncheckedIndexedAccess + noImplicitOverride + noFallthroughCasesInSwitch + forceConsistentCasingInFileNames); 4 mechanical index-guard fixes; 11 tests + build still green.
 - [ ] Task 8 — ESLint: `jsx-a11y` + vitest plugin
 - [ ] Task 9 — Sentry (`@sentry/nextjs`) wiring
 - [ ] Task 10 — CI: add `npm test` + Playwright e2e to `web-verification`
