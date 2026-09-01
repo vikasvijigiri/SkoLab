@@ -80,7 +80,7 @@
 - [ ] Task 3 — Playwright + axe harness
 - [ ] Task 4 — TanStack Query provider, `queries.ts`, `apiRequest` timeout
 - [ ] Task 5 — Migrate `author/[id]` to `useQuery` + extract its sub-components
-- [ ] Task 6 — Remove the 3 unused `endpoints.ts` exports
+- [x] Task 6 — Remove the 3 unused `endpoints.ts` exports (+ dead `PeerRecommendation` type) — verified: tsc/lint/build exit 0, grep clean.
 - [ ] Task 7 — TypeScript strictness + fallout
 - [ ] Task 8 — ESLint: `jsx-a11y` + vitest plugin
 - [ ] Task 9 — Sentry (`@sentry/nextjs`) wiring
