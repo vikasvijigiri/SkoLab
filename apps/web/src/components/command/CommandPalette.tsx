@@ -96,6 +96,10 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
       <div className="flex items-center gap-2.5 border-b border-border px-4">
         <Search size={16} className="shrink-0 text-text-muted" />
         <Command.Input
+          // A command palette is a modal dialog whose whole purpose is to type
+          // into immediately on open — focusing its input is expected, accessible
+          // behaviour here, not a focus trap.
+          // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus
           value={query}
           onValueChange={setQuery}
