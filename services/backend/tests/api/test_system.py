@@ -2,7 +2,6 @@
 
 from app.schemas.system import (
     AiStatusResponse,
-    AppInfoResponse,
     RootResponse,
     SystemStatusResponse,
 )
@@ -15,9 +14,12 @@ async def test_root_router_route_parses(client):
 
 
 async def test_app_root_parses(client):
+    # The API router is mounted at the bare prefix before main.py's own
+    # `@app.get("/")`, so `/` is served by the router's read_root
+    # (RootResponse), and main.py's handler is shadowed.
     r = await client.get("/")
     assert r.status_code == 200
-    AppInfoResponse(**r.json())
+    RootResponse(**r.json())
 
 
 async def test_ai_status_parses(client):

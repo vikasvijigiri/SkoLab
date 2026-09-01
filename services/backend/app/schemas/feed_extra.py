@@ -18,8 +18,8 @@ class DailyFeedItem(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    id: str
-    title: str
+    id: str | None = None
+    title: str | None = None
     authors: list[str] = []
     journal: str = ""
     year: int = 0
@@ -44,9 +44,9 @@ class IndustryOpportunity(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    id: str
-    type: str
-    title: str
+    id: str | None = None
+    type: str | None = None
+    title: str | None = None
     companyOrFunder: str = ""
     tags: list[str] = []
     description: str = ""
@@ -70,8 +70,8 @@ class RoadmapResponse(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    userName: str
-    researchFocus: str
+    userName: str | None = None
+    researchFocus: str | None = None
     userMetrics: dict[str, Any] = {}
     targetMetrics: dict[str, Any] = {}
     milestones: list[dict[str, Any]] = []
