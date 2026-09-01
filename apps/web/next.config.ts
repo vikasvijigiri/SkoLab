@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import path from "path";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   // apps/web is an npm workspace member of the SkoLab monorepo root — pin the
@@ -16,4 +17,12 @@ const nextConfig: NextConfig = {
   // elements. If they are built later, re-enable whatever 16.3 calls this.
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  // No auth token in CI/local -> source-map upload is skipped silently; the
+  // runtime SDK still works once NEXT_PUBLIC_SENTRY_DSN is set.
+  silent: true,
+  // Route Sentry traffic through the app's own origin so ad-blockers don't
+  // drop events.
+  tunnelRoute: "/monitoring",
+  disableLogger: true,
+});

@@ -130,7 +130,6 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [work, intelRetryCount]);
 
   if (error && !work) {

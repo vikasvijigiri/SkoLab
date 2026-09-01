@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, use, useEffect, useMemo, useState } from "react";
+import { use, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   RefreshCw,
   Radar as RadarIcon,
@@ -17,146 +18,83 @@ import {
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 import { Reveal } from "@/components/ui/Reveal";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { MarkdownText, MathText } from "@/components/ui/MathText";
 import { RailShell } from "@/components/layout/RailShell";
 import { RadarChart } from "@/components/author/RadarChart";
 import { CitationBarChart } from "@/components/author/CitationBarChart";
+import { StatTile } from "@/components/author/StatTile";
+import { MetricPill } from "@/components/author/MetricPill";
+import { SectionHeading } from "@/components/author/SectionHeading";
+import { refreshAuthor } from "@/lib/api/endpoints";
 import {
-  searchAuthor,
-  refreshAuthor,
-  getNetworkCollaborators,
-  getCitationHeatmap,
-  getJournalAdvisor,
-} from "@/lib/api/endpoints";
-import type { AuthorResponse, NetworkCollaborator, CitationHeatmap, JournalRecommendation } from "@/lib/types";
+  authorQuery,
+  collaboratorsQuery,
+  heatmapQuery,
+  journalAdvisorQuery,
+} from "@/lib/api/queries";
+import type { AuthorResponse } from "@/lib/types";
 
 function authorLabel(authorPair: string) {
   return authorPair.split("|")[0];
 }
 
-function StatTile({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="flex-1 rounded-[8px] bg-surface-subtle px-3 py-2.5 text-center">
-      <p className="font-mono text-[18px] font-semibold tabular-nums text-text-primary">
-        <AnimatedCounter to={value} />
-      </p>
-      <p className="mt-0.5 font-body text-[10.5px] font-medium uppercase tracking-wide text-text-muted">
-        {label}
-      </p>
-    </div>
-  );
-}
-
-function MetricPill({ label, value, color }: { label: string; value: number; color: string }) {
-  const isZero = value === 0;
-  return (
-    <div
-      className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1"
-      style={{ opacity: isZero ? 0.5 : 1 }}
-    >
-      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: isZero ? "var(--text-muted)" : color }} />
-      <span className="font-body text-[11px] text-text-secondary">{label}</span>
-      <span className="font-mono text-[11px] font-semibold text-text-primary">{value.toFixed(0)}</span>
-    </div>
-  );
-}
-
-function SectionHeading({ icon: Icon, color, children }: { icon: typeof RadarIcon; color: string; children: React.ReactNode }) {
-  return (
-    <h2 className="flex items-center gap-1.5 font-display text-[15px] font-semibold text-text-primary">
-      <Icon size={15} style={{ color }} />
-      {children}
-    </h2>
-  );
-}
-
 export default function AuthorDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  return (
-    <Suspense fallback={null}>
-      <AuthorDetailContent authorId={id} />
-    </Suspense>
-  );
+  return <AuthorDetailContent authorId={id} />;
 }
 
-function AuthorDetailContent({ authorId }: { authorId: string }) {
+/** Exported for unit tests — the default export is just the Next route wrapper. */
+export function AuthorDetailContent({ authorId }: { authorId: string }) {
   const searchParams = useSearchParams();
   const name = searchParams.get("name") ?? "";
   const focus = searchParams.get("focus") ?? undefined;
+  const queryClient = useQueryClient();
 
-  const [author, setAuthor] = useState<AuthorResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [collaborators, setCollaborators] = useState<NetworkCollaborator[]>([]);
-  const [heatmap, setHeatmap] = useState<CitationHeatmap | null>(null);
-  const [journals, setJournals] = useState<JournalRecommendation[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
+  const primary = authorQuery(name, authorId, focus);
+  const {
+    data: author,
+    isPending,
+    isError,
+    refetch,
+  } = useQuery(primary);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const a = await searchAuthor(name, authorId, focus);
-        if (cancelled) return;
-        setAuthor(a);
-        setError(null);
+  // Each secondary section owns its own request — it renders as soon as its own
+  // data arrives, independent of the other two. `enabled` is gated on the author
+  // id inside the query factory, so nothing fires until the primary resolves.
+  const authorPk = author?.id ?? "";
+  const { data: collaborators = [] } = useQuery(
+    collaboratorsQuery(authorPk, author?.field_of_study, author?.display_name),
+  );
+  const { data: heatmap } = useQuery(heatmapQuery(authorPk));
+  const { data: journals = [] } = useQuery(journalAdvisorQuery(authorPk));
 
-        // Independent fetches, not Promise.allSettled — previously these 3
-        // secondary sections (collaborators/heatmap/journal advisor) were
-        // batched together, so if any one was slow, all 3 stayed blank even
-        // though each setState below is already independent. Firing them
-        // separately lets each section render as soon as its own data
-        // arrives instead of waiting for the slowest of the three.
-        getNetworkCollaborators(a.id, a.field_of_study, a.display_name)
-          .then((c) => !cancelled && setCollaborators(c))
-          .catch(() => {});
-        getCitationHeatmap(a.id)
-          .then((h) => !cancelled && setHeatmap(h))
-          .catch(() => {});
-        getJournalAdvisor(a.id)
-          .then((j) => !cancelled && setJournals(j))
-          .catch(() => {});
-      } catch {
-        if (!cancelled) setError("Couldn't load this researcher's profile — the backend may be unreachable.");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [authorId, name, focus]);
+  const refresh = useMutation({
+    mutationFn: () => refreshAuthor(name, authorId),
+    onSuccess: (fresh: AuthorResponse) => {
+      queryClient.setQueryData(primary.queryKey, fresh);
+      queryClient.invalidateQueries({ queryKey: ["author", authorPk] });
+    },
+  });
 
-  async function handleRefresh() {
-    setRefreshing(true);
-    try {
-      const a = await refreshAuthor(name, authorId);
-      setAuthor(a);
-      setError(null);
-    } catch {
-      setError("Couldn't refresh this profile right now.");
-    } finally {
-      setRefreshing(false);
-    }
-  }
-
-  // Re-sorting/re-mapping on every render (including unrelated re-renders
-  // like `refreshing` toggling) was wasted work — memoize on the actual
-  // works array reference instead.
   const sortedWorks = useMemo(
     () => (author?.works ? [...author.works].sort((a, b) => (b.year ?? 0) - (a.year ?? 0)) : []),
-    [author?.works]
+    [author?.works],
   );
 
-  if (error && !author) {
+  if (isError && !author) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-6 md:px-8">
-        <ErrorBanner message={error} />
+        <ErrorBanner
+          message="Couldn't load this researcher's profile — the backend may be unreachable."
+          onRetry={() => refetch()}
+        />
       </div>
     );
   }
 
-  if (!author) {
+  if (isPending || !author) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-6 md:px-8">
         <div className="h-48 animate-pulse rounded-[8px] bg-surface-subtle" />
@@ -186,6 +124,7 @@ function AuthorDetailContent({ authorId }: { authorId: string }) {
   ];
 
   const sparseData = author.works_count < 5 || author.cited_by_count < 10;
+  const refreshing = refresh.isPending;
 
   const railContent = (
     <div className="flex flex-col gap-4">
@@ -205,7 +144,7 @@ function AuthorDetailContent({ authorId }: { authorId: string }) {
                   {author.display_name || "Unknown Researcher"}
                 </h1>
                 <motion.button
-                  onClick={handleRefresh}
+                  onClick={() => refresh.mutate()}
                   disabled={refreshing}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -260,9 +199,9 @@ function AuthorDetailContent({ authorId }: { authorId: string }) {
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 lg:max-w-6xl">
       <AnimatePresence>
-        {error && (
+        {refresh.isError && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <ErrorBanner message={error} />
+            <ErrorBanner message="Couldn't refresh this profile right now." />
           </motion.div>
         )}
       </AnimatePresence>

@@ -37,10 +37,16 @@ export function ManuscriptTab({
     <div className="flex flex-col gap-3">
       <div>
         <div className="flex items-center justify-between">
-          <label className="font-body text-[12.5px] font-medium text-text-secondary">Progress</label>
+          <label
+            htmlFor="manuscript-progress"
+            className="font-body text-[12.5px] font-medium text-text-secondary"
+          >
+            Progress
+          </label>
           <span className="font-mono text-[12px] text-text-primary">{progress}%</span>
         </div>
         <input
+          id="manuscript-progress"
           type="range"
           min={0}
           max={100}
