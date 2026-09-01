@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Space_Grotesk, Syne, Inter, JetBrains_Mono } from "next/font/google";
 import { AuthProvider } from "@/lib/hooks/AuthProvider";
 import { MotionProvider } from "@/components/MotionProvider";
+import { Providers } from "@/components/providers";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -53,7 +54,9 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col font-body">
         <MotionProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            <Providers>{children}</Providers>
+          </AuthProvider>
         </MotionProvider>
       </body>
     </html>

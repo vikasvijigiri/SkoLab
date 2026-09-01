@@ -6,6 +6,9 @@
     "shared/skolab-design-system",
     "apps/web"
   ],
+  "devDependencies": {
+    "jsdom": "~26.1.0"
+  },
   "scripts": {
     "dev:backend": "cd services/backend && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
     "dev:go": "cd services/backend-go && go run main.go",
