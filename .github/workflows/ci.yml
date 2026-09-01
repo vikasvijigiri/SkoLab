@@ -62,9 +62,14 @@ jobs:
         cd services/backend
         python -m venv venv
         source venv/bin/activate
-        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
         # Create dummy service-account.json to satisfy SRE key audit
         echo '{"type": "service_account"}' > service-account.json
+        # Bootstrap the schema against the CI Postgres (conftest only does this
+        # on its SQLite fallback; alembic scripts only patch an assumed schema).
+        # The script waits for the service container to actually accept queries
+        # and retries init_db(), which otherwise fails flakily mid-transaction.
+        python ci_bootstrap_db.py
         pytest tests/
 
     - name: Verify Go Gateway Build
@@ -78,3 +83,30 @@ jobs:
         cd services/backend-go
         go vet ./...
         go test ./... -v
+
+  web-verification:
+    name: Web Build, Typecheck & Lint
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+
+    - name: Install workspace dependencies
+      run: npm ci
+
+    # `next build` must run before standalone tsc: it generates `.next/types`,
+    # which is where Next 16's `RouteContext` and route param types live. Running
+    # `tsc --noEmit` first fails with "Cannot find name 'RouteContext'".
+    - name: Production build (next build)
+      run: npm run build --workspace web
+
+    - name: Typecheck (tsc --noEmit)
+      run: npm exec --workspace web -- tsc --noEmit
+
+    - name: Lint (eslint)
+      run: npm run lint --workspace web

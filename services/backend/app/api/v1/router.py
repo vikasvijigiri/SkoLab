@@ -26,4 +26,6 @@ api_router.include_router(discovery_engine.router, tags=["Discovery Engine"])
 api_router.include_router(support.router, prefix="/support", tags=["Support"])
 api_router.include_router(industry_academic.router, tags=["Industry Academic"])
 api_router.include_router(recommendation_router, tags=["Recommendations"])
-api_router.include_router(integrations.router, prefix="/integrations", tags=["Integrations"])
+api_router.include_router(
+    integrations.router, prefix="/integrations", tags=["Integrations"]
+)

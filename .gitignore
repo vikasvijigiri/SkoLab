@@ -42,6 +42,7 @@ skolab-*.json
 *.log
 *.txt
 !requirements.txt
+!requirements-dev.txt
 logcat_dump.txt
 logcat_dump_utf8.txt
 fresh_logcat.txt

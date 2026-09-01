@@ -31,7 +31,7 @@ def cleanup_test_context():
     rate_limiter.buckets.clear()
     yield
     rate_limiter.buckets.clear()
-    asyncio.get_event_loop().run_until_complete(engine.dispose())
+    asyncio.run(engine.dispose())
 
 
 async def force_cleanup_user(db, user_id):

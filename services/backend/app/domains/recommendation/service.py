@@ -30,23 +30,25 @@ class RecommendationService:
     # ── Peer Recommendations & Autocomplete (FAANG-style Data Management) ───
 
     async def get_peer_recommendations(
-        self,
-        query: str,
-        user_id: Optional[str] = None
+        self, query: str, user_id: Optional[str] = None
     ) -> List[PeerRecommendation]:
         from app.models.user_models import User, ResearcherProfile, UserCircle
         from sqlalchemy import select, or_, text
 
         q = f"%{query.strip().lower()}%"
         # 1. Fetch matching registered users from Postgres
-        stmt_users = select(User).where(
-            or_(
-                User.display_name.ilike(q),
-                User.email.ilike(q),
-                text("users.username ILIKE :q").bindparams(q=q),
-                text("users.phone ILIKE :q").bindparams(q=q)
+        stmt_users = (
+            select(User)
+            .where(
+                or_(
+                    User.display_name.ilike(q),
+                    User.email.ilike(q),
+                    text("users.username ILIKE :q").bindparams(q=q),
+                    text("users.phone ILIKE :q").bindparams(q=q),
+                )
             )
-        ).limit(20)
+            .limit(20)
+        )
 
         res_users = await self.db.execute(stmt_users)
         db_users = res_users.scalars().all()
@@ -61,7 +63,9 @@ class RecommendationService:
             if curr_user:
                 user_focus = getattr(curr_user, "research_focus", "") or ""
             # Get circles
-            circle_stmt = select(UserCircle.peer_id).where(UserCircle.user_id == user_id)
+            circle_stmt = select(UserCircle.peer_id).where(
+                UserCircle.user_id == user_id
+            )
             circle_res = await self.db.execute(circle_stmt)
             user_circle_peer_ids = set(circle_res.scalars().all())
 
@@ -73,9 +77,17 @@ class RecommendationService:
 
             # Base relevance
             score = 0.5
-            if query.lower() == uname.lower() or query.lower() == (u.email or "").lower() or query.lower() == uphone:
+            if (
+                query.lower() == uname.lower()
+                or query.lower() == (u.email or "").lower()
+                or query.lower() == uphone
+            ):
                 score += 0.4
-            elif query.lower() in uname.lower() or query.lower() in (u.email or "").lower() or query.lower() in uphone:
+            elif (
+                query.lower() in uname.lower()
+                or query.lower() in (u.email or "").lower()
+                or query.lower() in uphone
+            ):
                 score += 0.3
             elif query.lower() in u.display_name.lower():
                 score += 0.2
@@ -99,17 +111,21 @@ class RecommendationService:
                     phone=uphone,
                     research_focus=ufocus,
                     is_registered=True,
-                    relevance_score=min(1.0, score)
+                    relevance_score=min(1.0, score),
                 )
             )
 
         # 3. Query researcher profiles (OpenAlex cached profiles) to match unregistered scientists
-        stmt_profiles = select(ResearcherProfile).where(
-            or_(
-                ResearcherProfile.display_name.ilike(q),
-                ResearcherProfile.field_of_study.ilike(q)
+        stmt_profiles = (
+            select(ResearcherProfile)
+            .where(
+                or_(
+                    ResearcherProfile.display_name.ilike(q),
+                    ResearcherProfile.field_of_study.ilike(q),
+                )
             )
-        ).limit(20)
+            .limit(20)
+        )
 
         res_profiles = await self.db.execute(stmt_profiles)
         db_profiles = res_profiles.scalars().all()
@@ -142,7 +158,7 @@ class RecommendationService:
                     phone=None,
                     research_focus=p.field_of_study,
                     is_registered=False,
-                    relevance_score=min(1.0, score)
+                    relevance_score=min(1.0, score),
                 )
             )
 
@@ -165,8 +181,7 @@ class RecommendationService:
             return False
 
         stmt_circle = select(UserCircle).where(
-            UserCircle.user_id == req.user_id,
-            UserCircle.peer_id == peer_id
+            UserCircle.user_id == req.user_id, UserCircle.peer_id == peer_id
         )
         res_circle = await self.db.execute(stmt_circle)
         circle = res_circle.scalar_one_or_none()
@@ -180,7 +195,7 @@ class RecommendationService:
                 peer_id=peer_id,
                 relationship_type="manual",
                 relevance_score=0.7,
-                spark_sessions_count=1
+                spark_sessions_count=1,
             )
             self.db.add(new_circle)
 
@@ -217,6 +232,5 @@ class RecommendationService:
                     reg_phones.append(user.phone)
 
         return RegisteredCheckResponse(
-            registered_emails=reg_emails,
-            registered_phones=reg_phones
+            registered_emails=reg_emails, registered_phones=reg_phones
         )
