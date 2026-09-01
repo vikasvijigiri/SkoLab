@@ -98,15 +98,7 @@ jobs:
         node-version: 20
 
     - name: Install workspace dependencies
-      # The committed package-lock.json was generated on Windows and omits the
-      # Linux platform binaries for lightningcss (a @tailwindcss/postcss dep),
-      # so a lockfile-bound install fails `next build` with
-      # "Cannot find module '../lightningcss.linux-x64-gnu.node'". Resolve fresh
-      # for this runner's platform instead. (Follow-up: regenerate the lockfile
-      # on a POSIX host and switch this back to `npm ci`.)
-      run: |
-        rm -f package-lock.json
-        npm install
+      run: npm ci
 
     # `next build` must run before standalone tsc: it generates `.next/types`,
     # which is where Next 16's `RouteContext` and route param types live. Running

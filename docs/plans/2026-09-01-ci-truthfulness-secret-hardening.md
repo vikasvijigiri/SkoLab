@@ -245,9 +245,15 @@ actually executes. All handled without scope creep:
   schema. Fix: `ci.yml` runs `init_db()` (`Base.metadata.create_all`, what
   `conftest` does) before `pytest`.
 - **Web `next build` failed** — `Cannot find module lightningcss.linux-x64-gnu.node`:
-  the Windows-generated `package-lock.json` lacks Linux platform binaries. Fix:
-  `rm -f package-lock.json` before `npm install` in the web job. **Follow-up:**
-  regenerate the lockfile on a POSIX host, restore `npm ci`.
+  the Windows-generated `package-lock.json` was missing every `node_modules/
+  lightningcss-*` entry. Fixed properly: regenerated the lockfile with npm 11
+  (now carries all platform binaries), web job switched to `npm ci`.
+- **Then `next build` failed on 2 TS errors** (`Badge.tsx:38`, `Button.tsx:75`,
+  `onDrag` handler clash) — surfaced by the `@types/react` / `typescript` bump
+  the lockfile regen pulled in; a latent fragility any dep update would trip.
+  Fixed at the type level: both components `Omit` the drag/animation handlers
+  framer-motion redefines. `framer-motion` pinned to `12.42.2` (exact) to keep
+  the resolve stable. `next build` + `tsc --noEmit` + `eslint` all exit 0 locally.
 - **`pip-audit` failed** — `pytest 8.4.2` (PYSEC-2026-1845) and `setuptools 79.0.1`
   (PYSEC-2026-3447). Fix: `pytest==9.0.3` + `pytest-asyncio==1.4.0` in
   `requirements-dev.txt`; `setuptools>=83.0.0` in `verify.yml`. (Reverses the

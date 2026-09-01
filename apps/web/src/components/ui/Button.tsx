@@ -7,7 +7,16 @@ import { TRANSITION_FAST } from "@/lib/motion";
 
 type Variant = "primary" | "outlined" | "ghost" | "text";
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+// framer-motion's `motion.button` redefines the drag/animation event handlers
+// with its own (gesture) signatures, which collide with React's DOM types when
+// props are spread through. Drop the conflicting handlers from the public API —
+// none of them are used here.
+type MotionSafeButtonAttributes = Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  "onDrag" | "onDragStart" | "onDragEnd" | "onAnimationStart" | "onAnimationEnd" | "onAnimationIteration"
+>;
+
+interface ButtonProps extends MotionSafeButtonAttributes {
   variant?: Variant;
   loading?: boolean;
   error?: boolean;
