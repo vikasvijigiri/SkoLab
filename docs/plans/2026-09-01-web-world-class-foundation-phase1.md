@@ -82,7 +82,7 @@
 - [x] Task 5 — Migrate `author/[id]` to `useQuery` + extract sub-components — verified: 11 tests pass, tsc/build rc=0, author page eslint 0 errors + 0 set-state-in-effect warnings. Tested `AuthorDetailContent` directly (default export is just the Next route wrapper).
 - [x] Task 6 — Remove the 3 unused `endpoints.ts` exports (+ dead `PeerRecommendation` type) — verified: tsc/lint/build exit 0, grep clean.
 - [x] Task 7 — TypeScript strictness + fallout — verified: tsc rc=0 with 4 flags on (ES2022 + noUncheckedIndexedAccess + noImplicitOverride + noFallthroughCasesInSwitch + forceConsistentCasingInFileNames); 4 mechanical index-guard fixes; 11 tests + build still green.
-- [ ] Task 8 — ESLint: `jsx-a11y` + vitest plugin
+- [x] Task 8 — ESLint jsx-a11y recommended + vitest plugin — verified: `npm run lint` rc=0 (0 errors). 3 real label-association fixes (profile/onboarding/ManuscriptTab), 1 documented no-autofocus exception (command palette).
 - [ ] Task 9 — Sentry (`@sentry/nextjs`) wiring
 - [ ] Task 10 — CI: add `npm test` + Playwright e2e to `web-verification`
 - [ ] Task 11 — `refactoring` sweep over `apps/web`, apply findings
