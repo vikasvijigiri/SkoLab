@@ -1,24 +1,27 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { motion } from "framer-motion";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Sparkles, FileText, Coins, Briefcase, BookOpen } from "lucide-react";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import { useMyProfile } from "@/lib/hooks/useMyProfile";
+import { dismissDailyFeedItem } from "@/lib/api/endpoints";
 import {
-  getDailyFeed,
-  dismissDailyFeedItem,
-  getDailyConjecture,
-  getIndustryOpportunities,
-  getMatchGrants,
-  getJournalAdvisor,
-} from "@/lib/api/endpoints";
+  dailyFeedQuery,
+  dailyConjectureQuery,
+  industryOpportunitiesQuery,
+  matchGrantsQuery,
+  journalAdvisorQuery,
+} from "@/lib/api/queries";
 import { FrontierPulseCard } from "@/components/feed/FrontierPulseCard";
 import { AIDailyBriefCard, type BriefItem } from "@/components/feed/AIDailyBriefCard";
 import { DailyChallengeCard } from "@/components/feed/DailyChallengeCard";
 import { ResearchActionRail } from "@/components/feed/ResearchActionRail";
 import { PulseFeedCard } from "@/components/feed/PulseFeedCard";
-import type { DailyFeedItem, Conjecture, GrantMatch, JournalRecommendation, IndustryOpportunity } from "@/lib/types";
+import type { DailyFeedItem, GrantMatch, JournalRecommendation, IndustryOpportunity } from "@/lib/types";
+
+const EMPTY_FEED: DailyFeedItem[] = [];
 import { DURATION_SLOW, EASE_STANDARD } from "@/lib/motion";
 
 /** Each insight is a distinct fact from a distinct source — kept as separate rows
@@ -81,90 +84,56 @@ function buildBriefItems(opts: {
 export default function HomePage() {
   const { user } = useAuth();
   const { firestoreProfile, author, loading: profileLoading, error: profileError, refetch: refetchProfile } = useMyProfile();
+  const queryClient = useQueryClient();
 
-  // Each backend call gets its own state + loading flag instead of one
-  // shared flag gated on Promise.allSettled — previously the whole page sat
-  // in full skeleton state until the *slowest* of 5 independent calls
-  // resolved (live-measured up to 259s for one call, while others returned
-  // in seconds). Now each section reveals the moment its own data arrives.
-  const [feed, setFeed] = useState<DailyFeedItem[]>([]);
-  const [feedLoading, setFeedLoading] = useState(true);
-  const [conjecture, setConjecture] = useState<Conjecture | null>(null);
-  const [conjectureLoading, setConjectureLoading] = useState(true);
-  const [topGrant, setTopGrant] = useState<GrantMatch | undefined>(undefined);
-  const [topOpportunity, setTopOpportunity] = useState<IndustryOpportunity | undefined>(undefined);
-  const [topJournal, setTopJournal] = useState<JournalRecommendation | undefined>(undefined);
-  // True until the *first* of the 4 brief-feeding sources settles, so the
-  // Daily Brief appears as soon as anything is ready instead of waiting for
-  // all four — remaining rows fill in as their own source resolves.
-  const [briefLoading, setBriefLoading] = useState(true);
+  const name = firestoreProfile?.name || user?.displayName || undefined;
+  // A topic/field, not the person's name — daily_feed uses this as a literal search
+  // query (and as the relevance-discipline filter) whenever the author's OpenAlex
+  // profile has no usable concepts yet. Passing a name here previously caused the
+  // backend to search for the *name itself*, surfacing unrelated same-name authors.
+  const topic = firestoreProfile?.researchFocus || author?.field_of_study || undefined;
+  const authorId = author?.id;
+  const ready = !profileLoading;
+
+  // Each backend call is its own query — previously the whole page sat in a full
+  // skeleton until the slowest of 5 independent calls resolved (measured up to
+  // 259s). Now each section reveals the moment its own data arrives.
+  const feedQ = useQuery({ ...dailyFeedQuery(authorId, topic), enabled: ready });
+  const conjectureQ = useQuery({ ...dailyConjectureQuery(authorId, name), enabled: ready });
+  const grantsQ = useQuery({ ...matchGrantsQuery(authorId ?? ""), enabled: ready && !!authorId });
+  const oppsQ = useQuery({ ...industryOpportunitiesQuery(topic || "AI", name), enabled: ready });
+  const journalQ = useQuery({ ...journalAdvisorQuery(authorId ?? ""), enabled: ready && !!authorId });
+
+  const feed = feedQ.data ?? EMPTY_FEED;
+  const feedLoading = feedQ.isPending;
+  const conjecture = conjectureQ.data ?? null;
+  const conjectureLoading = conjectureQ.isPending;
+  const topGrant = grantsQ.data?.[0];
+  const topOpportunity = oppsQ.data?.[0];
+  const topJournal = journalQ.data?.[0];
+  // Brief appears as soon as ANY of its four sources has settled.
+  const briefLoading = !(feedQ.isFetched || grantsQ.isFetched || oppsQ.isFetched || journalQ.isFetched);
 
   const briefItems = useMemo(
     () => buildBriefItems({ topPaper: feed[0], topGrant, topOpportunity, topJournal }),
     [feed, topGrant, topOpportunity, topJournal]
   );
 
-  useEffect(() => {
-    if (profileLoading) return;
-    const name = firestoreProfile?.name || user?.displayName || undefined;
-    // A topic/field, not the person's name — daily_feed uses this as a literal search
-    // query (and as the relevance-discipline filter) whenever the author's OpenAlex
-    // profile has no usable concepts yet. Passing a name here previously caused the
-    // backend to search arXiv/OpenAlex for the *name itself*, surfacing papers by
-    // unrelated same-first-name authors instead of anything topically relevant.
-    const topic = firestoreProfile?.researchFocus || author?.field_of_study || undefined;
-    const authorId = author?.id;
-
-    let cancelled = false;
-    const revealBrief = () => {
-      if (!cancelled) setBriefLoading(false);
-    };
-
-    setFeedLoading(true);
-    getDailyFeed(authorId, topic)
-      .then((items) => !cancelled && setFeed(items))
-      .catch(() => !cancelled && setFeed([]))
-      .finally(() => {
-        if (!cancelled) setFeedLoading(false);
-        revealBrief();
-      });
-
-    setConjectureLoading(true);
-    getDailyConjecture(authorId, name)
-      .then((c) => !cancelled && setConjecture(c))
-      .catch(() => !cancelled && setConjecture(null))
-      .finally(() => !cancelled && setConjectureLoading(false));
-
-    (authorId ? getMatchGrants(authorId) : Promise.resolve([]))
-      .then((grants) => !cancelled && setTopGrant(grants[0]))
-      .catch(() => {})
-      .finally(revealBrief);
-
-    getIndustryOpportunities(topic || "AI", name)
-      .then((opps) => !cancelled && setTopOpportunity(opps[0]))
-      .catch(() => {})
-      .finally(revealBrief);
-
-    (authorId ? getJournalAdvisor(authorId) : Promise.resolve([]))
-      .then((journals) => !cancelled && setTopJournal(journals[0]))
-      .catch(() => {})
-      .finally(revealBrief);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [profileLoading, firestoreProfile, author, user]);
-
   const greetName = firestoreProfile?.name?.split(" ")[0] || user?.displayName?.split(" ")[0] || "there";
 
-  // Optimistic removal — a failed dismiss call just means the paper could
-  // reappear on the next fetch, which isn't worth rolling back the UI for.
-  const handleDismiss = (workId: string) => {
-    setFeed((prev) => prev.filter((item) => item.id !== workId));
-    if (author?.id) {
-      dismissDailyFeedItem(author.id, workId).catch(() => {});
-    }
-  };
+  // Optimistic removal from the feed cache — a failed dismiss just means the
+  // paper could reappear on the next fetch, not worth rolling the UI back for.
+  const dismiss = useMutation({
+    mutationFn: (workId: string) =>
+      author?.id ? dismissDailyFeedItem(author.id, workId) : Promise.resolve({ success: true }),
+    onMutate: (workId: string) => {
+      const key = dailyFeedQuery(authorId, topic).queryKey;
+      queryClient.setQueryData<DailyFeedItem[]>(key, (prev) =>
+        (prev ?? []).filter((item) => item.id !== workId),
+      );
+    },
+  });
+  const handleDismiss = (workId: string) => dismiss.mutate(workId);
 
   const sections = [
     <FrontierPulseCard key="pulse" author={author} loading={profileLoading} error={profileError} onRetry={refetchProfile} />,
