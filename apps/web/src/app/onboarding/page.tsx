@@ -68,10 +68,13 @@ export default function OnboardingPage() {
       </p>
 
       <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
-        <div>
-          <label className="mb-1.5 block font-body text-[13px] font-medium text-text-secondary">
+        <div role="group" aria-labelledby="onboarding-focus-label">
+          <span
+            id="onboarding-focus-label"
+            className="mb-1.5 block font-body text-[13px] font-medium text-text-secondary"
+          >
             Primary research focus
-          </label>
+          </span>
           <div className="flex flex-wrap gap-2">
             {FOCUS_OPTIONS.map((opt) => (
               <motion.button
