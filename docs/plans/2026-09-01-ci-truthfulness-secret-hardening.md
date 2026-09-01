@@ -54,15 +54,17 @@
 | repo `main` branch protection | Modify (GitHub API, Task 9) | Required checks include the real pipeline |
 
 ## Progress
-- [ ] Task 1 — Untrack `scripts/.env` and record the key-rotation follow-up
-- [ ] Task 2 — Pin backend runtime dependencies
-- [ ] Task 3 — Add `requirements-dev.txt` for test/lint tooling
-- [ ] Task 4 — Fix `test_threat_modeling.py` event-loop teardown
-- [ ] Task 5 — Reformat `services/backend/app` to satisfy `ruff format --check`
-- [ ] Task 6 — Production fail-fast for default/absent `DATABASE_ENCRYPTION_KEY`
-- [ ] Task 7 — Raise the Android Gradle/Lint worker heap
-- [ ] Task 8 — Wire dev deps + a web verification job into `ci.yml`
-- [ ] Task 9 — Require the full pipeline in `main` branch protection (user-gated)
+- [x] Task 1 — Untrack `scripts/.env` (8eea18e) — verified: `git ls-files` count 0, local file intact
+- [x] Task 2 — Pin backend runtime dependencies (87c4340) — verified: full `pip install --dry-run --python-version 310` resolves; 21/21 pinned. Full 3.10 install + `pip-audit` = CI
+- [x] Task 3 — `requirements-dev.txt` + `pytest.ini` (c734397, 8fd45de) — verified: dev deps resolve for 3.10; `asyncio_mode=auto` added
+- [x] Task 4 — `asyncio.run` teardown (2c35dd5) — verified: `py_compile` OK. Full pytest run = CI
+- [x] Task 5 — `ruff format` + version alignment (4827bc9) — verified: `ruff format --check` + `ruff check` both exit 0 locally (ruff 0.16.3)
+- [x] Task 6 — production key fail-fast (5318662) — verified: all 4 env combinations behave correctly on 3.14; test added
+- [x] Task 7 — Android lint heap (76fd5c9) — NOT verified locally (no Android SDK). CI-only
+- [x] Task 8 — backend suite + web job in `ci.yml` (496b54f) — web half verified locally (build/tsc/lint exit 0 on node 22). Backend `pytest` step = CI
+- [ ] Task 9 — branch protection — DEFERRED until the PR shows all jobs green, then applied on the user's go-ahead
+
+**Verification model:** Tasks 7 and the Python halves of 2/3/4/8 can only be proven by the CI run on the PR — that is this plan's `## Verification (end to end)` step 7. Local verification done wherever the toolchain allowed.
 
 ## Constitution gate
 - [x] I Evidence — every task names the exact command and expected output
