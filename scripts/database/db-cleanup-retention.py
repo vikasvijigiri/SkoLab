@@ -39,7 +39,7 @@ async def offload_and_prune():
     os.makedirs(cold_storage_dir, exist_ok=True)
 
     engine = create_async_engine(DATABASE_URL)
-    cutoff_date = datetime.datetime.now(datetime.UTC).replace(
+    cutoff_date = datetime.datetime.now(datetime.timezone.utc).replace(
         tzinfo=None
     ) - datetime.timedelta(days=90)
     cutoff_str = cutoff_date.strftime("%Y-%m-%d %H:%M:%S")
@@ -68,7 +68,7 @@ async def offload_and_prune():
                     raise TypeError(f"Type {type(obj)} not serializable")
 
                 # 2. Write to compressed gzip file
-                timestamp = datetime.datetime.now(datetime.UTC).strftime(
+                timestamp = datetime.datetime.now(datetime.timezone.utc).strftime(
                     "%Y%m%d_%H%M%S"
                 )
                 file_name = f"{table}_archive_{timestamp}.json.gz"
@@ -104,7 +104,7 @@ async def offload_and_prune():
             ("researcher_works", "expires_at"),
         ]
 
-        now_utc = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
+        now_utc = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
         for table, col in tables_with_expiry:
             try:
                 delete_query = text(f"DELETE FROM {table} WHERE {col} < :now;")  # noqa: S608
