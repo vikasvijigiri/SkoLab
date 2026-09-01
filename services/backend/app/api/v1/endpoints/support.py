@@ -1,12 +1,14 @@
 import logging
 from fastapi import APIRouter
 
+from app.schemas.support import SupportMetricsResponse
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-@router.get("/metrics")
+@router.get("/metrics", response_model=SupportMetricsResponse)
 async def get_support_metrics():
     return {
         "sla_targets": {

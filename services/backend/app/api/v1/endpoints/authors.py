@@ -1,8 +1,18 @@
-from typing import List, Optional, Union
+from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, BackgroundTasks, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.core import AuthorResponse, AuthorSuggestion, Work
+from app.schemas.authors_extra import (
+    AuthorMetricsResponse,
+    CitationHeatmap,
+    CollaboratorSynergyResponse,
+    GrantMatch,
+    JournalRecommendation,
+    NetworkCollaborator,
+    RefreshAuthorResponse,
+)
+from app.api.pagination import PaginationParams
 from app.services.platform.pipeline_services import PipelineServices
 from app.services.platform.metrics_service import compute_author_metrics
 from app.services.ai.summarization_service import is_llm_working
@@ -203,31 +213,26 @@ async def fetch_similar_authors(
 # GET /author_suggestions — migrated to Go (internal/handlers/authors.go)
 
 
-@router.get("/refresh_author")
+@router.get("/refresh_author", response_model=RefreshAuthorResponse)
 async def refresh_author(
     name: str = Query(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     openalex_service: OpenAlexService = Depends(get_openalex_service),
 ):
     """Explicitly re-runs the teleportation worker to update Firestore data."""
-    try:
-        cache_key = name.strip().lower()
-        await profile_cache.delete(cache_key)
-        await suggestions_cache.delete(cache_key)
+    cache_key = name.strip().lower()
+    await profile_cache.delete(cache_key)
+    await suggestions_cache.delete(cache_key)
 
-        results = await openalex_service.search_authors(name, per_page=1)
-        if results:
-            author_id = results[0]["id"]
-            background_tasks.add_task(track_teleport_researcher, author_id)
-            return {"status": "Refresh started", "author_id": author_id}
-        raise HTTPException(status_code=404, detail="Author not found for refresh")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    results = await openalex_service.search_authors(name, per_page=1)
+    if results:
+        author_id = results[0]["id"]
+        background_tasks.add_task(track_teleport_researcher, author_id)
+        return {"status": "Refresh started", "author_id": author_id}
+    raise HTTPException(status_code=404, detail="Author not found for refresh")
 
 
-@router.get("/search_author", response_model=Union[AuthorResponse, dict])
+@router.get("/search_author", response_model=AuthorResponse)
 async def search_author(
     name: str = Query(...),
     id: Optional[str] = Query(None),
@@ -665,12 +670,15 @@ async def search_author(
 
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"[search_author] OpenAlex fetch error: {e}", flush=True)
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+    except Exception:
+        # Deliberate: hand unexpected failures to the app-level catch-all, which
+        # logs the real cause with the request id and returns the generic 500
+        # envelope. (Kept as a try/except rather than dedenting ~190 lines; the
+        # block no longer maps or leaks the exception.)
+        raise
 
 
-@router.get("/author_metrics")
+@router.get("/author_metrics", response_model=AuthorMetricsResponse)
 async def get_author_metrics(
     author_id: str = Query(...),
 ):
@@ -683,90 +691,66 @@ async def get_author_metrics(
         data = await compute_author_metrics(author_id)
         await author_metrics_cache.set(author_id, data)
         return data
-    except HTTPException:
-        raise
     except ValueError as e:
+        # Deliberate 4xx the route owns: a bad/unresolvable author_id.
         raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/network_collaborators")
+@router.get("/network_collaborators", response_model=list[NetworkCollaborator])
 async def get_network_collaborators(
     author_id: str = Query(...),
-    limit: int = Query(10),
-    offset: int = Query(0),
     exclude_ids: str = Query(""),
     field: str = Query(""),
     name: str = Query(""),
+    pagination: PaginationParams = Depends(),
     pipeline_services: PipelineServices = Depends(get_pipeline_services),
 ):
+    limit, offset = pagination.limit, pagination.offset
     cache_key = f"{author_id}_{limit}_{offset}_{exclude_ids}_{field}_{name}"
     cached_data = await network_collaborators_cache.get(cache_key)
     if cached_data is not None:
         return cached_data
 
     excl_list = [x.strip() for x in exclude_ids.split(",")] if exclude_ids else []
-    try:
-        data = await pipeline_services.get_network_collaborators(
-            author_id, limit, offset, excl_list, field, name
-        )
-        if data:
-            await network_collaborators_cache.set(cache_key, data)
-        return data
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    data = await pipeline_services.get_network_collaborators(
+        author_id, limit, offset, excl_list, field, name
+    )
+    if data:
+        await network_collaborators_cache.set(cache_key, data)
+    return data
 
 
-@router.get("/collaborator_synergy")
+@router.get("/collaborator_synergy", response_model=CollaboratorSynergyResponse)
 async def get_collaborator_synergy(
     author_id: str = Query(...),
     collaborator_id: str = Query(...),
     pipeline_services: PipelineServices = Depends(get_pipeline_services),
 ):
-    try:
-        data = await pipeline_services.get_collaborator_synergy(
-            author_id, collaborator_id
-        )
-        return data
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return await pipeline_services.get_collaborator_synergy(author_id, collaborator_id)
 
 
-@router.get("/citation_heatmap")
+@router.get("/citation_heatmap", response_model=CitationHeatmap)
 async def get_citation_heatmap(
     author_id: str = Query(...),
     pipeline_services: PipelineServices = Depends(get_pipeline_services),
 ):
-    try:
-        data = await pipeline_services.get_citation_heatmap(author_id)
-        return data
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return await pipeline_services.get_citation_heatmap(author_id)
 
 
-@router.get("/match_grants")
+@router.get("/match_grants", response_model=list[GrantMatch])
 async def match_grants(
     author_id: str = Query(...),
     pipeline_services: PipelineServices = Depends(get_pipeline_services),
 ):
-    try:
-        data = await pipeline_services.match_grants(author_id)
-        return data
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return await pipeline_services.match_grants(author_id)
 
 
-@router.get("/journal_advisor")
+@router.get("/journal_advisor", response_model=list[JournalRecommendation])
 async def get_journal_advisor(
     author_id: str = Query(...),
     pipeline_services: PipelineServices = Depends(get_pipeline_services),
 ):
-    try:
-        data = await pipeline_services.get_journal_advisor(author_id)
-        return data
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return await pipeline_services.get_journal_advisor(author_id)
 
 
 # GET /resolve_email  — migrated to Go (internal/handlers/authors.go)

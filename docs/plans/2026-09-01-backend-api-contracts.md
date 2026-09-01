@@ -57,18 +57,26 @@
 | `README.md`, `AGENTS.md` | Modify | references to `api-contracts/openapi.yaml` → `/openapi.json` and `/docs` |
 
 ## Progress
-- [ ] Task 1 — `ErrorResponse` envelope + app-level exception handlers
-- [ ] Task 2 — `PaginationParams` + `Page[T]`
-- [ ] Task 3 — `tests/api/` harness + shrinking contract-guard test
-- [ ] Task 4 — Wire `system.py` + `main.py` app-level routes
-- [ ] Task 5 — Wire `agent.py`
-- [ ] Task 6 — Wire `papers.py`
-- [ ] Task 7 — Wire `feed.py`
-- [ ] Task 8 — Wire `authors.py` (the heavy one)
-- [ ] Task 9 — Wire `support.py` + `integrations.py`
-- [ ] Task 10 — Wire `discovery_engine.py`
-- [ ] Task 11 — Wire `domains/quest` + `domains/recommendation`
-- [ ] Task 12 — Delete `openapi.yaml`, add OpenAPI build+snapshot test, fix doc refs
+
+> **Verification note (execution deviation):** this environment has only Python
+> 3.14 and cannot build the backend's 3.10 dependency tree, so `python -m pytest`
+> cannot run locally. Per user decision 2026-09-01 ("Execute all, one PR, CI
+> verifies"), all 12 tasks are implemented on one branch, reviewed as one diff,
+> and the **CI backend job is the verification of record**. A ticked box below
+> means "implemented + self-reviewed"; the end-to-end green is CI.
+
+- [x] Task 1 — `ErrorResponse` envelope + app-level exception handlers
+- [x] Task 2 — `PaginationParams` + `Page[T]`
+- [x] Task 3 — `tests/api/` harness + shrinking contract-guard test
+- [x] Task 4 — Wire `system.py` + `main.py` app-level routes
+- [x] Task 5 — Wire `agent.py`
+- [x] Task 6 — Wire `papers.py`
+- [x] Task 7 — Wire `feed.py`
+- [x] Task 8 — Wire `authors.py` (the heavy one)
+- [x] Task 9 — Wire `support.py` + `integrations.py`
+- [x] Task 10 — Wire `discovery_engine.py`
+- [x] Task 11 — Wire `domains/quest` + `domains/recommendation`
+- [x] Task 12 — Delete `openapi.yaml`, add OpenAPI build+snapshot test, fix doc refs
 
 ## Constitution gate
 - [x] I Evidence — every task names its pytest command + expected result
@@ -276,6 +284,20 @@
 - **openapi.yaml** -> delete it; commit `api-contracts/openapi.snapshot.json` from `app.openapi()` and diff it in a test (plan as written).
 - **Pagination envelope** -> `Page[T] = {items, total, limit, offset}` (plan as written).
 - **Route-handler `except Exception` blocks** -> delete them; rely on the app-level catch-all; keep `try/except` only where a handler genuinely recovers, with a comment (plan as written).
+
+## Deviations reconciled during execution
+
+Recorded per `executing-plans` — divergences from the plan text, with the reason.
+
+| # | Plan said | Actual | Why |
+|---|---|---|---|
+| D1 | `system.py` has 3 route-handler `except Exception → 500` blocks to delete | It has **none** (its `except` blocks are genuine degraded-status recovery) | Inventory over-counted; nothing deleted in `system.py`, only `response_model` added |
+| D2 | Task 11 creates `quest_extra.py` `CompleteQuestResponse` for `/users/quests/complete` | That route **does not exist**; `quest/router.py` has 2 routes, both already typed | No `quest_extra.py` created; Task 11 for quest = delete the 2 `except Exception → 500` wrappers only |
+| D3 | Guard allow-list entry `/peers/invite` | Real path is `/recommendations/peers/invite` (`recommendation_router` carries its own `prefix="/recommendations"`) | Fixed the normalized path; `recommendation_extra.py` holds `LogPeerInviteResponse` |
+| D4 | `/daily_feed`, `/industry_opportunities`, `/network_collaborators` list routes → `Page[T]` | Kept as bare `list[T]` (`+ PaginationParams` bounds on `/network_collaborators`) | Web client types them `T[]`; a `Page[T]` envelope is a response-shape change → breaks web/Android. Paginated variant deferred to a coordinated web+backend change |
+| D5 | `authors.py` `search_author`: delete the route-handler `except Exception` | Neutralised it to a bare `raise` (kept the `try:` structure) | Body is ~190 lines inside the `try:`; a hand dedent with no local test run is higher-risk than a 6-line edit that removes the mapping/leak and defers to the app catch-all |
+| D6 | Per-task `python -m pytest` verification | Verification of record is CI | Environment has no runnable backend Python (see Progress note); user decision 2026-09-01 |
+| D7 | `semantic_trending` → apply `PaginationParams` if it returns a list | It returns a fixed object envelope `{author_concepts, papers}` with its own bounded `limit` | Left param as-is (changing `le=30`→`le=100` is a behavior change); `response_model` added |
 
 ## Approved
 
