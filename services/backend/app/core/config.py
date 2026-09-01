@@ -44,6 +44,11 @@ def _downloads_dir() -> Path:
     return p
 
 
+# Publicly-known default shipped in this file's history. A production process must
+# never run with it (or with an empty key) — see Settings.__post_init__.
+_DEFAULT_DB_ENCRYPTION_KEY = "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MTI="
+
+
 @dataclass(frozen=True)
 class Settings:
     # ── Server ──────────────────────────────────────────────────────────────
@@ -139,9 +144,23 @@ class Settings:
     )
     database_encryption_key: str = field(
         default_factory=lambda: os.environ.get(
-            "DATABASE_ENCRYPTION_KEY", "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MTI="
+            "DATABASE_ENCRYPTION_KEY", _DEFAULT_DB_ENCRYPTION_KEY
         )
     )
+
+    def __post_init__(self) -> None:
+        # Fail fast: a production deploy must supply a real DATABASE_ENCRYPTION_KEY.
+        # Booting with the shipped default (or none) would encrypt user records
+        # under a publicly-known key. Dev/staging are unaffected — APP_ENV unset
+        # resolves `environment` to "development".
+        if self.environment == "production" and self.database_encryption_key in (
+            "",
+            _DEFAULT_DB_ENCRYPTION_KEY,
+        ):
+            raise RuntimeError(
+                "DATABASE_ENCRYPTION_KEY is unset or still the shipped default while "
+                "APP_ENV=production. Set a real key before starting the backend."
+            )
 
     @property
     def mdns_fqdn(self) -> str:
