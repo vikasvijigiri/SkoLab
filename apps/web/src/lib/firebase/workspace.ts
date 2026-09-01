@@ -180,8 +180,9 @@ export async function scheduleMeeting(projectId: string, title: string, when: st
 export async function findResearcherByEmail(email: string): Promise<SkoLabUser | null> {
   const q = query(collection(requireDb(), "researchers"), where("email", "==", email));
   const snap = await getDocs(q);
-  if (snap.empty) return null;
-  return snap.docs[0].data() as SkoLabUser;
+  const first = snap.docs[0];
+  if (!first) return null;
+  return first.data() as SkoLabUser;
 }
 
 export async function inviteMember(

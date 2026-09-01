@@ -217,18 +217,6 @@ export interface OpenAlexWork {
   abstract_inverted_index?: Record<string, number[]>;
 }
 
-// GET /api/v1/recommendations/peers
-export interface PeerRecommendation {
-  uid?: string;
-  name: string;
-  username?: string;
-  email?: string;
-  phone?: string;
-  research_focus?: string;
-  is_registered: boolean;
-  relevance_score: number;
-}
-
 // Firestore collabs_groups/{id}
 export interface CollabProject {
   id: string;

@@ -151,8 +151,14 @@ export default function ProfilePage() {
                 onChange={(e) => setAcademicStatus(e.target.value)}
               />
               <div>
-                <label className="mb-1.5 block font-body text-[13px] font-medium text-text-secondary">About</label>
+                <label
+                  htmlFor="profile-about"
+                  className="mb-1.5 block font-body text-[13px] font-medium text-text-secondary"
+                >
+                  About
+                </label>
                 <textarea
+                  id="profile-about"
                   value={about}
                   onChange={(e) => setAbout(e.target.value)}
                   rows={4}
