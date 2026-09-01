@@ -62,7 +62,7 @@
 - [x] Task 6 — production key fail-fast (5318662) — verified: all 4 env combinations behave correctly on 3.14; test added
 - [x] Task 7 — Android lint heap (76fd5c9) — NOT verified locally (no Android SDK). CI-only
 - [x] Task 8 — backend suite + web job in `ci.yml` (496b54f) — web half verified locally (build/tsc/lint exit 0 on node 22). Backend `pytest` step = CI
-- [ ] Task 9 — branch protection — DEFERRED until the PR shows all jobs green, then applied on the user's go-ahead
+- [~] Task 9 — branch protection — **BLOCKED by platform**: `gh api repos/.../branches/main/protection` returns HTTP 403 "Upgrade to GitHub Pro or make this repository public to enable this feature." No required-status-check enforcement is possible on a free private repo (UI or API). Options for the owner: make the repo public, upgrade to Pro, or accept advisory-only checks.
 
 **Verification model:** Tasks 7 and the Python halves of 2/3/4/8 can only be proven by the CI run on the PR — that is this plan's `## Verification (end to end)` step 7. Local verification done wherever the toolchain allowed.
 
