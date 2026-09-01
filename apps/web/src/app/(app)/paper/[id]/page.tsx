@@ -1,6 +1,7 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   ListChecks,
@@ -19,8 +20,8 @@ import { Reveal } from "@/components/ui/Reveal";
 import { MathText, Formula } from "@/components/ui/MathText";
 import { RailShell } from "@/components/layout/RailShell";
 import { TableOfContents } from "@/components/paper/TableOfContents";
-import type { OpenAlexWork, PaperIntelligence } from "@/lib/types";
-import { analyzePaper } from "@/lib/api/endpoints";
+import type { PaperIntelligence } from "@/lib/types";
+import { paperWorkQuery, paperAnalysisQuery } from "@/lib/api/queries";
 
 function authorLabel(authorPair: string) {
   return authorPair.split("|")[0];
@@ -75,67 +76,27 @@ function BulletList({ items }: { items: string[] }) {
 
 export default function PaperDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const [work, setWork] = useState<OpenAlexWork | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [intelligence, setIntelligence] = useState<PaperIntelligence | null>(null);
-  const [intelLoading, setIntelLoading] = useState(true);
-  const [intelError, setIntelError] = useState<string | null>(null);
-  // Bumped by the retry button below — included in the effect's deps so a
-  // transient failure (network blip, a slow-to-compile dev route, momentary
-  // upstream rate limit) can be recovered from without a full page reload.
-  const [retryCount, setRetryCount] = useState(0);
-  // Separate retry counter for just the intelligence section, so retrying it
-  // doesn't re-fetch the (already-successful) paper metadata too.
-  const [intelRetryCount, setIntelRetryCount] = useState(0);
+  return <PaperDetailContent id={id} />;
+}
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        setError(null);
-        const res = await fetch(`/api/openalex/works/${encodeURIComponent(id)}`);
-        if (!res.ok) throw new Error(`Couldn't load this paper (HTTP ${res.status}).`);
-        const data = (await res.json()) as OpenAlexWork;
-        if (cancelled) return;
-        setWork(data);
-        setError(null);
-      } catch (err) {
-        if (!cancelled) setError((err as Error).message || "Couldn't load this paper.");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [id, retryCount]);
+/** Exported for unit tests — the default export is only the Next route wrapper. */
+export function PaperDetailContent({ id }: { id: string }) {
+  const workQ = useQuery(paperWorkQuery(id));
+  const work = workQ.data ?? null;
+  const error = workQ.isError ? "Couldn't load this paper." : null;
 
-  useEffect(() => {
-    if (!work) return;
-    let cancelled = false;
-    (async () => {
-      setIntelLoading(true);
-      setIntelError(null);
-      try {
-        const intel = await analyzePaper({ title: work.display_name, doi: work.doi, openalexId: work.id });
-        if (!cancelled) {
-          setIntelligence(intel);
-          setIntelLoading(false);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setIntelError((err as Error).message || "Couldn't analyze this paper.");
-          setIntelLoading(false);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [work, intelRetryCount]);
+  const intelQ = useQuery({
+    ...paperAnalysisQuery({ title: work?.display_name, doi: work?.doi, openalexId: work?.id }),
+    enabled: Boolean(work?.id),
+  });
+  const intelligence = intelQ.data ?? null;
+  const intelLoading = intelQ.isPending;
+  const intelError = intelQ.isError ? "Couldn't analyze this paper." : null;
 
   if (error && !work) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-6 md:px-8">
-        <ErrorBanner message={error} onRetry={() => setRetryCount((c) => c + 1)} />
+        <ErrorBanner message={error} onRetry={() => workQ.refetch()} />
       </div>
     );
   }
@@ -192,7 +153,7 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         <div className="mt-4">
           <ErrorBanner
             message={`Couldn't generate the paper intelligence report — ${intelError}`}
-            onRetry={() => setIntelRetryCount((c) => c + 1)}
+            onRetry={() => intelQ.refetch()}
           />
         </div>
       )}

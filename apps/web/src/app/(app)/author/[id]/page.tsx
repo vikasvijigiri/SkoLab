@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useMemo } from "react";
+import { use } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -78,10 +78,11 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
     },
   });
 
-  const sortedWorks = useMemo(
-    () => (author?.works ? [...author.works].sort((a, b) => (b.year ?? 0) - (a.year ?? 0)) : []),
-    [author?.works],
-  );
+  // `toSorted` (non-mutating) + no manual useMemo — the React Compiler memoises
+  // this and can actually preserve it, unlike `[...arr].sort()` in a useMemo.
+  const sortedWorks = author?.works
+    ? author.works.toSorted((a, b) => (b.year ?? 0) - (a.year ?? 0))
+    : [];
 
   if (isError && !author) {
     return (

@@ -217,6 +217,52 @@ export interface OpenAlexWork {
   abstract_inverted_index?: Record<string, number[]>;
 }
 
+// POST /api/v1/discovery/predict  (Horizon foresight engine)
+export interface PaperSource {
+  id: string;
+  title: string;
+  authors: string[];
+  year: number;
+  cited_by_count: number;
+  doi?: string;
+}
+
+export interface BreakthroughPrediction {
+  breakthrough_name: string;
+  description: string;
+  scientific_logic: string;
+  business_application: string;
+  time_horizon: string;
+  feasibility: "High" | "Medium" | "Low";
+  roadmap_steps: string[];
+  pioneering_papers: PaperSource[];
+  latest_papers: PaperSource[];
+}
+
+// Nexus collection workspace (client-derived from OpenAlexWork) + chat
+export interface NexusCollectionPaper {
+  id: string;
+  title: string;
+  authors: string[];
+  year: number;
+  cited_by_count?: number;
+  abstract: string;
+  doi?: string;
+}
+
+export interface NexusMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+/** Trimmed paper shape sent in the POST /api/v1/discovery/nexus-chat body. */
+export interface NexusChatPaper {
+  title: string;
+  authors: string[];
+  year: number;
+  abstract: string;
+}
+
 // Firestore collabs_groups/{id}
 export interface CollabProject {
   id: string;
