@@ -83,7 +83,7 @@
 - [x] Task 6 — Remove the 3 unused `endpoints.ts` exports (+ dead `PeerRecommendation` type) — verified: tsc/lint/build exit 0, grep clean.
 - [x] Task 7 — TypeScript strictness + fallout — verified: tsc rc=0 with 4 flags on (ES2022 + noUncheckedIndexedAccess + noImplicitOverride + noFallthroughCasesInSwitch + forceConsistentCasingInFileNames); 4 mechanical index-guard fixes; 11 tests + build still green.
 - [x] Task 8 — ESLint jsx-a11y recommended + vitest plugin — verified: `npm run lint` rc=0 (0 errors). 3 real label-association fixes (profile/onboarding/ManuscriptTab), 1 documented no-autofocus exception (command palette).
-- [ ] Task 9 — Sentry (`@sentry/nextjs`) wiring
+- [x] Task 9 — Sentry @sentry/nextjs wiring — verified: tsc/build/test/lint all green. SDK enabled:false with no DSN (no-op). v10 layout: src/instrumentation{,-client}.ts + src/sentry.{server,edge}.config.ts, withSentryConfig in next.config.ts, captureException in both error.tsx.
 - [ ] Task 10 — CI: add `npm test` + Playwright e2e to `web-verification`
 - [ ] Task 11 — `refactoring` sweep over `apps/web`, apply findings
 
