@@ -85,7 +85,7 @@ jobs:
         go test ./... -v
 
   web-verification:
-    name: Web Build, Typecheck & Lint
+    name: Web Build, Typecheck, Lint & Test
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
@@ -94,7 +94,7 @@ jobs:
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: 20
+        node-version: 22
 
     - name: Install workspace dependencies
       run: npm ci
@@ -110,3 +110,14 @@ jobs:
 
     - name: Lint (eslint)
       run: npm run lint --workspace web
+
+    - name: Unit tests (vitest)
+      run: npm run --workspace web test
+
+    - name: Install Playwright browser
+      run: npm exec --workspace web -- playwright install --with-deps chromium
+
+    - name: E2E + a11y (playwright)
+      run: npm run --workspace web test:e2e
+      env:
+        CI: "true"
