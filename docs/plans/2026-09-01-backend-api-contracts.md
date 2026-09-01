@@ -64,6 +64,13 @@
 > verifies"), all 12 tasks are implemented on one branch, reviewed as one diff,
 > and the **CI backend job is the verification of record**. A ticked box below
 > means "implemented + self-reviewed"; the end-to-end green is CI.
+>
+> **CI result (PR #6, commit `d1d78e8`, 2026-09-01):** `SkoLab CI Pipeline`,
+> `CI Verification`, `checks` all green. Backend suite `132 passed, 1 skipped`
+> (the skip = `test_openapi.py` bootstrapping `openapi.snapshot.json`, which
+> must be committed once to arm the drift-guard). First push (`218cbf4`) had 3
+> failures — over-strict `response_model` required fields + two test bugs —
+> fixed in `d1d78e8`.
 
 - [x] Task 1 — `ErrorResponse` envelope + app-level exception handlers
 - [x] Task 2 — `PaginationParams` + `Page[T]`
