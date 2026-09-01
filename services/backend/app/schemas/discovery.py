@@ -40,4 +40,6 @@ class BreakthroughPrediction(BaseModel):
 class NexusChatResponse(BaseModel):
     """``POST /discovery/nexus-chat``."""
 
-    content: str
+    model_config = ConfigDict(extra="allow")
+
+    content: str | None = None
