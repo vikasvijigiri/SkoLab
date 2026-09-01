@@ -59,7 +59,7 @@ function splitMath(input: string): Segment[] {
     if (match[1] !== undefined) {
       segments.push({ math: true, content: match[1], display: true });
     } else {
-      segments.push({ math: true, content: match[2], display: false });
+      segments.push({ math: true, content: match[2] ?? "", display: false });
     }
     lastIndex = MATH_PATTERN.lastIndex;
   }

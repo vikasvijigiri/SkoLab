@@ -6,7 +6,8 @@ export function CitationBarChart({ data }: { data: CitationHeatmap }) {
   return (
     <div className="flex items-end gap-2" style={{ height: 120 }}>
       {data.years.map((year, i) => {
-        const h = Math.max(4, (data.citations[i] / max) * 100);
+        const cites = data.citations[i] ?? 0;
+        const h = Math.max(4, (cites / max) * 100);
         return (
           <div key={year} className="flex flex-1 flex-col items-center gap-1.5">
             <div className="flex h-24 w-full items-end">
@@ -17,7 +18,7 @@ export function CitationBarChart({ data }: { data: CitationHeatmap }) {
                   background: "var(--gradient-hero)",
                   transitionTimingFunction: "var(--ease-standard)",
                 }}
-                title={`${data.citations[i]} citations in ${year}`}
+                title={`${cites} citations in ${year}`}
               />
             </div>
             <span className="font-mono text-[10px] text-text-muted">{year}</span>
