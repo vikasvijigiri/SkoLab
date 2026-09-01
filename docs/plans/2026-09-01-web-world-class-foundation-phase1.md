@@ -85,7 +85,7 @@
 - [x] Task 8 — ESLint jsx-a11y recommended + vitest plugin — verified: `npm run lint` rc=0 (0 errors). 3 real label-association fixes (profile/onboarding/ManuscriptTab), 1 documented no-autofocus exception (command palette).
 - [x] Task 9 — Sentry @sentry/nextjs wiring — verified: tsc/build/test/lint all green. SDK enabled:false with no DSN (no-op). v10 layout: src/instrumentation{,-client}.ts + src/sentry.{server,edge}.config.ts, withSentryConfig in next.config.ts, captureException in both error.tsx.
 - [x] Task 10 — CI: added vitest + Playwright e2e steps to web-verification (node 20 -> 22 for modern test tooling). Verified on the PR run.
-- [ ] Task 11 — `refactoring` sweep over `apps/web`, apply findings
+- [x] Task 11 — refactoring sweep over apps/web — removed 6 unused lucide/Chip imports (horizon, nexus), a dead catch binding, and a stale eslint-disable (paper). No orphan files (instrumentation*.ts are Next convention). lint warnings 12 -> 4 (the 4 are the Phase-2 react-hooks warns). tsc/test/build green.
 
 ## Constitution gate
 - [x] I Evidence — every task names its command + expected output

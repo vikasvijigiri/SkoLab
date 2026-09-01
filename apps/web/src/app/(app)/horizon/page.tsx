@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, ArrowRight, ArrowLeft, RefreshCw, Compass, AlertCircle, BookOpen, ExternalLink, Calendar, Star } from "lucide-react";
+import { Sparkles, ArrowRight, ArrowLeft, Compass, AlertCircle, BookOpen, ExternalLink, Star } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Badge, Chip } from "@/components/ui/Badge";
+import { Badge } from "@/components/ui/Badge";
 import { MathText } from "@/components/ui/MathText";
 import { apiRequest } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
