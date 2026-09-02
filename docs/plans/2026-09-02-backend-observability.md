@@ -50,9 +50,9 @@
 | `.env.example` | Modify | `SENTRY_DSN=` with a comment |
 
 ## Progress
-- [ ] Task 1 — `sentry-sdk` dep + `observability.py` + `Settings.sentry_dsn` + `main.py` wiring
-- [ ] Task 2 — `check_readiness()` helper + `/livez` + `/readyz` + `LivenessResponse` + guard allow-list
-- [ ] Task 3 — docs: `backend-auth-posture.md` + `.env.example`
+- [x] Task 1 — `sentry-sdk` dep + `observability.py` + `Settings.sentry_dsn` + `main.py` wiring
+- [x] Task 2 — `check_readiness()` helper + `/livez` + `/readyz` + `LivenessResponse` + guard allow-list
+- [x] Task 3 — docs: `backend-auth-posture.md` + `.env.example`
 
 ## Constitution gate
 - [x] I Evidence — each task names its pytest / ruff / py_compile command and expected result
@@ -139,6 +139,13 @@
 - **Sentry captures the exception before the PR #6 catch-all.** `FastApiIntegration` wraps the app at a lower layer than the exception handlers, so it should see the raw exception. If a CI/manual check shows it does not, add an explicit `sentry_sdk.capture_exception(exc)` inside the catch-all in `app/api/errors.py` (a one-line, in-scope follow-up).
 - **`traces_sample_rate`** — Gate-1 marker; `0.0` recommended to protect the free-tier span budget.
 - SP-3 (web Firestore-realtime) — its own spec, after this.
+
+## Notes from execution
+
+- **`.env.example` NOT modified** (planned in T3). The `pre-commit` secret-scan hook re-scans the whole staged file and flags the **pre-existing** `DATABASE_URL` line in that file (it carries an inline-credential connection string) — not this PR's line. Fixing that pre-existing line is out of scope. `SENTRY_DSN` is documented in `app/core/config.py`'s field comment and `docs/backend-auth-posture.md` instead; adding it to `.env.example` is a follow-up bundled with a `DATABASE_URL` placeholder cleanup.
+- `traces_sample_rate=0.0` hard-coded in `observability.py` (Gate-1 choice) rather than left as a config knob — matches the spec's recommendation; a knob can be added when a real DSN and traffic exist.
+- `sentry-sdk[fastapi]==2.42.0` pinned (available on PyPI; CI resolves it). T1's fallback (newest resolvable 2.x) was not needed pending the CI run.
+- Verification of record is CI (no backend Python here); `ruff` + `py_compile` clean locally on all changed files.
 
 ## Resolved at Gate 1
 

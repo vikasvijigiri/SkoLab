@@ -197,6 +197,11 @@ except (ImportError, Exception) as _zeroconf_import_err:
     )
 
 from app.core.config import settings
+from app.core.observability import init_observability
+
+# Initialise error aggregation before the app is built (no-op without SENTRY_DSN).
+init_observability()
+
 from app.core.cache import (
     suggestions_cache,
     profile_cache,
@@ -205,7 +210,7 @@ from app.core.cache import (
 )
 from app.api.v1.router import api_router
 from app.api.errors import register_exception_handlers
-from app.schemas.system import AppInfoResponse
+from app.schemas.system import AppInfoResponse, LivenessResponse
 
 _zeroconf: AsyncZeroconf | None = None
 _mdns_info: ServiceInfo | None = None
@@ -907,13 +912,11 @@ async def root():
     return {"app": "Skolab API", "status": "online", "version": "1.0.0"}
 
 
-@app.get("/health")
-async def health():
-    """Dynamic status check verifying database and cache connectivity."""
+async def check_readiness() -> tuple[bool, dict[str, str]]:
+    """Probe the DB and cache. Never raises — failures land in the status dict."""
     db_status = "unhealthy"
     cache_status = "unhealthy"
 
-    # Check Database
     from app.db.database import AsyncSessionLocal
     from sqlalchemy import text
 
@@ -924,7 +927,6 @@ async def health():
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
 
-    # Check Cache (PgBackedCache)
     try:
         await suggestions_cache.set("health_ping", "1")
         val = await suggestions_cache.get("health_ping")
@@ -933,20 +935,42 @@ async def health():
     except Exception as e:
         logger.error(f"Cache health check failed: {e}")
 
-    status_code = 200
-    if db_status != "healthy" or cache_status != "healthy":
-        status_code = 503  # Service Unavailable
+    ok = db_status == "healthy" and cache_status == "healthy"
+    return ok, {"database": db_status, "cache": cache_status}
 
+
+@app.get("/livez", response_model=LivenessResponse)
+async def livez():
+    """Liveness probe — the process is up. Makes NO dependency calls, so a DB
+    or cache blip never triggers an orchestrator restart of a healthy pod."""
+    return {"status": "alive"}
+
+
+@app.get("/readyz")
+async def readyz():
+    """Readiness probe — should traffic route here? 503 drains this instance."""
+    ok, detail = await check_readiness()
+    return Response(
+        content=json.dumps({"status": "ready" if ok else "not ready", **detail}),
+        media_type="application/json",
+        status_code=200 if ok else 503,
+    )
+
+
+@app.get("/health")
+async def health():
+    """Dynamic status check verifying database and cache connectivity."""
+    ok, detail = await check_readiness()
     return Response(
         content=json.dumps(
             {
-                "status": "healthy" if status_code == 200 else "unhealthy",
-                "database": db_status,
-                "cache": cache_status,
+                "status": "healthy" if ok else "unhealthy",
+                "database": detail["database"],
+                "cache": detail["cache"],
             }
         ),
         media_type="application/json",
-        status_code=status_code,
+        status_code=200 if ok else 503,
     )
 
 
