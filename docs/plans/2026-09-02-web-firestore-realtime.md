@@ -54,10 +54,10 @@
 | `apps/web/src/app/(app)/profile/page.test.tsx` | Create | renders name/focus/about from a mocked `useMyProfile`; edit toggle |
 
 ## Progress
-- [ ] Task 1 — `useFirestoreDoc` + `useFirestoreCollection` + firestore test mock + hook tests
-- [ ] Task 2 — rewrite `useMyProfile` on the hooks + its test
-- [ ] Task 3 — wire `workspace` + `workspace/[id]` pages + their tests
-- [ ] Task 4 — `profile/page.test.tsx`
+- [x] Task 1 — `useFirestoreDoc` + `useFirestoreCollection` + firestore test mock + hook tests
+- [x] Task 2 — rewrite `useMyProfile` on the hooks + its test
+- [x] Task 3 — wire `workspace` + `workspace/[id]` pages + their tests
+- [x] Task 4 — `profile/page.test.tsx`
 
 ## Constitution gate
 - [x] I Evidence — every task names its `npm run -w web test` / `tsc` / `build` command and expected output
@@ -152,6 +152,14 @@
 - **`vi.mock` hoisting.** The firestore mock impl must be inline/importable in a hoist-safe way; T1's implementation notes pin the approach the marker resolves.
 - **Listener dedupe** — two components mounting the same `useFirestoreDoc` path open two listeners. Accepted (spec §4); a `useSyncExternalStore` registry is the upgrade path.
 - **Sub-subscriptions in `*Tab` components** (`subscribeMessages`/`Tasks`/`Meetings`) — out of scope; a follow-up can adopt `useFirestoreCollection` there.
+
+## Notes from execution
+
+- **All local checks green:** `npm run -w web test` → 15 files / 47 tests; `tsc --noEmit` 0; `npm run -w web lint` 0; `npm run -w web build` ✓.
+- **`useFirestoreDoc`/`useFirestoreCollection` are keyed by path / `JSON.stringify(deps)`** in a `useState` map, so every `setState` happens inside the async `onSnapshot` callbacks — no synchronous `setState` in the effect body, `react-hooks/set-state-in-effect` (repo `error`) stays clean, and a path/deps change shows the new key's loading state (no stale data).
+- **`workspace/[id]/page.tsx` split**: `WorkspaceDetailContent({ id })` exported for tests (the `use(params)` Promise doesn't settle under jsdom — Phase-1 lesson).
+- **`src/test/setup.ts`**: global `vi.mock("firebase/firestore")` + a `@/lib/firebase/client` stub + `Element.prototype.scrollIntoView` noop (workspace ChatTab auto-scrolls).
+- **Sticky emissions** in `src/test/firestore.ts` — the last `emitDoc`/`emitCollection` replays to a listener that subscribes afterwards, so tests don't race the component's effect.
 
 ## Resolved at Gate 1
 
