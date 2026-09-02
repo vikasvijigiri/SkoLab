@@ -46,9 +46,9 @@ dependency, so an optional route's `dependant` tree shows only `get_optional_use
 | `README.md` | Modify | one line under the docs list pointing at `docs/backend-auth-posture.md` |
 
 ## Progress
-- [ ] Task 1 — `test_auth_posture.py` set-level auth guard
-- [ ] Task 2 — `gen_openapi_snapshot.py` generator + `test_openapi.py` message fix
-- [ ] Task 3 — `docs/backend-auth-posture.md` + README pointer
+- [x] Task 1 — `test_auth_posture.py` set-level auth guard  (CI-verified: pytest)
+- [x] Task 2 — `gen_openapi_snapshot.py` generator + `test_openapi.py` message fix
+- [x] Task 3 — `docs/backend-auth-posture.md` + README pointer
 
 ## Constitution gate
 - [x] I Evidence — each task names its pytest / ruff / py_compile command and expected result
@@ -133,6 +133,14 @@ dependency, so an optional route's `dependant` tree shows only `get_optional_use
 - **The OpenAPI equality assertion stays skipped** until the user runs T2's script once and commits the artifact — a marked manual step (Gate 1 marker), not a silently skipped check.
 - **Stacked on PR #6.** If PR #6 is rewritten, this branch rebases. PR #6 is green and reviewed — low risk.
 - SP-2 (observability) and SP-3 (web Firestore) — their own specs, after this.
+
+## Deviations reconciled during execution
+
+- **Root cause found: FastAPI 0.141 lazy router inclusion.** `app.routes` holds `_IncludedRouter` placeholders, not flat `APIRoute`s (resolved on first request), so any test iterating `app.routes` directly saw only `/`, `/health`, `/metrics` — which is why PR #6's `test_contract_guard` passed **vacuously**. Fixed properly: `tests/api/_route_walk.py` recurses the placeholder tree (`original_router.routes` + `include_context.prefix`); `test_auth_posture` and `test_contract_guard` use it and both carry a `test_route_table_is_populated` backstop (`> 20`). No conftest hack. Also restored `tests/api/__init__.py` (needed for the relative import and to avoid `test_integrations` / `test_support` basename collisions with `tests/`).
+- **Hardened `tests/api/test_contract_guard.py` too** (PR #6, in scope as a "PR #6 loose end"). It used a module-level `from app.main import app` and, when `test_auth_posture.py` imported `app.api.dependencies` first, the app was captured with only 3 routes (`/`, `/health`, `/metrics`) — making both guards pass vacuously. Both now take the session `app` fixture (resolved after full init) and carry a `test_route_table_is_populated` backstop (`len > 20`).
+- **Fixed a path bug in PR #6's `test_openapi.py`** (T2, beyond the planned string-only edit). `_SNAPSHOT` used `Path(__file__).parents[2]` = `services/`, so the drift-guard read/wrote `services/api-contracts/openapi.snapshot.json` — not the real `api-contracts/` at repo root. Changed to `parents[3]` in both `test_openapi.py` and the new `gen_openapi_snapshot.py`. A guard pointing at the wrong path is not "armed", which is T2's whole goal.
+- **`scripts/__init__.py` not created** (plan File map row / Task 2). `scripts/gen_openapi_snapshot.py` is run directly (`python scripts/...`), never imported, and `scripts/` had no tracked files — a namespace dir is fine. Skipped per the plan's own "only if needed" condition.
+- **Task 1 verification is CI-only.** No runnable backend Python here (Py3.14); `py_compile` + `ruff` pass locally, `pytest tests/api/test_auth_posture.py` runs in CI — same posture as every PR #6 test.
 
 ## Resolved at Gate 1
 
