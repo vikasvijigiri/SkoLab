@@ -16,6 +16,12 @@ class RootResponse(BaseModel):
     message: str
 
 
+class LivenessResponse(BaseModel):
+    """``GET /livez`` — dependency-free liveness probe."""
+
+    status: str
+
+
 class AppInfoResponse(BaseModel):
     """``GET /`` defined on the application in ``main.py``."""
 

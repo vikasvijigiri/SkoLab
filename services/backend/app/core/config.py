@@ -131,6 +131,12 @@ class Settings:
         )
     )
 
+    # ── Observability ────────────────────────────────────────────────────────
+    # Sentry DSN. Empty (the default) leaves Sentry inert — the SDK is never
+    # initialised. Set SENTRY_DSN in the deployment environment to enable error
+    # aggregation. Never committed to the repo.
+    sentry_dsn: str = field(default_factory=lambda: os.environ.get("SENTRY_DSN", ""))
+
     # ── Monitoring ───────────────────────────────────────────────────────────
     # Full name of the primary researcher. Used by add_monitors.py to resolve
     # the OpenAlex author ID at runtime — never hardcoded in source.
