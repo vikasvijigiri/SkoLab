@@ -29,11 +29,20 @@ DATABASE_URL: str = _raw_db_url
 
 
 from sqlalchemy.pool import NullPool
+from app.core.config import settings
+
+# asyncpg keeps a per-connection prepared-statement cache. Behind the Supabase
+# transaction pooler (pgBouncer in `transaction` mode) a connection is handed to
+# a different client between statements, so a cached prepared statement resolves
+# against the wrong session and errors ("prepared statement ... does not exist").
+# Disabling the cache is the documented requirement for pgBouncer txn pooling.
+_is_asyncpg = "asyncpg" in DATABASE_URL
+_pg_connect_args: dict = {"command_timeout": 30.0}
+if _is_asyncpg:
+    _pg_connect_args["statement_cache_size"] = 0
 
 if os.environ.get("TESTING") == "True":
-    connect_args = (
-        {} if DATABASE_URL.startswith("sqlite") else {"command_timeout": 30.0}
-    )
+    connect_args = {} if DATABASE_URL.startswith("sqlite") else _pg_connect_args
     engine = create_async_engine(
         DATABASE_URL,
         echo=False,
@@ -44,11 +53,14 @@ else:
     engine = create_async_engine(
         DATABASE_URL,
         echo=False,
-        pool_size=10,  # number of persistent connections in pool
-        max_overflow=20,  # extra connections allowed beyond pool_size
+        # Sized for the Supabase free transaction pooler; see Settings. The
+        # effective server-connection count is workers * (pool_size + overflow).
+        pool_size=settings.db_pool_size,
+        max_overflow=settings.db_max_overflow,
+        pool_timeout=settings.db_pool_timeout_seconds,  # fail fast, don't queue forever
         pool_pre_ping=True,  # validate connections before use (handles server restarts)
         pool_recycle=1800,  # recycle connections every 30 min to avoid stale TCP issues
-        connect_args={"command_timeout": 30.0},
+        connect_args=_pg_connect_args,
     )
 
 import time
@@ -146,6 +158,15 @@ async def init_db() -> None:
     import app.models.agent_models  # noqa: F401 — AgentHistorySummary, AgentDocumentUpload
     import app.models.analytics_models  # noqa: F401 — UserSettings, UserActivityLog, ApiRequestLog, AuthorSearchLog
     import app.models.content_models  # noqa: F401 — DailyFeedItem, Conjecture
+
+    if not settings.run_schema_create_all:
+        print(
+            "[init_db] Skipping runtime create_all/ALTER "
+            "(run_schema_create_all=False). Schema is owned by Alembic — "
+            "ensure `alembic upgrade head` ran as a release step.",
+            flush=True,
+        )
+        return
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

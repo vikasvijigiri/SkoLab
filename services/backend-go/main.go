@@ -1,13 +1,17 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/skolab/backend-go/internal/auth"
@@ -124,6 +128,32 @@ func main() {
 	}
 }
 
+// proxyTransport is a dedicated HTTP transport for the Python upstream. The
+// default (http.DefaultTransport) caps idle connections per host at 2, so under
+// load the gateway constantly reopens TCP connections to the single Python
+// host, and — with no ResponseHeaderTimeout — a hung upstream request pins a
+// gateway goroutine and the client socket indefinitely, leading to goroutine
+// pileup and memory growth.
+var proxyTransport http.RoundTripper = &http.Transport{
+	Proxy: http.ProxyFromEnvironment,
+	DialContext: (&net.Dialer{
+		Timeout:   10 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}).DialContext,
+	ForceAttemptHTTP2:     true,
+	MaxIdleConns:          100,
+	MaxIdleConnsPerHost:   100,
+	IdleConnTimeout:       90 * time.Second,
+	TLSHandshakeTimeout:   10 * time.Second,
+	ExpectContinueTimeout: 1 * time.Second,
+	ResponseHeaderTimeout: 60 * time.Second,
+}
+
+// proxyRequestTimeout bounds a single proxied request end-to-end. LLM routes
+// are the slow case (long 70B generations); 120s covers them with margin while
+// still guaranteeing a hung upstream cannot hold a goroutine forever.
+const proxyRequestTimeout = 120 * time.Second
+
 // reverseProxy returns a Gin handler that reverse-proxies to target.
 func reverseProxy(target string) gin.HandlerFunc {
 	targetURL, err := url.Parse(target)
@@ -131,6 +161,7 @@ func reverseProxy(target string) gin.HandlerFunc {
 		log.Fatalf("invalid proxy target URL: %v", err)
 	}
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
+	proxy.Transport = proxyTransport
 	orig := proxy.Director
 	proxy.Director = func(req *http.Request) {
 		orig(req)
@@ -151,11 +182,22 @@ func reverseProxy(target string) gin.HandlerFunc {
 		return nil
 	}
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		if errors.Is(err, context.Canceled) {
+			// Client hung up — not a gateway fault, don't log it as an error.
+			return
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			slog.Warn("proxy upstream timeout", "path", r.URL.Path)
+			w.WriteHeader(http.StatusGatewayTimeout)
+			return
+		}
 		slog.Error("proxy error", "path", r.URL.Path, "err", err)
 		w.WriteHeader(http.StatusBadGateway)
 	}
 	return func(c *gin.Context) {
-		proxy.ServeHTTP(c.Writer, c.Request)
+		ctx, cancel := context.WithTimeout(c.Request.Context(), proxyRequestTimeout)
+		defer cancel()
+		proxy.ServeHTTP(c.Writer, c.Request.WithContext(ctx))
 	}
 }
 

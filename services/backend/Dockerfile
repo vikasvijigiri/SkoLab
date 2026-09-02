@@ -44,5 +44,11 @@ USER schoolab
 # there's no first-request latency spike.
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-small-en-v1.5')"
 
-# Run the app
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the app.
+# WEB_CONCURRENCY controls uvicorn worker processes — one event loop per worker,
+# so CPU-bound work (embedding encode, large JSON parsing) in one request no
+# longer starves every other. Each worker loads its own copy of the embedding
+# model (~130 MB + torch), so scale this to the host: default 1 keeps a 512 MB
+# box alive; set WEB_CONCURRENCY=2..N on a multi-vCPU / 16 GB Space.
+# --timeout-keep-alive 65 outlives typical upstream (Render/HF) idle timeouts.
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${WEB_CONCURRENCY:-1} --timeout-keep-alive 65"]
