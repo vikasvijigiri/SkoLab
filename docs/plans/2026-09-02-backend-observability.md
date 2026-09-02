@@ -140,6 +140,11 @@
 - **`traces_sample_rate`** — Gate-1 marker; `0.0` recommended to protect the free-tier span budget.
 - SP-3 (web Firestore-realtime) — its own spec, after this.
 
-[NEEDS CLARIFICATION: §Task 1 — `traces_sample_rate` for `sentry_sdk.init`: `0.0` (errors only; protects Sentry's 5M-spans/month free-tier budget — recommended), `0.1` (matches the web app's `sentry.server.config.ts`), or another value?]
+## Resolved at Gate 1
 
-[NEEDS CLARIFICATION: §Task 1 / Task 3 — env var name: `SENTRY_DSN` (recommended — it is `sentry-sdk`'s own default env var, so `init(dsn=...)` could even omit the arg) vs `BACKEND_SENTRY_DSN` (namespaced; the web app uses `NEXT_PUBLIC_SENTRY_DSN` and a separate Sentry project/DSN for the backend is likely anyway)?]
+- **`traces_sample_rate` = `0.0`** (errors only — protects the free-tier span budget; recommended option).
+- **Env var = `SENTRY_DSN`** (sentry-sdk's own default; separate project from the web app assumed).
+
+## Approved
+
+Gate 1 passed 2026-09-02. Both markers resolved with the recommended options. Proceed to implementation on `feat/backend-observability`.
