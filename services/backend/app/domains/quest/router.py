@@ -20,9 +20,8 @@ async def get_quests_leaderboard(
     try:
         return await quests_service.get_leaderboard(field)
     except ValueError:
+        # Unknown field → empty leaderboard, not an error.
         return []
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/users/quests", response_model=List[Quest])
@@ -38,6 +37,5 @@ async def get_user_quests(
     try:
         return await quests_service.get_user_quests(user_id, openalex_service)
     except ValueError as e:
+        # Upstream (OpenAlex / LLM) could not produce a quest set.
         raise HTTPException(status_code=502, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
