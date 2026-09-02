@@ -1,11 +1,10 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useState } from "react";
 import { useRouter } from "next/navigation";
-import { doc, onSnapshot } from "firebase/firestore";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trash2, MessageSquare, Sigma, FileText, ListChecks, Users2 } from "lucide-react";
-import { requireDb } from "@/lib/firebase/client";
+import { useFirestoreDoc } from "@/lib/hooks/useFirestoreDoc";
 import { deleteProject } from "@/lib/firebase/workspace";
 import { cn } from "@/lib/utils";
 import { ErrorBanner, friendlyFirestoreError } from "@/components/ui/ErrorBanner";
@@ -30,25 +29,22 @@ type Tab = (typeof TABS)[number]["name"];
 
 export default function WorkspaceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  return <WorkspaceDetailContent id={id} />;
+}
+
+/** Body split out so tests can render it without the `use(params)` Promise,
+ *  which does not settle under jsdom. */
+export function WorkspaceDetailContent({ id }: { id: string }) {
   const router = useRouter();
   const { user } = useAuth();
-  const [project, setProject] = useState<CollabProject | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { data: project, error: subError } = useFirestoreDoc<CollabProject>(
+    `collabs_groups/${id}`,
+  );
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const error = deleteError ?? subError;
   const [tab, setTab] = useState<Tab>("Chat");
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-
-  useEffect(() => {
-    const unsub = onSnapshot(
-      doc(requireDb(), "collabs_groups", id),
-      (snap) => {
-        setProject(snap.exists() ? ({ id: snap.id, ...snap.data() } as CollabProject) : null);
-        setError(null);
-      },
-      (err) => setError(friendlyFirestoreError(err))
-    );
-    return unsub;
-  }, [id]);
 
   async function handleDelete() {
     setDeleting(true);
@@ -56,7 +52,9 @@ export default function WorkspaceDetailPage({ params }: { params: Promise<{ id: 
       await deleteProject(id);
       router.push("/workspace");
     } catch (err) {
-      setError(friendlyFirestoreError(err as { code?: string; message?: string }));
+      setDeleteError(
+        friendlyFirestoreError(err as { code?: string; message?: string }),
+      );
     } finally {
       setDeleting(false);
     }

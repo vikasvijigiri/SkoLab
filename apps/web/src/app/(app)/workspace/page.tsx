@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, FolderKanban, Users2 } from "lucide-react";
@@ -9,36 +9,27 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ErrorBanner, friendlyFirestoreError } from "@/components/ui/ErrorBanner";
 import { useAuth } from "@/lib/hooks/AuthProvider";
+import { useFirestoreCollection } from "@/lib/hooks/useFirestoreCollection";
 import { subscribeProjects, createProject } from "@/lib/firebase/workspace";
 import type { CollabProject } from "@/lib/types";
 import { TRANSITION_FAST, DURATION_SLOW, EASE_STANDARD } from "@/lib/motion";
 
 export default function WorkspaceListPage() {
   const { user } = useAuth();
-  const [projects, setProjects] = useState<CollabProject[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    data: projects,
+    loading,
+    error: subError,
+  } = useFirestoreCollection<CollabProject>(
+    user ? (next, onErr) => subscribeProjects(user.uid, next, onErr) : null,
+    { deps: [user?.uid] },
+  );
+  const [createError, setCreateError] = useState<string | null>(null);
+  const error = createError ?? subError;
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (!user) return;
-    const unsub = subscribeProjects(
-      user.uid,
-      (p) => {
-        setProjects(p);
-        setLoading(false);
-        setError(null);
-      },
-      (err) => {
-        setError(friendlyFirestoreError(err));
-        setLoading(false);
-      }
-    );
-    return unsub;
-  }, [user]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -56,7 +47,9 @@ export default function WorkspaceListPage() {
       setDescription("");
       setCreating(false);
     } catch (err) {
-      setError(friendlyFirestoreError(err as { code?: string; message?: string }));
+      setCreateError(
+        friendlyFirestoreError(err as { code?: string; message?: string }),
+      );
     } finally {
       setSubmitting(false);
     }
