@@ -48,13 +48,21 @@ Build back-to-front so each layer's URL exists when the next one needs it:
 ### 1. Supabase — Postgres
 
 1. `supabase.com` → New project (org's free slot). Pick a region near Render's
-   (`oregon` → US West).
+   (`oregon` → US West). A cross-Pacific region adds ~200 ms to every query —
+   see the audit doc's note.
 2. Project Settings → Database → **Connection string → URI**. Copy the
-   `postgresql://postgres:...@...pooler.supabase.com:5432/postgres` form (session
-   pooler, port 5432 — not 6543).
-3. Run the schema: `services/backend` owns migrations via Alembic
-   (`alembic upgrade head` with `DATABASE_URL` set), or apply
-   `services/backend-go`'s expected tables. Confirm `list_tables` after.
+   **transaction pooler** form —
+   `postgresql://postgres.<ref>:...@...pooler.supabase.com:6543/postgres`
+   (port **6543**). Both services are already configured for pgBouncer
+   transaction mode (asyncpg `statement_cache_size=0`, pgx `QueryExecModeExec`);
+   the direct `:5432` connection blows the free tier's ~60-connection ceiling
+   under load.
+   - Python wants the `postgresql+asyncpg://` scheme; the Go gateway wants
+     plain `postgres://...?sslmode=require`.
+3. Run the schema **before first boot** — it is now a release step, not
+   something the app does on startup when `APP_ENV=production`:
+   `cd services/backend && alembic upgrade head` with `DATABASE_URL` set.
+   Confirm with `list_tables`.
 4. Hold the URI for steps 2 and 3.
 
 ### 2. Hugging Face — Python / ML backend
@@ -159,6 +167,21 @@ The Space is its own git repo, so push the `services/backend` subtree to it.
 | `GROQ_API` | — | — | ✅ |
 | `SENTRY_DSN` | — | — | ✅ backend DSN |
 | `APP_ENV` | — | — | ✅ `production` |
+
+### Scale / latency tunables (optional — defaults are safe)
+
+All have working defaults; set them when the free-tier hosts are the
+constraint. Full rationale in `docs/plans/2026-09-02-scale-latency-audit.md`.
+
+| Var | Host | Default | When to change |
+|---|---|---|---|
+| `WEB_CONCURRENCY` | HF Space | `1` | `2`+ once the Space has the RAM (each worker = its own ~130 MB model copy) |
+| `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` / `DB_POOL_TIMEOUT_SECONDS` | HF Space | `5` / `10` / `10` | lower if `WEB_CONCURRENCY` × (size+overflow) nears the pooler's ~60 |
+| `DB_MAX_CONNS` / `DB_MIN_CONNS` | Render | `15` / `3` | same ceiling, from the Go side |
+| `EMBED_MAX_CONCURRENCY` | HF Space | `0` (= core count) | pin lower if embedding starves request serving |
+| `EMBED_VECTOR_CACHE_TTL_SECONDS` | HF Space | `2592000` (30 d) | rarely — text→vector is deterministic per model |
+| `LLM_MAX_FALLBACK_MODELS` / `LLM_TOTAL_DEADLINE_SECONDS` | HF Space | `4` / `90` | raise the deadline only if long 70B generations are being cut off |
+| `RUN_DB_CREATE_ALL` | HF Space | off when `APP_ENV=production` | `1` only to let the app bootstrap its own schema (skips Alembic) |
 
 ## Optional
 
