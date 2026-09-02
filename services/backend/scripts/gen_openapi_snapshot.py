@@ -18,9 +18,13 @@ newline), so either path produces a committable, guard-arming snapshot.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
-from app.main import app
+# Make `app` importable no matter the working directory this is launched from.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from app.main import app  # noqa: E402
 
 # scripts/ -> backend -> services -> repo root (which holds api-contracts/).
 _SNAPSHOT = (
