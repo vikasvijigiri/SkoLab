@@ -6,14 +6,19 @@ from app.main import app, metrics_store
 
 def test_init_observability_is_inert_without_dsn(monkeypatch):
     """No SENTRY_DSN -> init_observability() is a no-op, Sentry stays inactive."""
+    from types import SimpleNamespace
+
     import sentry_sdk
 
-    from app.core import config as config_mod
     from app.core import observability as obs_mod
 
-    monkeypatch.delenv("SENTRY_DSN", raising=False)
-    monkeypatch.setattr(config_mod.settings, "sentry_dsn", "", raising=False)
-    monkeypatch.setattr(obs_mod.settings, "sentry_dsn", "", raising=False)
+    # `Settings` is a frozen dataclass — swap the module-level reference for a
+    # stand-in with an empty DSN rather than mutating the frozen instance.
+    monkeypatch.setattr(
+        obs_mod,
+        "settings",
+        SimpleNamespace(sentry_dsn="", environment="test"),
+    )
 
     assert obs_mod.init_observability() is None  # does not raise
 
