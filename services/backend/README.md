@@ -1,3 +1,17 @@
+---
+title: Skolab Backend
+emoji: 🎓
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 8000
+pinned: false
+---
+
+<!-- The block above is Hugging Face Space metadata. It is inert on GitHub and
+     required when this directory is pushed to a Docker Space (see DEPLOY.md).
+     `app_port: 8000` matches the Dockerfile CMD's uvicorn port. -->
+
 # Skolab Backend
 
 This is the Python (FastAPI) backend for the Skolab project.
