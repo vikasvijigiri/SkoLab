@@ -82,6 +82,11 @@ class PgBackedCache:
         self.l1_ttl = l1_ttl_seconds
         self._l1: dict[str, tuple[Any, float]] = {}  # key -> (value, expiry_ts)
         self._lock = asyncio.Lock()
+        # Single-flight: in-flight compute() calls keyed by cache key. N
+        # concurrent misses on the same key await one shared task instead of
+        # all N independently hitting the (embedding / LLM / OpenAlex) work —
+        # the "cache stampede" when a hot key expires and every user misses.
+        self._inflight: dict[str, "asyncio.Task[Any]"] = {}
 
     # ── helpers ───────────────────────────────────────────────────────────────
 
@@ -236,6 +241,36 @@ class PgBackedCache:
                     flush=True,
                 )
                 await session.rollback()
+
+    async def get_or_compute(self, key: str, compute):
+        """Return the cached value for `key`, or run `compute()` (an async
+        callable taking no args), cache the result, and return it.
+
+        Concurrent callers that miss the same key share one `compute()` run
+        (single-flight) — the rest await its result rather than each doing the
+        expensive work. `compute()` raising propagates to every waiter and
+        nothing is cached.
+        """
+        hit = await self.get(key)
+        if hit is not None:
+            return hit
+
+        existing = self._inflight.get(key)
+        if existing is not None:
+            return await existing
+
+        async def _run():
+            value = await compute()
+            if value is not None:
+                await self.set(key, value)
+            return value
+
+        task = asyncio.ensure_future(_run())
+        self._inflight[key] = task
+        try:
+            return await task
+        finally:
+            self._inflight.pop(key, None)
 
     async def delete(self, key: str) -> None:
         """Remove a single key from L1 and L2 (Redis/Database)."""
