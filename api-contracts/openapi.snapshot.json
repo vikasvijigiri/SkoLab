@@ -1,0 +1,6087 @@
+{
+  "components": {
+    "schemas": {
+      "AcademicPaperInfo": {
+        "properties": {
+          "authors": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Authors",
+            "type": "array"
+          },
+          "citations": {
+            "default": 0,
+            "title": "Citations",
+            "type": "integer"
+          },
+          "doi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doi"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "journal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Journal"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "AcademicPaperInfo",
+        "type": "object"
+      },
+      "AgentChatRequest": {
+        "properties": {
+          "history": {
+            "default": [],
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "History",
+            "type": "array"
+          },
+          "message": {
+            "maxLength": 2000,
+            "title": "Message",
+            "type": "string"
+          },
+          "mode": {
+            "default": "RESEARCH",
+            "title": "Mode",
+            "type": "string"
+          },
+          "user_memory": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Memory"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "AgentChatRequest",
+        "type": "object"
+      },
+      "AgentChatResponse": {
+        "additionalProperties": true,
+        "description": "``POST /agent/chat`` \u2014 the research agent's reply.",
+        "properties": {
+          "reply": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply"
+          }
+        },
+        "title": "AgentChatResponse",
+        "type": "object"
+      },
+      "AiStatusResponse": {
+        "description": "``GET /ai_status``.",
+        "properties": {
+          "groq_api_configured": {
+            "title": "Groq Api Configured",
+            "type": "boolean"
+          },
+          "key_prefix": {
+            "title": "Key Prefix",
+            "type": "string"
+          },
+          "llm_active": {
+            "title": "Llm Active",
+            "type": "boolean"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "groq_api_configured",
+          "llm_active",
+          "model",
+          "key_prefix"
+        ],
+        "title": "AiStatusResponse",
+        "type": "object"
+      },
+      "AppInfoResponse": {
+        "description": "``GET /`` defined on the application in ``main.py``.",
+        "properties": {
+          "app": {
+            "title": "App",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "app",
+          "status",
+          "version"
+        ],
+        "title": "AppInfoResponse",
+        "type": "object"
+      },
+      "AuthorMetricsResponse": {
+        "additionalProperties": true,
+        "description": "``GET /author_metrics`` \u2014 computed metric bundle (shape varies by pipeline).",
+        "properties": {},
+        "title": "AuthorMetricsResponse",
+        "type": "object"
+      },
+      "AuthorResponse": {
+        "properties": {
+          "academic_history": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Academic History",
+            "type": "array"
+          },
+          "average_activity": {
+            "default": 0.0,
+            "title": "Average Activity",
+            "type": "number"
+          },
+          "average_complexity": {
+            "default": 0.0,
+            "title": "Average Complexity",
+            "type": "number"
+          },
+          "average_creativity": {
+            "default": 0.0,
+            "title": "Average Creativity",
+            "type": "number"
+          },
+          "average_impact": {
+            "default": 0.0,
+            "title": "Average Impact",
+            "type": "number"
+          },
+          "average_skill_score": {
+            "default": 0.0,
+            "title": "Average Skill Score",
+            "type": "number"
+          },
+          "citation_acceleration": {
+            "default": 0.0,
+            "title": "Citation Acceleration",
+            "type": "number"
+          },
+          "cited_by_count": {
+            "title": "Cited By Count",
+            "type": "integer"
+          },
+          "collaboration_diversity": {
+            "default": 0.0,
+            "title": "Collaboration Diversity",
+            "type": "number"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "disruption_score": {
+            "default": 0.0,
+            "title": "Disruption Score",
+            "type": "number"
+          },
+          "expertise": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Expertise",
+            "type": "array"
+          },
+          "field_of_study": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Of Study"
+          },
+          "future_impact_score": {
+            "default": 0.0,
+            "title": "Future Impact Score",
+            "type": "number"
+          },
+          "h_index": {
+            "title": "H Index",
+            "type": "integer"
+          },
+          "i10_index": {
+            "title": "I10 Index",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "innovation_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Innovation Score"
+          },
+          "institution": {
+            "title": "Institution",
+            "type": "string"
+          },
+          "interdisciplinary_index": {
+            "default": 0.0,
+            "title": "Interdisciplinary Index",
+            "type": "number"
+          },
+          "llm_active": {
+            "default": true,
+            "title": "Llm Active",
+            "type": "boolean"
+          },
+          "metrics_computed": {
+            "default": false,
+            "title": "Metrics Computed",
+            "type": "boolean"
+          },
+          "network_centrality": {
+            "default": 0.0,
+            "title": "Network Centrality",
+            "type": "number"
+          },
+          "next_prediction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Prediction"
+          },
+          "open_science_score": {
+            "default": 0.0,
+            "title": "Open Science Score",
+            "type": "number"
+          },
+          "orcid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orcid"
+          },
+          "policy_patent_score": {
+            "default": 0.0,
+            "title": "Policy Patent Score",
+            "type": "number"
+          },
+          "research_consistency": {
+            "default": 0.0,
+            "title": "Research Consistency",
+            "type": "number"
+          },
+          "semantic_novelty": {
+            "default": 0.0,
+            "title": "Semantic Novelty",
+            "type": "number"
+          },
+          "similar_researchers": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AuthorSuggestion"
+            },
+            "title": "Similar Researchers",
+            "type": "array"
+          },
+          "skills": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Skills",
+            "type": "array"
+          },
+          "tools": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Tools",
+            "type": "array"
+          },
+          "works": {
+            "items": {
+              "$ref": "#/components/schemas/Work"
+            },
+            "title": "Works",
+            "type": "array"
+          },
+          "works_count": {
+            "title": "Works Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "display_name",
+          "h_index",
+          "i10_index",
+          "works_count",
+          "cited_by_count",
+          "institution",
+          "academic_history",
+          "works"
+        ],
+        "title": "AuthorResponse",
+        "type": "object"
+      },
+      "AuthorSuggestion": {
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "field_of_study": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Of Study"
+          },
+          "h_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "H Index"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "innovation_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Innovation Score"
+          },
+          "institution": {
+            "title": "Institution",
+            "type": "string"
+          },
+          "works_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Works Count"
+          }
+        },
+        "required": [
+          "id",
+          "display_name",
+          "institution"
+        ],
+        "title": "AuthorSuggestion",
+        "type": "object"
+      },
+      "Body_upload_document_agent_upload_document_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_document_agent_upload_document_post",
+        "type": "object"
+      },
+      "Body_upload_document_api_v1_agent_upload_document_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_document_api_v1_agent_upload_document_post",
+        "type": "object"
+      },
+      "BreakthroughPrediction": {
+        "additionalProperties": true,
+        "description": "``POST /discovery/predict`` \u2014 the Horizon foresight result.",
+        "properties": {
+          "breakthrough_name": {
+            "default": "",
+            "title": "Breakthrough Name",
+            "type": "string"
+          },
+          "business_application": {
+            "default": "",
+            "title": "Business Application",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "feasibility": {
+            "default": "",
+            "title": "Feasibility",
+            "type": "string"
+          },
+          "latest_papers": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PaperSource"
+            },
+            "title": "Latest Papers",
+            "type": "array"
+          },
+          "pioneering_papers": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PaperSource"
+            },
+            "title": "Pioneering Papers",
+            "type": "array"
+          },
+          "roadmap_steps": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Roadmap Steps",
+            "type": "array"
+          },
+          "scientific_logic": {
+            "default": "",
+            "title": "Scientific Logic",
+            "type": "string"
+          },
+          "time_horizon": {
+            "default": "",
+            "title": "Time Horizon",
+            "type": "string"
+          }
+        },
+        "title": "BreakthroughPrediction",
+        "type": "object"
+      },
+      "ChatMessage": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ChatMessage",
+        "type": "object"
+      },
+      "ChatRequest": {
+        "properties": {
+          "author_id": {
+            "title": "Author Id",
+            "type": "string"
+          },
+          "history": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ChatMessage"
+            },
+            "title": "History",
+            "type": "array"
+          },
+          "paper_title": {
+            "title": "Paper Title",
+            "type": "string"
+          },
+          "user_message": {
+            "maxLength": 2000,
+            "title": "User Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "author_id",
+          "paper_title",
+          "user_message"
+        ],
+        "title": "ChatRequest",
+        "type": "object"
+      },
+      "ChatWithAuthorResponse": {
+        "additionalProperties": true,
+        "description": "``POST /chat_with_author``.",
+        "properties": {
+          "author_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Id"
+          },
+          "author_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Name"
+          },
+          "reply": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply"
+          }
+        },
+        "title": "ChatWithAuthorResponse",
+        "type": "object"
+      },
+      "CitationHeatmap": {
+        "additionalProperties": true,
+        "description": "``GET /citation_heatmap``.",
+        "properties": {
+          "citations": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "h_index": {
+            "default": 0,
+            "title": "H Index",
+            "type": "integer"
+          },
+          "institutional_reach": {
+            "default": 0.0,
+            "title": "Institutional Reach",
+            "type": "number"
+          },
+          "works": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Works",
+            "type": "array"
+          },
+          "years": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Years",
+            "type": "array"
+          }
+        },
+        "title": "CitationHeatmap",
+        "type": "object"
+      },
+      "CollaboratorSynergyResponse": {
+        "additionalProperties": true,
+        "description": "``GET /collaborator_synergy`` \u2014 pairwise synergy metrics (LLM/graph-shaped).",
+        "properties": {},
+        "title": "CollaboratorSynergyResponse",
+        "type": "object"
+      },
+      "ConjectureResponse": {
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "correctOptionIndex": {
+            "title": "Correctoptionindex",
+            "type": "integer"
+          },
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "hypothesis": {
+            "title": "Hypothesis",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Options",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "category",
+          "title",
+          "hypothesis",
+          "options",
+          "correctOptionIndex",
+          "explanation"
+        ],
+        "title": "ConjectureResponse",
+        "type": "object"
+      },
+      "DailyFeedItem": {
+        "additionalProperties": true,
+        "description": "One card in ``GET /daily_feed`` (returned as a bare JSON array).",
+        "properties": {
+          "abstract": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Abstract"
+          },
+          "authors": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Authors",
+            "type": "array"
+          },
+          "doi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doi"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "journal": {
+            "default": "",
+            "title": "Journal",
+            "type": "string"
+          },
+          "key_findings": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Findings"
+          },
+          "methodology": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Methodology"
+          },
+          "publication_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publication Date"
+          },
+          "recommendation_reason": {
+            "default": "",
+            "title": "Recommendation Reason",
+            "type": "string"
+          },
+          "relevance_score": {
+            "default": 0.0,
+            "title": "Relevance Score",
+            "type": "number"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "tools_used": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tools Used"
+          },
+          "year": {
+            "default": 0,
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "title": "DailyFeedItem",
+        "type": "object"
+      },
+      "DismissFeedItemRequest": {
+        "properties": {
+          "author_id": {
+            "title": "Author Id",
+            "type": "string"
+          },
+          "work_id": {
+            "title": "Work Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "author_id",
+          "work_id"
+        ],
+        "title": "DismissFeedItemRequest",
+        "type": "object"
+      },
+      "DismissResponse": {
+        "description": "``POST /daily_feed/dismiss``.",
+        "properties": {
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "DismissResponse",
+        "type": "object"
+      },
+      "GrantMatch": {
+        "additionalProperties": true,
+        "description": "One row of ``GET /match_grants`` (bare JSON array).",
+        "properties": {
+          "agency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agency"
+          },
+          "match_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Score"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "title": "GrantMatch",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "IndustryAcademicTieupsResponse": {
+        "properties": {
+          "futuristic": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/TieupIdea"
+            },
+            "title": "Futuristic",
+            "type": "array"
+          },
+          "trending": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/TieupIdea"
+            },
+            "title": "Trending",
+            "type": "array"
+          }
+        },
+        "title": "IndustryAcademicTieupsResponse",
+        "type": "object"
+      },
+      "IndustryOpportunity": {
+        "additionalProperties": true,
+        "description": "One item in ``GET /industry_opportunities`` (bare JSON array).",
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "companyOrFunder": {
+            "default": "",
+            "title": "Companyorfunder",
+            "type": "string"
+          },
+          "deadline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "eligibility": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eligibility"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "matchScore": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matchscore"
+          },
+          "positionLevel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Positionlevel"
+          },
+          "postedAgo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Postedago"
+          },
+          "procedureSteps": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proceduresteps"
+          },
+          "relevanceExplanation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relevanceexplanation"
+          },
+          "remoteType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remotetype"
+          },
+          "requiredSkills": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requiredskills"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "tags": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "title": "IndustryOpportunity",
+        "type": "object"
+      },
+      "JournalRecommendation": {
+        "additionalProperties": true,
+        "description": "One row of ``GET /journal_advisor`` (bare JSON array).",
+        "properties": {
+          "journal_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Journal Name"
+          },
+          "match_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Score"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          }
+        },
+        "title": "JournalRecommendation",
+        "type": "object"
+      },
+      "LeaderboardEntry": {
+        "properties": {
+          "entropy_score": {
+            "title": "Entropy Score",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "institution": {
+            "title": "Institution",
+            "type": "string"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "user_name": {
+            "title": "User Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rank",
+          "id",
+          "user_name",
+          "institution",
+          "entropy_score"
+        ],
+        "title": "LeaderboardEntry",
+        "type": "object"
+      },
+      "LivenessResponse": {
+        "description": "``GET /livez`` \u2014 dependency-free liveness probe.",
+        "properties": {
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "LivenessResponse",
+        "type": "object"
+      },
+      "LogPeerInviteResponse": {
+        "description": "``POST /recommendations/peers/invite`` \u2014 invite logged for score updates.",
+        "properties": {
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "LogPeerInviteResponse",
+        "type": "object"
+      },
+      "NetworkCollaborator": {
+        "additionalProperties": true,
+        "description": "One row of ``GET /network_collaborators`` (bare JSON array).",
+        "properties": {
+          "connection_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Path"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "institution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Institution"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "relevance_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relevance Score"
+          }
+        },
+        "title": "NetworkCollaborator",
+        "type": "object"
+      },
+      "NexusChatRequest": {
+        "properties": {
+          "messages": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Messages",
+            "type": "array"
+          },
+          "papers": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Papers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "papers",
+          "messages"
+        ],
+        "title": "NexusChatRequest",
+        "type": "object"
+      },
+      "NexusChatResponse": {
+        "additionalProperties": true,
+        "description": "``POST /discovery/nexus-chat``.",
+        "properties": {
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content"
+          }
+        },
+        "title": "NexusChatResponse",
+        "type": "object"
+      },
+      "PaperIntelligenceResponse": {
+        "properties": {
+          "confidence": {
+            "default": "Medium",
+            "title": "Confidence",
+            "type": "string"
+          },
+          "core_concepts": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Core Concepts",
+            "type": "array"
+          },
+          "formulas": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Formulas",
+            "type": "array"
+          },
+          "future_directions": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Future Directions",
+            "type": "array"
+          },
+          "key_findings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Key Findings",
+            "type": "array"
+          },
+          "limitations": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Limitations",
+            "type": "array"
+          },
+          "real_world_impact": {
+            "default": "",
+            "title": "Real World Impact",
+            "type": "string"
+          },
+          "techniques": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Techniques",
+            "type": "array"
+          },
+          "text_source": {
+            "default": "abstract_only",
+            "title": "Text Source",
+            "type": "string"
+          },
+          "tldr": {
+            "default": "",
+            "title": "Tldr",
+            "type": "string"
+          },
+          "tools_and_software": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Tools And Software",
+            "type": "array"
+          }
+        },
+        "title": "PaperIntelligenceResponse",
+        "type": "object"
+      },
+      "PaperSource": {
+        "additionalProperties": true,
+        "properties": {
+          "authors": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Authors",
+            "type": "array"
+          },
+          "cited_by_count": {
+            "default": 0,
+            "title": "Cited By Count",
+            "type": "integer"
+          },
+          "doi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doi"
+          },
+          "id": {
+            "default": "",
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          },
+          "year": {
+            "default": 0,
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "title": "PaperSource",
+        "type": "object"
+      },
+      "PeerInviteLogRequest": {
+        "properties": {
+          "peer_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Peer Email"
+          },
+          "peer_phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Peer Phone"
+          },
+          "peer_uid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Peer Uid"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "PeerInviteLogRequest",
+        "type": "object"
+      },
+      "PeerRecommendation": {
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "is_registered": {
+            "title": "Is Registered",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "relevance_score": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Relevance Score",
+            "type": "number"
+          },
+          "research_focus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Research Focus"
+          },
+          "uid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uid"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "required": [
+          "name",
+          "is_registered",
+          "relevance_score"
+        ],
+        "title": "PeerRecommendation",
+        "type": "object"
+      },
+      "PredictRequest": {
+        "properties": {
+          "author_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Id"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "focus_area": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Focus Area"
+          }
+        },
+        "required": [
+          "field"
+        ],
+        "title": "PredictRequest",
+        "type": "object"
+      },
+      "PresentationOutlineResponse": {
+        "additionalProperties": true,
+        "description": "``GET /presentation_outline`` \u2014 7-slide outline; keys are LLM-shaped.",
+        "properties": {
+          "slides": {
+            "default": [],
+            "items": {},
+            "title": "Slides",
+            "type": "array"
+          }
+        },
+        "title": "PresentationOutlineResponse",
+        "type": "object"
+      },
+      "Quest": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_completed": {
+            "title": "Is Completed",
+            "type": "boolean"
+          },
+          "reward_entropy": {
+            "title": "Reward Entropy",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "reward_entropy",
+          "is_completed"
+        ],
+        "title": "Quest",
+        "type": "object"
+      },
+      "RefreshAuthorResponse": {
+        "description": "``GET /refresh_author`` \u2014 kicks the teleport worker.",
+        "properties": {
+          "author_id": {
+            "title": "Author Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "author_id"
+        ],
+        "title": "RefreshAuthorResponse",
+        "type": "object"
+      },
+      "RegisteredCheckRequest": {
+        "properties": {
+          "emails": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Emails",
+            "type": "array"
+          },
+          "phones": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Phones",
+            "type": "array"
+          }
+        },
+        "required": [
+          "emails",
+          "phones"
+        ],
+        "title": "RegisteredCheckRequest",
+        "type": "object"
+      },
+      "RegisteredCheckResponse": {
+        "properties": {
+          "registered_emails": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Registered Emails",
+            "type": "array"
+          },
+          "registered_phones": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Registered Phones",
+            "type": "array"
+          }
+        },
+        "required": [
+          "registered_emails",
+          "registered_phones"
+        ],
+        "title": "RegisteredCheckResponse",
+        "type": "object"
+      },
+      "RoadmapResponse": {
+        "additionalProperties": true,
+        "description": "``GET /assistant_professor_roadmap`` \u2014 milestone/checklist/template plan.",
+        "properties": {
+          "checklist": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Checklist",
+            "type": "array"
+          },
+          "milestones": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Milestones",
+            "type": "array"
+          },
+          "peerCoauthors": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Peercoauthors",
+            "type": "array"
+          },
+          "researchFocus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Researchfocus"
+          },
+          "targetMetrics": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Targetmetrics",
+            "type": "object"
+          },
+          "templates": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Templates",
+            "type": "array"
+          },
+          "userMetrics": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Usermetrics",
+            "type": "object"
+          },
+          "userName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "title": "RoadmapResponse",
+        "type": "object"
+      },
+      "RootResponse": {
+        "description": "``GET /`` on the API router.",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "RootResponse",
+        "type": "object"
+      },
+      "SemanticTrendingPaper": {
+        "additionalProperties": true,
+        "properties": {
+          "cited_by_count": {
+            "default": 0,
+            "title": "Cited By Count",
+            "type": "integer"
+          },
+          "concept_tags": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Concept Tags",
+            "type": "array"
+          },
+          "doi": {
+            "default": "",
+            "title": "Doi",
+            "type": "string"
+          },
+          "id": {
+            "default": "",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_open_access": {
+            "default": false,
+            "title": "Is Open Access",
+            "type": "boolean"
+          },
+          "journal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Journal"
+          },
+          "title": {
+            "default": "Untitled",
+            "title": "Title",
+            "type": "string"
+          },
+          "velocity_score": {
+            "default": 0.0,
+            "title": "Velocity Score",
+            "type": "number"
+          },
+          "year": {
+            "default": 0,
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "title": "SemanticTrendingPaper",
+        "type": "object"
+      },
+      "SemanticTrendingResponse": {
+        "description": "``GET /semantic_trending`` \u2014 field-trending papers for one author.",
+        "properties": {
+          "author_concepts": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Author Concepts",
+            "type": "array"
+          },
+          "papers": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SemanticTrendingPaper"
+            },
+            "title": "Papers",
+            "type": "array"
+          }
+        },
+        "title": "SemanticTrendingResponse",
+        "type": "object"
+      },
+      "SummarizeWorkResponse": {
+        "additionalProperties": true,
+        "description": "``GET /summarize_work`` \u2014 legacy bullets/metrics summary or a degraded stub.",
+        "properties": {
+          "bullets": {
+            "default": [],
+            "items": {},
+            "title": "Bullets",
+            "type": "array"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "metrics": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metrics"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "top_skills": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top Skills"
+          }
+        },
+        "title": "SummarizeWorkResponse",
+        "type": "object"
+      },
+      "SupportMetricsResponse": {
+        "description": "``GET /support/metrics`` \u2014 SLA targets, performance, and queue status.",
+        "properties": {
+          "performance_metrics": {
+            "additionalProperties": true,
+            "title": "Performance Metrics",
+            "type": "object"
+          },
+          "queue_status": {
+            "additionalProperties": true,
+            "title": "Queue Status",
+            "type": "object"
+          },
+          "sla_targets": {
+            "additionalProperties": true,
+            "title": "Sla Targets",
+            "type": "object"
+          }
+        },
+        "required": [
+          "sla_targets",
+          "performance_metrics",
+          "queue_status"
+        ],
+        "title": "SupportMetricsResponse",
+        "type": "object"
+      },
+      "SystemServiceStatuses": {
+        "properties": {
+          "ai_inference": {
+            "title": "Ai Inference",
+            "type": "string"
+          },
+          "api_gateway": {
+            "title": "Api Gateway",
+            "type": "string"
+          },
+          "cache_layer": {
+            "title": "Cache Layer",
+            "type": "string"
+          },
+          "database": {
+            "title": "Database",
+            "type": "string"
+          }
+        },
+        "required": [
+          "api_gateway",
+          "database",
+          "cache_layer",
+          "ai_inference"
+        ],
+        "title": "SystemServiceStatuses",
+        "type": "object"
+      },
+      "SystemStatusResponse": {
+        "description": "``GET /status``.",
+        "properties": {
+          "incidents": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Incidents",
+            "type": "array"
+          },
+          "services": {
+            "$ref": "#/components/schemas/SystemServiceStatuses"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "services",
+          "incidents"
+        ],
+        "title": "SystemStatusResponse",
+        "type": "object"
+      },
+      "TieupIdea": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "papers": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AcademicPaperInfo"
+            },
+            "title": "Papers",
+            "type": "array"
+          },
+          "search_queries": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Search Queries",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "description"
+        ],
+        "title": "TieupIdea",
+        "type": "object"
+      },
+      "UploadDocumentResponse": {
+        "additionalProperties": true,
+        "description": "``POST /agent/upload_document`` \u2014 stored-document acknowledgement.",
+        "properties": {
+          "extracted_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extracted Text"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          }
+        },
+        "title": "UploadDocumentResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "Work": {
+        "properties": {
+          "authors": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authors"
+          },
+          "citations": {
+            "default": 0,
+            "title": "Citations",
+            "type": "integer"
+          },
+          "complexity_score": {
+            "default": 0.0,
+            "title": "Complexity Score",
+            "type": "number"
+          },
+          "creativity_score": {
+            "default": 0.0,
+            "title": "Creativity Score",
+            "type": "number"
+          },
+          "disruption_score": {
+            "default": 0.0,
+            "title": "Disruption Score",
+            "type": "number"
+          },
+          "doi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doi"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "impact_factor": {
+            "default": 0.0,
+            "title": "Impact Factor",
+            "type": "number"
+          },
+          "is_open_access": {
+            "default": false,
+            "title": "Is Open Access",
+            "type": "boolean"
+          },
+          "journal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Journal"
+          },
+          "open_science_score": {
+            "default": 0.0,
+            "title": "Open Science Score",
+            "type": "number"
+          },
+          "semantic_novelty": {
+            "default": 0.0,
+            "title": "Semantic Novelty",
+            "type": "number"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          }
+        },
+        "title": "Work",
+        "type": "object"
+      },
+      "ZoteroAuthResponse": {
+        "description": "``GET /integrations/zotero/auth``.",
+        "properties": {
+          "authorization_url": {
+            "title": "Authorization Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "authorization_url"
+        ],
+        "title": "ZoteroAuthResponse",
+        "type": "object"
+      },
+      "ZoteroCallbackResponse": {
+        "description": "``GET /integrations/zotero/callback``.",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "zotero_user_id": {
+            "title": "Zotero User Id",
+            "type": "string"
+          },
+          "zotero_username": {
+            "title": "Zotero Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "message",
+          "zotero_user_id",
+          "zotero_username"
+        ],
+        "title": "ZoteroCallbackResponse",
+        "type": "object"
+      },
+      "ZoteroSyncRequest": {
+        "properties": {
+          "papers": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Papers",
+            "type": "array"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "papers"
+        ],
+        "title": "ZoteroSyncRequest",
+        "type": "object"
+      },
+      "ZoteroSyncResponse": {
+        "description": "``POST /integrations/zotero/sync``.",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "synced_count": {
+            "title": "Synced Count",
+            "type": "integer"
+          },
+          "synced_papers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Synced Papers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "status",
+          "synced_count",
+          "synced_papers",
+          "message"
+        ],
+        "title": "ZoteroSyncResponse",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "Research intelligence backend powering the SkoLab Android app.\n\n**Auth**: Protected endpoints require a Firebase ID token in the `Authorization: Bearer <token>` header.\n\n**Rate limits**: `/agent/chat` and search endpoints \u2014 5 req/min per IP. All other endpoints \u2014 60 req/min per IP.",
+    "title": "SkoLab API",
+    "version": "1.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/": {
+      "get": {
+        "description": "Root endpoint returning API metadata for mobile client verification and discovery.",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppInfoResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Root"
+      }
+    },
+    "/agent/chat": {
+      "post": {
+        "operationId": "agent_chat_agent_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentChatResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Agent Chat",
+        "tags": [
+          "Agent"
+        ]
+      }
+    },
+    "/agent/upload_document": {
+      "post": {
+        "operationId": "upload_document_agent_upload_document_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_document_agent_upload_document_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadDocumentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Document",
+        "tags": [
+          "Agent"
+        ]
+      }
+    },
+    "/ai_status": {
+      "get": {
+        "description": "Checks if the AI services have valid API keys and are reachable.",
+        "operationId": "ai_status_ai_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ai Status",
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/analyze_paper": {
+      "get": {
+        "description": "Deep paper intelligence: reads the FULL paper text (PDF when available)\nand extracts 9 structured insight dimensions via a Research Intelligence Agent LLM.",
+        "operationId": "analyze_paper_analyze_paper_get",
+        "parameters": [
+          {
+            "description": "Full paper title",
+            "in": "query",
+            "name": "title",
+            "required": true,
+            "schema": {
+              "description": "Full paper title",
+              "title": "Title",
+              "type": "string"
+            }
+          },
+          {
+            "description": "DOI of the paper (e.g. 10.48550/arXiv.1706.03762)",
+            "in": "query",
+            "name": "doi",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "DOI of the paper (e.g. 10.48550/arXiv.1706.03762)",
+              "title": "Doi"
+            }
+          },
+          {
+            "description": "OpenAlex work ID (e.g. W2741809807 or full URL)",
+            "in": "query",
+            "name": "openalex_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "OpenAlex work ID (e.g. W2741809807 or full URL)",
+              "title": "Openalex Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaperIntelligenceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Analyze Paper",
+        "tags": [
+          "Papers"
+        ]
+      }
+    },
+    "/api/v1/": {
+      "get": {
+        "operationId": "read_root_api_v1__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RootResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Read Root",
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/agent/chat": {
+      "post": {
+        "operationId": "agent_chat_api_v1_agent_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentChatResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Agent Chat",
+        "tags": [
+          "Agent"
+        ]
+      }
+    },
+    "/api/v1/agent/upload_document": {
+      "post": {
+        "operationId": "upload_document_api_v1_agent_upload_document_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_document_api_v1_agent_upload_document_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadDocumentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Document",
+        "tags": [
+          "Agent"
+        ]
+      }
+    },
+    "/api/v1/ai_status": {
+      "get": {
+        "description": "Checks if the AI services have valid API keys and are reachable.",
+        "operationId": "ai_status_api_v1_ai_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ai Status",
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/analyze_paper": {
+      "get": {
+        "description": "Deep paper intelligence: reads the FULL paper text (PDF when available)\nand extracts 9 structured insight dimensions via a Research Intelligence Agent LLM.",
+        "operationId": "analyze_paper_api_v1_analyze_paper_get",
+        "parameters": [
+          {
+            "description": "Full paper title",
+            "in": "query",
+            "name": "title",
+            "required": true,
+            "schema": {
+              "description": "Full paper title",
+              "title": "Title",
+              "type": "string"
+            }
+          },
+          {
+            "description": "DOI of the paper (e.g. 10.48550/arXiv.1706.03762)",
+            "in": "query",
+            "name": "doi",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "DOI of the paper (e.g. 10.48550/arXiv.1706.03762)",
+              "title": "Doi"
+            }
+          },
+          {
+            "description": "OpenAlex work ID (e.g. W2741809807 or full URL)",
+            "in": "query",
+            "name": "openalex_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "OpenAlex work ID (e.g. W2741809807 or full URL)",
+              "title": "Openalex Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaperIntelligenceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Analyze Paper",
+        "tags": [
+          "Papers"
+        ]
+      }
+    },
+    "/api/v1/assistant_professor_roadmap": {
+      "get": {
+        "operationId": "get_assistant_professor_roadmap_api_v1_assistant_professor_roadmap_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "author_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Author Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name"
+            }
+          },
+          {
+            "in": "query",
+            "name": "focus",
+            "required": false,
+            "schema": {
+              "default": "AI",
+              "title": "Focus",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoadmapResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Assistant Professor Roadmap",
+        "tags": [
+          "Feed"
+        ]
+      }
+    },
+    "/api/v1/author_metrics": {
+      "get": {
+        "operationId": "get_author_metrics_api_v1_author_metrics_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "author_id",
+            "required": true,
+            "schema": {
+              "title": "Author Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorMetricsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Author Metrics",
+        "tags": [
+          "Authors"
+        ]
+      }
+    },
+    "/api/v1/chat_with_author": {
+      "post": {
+        "operationId": "chat_with_author_api_v1_chat_with_author_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatWithAuthorResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Chat With Author",
+        "tags": [
+          "Agent"
+        ]
+      }
+    },
+    "/api/v1/citation_heatmap": {
+      "get": {
+        "operationId": "get_citation_heatmap_api_v1_citation_heatmap_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "author_id",
+            "required": true,
+            "schema": {
+              "title": "Author Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CitationHeatmap"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Citation Heatmap",
+        "tags": [
+          "Authors"
+        ]
+      }
+    },
+    "/api/v1/collaborator_synergy": {
+      "get": {
+        "operationId": "get_collaborator_synergy_api_v1_collaborator_synergy_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "author_id",
+            "required": true,
+            "schema": {
+              "title": "Author Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "collaborator_id",
+            "required": true,
+            "schema": {
+              "title": "Collaborator Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollaboratorSynergyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Collaborator Synergy",
+        "tags": [
+          "Authors"
+        ]
+      }
+    },
+    "/api/v1/daily_conjecture": {
+      "get": {
+        "operationId": "get_daily_conjecture_api_v1_daily_conjecture_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "author_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Author Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConjectureResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Daily Conjecture",
+        "tags": [
+          "Feed"
+        ]
+      }
+    },
+    "/api/v1/daily_feed": {
+      "get": {
+        "operationId": "get_daily_feed_api_v1_daily_feed_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "author_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Author Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "query_fallback",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Query Fallback"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DailyFeedItem"
+                  },
+                  "title": "Response Get Daily Feed Api V1 Daily Feed Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Daily Feed",
+        "tags": [
+          "Feed"
+        ]
+      }
+    },
+    "/api/v1/daily_feed/dismiss": {
+      "post": {
+        "operationId": "dismiss_daily_feed_item_api_v1_daily_feed_dismiss_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DismissFeedItemRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DismissResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dismiss Daily Feed Item",
+        "tags": [
+          "Feed"
+        ]
+      }
+    },
+    "/api/v1/discovery/nexus-chat": {
+      "post": {
+        "operationId": "nexus_chat_api_v1_discovery_nexus_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NexusChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NexusChatResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Nexus Chat",
+        "tags": [
+          "Discovery Engine"
+        ]
+      }
+    },
+    "/api/v1/discovery/predict": {
+      "post": {
+        "operationId": "predict_discovery_api_v1_discovery_predict_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PredictRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BreakthroughPrediction"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Predict Discovery",
+        "tags": [
+          "Discovery Engine"
+        ]
+      }
+    },
+    "/api/v1/industry_academic_tieups": {
+      "get": {
+        "description": "Dynamically brainstorms and queries industry-academic tie-up ideas\nbased on the user's semantic memory profile and recent active topics.\nEach idea is enriched with real academic papers searched on OpenAlex.",
+        "operationId": "get_industry_academic_tieups_api_v1_industry_academic_tieups_get",
+        "parameters": [
+          {
+            "description": "Firebase UID of the user",
+            "in": "query",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "description": "Firebase UID of the user",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndustryAcademicTieupsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Industry Academic Tieups",
+        "tags": [
+          "Industry Academic"
+        ]
+      }
+    },
+    "/api/v1/industry_opportunities": {
+      "get": {
+        "operationId": "get_industry_opportunities_api_v1_industry_opportunities_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "focus",
+            "required": false,
+            "schema": {
+              "default": "AI",
+              "title": "Focus",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/IndustryOpportunity"
+                  },
+                  "title": "Response Get Industry Opportunities Api V1 Industry Opportunities Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Industry Opportunities",
+        "tags": [
+          "Feed"
+        ]
+      }
+    },
+    "/api/v1/integrations/zotero/auth": {
+      "get": {
+        "description": "Step 1: Returns the Zotero OAuth authorization URL to initiate link flow.",
+        "operationId": "zotero_auth_init_api_v1_integrations_zotero_auth_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoteroAuthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Zotero Auth Init",
+        "tags": [
+          "Integrations"
+        ]
+      }
+    },
+    "/api/v1/integrations/zotero/callback": {
+      "get": {
+        "description": "Step 2: Handles the Zotero redirect callback, exchanges token, and marks user as connected.",
+        "operationId": "zotero_auth_callback_api_v1_integrations_zotero_callback_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "oauth_token",
+            "required": true,
+            "schema": {
+              "title": "Oauth Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "oauth_verifier",
+            "required": true,
+            "schema": {
+              "title": "Oauth Verifier",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoteroCallbackResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Zotero Auth Callback",
+        "tags": [
+          "Integrations"
+        ]
+      }
+    },
+    "/api/v1/integrations/zotero/sync": {
+      "post": {
+        "description": "Step 3: Pushes a list of papers from the SkoLab SwipeVault directly into Zotero via Zotero API.",
+        "operationId": "zotero_sync_papers_api_v1_integrations_zotero_sync_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZoteroSyncRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoteroSyncResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Zotero Sync Papers",
+        "tags": [
+          "Integrations"
+        ]
+      }
+    },
+    "/api/v1/journal_advisor": {
+      "get": {
+        "operationId": "get_journal_advisor_api_v1_journal_advisor_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "author_id",
+            "required": true,
+            "schema": {
+              "title": "Author Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JournalRecommendation"
+                  },
+                  "title": "Response Get Journal Advisor Api V1 Journal Advisor Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Journal Advisor",
+        "tags": [
+          "Authors"
+        ]
+      }
+    },
+    "/api/v1/leaderboard/{field}": {
+      "get": {
+        "description": "Get the quest leaderboard for a specific scientific field.",
+        "operationId": "get_quests_leaderboard_api_v1_leaderboard__field__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "field",
+            "required": true,
+            "schema": {
+              "title": "Field",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LeaderboardEntry"
+                  },
+                  "title": "Response Get Quests Leaderboard Api V1 Leaderboard  Field  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Quests Leaderboard",
+        "tags": [
+          "Quests"
+        ]
+      }
+    },
+    "/api/v1/match_grants": {
+      "get": {
+        "operationId": "match_grants_api_v1_match_grants_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "author_id",
+            "required": true,
+            "schema": {
+              "title": "Author Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GrantMatch"
+                  },
+                  "title": "Response Match Grants Api V1 Match Grants Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Match Grants",
+        "tags": [
+          "Authors"
+        ]
+      }
+    },
+    "/api/v1/network_collaborators": {
+      "get": {
+        "operationId": "get_network_collaborators_api_v1_network_collaborators_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "author_id",
+            "required": true,
+            "schema": {
+              "title": "Author Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "exclude_ids",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Exclude Ids",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "field",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Field",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NetworkCollaborator"
+                  },
+                  "title": "Response Get Network Collaborators Api V1 Network Collaborators Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Network Collaborators",
+        "tags": [
+          "Authors"
+        ]
+      }
+    },
+    "/api/v1/presentation_outline": {
+      "get": {
+        "operationId": "presentation_outline_api_v1_presentation_outline_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "title",
+            "required": true,
+            "schema": {
+              "title": "Title",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "doi",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Doi"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresentationOutlineResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Presentation Outline",
+        "tags": [
+          "Papers"
+        ]
+      }
+    },
+    "/api/v1/recommendations/peers": {
+      "get": {
+        "description": "Search and rank registered and cached researchers matching query criteria.",
+        "operationId": "get_peer_recommendations_api_v1_recommendations_peers_get",
+        "parameters": [
+          {
+            "description": "Query name, username, email, phone, or focus",
+            "in": "query",
+            "name": "query",
+            "required": true,
+            "schema": {
+              "description": "Query name, username, email, phone, or focus",
+              "title": "Query",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Current logged-in user ID for personalized ranking",
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Current logged-in user ID for personalized ranking",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PeerRecommendation"
+                  },
+                  "title": "Response Get Peer Recommendations Api V1 Recommendations Peers Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get peer recommendations for autocomplete",
+        "tags": [
+          "Recommendations",
+          "Recommendations"
+        ]
+      }
+    },
+    "/api/v1/recommendations/peers/check-registered": {
+      "post": {
+        "operationId": "check_registered_peers_api_v1_recommendations_peers_check_registered_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisteredCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisteredCheckResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check which emails/phones are registered in SkoLab",
+        "tags": [
+          "Recommendations",
+          "Recommendations"
+        ]
+      }
+    },
+    "/api/v1/recommendations/peers/invite": {
+      "post": {
+        "operationId": "log_peer_invite_api_v1_recommendations_peers_invite_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PeerInviteLogRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogPeerInviteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Log peer invitation to update recommendation engine scores",
+        "tags": [
+          "Recommendations",
+          "Recommendations"
+        ]
+      }
+    },
+    "/api/v1/refresh_author": {
+      "get": {
+        "description": "Explicitly re-runs the teleportation worker to update Firestore data.",
+        "operationId": "refresh_author_api_v1_refresh_author_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshAuthorResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Refresh Author",
+        "tags": [
+          "Authors"
+        ]
+      }
+    },
+    "/api/v1/search_author": {
+      "get": {
+        "operationId": "search_author_api_v1_search_author_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "focus",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Focus"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Author",
+        "tags": [
+          "Authors"
+        ]
+      }
+    },
+    "/api/v1/semantic_trending": {
+      "get": {
+        "description": "Returns papers trending specifically in the author's research field.",
+        "operationId": "get_semantic_trending_api_v1_semantic_trending_get",
+        "parameters": [
+          {
+            "description": "Full OpenAlex author URI or short ID",
+            "in": "query",
+            "name": "author_id",
+            "required": true,
+            "schema": {
+              "description": "Full OpenAlex author URI or short ID",
+              "title": "Author Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 30,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SemanticTrendingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Semantic Trending",
+        "tags": [
+          "Papers"
+        ]
+      }
+    },
+    "/api/v1/status": {
+      "get": {
+        "description": "Returns a public system status report detailing service availability and active/past incidents.",
+        "operationId": "get_system_status_api_v1_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get System Status",
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/summarize_work": {
+      "get": {
+        "operationId": "summarize_work_api_v1_summarize_work_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "title",
+            "required": true,
+            "schema": {
+              "title": "Title",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "doi",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Doi"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummarizeWorkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Summarize Work",
+        "tags": [
+          "Papers"
+        ]
+      }
+    },
+    "/api/v1/support/metrics": {
+      "get": {
+        "operationId": "get_support_metrics_api_v1_support_metrics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportMetricsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Support Metrics",
+        "tags": [
+          "Support"
+        ]
+      }
+    },
+    "/api/v1/users/quests": {
+      "get": {
+        "description": "LLM-based quest initialisation for new users.\nCalled only when Go gateway proxies here because quests don't exist in PG yet.",
+        "operationId": "get_user_quests_api_v1_users_quests_get",
+        "parameters": [
+          {
+            "description": "The user ID",
+            "in": "query",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "description": "The user ID",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Quest"
+                  },
+                  "title": "Response Get User Quests Api V1 Users Quests Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get User Quests",
+        "tags": [
+          "Quests"
+        ]
+      }
+    },
+    "/assistant_professor_roadmap": {
+      "get": {
+        "operationId": "get_assistant_professor_roadmap_assistant_professor_roadmap_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "author_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Author Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name"
+            }
+          },
+          {
+            "in": "query",
+            "name": "focus",
+            "required": false,
+            "schema": {
+              "default": "AI",
+              "title": "Focus",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoadmapResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Assistant Professor Roadmap",
+        "tags": [
+          "Feed"
+        ]
+      }
+    },
+    "/author_metrics": {
+      "get": {
+        "operationId": "get_author_metrics_author_metrics_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "author_id",
+            "required": true,
+            "schema": {
+              "title": "Author Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorMetricsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Author Metrics",
+        "tags": [
+          "Authors"
+        ]
+      }
+    },
+    "/chat_with_author": {
+      "post": {
+        "operationId": "chat_with_author_chat_with_author_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatWithAuthorResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Chat With Author",
+        "tags": [
+          "Agent"
+        ]
+      }
+    },
+    "/citation_heatmap": {
+      "get": {
+        "operationId": "get_citation_heatmap_citation_heatmap_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "author_id",
+            "required": true,
+            "schema": {
+              "title": "Author Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CitationHeatmap"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Citation Heatmap",
+        "tags": [
+          "Authors"
+        ]
+      }
+    },
+    "/collaborator_synergy": {
+      "get": {
+        "operationId": "get_collaborator_synergy_collaborator_synergy_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "author_id",
+            "required": true,
+            "schema": {
+              "title": "Author Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "collaborator_id",
+            "required": true,
+            "schema": {
+              "title": "Collaborator Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollaboratorSynergyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Collaborator Synergy",
+        "tags": [
+          "Authors"
+        ]
+      }
+    },
+    "/daily_conjecture": {
+      "get": {
+        "operationId": "get_daily_conjecture_daily_conjecture_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "author_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Author Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConjectureResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Daily Conjecture",
+        "tags": [
+          "Feed"
+        ]
+      }
+    },
+    "/daily_feed": {
+      "get": {
+        "operationId": "get_daily_feed_daily_feed_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "author_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Author Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "query_fallback",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Query Fallback"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DailyFeedItem"
+                  },
+                  "title": "Response Get Daily Feed Daily Feed Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Daily Feed",
+        "tags": [
+          "Feed"
+        ]
+      }
+    },
+    "/daily_feed/dismiss": {
+      "post": {
+        "operationId": "dismiss_daily_feed_item_daily_feed_dismiss_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DismissFeedItemRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DismissResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dismiss Daily Feed Item",
+        "tags": [
+          "Feed"
+        ]
+      }
+    },
+    "/discovery/nexus-chat": {
+      "post": {
+        "operationId": "nexus_chat_discovery_nexus_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NexusChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NexusChatResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Nexus Chat",
+        "tags": [
+          "Discovery Engine"
+        ]
+      }
+    },
+    "/discovery/predict": {
+      "post": {
+        "operationId": "predict_discovery_discovery_predict_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PredictRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BreakthroughPrediction"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Predict Discovery",
+        "tags": [
+          "Discovery Engine"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "description": "Dynamic status check verifying database and cache connectivity.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    },
+    "/industry_academic_tieups": {
+      "get": {
+        "description": "Dynamically brainstorms and queries industry-academic tie-up ideas\nbased on the user's semantic memory profile and recent active topics.\nEach idea is enriched with real academic papers searched on OpenAlex.",
+        "operationId": "get_industry_academic_tieups_industry_academic_tieups_get",
+        "parameters": [
+          {
+            "description": "Firebase UID of the user",
+            "in": "query",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "description": "Firebase UID of the user",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndustryAcademicTieupsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Industry Academic Tieups",
+        "tags": [
+          "Industry Academic"
+        ]
+      }
+    },
+    "/industry_opportunities": {
+      "get": {
+        "operationId": "get_industry_opportunities_industry_opportunities_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "focus",
+            "required": false,
+            "schema": {
+              "default": "AI",
+              "title": "Focus",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/IndustryOpportunity"
+                  },
+                  "title": "Response Get Industry Opportunities Industry Opportunities Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Industry Opportunities",
+        "tags": [
+          "Feed"
+        ]
+      }
+    },
+    "/integrations/zotero/auth": {
+      "get": {
+        "description": "Step 1: Returns the Zotero OAuth authorization URL to initiate link flow.",
+        "operationId": "zotero_auth_init_integrations_zotero_auth_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoteroAuthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Zotero Auth Init",
+        "tags": [
+          "Integrations"
+        ]
+      }
+    },
+    "/integrations/zotero/callback": {
+      "get": {
+        "description": "Step 2: Handles the Zotero redirect callback, exchanges token, and marks user as connected.",
+        "operationId": "zotero_auth_callback_integrations_zotero_callback_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "oauth_token",
+            "required": true,
+            "schema": {
+              "title": "Oauth Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "oauth_verifier",
+            "required": true,
+            "schema": {
+              "title": "Oauth Verifier",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoteroCallbackResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Zotero Auth Callback",
+        "tags": [
+          "Integrations"
+        ]
+      }
+    },
+    "/integrations/zotero/sync": {
+      "post": {
+        "description": "Step 3: Pushes a list of papers from the SkoLab SwipeVault directly into Zotero via Zotero API.",
+        "operationId": "zotero_sync_papers_integrations_zotero_sync_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZoteroSyncRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoteroSyncResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Zotero Sync Papers",
+        "tags": [
+          "Integrations"
+        ]
+      }
+    },
+    "/journal_advisor": {
+      "get": {
+        "operationId": "get_journal_advisor_journal_advisor_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "author_id",
+            "required": true,
+            "schema": {
+              "title": "Author Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JournalRecommendation"
+                  },
+                  "title": "Response Get Journal Advisor Journal Advisor Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Journal Advisor",
+        "tags": [
+          "Authors"
+        ]
+      }
+    },
+    "/leaderboard/{field}": {
+      "get": {
+        "description": "Get the quest leaderboard for a specific scientific field.",
+        "operationId": "get_quests_leaderboard_leaderboard__field__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "field",
+            "required": true,
+            "schema": {
+              "title": "Field",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LeaderboardEntry"
+                  },
+                  "title": "Response Get Quests Leaderboard Leaderboard  Field  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Quests Leaderboard",
+        "tags": [
+          "Quests"
+        ]
+      }
+    },
+    "/livez": {
+      "get": {
+        "description": "Liveness probe \u2014 the process is up. Makes NO dependency calls, so a DB\nor cache blip never triggers an orchestrator restart of a healthy pod.",
+        "operationId": "livez_livez_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LivenessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Livez"
+      }
+    },
+    "/match_grants": {
+      "get": {
+        "operationId": "match_grants_match_grants_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "author_id",
+            "required": true,
+            "schema": {
+              "title": "Author Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GrantMatch"
+                  },
+                  "title": "Response Match Grants Match Grants Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Match Grants",
+        "tags": [
+          "Authors"
+        ]
+      }
+    },
+    "/metrics": {
+      "get": {
+        "description": "Prometheus metrics endpoint in plain text exposition format.",
+        "operationId": "metrics_metrics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Metrics"
+      }
+    },
+    "/network_collaborators": {
+      "get": {
+        "operationId": "get_network_collaborators_network_collaborators_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "author_id",
+            "required": true,
+            "schema": {
+              "title": "Author Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "exclude_ids",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Exclude Ids",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "field",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Field",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NetworkCollaborator"
+                  },
+                  "title": "Response Get Network Collaborators Network Collaborators Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Network Collaborators",
+        "tags": [
+          "Authors"
+        ]
+      }
+    },
+    "/presentation_outline": {
+      "get": {
+        "operationId": "presentation_outline_presentation_outline_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "title",
+            "required": true,
+            "schema": {
+              "title": "Title",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "doi",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Doi"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresentationOutlineResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Presentation Outline",
+        "tags": [
+          "Papers"
+        ]
+      }
+    },
+    "/readyz": {
+      "get": {
+        "description": "Readiness probe \u2014 should traffic route here? 503 drains this instance.",
+        "operationId": "readyz_readyz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Readyz"
+      }
+    },
+    "/recommendations/peers": {
+      "get": {
+        "description": "Search and rank registered and cached researchers matching query criteria.",
+        "operationId": "get_peer_recommendations_recommendations_peers_get",
+        "parameters": [
+          {
+            "description": "Query name, username, email, phone, or focus",
+            "in": "query",
+            "name": "query",
+            "required": true,
+            "schema": {
+              "description": "Query name, username, email, phone, or focus",
+              "title": "Query",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Current logged-in user ID for personalized ranking",
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Current logged-in user ID for personalized ranking",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PeerRecommendation"
+                  },
+                  "title": "Response Get Peer Recommendations Recommendations Peers Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get peer recommendations for autocomplete",
+        "tags": [
+          "Recommendations",
+          "Recommendations"
+        ]
+      }
+    },
+    "/recommendations/peers/check-registered": {
+      "post": {
+        "operationId": "check_registered_peers_recommendations_peers_check_registered_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisteredCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisteredCheckResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check which emails/phones are registered in SkoLab",
+        "tags": [
+          "Recommendations",
+          "Recommendations"
+        ]
+      }
+    },
+    "/recommendations/peers/invite": {
+      "post": {
+        "operationId": "log_peer_invite_recommendations_peers_invite_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PeerInviteLogRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogPeerInviteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Log peer invitation to update recommendation engine scores",
+        "tags": [
+          "Recommendations",
+          "Recommendations"
+        ]
+      }
+    },
+    "/refresh_author": {
+      "get": {
+        "description": "Explicitly re-runs the teleportation worker to update Firestore data.",
+        "operationId": "refresh_author_refresh_author_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshAuthorResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Refresh Author",
+        "tags": [
+          "Authors"
+        ]
+      }
+    },
+    "/search_author": {
+      "get": {
+        "operationId": "search_author_search_author_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "focus",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Focus"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Author",
+        "tags": [
+          "Authors"
+        ]
+      }
+    },
+    "/semantic_trending": {
+      "get": {
+        "description": "Returns papers trending specifically in the author's research field.",
+        "operationId": "get_semantic_trending_semantic_trending_get",
+        "parameters": [
+          {
+            "description": "Full OpenAlex author URI or short ID",
+            "in": "query",
+            "name": "author_id",
+            "required": true,
+            "schema": {
+              "description": "Full OpenAlex author URI or short ID",
+              "title": "Author Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 30,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SemanticTrendingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Semantic Trending",
+        "tags": [
+          "Papers"
+        ]
+      }
+    },
+    "/status": {
+      "get": {
+        "description": "Returns a public system status report detailing service availability and active/past incidents.",
+        "operationId": "get_system_status_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get System Status",
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/summarize_work": {
+      "get": {
+        "operationId": "summarize_work_summarize_work_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "title",
+            "required": true,
+            "schema": {
+              "title": "Title",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "doi",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Doi"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummarizeWorkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Summarize Work",
+        "tags": [
+          "Papers"
+        ]
+      }
+    },
+    "/support/metrics": {
+      "get": {
+        "operationId": "get_support_metrics_support_metrics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportMetricsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Support Metrics",
+        "tags": [
+          "Support"
+        ]
+      }
+    },
+    "/users/quests": {
+      "get": {
+        "description": "LLM-based quest initialisation for new users.\nCalled only when Go gateway proxies here because quests don't exist in PG yet.",
+        "operationId": "get_user_quests_users_quests_get",
+        "parameters": [
+          {
+            "description": "The user ID",
+            "in": "query",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "description": "The user ID",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Quest"
+                  },
+                  "title": "Response Get User Quests Users Quests Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get User Quests",
+        "tags": [
+          "Quests"
+        ]
+      }
+    }
+  },
+  "tags": [
+    {
+      "description": "AI research agent \u2014 chat, document upload, cover letters.",
+      "name": "agent"
+    },
+    {
+      "description": "Paper search, feed, and recommendations.",
+      "name": "papers"
+    },
+    {
+      "description": "Researcher profiles, metrics, and co-author graphs.",
+      "name": "authors"
+    },
+    {
+      "description": "User account management and GDPR deletion.",
+      "name": "users"
+    },
+    {
+      "description": "Personalised daily feed and trending items.",
+      "name": "feed"
+    },
+    {
+      "description": "Health, metrics, and AI status endpoints.",
+      "name": "system"
+    }
+  ]
+}
