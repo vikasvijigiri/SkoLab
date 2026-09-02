@@ -134,4 +134,10 @@ dependency, so an optional route's `dependant` tree shows only `get_optional_use
 - **Stacked on PR #6.** If PR #6 is rewritten, this branch rebases. PR #6 is green and reviewed — low risk.
 - SP-2 (observability) and SP-3 (web Firestore) — their own specs, after this.
 
-[NEEDS CLARIFICATION: `api-contracts/openapi.snapshot.json` generation — this plan adds `scripts/gen_openapi_snapshot.py` and expects you to run it once (`pip install -r services/backend/requirements-dev.txt && python services/backend/scripts/gen_openapi_snapshot.py`) and commit the JSON, since there is no backend-capable Python here. Alternative: a one-shot CI job that generates and commits the snapshot back to the branch (needs a write token). Confirm the script-and-manual-commit path, or ask for the CI-commit job.]
+## Resolved at Gate 1
+
+- **openapi.snapshot.json generation** -> committed script `services/backend/scripts/gen_openapi_snapshot.py` (Task 2); the user runs `pip install -r services/backend/requirements-dev.txt && python services/backend/scripts/gen_openapi_snapshot.py` once in a backend env and commits the JSON. `test_openapi.py`'s equality assertion arms itself once the file exists. No CI-commit job.
+
+## Approved
+
+Gate 1 passed 2026-09-02. Marker resolved with the recommended option. Proceed to implementation on `feat/backend-auth-posture` (stacked on PR #6).
