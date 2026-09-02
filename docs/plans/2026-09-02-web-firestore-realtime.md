@@ -153,6 +153,11 @@
 - **Listener dedupe** — two components mounting the same `useFirestoreDoc` path open two listeners. Accepted (spec §4); a `useSyncExternalStore` registry is the upgrade path.
 - **Sub-subscriptions in `*Tab` components** (`subscribeMessages`/`Tasks`/`Meetings`) — out of scope; a follow-up can adopt `useFirestoreCollection` there.
 
-[NEEDS CLARIFICATION: §Task 1 — `firebase/firestore` test mock: register it **globally** in `src/test/setup.ts` (`vi.mock("firebase/firestore", ...)` — every test file gets the stub, simplest, but non-Firestore tests carry an unused mock) vs **opt-in** (`src/test/firestore.ts` exports a `mockFirestore()` the Firestore test files call — explicit, one line per test file)? Recommend global: the SDK is never wanted for real in jsdom and a global stub matches how `IntersectionObserver` etc. are already handled in `setup.ts`.]
+## Resolved at Gate 1
 
-[NEEDS CLARIFICATION: §Task 2 — `useMyProfile`'s `firestoreProfile` from `useFirestoreDoc` makes `profile`/`home`/`horizon` re-render on any `researchers/{uid}` write (live profile — matches Android, the intended improvement). Confirm live now, or keep the Firestore read one-shot (`getDoc` inside a `useQuery` with a stable key, still deleting the `cancelled`/`refetchToken` boilerplate) and defer "live profile" to its own change? Recommend live now — it is the same subscription machinery the workspace pages use and defers nothing.]
+- **Firestore test mock**: registered **globally** in `src/test/setup.ts` via `vi.mock("firebase/firestore", ...)` (+ a `@/lib/firebase/client` `requireDb` stub). Same treatment as `IntersectionObserver` / `matchMedia`.
+- **`useMyProfile` Firestore profile goes LIVE now** via `useFirestoreDoc` — `profile`/`home`/`horizon` re-render on a `researchers/{uid}` write.
+
+## Approved
+
+Gate 1 passed 2026-09-02. Both markers resolved with the recommended options. Proceed to implementation on `feat/web-firestore-realtime`.
