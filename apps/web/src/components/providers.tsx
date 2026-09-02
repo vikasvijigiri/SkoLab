@@ -13,9 +13,26 @@ export function makeQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
+        // Baseline; heavy queries set their own staleTime aligned to the
+        // server cache TTL (see lib/api/queries.ts).
         staleTime: 60_000,
-        retry: 2,
+        // Keep unmounted data resident for 30 min so navigating back to a
+        // page inside that window paints instantly instead of re-fetching.
+        gcTime: 30 * 60_000,
+        // One retry, backed off — a degraded backend was getting 3x the load
+        // (original + 2 retries) per query. Don't retry a 4xx; it won't change.
+        retry: (failureCount, error) => {
+          const status = (error as { status?: number })?.status;
+          if (status && status >= 400 && status < 500) return false;
+          return failureCount < 1;
+        },
+        retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
         refetchOnWindowFocus: false,
+      },
+      mutations: {
+        // Never auto-retry a mutation (Horizon predict, Nexus chat, dismiss):
+        // it may have already been applied server-side.
+        retry: 0,
       },
     },
   });
