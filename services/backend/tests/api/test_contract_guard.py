@@ -1,16 +1,17 @@
 """The mechanism that makes "every route is typed" a test, not a promise.
 
-``UNTYPED_ALLOWLIST`` is seeded with every route that lacks a ``response_model``
-today. Each wiring task removes its paths. The plan is done when it is empty
-(Task 11 flips the final assertion). ``PERMANENT_ALLOWLIST`` holds infra routes
-that legitimately return a raw response.
+``PERMANENT_ALLOWLIST`` holds infra routes that legitimately return a raw
+response. ``UNTYPED_ALLOWLIST`` is empty and must stay empty.
+
+Routes are enumerated with ``_route_walk.iter_api_routes`` — FastAPI 0.141
+includes sub-routers lazily, so ``app.routes`` alone shows only ``/``,
+``/health`` and ``/metrics``. ``test_route_table_is_populated`` is the backstop
+against a vacuous pass.
 """
 
 from __future__ import annotations
 
-from fastapi.routing import APIRoute
-
-from app.main import app
+from ._route_walk import iter_api_routes
 
 _V1_PREFIX = "/api/v1"
 _HTTP_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
@@ -21,9 +22,7 @@ PERMANENT_ALLOWLIST: set[str] = {
     "/metrics",  # Prometheus text/plain exposition format, not JSON
 }
 
-# Routes still awaiting a response_model. Shrank to empty across Tasks 4–11 —
-# it MUST stay empty. A new untyped route either gets a response_model or a
-# justified PERMANENT_ALLOWLIST entry; it does not come back here.
+# Routes still awaiting a response_model — MUST stay empty.
 UNTYPED_ALLOWLIST: set[str] = set()
 
 
@@ -33,21 +32,28 @@ def _norm(path: str) -> str:
     return path
 
 
-def _api_routes() -> list[APIRoute]:
+def _routes(app):
+    """(normalised path, route) for every HTTP APIRoute in the app."""
     out = []
-    for route in app.routes:
-        if not isinstance(route, APIRoute):
-            continue
-        if not (route.methods or set()) & _HTTP_METHODS:
-            continue
-        out.append(route)
+    for full_path, route in iter_api_routes(app.routes):
+        if (route.methods or set()) & _HTTP_METHODS:
+            out.append((_norm(full_path), route))
     return out
 
 
-def test_every_route_has_a_response_model_or_is_allowlisted():
+def test_route_table_is_populated(app):
+    """Backstop against a vacuous pass — the walk must reach the real surface."""
+    n = len(_routes(app))
+    assert n > 20, (
+        f"only {n} API routes reachable — the lazy router tree is not being "
+        f"resolved; every other assertion here would pass vacuously. "
+        f"paths={sorted(p for p, _ in _routes(app))}"
+    )
+
+
+def test_every_route_has_a_response_model_or_is_allowlisted(app):
     offenders: list[tuple[str, list[str]]] = []
-    for route in _api_routes():
-        path = _norm(route.path)
+    for path, route in _routes(app):
         if route.response_model is not None:
             continue
         if path in PERMANENT_ALLOWLIST or path in UNTYPED_ALLOWLIST:
@@ -61,21 +67,19 @@ def test_every_route_has_a_response_model_or_is_allowlisted():
 
 
 def test_untyped_allowlist_is_empty():
-    # The plan's terminal invariant: every APIRoute is typed or permanently
-    # allow-listed with a reason. Nothing sits in the shrinking list any more.
     assert UNTYPED_ALLOWLIST == set()
 
 
-def test_allowlist_has_no_entry_that_is_already_typed():
-    typed = {_norm(r.path) for r in _api_routes() if r.response_model is not None}
-    # A path is "typed" only if it has NO untyped variant left.
-    untyped = {_norm(r.path) for r in _api_routes() if r.response_model is None}
+def test_allowlist_has_no_entry_that_is_already_typed(app):
+    routes = _routes(app)
+    typed = {p for p, r in routes if r.response_model is not None}
+    untyped = {p for p, r in routes if r.response_model is None}
     fully_typed = typed - untyped
     stale = (UNTYPED_ALLOWLIST | PERMANENT_ALLOWLIST) & fully_typed
     assert not stale, f"allow-list entries that are already typed: {sorted(stale)}"
 
 
-def test_every_allowlist_entry_points_at_a_real_route():
-    all_paths = {_norm(r.path) for r in _api_routes()}
+def test_every_allowlist_entry_points_at_a_real_route(app):
+    all_paths = {p for p, _ in _routes(app)}
     missing = (UNTYPED_ALLOWLIST | PERMANENT_ALLOWLIST) - all_paths
     assert not missing, f"allow-list entries with no matching route: {sorted(missing)}"
