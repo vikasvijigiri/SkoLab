@@ -71,6 +71,16 @@ jobs:
         # and retries init_db(), which otherwise fails flakily mid-transaction.
         python ci_bootstrap_db.py
         pytest tests/
+        # TEMP: generate the OpenAPI snapshot so it can be committed once
+        # (removed in the same PR after the artifact is downloaded).
+        python scripts/gen_openapi_snapshot.py
+
+    - name: Upload OpenAPI snapshot (temp)
+      uses: actions/upload-artifact@v4
+      with:
+        name: openapi-snapshot
+        path: api-contracts/openapi.snapshot.json
+        if-no-files-found: error
 
     - name: Verify Go Gateway Build
       run: |
