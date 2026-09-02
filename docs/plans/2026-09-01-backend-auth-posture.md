@@ -50,6 +50,12 @@ dependency, so an optional route's `dependant` tree shows only `get_optional_use
 - [x] Task 2 — `gen_openapi_snapshot.py` generator + `test_openapi.py` message fix
 - [x] Task 3 — `docs/backend-auth-posture.md` + README pointer
 
+**CI result (PR #7, `bbe5e25` → base `main`, 2026-09-02):** `build-and-test`
+`138 passed, 1 skipped`; all workflows green. Execution required an unplanned
+debugging detour (FastAPI 0.141 lazy `_IncludedRouter` inclusion — see the
+deviations table) which also fixed a latent PR #6 bug where `test_contract_guard`
+had been passing vacuously.
+
 ## Constitution gate
 - [x] I Evidence — each task names its pytest / ruff / py_compile command and expected result
 - [x] II Test first — T1 *is* the test; it carries a self-check (classifier must flag a known authed route) so it cannot pass vacuously
