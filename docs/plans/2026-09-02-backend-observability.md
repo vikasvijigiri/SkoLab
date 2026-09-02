@@ -142,6 +142,7 @@
 
 ## Notes from execution
 
+- **CI green (PR #8, `14de56f`):** `build-and-test` `142 passed, 1 skipped`; web green. First push (`719aee1`) failed one test — `Settings` is a frozen dataclass so `monkeypatch.setattr` on `settings.sentry_dsn` raised `FrozenInstanceError`; fixed by swapping `observability.settings` for a `SimpleNamespace` stand-in.
 - **`.env.example` NOT modified** (planned in T3). The `pre-commit` secret-scan hook re-scans the whole staged file and flags the **pre-existing** `DATABASE_URL` line in that file (it carries an inline-credential connection string) — not this PR's line. Fixing that pre-existing line is out of scope. `SENTRY_DSN` is documented in `app/core/config.py`'s field comment and `docs/backend-auth-posture.md` instead; adding it to `.env.example` is a follow-up bundled with a `DATABASE_URL` placeholder cleanup.
 - `traces_sample_rate=0.0` hard-coded in `observability.py` (Gate-1 choice) rather than left as a config knob — matches the spec's recommendation; a knob can be added when a real DSN and traffic exist.
 - `sentry-sdk[fastapi]==2.42.0` pinned (available on PyPI; CI resolves it). T1's fallback (newest resolvable 2.x) was not needed pending the CI run.
