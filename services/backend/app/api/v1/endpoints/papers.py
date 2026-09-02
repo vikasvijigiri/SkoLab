@@ -5,6 +5,11 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.core import PaperIntelligenceResponse
+from app.schemas.papers_extra import (
+    PresentationOutlineResponse,
+    SemanticTrendingResponse,
+    SummarizeWorkResponse,
+)
 from app.services.ai.summarization_service import SummarizationService
 from app.services.platform.pipeline_services import PipelineServices
 from app.services.data.openalex_service import OpenAlexService
@@ -19,18 +24,13 @@ from app.core.cache import analyze_paper_cache, _semantic_trending_cache
 router = APIRouter()
 
 
-@router.get("/summarize_work")
+@router.get("/summarize_work", response_model=SummarizeWorkResponse)
 async def summarize_work(
     title: str = Query(...),
     doi: Optional[str] = None,
     summarization_service: SummarizationService = Depends(get_summarization_service),
 ):
-    try:
-        return await summarization_service.summarize_paper(title, doi)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return await summarization_service.summarize_paper(title, doi)
 
 
 @router.get("/analyze_paper", response_model=PaperIntelligenceResponse)
@@ -54,35 +54,28 @@ async def analyze_paper(
         print(f"[/analyze_paper] Cache hit for: {title[:50]}", flush=True)
         return cached
 
-    try:
-        result = await summarization_service.analyze_paper(
-            title=title,
-            doi=doi,
-            openalex_id=openalex_id,
-        )
-        await analyze_paper_cache.set(cache_key, result)
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    result = await summarization_service.analyze_paper(
+        title=title,
+        doi=doi,
+        openalex_id=openalex_id,
+    )
+    await analyze_paper_cache.set(cache_key, result)
+    return result
 
 
-@router.get("/presentation_outline")
+@router.get("/presentation_outline", response_model=PresentationOutlineResponse)
 async def presentation_outline(
     title: str = Query(...),
     doi: Optional[str] = None,
     summarization_service: SummarizationService = Depends(get_summarization_service),
 ):
-    try:
-        return await summarization_service.generate_presentation(title, doi)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return await summarization_service.generate_presentation(title, doi)
 
 
-@router.get("/semantic_trending")
+# NOTE: /semantic_trending returns a fixed-size object envelope (not an unbounded
+# list) and already bounds its own `limit` (1..30). Left as-is per the plan's
+# "inherently small and fixed" carve-out; only response_model is added.
+@router.get("/semantic_trending", response_model=SemanticTrendingResponse)
 async def get_semantic_trending(
     author_id: str = Query(..., description="Full OpenAlex author URI or short ID"),
     limit: int = Query(10, ge=1, le=30),

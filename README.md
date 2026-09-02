@@ -37,7 +37,7 @@ SkoLab/
 ├── shared/
 │   └── skolab-design-system/    # Central design tokens and compiler
 ├── infrastructure/              # Prometheus, Grafana, Alertmanager config
-├── api-contracts/               # Schema-first OpenAPI Specifications
+├── api-contracts/               # Generated OpenAPI schema snapshot + docs (see /openapi.json, /docs)
 ├── tools/                       # Cache clearing and cleanup utilities
 ├── scripts/                     # Local build and environment scripts
 └── tests/                       # Unit, integration, and load testing suites
