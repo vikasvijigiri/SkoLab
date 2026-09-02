@@ -1,0 +1,52 @@
+# Render Blueprint — the Go API gateway (services/backend-go) on the free plan.
+#
+# The Next.js frontend goes to Vercel and the Python/ML backend to a Hugging
+# Face Space; see DEPLOY.md for the full runbook. Only the gateway lives here
+# because Render's free web service (512 MB) fits a ~20 MB Go binary but not a
+# PyTorch image.
+#
+# First deploy: Render dashboard -> New -> Blueprint -> pick this repo. Render
+# reads this file, creates the service, and prompts for every `sync: false`
+# value below. Redeploys happen on push to `branch`.
+
+services:
+  - type: web
+    name: skolab-gateway
+    runtime: docker
+    repo: https://github.com/vikasvijigiri/SkoLab
+    branch: main
+    plan: free
+    region: oregon
+    dockerfilePath: ./services/backend-go/Dockerfile
+    dockerContext: ./services/backend-go
+    healthCheckPath: /gateway-health
+    envVars:
+      # main.go binds a hardcoded ":8080"; tell Render to route to that port
+      # rather than its default 10000. (Alternative: teach main.go to read PORT
+      # — see DEPLOY.md "Optional code change".)
+      - key: PORT
+        value: "8080"
+      # Fail Firebase auth closed instead of falling back to a dev user.
+      - key: GIN_MODE
+        value: release
+      # https URL of the Hugging Face Space running services/backend.
+      - key: PYTHON_BACKEND_URL
+        sync: false
+      # Supabase "Connection string" -> "URI" (session pooler, port 5432).
+      - key: DATABASE_URL
+        sync: false
+      # Comma-separated exact origins allowed by the gateway CORS layer
+      # (internal/middleware/cors.go). Set to the Vercel production URL, e.g.
+      # https://skolab.vercel.app
+      - key: CORS_ORIGINS
+        sync: false
+      # Optional. Leave unset for memory-only pub/sub; set to an Upstash
+      # redis:// URL to share state across instances.
+      - key: REDIS_URL
+        sync: false
+      # firebase.NewApp(ctx, nil) uses Application Default Credentials, i.e. a
+      # service-account JSON file at this path. Upload that JSON in the Render
+      # dashboard as a Secret File named service-account.json (mounted under
+      # /etc/secrets), then keep this value pointing at it.
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: /etc/secrets/service-account.json
