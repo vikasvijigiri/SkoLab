@@ -19,6 +19,7 @@ _HTTP_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 # Infra routes that return a raw Response / plain text by design — never typed.
 PERMANENT_ALLOWLIST: set[str] = {
     "/health",  # returns Response with a dynamic 200/503 status code
+    "/readyz",  # infra: raw Response, dynamic 200/503
     "/metrics",  # Prometheus text/plain exposition format, not JSON
 }
 

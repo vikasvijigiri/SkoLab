@@ -4,6 +4,32 @@ from httpx import AsyncClient
 from app.main import app, metrics_store
 
 
+def test_init_observability_is_inert_without_dsn(monkeypatch):
+    """No SENTRY_DSN -> init_observability() is a no-op, Sentry stays inactive."""
+    from types import SimpleNamespace
+
+    import sentry_sdk
+
+    from app.core import observability as obs_mod
+
+    # `Settings` is a frozen dataclass — swap the module-level reference for a
+    # stand-in with an empty DSN rather than mutating the frozen instance.
+    monkeypatch.setattr(
+        obs_mod,
+        "settings",
+        SimpleNamespace(sentry_dsn="", environment="test"),
+    )
+
+    assert obs_mod.init_observability() is None  # does not raise
+
+    client = sentry_sdk.get_client()
+    is_active = getattr(client, "is_active", None)
+    if callable(is_active):
+        assert is_active() is False
+    else:  # pragma: no cover - older sentry_sdk API
+        assert sentry_sdk.Hub.current.client is None
+
+
 @pytest.mark.anyio
 async def test_health_endpoint():
     transport = httpx.ASGITransport(app=app)
