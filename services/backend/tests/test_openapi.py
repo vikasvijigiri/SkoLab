@@ -2,8 +2,9 @@
 
 The snapshot at ``api-contracts/openapi.snapshot.json`` is the committed copy of
 ``app.openapi()``. A contract change is meant to show up as a reviewable diff to
-that file. If the snapshot is absent (first run) it is written and the diff
-assertion is skipped with an instruction to commit it.
+that file. If the snapshot is absent it is written and the diff assertion skips
+with an instruction to generate it via ``scripts/gen_openapi_snapshot.py`` and
+commit it.
 """
 
 import json
@@ -13,8 +14,9 @@ import pytest
 
 from app.main import app
 
+# tests/ -> backend -> services -> repo root (which holds api-contracts/).
 _SNAPSHOT = (
-    Path(__file__).resolve().parents[2] / "api-contracts" / "openapi.snapshot.json"
+    Path(__file__).resolve().parents[3] / "api-contracts" / "openapi.snapshot.json"
 )
 
 
@@ -61,13 +63,14 @@ def test_schema_matches_committed_snapshot():
         _SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
         _SNAPSHOT.write_text(serialised, encoding="utf-8")
         pytest.skip(
-            "openapi.snapshot.json bootstrapped — commit "
-            "api-contracts/openapi.snapshot.json"
+            "openapi.snapshot.json bootstrapped — run "
+            "`python scripts/gen_openapi_snapshot.py` and commit "
+            "api-contracts/openapi.snapshot.json to arm this guard"
         )
     current = _SNAPSHOT.read_text(encoding="utf-8")
     assert current == serialised, (
         "Generated OpenAPI schema differs from api-contracts/openapi.snapshot.json. "
         "If the change is intended, regenerate: "
-        "`cd services/backend && python -m pytest tests/test_openapi.py` and commit "
+        "`cd services/backend && python scripts/gen_openapi_snapshot.py` and commit "
         "the updated snapshot."
     )
