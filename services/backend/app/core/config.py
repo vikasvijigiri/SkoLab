@@ -164,6 +164,27 @@ class Settings:
             in ("1", "true", "yes")
         )
     )
+    # How long a content-hashed embedding vector stays cached in L2. Text→vector
+    # is deterministic for a fixed model, so this can be long; the same paper
+    # abstract is re-embedded across the feed, journal advisor and grant match.
+    embed_vector_cache_ttl_seconds: int = field(
+        default_factory=lambda: int(
+            os.environ.get("EMBED_VECTOR_CACHE_TTL_SECONDS", str(30 * 24 * 3600))
+        )
+    )
+
+    # ── LLM fallback bounds ─────────────────────────────────────────────────
+    # The fallback loop used to try up to 16 models serially, each with a full
+    # llm_timeout_seconds budget — one bad provider window could burn minutes on
+    # a single user request. Cap the attempts and the total wall-clock.
+    llm_max_fallback_models: int = field(
+        default_factory=lambda: int(os.environ.get("LLM_MAX_FALLBACK_MODELS", "4"))
+    )
+    llm_total_deadline_seconds: float = field(
+        default_factory=lambda: float(
+            os.environ.get("LLM_TOTAL_DEADLINE_SECONDS", "90.0")
+        )
+    )
 
     # ── Observability ────────────────────────────────────────────────────────
     # Sentry DSN. Empty (the default) leaves Sentry inert — the SDK is never
