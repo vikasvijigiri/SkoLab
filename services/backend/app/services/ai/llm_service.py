@@ -3,6 +3,7 @@ import httpx
 from typing import List, Dict, Any, Optional
 from openrouter import OpenRouter
 from app.core.config import settings
+from app.core.circuit_breaker import groq_breaker, CircuitBreakerOpenError
 
 
 # ── Shared HTTP client ───────────────────────────────────────────────────────
@@ -234,16 +235,35 @@ class LLMService:
                 if m not in models_to_try:
                     models_to_try.append(m)
         else:
-            models_to_try = self.default_models
+            models_to_try = list(self.default_models)
+
+        # Bound the fallback fan-out: at most N attempts, under one total
+        # wall-clock budget. Without this, a bad provider window could keep a
+        # single user request alive for minutes (16 models x llm_timeout).
+        models_to_try = models_to_try[: max(1, settings.llm_max_fallback_models)]
+        deadline = time.monotonic() + settings.llm_total_deadline_seconds
 
         errors_encountered = []
         for model in models_to_try:
+            if time.monotonic() >= deadline:
+                errors_encountered.append(
+                    f"(stopped: {settings.llm_total_deadline_seconds:.0f}s total "
+                    f"deadline reached before trying {model})"
+                )
+                break
+
             is_or = "/" in model and not model.startswith("groq/")
 
             # Check key and availability before querying
             if is_or and not settings.openrouter_api_key:
                 continue
             if not is_or and (not self.groq_api_key or LLM_LIMIT_EXCEEDED):
+                continue
+            # Skip Groq models while the Groq circuit is OPEN — don't burn a
+            # slot (and a timeout) on a provider we already know is down; the
+            # OpenRouter models later in the list are still worth trying.
+            if not is_or and not await groq_breaker.allow():
+                errors_encountered.append(f"{model}: skipped (groq circuit OPEN)")
                 continue
 
             print(f"[LLMService] Attempting query with model: {model} ...", flush=True)
@@ -298,6 +318,7 @@ class LLMService:
                             raise Exception(
                                 f"Model {model} returned 200 with an empty completion."
                             )
+                        await groq_breaker.record_success()
                         return LLMResponse(
                             content=content, tool_calls=tool_calls, model_used=model
                         )
@@ -308,9 +329,13 @@ class LLMService:
                             set_llm_limit_exceeded(True)
                         raise Exception(err_msg)
 
+            except CircuitBreakerOpenError as e:
+                errors_encountered.append(f"{model}: {e}")
             except Exception as e:
                 print(f"[LLMService] Exception for model {model}: {e}", flush=True)
                 errors_encountered.append(f"{model}: {e}")
+                if not is_or:
+                    await groq_breaker.record_failure(e)
 
         # If we got here, all attempted models failed
         raise Exception(
