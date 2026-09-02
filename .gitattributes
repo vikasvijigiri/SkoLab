@@ -1,0 +1,4 @@
+# The OpenAPI snapshot is byte-compared by services/backend/tests/test_openapi.py
+# against `json.dumps(...) + "\n"` output — it must stay LF regardless of the
+# checkout platform's autocrlf setting.
+api-contracts/openapi.snapshot.json text eol=lf
