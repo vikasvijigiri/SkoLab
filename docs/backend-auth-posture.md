@@ -24,7 +24,11 @@ document is out of date.
 | :--- | :--- | :--- | :--- |
 | **authed** | `POST /agent/chat` | `Depends(get_verified_user)` → 401 without a valid token | Chat history is stored per verified `uid`. |
 | **optional** | `POST /chat_with_author`, `POST /discovery/predict`, `POST /discovery/nexus-chat` | `Depends(get_optional_user)` → `None` when no token | Personalise the result when a token is present; work anonymously otherwise. |
-| **public** | every other `APIRoute` | none | Public research data, no per-user state; coarse auth is the gateway's job. |
+| **public** | every other `APIRoute`, incl. `/health`, `/livez`, `/readyz` | none | Public research data, no per-user state; coarse auth is the gateway's job. |
+
+`/livez` (liveness) and `/readyz` (readiness) are unauthenticated by design — an
+orchestrator's probes carry no token, liveness must not depend on auth or the
+DB, and readiness only reports dependency health.
 
 The 401/403 raised by `get_verified_user` is returned through the app-level
 `ErrorResponse` envelope (`app/api/errors.py`), like every other error.
