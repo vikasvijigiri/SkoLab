@@ -30,8 +30,10 @@ import redis.asyncio as aioredis  # type: ignore
 from sqlalchemy.future import select
 from sqlalchemy import delete as sa_delete
 
-from app.db.database import AsyncSessionLocal
+from app.db.database import AsyncSessionLocal, engine
 from app.models.user_models import CacheEntry
+
+_IS_POSTGRES = engine.dialect.name == "postgresql"
 
 # Shared Redis client
 _redis_client: aioredis.Redis | None = None
@@ -187,21 +189,46 @@ class PgBackedCache:
 
         async with AsyncSessionLocal() as session:
             try:
-                stmt = select(CacheEntry).where(CacheEntry.cache_key == db_key)
-                result = await session.execute(stmt)
-                entry = result.scalars().first()
-                if entry:
-                    entry.data = payload
-                    entry.last_synced = now
-                    entry.expires_at = expires_at
-                else:
-                    entry = CacheEntry(
+                if _IS_POSTGRES:
+                    # Atomic upsert — the previous SELECT-then-INSERT/UPDATE let
+                    # two concurrent sets on the same key both miss the SELECT
+                    # and then race on INSERT (unique-violation) or clobber each
+                    # other. ON CONFLICT collapses it to one statement.
+                    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+                    stmt = pg_insert(CacheEntry).values(
                         cache_key=db_key,
                         data=payload,
                         last_synced=now,
                         expires_at=expires_at,
                     )
-                    session.add(entry)
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=[CacheEntry.cache_key],
+                        set_={
+                            "data": stmt.excluded.data,
+                            "last_synced": stmt.excluded.last_synced,
+                            "expires_at": stmt.excluded.expires_at,
+                        },
+                    )
+                    await session.execute(stmt)
+                else:
+                    existing = await session.execute(
+                        select(CacheEntry).where(CacheEntry.cache_key == db_key)
+                    )
+                    entry = existing.scalars().first()
+                    if entry:
+                        entry.data = payload
+                        entry.last_synced = now
+                        entry.expires_at = expires_at
+                    else:
+                        session.add(
+                            CacheEntry(
+                                cache_key=db_key,
+                                data=payload,
+                                last_synced=now,
+                                expires_at=expires_at,
+                            )
+                        )
                 await session.commit()
             except Exception as exc:
                 print(

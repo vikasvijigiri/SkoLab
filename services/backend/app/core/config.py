@@ -131,6 +131,40 @@ class Settings:
         )
     )
 
+    # ── Connection pool & concurrency (env-driven — no rebuild required) ──────
+    # The DB pool is sized for the Supabase free-tier *transaction pooler*
+    # (pgBouncer, ~60 shared server connections). With N uvicorn workers the
+    # effective ceiling is N * (pool_size + max_overflow), so keep these small.
+    db_pool_size: int = field(
+        default_factory=lambda: int(os.environ.get("DB_POOL_SIZE", "5"))
+    )
+    db_max_overflow: int = field(
+        default_factory=lambda: int(os.environ.get("DB_MAX_OVERFLOW", "10"))
+    )
+    db_pool_timeout_seconds: float = field(
+        default_factory=lambda: float(os.environ.get("DB_POOL_TIMEOUT_SECONDS", "10.0"))
+    )
+    # Upper bound on concurrent embedding forward passes. The model is CPU-bound
+    # and single-machine; unbounded callers thrash a shared-CPU host. 0 = resolve
+    # to the container's visible core count at runtime.
+    embed_max_concurrency: int = field(
+        default_factory=lambda: int(os.environ.get("EMBED_MAX_CONCURRENCY", "0"))
+    )
+    # Run Base.metadata.create_all + ad-hoc ALTERs on startup. Correct for local
+    # dev; in production the schema is owned by Alembic (`alembic upgrade head`
+    # as a release step) and running DDL on every deploy is drift + slow starts.
+    # Default: on everywhere except APP_ENV=production. Override with
+    # RUN_DB_CREATE_ALL=1/0.
+    run_schema_create_all: bool = field(
+        default_factory=lambda: (
+            os.environ.get(
+                "RUN_DB_CREATE_ALL",
+                "0" if os.environ.get("APP_ENV", "").lower() == "production" else "1",
+            ).lower()
+            in ("1", "true", "yes")
+        )
+    )
+
     # ── Observability ────────────────────────────────────────────────────────
     # Sentry DSN. Empty (the default) leaves Sentry inert — the SDK is never
     # initialised. Set SENTRY_DSN in the deployment environment to enable error

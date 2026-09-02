@@ -5,6 +5,32 @@ from openrouter import OpenRouter
 from app.core.config import settings
 
 
+# ── Shared HTTP client ───────────────────────────────────────────────────────
+# One process-wide AsyncClient with a bounded connection pool. The previous
+# `async with httpx.AsyncClient()` per call paid a fresh TCP + TLS handshake to
+# Groq on every request (~100-300 ms) and, under load, exhausted ephemeral
+# ports. Keep-alive connections are reused across calls.
+_http_client: Optional[httpx.AsyncClient] = None
+
+
+def get_http_client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(settings.llm_timeout_seconds, connect=5.0),
+            limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
+        )
+    return _http_client
+
+
+async def aclose_http_client() -> None:
+    """Close the shared client on app shutdown (call from the FastAPI lifespan)."""
+    global _http_client
+    if _http_client is not None and not _http_client.is_closed:
+        await _http_client.aclose()
+    _http_client = None
+
+
 # Global rate limit / availability state
 LLM_LIMIT_EXCEEDED = False
 LLM_LIMIT_EXCEEDED_TIME = 0.0
@@ -247,17 +273,18 @@ class LLMService:
                     if tool_choice is not None:
                         payload["tool_choice"] = tool_choice
 
-                    async with httpx.AsyncClient(
-                        timeout=httpx.Timeout(settings.llm_timeout_seconds, connect=5.0)
-                    ) as client:
-                        resp = await client.post(
-                            self.groq_base_url,
-                            headers={
-                                "Authorization": f"Bearer {self.groq_api_key}",
-                                "Content-Type": "application/json",
-                            },
-                            json=payload,
-                        )
+                    client = get_http_client()
+                    resp = await client.post(
+                        self.groq_base_url,
+                        headers={
+                            "Authorization": f"Bearer {self.groq_api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json=payload,
+                        timeout=httpx.Timeout(
+                            settings.llm_timeout_seconds, connect=5.0
+                        ),
+                    )
 
                     if resp.status_code == 200:
                         data = resp.json()
