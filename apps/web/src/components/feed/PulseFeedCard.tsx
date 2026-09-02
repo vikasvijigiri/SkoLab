@@ -3,10 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, X } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { MathText } from "@/components/ui/MathText";
+import { prefetchPaper } from "@/lib/api/prefetch";
 import type { DailyFeedItem } from "@/lib/types";
 
 function authorLabel(authorPair: string) {
@@ -22,7 +24,9 @@ export function PulseFeedCard({
   onDismiss?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const qc = useQueryClient();
   const hasDetails = item.methodology || item.tools_used?.length || item.key_findings;
+  const warm = () => prefetchPaper(qc, item.id);
 
   return (
     <Card interactive={false} className="flex flex-col gap-2.5">
@@ -43,7 +47,12 @@ export function PulseFeedCard({
         </div>
       </div>
 
-      <Link href={`/paper/${encodeURIComponent(item.id)}`} className="group">
+      <Link
+        href={`/paper/${encodeURIComponent(item.id)}`}
+        className="group"
+        onMouseEnter={warm}
+        onFocus={warm}
+      >
         <h3 className="font-display text-[15px] font-semibold leading-snug text-text-primary group-hover:text-primary">
           <MathText text={item.title} />
         </h3>
