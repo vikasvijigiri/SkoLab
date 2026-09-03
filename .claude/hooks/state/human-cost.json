@@ -1,1 +1,1 @@
-{"calls": 3, "by_tool": {"AskUserQuestion": 3}}
+{"calls": 8, "by_tool": {"AskUserQuestion": 7, "ExitPlanMode": 1}}
