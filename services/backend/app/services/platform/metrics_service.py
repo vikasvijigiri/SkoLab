@@ -298,5 +298,12 @@ async def compute_author_metrics(
         parsed["overall_score"] = int((tt + vel) / 2)
         return parsed
     except Exception as e:
+        # The LLM step is the only thing that can fail here (works were already
+        # fetched above). There is no local fallback for this analysis, so
+        # surface it as a transient 503, not a 500. See app/core/exceptions.py.
+        from app.core.exceptions import AIUnavailable
+
         logger.error(f"Error analyzing metrics with LLM: {e}")
-        raise e
+        raise AIUnavailable(
+            "Author metrics analysis is temporarily unavailable."
+        ) from e

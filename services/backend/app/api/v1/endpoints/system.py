@@ -68,14 +68,16 @@ async def get_system_status():
         logger.warning("Database health check failed: %s", exc)
         db_status = "degraded"
 
-    # Check Cache
-    from app.core.cache import suggestions_cache
-
+    # Check Cache — read-only. This is a polled status endpoint; a write per
+    # call (the previous `suggestions_cache.set`) is pure overhead on the DB.
     try:
-        await suggestions_cache.set("status_ping", "1")
-        val = await suggestions_cache.get("status_ping")
-        if val != "1":
-            cache_status = "degraded"
+        from app.db.pg_cache import _redis_active, _redis_client
+
+        if _redis_active and _redis_client is not None:
+            await _redis_client.ping()
+        else:
+            # L2 is Postgres; its reachability tracks the DB probe above.
+            cache_status = db_status
     except Exception as exc:
         logger.warning("Cache health check failed: %s", exc)
         cache_status = "degraded"

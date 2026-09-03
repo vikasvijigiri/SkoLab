@@ -139,14 +139,21 @@ async def test_status_endpoint_degraded_db():
 
 
 @pytest.mark.anyio
-async def test_status_endpoint_degraded_cache():
-    """Verify `/status` handles cache health failure gracefully."""
-    with patch("app.core.cache.suggestions_cache.set") as mock_set:
-        mock_set.side_effect = Exception("Cache down")
+async def test_status_endpoint_degraded_cache(monkeypatch):
+    """Verify `/status` reports the cache degraded when the L2 (Redis) probe
+    fails. The probe is read-only now (a `PING`, not a write)."""
+    import app.db.pg_cache as pg_cache
 
-        async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
-            response = await ac.get("/api/v1/status")
-            assert response.status_code == 200
-            data = response.json()
-            assert data["services"]["cache_layer"] == "degraded"
-            assert data["status"] in ["degraded", "outage"]
+    class _BoomRedis:
+        async def ping(self):
+            raise Exception("Cache down")
+
+    monkeypatch.setattr(pg_cache, "_redis_active", True)
+    monkeypatch.setattr(pg_cache, "_redis_client", _BoomRedis())
+
+    async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
+        response = await ac.get("/api/v1/status")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["services"]["cache_layer"] == "degraded"
+        assert data["status"] in ["degraded", "outage"]

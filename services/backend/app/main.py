@@ -366,13 +366,19 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
 
-    # Release the shared LLM HTTP client's keep-alive connections cleanly.
+    # Release the shared outbound HTTP clients' keep-alive connections cleanly.
     try:
         from app.services.ai.llm_service import aclose_http_client
 
         await aclose_http_client()
     except Exception as e:
         print(f"[Shutdown] LLM HTTP client close failed: {e}", flush=True)
+    try:
+        from app.services.data.openalex_service import aclose_openalex_client
+
+        await aclose_openalex_client()
+    except Exception as e:
+        print(f"[Shutdown] OpenAlex HTTP client close failed: {e}", flush=True)
 
     if _zeroconf and _mdns_info:
         await _zeroconf.async_unregister_service(_mdns_info)
@@ -391,6 +397,14 @@ app = FastAPI(
     ),
     version="1.1.0",
     lifespan=lifespan,
+    # Interactive docs and the raw schema are developer tools, not a public
+    # surface — expose them everywhere except production (OWASP API8: reduce the
+    # attack surface / avoid information disclosure). Regenerate the committed
+    # snapshot with scripts/gen_openapi_snapshot.py, which builds the app
+    # directly rather than fetching /openapi.json.
+    docs_url=None if settings.environment == "production" else "/docs",
+    redoc_url=None if settings.environment == "production" else "/redoc",
+    openapi_url=None if settings.environment == "production" else "/openapi.json",
     openapi_tags=[
         {
             "name": "agent",
@@ -414,15 +428,26 @@ register_exception_handlers(app)
 # Configure CORS origins dynamically and restrict from wildcard
 import os
 
-origins = [
-    "http://localhost",
-    "http://localhost:8000",
-    "http://localhost:3000",
-    "http://127.0.0.1",
-    "http://127.0.0.1:8000",
-    "http://127.0.0.1:3000",
-]
-if settings.app_base_url:
+_IS_PROD = settings.environment == "production"
+
+# localhost/loopback origins are for local dev only. With allow_credentials=True
+# a page on a dev server could otherwise make credentialed calls against
+# production, so production trusts only APP_BASE_URL and CORS_ORIGINS.
+origins: list[str] = []
+if not _IS_PROD:
+    origins += [
+        "http://localhost",
+        "http://localhost:8000",
+        "http://localhost:3000",
+        "http://127.0.0.1",
+        "http://127.0.0.1:8000",
+        "http://127.0.0.1:3000",
+    ]
+# app_base_url defaults to http://localhost:8000 — don't treat that default as a
+# real production origin; only an explicitly configured value counts.
+if settings.app_base_url and not (
+    _IS_PROD and settings.app_base_url == "http://localhost:8000"
+):
     origins.append(settings.app_base_url)
 env_origins = os.environ.get("CORS_ORIGINS", "")
 if env_origins:
@@ -432,6 +457,11 @@ if env_origins:
             origins.append(o_clean)
 # Remove duplicates
 origins = list(set(origins))
+if _IS_PROD and not origins:
+    logger.warning(
+        "CORS: no production origins configured. Set APP_BASE_URL or CORS_ORIGINS "
+        "to the web app's real URL; browser clients will be blocked until then."
+    )
 
 app.add_middleware(
     CORSMiddleware,
@@ -590,6 +620,8 @@ async def security_guard_middleware(request: Request, call_next):
         "/ai_status/",
         "/api/v1/ai_status",
     ]:
+        import hmac
+
         client_ip = request.client.host if request.client else "unknown"
         is_private = False
         if client_ip in ["127.0.0.1", "::1", "localhost", "testserver"]:
@@ -605,8 +637,18 @@ async def security_guard_middleware(request: Request, call_next):
             except Exception:
                 pass
         sre_token = request.headers.get("X-SRE-Token")
-        expected_token = os.environ.get("SRE_SECURITY_TOKEN", "sre_bypass_secret_2026")
-        if not is_private and sre_token != expected_token:
+        # The shipped default is a dev convenience only. In production an unset
+        # SRE_SECURITY_TOKEN means there is no valid token, so a non-private
+        # caller is always denied — never a guessable fallback (OWASP API8).
+        configured_token = os.environ.get("SRE_SECURITY_TOKEN", "")
+        if not configured_token:
+            configured_token = (
+                "" if settings.environment == "production" else "sre_bypass_secret_2026"
+            )
+        token_ok = bool(configured_token) and hmac.compare_digest(
+            sre_token or "", configured_token
+        )
+        if not is_private and not token_ok:
             from fastapi.responses import JSONResponse
 
             return JSONResponse(
@@ -674,11 +716,17 @@ async def security_guard_middleware(request: Request, call_next):
     # 6. Rate Limiting Guard
     if path not in ["/", "/health", "/health/"]:
         client_ip = request.client.host if request.client else "unknown"
+        # Fragments, not full paths: every route is mounted under both /api/v1
+        # and the bare prefix, so a substring match catches both. Only the two
+        # routes that were genuinely strict-and-real are kept. The previous list
+        # also named /api/v1/papers/search and /api/v1/authors/search — neither
+        # is a real route, so the drift meant the ONLY strictly limited real
+        # route was /agent/chat. Whether the expensive LLM GETs (daily_conjecture,
+        # discovery/*, industry_academic_tieups) and search_author should also be
+        # strict is a product decision (5/min breaks live autocomplete) tracked
+        # for a follow-up, not changed here.
         strict_paths = [
-            "/api/v1/agent/chat",
-            "/api/v1/papers/search",
-            "/api/v1/authors/search",
-            "/api/v1/users/download-export",
+            "/agent/chat",
             "/export",
         ]
         is_strict = any(sp in path for sp in strict_paths)
@@ -935,11 +983,19 @@ async def check_readiness() -> tuple[bool, dict[str, str]]:
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
 
+    # Read-only cache probe. This endpoint is hit every few seconds by the load
+    # balancer and the status page, so it must not write — the previous
+    # `cache.set()` here put a row into `cache_entries` on every call and made
+    # /health ~10x slower than any real read. Redis-backed L2: PING. Otherwise
+    # the L2 is Postgres, whose reachability the SELECT 1 above already proved.
     try:
-        await suggestions_cache.set("health_ping", "1")
-        val = await suggestions_cache.get("health_ping")
-        if val == "1":
+        from app.db.pg_cache import _redis_active, _redis_client
+
+        if _redis_active and _redis_client is not None:
+            await _redis_client.ping()
             cache_status = "healthy"
+        else:
+            cache_status = db_status
     except Exception as e:
         logger.error(f"Cache health check failed: {e}")
 

@@ -25,6 +25,10 @@ from app.core.cache import (
     author_metrics_cache,
 )
 
+import logging
+
+logger = logging.getLogger("skolab")
+
 try:
     from app.services.data.researcher_worker import (
         teleport_researcher,
@@ -91,7 +95,7 @@ async def _pg_get_researcher_metrics(session: AsyncSession, clean_id: str):
         result = await session.execute(stmt)
         return result.scalars().first()
     except Exception as exc:
-        print(f"[PG Metrics] read error: {exc}", flush=True)
+        logger.debug(f"[PG Metrics] read error: {exc}")
     return None
 
 
@@ -129,7 +133,7 @@ async def _pg_get_researcher_works(session: AsyncSession, clean_id: str) -> List
                 )
             )
     except Exception as exc:
-        print(f"[PG Works] read error: {exc}", flush=True)
+        logger.debug(f"[PG Works] read error: {exc}")
     return works_data
 
 
@@ -206,7 +210,7 @@ async def fetch_similar_authors(
                 break
         return suggestions
     except Exception as e:
-        print(f"Error fetching similar authors: {e}", flush=True)
+        logger.debug(f"Error fetching similar authors: {e}")
     return []
 
 
@@ -241,7 +245,7 @@ async def search_author(
     session: AsyncSession = Depends(get_db),
     openalex_service: OpenAlexService = Depends(get_openalex_service),
 ):
-    print(f"[search_author] name='{name}', id='{id}', focus='{focus}'", flush=True)
+    logger.debug(f"[search_author] name='{name}', id='{id}', focus='{focus}'")
     clean_id = id.split("/")[-1] if id else None
     cache_key = (
         f"id:{clean_id}"
@@ -252,15 +256,15 @@ async def search_author(
     # 1. Check in-memory cache
     cached = await profile_cache.get(cache_key)
     if cached is not None:
-        print(f"[search_author] In-memory cache hit: '{cache_key}'", flush=True)
+        logger.debug(f"[search_author] In-memory cache hit: '{cache_key}'")
         return cached
 
     # 2. PostgreSQL researcher_metrics — local, sub-ms, has all computed scores
     # Best for: returning the fast metadata response while works load from Firestore
     pg_row = await _pg_get_researcher_metrics(session, clean_id) if clean_id else None
     if pg_row:
-        print(
-            f"[search_author] PG researcher_metrics hit for: '{clean_id}'", flush=True
+        logger.debug(
+            f"[search_author] PG researcher_metrics hit for: '{clean_id}'"
         )
         # 1. Fetch works from PostgreSQL first (extremely fast)
         works_data = await _pg_get_researcher_works(session, clean_id)
@@ -301,7 +305,7 @@ async def search_author(
                             except Exception:
                                 pass
             except Exception as e:
-                print(f"[search_author] Firestore works fetch error: {e}", flush=True)
+                logger.debug(f"[search_author] Firestore works fetch error: {e}")
 
         field = pg_row.field_of_study or ""
         # Prefer the most specific expertise topic over the broad top-level
@@ -402,9 +406,8 @@ async def search_author(
                 )
 
                 if d:
-                    print(
+                    logger.debug(
                         f"[search_author] Firestore hit for: '{clean_id or name}'",
-                        flush=True,
                     )
                     works_data = []
                     for w in d.get("works", []):
@@ -470,7 +473,7 @@ async def search_author(
                     await profile_cache.set(cache_key, response_data)
                     return response_data
         except Exception as e:
-            print(f"[search_author] Firestore lookup error: {e}", flush=True)
+            logger.debug(f"[search_author] Firestore lookup error: {e}")
 
     # 3. Fetch directly from OpenAlex — source of truth
     try:
@@ -656,14 +659,12 @@ async def search_author(
         if is_llm_working():
             author_full_id = author_data.get("id", resolved_id)
             background_tasks.add_task(track_teleport_researcher, author_full_id)
-            print(
+            logger.debug(
                 f"[search_author] Queued background teleport for: {author_data.get('display_name')}",
-                flush=True,
             )
         else:
-            print(
+            logger.debug(
                 "[search_author] LLM offline or unconfigured, skipping background task.",
-                flush=True,
             )
 
         return response_data
@@ -684,7 +685,7 @@ async def get_author_metrics(
 ):
     cached = await author_metrics_cache.get(author_id)
     if cached is not None:
-        print(f"[AuthorMetrics] Cache hit for author={author_id}", flush=True)
+        logger.debug(f"[AuthorMetrics] Cache hit for author={author_id}")
         return cached
 
     try:

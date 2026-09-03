@@ -17,6 +17,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.core.exceptions import AIUnavailable
+
 logger = logging.getLogger("skolab")
 
 
@@ -65,6 +67,28 @@ def register_exception_handlers(app: FastAPI) -> None:
             ],
         )
         return JSONResponse(status_code=422, content=body.model_dump())
+
+    @app.exception_handler(AIUnavailable)
+    async def _ai_unavailable_handler(
+        request: Request, exc: AIUnavailable
+    ) -> JSONResponse:
+        # A dependency (LLM provider) is down and the route has no local
+        # fallback. 503 + Retry-After tells the client this is transient — never
+        # a 500, which reads as "the server is broken".
+        logger.warning(
+            "AI unavailable on %s %s: %s",
+            request.method,
+            request.url.path,
+            exc.detail,
+        )
+        body = ErrorResponse(
+            detail=exc.detail, code="ai_unavailable", request_id=_request_id()
+        )
+        return JSONResponse(
+            status_code=503,
+            content=body.model_dump(),
+            headers={"Retry-After": str(exc.retry_after)},
+        )
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_handler(
