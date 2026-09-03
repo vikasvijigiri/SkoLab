@@ -1,5 +1,5 @@
 from typing import Optional, Dict, Any
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 from pydantic import BaseModel
 
 import re
@@ -18,7 +18,13 @@ from app.services.data.openalex_service import OpenAlexService
 from app.services.ai.user_context import reconstruct_abstract
 from app.core.config import settings
 from app.core.cache import daily_conjecture_cache
-from app.api.dependencies import get_pipeline_services, get_openalex_service
+from app.api.dependencies import (
+    get_pipeline_services,
+    get_openalex_service,
+    get_verified_user,
+    get_db,
+)
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
 
@@ -46,8 +52,26 @@ class DismissFeedItemRequest(BaseModel):
 @router.post("/daily_feed/dismiss", response_model=DismissResponse)
 async def dismiss_daily_feed_item(
     request: DismissFeedItemRequest,
+    user: dict = Depends(get_verified_user),
+    db: AsyncSession = Depends(get_db),
     pipeline_services: PipelineServices = Depends(get_pipeline_services),
 ):
+    # Owner-scoped write: a signed-in user may only dismiss items from *their
+    # own* feed. `request.author_id` is an OpenAlex id (not the Firebase uid),
+    # so bind it through the caller's linked `users.openalex_id`. 401 with no
+    # token, 403 when the token's user is not that OpenAlex author.
+    from app.models.user_models import User
+    from sqlalchemy import select
+
+    uid = (user or {}).get("uid")
+    linked_openalex_id = (
+        await db.execute(select(User.openalex_id).where(User.id == uid))
+    ).scalar_one_or_none()
+    if not linked_openalex_id or linked_openalex_id != request.author_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only dismiss items from your own feed.",
+        )
     await pipeline_services.dismiss_recommendation(request.author_id, request.work_id)
     return {"success": True}
 

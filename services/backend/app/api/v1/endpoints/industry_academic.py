@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.core import IndustryAcademicTieupsResponse
-from app.api.dependencies import get_db
+from app.api.dependencies import get_db, require_owner
 from app.core.exceptions import AIUnavailable
 from app.services.industry.industry_academic_service import IndustryAcademicService
 
@@ -17,11 +17,15 @@ router = APIRouter()
 async def get_industry_academic_tieups(
     user_id: str = Query(..., description="Firebase UID of the user"),
     db: AsyncSession = Depends(get_db),
+    _owner: dict = Depends(require_owner("user_id")),
 ):
     """
     Dynamically brainstorms and queries industry-academic tie-up ideas
     based on the user's semantic memory profile and recent active topics.
     Each idea is enriched with real academic papers searched on OpenAlex.
+
+    Owner-scoped: reads the caller's private semantic-memory profile, so the
+    verified Firebase uid must equal ``user_id`` (see docs/backend-auth-posture).
     """
     try:
         service = IndustryAcademicService(db)

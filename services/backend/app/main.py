@@ -578,41 +578,13 @@ async def security_guard_middleware(request: Request, call_next):
                     },
                 )
 
-    # 2. Scraper Blocking Guard
-    user_agent = request.headers.get("user-agent", "").lower()
-    bot_keywords = [
-        "python-requests",
-        "urllib",
-        "curl",
-        "wget",
-        "scrapy",
-        "playwright",
-        "puppeteer",
-    ]
-    if any(keyword in user_agent for keyword in bot_keywords):
-        from fastapi.responses import JSONResponse
+    # NOTE: the User-Agent "scraper" block and the query-string "WAF XSS" block
+    # that used to sit here were removed (Stream B security hardening). They
+    # blocked the repo's own tooling (k6, Playwright, uptime probes, curl) and
+    # stopped nothing real — output encoding and Pydantic validation, not a
+    # substring scan of the raw query string, are what defend against XSS.
 
-        return JSONResponse(
-            status_code=403,
-            content={
-                "detail": "Access Denied: Automated scraping signatures detected."
-            },
-        )
-
-    # 3. Input Sanitization (WAF XSS) Guard
-    query_string = request.url.query.lower()
-    xss_patterns = ["<script", "javascript:", "onload=", "onerror=", "<iframe", "<img"]
-    if any(pat in query_string for pat in xss_patterns):
-        from fastapi.responses import JSONResponse
-
-        return JSONResponse(
-            status_code=400,
-            content={
-                "detail": "Bad Request: Malicious input signatures (XSS) detected."
-            },
-        )
-
-    # 4. Admin Access Guard
+    # 2. Admin Access Guard
     if path in [
         "/metrics",
         "/metrics/",
@@ -658,7 +630,7 @@ async def security_guard_middleware(request: Request, call_next):
                 },
             )
 
-    # 5. Device Signature Verification Guard
+    # 3. Device Signature Verification Guard
     if request.method in ["POST", "PUT", "DELETE", "PATCH"]:
         import hmac
         import hashlib
@@ -713,15 +685,15 @@ async def security_guard_middleware(request: Request, call_next):
                     },
                 )
 
-    # 6. Rate Limiting Guard
+    # 4. Rate Limiting Guard
     if path not in ["/", "/health", "/health/"]:
         client_ip = request.client.host if request.client else "unknown"
-        # Fragments, not full paths: every route is mounted under both /api/v1
-        # and the bare prefix, so a substring match catches both. Only the two
-        # routes that were genuinely strict-and-real are kept. The previous list
-        # also named /api/v1/papers/search and /api/v1/authors/search — neither
-        # is a real route, so the drift meant the ONLY strictly limited real
-        # route was /agent/chat. Whether the expensive LLM GETs (daily_conjecture,
+        # Fragments, not full paths, so a substring match still catches the
+        # route however it is mounted. Only the two routes that were genuinely
+        # strict-and-real are kept. The previous list also named
+        # /api/v1/papers/search and /api/v1/authors/search — neither is a real
+        # route, so the drift meant the ONLY strictly limited real route was
+        # /agent/chat. Whether the expensive LLM GETs (daily_conjecture,
         # discovery/*, industry_academic_tieups) and search_author should also be
         # strict is a product decision (5/min breaks live autocomplete) tracked
         # for a follow-up, not changed here.
@@ -957,9 +929,11 @@ app.mount(
     name="downloads",
 )
 
-# Include aggregate router under /api/v1 and at root (for client URL compatibility and legacy fallbacks)
+# Single mount under /api/v1. The bare-prefix mount was removed (Stream B
+# security hardening): on a public URL it doubled every route's attack surface
+# and defeated the "one canonical path per endpoint" assumption the auth
+# posture and rate-limit fragments rely on. Clients must use /api/v1.
 app.include_router(api_router, prefix="/api/v1")
-app.include_router(api_router)
 
 
 @app.get("/", response_model=AppInfoResponse)

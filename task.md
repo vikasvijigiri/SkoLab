@@ -268,3 +268,20 @@ first — and I'll scope it" / "okay go ahead with it"
 6. Verified: `pytest tests/test_email_blind_index.py` 7 passed; targeted sweep 69 passed; `--collect-only` 157; `ruff` clean. Go unit tests (HMAC vectors) added — CI-verified. Android token attach + the `VerifyUserOptional`→`VerifyUser` flip remain (needs a shipped Android build).
 
 **Status:** Phase 0b blind index committed on `feat/peers-to-go-gateway`. Remaining 0b (Android auth) + Phases 1–5 tracked in `docs/plans/2026-09-03-python-llm-only-phase0.md`.
+
+---
+
+## 2026-09-03 — Deployment-readiness security hardening (Stream B)
+
+**Asked:** Execute `docs/plans/2026-09-03-security-hardening.md` end to end — enforce owner auth on the Python backend's user-scoped routes, fail the boot on a misconfigured deploy env, and delete the substring "WAF" middleware, before PR #25 puts the backend on a public Render URL.
+
+1. **`require_owner` dependency** (`app/api/dependencies.py`) — factory that runs `get_verified_user` then asserts the verified `token["uid"]` equals the `user_id` / `author_id` (path or query) the request carries: 401 no token, 403 mismatch (IDOR), 400 no id. No new auth mechanism — reuses `get_verified_user`.
+2. **Config fail-fast** (`app/core/config.py.__post_init__`) — raise unless `APP_ENV` resolves to `development|staging|production` (unset ⇒ development, so local dev + CI still boot); extended the shipped-default/empty `DATABASE_ENCRYPTION_KEY` refusal from production-only to staging+production.
+3. **Route classification** — walked every route carrying `author_id` / `user_id`. Only two act as the *requesting* user with a Firebase-uid parameter and became owner-scoped: `GET /industry_academic_tieups` (private semantic-memory profile) and `GET /users/quests` (private quest records). Everything with an OpenAlex `author_id` (a *lookup target*, public data, anonymous-capable) stayed public: `/author_metrics`, `/network_collaborators`, `/collaborator_synergy`, `/citation_heatmap`, `/match_grants`, `/journal_advisor`, `/search_author`, `/refresh_author`, `/semantic_trending`, `/daily_feed`, `/daily_feed/dismiss`, `/daily_conjecture`, `/assistant_professor_roadmap`, `/industry_opportunities`, `/leaderboard/{field}`, `/zotero/*`. `/agent/chat` (authed) and `/chat_with_author` + `/discovery/*` (optional) unchanged. `EXPECTED_AUTHED` in `tests/api/test_auth_posture.py` updated in the same commit.
+4. **Deleted the substring WAF** — removed the User-Agent `bot_keywords` scraper block and the query-string `xss_patterns` block from `security_guard_middleware` (kept kill-switch, admin-guard, device-signature, rate-limit). Removed the bare-prefix `app.include_router(api_router)` mount — every endpoint is now `/api/v1`-only; `/` is served by `main.py`'s own `AppInfoResponse` handler.
+5. **Docs** — rewrote `docs/backend-auth-posture.md` to the new three-class posture with the full route table; this entry.
+6. **Verified:** `pytest tests/ -q` 177 passed (baseline 163 + 14 new/changed); `ruff check app` clean; `APP_ENV=production DATABASE_ENCRYPTION_KEY=<default> python -c "import app.core.config"` ⇒ `RuntimeError`; `python -c "import app.main"` with `APP_ENV` unset ⇒ OK; `grep "python-requests\|bot_keywords\|xss_patterns" app/main.py` ⇒ nothing; regenerated `api-contracts/openapi.snapshot.json` twice (security scheme added, then bare-prefix paths removed).
+
+**Open decisions (in the PR):** `POST /daily_feed/dismiss` (a write keyed by OpenAlex `author_id`, not a uid) left public — binding it to the caller needs a uid→openalex_id map; `/zotero/*` stubs left public pending a real implementation.
+
+**Status:** Done — committed on `feat/security-hardening` (Tasks 1–4). Draft PR opened against `main`.
