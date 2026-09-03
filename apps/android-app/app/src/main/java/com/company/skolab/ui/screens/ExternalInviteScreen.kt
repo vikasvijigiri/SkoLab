@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.company.skolab.ui.theme.*
 import com.company.skolab.network.ServerLocator
+import com.company.skolab.network.GatewayClient
 import com.company.skolab.ui.components.primitives.SkoLabTextField
 import com.company.skolab.utils.PhoneVisualTransformation
 import kotlinx.coroutines.Dispatchers
@@ -79,7 +80,7 @@ fun ExternalInviteScreen(
                         .url(url)
                         .post(requestBody)
                         .build()
-                    okhttp3.OkHttpClient().newCall(request).execute().use { response ->
+                    GatewayClient.instance.newCall(request).execute().use { response ->
                         if (response.isSuccessful) {
                             withContext(Dispatchers.Main) {
                                 Toast.makeText(context, "✅ Invitation logged on SkoLab!", Toast.LENGTH_SHORT).show()
@@ -244,7 +245,7 @@ fun ExternalInviteScreen(
                         jsonReq.toString()
                     )
                     
-                    val client = okhttp3.OkHttpClient()
+                    val client = GatewayClient.instance
                     val request = okhttp3.Request.Builder()
                         .url(url)
                         .post(requestBody)

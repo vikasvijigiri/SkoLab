@@ -35,7 +35,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import com.company.skolab.ui.theme.SkoLabWarning
 import com.company.skolab.di.AppDependencies
-import okhttp3.OkHttpClient
+import com.company.skolab.network.GatewayClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -107,7 +107,7 @@ fun InviteMemberScreen(
                                                 try {
                                                     val base = com.company.skolab.network.ServerLocator.baseUrl.value ?: "http://10.0.2.2:8080"
                                                     val url = "$base/api/v1/recommendations/peers/invite"
-                                                    val client = OkHttpClient()
+                                                    val client = GatewayClient.instance
                                                     val jsonBody = JSONObject().apply {
                                                         put("user_id", currentUserId)
                                                         put("peer_email", researcher.email)
