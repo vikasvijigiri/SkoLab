@@ -53,7 +53,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 try:
     import security_gate  # noqa: E402
 except Exception:  # pragma: no cover -- an unimportable gate is `unknown`, not a crash
-    security_gate = None
+    security_gate = None  # type: ignore[assignment]
 
 # Squash, resolved at Gate 1: squash-merge onto short-lived independent branches
 # is the dominant trunk-based convention, and `CLAUDE.md` already assumed it --
