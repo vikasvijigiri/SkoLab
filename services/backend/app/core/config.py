@@ -208,6 +208,15 @@ class Settings:
             "DATABASE_ENCRYPTION_KEY", _DEFAULT_DB_ENCRYPTION_KEY
         )
     )
+    # Separate key for the deterministic email blind index (HMAC-SHA256 over a
+    # normalised address, stored in users.email_bidx). Kept distinct from
+    # database_encryption_key: that one is for at-rest confidentiality (Fernet,
+    # non-deterministic), this one is for equality lookups on an encrypted
+    # column. Empty ⇒ blind-index writes are skipped and email-equality lookups
+    # in the Go gateway degrade to "no match" (see app/db/blind_index.py).
+    email_blind_index_key: str = field(
+        default_factory=lambda: os.environ.get("EMAIL_BLIND_INDEX_KEY", "")
+    )
 
     def __post_init__(self) -> None:
         # Fail fast: a production deploy must supply a real DATABASE_ENCRYPTION_KEY.
