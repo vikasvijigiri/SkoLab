@@ -26,6 +26,16 @@ jobs:
           --health-retries 5
 
     steps:
+    - name: Free disk space
+      # `pip install -r requirements-dev.txt` pulls torch + sentence-transformers
+      # (~2 GB unpacked). On a stock ubuntu-latest runner that tips the root FS
+      # over and the install dies with `[Errno 28] No space left on device`,
+      # which is what had this job red on every commit. Reclaiming the unused
+      # Android SDK, .NET and Haskell toolchains frees ~20 GB.
+      run: |
+        sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+        df -h /
+
     - name: Checkout repository
       uses: actions/checkout@v4
 
@@ -82,7 +92,7 @@ jobs:
       run: |
         cd services/backend-go
         go vet ./...
-        go test ./... -v
+        go test ./... -race -cover -v
 
   web-verification:
     name: Web Build, Typecheck, Lint & Test
