@@ -24,7 +24,7 @@ export function AuthorResultCard({ a, index }: { a: AuthorSuggestion; index: num
         href={`/author/${encodeURIComponent(a.id)}?name=${encodeURIComponent(a.display_name)}&focus=${encodeURIComponent(a.field_of_study ?? "")}`}
         onMouseEnter={warm}
         onFocus={warm}
-        className={cn("block", focusRing)}
+        className={cn("block rounded-lg", focusRing)}
       >
         <Card glow interactive className="flex h-full items-center gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary font-display text-[14px] font-bold text-text-on-primary">
