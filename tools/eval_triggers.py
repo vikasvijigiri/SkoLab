@@ -29,6 +29,7 @@ skill tests nothing.
 from __future__ import annotations
 
 import argparse
+import collections
 import json
 import os
 import subprocess
@@ -190,7 +191,7 @@ def run_query(query: str, timeout: int = 180, cwd: Path | None = None) -> tuple[
     Cost is returned rather than discarded, because a harness that spends real
     money silently is how you find out afterwards.
     """
-    # Each invocation is a REAL session in this repository, so its post-run hook
+    # Each invocation is a REAL session in this repository, so its stop-finalization hook
     # would auto-commit whatever happens to be in the working tree -- forty times,
     # while an eval is running. `UAIOS_AUTOCOMMIT_RUNNING` is the re-entry guard
     # that hook already checks; setting it here is the same mechanism the check
@@ -226,7 +227,14 @@ def run_query(query: str, timeout: int = 180, cwd: Path | None = None) -> tuple[
             continue
         if event.get("type") == "result":
             cost += float(event.get("total_cost_usd") or 0.0)
-        message = event.get("message") or {}
+        # `message` is a dict on assistant/user events and a STRING on others
+        # (an error event carries its text there). `or {}` does not catch that
+        # -- a non-empty string is truthy -- so this crashed on the first live
+        # invocation with `'str' object has no attribute 'get'`. Every event
+        # shape this does not understand is skipped rather than assumed.
+        message = event.get("message")
+        if not isinstance(message, dict):
+            continue
         blocks = message.get("content")
         if not isinstance(blocks, list):
             continue
@@ -249,6 +257,8 @@ def evaluate(skill: str, cases: list[dict], repeats: int, dry: bool,
              limit: int | None = None, cwd: Path | None = None) -> dict:
     hits = misses = false_fires = correct_silence = 0
     spent = 0.0
+    # Which skill set ran on each positive that did not fire.
+    instead: collections.Counter = collections.Counter()
     # Sample evenly across positives and negatives, so `--limit 4` is two of each
     # rather than four positives.
     if limit:
@@ -277,13 +287,53 @@ def evaluate(skill: str, cases: list[dict], repeats: int, dry: bool,
                 # confident, uniform 0.0. Aborting here caps the next instance at
                 # one query instead of the whole sweep.
                 if not invoked and cost == 0.0:
-                    raise InstrumentError(
-                        f"first live query returned no tool records AND no cost "
-                        f"({skill!r}: {case['query'][:60]!r}). A real invocation "
-                        f"always costs something, so this is the harness, not the "
-                        f"descriptions. Check that `claude` is on PATH, that the "
-                        f"stream decodes, and that a tool_use block still names "
-                        f"the skill. Nothing further was run.")
+                    # Retry ONCE, with a longer timeout, before condemning the
+                    # harness. The tell above cannot separate "the instrument is
+                    # broken" from "the first invocation of a cold CLI took longer
+                    # than the per-query timeout" -- and both present identically,
+                    # as no tools and no cost.
+                    #
+                    # Measured 2026-08-09: `--skill research` succeeded (cost
+                    # $0.8837) while `--all` aborted twice on its first query, the
+                    # difference being that the single-skill run followed a manual
+                    # invocation and inherited a warm CLI. A cold start that
+                    # exceeds 180s raises TimeoutExpired, which `run_query` catches
+                    # and reports as (no tools, no cost).
+                    #
+                    # One retry, not three: a genuinely broken instrument fails
+                    # both times and still costs one query instead of a sweep,
+                    # which is the property this check was written for.
+                    print("  first query saw nothing -- retrying once with a "
+                          "longer timeout before blaming the instrument")
+                    invoked, cost = run_query(
+                        case["query"], timeout=600, cwd=cwd)
+                    spent += cost
+                    fired = skill in invoked
+                    if not invoked and cost == 0.0:
+                        raise InstrumentError(
+                            f"first live query returned no tool records AND no "
+                            f"cost TWICE, the second time with a 600s timeout "
+                            f"({skill!r}: {case['query'][:60]!r}). A real "
+                            f"invocation always costs something, so this is the "
+                            f"harness, not the descriptions. Check that `claude` "
+                            f"is on PATH, that the stream decodes, and that a "
+                            f"tool_use block still names the skill. Nothing "
+                            f"further was run.")
+            # What ran INSTEAD, on a positive that did not fire. A bare 0.0 says
+            # the skill lost and nothing about what beat it, so diagnosing one
+            # costs another live sweep -- $2.92 to learn that `code-review`
+            # scored 0.0, then $0.35 more to find that the model reviewed the
+            # diff with four Bash calls and invoked no skill at all.
+            #
+            # That distinction is the whole finding: a skill losing to ANOTHER
+            # skill is a description problem, and adding trigger words fixes it.
+            # A skill losing to the model doing the work itself is not, and no
+            # amount of trigger words touches it -- proven by adding ~600
+            # characters of phrases to `code-review` and measuring 0.0 both
+            # before and after.
+            if case["should_trigger"] and not fired and not dry:
+                instead[frozenset(invoked) or frozenset({"(no skill -- done directly)"})] += 1
+
             if case["should_trigger"]:
                 hits += fired
                 misses += not fired
@@ -298,6 +348,10 @@ def evaluate(skill: str, cases: list[dict], repeats: int, dry: bool,
         "false_fire_rate": round(false_fires / neg, 3) if neg else None,
         "positives": pos, "negatives": neg, "dry_run": dry,
         "cost_usd": round(spent, 4),
+        # Sorted for a stable report; empty on a dry run and on a
+        # clean sweep, which is the only time it says nothing useful.
+        "lost_to": [{"ran": sorted(k), "n": n}
+                    for k, n in instead.most_common()],
     }
 
 

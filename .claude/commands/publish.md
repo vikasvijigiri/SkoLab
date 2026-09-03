@@ -1,5 +1,11 @@
 ---
 description: Create the GitHub repository, add the remote, push the branch and open the PR after explicit confirmation; never configures its own merge gates.
+# User entry point: typed explicitly, never auto-invoked. Notion section 8 -
+# commands are optional shortcuts, not workflow stages, and the router must work
+# without them. Left invocable, their descriptions cost 1,506 chars of the skill
+# listing on EVERY turn for a capability only the user triggers; per
+# code.claude.com/docs/en/skills this flag also keeps them out of context.
+disable-model-invocation: false
 ---
 
 # Publish
@@ -69,10 +75,41 @@ first is not answering the second.
    then `git push -u origin <branch>`. Never `--force`, never to `main`.
    Use the owner from step 4 verbatim; do not re-derive it here.
 8. `gh pr create --fill --base main --head <branch>`.
-9. Print the settings to enable by hand, and stop:
+9. **Probe whether merge gates are even available here, then report. Do not
+   print instructions without checking.**
 
-       branch protection on `main`  → require the status check `conclusion`
-       merge queue                  → enable for `main`
+       gh api "repos/<owner>/<name>/branches/main/protection"
+
+   Three outcomes, and each gets a different sentence:
+
+   | Response | Say |
+   |---|---|
+   | `200` | protection exists — print what it requires, and whether `conclusion` is among the required checks |
+   | `404` | available and unset — print the settings to enable by hand: branch protection on `main` requiring the status check `conclusion`, and the merge queue for `main` |
+   | `403` `Upgrade to GitHub Pro or make this repository public` | **unavailable on this plan.** Say so, and name what still holds the line |
+
+   On `403`, do not leave a task nobody can do. Branch protection and rulesets
+   are not offered on a free private repository, so the honest report is the
+   limitation plus its compensating controls:
+
+   - `.github/workflows/checks.yml` runs on every pull request and resolves the
+     same `.claude/project-checks.json` the local gate does, so a red branch is
+     visible on the PR — **visible, not blocked**;
+   - `permission-security/02-branch-guard.py` refuses commits on `main` in any working
+     tree that has the layer installed;
+   - nothing prevents a direct `git push` to `main` from a clone without the
+     layer. State that plainly rather than implying the branch is protected.
+
+   The options are then a real choice for a human: make the repository public,
+   upgrade the plan, or accept the gap knowingly. Recommending one is fine;
+   deciding is not.
+
+**Why a probe and not a printed instruction.** Step 9 printed those two settings
+unconditionally, and on this repository the API answers `403` — so the "pending"
+item it created was unfollowable, and it sat in `HANDOFF.md` as though somebody
+had simply not got round to it. An instruction that cannot be carried out is
+worse than none: it reads as an open task forever and it costs a reader the time
+to discover why it is not.
 
 ## Never
 
@@ -80,7 +117,7 @@ first is not answering the second.
   Those settings decide what may merge unattended; an agent that configures its
   own gates has removed the reason the gates exist. Print them, let a human set them.
 - Never `gh pr merge`, `--admin`, or `--auto` in this command. Landing is
-  `delivering`'s business and the queue's, after review.
+  `release-git`'s business and the queue's, after review.
 - Never publish a repository whose tree has uncommitted secrets — step 1 runs
   the secret scan as part of the tier, and a red tier stops here.
 - Never guess the owner, and never fall back to the active personal account when
@@ -93,12 +130,12 @@ first is not answering the second.
 
 This layer shipped an automatic version once: a `SessionStart` hook installed
 the whole capability layer into any git repository it found, unasked. It was
-removed with `install.py`, and `session-start/02-bootstrap-docs.py`
-was reduced from authoring to detection —
-`tools/test_session_start_contract.py` now asserts it creates nothing.
+removed with `install.py`, and `session-init/02-session-context.py`
+was reduced from authoring to detection — the layer's
+`test_session_start_contract.py` (source repo only) asserts it creates nothing.
 
 A hook fires unasked and its failure mode is silence. Publishing is irreversible
 and outward-facing, so it gets a command, one confirmation, and a human.
-`session-start/03-state-report.py` reports the `[state:no-remote]` condition when
+`session-init/03-state-report.py` reports the `[state:no-remote]` condition when
 a branch has commits and nowhere to send them; reporting is a hook's job, acting
 is not.

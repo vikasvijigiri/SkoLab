@@ -30,8 +30,10 @@ import redis.asyncio as aioredis  # type: ignore
 from sqlalchemy.future import select
 from sqlalchemy import delete as sa_delete
 
-from app.db.database import AsyncSessionLocal
+from app.db.database import AsyncSessionLocal, engine
 from app.models.user_models import CacheEntry
+
+_IS_POSTGRES = engine.dialect.name == "postgresql"
 
 # Shared Redis client
 _redis_client: aioredis.Redis | None = None
@@ -80,6 +82,11 @@ class PgBackedCache:
         self.l1_ttl = l1_ttl_seconds
         self._l1: dict[str, tuple[Any, float]] = {}  # key -> (value, expiry_ts)
         self._lock = asyncio.Lock()
+        # Single-flight: in-flight compute() calls keyed by cache key. N
+        # concurrent misses on the same key await one shared task instead of
+        # all N independently hitting the (embedding / LLM / OpenAlex) work —
+        # the "cache stampede" when a hot key expires and every user misses.
+        self._inflight: dict[str, "asyncio.Task[Any]"] = {}
 
     # ── helpers ───────────────────────────────────────────────────────────────
 
@@ -187,21 +194,46 @@ class PgBackedCache:
 
         async with AsyncSessionLocal() as session:
             try:
-                stmt = select(CacheEntry).where(CacheEntry.cache_key == db_key)
-                result = await session.execute(stmt)
-                entry = result.scalars().first()
-                if entry:
-                    entry.data = payload
-                    entry.last_synced = now
-                    entry.expires_at = expires_at
-                else:
-                    entry = CacheEntry(
+                if _IS_POSTGRES:
+                    # Atomic upsert — the previous SELECT-then-INSERT/UPDATE let
+                    # two concurrent sets on the same key both miss the SELECT
+                    # and then race on INSERT (unique-violation) or clobber each
+                    # other. ON CONFLICT collapses it to one statement.
+                    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+                    stmt = pg_insert(CacheEntry).values(
                         cache_key=db_key,
                         data=payload,
                         last_synced=now,
                         expires_at=expires_at,
                     )
-                    session.add(entry)
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=[CacheEntry.cache_key],
+                        set_={
+                            "data": stmt.excluded.data,
+                            "last_synced": stmt.excluded.last_synced,
+                            "expires_at": stmt.excluded.expires_at,
+                        },
+                    )
+                    await session.execute(stmt)
+                else:
+                    existing = await session.execute(
+                        select(CacheEntry).where(CacheEntry.cache_key == db_key)
+                    )
+                    entry = existing.scalars().first()
+                    if entry:
+                        entry.data = payload
+                        entry.last_synced = now
+                        entry.expires_at = expires_at
+                    else:
+                        session.add(
+                            CacheEntry(
+                                cache_key=db_key,
+                                data=payload,
+                                last_synced=now,
+                                expires_at=expires_at,
+                            )
+                        )
                 await session.commit()
             except Exception as exc:
                 print(
@@ -209,6 +241,36 @@ class PgBackedCache:
                     flush=True,
                 )
                 await session.rollback()
+
+    async def get_or_compute(self, key: str, compute):
+        """Return the cached value for `key`, or run `compute()` (an async
+        callable taking no args), cache the result, and return it.
+
+        Concurrent callers that miss the same key share one `compute()` run
+        (single-flight) — the rest await its result rather than each doing the
+        expensive work. `compute()` raising propagates to every waiter and
+        nothing is cached.
+        """
+        hit = await self.get(key)
+        if hit is not None:
+            return hit
+
+        existing = self._inflight.get(key)
+        if existing is not None:
+            return await existing
+
+        async def _run():
+            value = await compute()
+            if value is not None:
+                await self.set(key, value)
+            return value
+
+        task = asyncio.ensure_future(_run())
+        self._inflight[key] = task
+        try:
+            return await task
+        finally:
+            self._inflight.pop(key, None)
 
     async def delete(self, key: str) -> None:
         """Remove a single key from L1 and L2 (Redis/Database)."""

@@ -18,12 +18,67 @@ The model is loaded once as a module-level singleton — loading takes ~1-2s
 and must not happen per-request.
 """
 
+import asyncio
+import hashlib
 import os
-from typing import List
+from typing import List, Optional
 import numpy as np
 
 _MODEL_NAME = "BAAI/bge-small-en-v1.5"
+_EMBED_DIM = 384
 _model = None
+
+# ── Content-hash vector cache ────────────────────────────────────────────────
+# text -> vector is deterministic for a fixed model, and the same paper abstract
+# is re-embedded across the daily feed, journal advisor and grant match. Cache
+# each vector in L2 keyed by sha256(model + text) so a warm text costs a dict /
+# Redis lookup instead of a CPU forward pass.
+_vec_cache = None
+
+
+def _get_vec_cache():
+    global _vec_cache
+    if _vec_cache is None:
+        from app.core.config import settings
+        from app.db.pg_cache import PgBackedCache
+
+        _vec_cache = PgBackedCache(
+            ttl_seconds=settings.embed_vector_cache_ttl_seconds, name="embed_vec"
+        )
+    return _vec_cache
+
+
+def _vec_key(text: str) -> str:
+    return hashlib.sha256(f"{_MODEL_NAME}\x00{text}".encode("utf-8")).hexdigest()
+
+
+# ── Concurrency cap ──────────────────────────────────────────────────────────
+# A forward pass is CPU-bound and single-machine. Without a cap, 100 concurrent
+# callers each spawn a worker thread that fights over the same 1-2 cores, so the
+# whole set runs slower than a small serialised queue would. This bounds the
+# in-flight forward passes; callers past the limit await their turn (the "queue"
+# the UI surfaces as a working... state). Size = EMBED_MAX_CONCURRENCY, or the
+# container's visible core count when that is 0.
+_embed_semaphore: Optional[asyncio.Semaphore] = None
+
+
+def _embed_concurrency_limit() -> int:
+    from app.core.config import settings
+
+    if settings.embed_max_concurrency > 0:
+        return settings.embed_max_concurrency
+    try:
+        return max(1, len(os.sched_getaffinity(0)))
+    except AttributeError:
+        return max(1, os.cpu_count() or 1)
+
+
+def _get_embed_semaphore() -> asyncio.Semaphore:
+    global _embed_semaphore
+    if _embed_semaphore is None:
+        _embed_semaphore = asyncio.Semaphore(_embed_concurrency_limit())
+    return _embed_semaphore
+
 
 # bge models are trained asymmetrically: prefixing the *query* side with this
 # instruction measurably improves retrieval quality, while the *passage*
@@ -75,24 +130,61 @@ async def embed_texts(texts: List[str]) -> np.ndarray:
     its full duration.
     """
     if not texts:
-        return np.zeros((0, 384), dtype=np.float32)
-    import asyncio
+        return np.zeros((0, _EMBED_DIM), dtype=np.float32)
     import time
 
     _t0 = time.monotonic()
-    model = _get_model()
-    _t_model = time.monotonic()
-    max_len = max(len(t) for t in texts)
-    vecs = await asyncio.to_thread(
-        model.encode, texts, normalize_embeddings=True, convert_to_numpy=True
-    )
-    _t_encode = time.monotonic()
+
+    # 1. Serve what we can from the content-hash cache; collect unique misses.
+    cache = _get_vec_cache()
+    keys = [_vec_key(t) for t in texts]
+    cached: dict[str, np.ndarray] = {}
+    misses: dict[str, str] = {}  # key -> text (deduped)
+    for key, text in zip(keys, texts):
+        if key in cached or key in misses:
+            continue
+        hit = None
+        try:
+            hit = await cache.get(key)
+        except Exception as exc:  # cache must never break embedding
+            print(f"[EmbeddingService] vec cache GET failed: {exc}", flush=True)
+        if hit is not None:
+            cached[key] = np.asarray(hit, dtype=np.float32)
+        else:
+            misses[key] = text
+
+    _t_cache = time.monotonic()
+    _encode_secs = 0.0
+    if misses:
+        miss_keys = list(misses.keys())
+        miss_texts = [misses[k] for k in miss_keys]
+        model = _get_model()
+        _t_model = time.monotonic()
+        async with _get_embed_semaphore():
+            fresh = await asyncio.to_thread(
+                model.encode,
+                miss_texts,
+                normalize_embeddings=True,
+                convert_to_numpy=True,
+            )
+        _encode_secs = time.monotonic() - _t_model
+        fresh = fresh.astype(np.float32)
+        for key, vec in zip(miss_keys, fresh):
+            cached[key] = vec
+            try:
+                await cache.set(key, [round(float(x), 7) for x in vec])
+            except Exception as exc:
+                print(f"[EmbeddingService] vec cache SET failed: {exc}", flush=True)
+
+    # 2. Reassemble in the caller's original order.
+    out = np.stack([cached[k] for k in keys]).astype(np.float32)
     print(
-        f"[EmbeddingService][TIMING] get_model={_t_model - _t0:.2f}s "
-        f"to_thread_encode={_t_encode - _t_model:.2f}s n={len(texts)} max_char_len={max_len}",
+        f"[EmbeddingService][TIMING] cache_lookup={_t_cache - _t0:.2f}s "
+        f"encode={_encode_secs:.2f}s n={len(texts)} misses={len(misses)} "
+        f"max_char_len={max(len(t) for t in texts)}",
         flush=True,
     )
-    return vecs.astype(np.float32)
+    return out
 
 
 async def embed_text(text: str) -> np.ndarray:

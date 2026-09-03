@@ -5,9 +5,21 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
+	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+func envInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return def
+}
 
 var Pool *pgxpool.Pool
 
@@ -15,8 +27,11 @@ var Pool *pgxpool.Pool
 func InitDB() error {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		// Fallback local url for development
-		dbURL = "postgres://postgres:postgres@localhost:5432/skolab?sslmode=disable"
+		// Credential-free local dev fallback — pgx uses the OS user (or PGUSER
+		// / PGPASSWORD) when the DSN omits them. Matches services/backend's
+		// .env.example convention and keeps a credential-shaped literal out of
+		// source. Set DATABASE_URL for anything real.
+		dbURL = "postgres://localhost:5432/skolab?sslmode=disable"
 	}
 
 	config, err := pgxpool.ParseConfig(dbURL)
@@ -24,9 +39,20 @@ func InitDB() error {
 		return fmt.Errorf("error parsing database connection string: %v", err)
 	}
 
-	// Optimize connection pool limits for high concurrency
-	config.MaxConns = 50
-	config.MinConns = 10
+	// Sized for the Supabase free transaction pooler (pgBouncer, ~60 shared
+	// server connections total, shared with the Python service). Overridable
+	// via DB_MAX_CONNS / DB_MIN_CONNS.
+	config.MaxConns = int32(envInt("DB_MAX_CONNS", 15))
+	config.MinConns = int32(envInt("DB_MIN_CONNS", 3))
+	config.MaxConnLifetime = 30 * time.Minute
+	config.MaxConnIdleTime = 5 * time.Minute
+	config.HealthCheckPeriod = 1 * time.Minute
+
+	// pgBouncer in transaction mode does not support session-level prepared
+	// statements: a connection is reassigned between statements, so a cached
+	// prepared statement resolves against the wrong session. QueryExecModeExec
+	// sends each query on the simple protocol with no statement caching.
+	config.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
 
 	pool, err := pgxpool.NewWithConfig(context.Background(), config)
 	if err != nil {

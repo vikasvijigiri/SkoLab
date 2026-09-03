@@ -15,10 +15,10 @@ that resolves to nothing, and its own entry point was an instance of it.
 
 Three rules, each because a fresh copy would otherwise discard a decision:
 
-  PRESERVE  `CLAUDE.md` and `.claude/project-checks.json` are never overwritten.
-            One states what the target repository is; the other states what
-            "the checks pass" means there. A source copy asserting this repo's
-            facts is worse than no file at all.
+  PRESERVE  an existing `CLAUDE.md` and `.claude/project-checks.json` are never
+            overwritten. A missing `CLAUDE.md` receives only a small bootloader
+            that imports `AGENTS.md`; a source copy asserting this repo's facts
+            is worse than no file at all.
   MERGE     `.claude/settings.json` is unioned by hook command string, so a
             target keeping its own hooks keeps them.
   SKIP      `__pycache__`, `.claude/hooks/state/`, and `.claude/workflow-state/`
@@ -45,6 +45,8 @@ TREES = (
     ".claude/hooks",
     ".claude/rules",
     ".claude/output-styles",
+    ".claude/workflows",
+    ".claude/policies",
     ".claude/agent-memory",
     "tools",
     # Fixtures the suites read. `test_pilot_contract.py` and `test_recon.py` are
@@ -53,6 +55,33 @@ TREES = (
     # found by installing into a synthetic repo on 2026-08-07 and running them.
     "docs/pilots",
     "docs/baselines",
+    # The authoring documentation the layer's OWN suites and skills cite by path.
+    # Neither shipped until 2026-08-08, and the failure surfaced only in a target:
+    # `test_hook_standards.py`'s docstring opens "Check repository hooks against
+    # guide/how_to_create_hooks.md", `test_process_router.py` quotes
+    # `guide/how_to_create_subagents.md` and `templates/Skills.md` as the source of
+    # two rules, and `capability-layer-maintenance` tells the model to compare a
+    # new hook or skill against `templates/` and `guide/`. In an installed repo
+    # every one of those resolved to nothing.
+    #
+    # `test_referenced_paths.py` could not catch it twice over: it scans `.md`
+    # files, so citations in `.py` docstrings are invisible to it, and it is
+    # repo-scoped, so the `.md` citations resolve here where `guide/` exists.
+    # 124KB together -- cheap against a skill telling somebody to read a directory
+    # that is not there.
+    "guide",
+    "templates",
+    # The host-neutral capability contract and its per-host adapter bindings.
+    # `AGENTS.md` and `harnesses.json` both ship and both promise these paths
+    # exist in every install ("`.claude/portability/capabilities.json` defines
+    # the host-neutral capabilities the workflow requires; `.claude/adapters/`
+    # binds each declared host"), and `capability-layer-maintenance` tells the
+    # model to run `tools/test_portability_contract.py` after an adapter change
+    # -- a suite that reads exactly these five files. Shipping the suite without
+    # its data left every installed target with a mandated command that exits on
+    # a missing file. 5 files, ~200 lines.
+    ".claude/portability",
+    ".claude/adapters",
 )
 
 # Single files copied as-is when absent or stale.
@@ -64,8 +93,11 @@ FILES = (
     ".claude/install.py",
     "AGENTS.md",
     "harnesses.json",
-    "ruff.toml",
-    "mypy.ini",
+    # AGENTS.md points a bridging non-Claude host here for the exact hook
+    # invocation contract. Unlike guide/ and templates/ (authoring references
+    # for someone changing the layer), this is operational documentation a
+    # TARGET needs, so it ships as a file rather than living only in docs/.
+    "docs/harness-hook-bridge.md",
 )
 
 # Written only when absent, never overwritten, but not in PRESERVE because a
@@ -74,12 +106,43 @@ FILES = (
 # two cannot drift.
 SEED = (
     ".github/workflows/checks.yml",
-    # `test_ci_shape.py` asserts both, and it travels with the layer. Seeding the
-    # workflow without the ownership file it is checked against left exactly one
-    # red suite in an otherwise-clean install -- found by running the fast tier in
-    # a synthetic target rather than by reading either file.
+    # A target's lint and typecheck configuration is ITS decision, and these were
+    # in FILES until 2026-08-08 -- copied unconditionally, so installing the layer
+    # silently overwrote a product's tuned `ruff.toml` with this repository's.
+    # Seeded instead: a repo with none gets a working starting point, a repo with
+    # its own keeps every rule in it.
+    "ruff.toml",
+    "mypy.ini",
+    # Seeded from `templates/CODEOWNERS.seed`, never from this repository's own
+    # copy -- see `SEED_SOURCE`. It used to be justified by `test_ci_shape.py`
+    # asserting it "and it travels with the layer"; that stopped being true when
+    # the internal suites were removed from the payload on 2026-08-16, so the
+    # reason it stays is the ownership file itself: a workflow seeded with no
+    # ownership beside it is a gate nobody is named on.
     "CODEOWNERS",
 )
+
+# A seeded file whose payload lives somewhere other than the same path here.
+#
+# `CODEOWNERS` is the case that forced it. Seeding the copy at this repository's
+# root shipped a real GitHub handle into every target as owner of `*`, where it
+# either requests review from a stranger on every pull request or -- worse --
+# silently does nothing, because GitHub ignores an owner who is not a
+# collaborator. The file still LOOKS like governance either way, which is the
+# failure mode that matters. `templates/CODEOWNERS.seed` carries the same
+# path-scoped rules with a placeholder and says on its first line to replace it.
+SEED_SOURCE = {"CODEOWNERS": "templates/CODEOWNERS.seed"}
+
+# Seeded only into a target that already has Python of its own.
+#
+# Both are markers in `_projectchecks.MARKER_CHECKS`, so seeding them decides
+# what the HOST's checks are, not just what the layer's are. Measured
+# 2026-08-16: a Node-only repository resolved four fast checks after install,
+# two of them `ruff check .` and `mypy` that it never asked for and that pass
+# only while the layer's own Python happens to be clean.
+PYTHON_SEED = {"ruff.toml", "mypy.ini"}
+
+CLAUDE_SEED = "@AGENTS.md\n\n# Capability layer\n\nThis repository uses the portable layer in `.claude/`. Read `.claude/workflow.md` for the execution policy and use the native skills, commands, and hooks registered by the active host.\n"
 
 # Never overwritten. Each carries a decision a fresh copy would silently discard.
 PRESERVE = (
@@ -131,9 +194,62 @@ EXCLUDE_FILES = (
     ".claude/rules/llm-env.md",
 )
 
+# The only `tools/test_*.py` a host has any use for: they check that the layer
+# it just INSTALLED is intact and wired. `install.py` ends by telling the reader
+# to run the first two.
+#
+# Everything else under that glob tests the layer's own internals -- the check
+# runner, the resume state machine, the escalation ladder, the packaging -- and
+# a host has no more use for those than for this repository's git history.
+#
+# The split is 6 files against 36, 119KB against 418KB, and shipping the 36 was
+# actively harmful rather than merely wasteful. Measured 2026-08-16 in a fresh
+# Python product:
+#
+#     INTERNALERROR> .../product/tools/test_package.py line 109: sys.exit(0)
+#     no tests ran in 32.16s
+#
+# They are standalone scripts that `sys.exit()` at import, pytest collected them
+# during its own run, and the HOST'S suite never executed. Installing the layer
+# broke the host's test runner. Nothing caught it because every one of
+# `test_install.py`'s 102 assertions checked installation mechanics and none
+# checked that the installed layer works.
+#
+# Verified against the runtime before cutting: no non-test tool imports any test
+# module, so nothing the layer DOES depends on them.
+#
+# The list is not "the ones that happen to be safe" -- it is every suite a
+# SHIPPED skill or command instructs the reader to run. A shipped skill naming a
+# suite that is not here is the same silent break as a dangling hook path, and
+# `test_referenced_paths.py` (now run in the target by `test_install.py`) fails
+# on it. `test_doc_entries.py` is `documentation`'s mandatory LOG/ISSUES-entry
+# validator and reads only those two files; `test_portability_contract.py` is
+# `capability-layer-maintenance`'s adapter check and reads the `.claude/adapters`
+# and `.claude/portability` trees now added to TREES.
+SHIPPED_SUITES = frozenset({
+    "test_process_router.py",
+    "test_referenced_paths.py",
+    "test_command_standards.py",
+    "test_agent_standards.py",
+    "test_hook_registration.py",
+    "test_workflow_contract.py",
+    "test_doc_entries.py",
+    "test_portability_contract.py",
+})
+
+
+def is_internal_suite(rel: Path) -> bool:
+    """True for a layer self-test the host has no use for."""
+    return (rel.parent.as_posix() == "tools"
+            and rel.name.startswith("test_")
+            and rel.name.endswith(".py")
+            and rel.name not in SHIPPED_SUITES)
+
 
 def skipped(rel: Path) -> bool:
     if rel.as_posix() in EXCLUDE_FILES:
+        return True
+    if is_internal_suite(rel):
         return True
     return any(part in SKIP_PARTS for part in rel.parts)
 
@@ -148,7 +264,6 @@ def skipped(rel: Path) -> bool:
 # registers no hooks and raises nothing.
 EXTRA_PAYLOAD = (
     ".claude/settings.json",
-    "templates/target-CLAUDE.md",
     "README.md",
 )
 
@@ -281,12 +396,37 @@ def _noise(path: Path, root: Path) -> bool:
                          "__pycache__", "target", "vendor", ".git"})
 
 
+def seed_source(name: str) -> Path:
+    """Where a seeded file's payload is read from. See `SEED_SOURCE`."""
+    return SOURCE / SEED_SOURCE.get(name, name)
+
+
+def target_has_python(target: Path) -> bool:
+    """Does the TARGET have Python of its own, discounting the layer's?
+
+    Called from `plan()`, before `apply()` copies anything, because after that
+    the answer is always yes -- `tools/` alone is 26 Python files. On a REPEAT
+    install the layer's files are already on disk, so `_layer_owned()` is what
+    keeps the answer about the host; it is the same manifest discriminator that
+    stops `_projectchecks` adopting the layer's suites as the host's tests, and
+    it fails open to an empty set, which over-seeds rather than under-detects.
+    """
+    owned = _layer_owned(target)
+    for path in target.rglob("*.py"):
+        if _noise(path, target):
+            continue
+        if path.relative_to(target).as_posix() in owned:
+            continue
+        return True
+    return False
+
+
 def entry_point(target: Path) -> str:
     """Where the chain should start in the target, from what is already there.
 
     Deliberately shallow: this is a deterministic script, not the session. It
     reports a signal and names the skill that consumes it. Deciding what the
-    work actually is belongs to `repo-recon`, which can read code.
+    work actually is belongs to `repository-navigation`, which can read code.
     """
     has_git = (target / ".git").exists()
     has_plan = any((target / "docs" / "plans").glob("*.md")) \
@@ -295,7 +435,7 @@ def entry_point(target: Path) -> str:
 
     # The layer's own files are not the host's code. `main` also calls this BEFORE
     # writing anything, so the dry run and the real run describe the same target
-    # -- they disagreed until 2026-08-07 ("empty, start at task-brief" then "an
+    # -- they disagreed until 2026-08-07 ("empty, start at framing" then "an
     # existing codebase" for one unchanged repo), because the second reading
     # counted the ~33 tool scripts the first one had just installed.
     owned = _layer_owned(target)
@@ -311,11 +451,11 @@ def entry_point(target: Path) -> str:
     if has_plan:
         return "docs/plans/ already has a plan -- run `python tools/resume.py`"
     if tracked > 20:
-        return ("an existing codebase with no plan -- start at `repo-recon`, "
-                "which reads the repo and writes the brief")
+        return ("an existing codebase with no plan -- start at "
+                "`repository-navigation`, which reads the repo and writes the brief")
     if has_task:
-        return "TASK.md exists -- start at `writing-plans`"
-    return "empty or near-empty -- start at `task-brief`"
+        return "TASK.md exists -- resume `task-analysis` at its planning stage"
+    return "empty or near-empty -- start at `task-analysis`"
 
 
 def plan(target: Path) -> tuple[list[tuple[Path, str]], list[str]]:
@@ -351,13 +491,22 @@ def plan(target: Path) -> tuple[list[tuple[Path, str]], list[str]]:
         else:
             actions.append((Path(name), "unchanged"))
 
+    host_python = target_has_python(target)
     for name in SEED:
-        src = SOURCE / name
+        if name in PYTHON_SEED and not host_python:
+            warnings.append(f"{name} not seeded -- this target has no Python of "
+                            f"its own, and seeding it would add a Python check "
+                            f"to the host's own tier")
+            continue
+        src = seed_source(name)
         if not src.is_file():
             warnings.append(f"source is missing {name} -- not seeded")
             continue
         dst = target / name
         actions.append((Path(name), "preserve" if dst.exists() else "create"))
+
+    claude = target / "CLAUDE.md"
+    actions.append((Path("CLAUDE.md"), "preserve" if claude.exists() else "create-claude-stub"))
 
     for name in PRESERVE:
         dst = target / name
@@ -410,7 +559,7 @@ def write_manifest(target: Path, actions: list[tuple[Path, str]]) -> int:
     """
     owned = sorted({
         rel.as_posix() for rel, action in actions
-        if action in ("create", "overwrite", "unchanged", "create-stub", "merge")
+        if action in ("create", "overwrite", "unchanged", "create-stub", "create-claude-stub", "merge")
         and rel.as_posix() not in PRESERVE
     } | {MANIFEST.as_posix()})
     # The hash of what was INSTALLED, per file. This is what lets `upgrade` tell
@@ -419,10 +568,15 @@ def write_manifest(target: Path, actions: list[tuple[Path, str]]) -> int:
     # improvement is refused too. Recorded from the source at install time, not
     # from the target, so a file that fails to copy does not get a hash claiming
     # it succeeded.
+    # `seed_source` and not `SOURCE / rel`: a `SEED_SOURCE` file is installed
+    # from a template, so hashing the same-named file at this repository's root
+    # would record a hash the target never had -- and `upgrade` would read that
+    # difference as a local edit and refuse every later improvement to it.
     hashes = {
-        rel: file_hash(SOURCE / rel)
+        rel: (file_hash(seed_source(rel)) if rel != "CLAUDE.md"
+              else __import__("hashlib").sha256(CLAUDE_SEED.encode()).hexdigest())
         for rel in owned
-        if rel != MANIFEST.as_posix() and (SOURCE / rel).is_file()
+        if rel != MANIFEST.as_posix() and (rel == "CLAUDE.md" or seed_source(rel).is_file())
     }
 
     path = target / MANIFEST
@@ -448,7 +602,13 @@ def apply(target: Path, actions: list[tuple[Path, str]]) -> list[str]:
         dst = target / rel
         if action in ("create", "overwrite"):
             dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(SOURCE / rel, dst)
+            # `seed_source` is the identity for everything but the handful of
+            # names in SEED_SOURCE, so this stays one copy path rather than two.
+            shutil.copy2(seed_source(rel.as_posix()), dst)
+        elif action == "create-claude-stub":
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_text(CLAUDE_SEED, encoding="utf-8")
+            notes.append("wrote a Claude bootloader importing AGENTS.md")
         elif action == "create-stub":
             dst.parent.mkdir(parents=True, exist_ok=True)
             dst.write_text(json.dumps(CHECKS_STUB, indent=2) + "\n", encoding="utf-8")
@@ -468,13 +628,139 @@ def apply(target: Path, actions: list[tuple[Path, str]]) -> list[str]:
     return notes
 
 
+def _contained(target: Path, rel: str) -> bool:
+    """Is `rel` a path that stays inside `target` once resolved?
+
+    **The manifest is untrusted input.** `.claude/layer-manifest.json` is a
+    tracked file: it is committed, it travels with every clone, and `uninstall`
+    is most useful precisely on a repository somebody else wrote. Until this
+    existed, a manifest carrying `"paths": ["../PRECIOUS.txt"]` made the verb
+    delete a file in the target's PARENT directory -- demonstrated against a
+    fixture, not theorised, and found by `code-review` after three passes of
+    `verifying-work` and an eight-mutation sweep had all reported clean.
+
+    `resolve()` before comparing, because the check has to survive `..`
+    segments, an absolute path (`target / "/etc/x"` is `/etc/x` under pathlib
+    join semantics), and a symlinked component. `is_relative_to` is the
+    containment test; `strict=False` because the path may already be gone.
+    """
+    try:
+        return (target / rel).resolve(strict=False).is_relative_to(target.resolve())
+    except (OSError, ValueError):
+        return False
+
+
+def uninstall_plan(target: Path) -> tuple[list[str], list[str], list[str], list[str]]:
+    """What an uninstall may remove, must keep, must never touch, and refuses.
+
+    Returns `(remove, kept_edited, kept_protected, refused)`, each a sorted list
+    of posix relative paths, and the four are disjoint. Writes nothing --
+    applying is `main()`'s job, so a dry run and a real run compute the same
+    answer from the same code rather than from two implementations that can
+    disagree.
+
+    `refused` holds manifest entries that do not resolve inside the target. They
+    are **reported, never silently skipped**: a manifest naming a path outside
+    the repository is either corrupt or hostile, and both are things the person
+    running a destructive verb needs told. Dropping them quietly would make a
+    partial uninstall look complete.
+
+    The rule is `upgrade`'s, with the opposite consequence. `upgrade` compares
+    each file's current sha256 against the hash `write_manifest` recorded and
+    uses the answer to decide overwrite-vs-keep; this uses it to decide
+    delete-vs-keep. One manifest, one comparison, no second notion of ownership.
+
+    The asymmetry that matters: a wrong `upgrade` keeps a file it could have
+    refreshed, and a wrong uninstall deletes somebody's work. So every uncertain
+    case resolves to keep. A file with no recorded hash -- a v1 manifest, or one
+    added after the install -- counts as edited, because "I do not know" and "it
+    is unchanged" must not be the same answer.
+
+    `MANIFEST` appears in none of the three lists. The caller removes it last, so
+    calling it "kept" would be the report contradicting the tree -- which is
+    precisely what the kept-list exists to prevent, and what it did until
+    `verifying-work` caught it.
+
+    Three categories are protected outright, and each is read from its own
+    constant rather than listed here, so a fourth entry in any of them is
+    protected automatically:
+
+    `MERGE`
+        `.claude/settings.json` is merged into whatever the host already had, and
+        nothing recorded what that was. It is in the manifest because
+        `write_manifest` counts `merge` actions -- that is the trap this function
+        exists to not fall into. Deleting it destroys hooks nobody can restore.
+    `PRESERVE`
+        Never written by the installer at all, and already excluded from the
+        manifest. Checked anyway: the exclusion lives in `write_manifest` and a
+        regression there would otherwise make them deletable.
+    `SEED`
+        Written only when the target lacked them, which means the repository has
+        been running on them ever since. Removing the layer must not also break
+        `ruff` and CI in the same step.
+    """
+    owned = _layer_owned(target)
+    if not owned:
+        # No manifest, or an unreadable one. Nothing here is provably the
+        # layer's, and guessing from directory names is how an uninstaller
+        # deletes a host's own `tools/`.
+        return [], [], [], []
+
+    recorded = _layer_hashes(target)
+    protected_names = {*PRESERVE, *MERGE, *SEED}
+
+    remove: list[str] = []
+    kept_edited: list[str] = []
+    kept_protected: list[str] = []
+    refused: list[str] = []
+
+    for rel in sorted(owned):
+        # Containment first, before any other classification. A path that
+        # escapes the target must never reach the hash comparison, because a
+        # crafted manifest can supply a matching hash for a file it wants gone.
+        if not _contained(target, rel):
+            refused.append(rel)
+            continue
+        # The manifest is in NONE of the three lists, and that is the whole
+        # correction here. It was in `kept_protected`, so the report printed
+        # `kept (yours)  .claude/layer-manifest.json` and `main()` then deleted
+        # it -- a report contradicting the tree it describes, which is the exact
+        # failure mode the kept-list exists to prevent. It is removed last, by
+        # the caller, and reported on its own line.
+        if rel == MANIFEST.as_posix():
+            continue
+        if rel in protected_names:
+            kept_protected.append(rel)
+            continue
+
+        path = target / rel
+        known = recorded.get(rel)
+        if not path.is_file():
+            # Already gone. Reported as kept rather than removed: the caller's
+            # report should describe what it did, and it did not do this.
+            kept_edited.append(rel)
+            continue
+        if known is None or known != file_hash(path):
+            kept_edited.append(rel)
+            continue
+        remove.append(rel)
+
+    return remove, kept_edited, kept_protected, refused
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--into", default=".", help="target directory (default: here)")
     ap.add_argument("--dry-run", action="store_true", dest="dry",
                     help="print every path and write nothing")
-    ap.add_argument("--upgrade", action="store_true",
-                    help="refresh an existing install without discarding local edits")
+    # Mutually exclusive: they are opposite operations over the same manifest,
+    # and a run asking for both must fail loudly rather than silently doing half
+    # of each. argparse refuses the pair before any path is resolved.
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--upgrade", action="store_true",
+                      help="refresh an existing install without discarding local edits")
+    mode.add_argument("--uninstall", action="store_true",
+                      help="remove the layer's own files, keeping anything edited")
     ap.add_argument("--force", action="store_true",
                     help="with --upgrade, overwrite locally-modified files too")
     args = ap.parse_args(argv)
@@ -486,6 +772,115 @@ def main(argv: list[str] | None = None) -> int:
     if target == SOURCE or SOURCE in target.parents:
         print(f"refusing: {target} is the source layer or inside it", file=sys.stderr)
         return 2
+
+    # --- uninstall: remove what the layer owns, keep what anyone touched -----
+    #
+    # Returns before the install machinery below: `plan()` computes what to COPY,
+    # and an uninstall has nothing to copy. Sharing that path would mean an
+    # uninstall's report was assembled from the install's action list, which is a
+    # different question about a different tree.
+    if args.uninstall:
+        # `--force` means "overwrite local edits" and belongs to `--upgrade`. It
+        # does nothing here, and saying so matters more than usual: on a
+        # destructive verb it reads as "yes, really delete the kept files too",
+        # so a user reaching for it would otherwise get a success exit code and
+        # no indication the flag was ignored.
+        if args.force:
+            print("note: --force has no effect with --uninstall. Files edited "
+                  "since install are always kept; delete them yourself if you "
+                  "mean to.", file=sys.stderr)
+
+        remove, kept_edited, kept_protected, refused = uninstall_plan(target)
+
+        # "The manifest is missing" and "the manifest classified nothing" are
+        # different facts and used to share one message, which sent a reader
+        # looking for a file that was sitting in front of them.
+        if not _layer_owned(target):
+            print(f"no {MANIFEST.as_posix()} in {target} -- nothing here was "
+                  f"installed by this layer, and nothing will be removed. "
+                  f"Deleting by pattern instead would take the host's own files.",
+                  file=sys.stderr)
+            return 2
+        if not remove and not kept_edited and not kept_protected and not refused:
+            print(f"{MANIFEST.as_posix()} in {target} names no removable path -- "
+                  f"it exists but lists nothing this can act on.", file=sys.stderr)
+            return 2
+
+        # Refused entries are reported BEFORE anything is deleted, and on stderr,
+        # because a manifest naming a path outside the repository is either
+        # corrupt or hostile and the run should not scroll past it.
+        if refused:
+            print(f"REFUSED: {len(refused)} manifest entr(ies) resolve outside "
+                  f"{target} and will not be touched:", file=sys.stderr)
+            for rel in refused:
+                print(f"  refused       {rel}", file=sys.stderr)
+            print("  A manifest naming paths outside its own repository is "
+                  "corrupt or hostile. Nothing outside the target is ever "
+                  "removed; check where this repository came from.",
+                  file=sys.stderr)
+
+        verb = "would remove" if args.dry else "removed"
+        print(f"target {target}\n")
+        for rel in remove:
+            print(f"  {verb:<13} {rel}")
+
+        # The manifest goes too, and a dry run has to say so. It was announced
+        # only on the real run until a no-slop sweep measured the two side by
+        # side -- so `--dry-run`, the safety mechanism for a destructive verb,
+        # under-reported by exactly the file whose removal makes the verb
+        # irreversible. The real run announces it after the deletion succeeds,
+        # because there it is a fact rather than an intention.
+        if args.dry:
+            print(f"  would remove  {MANIFEST.as_posix()}  (last)")
+
+        removed = 0
+        if not args.dry:
+            for rel in remove:
+                path = target / rel
+                try:
+                    path.unlink()
+                    removed += 1
+                except OSError as exc:
+                    print(f"  FAILED        {rel}: {exc}", file=sys.stderr)
+
+            # Directories the removals emptied. Deepest first, so a parent is
+            # considered only after its children are gone; `rmdir` refuses a
+            # non-empty directory, which is the guard rather than a check here.
+            for d in sorted({(target / rel).parent for rel in remove},
+                            key=lambda p: len(p.parts), reverse=True):
+                while d != target and d.is_dir():
+                    try:
+                        d.rmdir()
+                    except OSError:
+                        break
+                    d = d.parent
+
+            # The manifest last. Until it goes the run is resumable, and once it
+            # goes a second run refuses instead of guessing -- which is what
+            # makes this verb safe to repeat.
+            try:
+                (target / MANIFEST).unlink()
+                print(f"  removed last  {MANIFEST.as_posix()}")
+            except OSError:
+                pass
+
+        # Every kept file is named. Silence here is the failure mode: the user
+        # must know the layer is not fully gone and exactly what is left.
+        for rel in kept_edited:
+            print(f"  kept (edited) {rel}")
+        for rel in kept_protected:
+            print(f"  kept (yours)  {rel}")
+
+        print(f"\n{verb} {len(remove) if args.dry else removed} file(s); "
+              f"kept {len(kept_edited)} edited, {len(kept_protected)} protected")
+        if kept_edited or kept_protected:
+            print("Those are yours to delete or keep. Edited files were changed "
+                  "after install; protected files are merged configuration, "
+                  "preserved documents, or seeded lint/CI config this repository "
+                  "has been running on since.")
+        if args.dry:
+            print("\n--dry-run: nothing was written.")
+        return 0
 
     # Read the target's shape BEFORE writing to it. Otherwise the report describes
     # a repository that now contains the layer, which is not the repository the
