@@ -46,11 +46,11 @@ export default function () {
   const scenario = __ITER % 4;
 
   if (scenario === 0) {
-    // Author search
-    const terms = ["reinforcement learning", "protein folding", "quantum mechanics", "climate model"];
-    const q = terms[__VU % terms.length];
+    // Author search — GET /api/v1/search_author?name=... (verified route).
+    const searchNames = ["Demis Hassabis", "Katalin Karikó", "Donna Strickland", "David Baker"];
+    const nm = searchNames[__VU % searchNames.length];
     const res = http.get(
-      `${BASE_URL}/api/v1/authors/search?query=${encodeURIComponent(q)}`,
+      `${BASE_URL}/api/v1/search_author?name=${encodeURIComponent(nm)}`,
       { headers }
     );
     check(res, { "author search ok": (r) => r.status === 200 || r.status === 429 });
@@ -68,12 +68,12 @@ export default function () {
     sleep(0.5);
 
   } else if (scenario === 2) {
-    // Paper search
+    // Paper analysis (LLM-backed) — GET /api/v1/analyze_paper?title=... (verified route).
     const res = http.get(
-      `${BASE_URL}/api/v1/papers/search?query=neural+network+architecture`,
+      `${BASE_URL}/api/v1/analyze_paper?title=${encodeURIComponent("Neural Network Architecture Search")}`,
       { headers }
     );
-    check(res, { "paper search ok": (r) => r.status === 200 || r.status === 429 });
+    check(res, { "paper analyze ok": (r) => r.status === 200 || r.status === 429 });
     soakLatency.add(res.timings.duration);
     errorRate.add(res.status >= 500);
     totalRequests.add(1);
