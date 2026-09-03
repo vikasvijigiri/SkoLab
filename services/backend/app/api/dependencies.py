@@ -1,6 +1,6 @@
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Awaitable, Callable, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import Depends, HTTPException, Security, status
+from fastapi import Depends, HTTPException, Request, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.db.database import AsyncSessionLocal
 from app.services.ai.agent_service import AgentService
@@ -69,6 +69,56 @@ async def get_optional_user(
         return await get_verified_user(credentials)
     except HTTPException:
         return None
+
+
+def require_owner(*id_params: str) -> Callable[..., Awaitable[dict]]:
+    """
+    Dependency factory for routes that act on behalf of the *requesting* user
+    and take that user's own identifier as a path or query parameter.
+
+    The returned dependency verifies the Firebase ID token (via
+    ``get_verified_user``) **and** asserts the verified ``uid`` equals the
+    ``user_id`` / ``author_id`` the request carries:
+
+    - missing / invalid token  → HTTP 401 (raised by ``get_verified_user``)
+    - token uid ≠ requested id  → HTTP 403 (IDOR attempt)
+    - no identifier in request  → HTTP 400
+
+    Pass the parameter name(s) to check, most-specific first; defaults to
+    ``("user_id", "author_id")``. Only use this where the identifier is the
+    caller's own Firebase uid — a route that merely looks up *another*
+    researcher's public OpenAlex profile stays public. See
+    ``docs/backend-auth-posture.md``.
+    """
+    names: tuple[str, ...] = id_params or ("user_id", "author_id")
+
+    async def _require_owner(
+        request: Request,
+        user: dict = Depends(get_verified_user),
+    ) -> dict:
+        claimed: Optional[str] = None
+        for name in names:
+            if name in request.path_params:
+                claimed = str(request.path_params[name])
+                break
+            value = request.query_params.get(name)
+            if value is not None:
+                claimed = value
+                break
+        if claimed is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Missing required owner identifier ({' or '.join(names)}).",
+            )
+        uid = (user or {}).get("uid")
+        if not uid or uid != claimed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Authenticated user does not match the requested identifier.",
+            )
+        return user
+
+    return _require_owner
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

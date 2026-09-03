@@ -52,9 +52,12 @@ export const getDailyFeed = (authorId?: string, queryFallback?: string) =>
     params: { author_id: authorId, query_fallback: queryFallback },
   });
 
-export const dismissDailyFeedItem = (authorId: string, workId: string) =>
+// Owner-scoped on the backend — needs the caller's Firebase ID token (401
+// without, 403 if the token's user is not that OpenAlex author).
+export const dismissDailyFeedItem = (idToken: string | null, authorId: string, workId: string) =>
   apiRequest<{ success: boolean }>("/api/v1/daily_feed/dismiss", {
     method: "POST",
+    idToken: idToken ?? undefined,
     body: { author_id: authorId, work_id: workId },
   });
 

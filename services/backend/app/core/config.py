@@ -235,17 +235,33 @@ class Settings:
     )
 
     def __post_init__(self) -> None:
-        # Fail fast: a production deploy must supply a real DATABASE_ENCRYPTION_KEY.
-        # Booting with the shipped default (or none) would encrypt user records
-        # under a publicly-known key. Dev/staging are unaffected — APP_ENV unset
-        # resolves `environment` to "development".
-        if self.environment == "production" and self.database_encryption_key in (
+        # Fail fast: APP_ENV must be an explicit, known value. Unset resolves to
+        # "development" (local dev + CI keep booting); anything else that is not
+        # one of the three recognised names is a typo or a stale deploy config
+        # (`prod`, `dev`, `test`, …) and must stop the boot rather than silently
+        # behave like development on a public URL.
+        _VALID_ENVIRONMENTS = ("development", "staging", "production")
+        if self.environment not in _VALID_ENVIRONMENTS:
+            raise RuntimeError(
+                f"APP_ENV={os.environ.get('APP_ENV')!r} is not one of "
+                f"{list(_VALID_ENVIRONMENTS)}. Set APP_ENV explicitly, or leave "
+                f"it unset for local development."
+            )
+
+        # Fail fast: a staging/production deploy must supply a real
+        # DATABASE_ENCRYPTION_KEY. Booting with the shipped default (or none)
+        # would encrypt user records under a publicly-known key. Development is
+        # unaffected — APP_ENV unset resolves `environment` to "development".
+        if self.environment in (
+            "staging",
+            "production",
+        ) and self.database_encryption_key in (
             "",
             _DEFAULT_DB_ENCRYPTION_KEY,
         ):
             raise RuntimeError(
                 "DATABASE_ENCRYPTION_KEY is unset or still the shipped default while "
-                "APP_ENV=production. Set a real key before starting the backend."
+                f"APP_ENV={self.environment}. Set a real key before starting the backend."
             )
 
     @property

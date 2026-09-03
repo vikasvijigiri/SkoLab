@@ -30,7 +30,14 @@ _V1_PREFIX = "/api/v1"
 _HTTP_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 
 # Routes that require a verified Firebase uid (keyed data, e.g. chat history).
-EXPECTED_AUTHED: set[str] = {"/agent/chat"}
+# ``require_owner`` pulls in ``get_verified_user``, so owner-scoped routes land
+# here too — they additionally assert token uid == the request's user_id.
+EXPECTED_AUTHED: set[str] = {
+    "/agent/chat",
+    "/industry_academic_tieups",  # require_owner("user_id") — private memory profile
+    "/users/quests",  # require_owner("user_id") — private quest records
+    "/daily_feed/dismiss",  # get_verified_user + users.openalex_id == body author_id
+}
 
 # Routes that personalise when a token is present but work anonymously.
 EXPECTED_OPTIONAL: set[str] = {

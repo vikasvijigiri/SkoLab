@@ -2,6 +2,7 @@
 
 from app.schemas.system import (
     AiStatusResponse,
+    AppInfoResponse,
     RootResponse,
     SystemStatusResponse,
 )
@@ -14,12 +15,13 @@ async def test_root_router_route_parses(client):
 
 
 async def test_app_root_parses(client):
-    # The API router is mounted at the bare prefix before main.py's own
-    # `@app.get("/")`, so `/` is served by the router's read_root
-    # (RootResponse), and main.py's handler is shadowed.
+    # The bare-prefix router mount was removed (Stream B security hardening),
+    # so `/` is now served by main.py's own `@app.get("/")` handler
+    # (AppInfoResponse), not the API router's read_root. The router's own
+    # root is still reachable at `/api/v1/` — see test_root_router_route_parses.
     r = await client.get("/")
     assert r.status_code == 200
-    RootResponse(**r.json())
+    AppInfoResponse(**r.json())
 
 
 async def test_ai_status_parses(client):
