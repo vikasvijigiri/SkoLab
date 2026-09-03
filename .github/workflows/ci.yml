@@ -119,23 +119,33 @@ jobs:
 
     - name: Install workspace dependencies
       # The committed lockfile is generated on Windows and records only the
-      # win32 build of lightningcss / @tailwindcss-oxide. npm does not
-      # cross-populate platform-specific optionalDependencies, and neither
-      # `npm ci` nor a plain `npm install` will swap in the Linux natives once
-      # the win32 one is locked — `next build` then fails with
-      # "Cannot find module '../lightningcss.linux-x64-gnu.node'". Dropping the
-      # lockfile forces a clean resolution for this runner. Every
-      # version-sensitive dep is pinned in package.json, so this stays
-      # reproducible in practice. Follow-up: regenerate the lockfile on a POSIX
-      # host and restore `npm ci`.
-      #
-      # KNOWN FLAKE: this lockfile-less resolve intermittently crashes npm
-      # arborist with "Cannot read properties of null (reading 'edgesOut')".
-      # The real fix is to regenerate package-lock.json on a Linux host and
-      # restore `npm ci`; retrying only sometimes clears it.
+      # win32 build of lightningcss / @tailwindcss-oxide, so `npm ci` on Linux
+      # cannot resolve the native — hence the lockfile-less install here. That
+      # resolve also intermittently trips an npm arborist bug
+      # ("Cannot read properties of null (reading 'edgesOut')") on Linux *and*
+      # Windows, regardless of npm version, so this retries with a cache clean
+      # between attempts. The durable fix is a Linux-regenerated lockfile +
+      # `npm ci` (see the retired regen-web-lockfile.yml probe).
       run: |
-        rm -f package-lock.json
-        npm install || { rm -rf node_modules ~/.npm/_cacache; npm install; }
+        npm install -g npm@10.9.2
+        ok=
+        for attempt in 1 2 3 4; do
+          rm -f package-lock.json
+          rm -rf node_modules
+          if npm install --no-audit --no-fund; then ok=1; break; fi
+          echo "::warning::npm install attempt $attempt failed (arborist flake); clearing cache and retrying"
+          npm cache clean --force || true
+          rm -rf ~/.npm/_cacache || true
+          sleep 5
+        done
+        [ -n "$ok" ] || { echo "::error::npm install failed after 4 attempts"; exit 1; }
+        # Belt-and-suspenders: a lockfile-less resolve on this runner should
+        # already pull the Linux natives, but pin the ones `next build` needs
+        # so a partial resolve cannot fail with
+        # "Cannot find module '../lightningcss.linux-x64-gnu.node'".
+        npm install --no-save --no-audit --no-fund \
+          lightningcss-linux-x64-gnu@1.32.0 \
+          @tailwindcss/oxide-linux-x64-gnu@4.3.3 || true
 
     # `next build` must run before standalone tsc: it generates `.next/types`,
     # which is where Next 16's `RouteContext` and route param types live. Running
