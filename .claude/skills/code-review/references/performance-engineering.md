@@ -42,14 +42,15 @@ single fast local run is not a performance claim.
 
 ## Next step
 
-Hand code changes to `test-driven-development` and `verifying-work`; hand
-production thresholds and dashboards to `observability-sre`.
+Hand code changes to `testing`, built test-first per
+`.claude/skills/implementation/references/test-driven-development.md`; hand production thresholds and dashboards to `release-git`, whose
+`.claude/skills/release-git/references/observability-sre.md` carries the depth.
 
 ## Routing
 
 - Enter for explicit performance requirements, regressions, scale changes, or
   performance-sensitive releases.
-- Pair with `systematic-debugging` when the bottleneck is unexplained.
+- Pair with `debugging` when the bottleneck is unexplained.
 - Do not use for premature optimization without a measurable target.
 
 ## Success

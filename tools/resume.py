@@ -33,6 +33,7 @@ a crash mid-repair, a week away, a different machine with the same clone.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import subprocess
@@ -40,6 +41,21 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _load(rel: str, name: str):
+    """`importlib`, not an import -- `tools/scope.py`'s pattern for reaching a
+    sibling module without turning this file into a package member."""
+    spec = importlib.util.spec_from_file_location(name, ROOT / rel)
+    if spec is None or spec.loader is None:
+        return None
+    mod = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(mod)
+    except Exception:
+        return None
+    return mod
+
 
 MAX_ATTEMPTS = 3
 BRANCH_PREFIX = "feat/"
@@ -92,11 +108,12 @@ CODE_SUFFIXES = (
 # queue treats it as blocking, and so does this.
 BLOCKING_LABELS = {"review:blocked", "do-not-merge", "do-not-merge/hold"}
 
-# States nothing automatic may move out of. Two are human gates, two are stops.
+# States nothing automatic may move out of. Three are human gates, two are stops.
 TERMINAL = {
     "DONE",
     "BLOCKED",
     "WAITING_PLAN_APPROVAL",
+    "WAITING_DELIVERY",
     "WAITING_SHIP_APPROVAL",
 }
 
@@ -110,6 +127,8 @@ NEXT_ACTION = {
     "BUILD": "implement against the plan's acceptance tests",
     "REPAIR": "classify the failure and repair it (see the escalation ladder)",
     "LAND": "open the PR and enable auto-merge",
+    "WAITING_DELIVERY": "human: a delivery decision is owed -- push the branch and "
+                        "open the PR, or say why not",
     "QUEUED": "wait -- the merge queue owns it now",
     "WAITING_SHIP_APPROVAL": "human: merge the release PR",
     "ROLLING_BACK": "roll back, verify the rolled-back version is healthy, then diagnose",
@@ -249,7 +268,7 @@ def rejections(text: str) -> list[str]:
 def _layer_owned(root: Path) -> set[str]:
     """Repo-relative paths the capability layer installed, or empty.
 
-    Fails open to empty rather than raising: this runs inside the session-start
+    Fails open to empty rather than raising: this runs inside the session-init
     hook, where an exception is invisible and a wrong count is merely wrong.
     """
     try:
@@ -259,6 +278,73 @@ def _layer_owned(root: Path) -> set[str]:
         return set()
     paths = data.get("paths") if isinstance(data, dict) else None
     return {str(p).replace("\\", "/") for p in paths} if isinstance(paths, list) else set()
+
+
+# The plan's own `## Progress` list, matched against `**Done when:**` boxes the
+# plan already writes as `- [ ]` / `- [x]` (see the plan template). Reading it
+# fresh from the file is the point: a stored "delivery ready" flag is exactly
+# the duplicate `decisions/2026-08-07-derived-state-over-stored-state.md`
+# forbids, so this walks the same text `rejections()` and `plan_body_hash()`
+# already walk rather than caching a verdict anywhere.
+_PROGRESS_SECTION = re.compile(r"(?ms)^## Progress\s*\n(.*?)(?=^## |\Z)")
+# `_hooklib.PROGRESS_TASK_BOX`, imported rather than retyped -- this used to
+# be `^- \[([ xX])\]`, any checkbox at all, looser than the `Task <n>`
+# requirement `tools/analyze.py`/`tools/chain.py`/`tools/git_ops.py` already
+# enforced. Already scoped to the `## Progress` section by `_PROGRESS_SECTION`
+# above, so this only changes behavior for a malformed section, never a
+# well-formed plan.
+_hooklib_for_resume = _load(".claude/hooks/_hooklib.py", "hooklib_for_resume")
+_CHECKBOX = (
+    _hooklib_for_resume.PROGRESS_TASK_BOX if _hooklib_for_resume is not None
+    else re.compile(r"^- \[( |x|X)\]\s+Task\s+(\d+)\b", re.M)
+)
+
+# The two branch names this repository and its installs actually use. Not a
+# configurable base: `resume.py` already hardcodes its own conventions
+# (`BRANCH_PREFIX`, `PLANS_DIR`) rather than reading them from a config file
+# nothing writes, and a base branch is the same kind of fact.
+_BASE_CANDIDATES = ("main", "master")
+
+
+def plan_tasks_done(plan_text: str) -> bool:
+    """True only when the plan's own Progress checklist exists and every box in
+    it is ticked. No section, or a section with nothing ticked, is False -- an
+    absent checklist is not evidence of completion."""
+    section = _PROGRESS_SECTION.search(plan_text)
+    if not section:
+        return False
+    # `_CHECKBOX` (now `_hooklib.PROGRESS_TASK_BOX`) has two capture groups,
+    # (mark, task_number) -- only the mark decides ticked-ness.
+    boxes = [m[0] for m in _CHECKBOX.findall(section.group(1))]
+    return bool(boxes) and all(b.lower() == "x" for b in boxes)
+
+
+def _base_branch(root: Path, branch: str) -> str | None:
+    """The branch this unit was cut from, or None when neither convention name
+    exists here. Never guesses past that -- an unknown base makes
+    `commits_ahead` unknown too, which `derive_state` treats as "not yet
+    established" rather than zero."""
+    for candidate in _BASE_CANDIDATES:
+        if candidate == branch:
+            continue
+        rc, _ = _git(root, "rev-parse", "--verify", "--quiet",
+                    f"refs/heads/{candidate}")
+        if rc == 0:
+            return candidate
+    return None
+
+
+def commits_ahead_of_base(root: Path, branch: str) -> int | None:
+    """How many commits HEAD carries that the base branch does not, or None
+    when there is no base branch to compare against. Read from git on every
+    call -- nothing here is written anywhere."""
+    base = _base_branch(root, branch)
+    if base is None:
+        return None
+    rc, out = _git(root, "rev-list", "--count", f"{base}..HEAD")
+    if rc != 0 or not out.strip().isdigit():
+        return None
+    return int(out.strip())
 
 
 def ledger_path(root: Path, slug: str) -> Path:
@@ -276,8 +362,17 @@ def read_ledger(root: Path, slug: str) -> dict:
 def gather_facts(root: Path, slug: str | None = None) -> dict:
     """Everything `derive_state` needs, read from git, gh, and one small ledger."""
     _, branch = _git(root, "rev-parse", "--abbrev-ref", "HEAD")
+    slug_arg = slug
     if not slug:
         slug = slug_from_branch(branch) if branch else ""
+
+    # Where the slug came from. A slug the CALLER named is about the work in
+    # hand; one taken from the branch is about whatever that branch was named
+    # after, which may be a unit that finished days ago -- measured 2026-08-16,
+    # `security-gate` accumulated 118 ledger turns across four units because the
+    # branch outlived its plan. The distinction is reported rather than guessed
+    # at: `derive_state` is unchanged, because its clause order is the policy.
+    slug_inferred = not bool(slug_arg)
 
     plan, plan_reason = plan_path(root, slug) if slug else (None, "no slug")
     plan_text = ""
@@ -370,6 +465,9 @@ def gather_facts(root: Path, slug: str | None = None) -> dict:
         "recon_exists": bool(recon_maps),
         "plan_approved": APPROVAL_MARKER in plan_text,
         "clarifications": plan_text.count(CLARIFICATION_MARKER),
+        "plan_tasks_done": plan_tasks_done(plan_text),
+        "slug_inferred": slug_inferred,
+        "commits_ahead": commits_ahead_of_base(root, branch),
         "rejections": _rejections,
         "rejection_reasons": _reject_log,
         # False means the plan is byte-for-byte what was rejected last time.
@@ -410,6 +508,10 @@ def derive_state(facts: dict) -> str:
         against a codebase nobody has read produces a plan against an imagined
         one. Only reachable when there is real code and no map, so a repository
         this layer has been used in from the start never sees it.
+      - WAITING_DELIVERY outranks LAND, but only when the plan's own checklist
+        is fully ticked and there are commits to hand off. A verified branch
+        nobody has pushed is a person's decision to make, not a stall -- the
+        same shape as the two named gates, and reported the same way.
     """
     if not facts.get("plan_exists"):
         if (facts.get("code_files", 0) >= RECON_THRESHOLD
@@ -434,6 +536,13 @@ def derive_state(facts: dict) -> str:
         return "BUILD"
 
     if facts.get("pr_number") is None:
+        # A verified branch nobody has pushed is not broken and not automatic --
+        # it is waiting on a person, exactly like the two named gates. That is
+        # only true once there is something to deliver (commits_ahead > 0, not
+        # None or 0) and the plan itself says the work is finished; short of
+        # both this is still an ordinary LAND -- open the PR and move on.
+        if facts.get("plan_tasks_done") and (facts.get("commits_ahead") or 0) > 0:
+            return "WAITING_DELIVERY"
         return "LAND"
     if set(facts.get("pr_labels") or []) & BLOCKING_LABELS:
         return "REPAIR"
@@ -448,12 +557,22 @@ def derive_state(facts: dict) -> str:
 
 
 def state_line(facts: dict, state: str) -> str:
-    """The one line the session-start hook prints. Kept short on purpose -- it is
+    """The one line the session-init hook prints. Kept short on purpose -- it is
     injected every session, so it is charged for every session."""
     pr = facts.get("pr_number")
     orphan = ""
     if not facts.get("plan_exists") and facts.get("plans_on_disk"):
         orphan = f" | NOTE: {facts.get('plan_reason')}"
+    # A finished plan under an inferred slug is the shape of work being scored
+    # against a unit that ended. It reported `state=BUILD` for 57 turns here
+    # while four separate units ran, and BUILD was the correct answer to the
+    # wrong question -- nothing said which question was being asked. Reported,
+    # not corrected: whether the branch should be delivered or the new work
+    # should get a slug of its own is a decision, and this is a status line.
+    elif facts.get("slug_inferred") and facts.get("plan_tasks_done"):
+        orphan = (" | NOTE: this plan's tasks are all ticked and the slug came "
+                  "from the branch name -- if you are working on something "
+                  "else, it has no plan and this line is about the old unit")
     return (
         f"slug={facts.get('slug') or '-'} "
         f"state={state} "

@@ -13,7 +13,7 @@ they appear to." But that is an argument for *checking* overlap, not for banning
 concurrency -- and the rule as written meant a twelve-task plan of genuinely
 independent work ran twelve times slower than it had to.
 
-`task-implementer` already carries `isolation: worktree`, whose own comment says
+`implementer` already carries `isolation: worktree`, whose own comment says
 the constraint could be relaxed "deliberately rather than by forgetting it", and
 names what isolation does not solve: frozen interfaces. This file is that
 deliberate relaxation. Concurrency is licensed by a computed property of the
@@ -121,7 +121,12 @@ BACKTICKED = re.compile(r"`([^`]+)`")
 def normalise(path: str) -> str:
     # Markdown emphasis is not part of a filename. Stripped rather than matched
     # around, because a plan may bold a path anywhere: `**a.py**`, `*a.py*`.
-    out = path.strip().strip("*_`").strip().strip(",;.").strip().replace("\\", "/")
+    # `rstrip`, never `strip`, on the punctuation pass. The trailing tidy-up
+    # exists so a path written `a.py,` in prose parses; nothing needs the leading
+    # one, and `strip` was silently turning `.claude/settings.json` into
+    # `claude/settings.json` -- which matches nothing in SHARED_PATTERNS, so
+    # every dotted shared surface was invisible to the scheduler.
+    out = path.strip().strip("*_`").strip().rstrip(",;.").strip().replace("\\", "/")
     while out.startswith("./"):
         out = out[2:]
     return out
@@ -150,10 +155,36 @@ def field(block: str, key: re.Pattern[str]) -> str | None:
             continue
         if NEXT_KEY.match(line):
             break
-        if not line.lstrip().startswith(("-", "*", "+")):
+        if line.lstrip().startswith(("-", "*", "+")):
+            collected.append(line.strip().lstrip("-*+ ").strip())
+        elif collected:
+            # A wrapped continuation of the bullet above -- writing-plans'
+            # own task template wraps prose onto an indented line with no
+            # bullet marker. Folding it into the current item (not breaking)
+            # is what lets a later bullet on the SAME block still be seen.
+            collected[-1] = collected[-1] + " " + line.strip()
+        else:
             break
-        collected.append(line.strip().lstrip("-*+ ").strip())
     return "\n".join(collected)
+
+
+_NOT_PATH_CHARS = re.compile(r"""[\s=(){}\[\]"';,<>!&|+*]""")
+
+
+def _looks_like_path(item: str) -> bool:
+    """False for a backticked code fragment that is not a file path.
+
+    A real plan backticks more than paths in one `Files:` bullet --
+    `` `WATCHED = ("Read",)` `` beside `` `.claude/hooks/post-tool/
+    04-read-cost.py` `` in the same sentence, because `writing-plans` wants
+    exact symbols cited. The original version of this function treated every
+    backticked span as a file candidate, so that code fragment became a
+    second, phantom file for the task -- discovered when `docs/plans/
+    2026-08-21-three-spec-metrics.md`'s Task 1 parsed with `WATCHED =
+    ("Read",)` in its file set. None of this punctuation is legal in a path
+    this repository uses; a token that needs any of it is prose, not a file.
+    """
+    return not _NOT_PATH_CHARS.search(item)
 
 
 def parse_files(raw: str) -> list[str]:
@@ -168,7 +199,7 @@ def parse_files(raw: str) -> list[str]:
     tasks editing different functions in one file look disjoint -- the exact
     overlap this scheduler exists to catch.
     """
-    ticked = [normalise(m) for m in BACKTICKED.findall(raw)]
+    ticked = [normalise(m) for m in BACKTICKED.findall(raw) if _looks_like_path(m)]
     candidates = ticked if ticked else [
         normalise(part) for part in re.split(r"[,\n]", raw)
     ]
@@ -206,8 +237,20 @@ def parse_depends(raw: str) -> tuple[list[int], str | None]:
     version of this module read that as seven fully independent tasks -- a
     seven-way fan-out over work where the executor consumes the store. Wrong in
     the one direction that corrupts a tree rather than merely wasting a round.
+
+    A fourth case sits beside the first: "none" WITH an explanation --
+    "none (both touch `09-telemetry.py` in non-overlapping fields)". Requiring
+    an exact full-string match on just "none" sent that straight to the digit
+    scan below, which read "09" out of the filename as a reference to a task
+    9 that does not exist -- discovered live when `docs/plans/
+    2026-08-21-four-more-spec-metrics.md`'s own Task 4 (Dependencies: "none
+    (reads only; touches `09-telemetry.py` ... from Tasks 1-3)") came back
+    "not schedulable" for a phantom dependency. A leading "none" (or "n/a",
+    "nothing", "-") is the author's stated claim of independence; whatever
+    follows it is explanation, not a second, competing claim, so it is never
+    scanned for numbers.
     """
-    if re.fullmatch(r"(?is)\s*(?:none|n/?a|nothing|-)\s*\.?\s*", raw or ""):
+    if re.match(r"(?is)^\s*(?:none|n/?a|nothing|-)\b", raw or ""):
         return [], None
     numbers = sorted({int(n) for n in re.findall(r"\d+", raw or "")})
     if numbers:
@@ -415,7 +458,7 @@ def render(result: dict) -> str:
         out.append("")
         out.append(f"schedulable: {result['parallel_groups']} group(s) may run "
                    f"concurrently, {result['serialized_groups']} must not.")
-        out.append("Dispatch one `task-implementer` per task within a round, all in "
+        out.append("Dispatch one `implementer` per task within a round, all in "
                    "the SAME message. Verify the whole round before the next.")
     return "\n".join(out)
 
