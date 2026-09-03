@@ -1,11 +1,8 @@
 name: regen-web-lockfile
 
-# Throwaway: `npm install` (full, with reify) crashes deterministically with
-# arborist "Cannot read properties of null (reading 'edgesOut')" for this dep
-# graph on the CI runner. `npm install --package-lock-only` (no reify) does
-# NOT crash. So: regenerate the lockfile here on Linux without reify, smoke it
-# with `npm ci`, and if that works, commit it back so ci.yml can drop the
-# lockfile-less hack. Delete this file once the lockfile lands.
+# Throwaway probe: does --legacy-peer-deps (which skips the peer-edge code path
+# where arborist null-derefs on 'edgesOut') let a full `npm install` complete?
+# Runs the reify twice to check it is not just a lucky pass.
 
 on:
   workflow_dispatch:
@@ -13,41 +10,25 @@ on:
     branches: [fix/web-routecontext-tsc]
     paths: [.github/workflows/regen-web-lockfile.yml]
 
-permissions:
-  contents: write
-
 jobs:
-  regen:
+  probe:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        run: [a, b]
+        flags:
+          - "--legacy-peer-deps"
+          - "--legacy-peer-deps --install-strategy=nested"
+          - "--package-lock-only --legacy-peer-deps"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Regenerate lockfile (no reify)
+      - name: install ${{ matrix.flags }} (${{ matrix.run }})
         run: |
           rm -f package-lock.json
-          npm install --package-lock-only --no-audit --no-fund
-          node -e "const p=require('./package-lock.json').packages;const n=Object.keys(p).filter(k=>/(lightningcss|oxide)-linux-x64-gnu\$/.test(k));console.log('linux-x64-gnu entries:',n);"
-      - name: Smoke test npm ci
-        id: smoke
-        continue-on-error: true
-        run: |
           rm -rf node_modules
-          npm ci --no-audit --no-fund
-          test -f node_modules/lightningcss-linux-x64-gnu/lightningcss.linux-x64-gnu.node && echo "native present"
-      - name: Commit lockfile back
-        if: steps.smoke.outcome == 'success'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          git commit -m "ci(web): Linux-regenerated package-lock.json (no-reify) so npm ci works" || echo "nothing to commit"
-          git push origin HEAD:fix/web-routecontext-tsc
-      - name: Report
-        run: |
-          echo "npm ci smoke: ${{ steps.smoke.outcome }}"
-          if [ "${{ steps.smoke.outcome }}" != "success" ]; then
-            echo "::error::npm ci also fails — the fix is a package-manager change, not a lockfile regen"
-            exit 1
-          fi
+          npm install --no-audit --no-fund ${{ matrix.flags }}
+          echo "OK: npm install ${{ matrix.flags }}"
