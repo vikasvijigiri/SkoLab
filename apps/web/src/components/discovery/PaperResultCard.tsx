@@ -25,7 +25,7 @@ export function PaperResultCard({ w, index }: { w: OpenAlexWork; index: number }
         href={`/paper/${encodeURIComponent(shortId)}`}
         onMouseEnter={warm}
         onFocus={warm}
-        className={cn("block", focusRing)}
+        className={cn("block rounded-lg", focusRing)}
       >
         <Card glow interactive accentColor="var(--accent-cyan)" className="flex h-full flex-col gap-1.5">
           <p className="font-display text-[14.5px] font-semibold leading-snug text-text-primary">

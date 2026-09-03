@@ -7,9 +7,10 @@ export function cn(...inputs: ClassValue[]) {
 
 /**
  * Keyboard focus ring for interactive wrappers (a `<Link>` / `<button>` around
- * a Card, a row, a tile). Matches Button's own focus-visible treatment so every
- * focusable surface in the app rings the same way. Mouse users never see it;
- * keyboard users always do.
+ * a Card, a row, a nav item). Matches Button's own focus-visible treatment so
+ * every focusable surface in the app rings the same way. Mouse users never see
+ * it; keyboard users always do. Pair it with the element's own `rounded-*` so
+ * the outline follows the corners.
  */
 export const focusRing =
-  "rounded-lg outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
+  "outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";

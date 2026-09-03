@@ -32,7 +32,7 @@ export function LeaderboardRow({ entry, index }: { entry: LeaderboardEntry; inde
         href={`/author/${encodeURIComponent(entry.id)}?name=${encodeURIComponent(entry.user_name)}`}
         onMouseEnter={warm}
         onFocus={warm}
-        className={cn("block", focusRing)}
+        className={cn("block rounded-lg", focusRing)}
       >
         <Card glow interactive className="flex h-full items-center gap-3">
           <div className="relative shrink-0">

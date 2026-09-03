@@ -50,7 +50,7 @@ export function PulseFeedCard({
 
       <Link
         href={`/paper/${encodeURIComponent(item.id)}`}
-        className={cn("group", focusRing)}
+        className={cn("group rounded-lg", focusRing)}
         onMouseEnter={warm}
         onFocus={warm}
       >
