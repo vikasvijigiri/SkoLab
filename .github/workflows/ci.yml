@@ -122,12 +122,14 @@ jobs:
       # reproducible in practice. Follow-up: regenerate the lockfile on a POSIX
       # host and restore `npm ci`.
       #
-      # The retry works around an intermittent npm arborist crash
-      # ("Cannot read properties of null (reading 'edgesOut')") seen on a clean
-      # tree — clearing the cache and retrying resolves it.
+      # npm 11.x's arborist crashes ("Cannot read properties of null (reading
+      # 'edgesOut')") on a lockfile-less workspace install — this job was green
+      # until the runner image bumped npm. Pin to the npm 10 line, which
+      # resolves the same tree fine, until the lockfile is regenerated on Linux.
       run: |
+        npm install -g npm@10.9.2
         rm -f package-lock.json
-        npm install || { npm cache clean --force; rm -rf node_modules; npm install; }
+        npm install
 
     # `next build` must run before standalone tsc: it generates `.next/types`,
     # which is where Next 16's `RouteContext` and route param types live. Running
