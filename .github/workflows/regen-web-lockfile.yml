@@ -1,11 +1,10 @@
 name: regen-web-lockfile
 
-# Throwaway: regenerate package-lock.json on Linux so it records the Linux
-# native optional deps (lightningcss / @tailwindcss-oxide) that a
-# Windows-generated lockfile omits — which is what forced ci.yml's
-# lockfile-less `npm install` and its arborist flake. Run once via
-# workflow_dispatch, download the `package-lock` artifact, commit it, then
-# delete this file.
+# Throwaway diagnostic: the lockfile-less `npm install` in ci.yml crashes with
+# arborist "Cannot read properties of null (reading 'edgesOut')" on BOTH
+# Windows and Linux, so it is an npm bug this dep graph trips, not a
+# platform-lockfile problem. This job tries several npm versions / strategies
+# to find one that resolves cleanly, then uploads the resulting lockfile.
 
 on:
   workflow_dispatch:
@@ -14,20 +13,37 @@ on:
     paths: [.github/workflows/regen-web-lockfile.yml]
 
 jobs:
-  regen:
+  probe:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        npm: ["10.9.2", "10.8.2", "11.4.2", "latest"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Regenerate lockfile
+      - run: npm install -g "npm@${{ matrix.npm }}" && npm --version
+      - name: plain install
+        id: plain
+        continue-on-error: true
         run: |
           rm -f package-lock.json
           npm install --package-lock-only --no-audit --no-fund
-          node -e "const p=require('./package-lock.json').packages; const n=Object.keys(p).filter(k=>/(lightningcss|oxide)-linux-x64-gnu\$/.test(k)); console.log('linux-x64-gnu entries:', n); if(!n.length){process.exit(1)}"
+      - name: legacy-peer-deps install
+        if: steps.plain.outcome == 'failure'
+        continue-on-error: true
+        run: |
+          rm -f package-lock.json
+          npm install --package-lock-only --no-audit --no-fund --legacy-peer-deps
+      - name: report + upload
+        if: always()
+        run: |
+          test -f package-lock.json && echo "lockfile produced with npm ${{ matrix.npm }}" || echo "NO lockfile with npm ${{ matrix.npm }}"
       - uses: actions/upload-artifact@v4
+        if: hashFiles('package-lock.json') != ''
         with:
-          name: package-lock
+          name: lock-${{ matrix.npm }}
           path: package-lock.json
           retention-days: 1
