@@ -26,7 +26,7 @@ are model-inference infrastructure.
 | Phase | Scope | Target | Key risk |
 |---|---|---|---|
 | **0** ✅ | `/recommendations/peers*` → Go; enumeration hole bounded (rate limit + 200-id cap) | Go gateway + pgx | client auth cutover |
-| **0b** | Blind-index column for `users.email` (deterministic keyed HMAC, own key, Alembic migration + decrypt-and-backfill script); Android Firebase-token attach; then flip the peers group to hard `auth.VerifyUser()` | Alembic + Android + Go | migration + first authed Android path |
+| **0b** ◑ | Blind-index column `users.email_bidx` (HMAC-SHA256, own key, migration + backfill) — **landed**. Remaining: Android Firebase-token attach, then flip the peers group to hard `auth.VerifyUser()` | Alembic + Android + Go | migration + first authed Android path |
 | **1** | `authors.py` non-LLM surface (metrics, heatmap, synergy, network, search, DB parts of grants / journal-advisor) → Go `internal/author` | Go + pgx; OpenAlex via `internal/services/openalex` | `pipeline_services.py` coupling; networkx → `gonum/graph` |
 | **2** | `feed.py` persistence + `/dismiss`, `industry` / `integrations` / `support` CRUD → Go; feed **generation** (LLM/embeds) stays Python, called by Go | Go | split generate-vs-store cleanly |
 | **3** | `PgBackedCache` L2 → Upstash Redis; in-app `RateLimiter` → gateway/Cloudflare; `MetricsStore` → `prometheus/client_golang` + OTel; delete the substring WAF (Cloudflare) | Upstash, Cloudflare, Prometheus/OTel | cache-key parity; metric continuity |
@@ -63,8 +63,34 @@ is "build the pattern", not "add a header".]`
 | `apps/web` `tsc --noEmit` | no new errors (pre-existing `RouteContext` error in `app/api/openalex/works/[id]/route.ts` is on clean `main`) |
 | `go vet ./... && go test ./...` | **CI only** — no Go toolchain on this machine; CI (`.github/workflows/ci.yml`, Go 1.24) is the verification of record |
 
+## Phase 0b — blind index (landed 2026-09-03)
+
+| File | Change |
+|---|---|
+| `services/backend/app/db/blind_index.py` | New: `email_blind_index(email)` = hex `HMAC-SHA256(EMAIL_BLIND_INDEX_KEY, email.strip().lower())`, `None` when key/email empty. |
+| `services/backend/app/core/config.py` | New `email_blind_index_key` setting from `EMAIL_BLIND_INDEX_KEY`. |
+| `services/backend/app/models/user_models.py` | `User.email_bidx` column (`String(64)`, indexed); `validate_user_email` keeps it in sync on every ORM write. |
+| `services/backend/alembic/versions/a1b2c3d4e5f6_add_users_email_blind_index.py` | New migration: add column + `ix_users_email_bidx`. |
+| `services/backend/scripts/backfill_email_bidx.py` | New: idempotent backfill for pre-existing rows (`email_bidx IS NULL`). Exits non-zero if the key is unset. |
+| `services/backend/tests/test_email_blind_index.py` | New: 7 tests — known vectors, normalisation, `None` paths, ORM-write side effect. |
+| `services/backend-go/internal/recommendation/recommendation.go` | `emailBlindIndex()` (same HMAC); `CheckRegisteredPeers` matches `email_bidx = ANY($1)` and returns the matched input emails as `registered_emails`. |
+| `services/backend-go/internal/recommendation/recommendation_test.go` | +2 unit tests pinning the HMAC vectors to the Python side. |
+| `.env.example` | `EMAIL_BLIND_INDEX_KEY=` documented. |
+
+**Owner release steps** (not run by an agent): set `EMAIL_BLIND_INDEX_KEY` in
+both services, `alembic upgrade head`, `python scripts/backfill_email_bidx.py`.
+
+Verification: `pytest tests/test_email_blind_index.py` **7 passed**; targeted
+sweep (`data_quality`, `security`, `api/`, `recommendation_system`,
+`encrypted_type`) **69 passed**; `--collect-only` 157; `ruff` clean; migration
+module imports with the right `revision`/`down_revision`. Go = CI only.
+
 ## Known follow-ups
 
-- **`registered_emails` is always empty** until the Phase 0b blind index lands.
-- **Hard auth** on the peers group is Phase 0b, telemetry-gated.
-- **`user_circles` invite** only resolves a `peer_uid`; the email path was dead in Python and stays dead until the blind index.
+- **Android token attach + hard-auth flip** — Phase 0b's remaining step. No
+  `Authorization`/`getIdToken` anywhere in `apps/android-app` today, so this is
+  "establish the pattern", gated on a shipped+adopted client build before the
+  `VerifyUserOptional` → `VerifyUser` flip.
+- **`registered_emails`** stays empty until the owner runs the migration + backfill.
+- **`user_circles` invite** only resolves a `peer_uid`; the email path was dead in Python and needs the blind index wired into `LogPeerInvite` too (small follow-up).
+- **`peers` autocomplete** email matching stays name/username/phone — a blind index is equality-only, no substring search on an encrypted column.

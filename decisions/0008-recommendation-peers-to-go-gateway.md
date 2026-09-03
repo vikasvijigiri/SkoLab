@@ -54,19 +54,32 @@ Two facts constrained the fix:
 - **Decrypt every candidate email in Go to restore email matching.** A
   security-sensitive Fernet reimplementation and a full-table scan. Rejected in
   favour of a blind index.
-- **Blind-index column now.** The right way to do equality lookups on an
-  encrypted column (deterministic keyed HMAC in its own column + key). Needs an
-  Alembic migration, a backfill that decrypts every row, and a new secret —
-  its own change with its own review, not bundled into this move.
+## Phase 0b — blind index (landed)
+
+`users.email_bidx`: `HMAC-SHA256(EMAIL_BLIND_INDEX_KEY, email.strip().lower())`,
+hex, indexed. Written by the `User.validate_user_email` validator; existing
+rows filled by `services/backend/scripts/backfill_email_bidx.py`. The Go
+gateway computes the same HMAC (`internal/recommendation/emailBlindIndex`) and
+matches on `email_bidx = ANY($1)`, so `check-registered` returns
+`registered_emails` again without either service decrypting anything.
+Cross-language parity is pinned by shared test vectors on both sides.
+
+- **`EMAIL_BLIND_INDEX_KEY` is separate from `DATABASE_ENCRYPTION_KEY`** —
+  equality-lookup index vs at-rest confidentiality, different rotation story.
+  Empty ⇒ email matching is silently skipped, no error.
+- **Release steps (owner runs, not an agent):** set `EMAIL_BLIND_INDEX_KEY` in
+  both services' environments, `alembic upgrade head`, then
+  `python scripts/backfill_email_bidx.py`.
 
 ## Consequences
 
-- The enumeration oracle is bounded today (rate limit + batch cap) and closed
-  fully in Phase 0b (hard auth).
-- `check-registered` returns phone matches only until the blind index lands;
-  `registered_emails` is always empty. Tracked as a follow-up.
-- Web `logPeerInvite` now sends the Firebase token (optional today, ready for
-  0b). Android is unchanged and keeps working via the optional path.
+- The enumeration oracle is bounded (rate limit + 200-id cap). The hard-auth
+  flip (`VerifyUserOptional` → `VerifyUser`) is Phase 0b's remaining step,
+  gated on the Android client attaching a token.
+- `check-registered` resolves emails again once the migration + backfill run;
+  until then `registered_emails` is empty (no error).
+- Web `logPeerInvite` sends the Firebase token (optional today, ready for the
+  flip). Android is unchanged and keeps working via the optional path.
 - One more slice of Python is gone; `services/backend` moves toward LLM-only.
 - See `docs/research/2026-09-03-python-llm-only-boundary.md` for the pattern
   grounding and `docs/plans/2026-09-03-python-llm-only-phase0.md` for the full

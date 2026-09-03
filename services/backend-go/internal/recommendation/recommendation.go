@@ -13,7 +13,11 @@
 package recommendation
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 
@@ -25,6 +29,20 @@ import (
 // had no cap, which made the endpoint an unbounded membership-enumeration
 // oracle. Device contact lists rarely exceed this.
 const maxCheckIdentifiers = 200
+
+// emailBlindIndex mirrors services/backend/app/db/blind_index.py: hex
+// HMAC-SHA256 of the normalised (trimmed, lowercased) address under
+// EMAIL_BLIND_INDEX_KEY. Empty key ⇒ "" ⇒ caller skips email matching. Keep the
+// normalisation identical to the Python side or matches silently break.
+func emailBlindIndex(email string) string {
+	key := os.Getenv("EMAIL_BLIND_INDEX_KEY")
+	if key == "" || email == "" {
+		return ""
+	}
+	mac := hmac.New(sha256.New, []byte(key))
+	mac.Write([]byte(strings.ToLower(strings.TrimSpace(email))))
+	return hex.EncodeToString(mac.Sum(nil))
+}
 
 // PeerRecommendation mirrors app/domains/recommendation/schemas.py:PeerRecommendation.
 type PeerRecommendation struct {
@@ -287,31 +305,63 @@ func CheckRegisteredPeers(c *gin.Context) {
 	}
 
 	resp := checkRegisteredResponse{RegisteredEmails: []string{}, RegisteredPhones: []string{}}
+	ctx := c.Request.Context()
+
 	phones := make([]string, 0, len(req.Phones))
 	for _, p := range req.Phones {
 		if p = strings.TrimSpace(p); p != "" {
 			phones = append(phones, p)
 		}
 	}
-	if len(phones) == 0 || db.Pool == nil {
-		// Email matching needs a blind index (decisions/0008); until then only
-		// phone lookups resolve, exactly as in the Python version.
+
+	// Email matching via the deterministic blind index (users.email_bidx) — the
+	// encrypted email column itself cannot be equality-matched. Skipped when
+	// EMAIL_BLIND_INDEX_KEY is unset (emailBlindIndex returns "").
+	bidxToEmail := make(map[string]string, len(req.Emails))
+	bidxList := make([]string, 0, len(req.Emails))
+	for _, e := range req.Emails {
+		if b := emailBlindIndex(e); b != "" {
+			if _, seen := bidxToEmail[b]; !seen {
+				bidxToEmail[b] = strings.TrimSpace(e)
+				bidxList = append(bidxList, b)
+			}
+		}
+	}
+
+	if db.Pool == nil || (len(phones) == 0 && len(bidxList) == 0) {
 		c.JSON(http.StatusOK, resp)
 		return
 	}
 
-	rows, err := db.Pool.Query(c.Request.Context(),
-		`SELECT phone FROM users WHERE phone = ANY($1)`, phones)
-	if err != nil {
-		c.JSON(http.StatusOK, resp)
-		return
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var ph *string
-		if rows.Scan(&ph) == nil && ph != nil && *ph != "" {
-			resp.RegisteredPhones = append(resp.RegisteredPhones, *ph)
+	if len(phones) > 0 {
+		rows, err := db.Pool.Query(ctx,
+			`SELECT phone FROM users WHERE phone = ANY($1)`, phones)
+		if err == nil {
+			for rows.Next() {
+				var ph *string
+				if rows.Scan(&ph) == nil && ph != nil && *ph != "" {
+					resp.RegisteredPhones = append(resp.RegisteredPhones, *ph)
+				}
+			}
+			rows.Close()
 		}
 	}
+
+	if len(bidxList) > 0 {
+		rows, err := db.Pool.Query(ctx,
+			`SELECT email_bidx FROM users WHERE email_bidx = ANY($1)`, bidxList)
+		if err == nil {
+			for rows.Next() {
+				var b *string
+				if rows.Scan(&b) == nil && b != nil {
+					if orig, ok := bidxToEmail[*b]; ok {
+						resp.RegisteredEmails = append(resp.RegisteredEmails, orig)
+					}
+				}
+			}
+			rows.Close()
+		}
+	}
+
 	c.JSON(http.StatusOK, resp)
 }

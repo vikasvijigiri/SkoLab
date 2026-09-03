@@ -10,6 +10,31 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func TestEmailBlindIndex_MatchesPythonVector(t *testing.T) {
+	t.Setenv("EMAIL_BLIND_INDEX_KEY", "testkey")
+
+	// Vectors computed from services/backend/app/db/blind_index.py with the
+	// same key. Normalisation is strip().lower(); the two implementations must
+	// agree byte-for-byte or check-registered silently stops matching emails.
+	cases := map[string]string{
+		"Test@Example.com ": "b300f80f54e9a5036e698a89ee6da477376e60459b5040da7ae2e3b8320a9ec9",
+		"test@example.com":   "b300f80f54e9a5036e698a89ee6da477376e60459b5040da7ae2e3b8320a9ec9",
+		"  ALICE@Foo.ORG":    "9788dfc7dc19fc0457a026c5dee1fecb7308228f2cb6988b61aaf1dd02204723",
+	}
+	for in, want := range cases {
+		if got := emailBlindIndex(in); got != want {
+			t.Errorf("emailBlindIndex(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestEmailBlindIndex_EmptyWhenKeyUnset(t *testing.T) {
+	t.Setenv("EMAIL_BLIND_INDEX_KEY", "")
+	if got := emailBlindIndex("a@b.com"); got != "" {
+		t.Fatalf("emailBlindIndex with no key = %q, want empty", got)
+	}
+}
+
 // These tests exercise the db.Pool == nil paths (no database in unit test) plus
 // the request-shape guards, which is where the security-relevant behaviour
 // lives: the batch cap on check-registered and the "no cross-user access on a
