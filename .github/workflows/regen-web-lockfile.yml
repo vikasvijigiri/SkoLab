@@ -1,0 +1,30 @@
+name: regen-web-lockfile
+
+# Throwaway: regenerate package-lock.json on Linux so it records the Linux
+# native optional deps (lightningcss / @tailwindcss-oxide) that a
+# Windows-generated lockfile omits — which is what forced ci.yml's
+# lockfile-less `npm install` and its arborist flake. Run once via
+# workflow_dispatch, download the `package-lock` artifact, commit it, then
+# delete this file.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  regen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Regenerate lockfile
+        run: |
+          rm -f package-lock.json
+          npm install --package-lock-only --no-audit --no-fund
+          node -e "const p=require('./package-lock.json').packages; const n=Object.keys(p).filter(k=>/(lightningcss|oxide)-linux-x64-gnu\$/.test(k)); console.log('linux-x64-gnu entries:', n); if(!n.length){process.exit(1)}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-lock
+          path: package-lock.json
+          retention-days: 1
