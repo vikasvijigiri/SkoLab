@@ -2,11 +2,18 @@
   "mcpServers": {
     "playwright": {
       "command": "npx",
-      "args": ["-y", "@playwright/mcp@latest"]
+      "args": [
+        "-y",
+        "@playwright/mcp@latest"
+      ]
     },
     "postgres": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "${DATABASE_URL}"]
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "${env:DATABASE_URL}"
+      ]
     },
     "sentry": {
       "type": "http",
@@ -14,26 +21,42 @@
     },
     "context7": {
       "command": "npx",
-      "args": ["-y", "@upstash/context7-mcp@latest"]
+      "args": [
+        "-y",
+        "@upstash/context7-mcp@latest"
+      ]
     },
     "duckduckgo": {
       "command": "npx",
-      "args": ["-y", "@oevortex/ddg_search@latest"]
+      "args": [
+        "-y",
+        "@oevortex/ddg_search@latest"
+      ]
     },
     "tavily": {
       "command": "npx",
-      "args": ["-y", "tavily-mcp@latest"],
+      "args": [
+        "-y",
+        "tavily-mcp@latest"
+      ],
       "env": {
-        "TAVILY_API_KEY": "${TAVILY_API_KEY}"
+        "TAVILY_API_KEY": "${env:TAVILY_API_KEY}"
       }
     },
     "shadcn-ui": {
       "command": "npx",
-      "args": ["-y", "@jpisnice/shadcn-ui-mcp-server@latest"]
+      "args": [
+        "-y",
+        "@jpisnice/shadcn-ui-mcp-server@latest"
+      ]
     },
     "firebase": {
       "command": "npx",
-      "args": ["-y", "firebase-tools@latest", "experimental:mcp"]
+      "args": [
+        "-y",
+        "firebase-tools@latest",
+        "experimental:mcp"
+      ]
     },
     "github": {
       "type": "http",
