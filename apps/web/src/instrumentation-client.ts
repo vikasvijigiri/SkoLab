@@ -10,3 +10,6 @@ Sentry.init({
   environment: process.env.NODE_ENV,
   // Session Replay is deliberately off — it burns the free-tier quota fast.
 });
+
+// Required for Sentry to trace client-side route transitions (App Router).
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
