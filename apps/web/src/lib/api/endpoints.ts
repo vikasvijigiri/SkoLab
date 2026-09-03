@@ -72,10 +72,18 @@ export const analyzePaper = (opts: { title?: string; doi?: string; openalexId?: 
   });
 
 // ---- Recommendations (project/task collaborator autocomplete) ---------------
+// Served by the Go gateway (internal/recommendation). Auth is transitional:
+// the token is optional today, mandatory after the Android client attaches one
+// (decisions/0008) — pass it now so the web client needs no later change.
 
-export const logPeerInvite = (userId: string, peer: { email?: string; phone?: string; uid?: string }) =>
+export const logPeerInvite = (
+  idToken: string | null,
+  userId: string,
+  peer: { email?: string; phone?: string; uid?: string },
+) =>
   apiRequest<{ success: boolean }>("/api/v1/recommendations/peers/invite", {
     method: "POST",
+    idToken: idToken ?? undefined,
     body: { user_id: userId, peer_email: peer.email, peer_phone: peer.phone, peer_uid: peer.uid },
   });
 

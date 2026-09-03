@@ -30,6 +30,18 @@ document is out of date.
 orchestrator's probes carry no token, liveness must not depend on auth or the
 DB, and readiness only reports dependency health.
 
+### Moved off the Python backend
+
+| Routes | Now served by | Auth |
+| :--- | :--- | :--- |
+| `GET/POST /api/v1/recommendations/peers`, `/peers/invite`, `/peers/check-registered` | Go gateway — `internal/recommendation` | **Transitional** `VerifyUserOptional` — a valid token sets `user_id`, a missing/invalid one is allowed through; a per-IP rate limit (5 rps) and a 200-identifier cap on `check-registered` bound the enumeration risk. Flips to hard `VerifyUser` once the Android client attaches a token — `decisions/0008`. |
+
+These are pure Postgres CRUD with no AI, so they belong on the Go edge
+(`decisions/0002`, `decisions/0008`). Email matching in `peers` /
+`check-registered` stays disabled until a deterministic blind-index column
+lands — `users.email` is Fernet-encrypted, so equality/`ILIKE` never resolved
+in the Python version either.
+
 The 401/403 raised by `get_verified_user` is returned through the app-level
 `ErrorResponse` envelope (`app/api/errors.py`), like every other error.
 

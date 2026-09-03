@@ -88,3 +88,34 @@ func VerifyUser() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// VerifyUserOptional is a transitional middleware for routes that are moving
+// behind auth but still have live tokenless clients (installed Android builds
+// send no Authorization header today). A valid token sets user_id; a missing or
+// invalid token is allowed through with user_id unset. It never aborts.
+//
+// The dependent handlers must therefore treat user_id as optional and must not
+// grant cross-user access on its absence. This is removed — replaced by
+// VerifyUser — once client telemetry shows tokenless traffic has fallen off
+// (see decisions/0008-recommendation-peers-to-go-gateway.md).
+func VerifyUserOptional() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+			c.Next()
+			return
+		}
+		if authClient == nil {
+			c.Next()
+			return
+		}
+		idToken := strings.TrimPrefix(authHeader, "Bearer ")
+		token, err := authClient.VerifyIDToken(context.Background(), idToken)
+		if err != nil {
+			c.Next()
+			return
+		}
+		c.Set("user_id", token.UID)
+		c.Next()
+	}
+}
