@@ -36,6 +36,7 @@ EXPECTED_AUTHED: set[str] = {
     "/agent/chat",
     "/industry_academic_tieups",  # require_owner("user_id") — private memory profile
     "/users/quests",  # require_owner("user_id") — private quest records
+    "/daily_feed/dismiss",  # get_verified_user + users.openalex_id == body author_id
 }
 
 # Routes that personalise when a token is present but work anonymously.

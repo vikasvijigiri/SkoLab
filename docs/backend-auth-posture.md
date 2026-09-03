@@ -53,6 +53,7 @@ the question in review — do not guess it into `authed`.
 | :--- | :--- |
 | `GET /industry_academic_tieups` | Reads the caller's **private** semantic-memory profile (`UserMemoryService`); `user_id` is documented as the Firebase UID. |
 | `GET /users/quests` | Creates/returns the caller's **private** quest records in Postgres, keyed by `User.id` (the Firebase uid). |
+| `POST /daily_feed/dismiss` | A write to a per-profile dismissed-ids list. `author_id` (body) is an OpenAlex id, so it is bound via `get_verified_user` + a `uid → users.openalex_id` lookup rather than `require_owner`: 401 with no token, 403 when the token's user is not that OpenAlex author. |
 
 ### optional — `Depends(get_optional_user)` (personalise if a token is present; work anonymously)
 
@@ -72,7 +73,7 @@ the question in review — do not guess it into `authed`.
 | `GET /author_metrics`, `GET /network_collaborators`, `GET /collaborator_synergy`, `GET /citation_heatmap` | Metrics computed from **any** researcher's public publication record; `author_id` is an OpenAlex id. |
 | `GET /match_grants`, `GET /journal_advisor` | Recommendations derived from a researcher's public works; used when viewing arbitrary profiles, not just one's own. |
 | `GET /semantic_trending` | Trending papers in a researcher's field; reads only public OpenAlex concepts. |
-| `GET /daily_feed`, `POST /daily_feed/dismiss`, `GET /daily_conjecture`, `GET /assistant_professor_roadmap`, `GET /industry_opportunities` | Feed/roadmap keyed by an OpenAlex `author_id`; explicitly support anonymous / `default_feed`. `dismiss` is a write but its "state" is a per-profile dismissed-ids list derived from the public feed — see open item below. |
+| `GET /daily_feed`, `GET /daily_conjecture`, `GET /assistant_professor_roadmap`, `GET /industry_opportunities` | Feed/roadmap keyed by an OpenAlex `author_id`; explicitly support anonymous / `default_feed`. (`POST /daily_feed/dismiss` is now owner-scoped — see the authed table.) |
 | `GET /leaderboard/{field}` | Public quest leaderboard. |
 | `POST /agent/upload_document` | Stateless document extraction; no identity involved. |
 | `GET /summarize_work`, `GET /analyze_paper`, `GET /presentation_outline` | Public paper intelligence. |
@@ -81,12 +82,14 @@ the question in review — do not guess it into `authed`.
 
 ### Open items (tracked, not closed here)
 
-- **`POST /daily_feed/dismiss`** — a write, but its `author_id` (body) is an
-  OpenAlex id, not a Firebase uid, so `require_owner` cannot bind it. Making it
-  owner-scoped needs a verified `uid` → `User.openalex_id` lookup in the
-  dependency. Left public for now.
 - **`/zotero/*`** — take a `user_id` but are unimplemented stubs. When Zotero
   linking becomes real it should be owner-scoped (or move to the Go gateway).
+
+> `POST /daily_feed/dismiss` was in this list; it is now owner-scoped via a
+> `uid → users.openalex_id` lookup. The web client (`dismissDailyFeedItem`,
+> `home/page.tsx`) now sends the token. A signed-in user who has not linked an
+> OpenAlex profile gets 403 on dismiss until they link — acceptable, the feed
+> still renders.
 
 ### Moved off the Python backend
 

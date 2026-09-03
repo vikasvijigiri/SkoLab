@@ -82,7 +82,7 @@ function buildBriefItems(opts: {
 }
 
 export default function HomePage() {
-  const { user } = useAuth();
+  const { user, getIdToken } = useAuth();
   const { firestoreProfile, author, loading: profileLoading, error: profileError, refetch: refetchProfile } = useMyProfile();
   const queryClient = useQueryClient();
 
@@ -124,8 +124,11 @@ export default function HomePage() {
   // Optimistic removal from the feed cache — a failed dismiss just means the
   // paper could reappear on the next fetch, not worth rolling the UI back for.
   const dismiss = useMutation({
-    mutationFn: (workId: string) =>
-      author?.id ? dismissDailyFeedItem(author.id, workId) : Promise.resolve({ success: true }),
+    mutationFn: async (workId: string) => {
+      if (!author?.id) return { success: true };
+      const idToken = await getIdToken();
+      return dismissDailyFeedItem(idToken, author.id, workId);
+    },
     onMutate: (workId: string) => {
       const key = dailyFeedQuery(authorId, topic).queryKey;
       queryClient.setQueryData<DailyFeedItem[]>(key, (prev) =>
