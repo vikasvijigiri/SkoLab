@@ -3,15 +3,42 @@
     "SessionStart": [
       {
         "hooks": [
-          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session-init/02-session-context.py\"", "statusMessage": "Loading knowledge-doc pointers, checking scaffolding drift..." },
-          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session-init/03-state-report.py\"", "statusMessage": "Measuring repo state against the branch point..." }
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session-init/02-session-context.py\"",
+            "statusMessage": "Loading knowledge-doc pointers, checking scaffolding drift..."
+          },
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session-init/03-state-report.py\"",
+            "statusMessage": "Measuring repo state against the branch point..."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/prompt-intake/02-turn-timer.py\""
+          },
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/prompt-intake/01-entry-classifier.py\"",
+            "statusMessage": "Classifying the prompt's workflow entry shape..."
+          }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stop-finalization/00-dispatch.py\"", "statusMessage": "Finalizing recovery, drift, and chain state..." }
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stop-finalization/00-dispatch.py\"",
+            "statusMessage": "Finalizing recovery, drift, and chain state..."
+          }
         ]
       }
     ],
@@ -19,20 +46,36 @@
       {
         "matcher": "Bash|PowerShell|Edit|Write|NotebookEdit|Task",
         "hooks": [
-          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pre-tool/01-halt-guard.py\"", "statusMessage": "Checking for a halt..." }
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pre-tool/01-halt-guard.py\"",
+            "statusMessage": "Checking for a halt..."
+          }
         ]
       },
       {
         "matcher": "Bash|PowerShell",
         "hooks": [
-          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/permission-security/00-dispatch.py\"", "statusMessage": "Checking secrets, branch, attribution, and deploy spend..." }
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/permission-security/00-dispatch.py\"",
+            "statusMessage": "Checking secrets, branch, attribution, and deploy spend..."
+          }
         ]
       },
       {
         "matcher": "Edit|Write|NotebookEdit",
         "hooks": [
-          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pre-edit/01-forbidden-change-guard.py\"", "statusMessage": "Checking the target is not generated or vendored..." },
-          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pre-edit/02-agent-scope-guard.py\"", "statusMessage": "Checking agent write scope..." }
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pre-edit/01-forbidden-change-guard.py\"",
+            "statusMessage": "Checking the target is not generated or vendored..."
+          },
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pre-edit/02-agent-scope-guard.py\"",
+            "statusMessage": "Checking agent write scope..."
+          }
         ]
       }
     ],
@@ -40,21 +83,65 @@
       {
         "matcher": "Edit|Write",
         "hooks": [
-          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/post-edit-validation/02-hook-self-test-nudge.py\"", "statusMessage": "Checking whether a hook script needs testing..." }
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/post-edit-validation/02-hook-self-test-nudge.py\"",
+            "statusMessage": "Checking whether a hook script needs testing..."
+          }
         ]
       },
-      { "matcher": "Bash|PowerShell", "hooks": [ { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/context-budget/01-context-cost.py\"" } ] },
-      { "matcher": "Read", "hooks": [ { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/post-tool/04-read-cost.py\"" } ] },
-      { "matcher": "Task", "hooks": [ { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/post-tool/05-agent-cost.py\"" } ] },
-      { "matcher": "Skill", "hooks": [ { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/context-budget/02-skill-cost.py\"" } ] },
-      { "matcher": "*", "hooks": [ { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/post-tool/06-tool-cost.py\"" } ] },
-      { "matcher": "AskUserQuestion|ExitPlanMode", "hooks": [ { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/post-tool/07-human-cost.py\"" } ] }
-    ],
-    "UserPromptSubmit": [
       {
+        "matcher": "Bash|PowerShell",
         "hooks": [
-          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/prompt-intake/02-turn-timer.py\"" },
-          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/prompt-intake/01-entry-classifier.py\"", "statusMessage": "Classifying the prompt's workflow entry shape..." }
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/context-budget/01-context-cost.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/post-tool/04-read-cost.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/post-tool/05-agent-cost.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/context-budget/02-skill-cost.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/post-tool/06-tool-cost.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "AskUserQuestion|ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/post-tool/07-human-cost.py\""
+          }
         ]
       }
     ]
