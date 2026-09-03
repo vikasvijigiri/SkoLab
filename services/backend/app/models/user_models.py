@@ -32,6 +32,10 @@ class User(Base):
     username = Column(String(100), unique=True, index=True, nullable=True)
     author_name = Column(String(255), nullable=True)
     email = Column(EncryptedString, nullable=True)
+    # Deterministic HMAC of the normalised email, for equality lookups the
+    # Fernet-encrypted `email` column cannot serve. Kept in sync by the
+    # `validate_user_email` validator below. See app/db/blind_index.py.
+    email_bidx = Column(String(64), index=True, nullable=True)
     phone = Column(String(50), nullable=True)
     research_focus = Column(Text, nullable=True)
     created_at = Column(DateTime, default=utcnow)
@@ -62,6 +66,11 @@ class User(Base):
             )
             if not EMAIL_REGEX.match(address):
                 raise ValueError(f"Invalid email format: {address}")
+        # Keep the blind index in lock-step with the encrypted value on every
+        # ORM write. Imported lazily to avoid a config import at module load.
+        from app.db.blind_index import email_blind_index
+
+        self.email_bidx = email_blind_index(address)
         return address
 
 
