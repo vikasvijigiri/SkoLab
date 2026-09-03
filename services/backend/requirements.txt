@@ -5,7 +5,10 @@ python-dotenv==1.2.3
 httpx==0.28.1
 firebase-admin==7.5.0
 numpy==2.2.6
-sentence-transformers==6.0.1
+# Embeddings run via the Hugging Face Inference API (see
+# app/services/ai/embedding_service.py). `sentence-transformers` (and its
+# ~2 GB PyTorch dependency) is intentionally NOT listed — add it only for a
+# self-hosted deploy that wants the local model backend.
 networkx==3.4.2
 zeroconf==0.151.3
 pdfplumber==0.11.10
