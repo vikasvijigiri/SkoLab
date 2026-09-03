@@ -92,7 +92,11 @@ jobs:
       run: |
         cd services/backend-go
         go vet ./...
-        go test ./... -race -cover -v
+        # -cover across multiple packages invokes the `covdata` tool, which the
+        # setup-go toolchain here does not ship ("go: no such tool covdata") and
+        # which fails the step even though every test passes. -race is the check
+        # that matters.
+        go test ./... -race -v
 
   web-verification:
     name: Web Build, Typecheck, Lint & Test
@@ -117,9 +121,13 @@ jobs:
       # version-sensitive dep is pinned in package.json, so this stays
       # reproducible in practice. Follow-up: regenerate the lockfile on a POSIX
       # host and restore `npm ci`.
+      #
+      # The retry works around an intermittent npm arborist crash
+      # ("Cannot read properties of null (reading 'edgesOut')") seen on a clean
+      # tree — clearing the cache and retrying resolves it.
       run: |
         rm -f package-lock.json
-        npm install
+        npm install || { npm cache clean --force; rm -rf node_modules; npm install; }
 
     # `next build` must run before standalone tsc: it generates `.next/types`,
     # which is where Next 16's `RouteContext` and route param types live. Running
