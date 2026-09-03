@@ -3,6 +3,33 @@ import httpx
 from typing import List, Dict, Any, Optional
 from openrouter import OpenRouter
 from app.core.config import settings
+from app.core.circuit_breaker import groq_breaker, CircuitBreakerOpenError
+
+
+# ── Shared HTTP client ───────────────────────────────────────────────────────
+# One process-wide AsyncClient with a bounded connection pool. The previous
+# `async with httpx.AsyncClient()` per call paid a fresh TCP + TLS handshake to
+# Groq on every request (~100-300 ms) and, under load, exhausted ephemeral
+# ports. Keep-alive connections are reused across calls.
+_http_client: Optional[httpx.AsyncClient] = None
+
+
+def get_http_client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(settings.llm_timeout_seconds, connect=5.0),
+            limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
+        )
+    return _http_client
+
+
+async def aclose_http_client() -> None:
+    """Close the shared client on app shutdown (call from the FastAPI lifespan)."""
+    global _http_client
+    if _http_client is not None and not _http_client.is_closed:
+        await _http_client.aclose()
+    _http_client = None
 
 
 # Global rate limit / availability state
@@ -208,16 +235,35 @@ class LLMService:
                 if m not in models_to_try:
                     models_to_try.append(m)
         else:
-            models_to_try = self.default_models
+            models_to_try = list(self.default_models)
+
+        # Bound the fallback fan-out: at most N attempts, under one total
+        # wall-clock budget. Without this, a bad provider window could keep a
+        # single user request alive for minutes (16 models x llm_timeout).
+        models_to_try = models_to_try[: max(1, settings.llm_max_fallback_models)]
+        deadline = time.monotonic() + settings.llm_total_deadline_seconds
 
         errors_encountered = []
         for model in models_to_try:
+            if time.monotonic() >= deadline:
+                errors_encountered.append(
+                    f"(stopped: {settings.llm_total_deadline_seconds:.0f}s total "
+                    f"deadline reached before trying {model})"
+                )
+                break
+
             is_or = "/" in model and not model.startswith("groq/")
 
             # Check key and availability before querying
             if is_or and not settings.openrouter_api_key:
                 continue
             if not is_or and (not self.groq_api_key or LLM_LIMIT_EXCEEDED):
+                continue
+            # Skip Groq models while the Groq circuit is OPEN — don't burn a
+            # slot (and a timeout) on a provider we already know is down; the
+            # OpenRouter models later in the list are still worth trying.
+            if not is_or and not await groq_breaker.allow():
+                errors_encountered.append(f"{model}: skipped (groq circuit OPEN)")
                 continue
 
             print(f"[LLMService] Attempting query with model: {model} ...", flush=True)
@@ -247,17 +293,18 @@ class LLMService:
                     if tool_choice is not None:
                         payload["tool_choice"] = tool_choice
 
-                    async with httpx.AsyncClient(
-                        timeout=httpx.Timeout(settings.llm_timeout_seconds, connect=5.0)
-                    ) as client:
-                        resp = await client.post(
-                            self.groq_base_url,
-                            headers={
-                                "Authorization": f"Bearer {self.groq_api_key}",
-                                "Content-Type": "application/json",
-                            },
-                            json=payload,
-                        )
+                    client = get_http_client()
+                    resp = await client.post(
+                        self.groq_base_url,
+                        headers={
+                            "Authorization": f"Bearer {self.groq_api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json=payload,
+                        timeout=httpx.Timeout(
+                            settings.llm_timeout_seconds, connect=5.0
+                        ),
+                    )
 
                     if resp.status_code == 200:
                         data = resp.json()
@@ -271,6 +318,7 @@ class LLMService:
                             raise Exception(
                                 f"Model {model} returned 200 with an empty completion."
                             )
+                        await groq_breaker.record_success()
                         return LLMResponse(
                             content=content, tool_calls=tool_calls, model_used=model
                         )
@@ -281,9 +329,13 @@ class LLMService:
                             set_llm_limit_exceeded(True)
                         raise Exception(err_msg)
 
+            except CircuitBreakerOpenError as e:
+                errors_encountered.append(f"{model}: {e}")
             except Exception as e:
                 print(f"[LLMService] Exception for model {model}: {e}", flush=True)
                 errors_encountered.append(f"{model}: {e}")
+                if not is_or:
+                    await groq_breaker.record_failure(e)
 
         # If we got here, all attempted models failed
         raise Exception(

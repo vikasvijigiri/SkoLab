@@ -39,16 +39,56 @@ def _load(rel: str, name: str):
 
 
 _rs = _load("tools/resume.py", "resume_for_analyze")
+_hooklib_for_analyze = _load(".claude/hooks/_hooklib.py", "hooklib_for_analyze")
 
-REQUIRED_HEADINGS = ["**Goal:**", "## File map", "## Tasks"]
+REQUIRED_HEADINGS = ["**Goal:**", "**Risk:**", "## File map", "## Tasks"]
+
+# Required in the plan's PREAMBLE -- everything before the first task heading.
+#
+# Added 2026-08-16, closing `GOAL_CHECKLIST.md` lines that had been prose since
+# the checklist was written; prose passes every suite, which is why that document
+# counts "enforced by a mechanism" and "described somewhere" separately.
+#
+# Positional and not a plain substring, which the first version got wrong. Tasks
+# carry their own `**Rollback:**`, so a whole-document search is satisfied by
+# task 3's revert line and the plan-level requirement adds nothing. The two are
+# different claims: undoing task 7 tells nobody how to undo a plan whose tasks
+# 1-6 already landed, and Gate 1 is specified to be shown the second one.
+PREAMBLE_HEADINGS = ["**Rollback:**", "**Blast radius:**"]
 TASK_RE = re.compile(r"(?m)^###\s+Task\s+(\d+)\s*:?(.*)$")
 GATE_RE = re.compile(r"(?m)^- \[( |x|X)\]\s+([IVX]+)\s")
+# `- [ ] Task 3 — title`. Distinguished from GATE_RE by what follows the box:
+# a constitution gate is followed by a roman numeral, a progress box by `Task N`.
+# `_hooklib.PROGRESS_TASK_BOX`, imported rather than retyped -- see its
+# docstring for the four sites that had drifted into disagreement.
+PROGRESS_RE = _hooklib_for_analyze.PROGRESS_TASK_BOX
 # `- Create: \`path\` — why` / `- Modify: \`path:symbol\` — why`
 FILE_RE = re.compile(r"(?m)^\s*-\s+(Create|Modify|Test|Delete|Move):\s*`([^`]+)`")
 
 
+COMPLEXITY_HEADING_RE = re.compile(r"(?m)^##\s+Complexity tracking\s*$")
+
+
 def _line_of(text: str, index: int) -> int:
     return text.count("\n", 0, index) + 1
+
+
+def _rollback_fields_exempt(text: str) -> bool:
+    """Whether this plan's own `## Complexity tracking` states, in words, an
+    exemption from the per-task `**Rollback:**`/`**Preconditions:**` fields.
+
+    A bare "we have a Complexity tracking section" is not enough here -- unlike
+    the constitution-gate check, silence about these two fields must not read
+    as an exemption, or every future plan quietly inherits this plan's pass.
+    The section must name both fields.
+    """
+    m = COMPLEXITY_HEADING_RE.search(text)
+    if not m:
+        return False
+    nxt = re.search(r"(?m)^##\s+", text[m.end():])
+    section = text[m.end(): m.end() + nxt.start() if nxt else len(text)]
+    lowered = section.lower()
+    return "rollback" in lowered and "precondition" in lowered
 
 
 def analyze(text: str, exists=None, slug: str = "") -> list[dict]:
@@ -71,6 +111,17 @@ def analyze(text: str, exists=None, slug: str = "") -> list[dict]:
         if heading not in text:
             add(1, "structure", f"missing required section {heading!r}")
 
+    # The preamble is everything before the first task. A plan with no tasks at
+    # all has already been reported above; here the whole document is preamble,
+    # which is the reading that cannot produce a false pass.
+    _first_task = TASK_RE.search(text)
+    preamble = text[:_first_task.start()] if _first_task else text
+    for heading in PREAMBLE_HEADINGS:
+        if heading not in preamble:
+            add(1, "structure",
+                f"missing required section {heading!r} -- it must appear in the "
+                f"plan's preamble; a task's own field is a different claim")
+
     # --- open questions. The gate cannot be passed while one remains, so
     # finding them here is the difference between a fixable draft and a
     # surprise at approval time.
@@ -89,10 +140,29 @@ def analyze(text: str, exists=None, slug: str = "") -> list[dict]:
             f"article(s) {', '.join(unticked)} unticked with no Complexity tracking "
             f"section -- an exception is legal, an unexplained one is not")
 
-    # --- tasks
+    # --- the progress block executing-plans ticks
+    #
+    # It said "`writing-plans` mandates that syntax expressly for tracking" while
+    # the task template emitted no checkbox at all, so every plan in docs/plans/
+    # had zero and the executor's progress mechanism had never had anything to
+    # tick. Counted rather than merely required: a plan that gains a task and not
+    # its box drifts back into the same silence one task at a time.
     tasks = list(TASK_RE.finditer(text))
+    progress = PROGRESS_RE.findall(text)
+    if tasks and not progress:
+        add(1, "progress",
+            f"no `## Progress` checkboxes for {len(tasks)} task(s) -- "
+            f"`executing-plans` ticks these, and a plan with none gives it "
+            f"nothing to record against")
+    elif progress and len(progress) != len(tasks):
+        add(1, "progress",
+            f"{len(progress)} progress checkbox(es) for {len(tasks)} task(s) -- "
+            f"one per task, or the record silently stops matching the plan")
+
+    # --- tasks
     if not tasks:
         add(1, "tasks", "no `### Task N:` sections")
+    rollback_exempt = _rollback_fields_exempt(text)
     for i, m in enumerate(tasks):
         body = text[m.end(): tasks[i + 1].start() if i + 1 < len(tasks) else len(text)]
         label = f"Task {m.group(1)}"
@@ -105,6 +175,13 @@ def analyze(text: str, exists=None, slug: str = "") -> list[dict]:
             add(line, "untestable", f"{label} has no `Done when:` condition")
         if not FILE_RE.search(body):
             add(line, "tasks", f"{label} names no file to create, modify or test")
+        # Per task, not per plan: one task's `**Rollback:**` must not be read
+        # as covering another, so this checks each task's own body only.
+        if not rollback_exempt:
+            if "**Rollback:**" not in body:
+                add(line, "untestable", f"{label} has no `Rollback:` strategy")
+            if "**Preconditions:**" not in body:
+                add(line, "untestable", f"{label} has no `Preconditions:` check")
 
     # --- paths. A Modify target that does not exist is the single most common
     # way a plan is wrong in a way that only surfaces mid-implementation.

@@ -1,11 +1,10 @@
 ---
 name: research
-description: Gather outside evidence a decision can rest on. Triggers include "how do people usually handle this", "what is the prior art", "does this exist already", "compare the options", "investigate", "is this even possible", "what do others do". Do NOT use for a single-fact lookup, a repo question Grep settles, or once the evidence is in hand. Use this whenever a claim needs outside evidence, even if unasked.
-when_to_use: when external evidence is required
+description: Gather outside evidence a decision can rest on, then report it honestly. Documentation, specifications, prior art and real implementations, separating what the evidence supports from what it does not. Triggers include "how do people usually handle this", "what is the prior art", "best practice for", "does this exist already", "is there a library for this", "compare the options", "investigate this", or "what do others do". Do NOT use for a single-fact lookup, for a repository question Grep settles, or once the evidence is already in hand. Use this whenever a claim needs outside evidence, even if unasked.
 effort: high
 model: opus
 disable-model-invocation: false
-allowed-tools: Read Grep Glob WebFetch WebSearch Task
+allowed-tools: Read Grep Glob Bash WebFetch WebSearch Task
 ---
 
 # Research
@@ -29,7 +28,7 @@ is not a source. Read the file.
 `.claude/workflow.md` makes research a stage entered from anywhere, and orders
 its sources internal knowledge, repository, memory,
 *then* web — and that order is load-bearing. A whole feature has been
-proposed to guard against losing uncommitted work; `post-run/03-checkpoint.py`
+proposed to guard against losing uncommitted work; `stop-finalization/03-checkpoint.py`
 had been snapshotting the tree every turn for two days. One `ls` of the hooks
 directory would have replaced the design.
 
@@ -87,9 +86,19 @@ block exists — unfocused evidence cannot be synthesised.
   and had to be redone against primaries.
 - **Hit count is not quality.** The single most useful find that day came from a
   search returning exactly one result; a 508-hit search needed heavy filtering.
-- Keep an evidence log as you go — source, claim, confidence, which
-  sub-question. Write it down before synthesising; a context reset loses
-  anything unsaved.
+- Keep an evidence log as you go, before synthesising. Each entry records:
+  `source opened`, `claim supported`, `confidence`, and the sub-question. Write it
+  down before synthesising; a context reset loses anything unsaved. The report
+  must preserve this traceability through `Findings` and `Sources`, and mark
+  unsupported conclusions `[UNVERIFIED]` rather than silently promoting them.
+
+One filled instance, so "evidence log" reads as a row, not a concept:
+
+> Question: should we add request-level rate limiting?
+> Sub-question: does our web framework ship one natively?
+> Evidence log: `source opened: framework docs §middleware` · `claim
+> supported: no built-in limiter, third-party package required` ·
+> `confidence: high (primary source)` · `sub-question: framework-native?`
 
 **3. Synthesise.** Group by sub-question. Two or more independent sources
 agreeing is **high** confidence; a single source is **medium**; sources that
@@ -110,7 +119,9 @@ opened? Does each map to a sub-question? Are single-source claims marked medium,
 not high? Did you state what would have changed your mind and whether anything
 did? Are conflicts shown rather than resolved by preference?
 
-**5. Report** to `docs/research/YYYY-MM-DD-<topic>.md`:
+**5. Report** to `docs/research/YYYY-MM-DD-<topic>.md`. `Write` is intentionally
+not pre-approved in this layer; request the write permission before creating or
+updating the report or a digest. Use this format:
 
 ```markdown
 # <question>
@@ -131,6 +142,11 @@ saves the next person rediscovering it>
 ## Sources
 <every source actually opened>
 ```
+
+The report is incomplete unless it contains all five sections in that order:
+`Findings`, `Disagreements`, `Not adopted`, and `Sources`, beneath the question,
+`Asked because`, and `Verdict` fields shown above. Do not report a verdict whose
+claims cannot be traced to an opened source or an evidence-log entry.
 
 Report the path in chat, not the contents. Then hand the verdict to whatever
 asked for it.
@@ -158,10 +174,10 @@ asked for it.
 | Skipping "Not adopted" | The next person re-runs the same search and reaches the same dead end |
 | Treating hit count as signal | The best source that day was the only hit; the 508-hit query was mostly noise |
 
-## Parallel work — `source-digger`
+## Parallel work — `researcher` (mode: source)
 
 When a pass needs several sources and reading them here would be expensive, hand
-each to a **`source-digger`** agent: one per source, all dispatched in the same
+each to a **`researcher`** agent dispatched in `mode: source`: one per source, all dispatched in the same
 message so they run concurrently. Each reads its source in full and writes a
 digest to `docs/research/digests/<topic>-<source>.md`; only the path and a few
 lines come back. The sources never enter this context.
@@ -169,7 +185,7 @@ lines come back. The sources never enter this context.
 Three to five at once. Past that you spend more time merging digests than the
 parallelism saves.
 
-Give each: the one source, the research question, the sub-questions it should
+Give each: the mode (`source`), the one source, the research question, the sub-questions it should
 answer, and its digest path. Then read the digests and synthesise here — Phase 3
 is yours, not theirs. A digger reports; it does not conclude, and it cannot
 compare, because it has seen exactly one source.
@@ -177,19 +193,26 @@ compare, because it has seen exactly one source.
 **Only when the user has asked for subagents.** Otherwise climb the context
 ladder above and read the sources yourself.
 
+For a question needing more independent cross-verification than a few
+`researcher` (mode: source) calls buy, Claude Code ships `/deep-research` — a native
+workflow that fans out web searches, cross-checks sources against each other,
+and synthesizes a cited report on its own. Worth suggesting to the user when
+the shape matches, rather than approximating it by hand.
+
 ## Routing
 
 - Mandatory validator: none. The Phase 4 check is the gate.
-- Terminal handoff: whatever needed the evidence — `brainstormer` when the
-  design is still open, `task-brief` when it is settled, `systematic-debugging`
-  when the question was a bug.
+- Terminal handoff: whatever needed the evidence. Usually the caller —
+  `task-analysis` dispatches this skill for a constraint that turns on outside
+  evidence and expects it back — or `architecture` when the design is still open,
+  or `debugging` when the question was a bug.
 - Precedes design, never replaces it. A survey is not a decision.
 - When the question is genuinely too broad for one pass, decompose into
   independent workstreams and research each separately rather than going shallow
   on all of them. Do not spawn subagents unless the user asks.
 - A finding that changes how this repo works earns a `decisions/` record; a
   recurring source or a dead end earns a `MEMORY.md` line via
-  `knowledge-manager`.
+  `documentation`.
 
 ## Success
 

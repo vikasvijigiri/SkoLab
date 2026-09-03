@@ -366,6 +366,14 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
 
+    # Release the shared LLM HTTP client's keep-alive connections cleanly.
+    try:
+        from app.services.ai.llm_service import aclose_http_client
+
+        await aclose_http_client()
+    except Exception as e:
+        print(f"[Shutdown] LLM HTTP client close failed: {e}", flush=True)
+
     if _zeroconf and _mdns_info:
         await _zeroconf.async_unregister_service(_mdns_info)
         await _zeroconf.async_close()

@@ -1,7 +1,12 @@
+"use client";
+
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { prefetchAuthor } from "@/lib/api/prefetch";
+import { cn, focusRing } from "@/lib/utils";
 import { DURATION_NORMAL, EASE_STANDARD } from "@/lib/motion";
 import type { LeaderboardEntry } from "@/lib/types";
 
@@ -13,6 +18,8 @@ const MEDAL: Record<number, string> = {
 
 export function LeaderboardRow({ entry, index }: { entry: LeaderboardEntry; index: number }) {
   const medal = MEDAL[entry.rank];
+  const qc = useQueryClient();
+  const warm = () => prefetchAuthor(qc, { id: entry.id, name: entry.user_name });
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -21,7 +28,12 @@ export function LeaderboardRow({ entry, index }: { entry: LeaderboardEntry; inde
     >
       {/* Deep-links straight to the author by id — a name-based search here can
           resolve to the wrong same-initial person when names collide. */}
-      <Link href={`/author/${encodeURIComponent(entry.id)}?name=${encodeURIComponent(entry.user_name)}`}>
+      <Link
+        href={`/author/${encodeURIComponent(entry.id)}?name=${encodeURIComponent(entry.user_name)}`}
+        onMouseEnter={warm}
+        onFocus={warm}
+        className={cn("block rounded-lg", focusRing)}
+      >
         <Card glow interactive className="flex h-full items-center gap-3">
           <div className="relative shrink-0">
             <div
