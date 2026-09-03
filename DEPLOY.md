@@ -4,11 +4,20 @@ Everything runs on managed hosts. After setup, **no local machine resources are
 used** — your laptop only pushes commits and builds the Android APK. Each host
 redeploys automatically on push to `main`.
 
-> This chooses a Vercel + Render + Hugging Face split over the Cloudflare-first
-> default in `.claude/rules/edge-hosting.md`. Reason: the Python service needs a
-> persistent container with >512 MB RAM for `sentence-transformers`, which the
-> Workers runtime cannot host. The rule's own escape hatch ("accept Render's
-> free tier ... explicitly") applies.
+> **2026-09 update — the Python backend moved from Hugging Face to Render.**
+> Hugging Face put Docker Spaces behind a paid plan. The Python service now
+> deploys via the **same `render.yaml` Blueprint** as the gateway (it defines
+> two services: `skolab-gateway` and `skolab-backend-py`). It fits Render's
+> free 512 MB tier because embeddings run via the **Hugging Face Inference
+> API** instead of a bundled PyTorch model — see
+> `services/backend/app/services/ai/embedding_service.py`. `render.yaml` is the
+> source of truth for env vars; where a table below still says "HF Space",
+> read "the `skolab-backend-py` Render service".
+
+> This chooses a Vercel + Render split over the Cloudflare-first default in
+> `.claude/rules/edge-hosting.md`. Reason: FastAPI on the Workers runtime is a
+> non-starter (no persistent Python process). The rule's own escape hatch
+> ("accept Render's free tier ... explicitly") applies.
 
 ## The stack
 
@@ -16,11 +25,12 @@ redeploys automatically on push to `main`.
 |---|---|---|---|---|
 | Next.js frontend | `apps/web` | **Vercel** Hobby | yes, no card | no |
 | Go API gateway | `services/backend-go` | **Render** free web service | yes, no card | after 15 min |
-| Python / ML backend | `services/backend` | **Hugging Face** Docker Space (free CPU) | yes, no card, 16 GB RAM | after 48 h |
+| Python / FastAPI backend | `services/backend` | **Render** free web service (same Blueprint) | yes, no card, 512 MB | after 15 min |
+| Embeddings (BAAI/bge-small-en-v1.5) | — | **Hugging Face Inference API** | yes, rate-limited | n/a |
 | Postgres | — | **Supabase** free | 500 MB | project pauses after 7 days idle |
 | Redis (optional) | — | **Upstash** free | 10k cmd/day | n/a |
 
-Cold start after a sleep: gateway ~30 s, Python Space ~40–60 s (model load).
+Cold start after a sleep: each Render service ~30–60 s.
 Acceptable for a demo; see "Keeping things warm" below.
 
 ## Before you start
@@ -38,10 +48,10 @@ Acceptable for a demo; see "Keeping things warm" below.
 Build back-to-front so each layer's URL exists when the next one needs it:
 
 ```text
-1. Supabase (Postgres)      → DATABASE_URL
-2. Hugging Face Space        → PYTHON_BACKEND_URL
-3. Render (Go gateway)       → gateway URL
-4. Vercel (frontend)         → production URL
+1. Supabase (Postgres)                 → DATABASE_URL
+2. Render Blueprint (both backends)    → gateway URL + python URL
+3. Set the gateway's PYTHON_BACKEND_URL to the python service URL
+4. Vercel (frontend)                   → production URL
 5. Cross-wire CORS + URLs, redeploy gateway and frontend
 ```
 
@@ -59,60 +69,58 @@ Build back-to-front so each layer's URL exists when the next one needs it:
    under load.
    - Python wants the `postgresql+asyncpg://` scheme; the Go gateway wants
      plain `postgres://...?sslmode=require`.
-3. Run the schema **before first boot** — it is now a release step, not
-   something the app does on startup when `APP_ENV=production`:
-   `cd services/backend && alembic upgrade head` with `DATABASE_URL` set.
-   Confirm with `list_tables`.
-4. Hold the URI for steps 2 and 3.
+3. Schema bootstrap: the Alembic migrations **cannot** build an empty database
+   (the "initial" migration only renames auto-created indexes). Instead set
+   `RUN_DB_CREATE_ALL=1` on the `skolab-backend-py` service for its **first**
+   deploy — the app runs `Base.metadata.create_all`. Blank it once `/livez` is
+   green. Optionally `python -m alembic stamp head` afterwards so future
+   migrations track. (If your DB password has a `%`, double it for Alembic's
+   configparser: `%40` → `%%40`.)
+4. Hold the URI for step 2.
 
-### 2. Hugging Face — Python / ML backend
+### 2. Render — both backends, one Blueprint
 
-The Space is its own git repo, so push the `services/backend` subtree to it.
-
-1. `huggingface.co` → New Space → **Docker** SDK → blank → free CPU hardware.
-   Name it `skolab-backend`. Note its git URL:
-   `https://huggingface.co/spaces/<you>/skolab-backend`.
-2. The Space needs the Dockerfile and app at **its repo root**. From this repo:
-
-   ```bash
-   git remote add hf https://huggingface.co/spaces/<you>/skolab-backend
-   git subtree push --prefix=services/backend hf main
-   ```
-
-   `services/backend/README.md` already carries the required Space metadata
-   (`sdk: docker`, `app_port: 8000`).
-3. Space → Settings → **Variables and secrets**:
+1. `render.com` → **New → Blueprint** → connect this repo. Render reads
+   `render.yaml` and creates **two** services: `skolab-gateway` (Go) and
+   `skolab-backend-py` (Python/FastAPI).
+2. It prompts for every `sync: false` value. For `skolab-backend-py`:
 
    | Key | Value |
    |---|---|
-   | `DATABASE_URL` | the Supabase URI from step 1 (swap scheme to `postgresql+asyncpg://` — the app uses asyncpg) |
+   | `DATABASE_URL` | Supabase transaction-pooler URI, `postgresql+asyncpg://` scheme, port `6543` |
+   | `DATABASE_ENCRYPTION_KEY` | `python -c "import base64,os;print(base64.b64encode(os.urandom(32)).decode())"` — **required**, the app refuses to boot without it in production |
    | `GROQ_API` | your Groq key |
+   | `SRE_SECURITY_TOKEN` | any random string |
+   | `HF_INFERENCE_TOKEN` | a Hugging Face token (read scope) — enables the embedding backend; unset ⇒ match scores floor but nothing 500s |
    | `SENTRY_DSN` | `https://7f3234a6dd311681fb026b919d4dfb69@o4512014875426816.ingest.de.sentry.io/4512016181297232` |
-   | `FIREBASE_CREDENTIALS_JSON` or the SDK's expected var | paste the service-account JSON as a **secret** if `firebase-admin` init needs it; otherwise omit |
-   | `APP_ENV` | `production` |
+   | `APP_BASE_URL` | `https://skolab-backend-py.onrender.com` |
+   | `RUN_DB_CREATE_ALL` | `1` for the first deploy only (see step 1.3), then blank |
+   | `GOOGLE_APPLICATION_CREDENTIALS` | optional — `/etc/secrets/service-account.json` if you upload the Firebase JSON as a Secret File; only `/agent/chat` needs it |
 
-4. Wait for the build (first one is slow — it pre-downloads the embedding
-   model). Verify `https://<you>-skolab-backend.hf.space/livez` returns 200.
-5. That base URL is `PYTHON_BACKEND_URL` for step 3.
+   (`skolab-gateway`'s prompts are unchanged — see step 3.)
+3. Wait for both builds. Verify:
+   `https://skolab-backend-py.onrender.com/livez` → `{"status":"alive"}`.
+4. Once green, remove `RUN_DB_CREATE_ALL` from `skolab-backend-py`.
 
-### 3. Render — Go API gateway
+### 3. Render — wire the gateway to the Python service
 
-1. `render.com` → New → **Blueprint** → connect this repo. Render reads
-   `render.yaml` and creates `skolab-gateway`.
+1. `skolab-gateway` was created by the same Blueprint above. Its prompts:
 2. Fill the prompted `sync: false` vars:
 
    | Key | Value |
    |---|---|
-   | `PYTHON_BACKEND_URL` | the HF Space URL from step 2 |
-   | `DATABASE_URL` | Supabase URI, `postgresql://...?sslmode=require` |
-   | `CORS_ORIGINS` | leave blank for now; set in step 5 |
+   | `PYTHON_BACKEND_URL` | leave blank during Blueprint create; set it to `https://skolab-backend-py.onrender.com` **after** that service is live (Render `fromService` can't supply the `https://` scheme the gateway needs) |
+   | `DATABASE_URL` | Supabase transaction-pooler URI, plain `postgres://...` (append `?sslmode=require` if the gateway logs an SSL error) |
+   | `CORS_ORIGINS` | `http://localhost:3000` for now; add the Vercel URL in step 5 |
    | `REDIS_URL` | leave blank (memory-only) unless you set up Upstash |
 
-3. Dashboard → the service → **Secret Files** → add `service-account.json`
+3. Dashboard → `skolab-gateway` → **Secret Files** → add `service-account.json`
    with the Firebase service-account JSON. `render.yaml` already points
    `GOOGLE_APPLICATION_CREDENTIALS` at `/etc/secrets/service-account.json`.
-4. Deploy. Verify `https://skolab-gateway.onrender.com/gateway-health` is 200.
-5. That URL (`/`) is `NEXT_PUBLIC_API_BASE_URL` for step 4.
+4. Deploy. Verify `https://skolab-gateway.onrender.com/gateway-health` is 200,
+   then set `PYTHON_BACKEND_URL` (it redeploys) and check
+   `https://skolab-gateway.onrender.com/livez` flips 502 → 200.
+5. `https://skolab-gateway.onrender.com` is `NEXT_PUBLIC_API_BASE_URL` for step 4.
 
 ### 4. Vercel — Next.js frontend
 
