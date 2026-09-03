@@ -7,7 +7,7 @@
 
 Why this exists
 ---------------
-The chain's entry was `task-brief`, which frames a *request*. Nothing owned the
+The chain's entry frames a *request*. Nothing owned the
 question a dropped-in layer actually faces first: *what is this repo and what is
 half-built in it*. The audit on 2026-08-07 found the gap by running
 `tools/resume.py` against this repository after 104 commits of finished work and
@@ -25,7 +25,7 @@ a second run.
 
 `--units` is the part that earns its place: it partitions the tree into
 subsystems with **disjoint file sets**, which is exactly the precondition
-`parallel_groups.py` enforces for concurrent agents. One `repo-cartographer` per
+`parallel_groups.py` enforces for concurrent agents. One `researcher` per
 unit, all dispatched in one message, no two reading the same file twice.
 """
 
@@ -45,6 +45,15 @@ NOISE_DIRS = {
     ".git", ".venv", "venv", "env", "node_modules", "__pycache__", ".mypy_cache",
     ".pytest_cache", ".ruff_cache", "dist", "build", "out", ".next", ".nuxt",
     "target", "vendor", "coverage", ".tox", ".gradle", "Pods", ".terraform",
+    # This repository's own parallel-worktree convention
+    # (decisions/2026-08-21-branch-per-parallel-task.md, `tools/worktree.py`'s
+    # `WORKTREE_DIR`). A nested worktree is a full checkout of this same repo,
+    # so scanning into it double-counts every test file and fixture string it
+    # contains under a different path -- found when a left-behind worktree made
+    # test_recon.py fail on its own "no skipped test outside this suite's own
+    # fixtures" assertion, reporting the SAME fixture line twice, once at its
+    # real path and once inside the worktree.
+    ".worktrees",
 }
 
 # One row per ecosystem: manifest -> (language, install, test). The same data-table
@@ -206,8 +215,8 @@ def stack_of(root: Path, files: list[Path]) -> dict:
 def scan_unfinished(root: Path, files: list[Path]) -> tuple[dict, list[dict]]:
     """Count each marker kind and locate the first 40, so the report is actionable.
 
-    Only files with a code suffix are read. A TODO in a vendored changelog is
-    noise, and reading a 4MB bundle to find one is worse than noise.
+    Only files with a code suffix are read. A stray marker in a vendored
+    changelog is noise, and reading a 4MB bundle to find one is worse than noise.
     """
     counts: Counter[str] = Counter()
     hits: list[dict] = []
