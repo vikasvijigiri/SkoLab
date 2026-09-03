@@ -369,16 +369,14 @@ def _run_bounded(command: str, root: Path, timeout: int, env: dict):
     Raises `subprocess.TimeoutExpired` exactly as `run` did, so every caller and
     every existing test sees the same contract -- only sooner.
     """
-    # POSIX: give the child its own process group so the timeout path can signal
-    # the whole tree. `start_new_session` is a no-op on Windows, so pass it
-    # unconditionally rather than threading a **kwargs dict through Popen's
-    # overloads.
+    kwargs = {}
+    if sys.platform != "win32":
+        kwargs["start_new_session"] = True  # its own process group to signal
     # nosec B602 -- see the annotation at the call site; same provenance.
     proc = subprocess.Popen(  # noqa: S602
         command, cwd=str(root), shell=True, stdout=subprocess.PIPE,
         stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True,
-        encoding="utf-8", errors="replace", env=env,
-        start_new_session=(sys.platform != "win32"),
+        encoding="utf-8", errors="replace", env=env, **kwargs,
     )
     try:
         out, err = proc.communicate(timeout=timeout)

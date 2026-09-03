@@ -43,7 +43,6 @@ def _load(name: str):
     import importlib.util
     path = Path(__file__).with_name(f"{name}.py")
     spec = importlib.util.spec_from_file_location(name.replace("-", "_"), path)
-    assert spec is not None and spec.loader is not None, f"cannot load {path}"
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
