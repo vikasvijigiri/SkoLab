@@ -369,7 +369,7 @@ def _run_bounded(command: str, root: Path, timeout: int, env: dict):
     Raises `subprocess.TimeoutExpired` exactly as `run` did, so every caller and
     every existing test sees the same contract -- only sooner.
     """
-    kwargs = {}
+    kwargs: dict = {}
     if sys.platform != "win32":
         kwargs["start_new_session"] = True  # its own process group to signal
     # nosec B602 -- see the annotation at the call site; same provenance.
