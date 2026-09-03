@@ -6,11 +6,7 @@
     },
     "postgres": {
       "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-postgres",
-        "postgresql://postgres:postgrespassword@localhost:5432/skolab"
-      ]
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "${DATABASE_URL}"]
     },
     "sentry": {
       "type": "http",
@@ -42,6 +38,10 @@
     "github": {
       "type": "http",
       "url": "https://api.githubcopilot.com/mcp/"
+    },
+    "figma": {
+      "type": "http",
+      "url": "https://mcp.figma.com/mcp"
     }
   }
 }
