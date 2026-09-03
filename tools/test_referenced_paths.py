@@ -4,7 +4,7 @@
 Why this suite exists
 ---------------------
 Prose in `.claude/` is executable instruction: a skill that says "run
-`python .claude/hooks/pre-commit/03-review-gate.py --record`" is a command the
+`python .claude/hooks/permission-security/03-review-gate.py --record`" is a command the
 model will run. Nothing type-checks it.
 
 On 2026-08-02 deleting three hooks broke four skills and one slash command --
@@ -45,7 +45,14 @@ HOOKS_DIR = ROOT / ".claude" / "hooks"
 # `AGENTS.md` joins it for the same reason: it is the contract every non-Claude
 # host reads, so a stale claim there is wrong for every harness at once.
 SOURCES = [
-    *(ROOT / ".claude").rglob("*.md"),
+    # `.claude/worktrees/` is gitignored -- a parallel-dispatch agent's own
+    # isolated checkout, not this repo's prose. Its LOG.md/README.md/etc. are
+    # a stale snapshot from whenever the worktree was created and will always
+    # disagree with live counts; scanning them was drift-detection noise, not
+    # a real finding. Confirmed live: it produced 554 false failures while
+    # two such worktrees were mid-build (2026-08-22).
+    *(p for p in (ROOT / ".claude").rglob("*.md")
+      if "worktrees" not in p.relative_to(ROOT / ".claude").parts),
     ROOT / "CLAUDE.md",
     ROOT / "README.md",
     ROOT / "AGENTS.md",
@@ -53,7 +60,7 @@ SOURCES = [
 ]
 
 # Two shapes appear in this repo's prose:
-#   a full path      `.claude/hooks/pre-commit/01-secret-scan.py`, `tools/x.py`
+#   a full path      `.claude/hooks/permission-security/01-secret-scan.py`, `tools/x.py`
 #   a bare hook name `04-delivery-guard.py`, resolved against .claude/hooks/*/
 #
 # The path is NOT anchored to the backticks, and requiring that was a real blind
@@ -180,13 +187,23 @@ WORD_NUMBERS = {
 COUNT_RE = re.compile(
     r"\b(" + "|".join(WORD_NUMBERS) + r"|\d{1,3})\s+"
     r"(?:[a-z]+-[a-z]+\s+)?"
-    r"(hooks|skills|suites|sub-?agents|agents|events)\b",
+    r"(hooks|skills|capabilit(?:y|ies)|suites|sub-?agents|agents|events)\b",
     re.IGNORECASE)
 
+# "capability"/"capabilities" is the word `.claude/README.md` uses for what
+# every other file calls "skills" -- same inventory
+# (`.claude/skills/*/SKILL.md`), different noun. Found live: it drifted to
+# "14 capabilities" while every "skills"-worded count elsewhere had already
+# moved to 15, undetected because the two words never met the same lookup.
+NOUN_ALIASES = {"capability": "skills", "capabilities": "skills"}
+
 # Built-in Claude Code commands, not files in this repo.
-BUILTIN_COMMANDS = {"/verify", "/save", "/wip", "/skills-doctor", "/git-state",
+BUILTIN_COMMANDS = {"/verify", "/save", "/wip", "/git-state",
                     "/fast", "/config", "/help", "/clear", "/loop", "/simplify",
-                    "/code-review", "/run", "/init", "/review", "/schedule"}
+                    "/code-review", "/run", "/init", "/review", "/schedule",
+                    # Claude Code's own bundled dynamic workflow -- ships with
+                    # the harness, not something this repo defines a file for.
+                    "/deep-research"}
 
 
 def live_counts() -> dict:
@@ -273,6 +290,7 @@ for source in sorted(seen):
                 claimed = int(raw)
             # "subagents" and "sub-agents" are the same inventory as "agents".
             noun_key = re.sub(r"^sub-?", "", noun.lower())
+            noun_key = NOUN_ALIASES.get(noun_key, noun_key)
             actual = counts[noun_key]
             if claimed != actual:
                 failures.append(
@@ -317,5 +335,98 @@ if failures:
     print("Either fix the path, or say on the same line that it was deleted.")
     sys.exit(1)
 
-print("OK: every hook and tool path named in prose resolves, or is marked gone")
+# --- the authoring trees, and the docstrings that cite them ------------------
+#
+# `FULL_PATH_RE` above matches `.claude/hooks/**.py` and `tools/**.py` -- PYTHON
+# ONLY. So `guide/how_to_create_hooks.md` and `templates/Skills.md` were never
+# checked by anything, in any repository, and neither tree shipped in the payload
+# until 2026-08-08.
+#
+# The consequence showed up where every consequence here shows up: in a target.
+# `test_hook_standards.py` opens "Check repository hooks against
+# guide/how_to_create_hooks.md", `test_process_router.py` quotes
+# `guide/how_to_create_subagents.md` as the source of its proactive-clause rule,
+# and `capability-layer-maintenance` tells the model to compare a new hook against
+# `templates/` and `guide/`. In an installed repo all of it resolved to nothing,
+# and a person following the skill went looking for directories that were not
+# there.
+#
+# `.py` files are scanned too, which the `.md`-only pass above cannot do: the
+# first of those citations is a module docstring.
+DOC_PATH_RE = re.compile(r"(?<![\w./-])((?:guide|templates)/[\w.-]+\.md)\b")
+
+doc_sources = list(SOURCES) + [
+    p for p in sorted((ROOT / "tools").glob("*.py"))
+] + [
+    p for p in sorted((ROOT / ".claude").rglob("*.py"))
+    if "__pycache__" not in p.parts and "worktrees" not in p.parts
+]
+
+doc_failures: list[str] = []
+for path in doc_sources:
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        continue
+    for number, line in enumerate(text.splitlines(), 1):
+        if TOMBSTONE.search(line):
+            continue
+        for match in DOC_PATH_RE.finditer(line):
+            rel = match.group(1)
+            if not (ROOT / rel).is_file():
+                doc_failures.append(
+                    f"{path.relative_to(ROOT).as_posix()}:{number} -> {rel}")
+
+# --- a reference is named by its PATH, never by its bare stem ----------------
+#
+# Four audit skills became `<skill>/references/*.md` on 2026-08-07 and the
+# artifact review became one too. Every document that had invoked them by name
+# kept doing so, and nothing noticed: `/plan-review` said "Invoke
+# `artifact-review`" for four days, naming a skill that no longer existed. The
+# session reads that as a skill invocation, finds nothing, and continues -- the
+# failure is silent, which is the whole reason it survived.
+#
+# So the rule is mechanical rather than a matter of care: a reference file may be
+# cited by path, and a bare backticked stem is a finding. There is no judgement
+# in it and no list to maintain -- the stems come off the disk.
+REFERENCE_STEMS = {p.stem for p in (ROOT / ".claude" / "skills").glob("*/references/*.md")}
+SKILL_DIRS = {p.name for p in (ROOT / ".claude" / "skills").iterdir() if p.is_dir()}
+COMMAND_STEMS = {p.stem for p in (ROOT / ".claude" / "commands").glob("*.md")}
+# A stem that is ALSO a live skill or command name is genuinely ambiguous and is
+# left alone: `security-review` is both a reference and a command, and failing on
+# the command would be a false positive.
+BARE_STEMS = REFERENCE_STEMS - SKILL_DIRS - COMMAND_STEMS
+
+stem_failures: list[str] = []
+for source in sorted(seen):
+    rel = source.relative_to(ROOT).as_posix()
+    for number, line in enumerate(
+            strip_fences(source.read_text(encoding="utf-8", errors="replace")
+                         .splitlines()), 1):
+        if TOMBSTONE.search(line):
+            continue
+        for stem in BARE_STEMS:
+            if f"`{stem}`" in line:
+                stem_failures.append(
+                    f"{rel}:{number} names `{stem}` as if it were a skill; it is "
+                    f"a reference -- cite its path")
+
+if stem_failures:
+    for item in stem_failures[:20]:
+        print(f"FAIL: {item}")
+    print(f"{len(stem_failures)} reference(s) named by bare stem. A stem reads as "
+          f"a skill invocation and resolves to nothing, silently.")
+    sys.exit(1)
+
+if doc_failures:
+    for item in doc_failures[:20]:
+        print(f"FAIL: {item} does not exist")
+    print(f"{len(doc_failures)} dangling authoring-doc reference(s). These are "
+          f"cited by shipped files, so they must be in the payload as well as on "
+          f"disk here.")
+    sys.exit(1)
+
+print(f"OK: every hook and tool path named in prose resolves, or is marked gone; "
+      f"every guide/ and templates/ path cited by {len(doc_sources)} shipped "
+      f"files exists")
 print("All referenced-path tests passed")
