@@ -7,6 +7,16 @@ from dotenv import load_dotenv
 backend_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 load_dotenv(os.path.join(backend_root, ".env"))
 
+# Neutralise a developer's local SENTRY_DSN *before anything imports
+# app.core.config* — `Settings` is a frozen dataclass that snapshots
+# `SENTRY_DSN` at construction, and `app.db.database` (imported a few lines
+# below in the SQLite-fallback branch) constructs it. If a real DSN is left in
+# scope, `app.main`'s import-time `init_observability()` activates the global
+# Sentry client and `test_observability.py`'s "inert without DSN" assertion —
+# green in CI, which has no .env — fails locally. A test that needs Sentry
+# active sets the DSN itself.
+os.environ["SENTRY_DSN"] = ""
+
 db_url = os.environ.get(
     "DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/skolab"
 )

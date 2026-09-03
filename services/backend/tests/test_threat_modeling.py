@@ -151,14 +151,14 @@ async def test_device_signature_validation():
 
 @pytest.mark.asyncio
 async def test_path_specific_rate_limiting():
-    """Verify strict rate limits (capacity=5) on critical paths."""
+    """Verify strict rate limits (capacity=5) on critical paths. The rate-limit
+    middleware runs before routing, so a GET on a POST-only strict path still
+    exercises it (405s until the 6th, which is 429)."""
     async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
-        # Trigger 6 rapid requests on strict path "/api/v1/papers/search"
-        # The 6th request should return 429
         responses = []
         for _ in range(6):
             try:
-                res = await ac.get("/api/v1/papers/search")
+                res = await ac.get("/api/v1/agent/chat")
                 responses.append(res)
             except Exception:
                 pass

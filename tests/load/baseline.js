@@ -59,17 +59,23 @@ export default function () {
   sleep(0.5);
 
   // ── Author search ─────────────────────────────────────────────────────────
-  const queries = ["quantum computing", "machine learning", "CRISPR", "climate change"];
-  const query = queries[Math.floor(Math.random() * queries.length)];
+  // Path + params verified against app.openapi()["paths"] (2026-09-03):
+  //   GET /api/v1/search_author  — required "name"; optional "id", "focus".
+  //   There is NO /api/v1/authors/search route.
+  const names = ["Yoshua Bengio", "Jennifer Doudna", "Andre Geim", "Michael E. Mann"];
+  const name = names[Math.floor(Math.random() * names.length)];
   {
     const res = http.get(
-      `${BASE_URL}/api/v1/authors/search?query=${encodeURIComponent(query)}`,
+      `${BASE_URL}/api/v1/search_author?name=${encodeURIComponent(name)}`,
       { headers }
     );
     const ok = check(res, {
       "author search 200": (r) => r.status === 200,
-      "author search has results": (r) => {
-        try { return Array.isArray(JSON.parse(r.body)); } catch { return false; }
+      "author search returns a profile": (r) => {
+        try {
+          const b = JSON.parse(r.body);
+          return b && typeof b === "object" && "display_name" in b;
+        } catch { return false; }
       },
     });
     authorSearchLatency.add(res.timings.duration);
@@ -79,14 +85,18 @@ export default function () {
 
   sleep(1);
 
-  // ── Paper search ──────────────────────────────────────────────────────────
+  // ── Paper analysis (LLM-backed expensive read) ────────────────────────────
+  // GET /api/v1/analyze_paper — required "title". (No /api/v1/papers/search route.)
   {
+    const titles = ["Attention Is All You Need", "A Method for Stochastic Optimization",
+                    "Deep Residual Learning for Image Recognition", "Generative Adversarial Nets"];
+    const title = titles[Math.floor(Math.random() * titles.length)];
     const res = http.get(
-      `${BASE_URL}/api/v1/papers/search?query=${encodeURIComponent(query)}`,
+      `${BASE_URL}/api/v1/analyze_paper?title=${encodeURIComponent(title)}`,
       { headers }
     );
     const ok = check(res, {
-      "paper search 200 or 429": (r) => r.status === 200 || r.status === 429,
+      "paper analyze 200 or 429": (r) => r.status === 200 || r.status === 429,
     });
     if (res.status === 200) {
       paperSearchLatency.add(res.timings.duration);

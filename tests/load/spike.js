@@ -40,8 +40,9 @@ export default function () {
     "User-Agent": "k6-spike-test/1.0",
   };
 
+  // GET /api/v1/search_author?name=... — verified route (no /authors/search).
   const res = http.get(
-    `${BASE_URL}/api/v1/authors/search?query=quantum`,
+    `${BASE_URL}/api/v1/search_author?name=${encodeURIComponent("Richard Feynman")}`,
     { headers }
   );
 
