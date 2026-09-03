@@ -3244,7 +3244,7 @@
     },
     "/api/v1/industry_academic_tieups": {
       "get": {
-        "description": "Dynamically brainstorms and queries industry-academic tie-up ideas\nbased on the user's semantic memory profile and recent active topics.\nEach idea is enriched with real academic papers searched on OpenAlex.",
+        "description": "Dynamically brainstorms and queries industry-academic tie-up ideas\nbased on the user's semantic memory profile and recent active topics.\nEach idea is enriched with real academic papers searched on OpenAlex.\n\nOwner-scoped: reads the caller's private semantic-memory profile, so the\nverified Firebase uid must equal ``user_id`` (see docs/backend-auth-posture).",
         "operationId": "get_industry_academic_tieups_api_v1_industry_academic_tieups_get",
         "parameters": [
           {
@@ -3281,6 +3281,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Industry Academic Tieups",
         "tags": [
           "Industry Academic"
@@ -4060,7 +4065,7 @@
     },
     "/api/v1/users/quests": {
       "get": {
-        "description": "LLM-based quest initialisation for new users.\nCalled only when Go gateway proxies here because quests don't exist in PG yet.",
+        "description": "LLM-based quest initialisation for new users.\nCalled only when Go gateway proxies here because quests don't exist in PG yet.\n\nOwner-scoped: creates/returns the caller's own quest records, so the\nverified Firebase uid must equal ``user_id`` (see docs/backend-auth-posture).",
         "operationId": "get_user_quests_api_v1_users_quests_get",
         "parameters": [
           {
@@ -4101,6 +4106,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get User Quests",
         "tags": [
           "Quests"
@@ -4649,7 +4659,7 @@
     },
     "/industry_academic_tieups": {
       "get": {
-        "description": "Dynamically brainstorms and queries industry-academic tie-up ideas\nbased on the user's semantic memory profile and recent active topics.\nEach idea is enriched with real academic papers searched on OpenAlex.",
+        "description": "Dynamically brainstorms and queries industry-academic tie-up ideas\nbased on the user's semantic memory profile and recent active topics.\nEach idea is enriched with real academic papers searched on OpenAlex.\n\nOwner-scoped: reads the caller's private semantic-memory profile, so the\nverified Firebase uid must equal ``user_id`` (see docs/backend-auth-posture).",
         "operationId": "get_industry_academic_tieups_industry_academic_tieups_get",
         "parameters": [
           {
@@ -4686,6 +4696,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Industry Academic Tieups",
         "tags": [
           "Industry Academic"
@@ -5518,7 +5533,7 @@
     },
     "/users/quests": {
       "get": {
-        "description": "LLM-based quest initialisation for new users.\nCalled only when Go gateway proxies here because quests don't exist in PG yet.",
+        "description": "LLM-based quest initialisation for new users.\nCalled only when Go gateway proxies here because quests don't exist in PG yet.\n\nOwner-scoped: creates/returns the caller's own quest records, so the\nverified Firebase uid must equal ``user_id`` (see docs/backend-auth-posture).",
         "operationId": "get_user_quests_users_quests_get",
         "parameters": [
           {
@@ -5559,6 +5574,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get User Quests",
         "tags": [
           "Quests"
