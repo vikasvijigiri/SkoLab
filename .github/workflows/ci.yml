@@ -80,7 +80,10 @@ jobs:
         # The script waits for the service container to actually accept queries
         # and retries init_db(), which otherwise fails flakily mid-transaction.
         python ci_bootstrap_db.py
-        pytest tests/
+        # Coverage floor as a no-regression ratchet. Real number today is ~40%
+        # (measured against this Postgres job); --cov-fail-under=38 leaves a
+        # little slack. Raise it as tests land — never lower it.
+        pytest tests/ --cov=app --cov-report=term-missing:skip-covered --cov-fail-under=38
 
     - name: Verify Go Gateway Build
       run: |
