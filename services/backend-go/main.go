@@ -110,14 +110,13 @@ func main() {
 	}
 
 	// ── Recommendations: CoLab peer autocomplete — Go PG only, no AI ─────────
-	// Ported from services/backend/app/domains/recommendation. Transitional
-	// optional auth: installed Android builds send no token yet, so a hard
-	// VerifyUser() would break them. A tight per-IP limit + a batch cap on
-	// check-registered bound the enumeration risk in the meantime. Flip to
-	// VerifyUser() once tokenless traffic drops — decisions/0008.
+	// Ported from services/backend/app/domains/recommendation. Hard Firebase
+	// auth (decisions/0008): the Android client attaches a token as of #27
+	// (network/AuthInterceptor.kt). The per-IP limit + the 200-id cap on
+	// check-registered still bound abuse from an authenticated caller.
 	recRL := middleware.NewRateLimiter(rate.Limit(5), 5)
 	recAPI := r.Group("/api/v1/recommendations")
-	recAPI.Use(auth.VerifyUserOptional(), recRL.Limit())
+	recAPI.Use(auth.VerifyUser(), recRL.Limit())
 	{
 		recAPI.GET("/peers", recommendation.GetPeerRecommendations)
 		recAPI.POST("/peers/invite", recommendation.LogPeerInvite)
