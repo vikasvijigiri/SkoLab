@@ -11,10 +11,10 @@ export function Orbs() {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
       <motion.div
-        animate={{ scale: [1, 1.12, 1], opacity: [0.35, 0.5, 0.35] }}
+        animate={{ scale: [1, 1.12, 1], opacity: [0.45, 0.62, 0.45] }}
         transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
         className="absolute -top-40 -left-40 h-[560px] w-[560px] rounded-full"
-        style={{ background: "radial-gradient(circle, color-mix(in srgb, var(--primary) 32%, transparent) 0%, transparent 68%)" }}
+        style={{ background: "radial-gradient(circle, color-mix(in srgb, var(--primary) 42%, transparent) 0%, transparent 68%)" }}
       />
       <motion.div
         animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.42, 0.3] }}
