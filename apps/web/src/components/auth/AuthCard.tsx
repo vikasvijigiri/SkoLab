@@ -24,14 +24,20 @@ export function AuthCard({ children }: { children: React.ReactNode }) {
         </Link>
       </header>
 
-      <div className="relative z-10 flex flex-1 items-center justify-center px-4 pb-16">
+      <div className="relative z-10 flex flex-1 items-center justify-center px-4 pb-16 pt-4">
         <motion.div
           initial={{ opacity: 0, y: 16, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="w-full max-w-md rounded-[16px] border border-border bg-surface p-8 shadow-none"
+          className="w-full max-w-md"
         >
-          {children}
+          <div className="overflow-hidden rounded-[18px] border border-border bg-surface shadow-elevated">
+            <div className="h-1 w-full" style={{ background: "var(--gradient-hero)" }} aria-hidden />
+            <div className="p-8">{children}</div>
+          </div>
+          <p className="mt-5 text-center font-body text-[12px] text-text-muted">
+            © {new Date().getFullYear()} SkoLab · Terms · Privacy
+          </p>
         </motion.div>
       </div>
     </div>
