@@ -118,24 +118,21 @@ jobs:
         node-version: 22
 
     - name: Install workspace dependencies
-      # The committed lockfile is generated on Windows and records only the
-      # win32 build of lightningcss / @tailwindcss-oxide. npm does not
-      # cross-populate platform-specific optionalDependencies, and neither
-      # `npm ci` nor a plain `npm install` will swap in the Linux natives once
-      # the win32 one is locked — `next build` then fails with
-      # "Cannot find module '../lightningcss.linux-x64-gnu.node'". Dropping the
-      # lockfile forces a clean resolution for this runner. Every
-      # version-sensitive dep is pinned in package.json, so this stays
-      # reproducible in practice. Follow-up: regenerate the lockfile on a POSIX
-      # host and restore `npm ci`.
-      #
-      # KNOWN FLAKE: this lockfile-less resolve intermittently crashes npm
-      # arborist with "Cannot read properties of null (reading 'edgesOut')".
-      # The real fix is to regenerate package-lock.json on a Linux host and
-      # restore `npm ci`; retrying only sometimes clears it.
+      # The committed lockfile is Windows-generated and records only the win32
+      # lightningcss / @tailwindcss-oxide natives, so `npm ci` on Linux cannot
+      # resolve them — hence a lockfile-less install. That resolve was ALSO
+      # crashing every run with an npm arborist bug in peer-edge handling
+      # ("Cannot read properties of null (reading 'edgesOut')"), on Linux and
+      # Windows, on every npm version. `--legacy-peer-deps` skips that code
+      # path; a matrix probe passed it 6/6 where the default failed 4/4.
+      # Consequence: peer deps are no longer auto-installed, so any peer the
+      # build needs must be a direct dep (e.g. @testing-library/dom, added to
+      # apps/web/package.json). A short retry stays as insurance. Durable fix:
+      # a Linux-regenerated lockfile + `npm ci`.
       run: |
         rm -f package-lock.json
-        npm install || { rm -rf node_modules ~/.npm/_cacache; npm install; }
+        npm install --no-audit --no-fund --legacy-peer-deps \
+          || { rm -rf node_modules ~/.npm/_cacache; npm install --no-audit --no-fund --legacy-peer-deps; }
 
     # `next build` must run before standalone tsc: it generates `.next/types`,
     # which is where Next 16's `RouteContext` and route param types live. Running
