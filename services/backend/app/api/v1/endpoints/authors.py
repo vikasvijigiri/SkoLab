@@ -263,9 +263,7 @@ async def search_author(
     # Best for: returning the fast metadata response while works load from Firestore
     pg_row = await _pg_get_researcher_metrics(session, clean_id) if clean_id else None
     if pg_row:
-        logger.debug(
-            f"[search_author] PG researcher_metrics hit for: '{clean_id}'"
-        )
+        logger.debug(f"[search_author] PG researcher_metrics hit for: '{clean_id}'")
         # 1. Fetch works from PostgreSQL first (extremely fast)
         works_data = await _pg_get_researcher_works(session, clean_id)
 
