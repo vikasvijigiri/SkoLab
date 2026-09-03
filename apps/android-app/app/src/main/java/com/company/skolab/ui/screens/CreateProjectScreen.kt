@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.company.skolab.auth.AuthManager
 import com.company.skolab.di.AppDependencies
+import com.company.skolab.network.GatewayClient
 import com.company.skolab.model.SkoLabUser
 import com.company.skolab.ui.theme.*
 import androidx.compose.foundation.text.KeyboardOptions
@@ -278,7 +279,7 @@ fun CreateProjectScreen(
                     val requestBody = jsonBody.toString().toRequestBody(mediaType)
                     val request = Request.Builder().url(url).post(requestBody).build()
                     
-                    val client = OkHttpClient.Builder()
+                    val client = GatewayClient.instance.newBuilder()
                         .connectTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
                         .readTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
                         .build()
@@ -404,7 +405,7 @@ fun CreateProjectScreen(
                               android.net.Uri.encode(q) +
                               "&user_id=" + android.net.Uri.encode(currentUserId)
                               
-                    val client = OkHttpClient.Builder()
+                    val client = GatewayClient.instance.newBuilder()
                         .connectTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
                         .readTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
                         .build()
@@ -805,7 +806,7 @@ fun CreateProjectScreen(
                                                         try {
                                                             val base = com.company.skolab.network.ServerLocator.baseUrl.value ?: "http://10.0.2.2:8080"
                                                             val url = "$base/api/v1/recommendations/peers/invite"
-                                                            val client = OkHttpClient()
+                                                            val client = GatewayClient.instance
                                                             val jsonBody = JSONObject().apply {
                                                                 put("user_id", currentUserId)
                                                                 put("peer_email", suggestion.email)
@@ -1063,7 +1064,7 @@ fun CreateProjectScreen(
                                                         try {
                                                             val base = com.company.skolab.network.ServerLocator.baseUrl.value ?: "http://10.0.2.2:8080"
                                                             val url = "$base/api/v1/recommendations/peers/invite"
-                                                            val client = OkHttpClient()
+                                                            val client = GatewayClient.instance
                                                             val jsonBody = JSONObject().apply {
                                                                 put("user_id", currentUserId)
                                                                 put("peer_email", contact.email)
@@ -1100,7 +1101,7 @@ fun CreateProjectScreen(
                                                         try {
                                                             val base = com.company.skolab.network.ServerLocator.baseUrl.value ?: "http://10.0.2.2:8080"
                                                             val url = "$base/api/v1/recommendations/peers/invite"
-                                                            val client = OkHttpClient()
+                                                            val client = GatewayClient.instance
                                                             val jsonBody = JSONObject().apply {
                                                                 put("user_id", currentUserId)
                                                                 put("peer_phone", contact.phone)
