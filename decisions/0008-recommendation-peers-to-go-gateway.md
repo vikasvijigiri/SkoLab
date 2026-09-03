@@ -71,15 +71,29 @@ Cross-language parity is pinned by shared test vectors on both sides.
   both services' environments, `alembic upgrade head`, then
   `python scripts/backfill_email_bidx.py`.
 
+## Phase 0b — hard-auth flip (landed)
+
+The recommendations group in `main.go` now uses `auth.VerifyUser()` — 401
+without a valid Firebase token. Both clients attach one: Android via
+`network/AuthInterceptor.kt` (#27), web via `apiRequest({ idToken })`. The
+per-IP rate limit and the 200-identifier cap on `check-registered` remain as
+abuse limits on authenticated callers. `VerifyUserOptional` stays in
+`internal/auth/firebase.go` as the pattern for any future transitional
+cutover, but nothing uses it now.
+
+> **Old app builds** that predate #27 lose peer-autocomplete / invite-logging
+> (they get 401); the rest of the app is unaffected. Acceptable — the feature
+> degrades, it does not crash — but hold this PR's merge until an Android
+> release carrying #27's interceptor is out.
+
 ## Consequences
 
-- The enumeration oracle is bounded (rate limit + 200-id cap). The hard-auth
-  flip (`VerifyUserOptional` → `VerifyUser`) is Phase 0b's remaining step,
-  gated on the Android client attaching a token.
+- The enumeration oracle is closed for tokenless callers (401) and bounded for
+  authenticated ones (rate limit + 200-id cap).
 - `check-registered` resolves emails again once the migration + backfill run;
   until then `registered_emails` is empty (no error).
-- Web `logPeerInvite` sends the Firebase token (optional today, ready for the
-  flip). Android is unchanged and keeps working via the optional path.
+- Web `logPeerInvite` / `dismissDailyFeedItem` send the Firebase token; Android
+  attaches it via the OkHttp interceptor (#27).
 - One more slice of Python is gone; `services/backend` moves toward LLM-only.
 - See `docs/research/2026-09-03-python-llm-only-boundary.md` for the pattern
   grounding and `docs/plans/2026-09-03-python-llm-only-phase0.md` for the full
