@@ -1,7 +1,42 @@
+import contextlib
 import httpx
-from typing import List, Dict, Optional, Any
+from typing import AsyncIterator, List, Dict, Optional, Any
 from app.core.config import settings
 from app.core.circuit_breaker import openalex_breaker, CircuitBreakerOpenError
+
+# ── Shared HTTP client ──────────────────────────────────────────────────────
+# One process-wide AsyncClient with a bounded pool, mirroring
+# app/services/ai/llm_service.py. The previous `async with httpx.AsyncClient()`
+# inside every method paid a fresh TCP + TLS handshake to api.openalex.org on
+# every call and set no ceiling on concurrent connections. Closed from the app
+# lifespan via aclose_openalex_client().
+_http_client: Optional[httpx.AsyncClient] = None
+
+
+def _get_http_client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient(
+            timeout=settings.http_timeout_seconds,
+            limits=httpx.Limits(
+                max_connections=20, max_keepalive_connections=10
+            ),
+        )
+    return _http_client
+
+
+@contextlib.asynccontextmanager
+async def _client() -> AsyncIterator[httpx.AsyncClient]:
+    """Hand out the shared client without closing it on block exit."""
+    yield _get_http_client()
+
+
+async def aclose_openalex_client() -> None:
+    """Release the shared client's keep-alive connections (call on shutdown)."""
+    global _http_client
+    if _http_client is not None and not _http_client.is_closed:
+        await _http_client.aclose()
+    _http_client = None
 
 
 def extract_field_and_expertise(
@@ -185,9 +220,7 @@ class OpenAlexService:
         params = {"mailto": self.email}
         try:
             await openalex_breaker._check_state()
-            async with httpx.AsyncClient(
-                timeout=settings.http_timeout_seconds
-            ) as client:
+            async with _client() as client:
                 res = await client.get(url, params=params, headers=self.headers)
                 if res.status_code == 200:
                     await openalex_breaker._on_success()
@@ -215,9 +248,7 @@ class OpenAlexService:
         params = {"search": query, "per_page": per_page, "mailto": self.email}
         try:
             await openalex_breaker._check_state()
-            async with httpx.AsyncClient(
-                timeout=settings.http_timeout_seconds
-            ) as client:
+            async with _client() as client:
                 res = await client.get(url, params=params, headers=self.headers)
                 if res.status_code == 200:
                     await openalex_breaker._on_success()
@@ -259,9 +290,7 @@ class OpenAlexService:
             "mailto": self.email,
         }
         try:
-            async with httpx.AsyncClient(
-                timeout=settings.http_timeout_seconds
-            ) as client:
+            async with _client() as client:
                 res = await client.get(url, params=params, headers=self.headers)
                 if res.status_code == 200:
                     return res.json().get("results", [])
@@ -290,9 +319,7 @@ class OpenAlexService:
             "mailto": self.email,
         }
         try:
-            async with httpx.AsyncClient(
-                timeout=settings.http_timeout_seconds
-            ) as client:
+            async with _client() as client:
                 res = await client.get(url, params=params, headers=self.headers)
                 if res.status_code == 200:
                     return res.json().get("results", [])
@@ -317,9 +344,7 @@ class OpenAlexService:
             "mailto": self.email,
         }
         try:
-            async with httpx.AsyncClient(
-                timeout=settings.http_timeout_seconds
-            ) as client:
+            async with _client() as client:
                 res = await client.get(url, params=params, headers=self.headers)
                 if res.status_code == 200:
                     return res.json().get("results", [])
@@ -345,9 +370,7 @@ class OpenAlexService:
             f"concepts.id:{concept_id},{date_filter}",
         ]
         try:
-            async with httpx.AsyncClient(
-                timeout=settings.http_timeout_seconds
-            ) as client:
+            async with _client() as client:
                 for filt in filters_to_try:
                     params = {
                         "filter": filt,
@@ -382,9 +405,7 @@ class OpenAlexService:
         }
         try:
             await openalex_breaker._check_state()
-            async with httpx.AsyncClient(
-                timeout=settings.http_timeout_seconds
-            ) as client:
+            async with _client() as client:
                 res = await client.get(url, params=params, headers=self.headers)
                 if res.status_code == 200:
                     await openalex_breaker._on_success()
@@ -428,9 +449,7 @@ class OpenAlexService:
         }
         try:
             await openalex_breaker._check_state()
-            async with httpx.AsyncClient(
-                timeout=settings.http_timeout_seconds
-            ) as client:
+            async with _client() as client:
                 res = await client.get(url, params=params, headers=self.headers)
                 if res.status_code == 200:
                     await openalex_breaker._on_success()
