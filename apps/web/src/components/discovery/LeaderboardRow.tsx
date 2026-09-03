@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { prefetchAuthor } from "@/lib/api/prefetch";
+import { cn, focusRing } from "@/lib/utils";
 import { DURATION_NORMAL, EASE_STANDARD } from "@/lib/motion";
 import type { LeaderboardEntry } from "@/lib/types";
 
@@ -31,6 +32,7 @@ export function LeaderboardRow({ entry, index }: { entry: LeaderboardEntry; inde
         href={`/author/${encodeURIComponent(entry.id)}?name=${encodeURIComponent(entry.user_name)}`}
         onMouseEnter={warm}
         onFocus={warm}
+        className={cn("block", focusRing)}
       >
         <Card glow interactive className="flex h-full items-center gap-3">
           <div className="relative shrink-0">
