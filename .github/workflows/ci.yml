@@ -125,8 +125,10 @@ jobs:
       # ("Cannot read properties of null (reading 'edgesOut')"), on Linux and
       # Windows, on every npm version. `--legacy-peer-deps` skips that code
       # path; a matrix probe passed it 6/6 where the default failed 4/4.
-      # A short retry stays as insurance. Durable fix: a Linux-regenerated
-      # lockfile + `npm ci`.
+      # Consequence: peer deps are no longer auto-installed, so any peer the
+      # build needs must be a direct dep (e.g. @testing-library/dom, added to
+      # apps/web/package.json). A short retry stays as insurance. Durable fix:
+      # a Linux-regenerated lockfile + `npm ci`.
       run: |
         rm -f package-lock.json
         npm install --no-audit --no-fund --legacy-peer-deps \
