@@ -121,6 +121,24 @@ class CircuitBreaker:
             elif self._failure_count >= self.failure_threshold:
                 await self._transition_to_open()
 
+    # ── Imperative API (for call sites that can't use the decorator, e.g. a
+    #    provider-fallback loop that must skip one provider but try others) ──
+
+    async def allow(self) -> bool:
+        """True if a call may proceed now. Transitions OPEN→HALF_OPEN when the
+        cooldown has elapsed; returns False while still OPEN."""
+        try:
+            await self._check_state()
+            return True
+        except CircuitBreakerOpenError:
+            return False
+
+    async def record_success(self) -> None:
+        await self._on_success()
+
+    async def record_failure(self, exc: Exception) -> None:
+        await self._on_failure(exc)
+
     def call(self, func: Callable):
         """Decorator — wraps an async callable with circuit-breaker logic."""
 

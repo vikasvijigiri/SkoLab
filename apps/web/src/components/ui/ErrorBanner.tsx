@@ -22,9 +22,9 @@ export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: (
 export function friendlyFirestoreError(error: { code?: string; message?: string }): string {
   switch (error.code) {
     case "permission-denied":
-      return "You don't have permission to access this — check Firestore security rules for this collection.";
+      return "You don't have permission to view this.";
     case "unavailable":
-      return "Couldn't reach Firestore — check your connection and try again.";
+      return "You appear to be offline — check your connection and try again.";
     case "not-found":
       return "This data no longer exists.";
     default:

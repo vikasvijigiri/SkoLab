@@ -181,9 +181,16 @@ export default function HomePage() {
             </div>
           )}
           {!feedLoading && feed.length === 0 && (
-            <p className="font-body text-[13px] text-text-muted">
-              No recommendations yet — make sure the backend is running and reachable.
-            </p>
+            <div className="rounded-[10px] border border-dashed border-border px-4 py-6 text-center">
+              <Sparkles size={18} className="mx-auto text-text-muted" />
+              <p className="mt-2 font-body text-[13px] font-medium text-text-primary">
+                No recommendations yet
+              </p>
+              <p className="mt-0.5 font-body text-[12px] leading-relaxed text-text-muted">
+                Add a research focus to your profile and fresh papers in your
+                field will show up here.
+              </p>
+            </div>
           )}
           <div className="flex flex-col gap-3 lg:max-h-[calc(100vh-10rem)] lg:overflow-y-auto lg:pr-1">
             {feed.map((item, i) => (
