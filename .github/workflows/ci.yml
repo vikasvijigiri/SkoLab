@@ -48,6 +48,8 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: "3.10"
+        cache: pip
+        cache-dependency-path: services/backend/requirements-dev.txt
 
     - name: Set up Go
       uses: actions/setup-go@v5
@@ -72,7 +74,9 @@ jobs:
         cd services/backend
         python -m venv venv
         source venv/bin/activate
-        pip install -r requirements-dev.txt
+        # torch + the ML stack is ~2 GB from PyPI; the default single attempt
+        # times out intermittently on files.pythonhosted.org.
+        pip install --retries 6 --timeout 180 -r requirements-dev.txt
         # Create dummy service-account.json to satisfy SRE key audit
         echo '{"type": "service_account"}' > service-account.json
         # Bootstrap the schema against the CI Postgres (conftest only does this
@@ -80,7 +84,10 @@ jobs:
         # The script waits for the service container to actually accept queries
         # and retries init_db(), which otherwise fails flakily mid-transaction.
         python ci_bootstrap_db.py
-        pytest tests/
+        # Coverage floor as a no-regression ratchet. Real number today is ~40%
+        # (measured against this Postgres job); --cov-fail-under=38 leaves a
+        # little slack. Raise it as tests land — never lower it.
+        pytest tests/ --cov=app --cov-report=term-missing:skip-covered --cov-fail-under=38
 
     - name: Verify Go Gateway Build
       run: |
