@@ -47,17 +47,33 @@ async def force_cleanup_user(db, user_id):
 
 
 @pytest.mark.asyncio
-async def test_scraper_user_agent_blocking():
-    """Verify that requests from common scraper User-Agents are blocked with 403."""
+async def test_scraper_user_agent_is_no_longer_blocked():
+    """The User-Agent substring "WAF" block was removed (Stream B hardening):
+    it blocked the repo's own k6 / Playwright / uptime tooling and stopped
+    nothing real. A scraper-looking UA now gets a normal response."""
     async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
-        headers = {"user-agent": "python-requests/2.28.1"}
-        response = await ac.get("/health", headers=headers)
-        assert response.status_code == 403
-        assert "Automated scraping signatures detected" in response.json()["detail"]
+        response = await ac.get(
+            "/health", headers={"user-agent": "python-requests/2.28.1"}
+        )
+        assert response.status_code != 403
+        assert response.status_code in (200, 503)  # health's own dynamic status
 
-        headers_valid = {"user-agent": "SkoLabMobileApp/1.0"}
-        response_valid = await ac.get("/", headers=headers_valid)
+        response_valid = await ac.get(
+            "/", headers={"user-agent": "SkoLabMobileApp/1.0"}
+        )
         assert response_valid.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_xss_query_string_is_not_waf_blocked():
+    """The query-string "XSS signature" block was removed too — a `<script>` in
+    a query param is defended by output encoding + Pydantic validation, not a
+    400 from a substring scan. The request reaches routing (404 here), not a
+    WAF 400."""
+    async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
+        response = await ac.get("/api/v1/does-not-exist?q=<script>alert(1)</script>")
+        assert response.status_code != 400
+        assert response.status_code == 404
 
 
 @pytest.mark.asyncio
