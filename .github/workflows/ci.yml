@@ -26,6 +26,16 @@ jobs:
           --health-retries 5
 
     steps:
+    - name: Free disk space
+      # `pip install -r requirements-dev.txt` pulls torch + sentence-transformers
+      # (~2 GB unpacked). On a stock ubuntu-latest runner that tips the root FS
+      # over and the install dies with `[Errno 28] No space left on device`,
+      # which is what had this job red on every commit. Reclaiming the unused
+      # Android SDK, .NET and Haskell toolchains frees ~20 GB.
+      run: |
+        sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+        df -h /
+
     - name: Checkout repository
       uses: actions/checkout@v4
 
@@ -82,7 +92,11 @@ jobs:
       run: |
         cd services/backend-go
         go vet ./...
-        go test ./... -v
+        # -cover across multiple packages invokes the `covdata` tool, which the
+        # setup-go toolchain here does not ship ("go: no such tool covdata") and
+        # which fails the step even though every test passes. -race is the check
+        # that matters.
+        go test ./... -race -v
 
   web-verification:
     name: Web Build, Typecheck, Lint & Test
@@ -107,9 +121,14 @@ jobs:
       # version-sensitive dep is pinned in package.json, so this stays
       # reproducible in practice. Follow-up: regenerate the lockfile on a POSIX
       # host and restore `npm ci`.
+      #
+      # KNOWN FLAKE: this lockfile-less resolve intermittently crashes npm
+      # arborist with "Cannot read properties of null (reading 'edgesOut')".
+      # The real fix is to regenerate package-lock.json on a Linux host and
+      # restore `npm ci`; retrying only sometimes clears it.
       run: |
         rm -f package-lock.json
-        npm install
+        npm install || { rm -rf node_modules ~/.npm/_cacache; npm install; }
 
     # `next build` must run before standalone tsc: it generates `.next/types`,
     # which is where Next 16's `RouteContext` and route param types live. Running
