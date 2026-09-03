@@ -84,8 +84,10 @@ export default function OnboardingPage() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 transition={TRANSITION_FAST}
-                className={`cursor-pointer rounded-full px-3 py-1.5 font-body text-[12px] font-medium transition-colors duration-[var(--motion-fast)] ${
-                  focus === opt ? "bg-primary text-text-on-primary" : "bg-surface-subtle text-text-secondary"
+                className={`cursor-pointer rounded-full border px-3 py-1.5 font-body text-[12px] font-medium transition-colors duration-[var(--motion-fast)] ${
+                  focus === opt
+                    ? "border-primary bg-primary text-text-on-primary shadow-[var(--shadow-glow-primary)]"
+                    : "border-border-input bg-surface-input text-text-secondary hover:border-primary/40 hover:text-text-primary"
                 }`}
                 style={{ transitionTimingFunction: "var(--ease-standard)" }}
               >

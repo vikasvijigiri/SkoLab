@@ -58,10 +58,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
     const variants: Record<Variant, string> = {
       primary: cn(
-        "h-13 text-[14px] shadow-card",
+        "h-12 text-[14px] shadow-card",
         error
           ? "bg-notification text-white disabled:opacity-50"
-          : "bg-primary text-text-on-primary disabled:opacity-30 disabled:text-text-on-primary/50"
+          : "bg-primary text-text-on-primary disabled:bg-surface-subtle disabled:text-text-muted disabled:shadow-none"
       ),
       outlined: cn(
         "h-11 text-[13px] border bg-transparent",

@@ -39,6 +39,14 @@
   --match-bg: #eef2ff;
   --match-text: #4338ca;
 
+  /* Form controls — crisp, bordered fields on their own surface, not a flat
+     grey fill. --ring is derived from --primary via var(), so it re-resolves
+     per theme at the element that uses it; one definition here is enough. */
+  --surface-input: #ffffff;
+  --border-input: #d4d4d8;
+  --ring: color-mix(in srgb, var(--primary) 22%, transparent);
+  --shadow-focus: 0 0 0 3px var(--ring);
+
   /* Motion — plain vars (used via arbitrary values, e.g. duration-[var(--motion-fast)]) */
   --motion-fast: 150ms;
   --motion-normal: 300ms;
@@ -86,6 +94,9 @@
     --match-bg: #1e1b4b;
     --match-text: #a5b4fc;
 
+    --surface-input: #1c1c21;
+    --border-input: #3a3a42;
+
     --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 6px rgba(0, 0, 0, 0.4);
     --shadow-card-hover: 0 4px 10px rgba(0, 0, 0, 0.5), 0 16px 32px rgba(0, 0, 0, 0.55);
@@ -113,6 +124,8 @@
   --accent-rose: #fb7185;
   --match-bg: #1e1b4b;
   --match-text: #a5b4fc;
+  --surface-input: #1c1c21;
+  --border-input: #3a3a42;
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 6px rgba(0, 0, 0, 0.4);
   --shadow-card-hover: 0 4px 10px rgba(0, 0, 0, 0.5), 0 16px 32px rgba(0, 0, 0, 0.55);
@@ -138,6 +151,8 @@
   --accent-rose: #e11d48;
   --match-bg: #eef2ff;
   --match-text: #4338ca;
+  --surface-input: #ffffff;
+  --border-input: #d4d4d8;
   --shadow-xs: 0 1px 2px rgba(24, 24, 27, 0.04);
   --shadow-card: 0 1px 2px rgba(24, 24, 27, 0.04), 0 1px 6px rgba(24, 24, 27, 0.05);
   --shadow-card-hover: 0 4px 10px rgba(24, 24, 27, 0.06), 0 12px 28px rgba(24, 24, 27, 0.08);
@@ -150,6 +165,8 @@
   --color-page-bg: var(--page-bg);
   --color-surface: var(--surface);
   --color-surface-subtle: var(--surface-subtle);
+  --color-surface-input: var(--surface-input);
+  --color-border-input: var(--border-input);
   --color-primary: var(--primary);
   --color-primary-dark: var(--primary-dark);
   --color-primary-deeper: var(--primary-deeper);

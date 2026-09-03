@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Orbs } from "@/components/ui/Orbs";
 import { Reveal } from "@/components/ui/Reveal";
-import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
+import { HeroPreview } from "@/components/ui/HeroPreview";
 import { MagneticCTA } from "@/components/ui/MagneticCTA";
 import { EASE_STANDARD } from "@/lib/motion";
 
@@ -42,11 +42,6 @@ const FEATURES = [
   },
 ];
 
-const STATS = [
-  { to: 8, suffix: "", label: "Impact Metric Axes" },
-  { to: 5, suffix: "", label: "Live Collab Modes" },
-];
-
 export default function LandingPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -69,7 +64,7 @@ export default function LandingPage() {
 
       <header className="relative z-10 flex items-center justify-between px-6 py-6 md:px-12">
         <span className="font-display text-[20px] font-bold text-text-primary">SkoLab</span>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <ThemeToggle />
           <Link
             href="/login"
@@ -77,10 +72,16 @@ export default function LandingPage() {
           >
             Sign in
           </Link>
+          <Link
+            href="/signup"
+            className="hidden rounded-md bg-primary px-4 py-2 font-body text-[13px] font-semibold text-text-on-primary shadow-card transition-transform hover:scale-[1.03] sm:inline-block"
+          >
+            Get started
+          </Link>
         </div>
       </header>
 
-      <main className="relative z-10 flex flex-1 flex-col items-center px-6 pb-24 pt-12 text-center md:pt-20">
+      <main className="relative z-10 flex flex-1 flex-col items-center px-6 pb-16 pt-10 text-center md:pt-16">
         <motion.span
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -136,24 +137,20 @@ export default function LandingPage() {
           </Link>
         </motion.div>
 
-        <div className="mt-14 flex gap-10 sm:gap-16">
-          {STATS.map((s, i) => (
-            <motion.div
-              key={s.label}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.4 + i * 0.08 }}
-              className="text-center"
-            >
-              <p className="font-mono text-[26px] font-bold text-text-primary">
-                <AnimatedCounter to={s.to} suffix={s.suffix} />
-              </p>
-              <p className="mt-0.5 font-body text-[11px] uppercase tracking-wide text-text-muted">{s.label}</p>
-            </motion.div>
-          ))}
+        <HeroPreview />
+
+        <div className="mt-12 flex flex-col items-center gap-3">
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-muted">
+            Built on trusted open research data
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 font-body text-[13px] font-semibold text-text-secondary">
+            {["OpenAlex", "Crossref", "ORCID", "arXiv", "Semantic Scholar"].map((src) => (
+              <span key={src}>{src}</span>
+            ))}
+          </div>
         </div>
 
-        <div className="mt-16 grid w-full max-w-5xl grid-cols-1 gap-4 text-left sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-14 grid w-full max-w-5xl grid-cols-1 gap-4 text-left sm:grid-cols-2 lg:grid-cols-4">
           {FEATURES.map((f, i) => (
             <Reveal key={f.title} delay={i * 0.08}>
               <Card glow accentColor={f.accent} className="h-full">
@@ -175,6 +172,19 @@ export default function LandingPage() {
           ))}
         </div>
       </main>
+
+      <footer className="relative z-10 border-t border-border px-6 py-8 md:px-12">
+        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-3 sm:flex-row">
+          <span className="font-display text-[14px] font-bold text-text-primary">SkoLab</span>
+          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 font-body text-[12.5px] text-text-muted">
+            <Link href="/login" className="transition-colors hover:text-primary">Sign in</Link>
+            <Link href="/signup" className="transition-colors hover:text-primary">Get started</Link>
+            <span className="transition-colors hover:text-primary">Privacy</span>
+            <span className="transition-colors hover:text-primary">Terms</span>
+          </div>
+          <span className="font-body text-[12px] text-text-muted">© {new Date().getFullYear()} SkoLab</span>
+        </div>
+      </footer>
     </div>
   );
 }
