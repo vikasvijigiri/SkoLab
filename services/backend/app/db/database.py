@@ -103,11 +103,16 @@ def after_cursor_execute(conn, cursor, statement, parameters, context, executema
                 "query_slow": True,
             },
         )
-        # Execute EXPLAIN automatically (avoid infinite recursion by checking statement)
-        if not statement.strip().upper().startswith("EXPLAIN"):
+        # Auto-EXPLAIN plain read queries only. `EXPLAIN CREATE TABLE ...` /
+        # `EXPLAIN CREATE INDEX ...` / `EXPLAIN ALTER ...` are syntax errors in
+        # PostgreSQL, and a failed statement issued from inside this handler
+        # aborts the caller's transaction ("current transaction is aborted") —
+        # which is exactly what broke schema bootstrap against a real Postgres
+        # in CI, since first-run DDL on a cold container can exceed 100 ms.
+        head = statement.lstrip()[:6].upper()
+        if head.startswith(("SELECT", "WITH")):
             try:
-                explain_query = f"EXPLAIN {statement}"
-                res = conn.execute(text(explain_query), parameters)
+                res = conn.execute(text(f"EXPLAIN {statement}"), parameters)
                 plan = "\n".join(row[0] for row in res.fetchall())
                 db_logger.info(f"EXPLAIN Plan for slow query:\n{plan}")
             except Exception as explain_exc:
