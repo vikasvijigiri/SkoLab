@@ -1,13 +1,18 @@
-# Render Blueprint — the Go API gateway (services/backend-go) on the free plan.
+# Render Blueprint — the Go API gateway AND the Python/FastAPI backend, both
+# on the free plan. The Next.js frontend goes to Vercel; see DEPLOY.md.
 #
-# The Next.js frontend goes to Vercel and the Python/ML backend to a Hugging
-# Face Space; see DEPLOY.md for the full runbook. Only the gateway lives here
-# because Render's free web service (512 MB) fits a ~20 MB Go binary but not a
-# PyTorch image.
+# The Python service used to target a Hugging Face Docker Space, but HF moved
+# Docker Spaces behind a paid plan (2026-09). It now fits Render's free 512 MB
+# tier because embeddings run via the Hugging Face Inference API instead of a
+# bundled PyTorch model (see app/services/ai/embedding_service.py) — the image
+# dropped from ~2.5 GB to ~350 MB.
 #
 # First deploy: Render dashboard -> New -> Blueprint -> pick this repo. Render
-# reads this file, creates the service, and prompts for every `sync: false`
+# reads this file, creates both services, and prompts for every `sync: false`
 # value below. Redeploys happen on push to `branch`.
+#
+# After the Python service's first successful deploy, set the gateway's
+# PYTHON_BACKEND_URL to `https://skolab-backend-py.onrender.com`.
 
 services:
   - type: web
@@ -29,7 +34,9 @@ services:
       # Fail Firebase auth closed instead of falling back to a dev user.
       - key: GIN_MODE
         value: release
-      # https URL of the Hugging Face Space running services/backend.
+      # Full https URL of the skolab-backend-py service below, e.g.
+      # https://skolab-backend-py.onrender.com — set it after that service is
+      # live (Render `fromService` can't supply the scheme the gateway needs).
       - key: PYTHON_BACKEND_URL
         sync: false
       # Supabase "Connection string" -> "URI", TRANSACTION pooler (port 6543).
@@ -58,3 +65,56 @@ services:
       # /etc/secrets), then keep this value pointing at it.
       - key: GOOGLE_APPLICATION_CREDENTIALS
         value: /etc/secrets/service-account.json
+
+  # ── Python / FastAPI backend (services/backend) ────────────────────────────
+  - type: web
+    name: skolab-backend-py
+    runtime: docker
+    repo: https://github.com/vikasvijigiri/SkoLab
+    branch: main
+    plan: free
+    region: oregon                      # co-locate with the gateway
+    dockerfilePath: ./services/backend/Dockerfile
+    dockerContext: ./services/backend
+    healthCheckPath: /livez             # liveness only — no dependency calls
+    envVars:
+      - key: APP_ENV
+        value: production
+      # The Dockerfile CMD binds :8000; tell Render's router to match.
+      - key: PORT
+        value: "8000"
+      # One uvicorn worker fits 512 MB. Raise on a bigger instance.
+      - key: WEB_CONCURRENCY
+        value: "1"
+      # Supabase Transaction pooler URI, asyncpg scheme:
+      # postgresql+asyncpg://postgres.<ref>:<pwd>@...pooler.supabase.com:6543/postgres
+      - key: DATABASE_URL
+        sync: false
+      # REQUIRED in production — the app refuses to boot with the shipped
+      # default or an empty value. Generate:
+      #   python -c "import base64,os;print(base64.b64encode(os.urandom(32)).decode())"
+      - key: DATABASE_ENCRYPTION_KEY
+        sync: false
+      - key: GROQ_API
+        sync: false
+      # Any random string — gates the /metrics and /ai_status admin routes.
+      - key: SRE_SECURITY_TOKEN
+        sync: false
+      # Hugging Face token (read scope) — enables the embedding backend. Unset
+      # ⇒ recommendation match scores floor to the minimum but nothing 500s.
+      - key: HF_INFERENCE_TOKEN
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      # Set to "1" for the FIRST deploy only — the app then runs
+      # Base.metadata.create_all to build the schema (the Alembic migrations
+      # cannot bootstrap an empty DB). Blank it once /livez is green.
+      - key: RUN_DB_CREATE_ALL
+        sync: false
+      # Optional: upload the Firebase service-account JSON as a Secret File
+      # named service-account.json and point this at it. Only the /agent/chat
+      # route needs it; every other route works without.
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        sync: false

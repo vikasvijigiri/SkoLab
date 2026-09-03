@@ -100,6 +100,22 @@ class Settings:
         default_factory=lambda: os.environ.get("openalex_api", "")
     )
 
+    # ── Embeddings ──────────────────────────────────────────────────────────
+    # When set, app/services/ai/embedding_service.py uses the Hugging Face
+    # Inference API for BAAI/bge-small-en-v1.5 instead of a local
+    # sentence-transformers model — no PyTorch in the image, fits a 512 MB
+    # box. Unset ⇒ fall back to the local model if the package is installed
+    # (dev/CI), else degrade to zero vectors. Base URL is overridable in case
+    # HF moves the serverless endpoint.
+    hf_inference_token: str = field(
+        default_factory=lambda: os.environ.get("HF_INFERENCE_TOKEN", "")
+    )
+    hf_inference_base_url: str = field(
+        default_factory=lambda: os.environ.get(
+            "HF_INFERENCE_BASE_URL", "https://api-inference.huggingface.co/models"
+        )
+    )
+
     # ── Runtime Timeout Controls (env-driven — no rebuild required) ──────────
     # Set HTTP_TIMEOUT_SECONDS in production to adjust all external API timeouts.
     # Set LLM_TIMEOUT_SECONDS to tune LLM endpoint response patience.
