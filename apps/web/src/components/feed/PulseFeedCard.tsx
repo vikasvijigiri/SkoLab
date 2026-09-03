@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { MathText } from "@/components/ui/MathText";
 import { prefetchPaper } from "@/lib/api/prefetch";
+import { cn, focusRing } from "@/lib/utils";
 import type { DailyFeedItem } from "@/lib/types";
 
 function authorLabel(authorPair: string) {
@@ -49,7 +50,7 @@ export function PulseFeedCard({
 
       <Link
         href={`/paper/${encodeURIComponent(item.id)}`}
-        className="group"
+        className={cn("group", focusRing)}
         onMouseEnter={warm}
         onFocus={warm}
       >

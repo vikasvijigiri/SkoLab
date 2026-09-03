@@ -88,7 +88,7 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-6 md:px-8">
         <ErrorBanner
-          message="Couldn't load this researcher's profile — the backend may be unreachable."
+          message="We couldn't load this researcher's profile. Give it another try in a moment."
           onRetry={() => refetch()}
         />
       </div>

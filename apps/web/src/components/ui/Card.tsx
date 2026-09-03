@@ -49,8 +49,9 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       <div
         ref={ref}
         className={cn(
-          "rounded-lg bg-surface p-4 shadow-card transition-[transform,box-shadow] duration-[var(--motion-fast)]",
-          interactive && "cursor-pointer hover:shadow-card-hover active:scale-[0.99]",
+          "rounded-lg bg-surface p-4 shadow-card transition-[transform,box-shadow] duration-[var(--motion-normal)]",
+          interactive &&
+            "cursor-pointer hover:-translate-y-0.5 hover:shadow-card-hover active:translate-y-0 active:scale-[0.99]",
           className
         )}
         style={sharedStyle}
