@@ -19,6 +19,7 @@ import (
 	"github.com/skolab/backend-go/internal/db"
 	"github.com/skolab/backend-go/internal/middleware"
 	"github.com/skolab/backend-go/internal/quest"
+	"github.com/skolab/backend-go/internal/recommendation"
 	"github.com/skolab/backend-go/internal/user"
 	"github.com/skolab/backend-go/internal/websocket"
 	"golang.org/x/time/rate"
@@ -106,6 +107,21 @@ func main() {
 	{
 		questsAPI.GET("/users/quests", quest.GetUserQuests(proxy))
 		questsAPI.POST("/users/quests/complete", quest.CompleteQuest)
+	}
+
+	// ── Recommendations: CoLab peer autocomplete — Go PG only, no AI ─────────
+	// Ported from services/backend/app/domains/recommendation. Transitional
+	// optional auth: installed Android builds send no token yet, so a hard
+	// VerifyUser() would break them. A tight per-IP limit + a batch cap on
+	// check-registered bound the enumeration risk in the meantime. Flip to
+	// VerifyUser() once tokenless traffic drops — decisions/0008.
+	recRL := middleware.NewRateLimiter(rate.Limit(5), 5)
+	recAPI := r.Group("/api/v1/recommendations")
+	recAPI.Use(auth.VerifyUserOptional(), recRL.Limit())
+	{
+		recAPI.GET("/peers", recommendation.GetPeerRecommendations)
+		recAPI.POST("/peers/invite", recommendation.LogPeerInvite)
+		recAPI.POST("/peers/check-registered", recommendation.CheckRegisteredPeers)
 	}
 
 	// ── Fallback: everything else → Python (AI / ML / enrichment) ────────────

@@ -238,3 +238,18 @@ first — and I'll scope it" / "okay go ahead with it"
   `main.go`. Provisioning or rotating any Firebase credential.
 
 **Status:** Done — release now returns 503 instead of dev_user; 4 tests added to internal/auth (was 0). Mutation-tested: the release test fails (200, want 503) against the pre-fix code.
+
+---
+
+## 2026-09-03 — Critique the backend + set "Python = LLM only" rule + Phase 0
+
+**Asked:** "what else issues are there ... find gaps ... rate our complete backend" → then "use python only for LLM related services, rest use industry standard ones, strictly" → "Plan + start P0".
+
+1. Delivered a full backend critique (grade C+): auth not enforced at the Python layer (IDOR / `check-registered` enumeration oracle), 220 swallowed exceptions, 3.2k-line `pipeline_services.py`, runtime schema patching, per-process rate limiter/metrics, typecheck green by accident. `.env` verified gitignored — no repo secret leak.
+2. Recorded the owner's hard rule as memory `python-llm-only-boundary` and researched the industry-standard shape — `docs/research/2026-09-03-python-llm-only-boundary.md` (Azure *Gateway Offloading* / *Bulkhead*; business logic goes in a service *behind* the gateway; embeddings stay Python).
+3. Wrote `docs/plans/2026-09-03-python-llm-only-phase0.md` — 6-phase roadmap + executable Phase 0.
+4. **Phase 0 implemented:** ported `/api/v1/recommendations/peers*` (peers autocomplete, invite, check-registered) from Python to the Go gateway (`internal/recommendation`, native pgx), behind a transitional `VerifyUserOptional` + a 5 rps/IP limit + a 200-identifier cap that bounds the enumeration oracle. Deleted the 4 Python modules + their test; kept `engine.py` (embedding math). Web `logPeerInvite` now threads a Firebase token. `decisions/0008` records it.
+5. Found while porting: `users.email` is Fernet-encrypted (random IV) so email matching never worked in Python either — Go port matches plaintext columns only; a blind-index column is the Phase 0b fix.
+6. Verified: `pytest` targeted `14 passed`, `--collect-only` 150 (−2), `ruff` clean, `import app.main` OK, web `tsc` no new errors. Go (`go vet`/`go test`) is CI-only — no Go toolchain on this machine.
+
+**Status:** Phase 0 done pending CI green on `feat/peers-to-go-gateway`. Phases 0b–5 tracked in the plan; not started.

@@ -12,7 +12,7 @@ import { useAuth } from "@/lib/hooks/AuthProvider";
 import type { CollabProject } from "@/lib/types";
 
 export function MembersTab({ project }: { project: CollabProject }) {
-  const { user } = useAuth();
+  const { user, getIdToken } = useAuth();
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +36,10 @@ export function MembersTab({ project }: { project: CollabProject }) {
         setStatus(`${researcher.name} added to the workspace.`);
         setEmail("");
       } else {
-        if (user) await logPeerInvite(user.uid, { email: email.trim() }).catch(() => {});
+        if (user) {
+          const idToken = await getIdToken();
+          await logPeerInvite(idToken, user.uid, { email: email.trim() }).catch(() => {});
+        }
         setStatus("No SkoLab account found for that email — an invite was logged.");
       }
     } catch (err) {
