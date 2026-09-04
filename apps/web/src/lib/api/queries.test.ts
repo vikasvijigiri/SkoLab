@@ -6,7 +6,9 @@ import {
   openAlexWorksQuery,
   paperAnalysisQuery,
   matchGrantsQuery,
+  dailyFeedQuery,
 } from "./queries";
+import { ApiError, ApiPending } from "./client";
 import { makeAuthorResponse } from "@/test/fixtures";
 import { server } from "@/test/handlers";
 import { http, HttpResponse } from "msw";
@@ -63,5 +65,47 @@ describe("query option factories", () => {
   it("matchGrantsQuery scopes its key to the author id", () => {
     expect(matchGrantsQuery("A1").queryKey).toEqual(["grants", "A1"]);
     expect(matchGrantsQuery("").enabled).toBe(false);
+  });
+
+  describe("dailyFeedQuery — 202/Retry-After polling", () => {
+    // Regression coverage for the daily_feed prod incident: uncached
+    // generation can take up to ~2m48s (feed.py), so the backend responds
+    // 202 + Retry-After rather than holding the connection open (see
+    // services/backend/app/core/pending_compute.py). The query must poll
+    // on that signal well past providers.tsx's global 1-retry default,
+    // and must not treat a genuine error the same way.
+
+    it("queryFn throws ApiPending with the Retry-After value in ms on a 202", async () => {
+      server.use(
+        http.get(`${API}/api/v1/daily_feed`, () =>
+          HttpResponse.json([], { status: 202, headers: { "Retry-After": "4" } }),
+        ),
+      );
+      await expect(dailyFeedQuery("A1").queryFn!({} as never)).rejects.toMatchObject({
+        retryAfterMs: 4000,
+      });
+    });
+
+    it("retry keeps going on ApiPending past the global 1-retry default", () => {
+      const { retry } = dailyFeedQuery("A1");
+      expect(typeof retry).toBe("function");
+      const shouldRetry = retry as (failureCount: number, error: unknown) => boolean;
+      expect(shouldRetry(1, new ApiPending(4000))).toBe(true);
+      expect(shouldRetry(19, new ApiPending(4000))).toBe(true);
+      expect(shouldRetry(20, new ApiPending(4000))).toBe(false);
+    });
+
+    it("retry does not retry a real error the same way", () => {
+      const { retry } = dailyFeedQuery("A1");
+      const shouldRetry = retry as (failureCount: number, error: unknown) => boolean;
+      expect(shouldRetry(1, new ApiError(500, "boom"))).toBe(false);
+    });
+
+    it("retryDelay uses the server's Retry-After for ApiPending, a fixed fallback otherwise", () => {
+      const { retryDelay } = dailyFeedQuery("A1");
+      const delay = retryDelay as (failureCount: number, error: unknown) => number;
+      expect(delay(1, new ApiPending(4000))).toBe(4000);
+      expect(delay(1, new ApiError(500, "boom"))).toBe(1000);
+    });
   });
 });

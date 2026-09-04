@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { ApiPending } from "./client";
 import {
   searchAuthor,
   getNetworkCollaborators,
@@ -90,6 +91,16 @@ export const dailyFeedQuery = (authorId?: string, queryFallback?: string) =>
     queryKey: ["daily-feed", { authorId: authorId ?? null, queryFallback: queryFallback ?? null }] as const,
     queryFn: () => getDailyFeed(authorId, queryFallback),
     ...HOURLY,
+    // Uncached generation can take up to ~2m48s (see feed.py); rather than
+    // hold one HTTP connection open that long, the backend responds
+    // 202 + Retry-After roughly every 10s while it keeps computing in the
+    // background (app/core/pending_compute.py). Poll on that signal well
+    // past providers.tsx's global 1-retry default — ApiPending isn't a
+    // failure, so this never masks a real error (a genuine 4xx/5xx still
+    // falls through to the global retry policy, which gives up fast).
+    retry: (failureCount, error) => error instanceof ApiPending && failureCount < 20,
+    retryDelay: (_failureCount, error) =>
+      error instanceof ApiPending ? error.retryAfterMs : 1000,
   });
 
 export const dailyConjectureQuery = (authorId?: string, name?: string) =>
