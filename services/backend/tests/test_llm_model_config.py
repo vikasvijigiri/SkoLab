@@ -150,6 +150,63 @@ async def test_query_routes_a_slash_named_groq_model_to_groqs_own_endpoint(monke
     service.query_openrouter.assert_not_awaited()
 
 
+async def test_reasoning_model_gets_a_max_tokens_buffer_non_reasoning_does_not(
+    monkeypatch,
+):
+    """Third round of the same incident, found by testing #49's fix live
+    rather than trusting it: openai/gpt-oss-120b/-20b are reasoning
+    models — part of max_tokens is spent on an internal `reasoning`
+    field before the final `content`. journals.py's rationale call
+    (max_tokens=100, tuned for the old non-reasoning model) came back
+    "200 with an empty completion" repeatedly in production, tripping
+    the Groq circuit breaker. Measured live with a realistic prompt:
+    90 reasoning tokens + 55 content tokens against that 100-token
+    budget — guaranteed truncation. The buffer must apply to a
+    reasoning model and must NOT inflate a non-reasoning model's budget
+    (that would just be paying for tokens the model was never going to
+    use)."""
+    from unittest.mock import AsyncMock
+
+    monkeypatch.setenv("LLM_GROQ_MODELS", "openai/gpt-oss-120b,qwen/qwen3.8-27b")
+    monkeypatch.setenv("LLM_OPENROUTER_MODELS", "")
+    monkeypatch.setenv("LLM_REASONING_MODEL_PREFIXES", "openai/gpt-oss")
+    monkeypatch.setenv("LLM_REASONING_TOKEN_BUFFER", "220")
+
+    from app.services.ai import llm_service as llm_service_mod
+
+    monkeypatch.setattr(llm_service_mod, "settings", Settings())
+    service = llm_service_mod.LLMService()
+    service.groq_api_key = "test-key"
+
+    class _FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {"choices": [{"message": {"content": "ok", "tool_calls": None}}]}
+
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(return_value=_FakeResponse())
+    monkeypatch.setattr(llm_service_mod, "get_http_client", lambda: fake_client)
+    monkeypatch.setattr(llm_service_mod, "is_llm_working", lambda: True)
+
+    await service.query(
+        messages=[{"role": "user", "content": "hi"}],
+        models=["openai/gpt-oss-120b"],
+        max_tokens=100,
+    )
+    reasoning_payload = fake_client.post.await_args.kwargs["json"]
+    assert reasoning_payload["max_tokens"] == 100 + 220
+
+    fake_client.post.reset_mock()
+    await service.query(
+        messages=[{"role": "user", "content": "hi"}],
+        models=["qwen/qwen3.8-27b"],
+        max_tokens=100,
+    )
+    non_reasoning_payload = fake_client.post.await_args.kwargs["json"]
+    assert non_reasoning_payload["max_tokens"] == 100
+
+
 def test_pipeline_base_model_comes_from_settings_not_a_literal(monkeypatch):
     fake_settings = SimpleNamespace(llm_primary_model="some/configured-model")
 
