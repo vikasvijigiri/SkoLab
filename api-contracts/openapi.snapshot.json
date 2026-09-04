@@ -2081,7 +2081,7 @@
     }
   },
   "info": {
-    "description": "Research intelligence backend powering the SkoLab Android app.\n\n**Auth**: Protected endpoints require a Firebase ID token in the `Authorization: Bearer <token>` header.\n\n**Rate limits**: `/agent/chat` and search endpoints \u2014 5 req/min per IP. All other endpoints \u2014 60 req/min per IP.",
+    "description": "Research intelligence backend powering the SkoLab Android app.\n\n**Auth**: Protected endpoints require a Firebase ID token in the `Authorization: Bearer <token>` header.\n\n**Rate limits**: enforced per-IP by the Go API gateway in front of this service, not here.",
     "title": "SkoLab API",
     "version": "1.1.0"
   },
@@ -3510,23 +3510,6 @@
         "summary": "Livez"
       }
     },
-    "/metrics": {
-      "get": {
-        "description": "Prometheus metrics endpoint in plain text exposition format.",
-        "operationId": "metrics_metrics_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Metrics"
-      }
-    },
     "/readyz": {
       "get": {
         "description": "Readiness probe \u2014 should traffic route here? 503 drains this instance.",
@@ -3567,7 +3550,7 @@
       "name": "feed"
     },
     {
-      "description": "Health, metrics, and AI status endpoints.",
+      "description": "Health, readiness, and AI status endpoints.",
       "name": "system"
     }
   ]
