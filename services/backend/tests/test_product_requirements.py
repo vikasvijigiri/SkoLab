@@ -85,23 +85,6 @@ async def test_daily_conjecture_mocked():
             assert "options" in data
 
 
-@pytest.mark.anyio
-async def test_network_collaborators_mocked():
-    """Verify networking hub resolves network collaborators successfully."""
-    async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
-        mock_collaborators = [
-            {
-                "name": "Dr. Sarah Jenkins",
-                "institution": "Stanford Department of Physics",
-                "field": "Physics",
-                "match": "94%",
-            }
-        ]
-        with patch(
-            "app.services.platform.pipeline_services.PipelineServices.get_network_collaborators",
-            return_value=mock_collaborators,
-        ):
-            response = await ac.get("/api/v1/network_collaborators?author_id=A12345678")
-            assert response.status_code == 200
-            data = response.json()
-            assert isinstance(data, list)
+# test_network_collaborators_mocked removed — GET /network_collaborators moved to
+# the Go gateway (services/backend-go/internal/author/network.go);
+# see docs/plans/2026-09-04-network-collaborators-to-go.md.

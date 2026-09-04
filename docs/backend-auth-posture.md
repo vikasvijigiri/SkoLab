@@ -70,7 +70,7 @@ the question in review — do not guess it into `authed`.
 | Route(s) | Note |
 | :--- | :--- |
 | `GET /`, `GET /ai_status`, `GET /status` | System metadata. `/` is served by `main.py`'s own `AppInfoResponse` handler (see "single mount" below). |
-| `GET /health`, `GET /livez`, `GET /readyz`, `GET /metrics` | Infra probes. Liveness/readiness carry no token by design; `/metrics` + `/ai_status` are additionally gated to the local subnet / SRE token by `security_guard_middleware`. |
+| `GET /health`, `GET /livez`, `GET /readyz` | Infra probes. Liveness/readiness carry no token by design. `GET /metrics` and the local-subnet / SRE-token admin gate in `security_guard_middleware` were removed — the Go gateway owns request metrics (`docs/plans/2026-09-04-retire-python-infra.md`). `GET /ai_status` is now plain public system metadata (row above). |
 | `GET /search_author`, `GET /refresh_author` | Resolve **any** researcher's public OpenAlex profile. |
 | `GET /author_metrics`, `GET /network_collaborators`, `GET /collaborator_synergy`, `GET /citation_heatmap` | Metrics computed from **any** researcher's public publication record; `author_id` is an OpenAlex id. |
 | `GET /match_grants`, `GET /journal_advisor` | Recommendations derived from a researcher's public works; used when viewing arbitrary profiles, not just one's own. |
@@ -126,8 +126,10 @@ large multi-source port. No route changed auth class — all remain `public`
 `app/main.py` mounts the aggregate router **only** at `prefix="/api/v1"`. The
 former bare-prefix `app.include_router(api_router)` mount was removed in the
 2026-09-03 hardening: on a public URL it doubled every route's attack surface and
-broke the "one canonical path per endpoint" assumption this posture and the
-rate-limit path fragments rely on. Clients must use `/api/v1`.
+broke the "one canonical path per endpoint" assumption this posture relies on.
+Clients must use `/api/v1`. (The Python kill-switch path-fragment match in
+`security_guard_middleware` also depends on it; the per-process rate limiter
+that used the same fragments was retired — the Go gateway rate-limits per IP.)
 
 ## Boot-time configuration fail-fast
 

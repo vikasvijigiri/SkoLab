@@ -47,7 +47,10 @@ async def ai_status():
         "groq_api_configured": has_key,
         "llm_active": llm_ok,
         "model": "llama-3.3-70b-versatile",
-        "key_prefix": groq_key[:7] if has_key else "None",
+        # Not the real key bytes: this route is unauthenticated (the admin gate
+        # was retired with the metrics store, see docs/plans/2026-09-04-retire-
+        # python-infra.md). Only report presence, never a prefix of the secret.
+        "key_prefix": "***" if has_key else "None",
     }
 
 

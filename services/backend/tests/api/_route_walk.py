@@ -4,8 +4,9 @@ FastAPI 0.141 includes sub-routers *lazily*: ``app.routes`` holds
 ``_IncludedRouter`` placeholders, not the concrete ``APIRoute`` objects, which
 are resolved on first request. Introspection tests that iterate ``app.routes``
 directly therefore see only the handful of routes declared straight on the app
-(``/``, ``/health``, ``/metrics``, the docs routes). This walker recurses
-through the placeholders to yield every real ``APIRoute`` with its full path.
+(``/``, ``/health``, ``/livez``, ``/readyz``, the docs routes). This walker
+recurses through the placeholders to yield every real ``APIRoute`` with its
+full path.
 """
 
 from __future__ import annotations
