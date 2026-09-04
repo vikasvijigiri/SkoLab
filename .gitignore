@@ -63,6 +63,14 @@ backend/.coverage
 .pytest_cache/
 htmlcov/
 
+# tests/conftest.py's SQLite fallback (used when Postgres is offline)
+# writes a throwaway *.db file to this directory. Nothing caught the
+# pattern before, so two such files (dev.db, _t.db) got committed by
+# accident and ended up copied into every skolab-backend-py Docker image
+# via the Dockerfile's `COPY . .` — see services/backend/.dockerignore.
+services/backend/*.db
+services/backend/*.db-journal
+
 # Playwright MCP output (screenshots/snapshots/console logs from browser_* tool calls)
 .playwright-mcp/
 

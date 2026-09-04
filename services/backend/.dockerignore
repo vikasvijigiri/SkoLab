@@ -1,0 +1,46 @@
+# Dockerfile's final stage does `COPY . .` with no exclusions — every file
+# in this directory landed in the image, unpacked onto the container's own
+# disk. On skolab-backend-py's small Render free-tier ephemeral disk, that
+# tripped the app's own >80% disk-usage alert (app/main.py's
+# monitor_disk_space). This file is the actual fix: keep dev/test/CI-only
+# artifacts out of the build context entirely, not just out of git.
+#
+# Two of these (dev.db, _t.db) were also committed to git by accident —
+# tests/conftest.py's SQLite fallback generates them locally, and nothing
+# in .gitignore caught the pattern before now (see the accompanying
+# .gitignore change). This file stops them re-entering a future image even
+# though old commits still carry their old contents; a .dockerignore entry
+# alone can't undo what git already tracked, only what gets built next.
+
+# Local dev / test artifacts
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+.env
+.env.*
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+*.pyo
+
+# Dev/CI-only tooling and scripts — not imported by the runtime app
+tests/
+scripts/
+ci_bootstrap_db.py
+docker-compose.yml
+pytest.ini
+ruff.toml
+requirements-dev.txt
+
+# VCS metadata — irrelevant at runtime, meaningful size in a monorepo clone
+.git/
+.gitignore
+
+# OS cruft
+.DS_Store
+Thumbs.db
