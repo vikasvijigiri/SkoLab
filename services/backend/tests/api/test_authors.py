@@ -1,46 +1,20 @@
-"""Task 8 — author routes typed; helper recovery left intact.
+"""Author routes: the LLM ones stay, the lookup ones are gone.
 
-`str(e)` route-handler wrappers on the 8 author routes are removed; the ~7
-`except Exception` blocks inside `_pg_*` / `fetch_similar_authors` / the
-`search_author` Firestore fallback stay (genuine degradation paths).
+``GET /search_author`` and ``GET /refresh_author`` moved to the Go gateway
+(``services/backend-go/internal/author/search.go``) — this asserts they no
+longer exist here. The teleport *enrichment* worker is an LLM job and stays
+Python, now reached via ``POST /api/v1/internal/teleport/{author_id}``.
 """
 
 import pytest
 
-from app.api.dependencies import get_openalex_service, get_pipeline_services
-from app.schemas.authors_extra import (
-    CitationHeatmap,
-    GrantMatch,
-    JournalRecommendation,
-    NetworkCollaborator,
-    RefreshAuthorResponse,
-)
+from app.api.dependencies import get_pipeline_services
+from app.schemas.authors_extra import GrantMatch, JournalRecommendation
 
 
 class _FakePipeline:
-    async def get_network_collaborators(self, *a, **k):
-        return [
-            {
-                "id": "A2",
-                "name": "Grace Hopper",
-                "institution": "USN",
-                "field": "CS",
-                "connection_path": "co-author",
-                "relevance_score": 0.8,
-            }
-        ]
-
     async def get_collaborator_synergy(self, *a, **k):
         return {"shared_topics": ["compilers"], "score": 0.7}
-
-    async def get_citation_heatmap(self, *a, **k):
-        return {
-            "years": [2022, 2023],
-            "citations": [10, 20],
-            "works": [1, 2],
-            "institutional_reach": 3.0,
-            "h_index": 2,
-        }
 
     async def match_grants(self, *a, **k):
         return [{"title": "NSF CAREER", "agency": "NSF", "match_score": 0.9}]
@@ -49,42 +23,25 @@ class _FakePipeline:
         return [{"journal_name": "Nature", "match_score": 0.8}]
 
 
-class _FakeOpenAlex:
-    async def search_authors(self, name, per_page=1):
-        return [{"id": "https://openalex.org/A1", "display_name": name}]
-
-
 @pytest.fixture(autouse=True)
 def _overrides(app):
     app.dependency_overrides[get_pipeline_services] = lambda: _FakePipeline()
-    app.dependency_overrides[get_openalex_service] = lambda: _FakeOpenAlex()
     yield
     app.dependency_overrides.clear()
 
 
-async def test_refresh_author_parses(client):
-    r = await client.get("/api/v1/refresh_author", params={"name": "Ada Lovelace"})
-    assert r.status_code == 200, r.text
-    RefreshAuthorResponse(**r.json())
+# ── the lookup routes are gone ──────────────────────────────────────────────
 
 
-async def test_network_collaborators_is_typed_array_and_bounds_limit(client):
-    ok = await client.get(
-        "/api/v1/network_collaborators", params={"author_id": "A1", "limit": 5}
-    )
-    assert ok.status_code == 200, ok.text
-    [NetworkCollaborator(**row) for row in ok.json()]
-
-    bad = await client.get(
-        "/api/v1/network_collaborators", params={"author_id": "A1", "limit": 5000}
-    )
-    assert bad.status_code == 422
+@pytest.mark.parametrize("path", ["/api/v1/search_author", "/api/v1/refresh_author"])
+async def test_lookup_routes_moved_to_go(client, path):
+    r = await client.get(path, params={"name": "Ada Lovelace"})
+    # FastAPI returns 404 for an unregistered path (405 would mean it still
+    # exists under another method).
+    assert r.status_code == 404, r.text
 
 
-async def test_citation_heatmap_parses(client):
-    r = await client.get("/api/v1/citation_heatmap", params={"author_id": "A1"})
-    assert r.status_code == 200, r.text
-    CitationHeatmap(**r.json())
+# ── LLM author routes still served here ─────────────────────────────────────
 
 
 async def test_match_grants_and_journal_advisor_are_typed_arrays(client):
@@ -97,7 +54,74 @@ async def test_match_grants_and_journal_advisor_are_typed_arrays(client):
     [JournalRecommendation(**row) for row in j.json()]
 
 
-async def test_refresh_author_requires_name(client):
-    r = await client.get("/api/v1/refresh_author")
-    assert r.status_code == 422
-    assert r.json()["code"] == "validation_error"
+# GET /author_metrics moved to the Go gateway (internal/author/metrics.go); the
+# LLM analysis step it used is now this internal route — decisions/0010.
+async def test_author_metrics_enrich_returns_scored_bundle(client, monkeypatch):
+    from app.services.data import scraping_service
+
+    async def _fake_parse(self, *, raw_content, response_schema, instruction):
+        assert "Title:" in raw_content
+        return {
+            "topic_toughness": 71,
+            "velocity": 53,
+            "skills": ["Quantum optics"],
+            "tools": ["QuTiP"],
+            "analysis": "Dense, fast-moving work.",
+        }
+
+    monkeypatch.setattr(
+        scraping_service.ScrapingService, "parse_content_to_json", _fake_parse
+    )
+
+    r = await client.post(
+        "/api/v1/internal/author_metrics_enrich",
+        json={"context": "Title: A. Concepts: X, Y"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["topic_toughness"] == 71
+    assert body["velocity"] == 53
+    assert body["overall_score"] == 62  # int((71 + 53) / 2)
+    assert body["skills"] == ["Quantum optics"]
+    assert body["tools"] == ["QuTiP"]
+
+
+# ── internal teleport handoff (Go gateway → Python worker) ──────────────────
+
+
+@pytest.fixture
+def _stub_teleport(monkeypatch):
+    """Replace the real enrichment worker with a recorder (no network)."""
+    calls: list[str] = []
+
+    async def _fake(author_id: str) -> None:
+        calls.append(author_id)
+
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.internal.teleport_researcher", _fake, raising=False
+    )
+    return calls
+
+
+async def test_internal_teleport_accepts_and_enqueues(client, _stub_teleport):
+    r = await client.post("/api/v1/internal/teleport/A123")
+    assert r.status_code == 202, r.text
+    body = r.json()
+    assert body["author_id"] == "A123"
+    # BackgroundTasks run after the response is sent under ASGITransport.
+    assert _stub_teleport == ["A123"]
+
+
+async def test_internal_teleport_rejects_bad_token(client, _stub_teleport, monkeypatch):
+    monkeypatch.setenv("INTERNAL_API_TOKEN", "s3cr3t")
+
+    bad = await client.post(
+        "/api/v1/internal/teleport/A123", headers={"X-Internal-Token": "wrong"}
+    )
+    assert bad.status_code == 401, bad.text
+
+    ok = await client.post(
+        "/api/v1/internal/teleport/A123", headers={"X-Internal-Token": "s3cr3t"}
+    )
+    assert ok.status_code == 202, ok.text
+    assert _stub_teleport == ["A123"]

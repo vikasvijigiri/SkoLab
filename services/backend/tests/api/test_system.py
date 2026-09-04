@@ -1,39 +1,39 @@
-"""Task 4 — system + app-level routes are typed."""
+"""System + app-level routes.
 
-from app.schemas.system import (
-    AiStatusResponse,
-    AppInfoResponse,
-    RootResponse,
-    SystemStatusResponse,
-)
+``GET /`` (API-router root) and ``GET /status`` moved to the Go gateway
+(``services/backend-go/internal/system``) — decisions/0010. This suite now
+asserts they are gone from Python and that the routes that stayed
+(``/ai_status``, the app-level ``/``, ``/health``) still serve.
+"""
+
+from app.schemas.system import AiStatusResponse, AppInfoResponse
 
 
-async def test_root_router_route_parses(client):
+async def test_api_router_root_is_gone_from_python(client):
+    # Served by the Go gateway now (system.Root). Python no longer registers it.
     r = await client.get("/api/v1/")
-    assert r.status_code == 200
-    RootResponse(**r.json())
+    assert r.status_code == 404
+
+
+async def test_system_status_is_gone_from_python(client):
+    # Served by the Go gateway now (system.Status).
+    r = await client.get("/api/v1/status")
+    assert r.status_code == 404
 
 
 async def test_app_root_parses(client):
-    # The bare-prefix router mount was removed (Stream B security hardening),
-    # so `/` is now served by main.py's own `@app.get("/")` handler
-    # (AppInfoResponse), not the API router's read_root. The router's own
-    # root is still reachable at `/api/v1/` — see test_root_router_route_parses.
+    # main.py's own ``@app.get("/")`` (AppInfoResponse) is untouched — it is the
+    # mobile-client discovery route, not an API-router route.
     r = await client.get("/")
     assert r.status_code == 200
     AppInfoResponse(**r.json())
 
 
 async def test_ai_status_parses(client):
+    # Stays in Python — it reports the LLM key/health.
     r = await client.get("/api/v1/ai_status")
     assert r.status_code == 200
     AiStatusResponse(**r.json())
-
-
-async def test_system_status_parses(client):
-    r = await client.get("/api/v1/status")
-    assert r.status_code == 200
-    SystemStatusResponse(**r.json())
 
 
 async def test_health_still_serves(client):

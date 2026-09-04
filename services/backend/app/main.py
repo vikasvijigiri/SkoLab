@@ -392,8 +392,8 @@ app = FastAPI(
         "Research intelligence backend powering the SkoLab Android app.\n\n"
         "**Auth**: Protected endpoints require a Firebase ID token in the "
         "`Authorization: Bearer <token>` header.\n\n"
-        "**Rate limits**: `/agent/chat` and search endpoints — 5 req/min per IP. "
-        "All other endpoints — 60 req/min per IP."
+        "**Rate limits**: enforced per-IP by the Go API gateway in front of "
+        "this service, not here."
     ),
     version="1.1.0",
     lifespan=lifespan,
@@ -417,7 +417,10 @@ app = FastAPI(
         },
         {"name": "users", "description": "User account management and GDPR deletion."},
         {"name": "feed", "description": "Personalised daily feed and trending items."},
-        {"name": "system", "description": "Health, metrics, and AI status endpoints."},
+        {
+            "name": "system",
+            "description": "Health, readiness, and AI status endpoints.",
+        },
     ],
     swagger_ui_parameters={"persistAuthorization": True},
 )
@@ -477,96 +480,29 @@ if settings.force_https:
     app.add_middleware(HTTPSRedirectMiddleware)
 
 
-# Token Bucket Rate Limiter for Pillar 2 Compliance
-class TokenBucket:
-    def __init__(self, capacity: float, refill_rate: float):
-        self.capacity = capacity
-        self.refill_rate = refill_rate
-        self.tokens = float(capacity)
-        self.last_update = time.perf_counter()
-        self.lock = asyncio.Lock()
-
-    async def consume(self) -> bool:
-        async with self.lock:
-            now = time.perf_counter()
-            elapsed = now - self.last_update
-            self.last_update = now
-            self.tokens = min(self.capacity, self.tokens + elapsed * self.refill_rate)
-            if self.tokens >= 1.0:
-                self.tokens -= 1.0
-                return True
-            return False
-
-
-class RateLimiter:
-    def __init__(self, capacity: float = 60.0, refill_rate: float = 1.0):
-        self.capacity = capacity
-        self.refill_rate = refill_rate
-        self.buckets = {}
-        self.last_cleanup = time.perf_counter()
-        self.lock = asyncio.Lock()
-
-    async def check_rate_limit(
-        self, client_ip: str, capacity: float = None, refill_rate: float = None
-    ) -> bool:
-        cap = capacity if capacity is not None else self.capacity
-        refill = refill_rate if refill_rate is not None else self.refill_rate
-
-        # ── Distributed Redis Rate Limiter ──
-        from app.db.pg_cache import _redis_active, _redis_client
-
-        if _redis_active and _redis_client:
-            try:
-                key = f"ratelimit:{client_ip}:{int(cap)}"
-                current = await _redis_client.get(key)
-                if current is None:
-                    await _redis_client.set(key, 1, ex=60)
-                    return True
-                else:
-                    count = int(current)
-                    if count >= cap:
-                        return False
-                    await _redis_client.incr(key)
-                    return True
-            except Exception as e:
-                logger.warning(
-                    f"Redis rate limiter failed: {e}. Falling back to in-memory."
-                )
-
-        # ── Local Token Bucket Fallback ──
-        async with self.lock:
-            now = time.perf_counter()
-            if now - self.last_cleanup > 60.0:
-                inactive_keys = [
-                    key
-                    for key, bucket in self.buckets.items()
-                    if now - bucket.last_update > 300.0
-                ]
-                for key in inactive_keys:
-                    del self.buckets[key]
-                self.last_cleanup = now
-
-            bucket_key = f"{client_ip}:{cap}"
-            if bucket_key not in self.buckets:
-                self.buckets[bucket_key] = TokenBucket(cap, refill)
-
-            return await self.buckets[bucket_key].consume()
-
-
-rate_limiter = RateLimiter()
-
-
+# ── SRE kill-switch guard ───────────────────────────────────────────────────
+# What used to live here — a per-process token-bucket rate limiter, a per-IP
+# admin-subnet gate for /metrics + /ai_status, and a device-signature check —
+# was retired (docs/plans/2026-09-04-retire-python-infra.md):
+#   • Per-IP rate limiting is the Go gateway's job (middleware.NewRateLimiter,
+#     applied globally in services/backend-go/main.go). The Python copy was
+#     redundant and per-worker.
+#   • The admin gate only ever protected /metrics, which is gone (below).
+#   • The device signature was keyed by settings.database_encryption_key — a
+#     server-only secret no client can hold — so it could never pass for a
+#     real client and guarded no real route.
+# The kill switch stays: KILL_SWITCHES=feature1,feature2 makes any route whose
+# path contains that fragment return 503 without a redeploy.
 @app.middleware("http")
 async def security_guard_middleware(request: Request, call_next):
     path = request.url.path.lower()
 
-    # 1. Kill Switch Guard
     kill_switches = [
         x.strip().lower()
         for x in os.environ.get("KILL_SWITCHES", "").split(",")
         if x.strip()
     ]
-    if path not in ["/", "/health", "/health/", "/metrics", "/metrics/"]:
+    if path not in ["/", "/health", "/health/"]:
         for feature in kill_switches:
             if feature in path:
                 from fastapi.responses import JSONResponse
@@ -578,253 +514,7 @@ async def security_guard_middleware(request: Request, call_next):
                     },
                 )
 
-    # NOTE: the User-Agent "scraper" block and the query-string "WAF XSS" block
-    # that used to sit here were removed (Stream B security hardening). They
-    # blocked the repo's own tooling (k6, Playwright, uptime probes, curl) and
-    # stopped nothing real — output encoding and Pydantic validation, not a
-    # substring scan of the raw query string, are what defend against XSS.
-
-    # 2. Admin Access Guard
-    if path in [
-        "/metrics",
-        "/metrics/",
-        "/ai_status",
-        "/ai_status/",
-        "/api/v1/ai_status",
-    ]:
-        import hmac
-
-        client_ip = request.client.host if request.client else "unknown"
-        is_private = False
-        if client_ip in ["127.0.0.1", "::1", "localhost", "testserver"]:
-            is_private = True
-        elif client_ip.startswith("10.") or client_ip.startswith("192.168."):
-            is_private = True
-        elif client_ip.startswith("172."):
-            try:
-                parts = client_ip.split(".")
-                second_octet = int(parts[1])
-                if 16 <= second_octet <= 31:
-                    is_private = True
-            except Exception:
-                pass
-        sre_token = request.headers.get("X-SRE-Token")
-        # The shipped default is a dev convenience only. In production an unset
-        # SRE_SECURITY_TOKEN means there is no valid token, so a non-private
-        # caller is always denied — never a guessable fallback (OWASP API8).
-        configured_token = os.environ.get("SRE_SECURITY_TOKEN", "")
-        if not configured_token:
-            configured_token = (
-                "" if settings.environment == "production" else "sre_bypass_secret_2026"
-            )
-        token_ok = bool(configured_token) and hmac.compare_digest(
-            sre_token or "", configured_token
-        )
-        if not is_private and not token_ok:
-            from fastapi.responses import JSONResponse
-
-            return JSONResponse(
-                status_code=403,
-                content={
-                    "detail": "Forbidden: Administrative access restricted to local subnet or valid SRE VPN context."
-                },
-            )
-
-    # 3. Device Signature Verification Guard
-    if request.method in ["POST", "PUT", "DELETE", "PATCH"]:
-        import hmac
-        import hashlib
-
-        user_id = (
-            request.headers.get("X-User-Id")
-            or request.query_params.get("user_id")
-            or request.query_params.get("userId")
-        )
-        if user_id:
-            timestamp_str = request.headers.get("X-Device-Timestamp")
-            signature = request.headers.get("X-Device-Signature")
-            if not timestamp_str or not signature:
-                from fastapi.responses import JSONResponse
-
-                return JSONResponse(
-                    status_code=401,
-                    content={
-                        "detail": "Unauthorized: Missing device signature headers."
-                    },
-                )
-            try:
-                timestamp = int(timestamp_str)
-                if abs(time.time() - timestamp) > 300:
-                    from fastapi.responses import JSONResponse
-
-                    return JSONResponse(
-                        status_code=401,
-                        content={
-                            "detail": "Unauthorized: Device signature timestamp expired."
-                        },
-                    )
-                device_secret = str(settings.database_encryption_key).encode("utf-8")
-                payload = f"{user_id}:{timestamp_str}"
-                expected = hmac.new(
-                    device_secret, payload.encode("utf-8"), hashlib.sha256
-                ).hexdigest()
-                if not hmac.compare_digest(signature, expected):
-                    from fastapi.responses import JSONResponse
-
-                    return JSONResponse(
-                        status_code=401,
-                        content={"detail": "Unauthorized: Invalid device signature."},
-                    )
-            except Exception:
-                from fastapi.responses import JSONResponse
-
-                return JSONResponse(
-                    status_code=401,
-                    content={
-                        "detail": "Unauthorized: Invalid device signature format."
-                    },
-                )
-
-    # 4. Rate Limiting Guard
-    if path not in ["/", "/health", "/health/"]:
-        client_ip = request.client.host if request.client else "unknown"
-        # Fragments, not full paths, so a substring match still catches the
-        # route however it is mounted. Only the two routes that were genuinely
-        # strict-and-real are kept. The previous list also named
-        # /api/v1/papers/search and /api/v1/authors/search — neither is a real
-        # route, so the drift meant the ONLY strictly limited real route was
-        # /agent/chat. Whether the expensive LLM GETs (daily_conjecture,
-        # discovery/*, industry_academic_tieups) and search_author should also be
-        # strict is a product decision (5/min breaks live autocomplete) tracked
-        # for a follow-up, not changed here.
-        strict_paths = [
-            "/agent/chat",
-            "/export",
-        ]
-        is_strict = any(sp in path for sp in strict_paths)
-        if is_strict:
-            allowed = await rate_limiter.check_rate_limit(
-                client_ip, capacity=5.0, refill_rate=5.0 / 60.0
-            )
-        else:
-            allowed = await rate_limiter.check_rate_limit(
-                client_ip, capacity=60.0, refill_rate=1.0
-            )
-        if not allowed:
-            from fastapi.responses import JSONResponse
-
-            return JSONResponse(
-                status_code=429,
-                content={"detail": "Too many requests. Please try again later."},
-                headers={"Retry-After": "5"},
-            )
-
     return await call_next(request)
-
-
-class MetricsStore:
-    def __init__(self):
-        self.request_counts = {}  # (method, endpoint, status) -> count
-        self.request_latency = {}  # (method, endpoint) -> [latencies]
-        self.active_requests = 0  # Gauge
-        self.background_tasks_active = 0  # Gauge
-        self.openalex_api_requests_total = 0  # Counter
-        self.error_counts = 0
-        # Buckets for latency histogram: 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0
-        self.latency_buckets = [
-            0.005,
-            0.01,
-            0.025,
-            0.05,
-            0.075,
-            0.1,
-            0.25,
-            0.5,
-            0.75,
-            1.0,
-            2.5,
-            5.0,
-            7.5,
-            10.0,
-        ]
-        self.histogram_buckets = {}  # (method, endpoint, le) -> count
-        self.lock = asyncio.Lock()
-
-        # Outbound HTTP Client metrics (thread-safe for sync/async wrappers)
-        import threading
-
-        self.outbound_lock = threading.Lock()
-        self.outbound_request_counts = {}
-        self.outbound_request_latency = {}
-
-    def record_outbound_request(self, host: str, status: int, latency_ms: float):
-        latency_sec = latency_ms / 1000.0
-        with self.outbound_lock:
-            key = (host, str(status))
-            self.outbound_request_counts[key] = (
-                self.outbound_request_counts.get(key, 0) + 1
-            )
-
-            if host not in self.outbound_request_latency:
-                self.outbound_request_latency[host] = []
-            self.outbound_request_latency[host].append(latency_sec)
-            if len(self.outbound_request_latency[host]) > 1000:
-                self.outbound_request_latency[host].pop(0)
-
-    async def increment_active_requests(self):
-        async with self.lock:
-            self.active_requests += 1
-
-    async def decrement_active_requests(self):
-        async with self.lock:
-            self.active_requests = max(0, self.active_requests - 1)
-
-    async def increment_background_tasks(self):
-        async with self.lock:
-            self.background_tasks_active += 1
-
-    async def decrement_background_tasks(self):
-        async with self.lock:
-            self.background_tasks_active = max(0, self.background_tasks_active - 1)
-
-    async def increment_openalex_requests(self):
-        async with self.lock:
-            self.openalex_api_requests_total += 1
-
-    def increment_openalex_requests_sync(self):
-        self.openalex_api_requests_total += 1
-
-    async def record_request(
-        self, method: str, endpoint: str, status: int, latency_ms: float
-    ):
-        latency_sec = latency_ms / 1000.0
-        async with self.lock:
-            key = (method, endpoint, str(status))
-            self.request_counts[key] = self.request_counts.get(key, 0) + 1
-
-            lat_key = (method, endpoint)
-            if lat_key not in self.request_latency:
-                self.request_latency[lat_key] = []
-            self.request_latency[lat_key].append(latency_sec)
-            if len(self.request_latency[lat_key]) > 1000:
-                self.request_latency[lat_key].pop(0)
-
-            # Histogram buckets
-            for bucket in self.latency_buckets:
-                bucket_key = (method, endpoint, f"{bucket:.3f}")
-                if latency_sec <= bucket:
-                    self.histogram_buckets[bucket_key] = (
-                        self.histogram_buckets.get(bucket_key, 0) + 1
-                    )
-            # Add +Inf bucket
-            inf_key = (method, endpoint, "+Inf")
-            self.histogram_buckets[inf_key] = self.histogram_buckets.get(inf_key, 0) + 1
-
-            if status >= 400:
-                self.error_counts += 1
-
-
-metrics_store = MetricsStore()
 
 
 @app.middleware("http")
@@ -861,7 +551,6 @@ async def structured_log_middleware(request: Request, call_next):
 
     span_name = f"{request.method} {request.url.path}"
 
-    await metrics_store.increment_active_requests()
     start_time = time.perf_counter()
     response = None
 
@@ -886,10 +575,6 @@ async def structured_log_middleware(request: Request, call_next):
         finally:
             latency_ms = int((time.perf_counter() - start_time) * 1000)
             status_code = response.status_code if response else 500
-            await metrics_store.record_request(
-                request.method, request.url.path, status_code, latency_ms
-            )
-            await metrics_store.decrement_active_requests()
 
             logger.info(
                 f"{request.method} {request.url.path} - {status_code} - {latency_ms}ms",
@@ -1012,128 +697,8 @@ async def health():
     )
 
 
-@app.get("/metrics")
-async def metrics():
-    """Prometheus metrics endpoint in plain text exposition format."""
-    lines = []
-
-    # http_requests_total
-    lines.append("# HELP http_requests_total Total number of HTTP requests.")
-    lines.append("# TYPE http_requests_total counter")
-    for (method, endpoint, status), count in metrics_store.request_counts.items():
-        lines.append(
-            f'http_requests_total{{method="{method}",endpoint="{endpoint}",status="{status}"}} {count}'
-        )
-
-    # http_active_requests
-    lines.append("# HELP http_active_requests Current number of active HTTP requests.")
-    lines.append("# TYPE http_active_requests gauge")
-    lines.append(f"http_active_requests {metrics_store.active_requests}")
-
-    # http_request_duration_seconds (Histogram)
-    lines.append(
-        "# HELP http_request_duration_seconds HTTP request duration histogram."
-    )
-    lines.append("# TYPE http_request_duration_seconds histogram")
-    for (method, endpoint), latencies in metrics_store.request_latency.items():
-        if latencies:
-            total_duration = sum(latencies)
-            count = len(latencies)
-            # Output buckets
-            for bucket in metrics_store.latency_buckets:
-                bucket_key = (method, endpoint, f"{bucket:.3f}")
-                bucket_count = metrics_store.histogram_buckets.get(bucket_key, 0)
-                lines.append(
-                    f'http_request_duration_seconds_bucket{{method="{method}",endpoint="{endpoint}",le="{bucket:.3f}"}} {bucket_count}'
-                )
-            # Output +Inf
-            inf_key = (method, endpoint, "+Inf")
-            inf_count = metrics_store.histogram_buckets.get(inf_key, count)
-            lines.append(
-                f'http_request_duration_seconds_bucket{{method="{method}",endpoint="{endpoint}",le="+Inf"}} {inf_count}'
-            )
-            # Sum and Count
-            lines.append(
-                f'http_request_duration_seconds_sum{{method="{method}",endpoint="{endpoint}"}} {total_duration:.6f}'
-            )
-            lines.append(
-                f'http_request_duration_seconds_count{{method="{method}",endpoint="{endpoint}"}} {count}'
-            )
-
-    # background_tasks_active
-    lines.append(
-        "# HELP background_tasks_active Current number of active background worker tasks."
-    )
-    lines.append("# TYPE background_tasks_active gauge")
-    lines.append(f"background_tasks_active {metrics_store.background_tasks_active}")
-
-    # openalex_api_requests_total
-    lines.append(
-        "# HELP openalex_api_requests_total Total number of external requests to OpenAlex API."
-    )
-    lines.append("# TYPE openalex_api_requests_total counter")
-    lines.append(
-        f"openalex_api_requests_total {metrics_store.openalex_api_requests_total}"
-    )
-
-    # system_errors_total
-    lines.append("# HELP system_errors_total Total number of error responses.")
-    lines.append("# TYPE system_errors_total counter")
-    lines.append(f"system_errors_total {metrics_store.error_counts}")
-
-    # host metrics
-    try:
-        import psutil
-        import shutil
-
-        cpu_usage = psutil.cpu_percent(interval=None)
-        mem = psutil.virtual_memory()
-        disk = shutil.disk_usage("/")
-
-        lines.append("# HELP host_cpu_usage_percent Host CPU utilization percentage.")
-        lines.append("# TYPE host_cpu_usage_percent gauge")
-        lines.append(f"host_cpu_usage_percent {cpu_usage:.1f}")
-
-        lines.append("# HELP host_memory_used_percent Host memory used percentage.")
-        lines.append("# TYPE host_memory_used_percent gauge")
-        lines.append(f"host_memory_used_percent {mem.percent:.1f}")
-
-        disk_used_pct = (disk.used / disk.total) * 100
-        lines.append(
-            "# HELP host_disk_used_percent Host disk capacity used percentage."
-        )
-        lines.append("# TYPE host_disk_used_percent gauge")
-        lines.append(f"host_disk_used_percent {disk_used_pct:.1f}")
-    except Exception as e:
-        logger.error(f"Failed to gather host metrics: {e}")
-
-    # outbound metrics
-    lines.append(
-        "# HELP outbound_http_requests_total Total number of outbound HTTP requests."
-    )
-    lines.append("# TYPE outbound_http_requests_total counter")
-    with metrics_store.outbound_lock:
-        for (host, status), count in metrics_store.outbound_request_counts.items():
-            lines.append(
-                f'outbound_http_requests_total{{host="{host}",status="{status}"}} {count}'
-            )
-
-    lines.append(
-        "# HELP outbound_http_request_duration_seconds Outbound HTTP request duration summary."
-    )
-    lines.append("# TYPE outbound_http_request_duration_seconds summary")
-    with metrics_store.outbound_lock:
-        for host, latencies in metrics_store.outbound_request_latency.items():
-            if latencies:
-                total_duration = sum(latencies)
-                count = len(latencies)
-                lines.append(
-                    f'outbound_http_request_duration_seconds_sum{{host="{host}"}} {total_duration:.6f}'
-                )
-                lines.append(
-                    f'outbound_http_request_duration_seconds_count{{host="{host}"}} {count}'
-                )
-
-    return Response(
-        content="\n".join(lines) + "\n", media_type="text/plain; version=0.0.4"
-    )
+# NOTE: GET /metrics was removed here (docs/plans/2026-09-04-retire-python-infra.md).
+# It served a Prometheus text exposition built from a per-process MetricsStore —
+# scraping one of N uvicorn workers gave a partial, misleading picture. Request
+# metrics belong at the Go gateway. infrastructure/prometheus.yml points there
+# now; the gateway's own /metrics endpoint is tracked as follow-up.

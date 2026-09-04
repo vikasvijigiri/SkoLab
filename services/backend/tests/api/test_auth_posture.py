@@ -6,8 +6,8 @@ checked-in expectation; ``public`` is asserted to be the remainder. A route that
 silently omits auth turns the build red.
 
 Routes are enumerated with ``_route_walk.iter_api_routes`` because FastAPI 0.141
-includes sub-routers lazily — ``app.routes`` alone shows only ``/``, ``/health``
-and ``/metrics``.
+includes sub-routers lazily — ``app.routes`` alone shows only ``/`` and the
+infra probes (``/health``, ``/livez``, ``/readyz``).
 
 See ``docs/backend-auth-posture.md`` for the model and the "adding a route"
 checklist.
@@ -36,7 +36,8 @@ EXPECTED_AUTHED: set[str] = {
     "/agent/chat",
     "/industry_academic_tieups",  # require_owner("user_id") — private memory profile
     "/users/quests",  # require_owner("user_id") — private quest records
-    "/daily_feed/dismiss",  # get_verified_user + users.openalex_id == body author_id
+    # NOTE: /daily_feed/dismiss moved to the Go gateway in Phase 2
+    # (services/backend-go/internal/feed/feed.go) — see docs/backend-auth-posture.md.
 }
 
 # Routes that personalise when a token is present but work anonymously.
