@@ -12,6 +12,7 @@ Previously also covered a unified paper/grant/collaborator recommendation
 endpoint and its 8-technique engine — removed along with that dead code.
 See decisions/0007-retire-dormant-unified-recommendations.md.
 """
+
 import numpy as np
 
 from app.domains.recommendation.engine import cosine_similarity, mmr_diversify
@@ -20,6 +21,7 @@ from app.domains.recommendation.engine import cosine_similarity, mmr_diversify
 # ──────────────────────────────────────────────────────────────────────────────
 # Fixtures
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def _make_paper(
     title: str,
@@ -54,6 +56,7 @@ def _unit_vector(seed: int, dim: int = 8) -> np.ndarray:
 # Cosine similarity
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def test_cosine_similarity_range():
     """Cosine similarity must always be in [0.0, 1.0]."""
     vecs = [_unit_vector(seed) for seed in range(5)]
@@ -76,10 +79,16 @@ def test_cosine_similarity_identical_texts():
 # MMR diversification
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def test_mmr_diversification_output_size():
     """MMR should return exactly k items from candidates."""
     papers = [
-        _make_paper(f"Paper {i}", f"machine learning neural networks {i}", ["machine learning"], pid=f"P{i}")
+        _make_paper(
+            f"Paper {i}",
+            f"machine learning neural networks {i}",
+            ["machine learning"],
+            pid=f"P{i}",
+        )
         for i in range(8)
     ]
     candidates_with_vecs = [(p, _unit_vector(i)) for i, p in enumerate(papers)]
@@ -92,7 +101,9 @@ def test_mmr_diversification_output_size():
 def test_mmr_diversification_no_duplicates():
     """MMR output should not contain duplicate papers."""
     papers = [
-        _make_paper(f"P{i}", f"machine learning {i}", ["machine learning"], pid=f"ID{i}")
+        _make_paper(
+            f"P{i}", f"machine learning {i}", ["machine learning"], pid=f"ID{i}"
+        )
         for i in range(6)
     ]
     candidates_with_vecs = [(p, _unit_vector(i)) for i, p in enumerate(papers)]
