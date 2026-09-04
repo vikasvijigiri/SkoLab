@@ -1,5 +1,6 @@
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends, Query, HTTPException
+from starlette.responses import JSONResponse
 
 import re
 
@@ -16,6 +17,7 @@ from app.services.data.openalex_service import OpenAlexService
 from app.services.ai.user_context import reconstruct_abstract
 from app.core.config import settings
 from app.core.cache import daily_conjecture_cache
+from app.core.pending_compute import PENDING, run_bounded
 from app.api.dependencies import (
     get_pipeline_services,
     get_openalex_service,
@@ -35,15 +37,43 @@ router = APIRouter()
 # client types them as `DailyFeedItem[]` / `IndustryOpportunity[]`). A `Page[T]`
 # envelope would be a response-shape change and break those clients, so they stay
 # `list[T]`; a paginated variant is a coordinated web+backend follow-up.
+#
+# Kept comfortably under the web client's default 15s fetch timeout
+# (apps/web/src/lib/api/client.ts DEFAULT_TIMEOUT_MS) and the Go gateway's
+# 120s proxy budget, so a single poll always gets a prompt response —
+# either the real result or a 202 telling the client to retry. See
+# app/core/pending_compute.py for why this exists and how it behaves.
+DAILY_FEED_WAIT_TIMEOUT_SECONDS = 10.0
+DAILY_FEED_RETRY_AFTER_SECONDS = 4
+
+
 @router.get("/daily_feed", response_model=list[DailyFeedItem])
 async def get_daily_feed(
     author_id: Optional[str] = None,
     query_fallback: Optional[str] = None,
     pipeline_services: PipelineServices = Depends(get_pipeline_services),
 ):
-    return await pipeline_services.get_daily_feed(
-        author_id, query_fallback=query_fallback
+    key = f"daily_feed:{author_id or ''}:{query_fallback or ''}"
+    result = await run_bounded(
+        key,
+        lambda: pipeline_services.get_daily_feed(
+            author_id, query_fallback=query_fallback
+        ),
+        wait_timeout=DAILY_FEED_WAIT_TIMEOUT_SECONDS,
     )
+    if result is PENDING:
+        # Generation is still running in the background and will be
+        # cached when it finishes — 202 Accepted + Retry-After is the
+        # standard HTTP signal for "accepted, not ready yet, ask again in
+        # N seconds" (RFC 9110 §15.3.3 / §10.2.3). Returning a Response
+        # subclass directly bypasses `response_model` for this one path;
+        # the normal 200 return below is still validated against it.
+        return JSONResponse(
+            status_code=202,
+            content=[],
+            headers={"Retry-After": str(DAILY_FEED_RETRY_AFTER_SECONDS)},
+        )
+    return result
 
 
 def generate_fallback_conjecture(author_data: dict) -> ConjectureResponse:
