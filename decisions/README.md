@@ -55,3 +55,4 @@ the old one's Status as `Superseded by NNNN`.
 | [0007](0007-retire-dormant-unified-recommendations.md) | Retire the dormant unified-recommendations endpoint (keep peer/invite/check-registered) |
 | [0008](0008-recommendation-peers-to-go-gateway.md) | `/recommendations/peers*` move to the Go gateway |
 | [0009](0009-phase1-authors-assessment.md) | Phase 1 (`authors.py` → Go) assessment: nothing moves yet |
+| [0010](0010-llm-python-rest-go-boundary.md) | The bright line: LLM/embedding work is Python, everything else is Go |

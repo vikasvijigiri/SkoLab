@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.core import AuthorResponse, AuthorSuggestion, Work
 from app.schemas.authors_extra import (
+    AuthorMetricsEnrichRequest,
     AuthorMetricsResponse,
     CollaboratorSynergyResponse,
     GrantMatch,
@@ -11,14 +12,13 @@ from app.schemas.authors_extra import (
     RefreshAuthorResponse,
 )
 from app.services.platform.pipeline_services import PipelineServices
-from app.services.platform.metrics_service import compute_author_metrics
+from app.services.platform.metrics_service import analyze_author_metrics_context
 from app.services.ai.summarization_service import is_llm_working
 from app.services.data.openalex_service import OpenAlexService
 from app.api.dependencies import get_pipeline_services, get_openalex_service, get_db
 from app.core.cache import (
     suggestions_cache,
     profile_cache,
-    author_metrics_cache,
 )
 
 import logging
@@ -667,22 +667,20 @@ async def search_author(
         raise
 
 
-@router.get("/author_metrics", response_model=AuthorMetricsResponse)
-async def get_author_metrics(
-    author_id: str = Query(...),
-):
-    cached = await author_metrics_cache.get(author_id)
-    if cached is not None:
-        logger.debug(f"[AuthorMetrics] Cache hit for author={author_id}")
-        return cached
+# GET /author_metrics — migrated to the Go gateway (internal/author/metrics.go).
+# Go does the OpenAlex fetch, the "not enough papers" 422, and the 2 h cache;
+# it calls the internal route below for the one model-bound step. decisions/0010.
 
-    try:
-        data = await compute_author_metrics(author_id)
-        await author_metrics_cache.set(author_id, data)
-        return data
-    except ValueError as e:
-        # Deliberate 4xx the route owns: a bad/unresolvable author_id.
-        raise HTTPException(status_code=422, detail=str(e))
+
+@router.post("/internal/author_metrics_enrich", response_model=AuthorMetricsResponse)
+async def author_metrics_enrich(req: AuthorMetricsEnrichRequest):
+    """LLM enrichment for ``GET /author_metrics`` (served by the Go gateway).
+
+    Takes the title/concepts digest the gateway built and returns the scored
+    bundle. Raises 503 (``AIUnavailable``) if the LLM step fails — the gateway
+    degrades that to an empty bundle on its side.
+    """
+    return await analyze_author_metrics_context(req.context)
 
 
 # GET /network_collaborators — migrated to Go (internal/author/network.go).

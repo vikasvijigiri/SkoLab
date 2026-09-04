@@ -65,3 +65,35 @@ async def test_refresh_author_requires_name(client):
     r = await client.get("/api/v1/refresh_author")
     assert r.status_code == 422
     assert r.json()["code"] == "validation_error"
+
+
+# GET /author_metrics moved to the Go gateway (internal/author/metrics.go); the
+# LLM analysis step it used is now this internal route — decisions/0010.
+async def test_author_metrics_enrich_returns_scored_bundle(client, monkeypatch):
+    from app.services.data import scraping_service
+
+    async def _fake_parse(self, *, raw_content, response_schema, instruction):
+        assert "Title:" in raw_content
+        return {
+            "topic_toughness": 71,
+            "velocity": 53,
+            "skills": ["Quantum optics"],
+            "tools": ["QuTiP"],
+            "analysis": "Dense, fast-moving work.",
+        }
+
+    monkeypatch.setattr(
+        scraping_service.ScrapingService, "parse_content_to_json", _fake_parse
+    )
+
+    r = await client.post(
+        "/api/v1/internal/author_metrics_enrich",
+        json={"context": "Title: A. Concepts: X, Y"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["topic_toughness"] == 71
+    assert body["velocity"] == 53
+    assert body["overall_score"] == 62  # int((71 + 53) / 2)
+    assert body["skills"] == ["Quantum optics"]
+    assert body["tools"] == ["QuTiP"]

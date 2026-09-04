@@ -24,16 +24,13 @@ async def test_metrics_endpoint_removed():
 
 
 @pytest.mark.anyio
-async def test_status_endpoint():
-    """Verify `/status` returns real-time availability states and incidents list."""
+async def test_status_endpoint_moved_to_go_gateway():
+    """`GET /api/v1/status` moved to the Go gateway (decisions/0010).
+
+    The status-shape + incidents-list assertions now live in
+    ``services/backend-go/internal/system/system_test.go``. Python no longer
+    serves the route.
+    """
     async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
-        response = await ac.get("/api/v1/status")  # router has /status endpoint
-        assert response.status_code == 200
-        data = response.json()
-        assert "status" in data
-        assert "services" in data
-        assert "database" in data["services"]
-        assert "cache_layer" in data["services"]
-        assert "incidents" in data
-        assert len(data["incidents"]) > 0
-        assert data["incidents"][0]["title"] == "OpenAlex Upstream API Outage"
+        response = await ac.get("/api/v1/status")
+        assert response.status_code == 404

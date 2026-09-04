@@ -22,6 +22,7 @@ import (
 	"github.com/skolab/backend-go/internal/middleware"
 	"github.com/skolab/backend-go/internal/quest"
 	"github.com/skolab/backend-go/internal/recommendation"
+	"github.com/skolab/backend-go/internal/system"
 	"github.com/skolab/backend-go/internal/user"
 	"github.com/skolab/backend-go/internal/websocket"
 	"golang.org/x/time/rate"
@@ -114,6 +115,22 @@ func main() {
 	r.GET("/api/v1/network_collaborators", author.GetNetworkCollaborators)
 	r.GET("/network_collaborators", author.GetNetworkCollaborators)
 	r.GET("/api/v1/authors/network_collaborators", author.GetNetworkCollaborators)
+
+	// GET /author_metrics — Go serves the endpoint (OpenAlex fetch + 422 + 2 h
+	// cache) and calls Python POST /api/v1/internal/author_metrics_enrich for the
+	// one model-bound step; degrades to an empty bundle if that is unavailable.
+	// Ported from authors.py::get_author_metrics — decisions/0010. Was public,
+	// stays public. Android calls the bare path on :8080.
+	r.GET("/api/v1/author_metrics", author.GetAuthorMetrics)
+	r.GET("/author_metrics", author.GetAuthorMetrics)
+	r.GET("/api/v1/authors/author_metrics", author.GetAuthorMetrics)
+
+	// ── System metadata — non-LLM, ported from endpoints/system.py ──────────
+	// GET /api/v1/ (API-router root) and GET /api/v1/status (public status
+	// report: DB/cache probe + incidents + LLM-inference flag). /ai_status stays
+	// in Python and is still reached via NoRoute. decisions/0010.
+	r.GET("/api/v1/", system.Root)
+	r.GET("/api/v1/status", system.Status)
 
 	// ── Leaderboard — PG query only ───────────────────────────────────────────
 	r.GET("/api/v1/leaderboard/:field", quest.GetLeaderboard)

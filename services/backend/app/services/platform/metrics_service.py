@@ -263,8 +263,19 @@ async def compute_author_metrics(
     if not results:
         raise ValueError("Not enough recent papers to analyze comprehensively.")
 
+    context = build_author_metrics_context(results)
+    return await analyze_author_metrics_context(context, scraping_service)
+
+
+def build_author_metrics_context(works: List[Dict]) -> str:
+    """Digest recent works into the title/concepts blob the LLM analysis reads.
+
+    Kept as a standalone function so the Go gateway's ``/author_metrics`` handler
+    (which does the OpenAlex fetch itself) and this in-process path produce the
+    byte-identical context string — see decisions/0010.
+    """
     abstracts = []
-    for work in results:
+    for work in works:
         title = work.get("title", "")
         concepts = [
             c.get("display_name")
@@ -272,8 +283,20 @@ async def compute_author_metrics(
             if c.get("display_name")
         ]
         abstracts.append(f"Title: {title}. Concepts: {', '.join(concepts)}")
+    return "\n".join(abstracts)
 
-    context = "\n".join(abstracts)
+
+async def analyze_author_metrics_context(
+    context: str,
+    scraping_service: Optional[ScrapingService] = None,
+) -> dict:
+    """The LLM half of ``/author_metrics``: parse a title/concepts digest into the
+    scored bundle. This is the one genuinely model-bound step; the Go gateway
+    calls it via ``POST /api/v1/internal/author_metrics_enrich`` (decisions/0010),
+    and the teleport worker reaches it through ``compute_author_metrics``.
+    """
+    if not scraping_service:
+        scraping_service = ScrapingService()
 
     schema = {
         "topic_toughness": "integer (0-100 indicating the complexity and niche of their topics)",
@@ -298,9 +321,10 @@ async def compute_author_metrics(
         parsed["overall_score"] = int((tt + vel) / 2)
         return parsed
     except Exception as e:
-        # The LLM step is the only thing that can fail here (works were already
-        # fetched above). There is no local fallback for this analysis, so
-        # surface it as a transient 503, not a 500. See app/core/exceptions.py.
+        # The LLM step is the only thing that can fail here. There is no local
+        # fallback for this analysis, so surface it as a transient 503, not a
+        # 500. See app/core/exceptions.py. (The Go gateway degrades this to an
+        # empty bundle on its side — decisions/0010.)
         from app.core.exceptions import AIUnavailable
 
         logger.error(f"Error analyzing metrics with LLM: {e}")
