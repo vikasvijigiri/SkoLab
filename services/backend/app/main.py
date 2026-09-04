@@ -517,31 +517,6 @@ async def security_guard_middleware(request: Request, call_next):
     return await call_next(request)
 
 
-class _BackgroundTaskGauge:
-    """Compat shim for the retired ``MetricsStore``.
-
-    The full metrics store (Prometheus counters, latency histograms, outbound
-    HTTP stats and the ``GET /metrics`` endpoint) was removed — the Go gateway
-    owns request metrics now. ``app/api/v1/endpoints/authors.py`` is owned by a
-    parallel stream and still calls these two methods from its teleport
-    background task with an unguarded ``from app.main import metrics_store``.
-    This keeps that import working until that stream drops the gauge calls, at
-    which point the shim can be deleted. Nothing reads ``background_tasks_active``.
-    """
-
-    def __init__(self) -> None:
-        self.background_tasks_active = 0
-
-    async def increment_background_tasks(self) -> None:
-        self.background_tasks_active += 1
-
-    async def decrement_background_tasks(self) -> None:
-        self.background_tasks_active = max(0, self.background_tasks_active - 1)
-
-
-metrics_store = _BackgroundTaskGauge()
-
-
 @app.middleware("http")
 async def structured_log_middleware(request: Request, call_next):
     # W3C traceparent extraction and validation

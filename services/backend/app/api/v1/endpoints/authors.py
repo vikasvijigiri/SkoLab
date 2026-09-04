@@ -41,13 +41,7 @@ except ImportError:
 
 async def track_teleport_researcher(author_id: str):
     if teleport_researcher is not None:
-        from app.main import metrics_store
-
-        await metrics_store.increment_background_tasks()
-        try:
-            await teleport_researcher(author_id)
-        finally:
-            await metrics_store.decrement_background_tasks()
+        await teleport_researcher(author_id)
 
 
 router = APIRouter()
