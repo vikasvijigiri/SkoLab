@@ -100,7 +100,7 @@ the question in review — do not guess it into `authed`.
 
 | Routes | Now served by | Auth |
 | :--- | :--- | :--- |
-| `GET/POST /api/v1/recommendations/peers`, `/peers/invite`, `/peers/check-registered` | Go gateway — `internal/recommendation` | **Transitional** `VerifyUserOptional` — a valid token sets `user_id`, a missing/invalid one is allowed through; a per-IP rate limit (5 rps) and a 200-identifier cap on `check-registered` bound the enumeration risk. Flips to hard `VerifyUser` once the Android client attaches a token — `decisions/0008`. |
+| `GET/POST /api/v1/recommendations/peers`, `/peers/invite`, `/peers/check-registered` | Go gateway — `internal/recommendation` | **Hard `auth.VerifyUser()`** — 401 without a valid Firebase token. The Android client attaches one as of #27 (`network/AuthInterceptor.kt`); the web client via `apiRequest({ idToken })`. A per-IP rate limit (5 rps) + a 200-identifier cap on `check-registered` still bound abuse from an authenticated caller. `decisions/0008`. |
 | `POST /api/v1/daily_feed/dismiss` | Go gateway — `internal/feed` | `auth.VerifyUser()` (**401** without a token) **and** the handler requires `users.openalex_id` for the verified uid to equal the body `author_id` — **403** on mismatch or an unlinked account. Same check as the old Python route, ported verbatim (Phase 2, `docs/plans/2026-09-04-phase2-feed-to-go.md`). |
 | `GET /api/v1/support/metrics`, `GET /api/v1/integrations/zotero/auth`, `GET /api/v1/integrations/zotero/callback`, `POST /api/v1/integrations/zotero/sync` | Go gateway — `internal/feed` | **Public.** `support/metrics` is a static counter dict; the `zotero/*` routes are OAuth stubs with no per-user state (unchanged from Python). |
 
