@@ -124,36 +124,14 @@ def test_pre_shift_check_http_helpers_fail(mock_urlopen):
 
 
 @pytest.mark.anyio
-async def test_status_endpoint_degraded_db():
-    """Verify `/status` handles database health failure gracefully."""
-    with patch("app.db.database.AsyncSessionLocal") as mock_session_class:
-        # Cause context manager to throw error
-        mock_session_class.side_effect = Exception("DB Connection Refused")
+async def test_status_endpoint_moved_to_go_gateway():
+    """`GET /api/v1/status` moved to the Go gateway (decisions/0010).
 
-        async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
-            response = await ac.get("/api/v1/status")
-            assert response.status_code == 200
-            data = response.json()
-            assert data["services"]["database"] == "degraded"
-            assert data["status"] in ["degraded", "outage"]
-
-
-@pytest.mark.anyio
-async def test_status_endpoint_degraded_cache(monkeypatch):
-    """Verify `/status` reports the cache degraded when the L2 (Redis) probe
-    fails. The probe is read-only now (a `PING`, not a write)."""
-    import app.db.pg_cache as pg_cache
-
-    class _BoomRedis:
-        async def ping(self):
-            raise Exception("Cache down")
-
-    monkeypatch.setattr(pg_cache, "_redis_active", True)
-    monkeypatch.setattr(pg_cache, "_redis_client", _BoomRedis())
-
+    The DB-degraded / cache-degraded / overall-state behaviour this suite used
+    to cover now lives in
+    ``services/backend-go/internal/system/system_test.go``. Python must no
+    longer serve the route.
+    """
     async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
         response = await ac.get("/api/v1/status")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["services"]["cache_layer"] == "degraded"
-        assert data["status"] in ["degraded", "outage"]
+        assert response.status_code == 404

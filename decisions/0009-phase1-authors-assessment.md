@@ -1,7 +1,10 @@
 # 0009. Phase 1 (`authors.py` → Go) — assessment: nothing moves yet
 
 **Date:** 2026-09-04
-**Status:** Accepted
+**Status:** Accepted — the `/author_metrics` conclusion (row below, and the
+"stay in Python permanently" list) is revised by
+[0010](0010-llm-python-rest-go-boundary.md): the endpoint's routing front door
+moves to Go with a Python LLM callback. The rest of this assessment stands.
 
 ## Context
 
