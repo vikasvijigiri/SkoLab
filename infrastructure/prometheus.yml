@@ -5,7 +5,16 @@ rule_files:
   - "alertmanager-alerts.yml"
 
 scrape_configs:
-  - job_name: 'skolab-backend'
+  # The Python FastAPI service no longer exposes /metrics — its per-process
+  # MetricsStore was retired (docs/plans/2026-09-04-retire-python-infra.md).
+  # Request metrics belong to the Go API gateway, which fronts every request.
+  #
+  # [NEEDS DECISION] The gateway does not expose a Prometheus endpoint yet
+  # (no prometheus/client_golang dependency). Once a minimal promhttp handler
+  # is added at services/backend-go (tracked follow-up), this target starts
+  # returning data. Until then the scrape will fail — that is expected and
+  # preferable to scraping one of N Python workers for a partial picture.
+  - job_name: 'skolab-gateway'
     metrics_path: '/metrics'
     static_configs:
-      - targets: ['host.docker.internal:8000']
+      - targets: ['host.docker.internal:8080']

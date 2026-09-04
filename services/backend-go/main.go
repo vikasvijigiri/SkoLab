@@ -18,6 +18,7 @@ import (
 	"github.com/skolab/backend-go/internal/author"
 	"github.com/skolab/backend-go/internal/db"
 	"github.com/skolab/backend-go/internal/feed"
+	"github.com/skolab/backend-go/internal/firestore"
 	"github.com/skolab/backend-go/internal/middleware"
 	"github.com/skolab/backend-go/internal/quest"
 	"github.com/skolab/backend-go/internal/recommendation"
@@ -39,6 +40,10 @@ func main() {
 	}
 
 	auth.InitFirebase()
+
+	// Firestore mirror tier for ported endpoints (e.g. /citation_heatmap). Uses
+	// the same ambient credentials as auth; degrades to a no-op if unavailable.
+	firestore.Init()
 
 	if err := db.InitDB(); err != nil {
 		log.Printf("WARNING: PostgreSQL init failed (%v) — DB-backed endpoints will be degraded\n", err)
@@ -97,6 +102,18 @@ func main() {
 	r.GET("/api/v1/authors/resolve_email", author.ResolveAuthorEmail)
 	r.GET("/authors/resolve_email", author.ResolveAuthorEmail)
 	r.GET("/resolve_email", author.ResolveAuthorEmail)
+	// citation_heatmap — ported from services/backend/app/services/platform/
+	// pipeline/heatmap.py (no LLM, no embedding). Only the /api/v1 form was ever
+	// exercised by clients / the Python test.
+	r.GET("/api/v1/citation_heatmap", author.GetCitationHeatmap)
+
+	// GET /network_collaborators — depth-1/2 co-author fan-out + Jaccard, no AI.
+	// Ported from services/backend/app/services/platform/pipeline/network.py
+	// (docs/plans/2026-09-04-network-collaborators-to-go.md). The web client
+	// calls the bare path on :8080; the /api/v1 alias keeps the old contract.
+	r.GET("/api/v1/network_collaborators", author.GetNetworkCollaborators)
+	r.GET("/network_collaborators", author.GetNetworkCollaborators)
+	r.GET("/api/v1/authors/network_collaborators", author.GetNetworkCollaborators)
 
 	// ── Leaderboard — PG query only ───────────────────────────────────────────
 	r.GET("/api/v1/leaderboard/:field", quest.GetLeaderboard)

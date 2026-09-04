@@ -6,8 +6,8 @@ checked-in expectation; ``public`` is asserted to be the remainder. A route that
 silently omits auth turns the build red.
 
 Routes are enumerated with ``_route_walk.iter_api_routes`` because FastAPI 0.141
-includes sub-routers lazily — ``app.routes`` alone shows only ``/``, ``/health``
-and ``/metrics``.
+includes sub-routers lazily — ``app.routes`` alone shows only ``/`` and the
+infra probes (``/health``, ``/livez``, ``/readyz``).
 
 See ``docs/backend-auth-posture.md`` for the model and the "adding a route"
 checklist.

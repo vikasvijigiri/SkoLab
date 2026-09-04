@@ -640,48 +640,6 @@
         "title": "ChatWithAuthorResponse",
         "type": "object"
       },
-      "CitationHeatmap": {
-        "additionalProperties": true,
-        "description": "``GET /citation_heatmap``.",
-        "properties": {
-          "citations": {
-            "default": [],
-            "items": {
-              "type": "integer"
-            },
-            "title": "Citations",
-            "type": "array"
-          },
-          "h_index": {
-            "default": 0,
-            "title": "H Index",
-            "type": "integer"
-          },
-          "institutional_reach": {
-            "default": 0.0,
-            "title": "Institutional Reach",
-            "type": "number"
-          },
-          "works": {
-            "default": [],
-            "items": {
-              "type": "integer"
-            },
-            "title": "Works",
-            "type": "array"
-          },
-          "years": {
-            "default": [],
-            "items": {
-              "type": "integer"
-            },
-            "title": "Years",
-            "type": "array"
-          }
-        },
-        "title": "CitationHeatmap",
-        "type": "object"
-      },
       "CollaboratorSynergyResponse": {
         "additionalProperties": true,
         "description": "``GET /collaborator_synergy`` \u2014 pairwise synergy metrics (LLM/graph-shaped).",
@@ -1243,80 +1201,6 @@
           "status"
         ],
         "title": "LivenessResponse",
-        "type": "object"
-      },
-      "NetworkCollaborator": {
-        "additionalProperties": true,
-        "description": "One row of ``GET /network_collaborators`` (bare JSON array).",
-        "properties": {
-          "connection_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Connection Path"
-          },
-          "field": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Field"
-          },
-          "id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
-          },
-          "institution": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Institution"
-          },
-          "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          },
-          "relevance_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Relevance Score"
-          }
-        },
-        "title": "NetworkCollaborator",
         "type": "object"
       },
       "NexusChatRequest": {
@@ -2123,7 +2007,7 @@
     }
   },
   "info": {
-    "description": "Research intelligence backend powering the SkoLab Android app.\n\n**Auth**: Protected endpoints require a Firebase ID token in the `Authorization: Bearer <token>` header.\n\n**Rate limits**: `/agent/chat` and search endpoints \u2014 5 req/min per IP. All other endpoints \u2014 60 req/min per IP.",
+    "description": "Research intelligence backend powering the SkoLab Android app.\n\n**Auth**: Protected endpoints require a Firebase ID token in the `Authorization: Bearer <token>` header.\n\n**Rate limits**: enforced per-IP by the Go API gateway in front of this service, not here.",
     "title": "SkoLab API",
     "version": "1.1.0"
   },
@@ -2519,48 +2403,6 @@
         "summary": "Chat With Author",
         "tags": [
           "Agent"
-        ]
-      }
-    },
-    "/api/v1/citation_heatmap": {
-      "get": {
-        "operationId": "get_citation_heatmap_api_v1_citation_heatmap_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "author_id",
-            "required": true,
-            "schema": {
-              "title": "Author Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CitationHeatmap"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Citation Heatmap",
-        "tags": [
-          "Authors"
         ]
       }
     },
@@ -3093,105 +2935,6 @@
         ]
       }
     },
-    "/api/v1/network_collaborators": {
-      "get": {
-        "operationId": "get_network_collaborators_api_v1_network_collaborators_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "author_id",
-            "required": true,
-            "schema": {
-              "title": "Author Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "exclude_ids",
-            "required": false,
-            "schema": {
-              "default": "",
-              "title": "Exclude Ids",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "field",
-            "required": false,
-            "schema": {
-              "default": "",
-              "title": "Field",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "name",
-            "required": false,
-            "schema": {
-              "default": "",
-              "title": "Name",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "maximum": 100,
-              "minimum": 1,
-              "title": "Limit",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "offset",
-            "required": false,
-            "schema": {
-              "default": 0,
-              "minimum": 0,
-              "title": "Offset",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/NetworkCollaborator"
-                  },
-                  "title": "Response Get Network Collaborators Api V1 Network Collaborators Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Network Collaborators",
-        "tags": [
-          "Authors"
-        ]
-      }
-    },
     "/api/v1/presentation_outline": {
       "get": {
         "operationId": "presentation_outline_api_v1_presentation_outline_get",
@@ -3594,23 +3337,6 @@
         "summary": "Livez"
       }
     },
-    "/metrics": {
-      "get": {
-        "description": "Prometheus metrics endpoint in plain text exposition format.",
-        "operationId": "metrics_metrics_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Metrics"
-      }
-    },
     "/readyz": {
       "get": {
         "description": "Readiness probe \u2014 should traffic route here? 503 drains this instance.",
@@ -3651,7 +3377,7 @@
       "name": "feed"
     },
     {
-      "description": "Health, metrics, and AI status endpoints.",
+      "description": "Health, readiness, and AI status endpoints.",
       "name": "system"
     }
   ]
