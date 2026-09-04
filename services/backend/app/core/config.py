@@ -202,6 +202,63 @@ class Settings:
         )
     )
 
+    # ── LLM model selection — env-configurable, never hardcoded in a call
+    # site. Incident, 2026-09-04: "llama-3.3-70b-versatile" (and 4 other
+    # Groq models in the old fallback list) had been decommissioned/removed
+    # by Groq — confirmed via the API's own model_not_found /
+    # model_decommissioned errors, not an assumption. The model name was
+    # hardcoded as a literal string in 6 places across 5 files
+    # (llm_service.py, pipeline/base.py, data/scraping_service.py,
+    # endpoints/system.py, endpoints/feed.py), so every one of them broke
+    # silently and identically — is_llm_working() only checks that GROQ_API
+    # is *configured*, not that the configured model is actually callable,
+    # so /ai_status kept reporting llm_active: true throughout. A single
+    # settings field means the next Groq deprecation is a one-line env var
+    # change on Render, not another emergency multi-file code deploy.
+    #
+    # llm_primary_model: the one model pipeline call sites request first
+    # (app/services/platform/pipeline/base.py's self.model and
+    # data/scraping_service.py's self.model) — still subject to the full
+    # fallback chain below if it fails.
+    llm_primary_model: str = field(
+        default_factory=lambda: os.environ.get(
+            "LLM_PRIMARY_MODEL", "openai/gpt-oss-120b"
+        )
+    )
+    # llm_fast_model: for a background/routine task that wants a small,
+    # cheap, low-latency model rather than the heavier primary — e.g.
+    # agent_service.py's chat-history summarizer. qwen3.8-27b isn't a
+    # reasoning model (see llm_fallback_models above), so it answers
+    # directly with no internal reasoning trace eating into max_tokens.
+    llm_fast_model: str = field(
+        default_factory=lambda: os.environ.get("LLM_FAST_MODEL", "qwen/qwen3.8-27b")
+    )
+    # llm_fallback_models: the ordered chain llm_service.py's LLMService
+    # tries by default, comma-separated, capped at runtime by
+    # llm_max_fallback_models above. The first 3 entries are Groq models
+    # verified live against a real completion call (including
+    # response_format: json_object, which every JSON-extraction call site
+    # here relies on) on 2026-09-04; the rest are pre-existing OpenRouter
+    # entries, unverified this session (no OpenRouter key available), kept
+    # as further redundancy if OPENROUTER_API_KEY is set.
+    #
+    # gpt-oss-120b/-20b are reasoning models — part of `max_tokens` is
+    # spent on an internal reasoning trace before the final answer, so a
+    # call site tuned for a non-reasoning model with a tight max_tokens can
+    # come back empty; raise max_tokens there rather than dropping the
+    # model. qwen3.8-27b is not a reasoning model and answers directly.
+    llm_fallback_models: str = field(
+        default_factory=lambda: os.environ.get(
+            "LLM_FALLBACK_MODELS",
+            "openai/gpt-oss-120b,openai/gpt-oss-20b,qwen/qwen3.8-27b,"
+            "google/gemma-4-31b-it:free,meta-llama/llama-3.3-70b-instruct:free,"
+            "meta-llama/llama-3.2-3b-instruct:free,openai/gpt-oss-120b:free,"
+            "meta-llama/llama-3.3-70b-instruct,google/gemma-2-9b-it,"
+            "qwen/qwen-2.5-72b-instruct,meta-llama/llama-3-8b-instruct,"
+            "openai/gpt-4o-mini,openrouter/auto",
+        )
+    )
+
     # ── Observability ────────────────────────────────────────────────────────
     # Sentry DSN. Empty (the default) leaves Sentry inert — the SDK is never
     # initialised. Set SENTRY_DSN in the deployment environment to enable error
