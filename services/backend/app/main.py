@@ -417,7 +417,10 @@ app = FastAPI(
         },
         {"name": "users", "description": "User account management and GDPR deletion."},
         {"name": "feed", "description": "Personalised daily feed and trending items."},
-        {"name": "system", "description": "Health, readiness, and AI status endpoints."},
+        {
+            "name": "system",
+            "description": "Health, readiness, and AI status endpoints.",
+        },
     ],
     swagger_ui_parameters={"persistAuthorization": True},
 )
