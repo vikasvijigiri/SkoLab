@@ -29,4 +29,4 @@ sentry-sdk[fastapi]==2.42.0
 # sentry_sdk.init() time (to patch Jinja2Templates), even though this API
 # never renders HTML templates. Without it installed, init_observability()
 # crashes the whole process on boot as soon as SENTRY_DSN is set.
-jinja2==3.1.5
+jinja2==3.1.6
