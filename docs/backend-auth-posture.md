@@ -53,7 +53,9 @@ the question in review — do not guess it into `authed`.
 | :--- | :--- |
 | `GET /industry_academic_tieups` | Reads the caller's **private** semantic-memory profile (`UserMemoryService`); `user_id` is documented as the Firebase UID. |
 | `GET /users/quests` | Creates/returns the caller's **private** quest records in Postgres, keyed by `User.id` (the Firebase uid). |
-| `POST /daily_feed/dismiss` | A write to a per-profile dismissed-ids list. `author_id` (body) is an OpenAlex id, so it is bound via `get_verified_user` + a `uid → users.openalex_id` lookup rather than `require_owner`: 401 with no token, 403 when the token's user is not that OpenAlex author. |
+
+> `POST /daily_feed/dismiss` was here; it moved to the Go gateway in Phase 2 —
+> see "Moved off the Python backend" below. Same owner check, ported faithfully.
 
 ### optional — `Depends(get_optional_user)` (personalise if a token is present; work anonymously)
 
@@ -73,21 +75,24 @@ the question in review — do not guess it into `authed`.
 | `GET /author_metrics`, `GET /network_collaborators`, `GET /collaborator_synergy`, `GET /citation_heatmap` | Metrics computed from **any** researcher's public publication record; `author_id` is an OpenAlex id. |
 | `GET /match_grants`, `GET /journal_advisor` | Recommendations derived from a researcher's public works; used when viewing arbitrary profiles, not just one's own. |
 | `GET /semantic_trending` | Trending papers in a researcher's field; reads only public OpenAlex concepts. |
-| `GET /daily_feed`, `GET /daily_conjecture`, `GET /assistant_professor_roadmap`, `GET /industry_opportunities` | Feed/roadmap keyed by an OpenAlex `author_id`; explicitly support anonymous / `default_feed`. (`POST /daily_feed/dismiss` is now owner-scoped — see the authed table.) |
+| `GET /daily_feed`, `GET /daily_conjecture`, `GET /assistant_professor_roadmap`, `GET /industry_opportunities` | Feed/roadmap keyed by an OpenAlex `author_id`; explicitly support anonymous / `default_feed`. (`POST /daily_feed/dismiss` moved to the Go gateway — see "Moved off the Python backend".) |
 | `GET /leaderboard/{field}` | Public quest leaderboard. |
 | `POST /agent/upload_document` | Stateless document extraction; no identity involved. |
 | `GET /summarize_work`, `GET /analyze_paper`, `GET /presentation_outline` | Public paper intelligence. |
-| `GET /support/metrics` | Support dashboard counters. |
-| `GET /zotero/auth`, `GET /zotero/callback`, `POST /zotero/sync` | Mock/stub integration endpoints with no backend per-user state — see open item below. |
+
+> `GET /support/metrics` and the `GET/POST /zotero/*` stubs moved to the Go
+> gateway in Phase 2 — see "Moved off the Python backend".
 
 ### Open items (tracked, not closed here)
 
-- **`/zotero/*`** — take a `user_id` but are unimplemented stubs. When Zotero
-  linking becomes real it should be owner-scoped (or move to the Go gateway).
+- **`/zotero/*`** — moved to the Go gateway as still-unimplemented stubs
+  (`internal/feed/feed.go`). When Zotero linking becomes real it should be
+  owner-scoped in Go (`auth.VerifyUser()` + a uid check).
 
-> `POST /daily_feed/dismiss` was in this list; it is now owner-scoped via a
-> `uid → users.openalex_id` lookup. The web client (`dismissDailyFeedItem`,
-> `home/page.tsx`) now sends the token. A signed-in user who has not linked an
+> `POST /daily_feed/dismiss` was in this list; it is now owner-scoped and, as of
+> Phase 2, served by the Go gateway (`internal/feed`). The web client
+> (`dismissDailyFeedItem`) already sends the Firebase token and targets the same
+> gateway path, so it needed no change. A signed-in user who has not linked an
 > OpenAlex profile gets 403 on dismiss until they link — acceptable, the feed
 > still renders.
 
@@ -96,6 +101,8 @@ the question in review — do not guess it into `authed`.
 | Routes | Now served by | Auth |
 | :--- | :--- | :--- |
 | `GET/POST /api/v1/recommendations/peers`, `/peers/invite`, `/peers/check-registered` | Go gateway — `internal/recommendation` | **Transitional** `VerifyUserOptional` — a valid token sets `user_id`, a missing/invalid one is allowed through; a per-IP rate limit (5 rps) and a 200-identifier cap on `check-registered` bound the enumeration risk. Flips to hard `VerifyUser` once the Android client attaches a token — `decisions/0008`. |
+| `POST /api/v1/daily_feed/dismiss` | Go gateway — `internal/feed` | `auth.VerifyUser()` (**401** without a token) **and** the handler requires `users.openalex_id` for the verified uid to equal the body `author_id` — **403** on mismatch or an unlinked account. Same check as the old Python route, ported verbatim (Phase 2, `docs/plans/2026-09-04-phase2-feed-to-go.md`). |
+| `GET /api/v1/support/metrics`, `GET /api/v1/integrations/zotero/auth`, `GET /api/v1/integrations/zotero/callback`, `POST /api/v1/integrations/zotero/sync` | Go gateway — `internal/feed` | **Public.** `support/metrics` is a static counter dict; the `zotero/*` routes are OAuth stubs with no per-user state (unchanged from Python). |
 
 Email matching in `peers` / `check-registered` uses the `users.email_bidx`
 blind-index column (`users.email` is Fernet-encrypted, so equality/`ILIKE` never
