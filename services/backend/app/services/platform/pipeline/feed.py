@@ -9,7 +9,6 @@ import httpx
 import numpy as np
 
 from app.core.config import settings
-from app.db.pg_cache import PgBackedCache
 from app.domains.recommendation.engine import (
     cosine_similarity as vector_cosine_similarity,
     mmr_diversify,
@@ -222,23 +221,17 @@ class FeedMixin:
     async def get_dismissed_recommendation_ids(
         self, author_id: Optional[str]
     ) -> Set[str]:
-        """OpenAlex work IDs this author has explicitly dismissed from their feed."""
+        """OpenAlex work IDs this author has explicitly dismissed from their feed.
+
+        The *write* path (``POST /daily_feed/dismiss``) moved to the Go gateway
+        in Phase 2 (``services/backend-go/internal/feed/feed.go``); this read is
+        still used by ``get_daily_feed`` to filter and to bust a stale cache.
+        The Go writer uses the identical ``pipeline_dismissed_recs::<doc_id>``
+        key and ``{"v": [...]}`` envelope.
+        """
         doc_id = author_id.split("/")[-1] if author_id else "anon"
         ids = await _pg_dismissed_recs_cache.get(doc_id)
         return set(ids) if ids else set()
-
-    async def dismiss_recommendation(self, author_id: str, work_id: str) -> None:
-        """
-        Records a dismissal and invalidates the cached feed so the next fetch
-        recomputes without this paper, instead of silently re-serving a stale
-        cached feed that still contains it for up to an hour.
-        """
-        doc_id = author_id.split("/")[-1] if author_id else "anon"
-        current = await self.get_dismissed_recommendation_ids(author_id)
-        current.add(work_id)
-        await _pg_dismissed_recs_cache.set(doc_id, list(current))
-        feed_cache = PgBackedCache(ttl_seconds=3600, name="pipeline")
-        await feed_cache.delete(f"daily_feed_{doc_id}")
 
     async def get_daily_feed(
         self, author_id: Optional[str], query_fallback: Optional[str] = None

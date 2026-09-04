@@ -862,38 +862,6 @@
         "title": "DailyFeedItem",
         "type": "object"
       },
-      "DismissFeedItemRequest": {
-        "properties": {
-          "author_id": {
-            "title": "Author Id",
-            "type": "string"
-          },
-          "work_id": {
-            "title": "Work Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "author_id",
-          "work_id"
-        ],
-        "title": "DismissFeedItemRequest",
-        "type": "object"
-      },
-      "DismissResponse": {
-        "description": "``POST /daily_feed/dismiss``.",
-        "properties": {
-          "success": {
-            "title": "Success",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "success"
-        ],
-        "title": "DismissResponse",
-        "type": "object"
-      },
       "GrantMatch": {
         "additionalProperties": true,
         "description": "One row of ``GET /match_grants`` (bare JSON array).",
@@ -1858,33 +1826,6 @@
         "title": "SummarizeWorkResponse",
         "type": "object"
       },
-      "SupportMetricsResponse": {
-        "description": "``GET /support/metrics`` \u2014 SLA targets, performance, and queue status.",
-        "properties": {
-          "performance_metrics": {
-            "additionalProperties": true,
-            "title": "Performance Metrics",
-            "type": "object"
-          },
-          "queue_status": {
-            "additionalProperties": true,
-            "title": "Queue Status",
-            "type": "object"
-          },
-          "sla_targets": {
-            "additionalProperties": true,
-            "title": "Sla Targets",
-            "type": "object"
-          }
-        },
-        "required": [
-          "sla_targets",
-          "performance_metrics",
-          "queue_status"
-        ],
-        "title": "SupportMetricsResponse",
-        "type": "object"
-      },
       "SystemServiceStatuses": {
         "properties": {
           "ai_inference": {
@@ -2171,103 +2112,6 @@
           }
         },
         "title": "Work",
-        "type": "object"
-      },
-      "ZoteroAuthResponse": {
-        "description": "``GET /integrations/zotero/auth``.",
-        "properties": {
-          "authorization_url": {
-            "title": "Authorization Url",
-            "type": "string"
-          }
-        },
-        "required": [
-          "authorization_url"
-        ],
-        "title": "ZoteroAuthResponse",
-        "type": "object"
-      },
-      "ZoteroCallbackResponse": {
-        "description": "``GET /integrations/zotero/callback``.",
-        "properties": {
-          "message": {
-            "title": "Message",
-            "type": "string"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          },
-          "zotero_user_id": {
-            "title": "Zotero User Id",
-            "type": "string"
-          },
-          "zotero_username": {
-            "title": "Zotero Username",
-            "type": "string"
-          }
-        },
-        "required": [
-          "status",
-          "message",
-          "zotero_user_id",
-          "zotero_username"
-        ],
-        "title": "ZoteroCallbackResponse",
-        "type": "object"
-      },
-      "ZoteroSyncRequest": {
-        "properties": {
-          "papers": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Papers",
-            "type": "array"
-          },
-          "user_id": {
-            "title": "User Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "user_id",
-          "papers"
-        ],
-        "title": "ZoteroSyncRequest",
-        "type": "object"
-      },
-      "ZoteroSyncResponse": {
-        "description": "``POST /integrations/zotero/sync``.",
-        "properties": {
-          "message": {
-            "title": "Message",
-            "type": "string"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          },
-          "synced_count": {
-            "title": "Synced Count",
-            "type": "integer"
-          },
-          "synced_papers": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Synced Papers",
-            "type": "array"
-          }
-        },
-        "required": [
-          "status",
-          "synced_count",
-          "synced_papers",
-          "message"
-        ],
-        "title": "ZoteroSyncResponse",
         "type": "object"
       }
     },
@@ -2905,52 +2749,6 @@
         ]
       }
     },
-    "/api/v1/daily_feed/dismiss": {
-      "post": {
-        "operationId": "dismiss_daily_feed_item_api_v1_daily_feed_dismiss_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DismissFeedItemRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DismissResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Dismiss Daily Feed Item",
-        "tags": [
-          "Feed"
-        ]
-      }
-    },
     "/api/v1/discovery/nexus-chat": {
       "post": {
         "operationId": "nexus_chat_api_v1_discovery_nexus_chat_post",
@@ -3153,143 +2951,6 @@
         "summary": "Get Industry Opportunities",
         "tags": [
           "Feed"
-        ]
-      }
-    },
-    "/api/v1/integrations/zotero/auth": {
-      "get": {
-        "description": "Step 1: Returns the Zotero OAuth authorization URL to initiate link flow.",
-        "operationId": "zotero_auth_init_api_v1_integrations_zotero_auth_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "user_id",
-            "required": true,
-            "schema": {
-              "title": "User Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ZoteroAuthResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Zotero Auth Init",
-        "tags": [
-          "Integrations"
-        ]
-      }
-    },
-    "/api/v1/integrations/zotero/callback": {
-      "get": {
-        "description": "Step 2: Handles the Zotero redirect callback, exchanges token, and marks user as connected.",
-        "operationId": "zotero_auth_callback_api_v1_integrations_zotero_callback_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "oauth_token",
-            "required": true,
-            "schema": {
-              "title": "Oauth Token",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "oauth_verifier",
-            "required": true,
-            "schema": {
-              "title": "Oauth Verifier",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ZoteroCallbackResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Zotero Auth Callback",
-        "tags": [
-          "Integrations"
-        ]
-      }
-    },
-    "/api/v1/integrations/zotero/sync": {
-      "post": {
-        "description": "Step 3: Pushes a list of papers from the SkoLab SwipeVault directly into Zotero via Zotero API.",
-        "operationId": "zotero_sync_papers_api_v1_integrations_zotero_sync_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ZoteroSyncRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ZoteroSyncResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Zotero Sync Papers",
-        "tags": [
-          "Integrations"
         ]
       }
     },
@@ -3840,27 +3501,6 @@
         "summary": "Summarize Work",
         "tags": [
           "Papers"
-        ]
-      }
-    },
-    "/api/v1/support/metrics": {
-      "get": {
-        "operationId": "get_support_metrics_api_v1_support_metrics_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SupportMetricsResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Get Support Metrics",
-        "tags": [
-          "Support"
         ]
       }
     },
