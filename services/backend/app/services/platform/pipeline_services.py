@@ -12,7 +12,6 @@ from app.services.platform.pipeline.author_chat import AuthorChatMixin
 from app.services.platform.pipeline.base import _PipelineBase
 from app.services.platform.pipeline.feed import FeedMixin
 from app.services.platform.pipeline.grants import GrantsMixin
-from app.services.platform.pipeline.heatmap import HeatmapMixin
 from app.services.platform.pipeline.journals import JournalsMixin
 from app.services.platform.pipeline.network import NetworkMixin
 from app.services.platform.pipeline.synergy import SynergyMixin
@@ -36,7 +35,6 @@ class PipelineServices(
     FeedMixin,
     GrantsMixin,
     SynergyMixin,
-    HeatmapMixin,
     JournalsMixin,
     NetworkMixin,
     AuthorChatMixin,

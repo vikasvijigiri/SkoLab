@@ -9,7 +9,6 @@ import pytest
 
 from app.api.dependencies import get_openalex_service, get_pipeline_services
 from app.schemas.authors_extra import (
-    CitationHeatmap,
     GrantMatch,
     JournalRecommendation,
     NetworkCollaborator,
@@ -32,15 +31,6 @@ class _FakePipeline:
 
     async def get_collaborator_synergy(self, *a, **k):
         return {"shared_topics": ["compilers"], "score": 0.7}
-
-    async def get_citation_heatmap(self, *a, **k):
-        return {
-            "years": [2022, 2023],
-            "citations": [10, 20],
-            "works": [1, 2],
-            "institutional_reach": 3.0,
-            "h_index": 2,
-        }
 
     async def match_grants(self, *a, **k):
         return [{"title": "NSF CAREER", "agency": "NSF", "match_score": 0.9}]
@@ -81,10 +71,9 @@ async def test_network_collaborators_is_typed_array_and_bounds_limit(client):
     assert bad.status_code == 422
 
 
-async def test_citation_heatmap_parses(client):
-    r = await client.get("/api/v1/citation_heatmap", params={"author_id": "A1"})
-    assert r.status_code == 200, r.text
-    CitationHeatmap(**r.json())
+# test_citation_heatmap_parses removed — GET /citation_heatmap migrated to the Go
+# gateway (services/backend-go/internal/author/heatmap.go), same as resolve_email
+# / orbit_metrics before it.
 
 
 async def test_match_grants_and_journal_advisor_are_typed_arrays(client):

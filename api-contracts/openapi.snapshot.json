@@ -640,48 +640,6 @@
         "title": "ChatWithAuthorResponse",
         "type": "object"
       },
-      "CitationHeatmap": {
-        "additionalProperties": true,
-        "description": "``GET /citation_heatmap``.",
-        "properties": {
-          "citations": {
-            "default": [],
-            "items": {
-              "type": "integer"
-            },
-            "title": "Citations",
-            "type": "array"
-          },
-          "h_index": {
-            "default": 0,
-            "title": "H Index",
-            "type": "integer"
-          },
-          "institutional_reach": {
-            "default": 0.0,
-            "title": "Institutional Reach",
-            "type": "number"
-          },
-          "works": {
-            "default": [],
-            "items": {
-              "type": "integer"
-            },
-            "title": "Works",
-            "type": "array"
-          },
-          "years": {
-            "default": [],
-            "items": {
-              "type": "integer"
-            },
-            "title": "Years",
-            "type": "array"
-          }
-        },
-        "title": "CitationHeatmap",
-        "type": "object"
-      },
       "CollaboratorSynergyResponse": {
         "additionalProperties": true,
         "description": "``GET /collaborator_synergy`` \u2014 pairwise synergy metrics (LLM/graph-shaped).",
@@ -2519,48 +2477,6 @@
         "summary": "Chat With Author",
         "tags": [
           "Agent"
-        ]
-      }
-    },
-    "/api/v1/citation_heatmap": {
-      "get": {
-        "operationId": "get_citation_heatmap_api_v1_citation_heatmap_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "author_id",
-            "required": true,
-            "schema": {
-              "title": "Author Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CitationHeatmap"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Citation Heatmap",
-        "tags": [
-          "Authors"
         ]
       }
     },

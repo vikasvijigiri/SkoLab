@@ -5,7 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.core import AuthorResponse, AuthorSuggestion, Work
 from app.schemas.authors_extra import (
     AuthorMetricsResponse,
-    CitationHeatmap,
     CollaboratorSynergyResponse,
     GrantMatch,
     JournalRecommendation,
@@ -728,12 +727,7 @@ async def get_collaborator_synergy(
     return await pipeline_services.get_collaborator_synergy(author_id, collaborator_id)
 
 
-@router.get("/citation_heatmap", response_model=CitationHeatmap)
-async def get_citation_heatmap(
-    author_id: str = Query(...),
-    pipeline_services: PipelineServices = Depends(get_pipeline_services),
-):
-    return await pipeline_services.get_citation_heatmap(author_id)
+# GET /citation_heatmap  — migrated to Go (internal/author/heatmap.go)
 
 
 @router.get("/match_grants", response_model=list[GrantMatch])
