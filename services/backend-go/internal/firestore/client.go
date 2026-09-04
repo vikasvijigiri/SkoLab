@@ -13,6 +13,7 @@ import (
 
 	fs "cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go/v4"
+	"google.golang.org/api/iterator"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -90,4 +91,31 @@ func SetDoc(ctx context.Context, collection, docID string, data map[string]any) 
 	}
 	_, err := c.Collection(collection).Doc(docID).Set(ctx, data)
 	return err
+}
+
+// QueryEq runs an equality query (`field == value`) against collection,
+// capped at limit results, and returns each matching document's data map.
+//   - client unavailable → (nil, nil) — same no-op degradation as GetDoc
+//   - no matches          → ([]map[string]any{}, nil)
+//   - other error         → (nil, err)
+func QueryEq(ctx context.Context, collection, field string, value any, limit int) ([]map[string]any, error) {
+	c := get()
+	if c == nil {
+		return nil, nil
+	}
+	iter := c.Collection(collection).Where(field, "==", value).Limit(limit).Documents(ctx)
+	defer iter.Stop()
+
+	out := make([]map[string]any, 0, limit)
+	for {
+		snap, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, snap.Data())
+	}
+	return out, nil
 }
