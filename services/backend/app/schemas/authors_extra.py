@@ -74,6 +74,19 @@ class JournalRecommendation(BaseModel):
 
 
 class AuthorMetricsResponse(BaseModel):
-    """``GET /author_metrics`` — computed metric bundle (shape varies by pipeline)."""
+    """``POST /internal/author_metrics_enrich`` — the LLM-scored metric bundle.
+
+    ``GET /author_metrics`` itself is served by the Go gateway now
+    (decisions/0010); Python only runs the enrichment step. Shape:
+    ``topic_toughness``/``velocity``/``overall_score`` ints, ``skills``/``tools``
+    string arrays, ``analysis`` string. ``extra="allow"`` keeps it a passthrough.
+    """
 
     model_config = ConfigDict(extra="allow")
+
+
+class AuthorMetricsEnrichRequest(BaseModel):
+    """Body of ``POST /internal/author_metrics_enrich`` — a title/concepts digest
+    of the author's recent works, built by the Go gateway."""
+
+    context: str

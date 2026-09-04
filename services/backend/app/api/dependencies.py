@@ -9,7 +9,6 @@ from app.services.ai.summarization_service import SummarizationService
 from app.services.ai.prediction_service import PredictionService
 from app.services.data.scraping_service import ScrapingService
 from app.services.data.openalex_service import OpenAlexService
-from app.services.user.user_memory_service import UserMemoryService
 from app.domains.quest.service import QuestsService
 from app.core.cache import history_summary_cache
 
@@ -141,15 +140,6 @@ async def get_pipeline_services(db: AsyncSession = Depends(get_db)) -> PipelineS
     Dependency provider for PipelineServices.
     """
     return PipelineServices(db=db)
-
-
-async def get_user_memory_service(
-    db: AsyncSession = Depends(get_db),
-) -> UserMemoryService:
-    """
-    Dependency provider for UserMemoryService.
-    """
-    return UserMemoryService(db=db)
 
 
 async def get_quests_service(db: AsyncSession = Depends(get_db)) -> QuestsService:
