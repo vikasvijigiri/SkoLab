@@ -301,6 +301,39 @@ class Settings:
             "openai/gpt-4o-mini,openrouter/auto",
         )
     )
+    # llm_reasoning_model_prefixes / llm_reasoning_token_buffer: the third
+    # and final round of the 2026-09-04 dead-model incident. openai/gpt-
+    # oss-120b and -20b (llm_groq_models above) are reasoning models — they
+    # spend part of `max_tokens` on an internal `reasoning` field before
+    # the final `content`, a behavior the retired llama-3.3-70b-versatile
+    # never had. The ~14 call sites across this codebase that set
+    # max_tokens (100-2048, e.g. journals.py's rationale generation at
+    # max_tokens=100) were all tuned for that old non-reasoning model.
+    # Confirmed live: gpt-oss-120b/-20b came back "200 with an empty
+    # completion" repeatedly right after #49 fixed the routing bug,
+    # tripping the Groq circuit breaker (5 consecutive failures) and
+    # forcing template-only fallback for some rationale/content calls in
+    # the same request. Measured live with a realistic single-sentence
+    # rationale prompt: 90 reasoning tokens + 55 content tokens = 145
+    # total against journals.py's 100-token budget — guaranteed
+    # truncation before content ever starts.
+    #
+    # Rather than hand-tune 14 call sites' budgets for a model-specific
+    # quirk (and re-tune them again for whatever model comes after
+    # gpt-oss), llm_service.py adds this buffer to `max_tokens` itself,
+    # only when the model about to be called is a known reasoning model
+    # (name prefix match against llm_reasoning_model_prefixes) — the
+    # existing call-site budgets stay meant for "the answer" the way
+    # their authors sized them, and this accounts for the one model
+    # family that needs more room to think first.
+    llm_reasoning_model_prefixes: str = field(
+        default_factory=lambda: os.environ.get(
+            "LLM_REASONING_MODEL_PREFIXES", "openai/gpt-oss"
+        )
+    )
+    llm_reasoning_token_buffer: int = field(
+        default_factory=lambda: int(os.environ.get("LLM_REASONING_TOKEN_BUFFER", "220"))
+    )
 
     # ── Observability ────────────────────────────────────────────────────────
     # Sentry DSN. Empty (the default) leaves Sentry inert — the SDK is never

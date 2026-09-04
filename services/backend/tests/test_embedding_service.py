@@ -60,10 +60,16 @@ def test_default_hf_base_url_is_not_the_decommissioned_host():
 
     settings = Settings()
     assert "api-inference.huggingface.co" not in settings.hf_inference_base_url
-    assert settings.hf_inference_base_url == "https://router.huggingface.co/hf-inference/models"
+    assert (
+        settings.hf_inference_base_url
+        == "https://router.huggingface.co/hf-inference/models"
+    )
 
     constructed_url = f"{settings.hf_inference_base_url.rstrip('/')}/{es._MODEL_NAME}"
-    assert constructed_url == "https://router.huggingface.co/hf-inference/models/BAAI/bge-small-en-v1.5"
+    assert (
+        constructed_url
+        == "https://router.huggingface.co/hf-inference/models/BAAI/bge-small-en-v1.5"
+    )
 
 
 async def test_uses_api_when_available(monkeypatch, fake_cache):
