@@ -883,39 +883,6 @@
         "title": "JournalRecommendation",
         "type": "object"
       },
-      "LeaderboardEntry": {
-        "properties": {
-          "entropy_score": {
-            "title": "Entropy Score",
-            "type": "integer"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "institution": {
-            "title": "Institution",
-            "type": "string"
-          },
-          "rank": {
-            "title": "Rank",
-            "type": "integer"
-          },
-          "user_name": {
-            "title": "User Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "rank",
-          "id",
-          "user_name",
-          "institution",
-          "entropy_score"
-        ],
-        "title": "LeaderboardEntry",
-        "type": "object"
-      },
       "LivenessResponse": {
         "description": "``GET /livez`` \u2014 dependency-free liveness probe.",
         "properties": {
@@ -2420,53 +2387,6 @@
         "summary": "Get Journal Advisor",
         "tags": [
           "Authors"
-        ]
-      }
-    },
-    "/api/v1/leaderboard/{field}": {
-      "get": {
-        "description": "Get the quest leaderboard for a specific scientific field.",
-        "operationId": "get_quests_leaderboard_api_v1_leaderboard__field__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "field",
-            "required": true,
-            "schema": {
-              "title": "Field",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/LeaderboardEntry"
-                  },
-                  "title": "Response Get Quests Leaderboard Api V1 Leaderboard  Field  Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Quests Leaderboard",
-        "tags": [
-          "Quests"
         ]
       }
     },

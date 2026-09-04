@@ -51,6 +51,10 @@ const (
 // teleportHook is the seam for tests. Production points it at fireTeleport.
 var teleportHook = fireTeleport
 
+// firestoreQueryEqHook is the seam for tests, same pattern as teleportHook.
+// Production points it at firestore.QueryEq.
+var firestoreQueryEqHook = firestore.QueryEq
+
 var teleportHTTP = &http.Client{Timeout: 12 * time.Second}
 
 // ── Response types (byte-for-byte field parity with app/schemas/core.py) ─────
@@ -187,18 +191,20 @@ func SearchAuthor(c *gin.Context) {
 		}
 	}
 
-	// ── 3. Firestore global_researchers (id path only) ──────────────────────
-	//
-	// The Python route also runs a `display_name == name` collection query when
-	// no id is supplied. The internal/firestore client from #36 exposes only
-	// GetDoc/SetDoc (no query API), so the name-only Firestore branch is not
-	// ported — it degrades to the OpenAlex tier below, exactly as the Python
-	// route does whenever Firestore is unavailable. See the PR description.
-	if firestore.Available() && cleanID != "" {
-		if doc, found, err := firestore.GetDoc(ctx, "global_researchers", cleanID); err != nil {
-			slog.Warn("search_author: firestore get failed", "id", cleanID, "err", err)
-		} else if found {
-			resp := assembleFromFirestore(ctx, doc)
+	// ── 3. Firestore global_researchers ─────────────────────────────────────
+	if firestore.Available() {
+		if cleanID != "" {
+			if doc, found, err := firestore.GetDoc(ctx, "global_researchers", cleanID); err != nil {
+				slog.Warn("search_author: firestore get failed", "id", cleanID, "err", err)
+			} else if found {
+				resp := assembleFromFirestore(ctx, doc)
+				if err := cache.PgSet(ctx, profileCacheName, cacheKey, resp, profileCacheTTL()); err != nil {
+					slog.Warn("search_author: profile_cache write failed", "key", cacheKey, "err", err)
+				}
+				c.JSON(http.StatusOK, resp)
+				return
+			}
+		} else if resp, ok := firestoreNameLookup(ctx, name); ok {
 			if err := cache.PgSet(ctx, profileCacheName, cacheKey, resp, profileCacheTTL()); err != nil {
 				slog.Warn("search_author: profile_cache write failed", "key", cacheKey, "err", err)
 			}
@@ -888,6 +894,25 @@ type firestoreResearcherDoc struct {
 	NextPrediction         *string  `json:"next_prediction"`
 }
 
+// firestoreNameLookup mirrors the Python route's name-only Firestore branch:
+// a `display_name == name` collection query, capped to a single hit. Ported
+// via firestoreQueryEqHook (the swappable seam over firestore.QueryEq) rather
+// than firestore.GetDoc, since there is no doc id to look up by. Returns
+// (AuthorResponse{}, false) on no hit, a query error, or when Firestore is
+// unavailable — the caller falls through to OpenAlex exactly as it does for
+// the id-path GetDoc branch.
+func firestoreNameLookup(ctx context.Context, name string) (AuthorResponse, bool) {
+	docs, err := firestoreQueryEqHook(ctx, "global_researchers", "display_name", name, 1)
+	if err != nil {
+		slog.Warn("search_author: firestore query failed", "name", name, "err", err)
+		return AuthorResponse{}, false
+	}
+	if len(docs) == 0 {
+		return AuthorResponse{}, false
+	}
+	return assembleFromFirestore(ctx, docs[0]), true
+}
+
 func worksFromFirestoreDoc(doc map[string]any) []Work {
 	raw, ok := doc["works"]
 	if !ok {
@@ -1009,11 +1034,96 @@ func postTeleport(endpoint, token string) error {
 
 // ── small helpers ────────────────────────────────────────────────────────
 
-// llmActive is the Go stand-in for Python is_llm_working(): it reflects only
-// whether an LLM provider key is configured (OPENROUTER_API_KEY / GROQ_API),
-// not the Python process's runtime rate-limit cooldown. Documented in the PR.
+// llmActive is the Go stand-in for Python is_llm_working(). It live-checks
+// Python's own view — a short-timeout GET {PYTHON_BACKEND_URL}/api/v1/ai_status,
+// whose `llm_active` boolean already tracks the in-process LLM_LIMIT_EXCEEDED
+// 15-min cooldown (app/services/ai/llm_service.py::is_llm_working) — rather
+// than only inferring it from whether a provider key is configured. The
+// result is cached for llmActiveCacheTTL so a burst of requests does not turn
+// into a burst of cross-service calls. On timeout, transport error, a
+// non-200, or an unparseable body (Python down or unreachable) it falls back
+// to the env-presence check (OPENROUTER_API_KEY / GROQ_API) — never blocks or
+// fails the caller.
+const llmActiveCacheTTL = 30 * time.Second
+
+// llmActiveTimeout is a var (not a const) so tests can shrink it to keep a
+// timeout-fallback test fast instead of actually waiting out the production
+// value.
+var llmActiveTimeout = 500 * time.Millisecond
+
+var llmActiveHTTPClient = &http.Client{}
+
+var (
+	llmActiveMu       sync.Mutex
+	llmActiveCached   bool
+	llmActiveCachedAt time.Time
+)
+
 func llmActive() bool {
+	llmActiveMu.Lock()
+	if time.Since(llmActiveCachedAt) < llmActiveCacheTTL {
+		v := llmActiveCached
+		llmActiveMu.Unlock()
+		return v
+	}
+	llmActiveMu.Unlock()
+
+	v := probeLLMActive()
+
+	llmActiveMu.Lock()
+	llmActiveCached = v
+	llmActiveCachedAt = time.Now()
+	llmActiveMu.Unlock()
+	return v
+}
+
+// probeLLMActive does the actual cross-service check; llmActive is the cached
+// wrapper around it.
+func probeLLMActive() bool {
+	base := os.Getenv("PYTHON_BACKEND_URL")
+	if base == "" {
+		base = "http://localhost:8000"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), llmActiveTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		strings.TrimRight(base, "/")+"/api/v1/ai_status", nil)
+	if err != nil {
+		return envLLMActive()
+	}
+	resp, err := llmActiveHTTPClient.Do(req)
+	if err != nil {
+		return envLLMActive()
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return envLLMActive()
+	}
+	var body struct {
+		LLMActive bool `json:"llm_active"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return envLLMActive()
+	}
+	return body.LLMActive
+}
+
+// envLLMActive is the fallback: whether an LLM provider key is configured
+// (OPENROUTER_API_KEY / GROQ_API). It does not track Python's in-process
+// LLM_LIMIT_EXCEEDED cooldown — that is exactly the gap probeLLMActive closes
+// when Python is reachable.
+func envLLMActive() bool {
 	return os.Getenv("OPENROUTER_API_KEY") != "" || os.Getenv("GROQ_API") != ""
+}
+
+// resetLLMActiveCacheForTest clears the cache so a test can force a fresh
+// probe. Test-only seam, same spirit as teleportHook.
+func resetLLMActiveCacheForTest() {
+	llmActiveMu.Lock()
+	llmActiveCached = false
+	llmActiveCachedAt = time.Time{}
+	llmActiveMu.Unlock()
 }
 
 func profileCacheTTL() time.Duration {
