@@ -1,7 +1,7 @@
 import pytest
 import httpx
 from httpx import AsyncClient
-from app.main import app, metrics_store
+from app.main import app
 
 
 def test_init_observability_is_inert_without_dsn(monkeypatch):
@@ -43,40 +43,13 @@ async def test_health_endpoint():
 
 
 @pytest.mark.anyio
-async def test_metrics_endpoint():
-    await metrics_store.record_request("GET", "/test-endpoint", 200, 15.0)
-
+async def test_metrics_endpoint_removed():
+    """Python no longer serves Prometheus metrics — the per-process MetricsStore
+    and GET /metrics were retired; the Go gateway owns request metrics."""
     transport = httpx.ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         response = await ac.get("/metrics")
-        assert response.status_code == 200
-        content = response.text
-
-        assert "# HELP http_requests_total" in content
-        assert "# TYPE http_requests_total counter" in content
-        assert (
-            'http_requests_total{method="GET",endpoint="/test-endpoint",status="200"}'
-            in content
-        )
-
-        assert "# HELP http_active_requests" in content
-        assert "# TYPE http_active_requests gauge" in content
-        assert "http_active_requests" in content
-
-        assert "# HELP http_request_duration_seconds" in content
-        assert "# TYPE http_request_duration_seconds histogram" in content
-        assert (
-            'http_request_duration_seconds_bucket{method="GET",endpoint="/test-endpoint",le="0.100"}'
-            in content
-        )
-        assert (
-            'http_request_duration_seconds_sum{method="GET",endpoint="/test-endpoint"}'
-            in content
-        )
-        assert (
-            'http_request_duration_seconds_count{method="GET",endpoint="/test-endpoint"}'
-            in content
-        )
+        assert response.status_code == 404
 
 
 @pytest.mark.anyio
@@ -101,30 +74,13 @@ async def test_kill_switch():
 
 
 @pytest.mark.anyio
-async def test_openalex_api_requests_metric_increment():
-    from app.main import metrics_store
-
-    initial_count = metrics_store.openalex_api_requests_total
-
-    # Trigger an async HTTP request to openalex.org
-    try:
-        async with httpx.AsyncClient() as client:
-            await client.get("https://api.openalex.org/mock-test-endpoint")
-    except Exception:
-        # Catch connection errors safely since daemon is offline
-        pass
-
-    assert metrics_store.openalex_api_requests_total == initial_count + 1
-
-
-@pytest.mark.anyio
-async def test_background_tasks_metrics_tracking():
-    from app.main import metrics_store
-
-    initial_active = metrics_store.background_tasks_active
-
-    await metrics_store.increment_background_tasks()
-    assert metrics_store.background_tasks_active == initial_active + 1
-
-    await metrics_store.decrement_background_tasks()
-    assert metrics_store.background_tasks_active == initial_active
+async def test_traceparent_still_propagates():
+    """The structured-log middleware keeps W3C trace context even though the
+    metrics-store calls were removed from it."""
+    transport = httpx.ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        traceparent = "00-1234567890abcdef1234567890abcdef-1234567890abcdef-01"
+        response = await ac.get("/health", headers={"traceparent": traceparent})
+        assert "1234567890abcdef1234567890abcdef" in response.headers.get(
+            "traceparent", ""
+        )
