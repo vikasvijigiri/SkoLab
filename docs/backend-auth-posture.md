@@ -104,6 +104,16 @@ resolved in the Python version either).
 The 401/403 raised by these dependencies is returned through the app-level
 `ErrorResponse` envelope (`app/api/errors.py`), like every other error.
 
+**Phase 1 (`authors.py` → Go), 2026-09-04 — assessed, nothing moved.** All 8
+live author routes (`/refresh_author`, `/search_author`, `/author_metrics`,
+`/network_collaborators`, `/collaborator_synergy`, `/citation_heatmap`,
+`/match_grants`, `/journal_advisor`) stay in Python: each calls an LLM or an
+embedding service, depends on a Firestore cache tier the gateway lacks, or is a
+large multi-source port. No route changed auth class — all remain `public`
+(public OpenAlex-derived data keyed by an OpenAlex id). See
+`decisions/0009-phase1-authors-assessment.md` and
+`docs/plans/2026-09-04-phase1-authors-to-go.md`.
+
 ## Single router mount
 
 `app/main.py` mounts the aggregate router **only** at `prefix="/api/v1"`. The
