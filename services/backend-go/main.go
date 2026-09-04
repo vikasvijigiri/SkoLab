@@ -209,12 +209,26 @@ func main() {
 	}
 }
 
+// proxyRequestTimeout bounds a single proxied request end-to-end. LLM routes
+// are the slow case (long 70B generations, or a cold-compute daily_feed —
+// see services/backend/app/services/platform/pipeline/feed.py, documented
+// there at ~40-80s uncached); 120s covers them with margin while still
+// guaranteeing a hung upstream cannot hold a goroutine forever.
+const proxyRequestTimeout = 120 * time.Second
+
 // proxyTransport is a dedicated HTTP transport for the Python upstream. The
 // default (http.DefaultTransport) caps idle connections per host at 2, so under
 // load the gateway constantly reopens TCP connections to the single Python
 // host, and — with no ResponseHeaderTimeout — a hung upstream request pins a
 // gateway goroutine and the client socket indefinitely, leading to goroutine
 // pileup and memory growth.
+//
+// ResponseHeaderTimeout must not be shorter than proxyRequestTimeout: it fires
+// independently of the per-request context deadline below, so a lower value
+// here silently overrides that deadline. It previously stood at 60s while
+// proxyRequestTimeout documented 120s as the intended bound — the mismatch
+// truncated any real request past 60s (confirmed live: a cold-compute
+// daily_feed call was cut off with a 502 at exactly 60.3s).
 var proxyTransport http.RoundTripper = &http.Transport{
 	Proxy: http.ProxyFromEnvironment,
 	DialContext: (&net.Dialer{
@@ -227,13 +241,8 @@ var proxyTransport http.RoundTripper = &http.Transport{
 	IdleConnTimeout:       90 * time.Second,
 	TLSHandshakeTimeout:   10 * time.Second,
 	ExpectContinueTimeout: 1 * time.Second,
-	ResponseHeaderTimeout: 60 * time.Second,
+	ResponseHeaderTimeout: proxyRequestTimeout,
 }
-
-// proxyRequestTimeout bounds a single proxied request end-to-end. LLM routes
-// are the slow case (long 70B generations); 120s covers them with margin while
-// still guaranteeing a hung upstream cannot hold a goroutine forever.
-const proxyRequestTimeout = 120 * time.Second
 
 // reverseProxy returns a Gin handler that reverse-proxies to target.
 func reverseProxy(target string) gin.HandlerFunc {
