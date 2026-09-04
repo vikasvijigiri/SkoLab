@@ -85,17 +85,27 @@ class LLMService:
         self.groq_base_url = "https://api.groq.com/openai/v1/chat/completions"
 
         # Prioritized fallback model order. If one fails, the loop continues
-        # to the next. Sourced from settings.llm_fallback_models
-        # (LLM_FALLBACK_MODELS env var) — never a hardcoded literal here.
-        # Incident, 2026-09-04: this used to be 5 Groq models followed by
-        # OpenRouter entries, all as string literals; Groq decommissioned
-        # every one of the 5, and with llm_max_fallback_models capping the
-        # loop at 4 attempts, every attempt was Groq and every one was dead
-        # — 100% of LLM calls failed before ever reaching an OpenRouter
-        # fallback. One config field means the next deprecation is a
-        # Render env var change, not a multi-file code deploy. See
-        # config.py's llm_fallback_models for the current default chain
-        # and how it was verified.
+        # to the next. Sourced from settings.llm_groq_models +
+        # settings.llm_openrouter_models (LLM_GROQ_MODELS /
+        # LLM_OPENROUTER_MODELS env vars) — never a hardcoded literal here.
+        # Incident, 2026-09-04 (two rounds):
+        # (1) This used to be 5 Groq models followed by OpenRouter entries,
+        #     all as string literals; Groq decommissioned every one of the
+        #     5, and with llm_max_fallback_models capping the loop at 4
+        #     attempts, every attempt was Groq and every one was dead —
+        #     100% of LLM calls failed before ever reaching an OpenRouter
+        #     fallback.
+        # (2) The immediate fix for (1) replaced the dead names with
+        #     openai/gpt-oss-120b and qwen/qwen3.8-27b — both containing
+        #     "/", which query()'s is_or check used to read as "this must
+        #     be an OpenRouter model" (Groq's older catalog was all
+        #     bare names). Both got routed to query_openrouter() instead
+        #     of Groq's endpoint; with no OpenRouter key configured, every
+        #     model was silently skipped, still 100% failure. Explicit
+        #     provider lists (self._openrouter_models, checked by set
+        #     membership in query() below) replace the name-shape guess —
+        #     see config.py's llm_groq_models docstring for the full
+        #     writeup and how the current chain was verified.
         #
         # "openrouter/owl-alpha" was removed from the chain (pre-existing
         # fix, kept): it has no active endpoints on OpenRouter, and every
@@ -105,9 +115,15 @@ class LLMService:
         # which query_openrouter used to treat as a *successful* response
         # (see the fix there), so analyze_paper's JSON parsing failed on
         # every single call instead of ever reaching a model that works.
-        self.default_models = [
-            m.strip() for m in settings.llm_fallback_models.split(",") if m.strip()
+        groq_models = [
+            m.strip() for m in settings.llm_groq_models.split(",") if m.strip()
         ]
+        openrouter_models = [
+            m.strip() for m in settings.llm_openrouter_models.split(",") if m.strip()
+        ]
+        self.default_models = groq_models + openrouter_models
+        # Membership, not a name-shape guess — see the incident note above.
+        self._openrouter_models = frozenset(openrouter_models)
 
         # Initialize official OpenRouter Client SDK
         if settings.openrouter_api_key:
@@ -246,7 +262,10 @@ class LLMService:
                 )
                 break
 
-            is_or = "/" in model and not model.startswith("groq/")
+            # Explicit membership, not a name-shape guess (a Groq model can
+            # itself contain "/" — see the incident note on
+            # self._openrouter_models in __init__).
+            is_or = model in self._openrouter_models
 
             # Check key and availability before querying
             if is_or and not settings.openrouter_api_key:

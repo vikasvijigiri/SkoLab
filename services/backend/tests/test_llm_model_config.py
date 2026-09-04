@@ -38,31 +38,116 @@ KNOWN_DEAD_MODELS = {
 
 def test_no_known_dead_model_in_the_default_configuration(monkeypatch):
     """The specific identifiers confirmed dead on 2026-09-04 must never be
-    the *default* llm_primary_model / llm_fast_model / llm_fallback_models
-    — that default is what a fresh deploy actually uses when no LLM_*
-    env var is set on Render."""
-    for var in ("LLM_PRIMARY_MODEL", "LLM_FAST_MODEL", "LLM_FALLBACK_MODELS"):
+    the *default* llm_primary_model / llm_fast_model / llm_groq_models /
+    llm_openrouter_models — that default is what a fresh deploy actually
+    uses when no LLM_* env var is set on Render."""
+    for var in (
+        "LLM_PRIMARY_MODEL",
+        "LLM_FAST_MODEL",
+        "LLM_GROQ_MODELS",
+        "LLM_OPENROUTER_MODELS",
+    ):
         monkeypatch.delenv(var, raising=False)
     settings = Settings()
 
     assert settings.llm_primary_model not in KNOWN_DEAD_MODELS
     assert settings.llm_fast_model not in KNOWN_DEAD_MODELS
-    fallback_list = [m.strip() for m in settings.llm_fallback_models.split(",")]
+    fallback_list = [
+        m.strip()
+        for m in (
+            settings.llm_groq_models + "," + settings.llm_openrouter_models
+        ).split(",")
+    ]
     dead_in_fallback = KNOWN_DEAD_MODELS & set(fallback_list)
-    assert not dead_in_fallback, f"known-dead model(s) still in the default chain: {dead_in_fallback}"
+    assert not dead_in_fallback, (
+        f"known-dead model(s) still in the default chain: {dead_in_fallback}"
+    )
 
 
-def test_llm_fallback_models_is_env_overridable(monkeypatch):
+def test_llm_fallback_chain_is_env_overridable(monkeypatch):
     """The chain is real config, not a hardcoded list — this is the whole
     point of the fix: the next Groq deprecation is a Render env var
     change, not a multi-file code deploy."""
-    monkeypatch.setenv("LLM_FALLBACK_MODELS", "model-a, model-b ,model-c")
+    monkeypatch.setenv("LLM_GROQ_MODELS", "groq-a, groq-b")
+    monkeypatch.setenv("LLM_OPENROUTER_MODELS", "or-a ,or-b")
 
     from app.services.ai import llm_service as llm_service_mod
 
     monkeypatch.setattr(llm_service_mod, "settings", Settings())
     service = llm_service_mod.LLMService()
-    assert service.default_models == ["model-a", "model-b", "model-c"]
+    assert service.default_models == ["groq-a", "groq-b", "or-a", "or-b"]
+
+
+def test_a_groq_model_containing_a_slash_is_not_misrouted_to_openrouter(monkeypatch):
+    """The bug in the immediate aftermath of the 2026-09-04 dead-model
+    fix, live in production for ~15 minutes before this test existed:
+    query()'s provider check used to infer Groq-vs-OpenRouter from
+    whether the model name contained "/" ("/" in model and not
+    model.startswith("groq/")) — true while every Groq model was a bare
+    name like llama-3.3-70b-versatile, false the instant a replacement
+    model (openai/gpt-oss-120b, a real Groq-hosted model) also contained
+    a slash. Both fixed-incident replacement models got routed to
+    query_openrouter() instead of Groq's own endpoint; with no
+    OpenRouter key configured, every model was silently skipped and the
+    whole chain failed with a genuinely empty error list. Provider must
+    be explicit set membership (self._openrouter_models), never inferred
+    from the string shape.
+    """
+    monkeypatch.setenv("LLM_GROQ_MODELS", "openai/gpt-oss-120b,qwen/qwen3.8-27b")
+    monkeypatch.setenv("LLM_OPENROUTER_MODELS", "openai/gpt-4o-mini")
+
+    from app.services.ai import llm_service as llm_service_mod
+
+    monkeypatch.setattr(llm_service_mod, "settings", Settings())
+    service = llm_service_mod.LLMService()
+
+    # Both Groq entries contain "/" -- the old heuristic would have
+    # called them OpenRouter models. They must not be.
+    assert "openai/gpt-oss-120b" not in service._openrouter_models
+    assert "qwen/qwen3.8-27b" not in service._openrouter_models
+    assert "openai/gpt-4o-mini" in service._openrouter_models
+
+
+async def test_query_routes_a_slash_named_groq_model_to_groqs_own_endpoint(monkeypatch):
+    """End-to-end version of the test above: actually calls query() and
+    proves a slash-named Groq model reaches Groq's HTTP endpoint rather
+    than query_openrouter() -- the real bug was in this call path, not
+    just in how the provider set gets built."""
+    from unittest.mock import AsyncMock
+
+    monkeypatch.setenv("LLM_GROQ_MODELS", "openai/gpt-oss-120b")
+    monkeypatch.setenv("LLM_OPENROUTER_MODELS", "")
+
+    from app.services.ai import llm_service as llm_service_mod
+
+    monkeypatch.setattr(llm_service_mod, "settings", Settings())
+    service = llm_service_mod.LLMService()
+    service.groq_api_key = "test-key"
+
+    class _FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {"choices": [{"message": {"content": "ok", "tool_calls": None}}]}
+
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(return_value=_FakeResponse())
+    monkeypatch.setattr(llm_service_mod, "get_http_client", lambda: fake_client)
+    monkeypatch.setattr(llm_service_mod, "is_llm_working", lambda: True)
+    service.query_openrouter = AsyncMock(
+        side_effect=AssertionError(
+            "a Groq model must never be routed to query_openrouter()"
+        )
+    )
+
+    result = await service.query(messages=[{"role": "user", "content": "hi"}])
+
+    assert result.content == "ok"
+    assert result.model_used == "openai/gpt-oss-120b"
+    fake_client.post.assert_awaited_once()
+    called_url = fake_client.post.await_args.args[0]
+    assert called_url == service.groq_base_url
+    service.query_openrouter.assert_not_awaited()
 
 
 def test_pipeline_base_model_comes_from_settings_not_a_literal(monkeypatch):

@@ -35,9 +35,7 @@ def probe_app():
 @pytest_asyncio.fixture
 async def probe_client(probe_app):
     transport = httpx.ASGITransport(app=probe_app, raise_app_exceptions=False)
-    async with httpx.AsyncClient(
-        transport=transport, base_url="http://probe"
-    ) as c:
+    async with httpx.AsyncClient(transport=transport, base_url="http://probe") as c:
         yield c
 
 

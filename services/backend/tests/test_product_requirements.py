@@ -66,12 +66,15 @@ async def test_daily_conjecture_mocked():
                 "abstract_inverted_index": {"The": [0]},
             }
         ]
-        with patch(
-            "app.services.data.openalex_service.OpenAlexService.fetch_author_by_id",
-            return_value=mock_author,
-        ), patch(
-            "app.services.data.openalex_service.OpenAlexService.fetch_author_works",
-            return_value=mock_works,
+        with (
+            patch(
+                "app.services.data.openalex_service.OpenAlexService.fetch_author_by_id",
+                return_value=mock_author,
+            ),
+            patch(
+                "app.services.data.openalex_service.OpenAlexService.fetch_author_works",
+                return_value=mock_works,
+            ),
         ):
             response = await ac.get("/api/v1/daily_conjecture?author_id=A12345678")
             assert response.status_code == 200
