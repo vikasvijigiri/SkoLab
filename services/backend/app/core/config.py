@@ -233,24 +233,53 @@ class Settings:
     llm_fast_model: str = field(
         default_factory=lambda: os.environ.get("LLM_FAST_MODEL", "qwen/qwen3.8-27b")
     )
-    # llm_fallback_models: the ordered chain llm_service.py's LLMService
-    # tries by default, comma-separated, capped at runtime by
-    # llm_max_fallback_models above. The first 3 entries are Groq models
-    # verified live against a real completion call (including
-    # response_format: json_object, which every JSON-extraction call site
-    # here relies on) on 2026-09-04; the rest are pre-existing OpenRouter
-    # entries, unverified this session (no OpenRouter key available), kept
-    # as further redundancy if OPENROUTER_API_KEY is set.
+    # llm_groq_models / llm_openrouter_models: the two halves of the
+    # fallback chain llm_service.py's LLMService tries by default, each
+    # comma-separated, concatenated in this order (Groq first) and capped
+    # at runtime by llm_max_fallback_models above.
+    #
+    # Split into two fields, not one — this itself is a fix, not just the
+    # original one. #47 (2026-09-04) replaced the dead Groq models with
+    # openai/gpt-oss-120b and qwen/qwen3.8-27b, both containing "/" in
+    # their name, then went out still broken: llm_service.py decided
+    # Groq-vs-OpenRouter from the model *string shape* alone
+    # ("/" in model and not model.startswith("groq/")) — an assumption
+    # that held while every Groq model was a bare name like
+    # llama-3.3-70b-versatile, and silently broke the instant a
+    # slash-containing Groq model existed, because Groq's own catalog has
+    # since grown vendor-prefixed slugs too (openai/..., qwen/...,
+    # groq/compound). Both replacement models got misrouted to
+    # query_openrouter() instead of Groq's endpoint; with no
+    # OPENROUTER_API_KEY configured, every model in the chain was
+    # silently skipped (the is_or-and-no-key branch `continue`s without
+    # appending anything) — confirmed live: "LLM query failed across all
+    # attempted models. Errors: " with a genuinely empty error list,
+    # immediately after #47 was deployed. Provider is now a set
+    # membership check against llm_openrouter_models, never inferred from
+    # the name — this class of bug cannot recur no matter what a future
+    # model name looks like.
+    #
+    # Groq entries verified live against a real completion call
+    # (including response_format: json_object, which every
+    # JSON-extraction call site here relies on) on 2026-09-04. OpenRouter
+    # entries are pre-existing, unverified this session (no OpenRouter
+    # key available in this environment), kept as further redundancy if
+    # OPENROUTER_API_KEY is set.
     #
     # gpt-oss-120b/-20b are reasoning models — part of `max_tokens` is
     # spent on an internal reasoning trace before the final answer, so a
     # call site tuned for a non-reasoning model with a tight max_tokens can
     # come back empty; raise max_tokens there rather than dropping the
     # model. qwen3.8-27b is not a reasoning model and answers directly.
-    llm_fallback_models: str = field(
+    llm_groq_models: str = field(
         default_factory=lambda: os.environ.get(
-            "LLM_FALLBACK_MODELS",
-            "openai/gpt-oss-120b,openai/gpt-oss-20b,qwen/qwen3.8-27b,"
+            "LLM_GROQ_MODELS",
+            "openai/gpt-oss-120b,openai/gpt-oss-20b,qwen/qwen3.8-27b",
+        )
+    )
+    llm_openrouter_models: str = field(
+        default_factory=lambda: os.environ.get(
+            "LLM_OPENROUTER_MODELS",
             "google/gemma-4-31b-it:free,meta-llama/llama-3.3-70b-instruct:free,"
             "meta-llama/llama-3.2-3b-instruct:free,openai/gpt-oss-120b:free,"
             "meta-llama/llama-3.3-70b-instruct,google/gemma-2-9b-it,"
