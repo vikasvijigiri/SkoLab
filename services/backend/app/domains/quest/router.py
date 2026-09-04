@@ -1,7 +1,7 @@
 from typing import List
 from fastapi import APIRouter, Depends, Query, HTTPException
 
-from app.domains.quest.schemas import Quest, LeaderboardEntry
+from app.domains.quest.schemas import Quest
 from app.api.dependencies import (
     get_quests_service,
     get_openalex_service,
@@ -12,20 +12,12 @@ from app.domains.quest.service import QuestsService
 
 router = APIRouter()
 
-
-@router.get("/leaderboard/{field}", response_model=List[LeaderboardEntry])
-async def get_quests_leaderboard(
-    field: str,
-    quests_service: QuestsService = Depends(get_quests_service),
-):
-    """
-    Get the quest leaderboard for a specific scientific field.
-    """
-    try:
-        return await quests_service.get_leaderboard(field)
-    except ValueError:
-        # Unknown field → empty leaderboard, not an error.
-        return []
+# GET /leaderboard/{field} is intentionally not defined here: the Go gateway
+# serves it natively (main.go -> quest.GetLeaderboard) and route precedence
+# made the Python copy unreachable dead code. Per decisions/0010 ("Python is
+# LLM-only"), a non-LLM route must not exist in Python at all — see
+# app/domains/quest/service.py::get_leaderboard for the still-used service
+# method (kept for its unit test coverage; nothing calls it over HTTP here).
 
 
 @router.get("/users/quests", response_model=List[Quest])

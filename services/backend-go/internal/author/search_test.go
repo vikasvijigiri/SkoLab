@@ -3,9 +3,12 @@ package author
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/skolab/backend-go/internal/services/openalex"
@@ -126,6 +129,12 @@ func TestAcademicHistoryFromAffiliations(t *testing.T) {
 func TestAssembleFromPGShapeAndDegradation(t *testing.T) {
 	t.Setenv("GROQ_API", "")
 	t.Setenv("OPENROUTER_API_KEY", "")
+	// Refused instantly (nothing listens on :1) so llmActive()'s probe fails
+	// fast and falls back to the env check below, deterministically and
+	// without waiting out the real network timeout.
+	t.Setenv("PYTHON_BACKEND_URL", "http://127.0.0.1:1")
+	resetLLMActiveCacheForTest()
+	t.Cleanup(resetLLMActiveCacheForTest)
 
 	row := pgResearcherMetrics{
 		OpenalexID:      "A1",
@@ -179,6 +188,7 @@ func TestAssembleFromPGShapeAndDegradation(t *testing.T) {
 
 	// with an LLM key, metrics_computed follows the stored flag
 	t.Setenv("GROQ_API", "gsk_fake")
+	resetLLMActiveCacheForTest()
 	resp2 := assembleFromPG(row, nil, nil)
 	if !resp2.MetricsComputed || !resp2.LLMActive {
 		t.Error("with GROQ_API set, metrics_computed and llm_active should be true")
@@ -188,6 +198,9 @@ func TestAssembleFromPGShapeAndDegradation(t *testing.T) {
 func TestAssembleFromFirestoreFieldOfStudy(t *testing.T) {
 	t.Setenv("GROQ_API", "")
 	t.Setenv("OPENROUTER_API_KEY", "")
+	t.Setenv("PYTHON_BACKEND_URL", "http://127.0.0.1:1")
+	resetLLMActiveCacheForTest()
+	t.Cleanup(resetLLMActiveCacheForTest)
 
 	// key present but null → field_of_study stays null (matches Python .get default
 	// semantics). No expertise / non-generic field_of_study, so fetchSimilarAuthors
@@ -313,6 +326,144 @@ func TestRefreshAuthorRequiresName(t *testing.T) {
 	RefreshAuthor(c)
 	if w.Code != http.StatusUnprocessableEntity {
 		t.Errorf("status = %d, want 422", w.Code)
+	}
+}
+
+func TestFirestoreNameLookupHitAssemblesResponse(t *testing.T) {
+	t.Setenv("GROQ_API", "")
+	t.Setenv("OPENROUTER_API_KEY", "")
+
+	orig := firestoreQueryEqHook
+	defer func() { firestoreQueryEqHook = orig }()
+
+	var (
+		gotCollection string
+		gotField      string
+		gotValue      any
+		gotLimit      int
+	)
+	firestoreQueryEqHook = func(_ context.Context, collection, field string, value any, limit int) ([]map[string]any, error) {
+		gotCollection, gotField, gotValue, gotLimit = collection, field, value, limit
+		return []map[string]any{
+			{"openalex_id": "A9", "display_name": "Grace Hopper", "h_index": int64(30)},
+		}, nil
+	}
+
+	resp, ok := firestoreNameLookup(context.Background(), "Grace Hopper")
+	if !ok {
+		t.Fatal("expected a hit")
+	}
+	// The query must run before any OpenAlex fallback would — asserted here by
+	// the fact that the response came from the Firestore doc, not a network
+	// call: the hook is the only source assembleFromFirestore could have used.
+	if gotCollection != "global_researchers" || gotField != "display_name" || gotValue != "Grace Hopper" || gotLimit != 1 {
+		t.Errorf("query args = (%q, %q, %v, %d), want (global_researchers, display_name, Grace Hopper, 1)",
+			gotCollection, gotField, gotValue, gotLimit)
+	}
+	if resp.ID != "A9" || resp.DisplayName != "Grace Hopper" || resp.HIndex != 30 {
+		t.Errorf("assembled response wrong: %+v", resp)
+	}
+}
+
+func TestFirestoreNameLookupNoHitFallsThrough(t *testing.T) {
+	orig := firestoreQueryEqHook
+	defer func() { firestoreQueryEqHook = orig }()
+
+	firestoreQueryEqHook = func(_ context.Context, _, _ string, _ any, _ int) ([]map[string]any, error) {
+		return nil, nil
+	}
+	if _, ok := firestoreNameLookup(context.Background(), "Nobody"); ok {
+		t.Error("expected no hit when the query returns no docs")
+	}
+}
+
+func TestFirestoreNameLookupErrorFallsThrough(t *testing.T) {
+	orig := firestoreQueryEqHook
+	defer func() { firestoreQueryEqHook = orig }()
+
+	firestoreQueryEqHook = func(_ context.Context, _, _ string, _ any, _ int) ([]map[string]any, error) {
+		return nil, fmt.Errorf("boom")
+	}
+	if _, ok := firestoreNameLookup(context.Background(), "Nobody"); ok {
+		t.Error("expected no hit when the query errors")
+	}
+}
+
+func TestLLMActiveCacheAvoidsSecondCall(t *testing.T) {
+	resetLLMActiveCacheForTest()
+	t.Cleanup(resetLLMActiveCacheForTest)
+
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"llm_active": true}`))
+	}))
+	defer srv.Close()
+	t.Setenv("PYTHON_BACKEND_URL", srv.URL)
+
+	if !llmActive() {
+		t.Fatal("expected llmActive()=true on the first (uncached) probe")
+	}
+	if !llmActive() {
+		t.Fatal("expected llmActive()=true on the second (cached) call")
+	}
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Errorf("/api/v1/ai_status was hit %d times, want 1 — the second call should be served from the 30s cache", got)
+	}
+}
+
+func TestLLMActiveTimeoutFallsBackToEnvPresence(t *testing.T) {
+	resetLLMActiveCacheForTest()
+	t.Cleanup(resetLLMActiveCacheForTest)
+
+	origTimeout := llmActiveTimeout
+	llmActiveTimeout = 20 * time.Millisecond
+	t.Cleanup(func() { llmActiveTimeout = origTimeout })
+
+	// Never responds within the client's (shrunk) timeout window — the client
+	// gives up long before this returns. Kept well under a second so
+	// httptest.Server.Close()'s wait-for-outstanding-requests doesn't slow the
+	// test down, while still comfortably exceeding llmActiveTimeout.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(300 * time.Millisecond)
+	}))
+	defer srv.Close()
+	t.Setenv("PYTHON_BACKEND_URL", srv.URL)
+
+	t.Run("key present -> true", func(t *testing.T) {
+		resetLLMActiveCacheForTest()
+		t.Setenv("GROQ_API", "gsk_fake")
+		t.Setenv("OPENROUTER_API_KEY", "")
+		if !llmActive() {
+			t.Error("expected a timed-out probe to fall back to env-presence (GROQ_API set) -> true")
+		}
+	})
+
+	t.Run("no key -> false", func(t *testing.T) {
+		resetLLMActiveCacheForTest()
+		t.Setenv("GROQ_API", "")
+		t.Setenv("OPENROUTER_API_KEY", "")
+		if llmActive() {
+			t.Error("expected a timed-out probe to fall back to env-presence (no keys set) -> false")
+		}
+	})
+}
+
+func TestLLMActiveNon200FallsBackToEnvPresence(t *testing.T) {
+	resetLLMActiveCacheForTest()
+	t.Cleanup(resetLLMActiveCacheForTest)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+	t.Setenv("PYTHON_BACKEND_URL", srv.URL)
+	t.Setenv("GROQ_API", "gsk_fake")
+	t.Setenv("OPENROUTER_API_KEY", "")
+
+	if !llmActive() {
+		t.Error("expected a non-200 ai_status response to fall back to env-presence -> true")
 	}
 }
 
