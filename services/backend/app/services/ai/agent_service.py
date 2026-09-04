@@ -4,6 +4,7 @@ import json
 import re
 import io
 import pdfplumber
+from app.core.config import settings
 from app.services.platform.connectors import TOOLS_SCHEMA, execute_tool_call
 from app.services.ai.llm_service import is_llm_working
 from app.prompts import (
@@ -220,7 +221,9 @@ class AgentService:
                                 {"role": "system", "content": AGENT_SUMMARY_PERSONA},
                                 {"role": "user", "content": summary_prompt},
                             ],
-                            models=["llama-3.1-8b-instant"],
+                            # Env-configurable (LLM_FAST_MODEL) — see
+                            # config.py's llm_fast_model docstring.
+                            models=[settings.llm_fast_model],
                             temperature=0.3,
                             max_tokens=1024,
                         )

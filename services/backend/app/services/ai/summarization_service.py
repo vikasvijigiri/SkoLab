@@ -29,8 +29,12 @@ from app.services.ai.llm_service import is_llm_working
 
 
 # ── LLM Context Budget ────────────────────────────────────────────────────────
-# Groq Llama-3.3-70B context window = 128k tokens
-# 1 token ≈ 0.75 words  →  ~96 000 words max
+# settings.llm_primary_model (config.py) is the model actually in use — its
+# context window varies by provider/model and isn't hardcoded here. 128k
+# tokens was the figure for the original Llama-3.3-70B choice (retired
+# 2026-09-04, see config.py's llm_primary_model docstring); the budget
+# below is deliberately conservative and has held across that change.
+# 1 token ≈ 0.75 words  →  ~96 000 words at a 128k-token window.
 # We cap at 30 000 words (~40 000 tokens) to leave room for prompt + output.
 MAX_PAPER_WORDS = 30_000
 
