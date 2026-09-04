@@ -221,7 +221,9 @@ class Settings:
     # data/scraping_service.py's self.model) — still subject to the full
     # fallback chain below if it fails.
     llm_primary_model: str = field(
-        default_factory=lambda: os.environ.get("LLM_PRIMARY_MODEL", "openai/gpt-oss-120b")
+        default_factory=lambda: os.environ.get(
+            "LLM_PRIMARY_MODEL", "openai/gpt-oss-120b"
+        )
     )
     # llm_fast_model: for a background/routine task that wants a small,
     # cheap, low-latency model rather than the heavier primary — e.g.
