@@ -179,298 +179,25 @@
         "title": "AppInfoResponse",
         "type": "object"
       },
+      "AuthorMetricsEnrichRequest": {
+        "description": "Body of ``POST /internal/author_metrics_enrich`` \u2014 a title/concepts digest\nof the author's recent works, built by the Go gateway.",
+        "properties": {
+          "context": {
+            "title": "Context",
+            "type": "string"
+          }
+        },
+        "required": [
+          "context"
+        ],
+        "title": "AuthorMetricsEnrichRequest",
+        "type": "object"
+      },
       "AuthorMetricsResponse": {
         "additionalProperties": true,
-        "description": "``GET /author_metrics`` \u2014 computed metric bundle (shape varies by pipeline).",
+        "description": "``POST /internal/author_metrics_enrich`` \u2014 the LLM-scored metric bundle.\n\n``GET /author_metrics`` itself is served by the Go gateway now\n(decisions/0010); Python only runs the enrichment step. Shape:\n``topic_toughness``/``velocity``/``overall_score`` ints, ``skills``/``tools``\nstring arrays, ``analysis`` string. ``extra=\"allow\"`` keeps it a passthrough.",
         "properties": {},
         "title": "AuthorMetricsResponse",
-        "type": "object"
-      },
-      "AuthorResponse": {
-        "properties": {
-          "academic_history": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Academic History",
-            "type": "array"
-          },
-          "average_activity": {
-            "default": 0.0,
-            "title": "Average Activity",
-            "type": "number"
-          },
-          "average_complexity": {
-            "default": 0.0,
-            "title": "Average Complexity",
-            "type": "number"
-          },
-          "average_creativity": {
-            "default": 0.0,
-            "title": "Average Creativity",
-            "type": "number"
-          },
-          "average_impact": {
-            "default": 0.0,
-            "title": "Average Impact",
-            "type": "number"
-          },
-          "average_skill_score": {
-            "default": 0.0,
-            "title": "Average Skill Score",
-            "type": "number"
-          },
-          "citation_acceleration": {
-            "default": 0.0,
-            "title": "Citation Acceleration",
-            "type": "number"
-          },
-          "cited_by_count": {
-            "title": "Cited By Count",
-            "type": "integer"
-          },
-          "collaboration_diversity": {
-            "default": 0.0,
-            "title": "Collaboration Diversity",
-            "type": "number"
-          },
-          "display_name": {
-            "title": "Display Name",
-            "type": "string"
-          },
-          "disruption_score": {
-            "default": 0.0,
-            "title": "Disruption Score",
-            "type": "number"
-          },
-          "expertise": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Expertise",
-            "type": "array"
-          },
-          "field_of_study": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Field Of Study"
-          },
-          "future_impact_score": {
-            "default": 0.0,
-            "title": "Future Impact Score",
-            "type": "number"
-          },
-          "h_index": {
-            "title": "H Index",
-            "type": "integer"
-          },
-          "i10_index": {
-            "title": "I10 Index",
-            "type": "integer"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "innovation_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Innovation Score"
-          },
-          "institution": {
-            "title": "Institution",
-            "type": "string"
-          },
-          "interdisciplinary_index": {
-            "default": 0.0,
-            "title": "Interdisciplinary Index",
-            "type": "number"
-          },
-          "llm_active": {
-            "default": true,
-            "title": "Llm Active",
-            "type": "boolean"
-          },
-          "metrics_computed": {
-            "default": false,
-            "title": "Metrics Computed",
-            "type": "boolean"
-          },
-          "network_centrality": {
-            "default": 0.0,
-            "title": "Network Centrality",
-            "type": "number"
-          },
-          "next_prediction": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Prediction"
-          },
-          "open_science_score": {
-            "default": 0.0,
-            "title": "Open Science Score",
-            "type": "number"
-          },
-          "orcid": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Orcid"
-          },
-          "policy_patent_score": {
-            "default": 0.0,
-            "title": "Policy Patent Score",
-            "type": "number"
-          },
-          "research_consistency": {
-            "default": 0.0,
-            "title": "Research Consistency",
-            "type": "number"
-          },
-          "semantic_novelty": {
-            "default": 0.0,
-            "title": "Semantic Novelty",
-            "type": "number"
-          },
-          "similar_researchers": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/AuthorSuggestion"
-            },
-            "title": "Similar Researchers",
-            "type": "array"
-          },
-          "skills": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Skills",
-            "type": "array"
-          },
-          "tools": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Tools",
-            "type": "array"
-          },
-          "works": {
-            "items": {
-              "$ref": "#/components/schemas/Work"
-            },
-            "title": "Works",
-            "type": "array"
-          },
-          "works_count": {
-            "title": "Works Count",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "display_name",
-          "h_index",
-          "i10_index",
-          "works_count",
-          "cited_by_count",
-          "institution",
-          "academic_history",
-          "works"
-        ],
-        "title": "AuthorResponse",
-        "type": "object"
-      },
-      "AuthorSuggestion": {
-        "properties": {
-          "display_name": {
-            "title": "Display Name",
-            "type": "string"
-          },
-          "field_of_study": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Field Of Study"
-          },
-          "h_index": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "H Index"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "innovation_score": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Innovation Score"
-          },
-          "institution": {
-            "title": "Institution",
-            "type": "string"
-          },
-          "works_count": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Works Count"
-          }
-        },
-        "required": [
-          "id",
-          "display_name",
-          "institution"
-        ],
-        "title": "AuthorSuggestion",
         "type": "object"
       },
       "Body_upload_document_api_v1_agent_upload_document_post": {
@@ -638,48 +365,6 @@
           }
         },
         "title": "ChatWithAuthorResponse",
-        "type": "object"
-      },
-      "CitationHeatmap": {
-        "additionalProperties": true,
-        "description": "``GET /citation_heatmap``.",
-        "properties": {
-          "citations": {
-            "default": [],
-            "items": {
-              "type": "integer"
-            },
-            "title": "Citations",
-            "type": "array"
-          },
-          "h_index": {
-            "default": 0,
-            "title": "H Index",
-            "type": "integer"
-          },
-          "institutional_reach": {
-            "default": 0.0,
-            "title": "Institutional Reach",
-            "type": "number"
-          },
-          "works": {
-            "default": [],
-            "items": {
-              "type": "integer"
-            },
-            "title": "Works",
-            "type": "array"
-          },
-          "years": {
-            "default": [],
-            "items": {
-              "type": "integer"
-            },
-            "title": "Years",
-            "type": "array"
-          }
-        },
-        "title": "CitationHeatmap",
         "type": "object"
       },
       "CollaboratorSynergyResponse": {
@@ -860,38 +545,6 @@
           }
         },
         "title": "DailyFeedItem",
-        "type": "object"
-      },
-      "DismissFeedItemRequest": {
-        "properties": {
-          "author_id": {
-            "title": "Author Id",
-            "type": "string"
-          },
-          "work_id": {
-            "title": "Work Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "author_id",
-          "work_id"
-        ],
-        "title": "DismissFeedItemRequest",
-        "type": "object"
-      },
-      "DismissResponse": {
-        "description": "``POST /daily_feed/dismiss``.",
-        "properties": {
-          "success": {
-            "title": "Success",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "success"
-        ],
-        "title": "DismissResponse",
         "type": "object"
       },
       "GrantMatch": {
@@ -1230,39 +883,6 @@
         "title": "JournalRecommendation",
         "type": "object"
       },
-      "LeaderboardEntry": {
-        "properties": {
-          "entropy_score": {
-            "title": "Entropy Score",
-            "type": "integer"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "institution": {
-            "title": "Institution",
-            "type": "string"
-          },
-          "rank": {
-            "title": "Rank",
-            "type": "integer"
-          },
-          "user_name": {
-            "title": "User Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "rank",
-          "id",
-          "user_name",
-          "institution",
-          "entropy_score"
-        ],
-        "title": "LeaderboardEntry",
-        "type": "object"
-      },
       "LivenessResponse": {
         "description": "``GET /livez`` \u2014 dependency-free liveness probe.",
         "properties": {
@@ -1275,80 +895,6 @@
           "status"
         ],
         "title": "LivenessResponse",
-        "type": "object"
-      },
-      "NetworkCollaborator": {
-        "additionalProperties": true,
-        "description": "One row of ``GET /network_collaborators`` (bare JSON array).",
-        "properties": {
-          "connection_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Connection Path"
-          },
-          "field": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Field"
-          },
-          "id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
-          },
-          "institution": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Institution"
-          },
-          "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          },
-          "relevance_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Relevance Score"
-          }
-        },
-        "title": "NetworkCollaborator",
         "type": "object"
       },
       "NexusChatRequest": {
@@ -1603,25 +1149,6 @@
         "title": "Quest",
         "type": "object"
       },
-      "RefreshAuthorResponse": {
-        "description": "``GET /refresh_author`` \u2014 kicks the teleport worker.",
-        "properties": {
-          "author_id": {
-            "title": "Author Id",
-            "type": "string"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          }
-        },
-        "required": [
-          "status",
-          "author_id"
-        ],
-        "title": "RefreshAuthorResponse",
-        "type": "object"
-      },
       "RoadmapResponse": {
         "additionalProperties": true,
         "description": "``GET /assistant_professor_roadmap`` \u2014 milestone/checklist/template plan.",
@@ -1698,20 +1225,6 @@
           }
         },
         "title": "RoadmapResponse",
-        "type": "object"
-      },
-      "RootResponse": {
-        "description": "``GET /`` on the API router.",
-        "properties": {
-          "message": {
-            "title": "Message",
-            "type": "string"
-          }
-        },
-        "required": [
-          "message"
-        ],
-        "title": "RootResponse",
         "type": "object"
       },
       "SemanticTrendingPaper": {
@@ -1858,74 +1371,12 @@
         "title": "SummarizeWorkResponse",
         "type": "object"
       },
-      "SupportMetricsResponse": {
-        "description": "``GET /support/metrics`` \u2014 SLA targets, performance, and queue status.",
+      "TeleportAck": {
+        "description": "``POST /internal/teleport/{author_id}`` \u2014 202, the task is now queued.",
         "properties": {
-          "performance_metrics": {
-            "additionalProperties": true,
-            "title": "Performance Metrics",
-            "type": "object"
-          },
-          "queue_status": {
-            "additionalProperties": true,
-            "title": "Queue Status",
-            "type": "object"
-          },
-          "sla_targets": {
-            "additionalProperties": true,
-            "title": "Sla Targets",
-            "type": "object"
-          }
-        },
-        "required": [
-          "sla_targets",
-          "performance_metrics",
-          "queue_status"
-        ],
-        "title": "SupportMetricsResponse",
-        "type": "object"
-      },
-      "SystemServiceStatuses": {
-        "properties": {
-          "ai_inference": {
-            "title": "Ai Inference",
+          "author_id": {
+            "title": "Author Id",
             "type": "string"
-          },
-          "api_gateway": {
-            "title": "Api Gateway",
-            "type": "string"
-          },
-          "cache_layer": {
-            "title": "Cache Layer",
-            "type": "string"
-          },
-          "database": {
-            "title": "Database",
-            "type": "string"
-          }
-        },
-        "required": [
-          "api_gateway",
-          "database",
-          "cache_layer",
-          "ai_inference"
-        ],
-        "title": "SystemServiceStatuses",
-        "type": "object"
-      },
-      "SystemStatusResponse": {
-        "description": "``GET /status``.",
-        "properties": {
-          "incidents": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Incidents",
-            "type": "array"
-          },
-          "services": {
-            "$ref": "#/components/schemas/SystemServiceStatuses"
           },
           "status": {
             "title": "Status",
@@ -1934,10 +1385,9 @@
         },
         "required": [
           "status",
-          "services",
-          "incidents"
+          "author_id"
         ],
-        "title": "SystemStatusResponse",
+        "title": "TeleportAck",
         "type": "object"
       },
       "TieupIdea": {
@@ -2057,218 +1507,6 @@
         ],
         "title": "ValidationError",
         "type": "object"
-      },
-      "Work": {
-        "properties": {
-          "authors": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Authors"
-          },
-          "citations": {
-            "default": 0,
-            "title": "Citations",
-            "type": "integer"
-          },
-          "complexity_score": {
-            "default": 0.0,
-            "title": "Complexity Score",
-            "type": "number"
-          },
-          "creativity_score": {
-            "default": 0.0,
-            "title": "Creativity Score",
-            "type": "number"
-          },
-          "disruption_score": {
-            "default": 0.0,
-            "title": "Disruption Score",
-            "type": "number"
-          },
-          "doi": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Doi"
-          },
-          "id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
-          },
-          "impact_factor": {
-            "default": 0.0,
-            "title": "Impact Factor",
-            "type": "number"
-          },
-          "is_open_access": {
-            "default": false,
-            "title": "Is Open Access",
-            "type": "boolean"
-          },
-          "journal": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Journal"
-          },
-          "open_science_score": {
-            "default": 0.0,
-            "title": "Open Science Score",
-            "type": "number"
-          },
-          "semantic_novelty": {
-            "default": 0.0,
-            "title": "Semantic Novelty",
-            "type": "number"
-          },
-          "title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Title"
-          },
-          "year": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Year"
-          }
-        },
-        "title": "Work",
-        "type": "object"
-      },
-      "ZoteroAuthResponse": {
-        "description": "``GET /integrations/zotero/auth``.",
-        "properties": {
-          "authorization_url": {
-            "title": "Authorization Url",
-            "type": "string"
-          }
-        },
-        "required": [
-          "authorization_url"
-        ],
-        "title": "ZoteroAuthResponse",
-        "type": "object"
-      },
-      "ZoteroCallbackResponse": {
-        "description": "``GET /integrations/zotero/callback``.",
-        "properties": {
-          "message": {
-            "title": "Message",
-            "type": "string"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          },
-          "zotero_user_id": {
-            "title": "Zotero User Id",
-            "type": "string"
-          },
-          "zotero_username": {
-            "title": "Zotero Username",
-            "type": "string"
-          }
-        },
-        "required": [
-          "status",
-          "message",
-          "zotero_user_id",
-          "zotero_username"
-        ],
-        "title": "ZoteroCallbackResponse",
-        "type": "object"
-      },
-      "ZoteroSyncRequest": {
-        "properties": {
-          "papers": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Papers",
-            "type": "array"
-          },
-          "user_id": {
-            "title": "User Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "user_id",
-          "papers"
-        ],
-        "title": "ZoteroSyncRequest",
-        "type": "object"
-      },
-      "ZoteroSyncResponse": {
-        "description": "``POST /integrations/zotero/sync``.",
-        "properties": {
-          "message": {
-            "title": "Message",
-            "type": "string"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          },
-          "synced_count": {
-            "title": "Synced Count",
-            "type": "integer"
-          },
-          "synced_papers": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Synced Papers",
-            "type": "array"
-          }
-        },
-        "required": [
-          "status",
-          "synced_count",
-          "synced_papers",
-          "message"
-        ],
-        "title": "ZoteroSyncResponse",
-        "type": "object"
       }
     },
     "securitySchemes": {
@@ -2279,7 +1517,7 @@
     }
   },
   "info": {
-    "description": "Research intelligence backend powering the SkoLab Android app.\n\n**Auth**: Protected endpoints require a Firebase ID token in the `Authorization: Bearer <token>` header.\n\n**Rate limits**: `/agent/chat` and search endpoints \u2014 5 req/min per IP. All other endpoints \u2014 60 req/min per IP.",
+    "description": "Research intelligence backend powering the SkoLab Android app.\n\n**Auth**: Protected endpoints require a Firebase ID token in the `Authorization: Bearer <token>` header.\n\n**Rate limits**: enforced per-IP by the Go API gateway in front of this service, not here.",
     "title": "SkoLab API",
     "version": "1.1.0"
   },
@@ -2302,27 +1540,6 @@
           }
         },
         "summary": "Root"
-      }
-    },
-    "/api/v1/": {
-      "get": {
-        "operationId": "read_root_api_v1__get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RootResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Read Root",
-        "tags": [
-          "System"
-        ]
       }
     },
     "/api/v1/agent/chat": {
@@ -2590,48 +1807,6 @@
         ]
       }
     },
-    "/api/v1/author_metrics": {
-      "get": {
-        "operationId": "get_author_metrics_api_v1_author_metrics_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "author_id",
-            "required": true,
-            "schema": {
-              "title": "Author Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthorMetricsResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Author Metrics",
-        "tags": [
-          "Authors"
-        ]
-      }
-    },
     "/api/v1/chat_with_author": {
       "post": {
         "operationId": "chat_with_author_api_v1_chat_with_author_post",
@@ -2675,48 +1850,6 @@
         "summary": "Chat With Author",
         "tags": [
           "Agent"
-        ]
-      }
-    },
-    "/api/v1/citation_heatmap": {
-      "get": {
-        "operationId": "get_citation_heatmap_api_v1_citation_heatmap_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "author_id",
-            "required": true,
-            "schema": {
-              "title": "Author Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CitationHeatmap"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Citation Heatmap",
-        "tags": [
-          "Authors"
         ]
       }
     },
@@ -2900,52 +2033,6 @@
           }
         },
         "summary": "Get Daily Feed",
-        "tags": [
-          "Feed"
-        ]
-      }
-    },
-    "/api/v1/daily_feed/dismiss": {
-      "post": {
-        "operationId": "dismiss_daily_feed_item_api_v1_daily_feed_dismiss_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DismissFeedItemRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DismissResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Dismiss Daily Feed Item",
         "tags": [
           "Feed"
         ]
@@ -3156,110 +2243,15 @@
         ]
       }
     },
-    "/api/v1/integrations/zotero/auth": {
-      "get": {
-        "description": "Step 1: Returns the Zotero OAuth authorization URL to initiate link flow.",
-        "operationId": "zotero_auth_init_api_v1_integrations_zotero_auth_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "user_id",
-            "required": true,
-            "schema": {
-              "title": "User Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ZoteroAuthResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Zotero Auth Init",
-        "tags": [
-          "Integrations"
-        ]
-      }
-    },
-    "/api/v1/integrations/zotero/callback": {
-      "get": {
-        "description": "Step 2: Handles the Zotero redirect callback, exchanges token, and marks user as connected.",
-        "operationId": "zotero_auth_callback_api_v1_integrations_zotero_callback_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "oauth_token",
-            "required": true,
-            "schema": {
-              "title": "Oauth Token",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "oauth_verifier",
-            "required": true,
-            "schema": {
-              "title": "Oauth Verifier",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ZoteroCallbackResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Zotero Auth Callback",
-        "tags": [
-          "Integrations"
-        ]
-      }
-    },
-    "/api/v1/integrations/zotero/sync": {
+    "/api/v1/internal/author_metrics_enrich": {
       "post": {
-        "description": "Step 3: Pushes a list of papers from the SkoLab SwipeVault directly into Zotero via Zotero API.",
-        "operationId": "zotero_sync_papers_api_v1_integrations_zotero_sync_post",
+        "description": "LLM enrichment for ``GET /author_metrics`` (served by the Go gateway).\n\nTakes the title/concepts digest the gateway built and returns the scored\nbundle. Raises 503 (``AIUnavailable``) if the LLM step fails \u2014 the gateway\ndegrades that to an empty bundle on its side.",
+        "operationId": "author_metrics_enrich_api_v1_internal_author_metrics_enrich_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ZoteroSyncRequest"
+                "$ref": "#/components/schemas/AuthorMetricsEnrichRequest"
               }
             }
           },
@@ -3270,7 +2262,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ZoteroSyncResponse"
+                  "$ref": "#/components/schemas/AuthorMetricsResponse"
                 }
               }
             },
@@ -3287,9 +2279,68 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Zotero Sync Papers",
+        "summary": "Author Metrics Enrich",
         "tags": [
-          "Integrations"
+          "Authors"
+        ]
+      }
+    },
+    "/api/v1/internal/teleport/{author_id}": {
+      "post": {
+        "description": "Enqueue ``teleport_researcher(author_id)`` as a background task (202).",
+        "operationId": "trigger_teleport_api_v1_internal_teleport__author_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "author_id",
+            "required": true,
+            "schema": {
+              "title": "Author Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-internal-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Token"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeleportAck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Trigger Teleport",
+        "tags": [
+          "Internal"
         ]
       }
     },
@@ -3339,53 +2390,6 @@
         ]
       }
     },
-    "/api/v1/leaderboard/{field}": {
-      "get": {
-        "description": "Get the quest leaderboard for a specific scientific field.",
-        "operationId": "get_quests_leaderboard_api_v1_leaderboard__field__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "field",
-            "required": true,
-            "schema": {
-              "title": "Field",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/LeaderboardEntry"
-                  },
-                  "title": "Response Get Quests Leaderboard Api V1 Leaderboard  Field  Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Quests Leaderboard",
-        "tags": [
-          "Quests"
-        ]
-      }
-    },
     "/api/v1/match_grants": {
       "get": {
         "operationId": "match_grants_api_v1_match_grants_get",
@@ -3427,105 +2431,6 @@
           }
         },
         "summary": "Match Grants",
-        "tags": [
-          "Authors"
-        ]
-      }
-    },
-    "/api/v1/network_collaborators": {
-      "get": {
-        "operationId": "get_network_collaborators_api_v1_network_collaborators_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "author_id",
-            "required": true,
-            "schema": {
-              "title": "Author Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "exclude_ids",
-            "required": false,
-            "schema": {
-              "default": "",
-              "title": "Exclude Ids",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "field",
-            "required": false,
-            "schema": {
-              "default": "",
-              "title": "Field",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "name",
-            "required": false,
-            "schema": {
-              "default": "",
-              "title": "Name",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "maximum": 100,
-              "minimum": 1,
-              "title": "Limit",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "offset",
-            "required": false,
-            "schema": {
-              "default": 0,
-              "minimum": 0,
-              "title": "Offset",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/NetworkCollaborator"
-                  },
-                  "title": "Response Get Network Collaborators Api V1 Network Collaborators Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Network Collaborators",
         "tags": [
           "Authors"
         ]
@@ -3589,123 +2494,6 @@
         ]
       }
     },
-    "/api/v1/refresh_author": {
-      "get": {
-        "description": "Explicitly re-runs the teleportation worker to update Firestore data.",
-        "operationId": "refresh_author_api_v1_refresh_author_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "name",
-            "required": true,
-            "schema": {
-              "title": "Name",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RefreshAuthorResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Refresh Author",
-        "tags": [
-          "Authors"
-        ]
-      }
-    },
-    "/api/v1/search_author": {
-      "get": {
-        "operationId": "search_author_api_v1_search_author_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "name",
-            "required": true,
-            "schema": {
-              "title": "Name",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Id"
-            }
-          },
-          {
-            "in": "query",
-            "name": "focus",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Focus"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthorResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Search Author",
-        "tags": [
-          "Authors"
-        ]
-      }
-    },
     "/api/v1/semantic_trending": {
       "get": {
         "description": "Returns papers trending specifically in the author's research field.",
@@ -3760,28 +2548,6 @@
         "summary": "Get Semantic Trending",
         "tags": [
           "Papers"
-        ]
-      }
-    },
-    "/api/v1/status": {
-      "get": {
-        "description": "Returns a public system status report detailing service availability and active/past incidents.",
-        "operationId": "get_system_status_api_v1_status_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SystemStatusResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Get System Status",
-        "tags": [
-          "System"
         ]
       }
     },
@@ -3840,27 +2606,6 @@
         "summary": "Summarize Work",
         "tags": [
           "Papers"
-        ]
-      }
-    },
-    "/api/v1/support/metrics": {
-      "get": {
-        "operationId": "get_support_metrics_api_v1_support_metrics_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SupportMetricsResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Get Support Metrics",
-        "tags": [
-          "Support"
         ]
       }
     },
@@ -3954,23 +2699,6 @@
         "summary": "Livez"
       }
     },
-    "/metrics": {
-      "get": {
-        "description": "Prometheus metrics endpoint in plain text exposition format.",
-        "operationId": "metrics_metrics_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Metrics"
-      }
-    },
     "/readyz": {
       "get": {
         "description": "Readiness probe \u2014 should traffic route here? 503 drains this instance.",
@@ -4011,7 +2739,7 @@
       "name": "feed"
     },
     {
-      "description": "Health, metrics, and AI status endpoints.",
+      "description": "Health, readiness, and AI status endpoints.",
       "name": "system"
     }
   ]

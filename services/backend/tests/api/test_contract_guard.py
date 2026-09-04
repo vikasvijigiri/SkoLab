@@ -4,9 +4,9 @@
 response. ``UNTYPED_ALLOWLIST`` is empty and must stay empty.
 
 Routes are enumerated with ``_route_walk.iter_api_routes`` — FastAPI 0.141
-includes sub-routers lazily, so ``app.routes`` alone shows only ``/``,
-``/health`` and ``/metrics``. ``test_route_table_is_populated`` is the backstop
-against a vacuous pass.
+includes sub-routers lazily, so ``app.routes`` alone shows only ``/`` and the
+infra probes (``/health``, ``/livez``, ``/readyz``).
+``test_route_table_is_populated`` is the backstop against a vacuous pass.
 """
 
 from __future__ import annotations
@@ -20,7 +20,6 @@ _HTTP_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 PERMANENT_ALLOWLIST: set[str] = {
     "/health",  # returns Response with a dynamic 200/503 status code
     "/readyz",  # infra: raw Response, dynamic 200/503
-    "/metrics",  # Prometheus text/plain exposition format, not JSON
 }
 
 # Routes still awaiting a response_model — MUST stay empty.

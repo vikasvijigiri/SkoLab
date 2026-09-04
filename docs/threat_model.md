@@ -45,8 +45,8 @@ graph TD
 
 | Threat Actor | Motivation | Attack Vector | Mitigation |
 |---|---|---|---|
-| **Data Scraper** | Steal copyrighted/licensed academic data from OpenAlex. | High-frequency queries to search endpoints. | Path-specific rate limits + User-Agent blocking. |
-| **Script Kiddie / Attacker** | Disrupt service / Access other user accounts. | Session spoofing, SQL injection, API abuse. | Device-specific HMAC signatures + Admin IP gating. |
+| **Data Scraper** | Steal copyrighted/licensed academic data from OpenAlex. | High-frequency queries to search endpoints. | Per-IP rate limiting at the Go API gateway (`internal/middleware`). The Python per-process token bucket and User-Agent blocking were removed as redundant/counterproductive. |
+| **Script Kiddie / Attacker** | Disrupt service / Access other user accounts. | Session spoofing, SQL injection, API abuse. | Firebase ID-token verification (`auth.VerifyUser` / `get_verified_user`) + parameterised ORM queries. The `X-Device-Signature` HMAC check and the `/metrics` admin-IP gate were removed (`docs/plans/2026-09-04-retire-python-infra.md`) — the signature was keyed by a server-only secret and protected no real route. |
 | **Prompt Injector** | Hijack LLM credits / Extract system prompts. | Prompt stuffing in search/chat fields. | XML tagging isolation + Max character constraints. |
 | **Direct DB Tamperer** | Modify database values (e.g., complete quests/get credits). | Modifying SQLite on device or executing SQL directly on compromised DB. | Record integrity HMAC-SHA256 signatures validated on read. |
 
@@ -54,9 +54,9 @@ graph TD
 
 ## 3. Threat Mitigation Summary (STRIDE Map)
 
-* **Spoofing:** Requests requesting writes validate `X-Device-Signature` calculated from the user's ID, timestamp, and a shared device secret.
+* **Spoofing:** Write requests authenticate with a Firebase ID token (`Authorization: Bearer`), verified at the gateway (`auth.VerifyUser`) and in Python (`get_verified_user`). The former `X-Device-Signature` HMAC check was removed — it was keyed by `settings.database_encryption_key`, a server-only secret no client could hold, and guarded no real route.
 * **Tampering:** Crucial quest state tables verify records against cryptographic HMAC-SHA256 signatures on database read operations.
 * **Repudiation:** Telemetry logs record masked IDs, endpoints, and HTTP response codes within centralized W3C tracing spans.
-* **Information Disclosure:** SRE / admin endpoints (`/metrics`, `/ai_status`) reject requests from public IPs or missing security tokens with `403 Forbidden`.
-* **Denial of Service:** Path-specific token-bucket rate limits throttle automated scrapers on expensive search/auth resources to 5 requests/minute.
+* **Information Disclosure:** `GET /metrics` and its admin-IP / SRE-token gate were removed from the Python service; request metrics move to the Go gateway. `GET /ai_status` is public system metadata.
+* **Denial of Service:** Per-IP rate limiting at the Go API gateway (`internal/middleware.NewRateLimiter`) throttles bursts in front of both services; the Python per-process token bucket was retired.
 * **Elevation of Privilege:** Strict segregation between public and private Docker networks prevents direct external access to Postgres nodes on port 5432.
