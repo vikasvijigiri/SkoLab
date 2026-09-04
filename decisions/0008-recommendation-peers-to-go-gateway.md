@@ -83,8 +83,12 @@ cutover, but nothing uses it now.
 
 > **Old app builds** that predate #27 lose peer-autocomplete / invite-logging
 > (they get 401); the rest of the app is unaffected. Acceptable — the feature
-> degrades, it does not crash — but hold this PR's merge until an Android
-> release carrying #27's interceptor is out.
+> degrades, it does not crash. This PR carried an explicit merge hold until an
+> Android release with #27's interceptor was confirmed out; the owner
+> (2026-09-04) directed merging ahead of that confirmation, accepting the
+> tradeoff for any pre-#27 install still in the field. `VerifyUserOptional`
+> remains available to reopen a transitional window if that turns out to
+> matter in practice.
 
 ## Consequences
 
