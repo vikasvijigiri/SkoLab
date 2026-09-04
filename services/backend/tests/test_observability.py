@@ -30,6 +30,41 @@ def test_init_observability_is_inert_without_dsn(monkeypatch):
         assert sentry_sdk.Hub.current.client is None
 
 
+def test_init_observability_with_dsn_does_not_crash(monkeypatch):
+    """With a DSN set, init_observability() must not raise.
+
+    Regression test for a prod-only boot crash: sentry_sdk's
+    StarletteIntegration unconditionally imports jinja2 during
+    ``sentry_sdk.init()`` (to patch Jinja2Templates), even though this API
+    never renders HTML templates. `jinja2` wasn't a direct dependency, so
+    every deploy with SENTRY_DSN set crashed on import of app.main before
+    the process could bind a port. Local dev and CI both blank SENTRY_DSN
+    (see conftest.py), so this path only ran for the first time in a real
+    deploy — this test exercises it locally instead.
+    """
+    from types import SimpleNamespace
+
+    import sentry_sdk
+
+    from app.core import observability as obs_mod
+
+    monkeypatch.setattr(
+        obs_mod,
+        "settings",
+        SimpleNamespace(
+            sentry_dsn="https://public@sentry.example.invalid/1",
+            environment="test",
+        ),
+    )
+
+    try:
+        obs_mod.init_observability()  # must not raise ImportError
+        assert sentry_sdk.get_client().is_active() is True
+    finally:
+        # Don't leak an active client into other tests.
+        sentry_sdk.init(dsn=None)
+
+
 @pytest.mark.anyio
 async def test_health_endpoint():
     transport = httpx.ASGITransport(app=app)
