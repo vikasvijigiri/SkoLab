@@ -47,6 +47,14 @@ func TestSetDocNoClientIsNoOp(t *testing.T) {
 	}
 }
 
+func TestQueryEqNoClientIsCleanMiss(t *testing.T) {
+	withNilClient(t)
+	docs, err := QueryEq(context.Background(), "global_researchers", "display_name", "Ada Lovelace", 1)
+	if docs != nil || err != nil {
+		t.Fatalf("QueryEq(nil client) = (%v, %v), want (nil, nil)", docs, err)
+	}
+}
+
 func TestServerTimestampIsUsableInADocMap(t *testing.T) {
 	// Compile-time guarantee that callers can build the Firestore mirror payload
 	// (as heatmap.go does) without importing the Firestore SDK directly.

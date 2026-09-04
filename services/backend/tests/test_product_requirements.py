@@ -11,14 +11,10 @@ except AttributeError:
     client_args = {"app": app}
 
 
-@pytest.mark.anyio
-async def test_quests_leaderboard():
-    """Verify that quests leaderboard endpoint resolves successfully."""
-    async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
-        response = await ac.get("/api/v1/leaderboard/Physics")
-        assert response.status_code == 200
-        data = response.json()
-        assert isinstance(data, list)
+# test_quests_leaderboard removed — GET /leaderboard/{field} moved to the Go
+# gateway (services/backend-go/internal/quest/quest.go); the Python route was
+# unreachable dead code (decisions/0010: a non-LLM route must not exist in
+# Python at all).
 
 
 @pytest.mark.anyio
