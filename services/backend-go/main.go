@@ -115,6 +115,19 @@ func main() {
 	r.GET("/network_collaborators", author.GetNetworkCollaborators)
 	r.GET("/api/v1/authors/network_collaborators", author.GetNetworkCollaborators)
 
+	// GET /search_author + /refresh_author — cache → Postgres (researcher_metrics)
+	// → Firestore (global_researchers) → OpenAlex lookup that assembles the
+	// ~40-field AuthorResponse. No LLM, no embedding. Ported from
+	// services/backend/app/api/v1/endpoints/authors.py (decisions/0002). The LLM
+	// teleport enrichment worker stays Python: both handlers fire-and-forget
+	// POST {PYTHON_BACKEND_URL}/api/v1/internal/teleport/{id} with the shared
+	// secret header X-Internal-Token (INTERNAL_API_TOKEN). Both routes were
+	// public in Python — kept public here.
+	r.GET("/api/v1/search_author", author.SearchAuthor)
+	r.GET("/search_author", author.SearchAuthor)
+	r.GET("/api/v1/refresh_author", author.RefreshAuthor)
+	r.GET("/refresh_author", author.RefreshAuthor)
+
 	// ── Leaderboard — PG query only ───────────────────────────────────────────
 	r.GET("/api/v1/leaderboard/:field", quest.GetLeaderboard)
 

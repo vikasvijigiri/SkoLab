@@ -186,293 +186,6 @@
         "title": "AuthorMetricsResponse",
         "type": "object"
       },
-      "AuthorResponse": {
-        "properties": {
-          "academic_history": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Academic History",
-            "type": "array"
-          },
-          "average_activity": {
-            "default": 0.0,
-            "title": "Average Activity",
-            "type": "number"
-          },
-          "average_complexity": {
-            "default": 0.0,
-            "title": "Average Complexity",
-            "type": "number"
-          },
-          "average_creativity": {
-            "default": 0.0,
-            "title": "Average Creativity",
-            "type": "number"
-          },
-          "average_impact": {
-            "default": 0.0,
-            "title": "Average Impact",
-            "type": "number"
-          },
-          "average_skill_score": {
-            "default": 0.0,
-            "title": "Average Skill Score",
-            "type": "number"
-          },
-          "citation_acceleration": {
-            "default": 0.0,
-            "title": "Citation Acceleration",
-            "type": "number"
-          },
-          "cited_by_count": {
-            "title": "Cited By Count",
-            "type": "integer"
-          },
-          "collaboration_diversity": {
-            "default": 0.0,
-            "title": "Collaboration Diversity",
-            "type": "number"
-          },
-          "display_name": {
-            "title": "Display Name",
-            "type": "string"
-          },
-          "disruption_score": {
-            "default": 0.0,
-            "title": "Disruption Score",
-            "type": "number"
-          },
-          "expertise": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Expertise",
-            "type": "array"
-          },
-          "field_of_study": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Field Of Study"
-          },
-          "future_impact_score": {
-            "default": 0.0,
-            "title": "Future Impact Score",
-            "type": "number"
-          },
-          "h_index": {
-            "title": "H Index",
-            "type": "integer"
-          },
-          "i10_index": {
-            "title": "I10 Index",
-            "type": "integer"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "innovation_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Innovation Score"
-          },
-          "institution": {
-            "title": "Institution",
-            "type": "string"
-          },
-          "interdisciplinary_index": {
-            "default": 0.0,
-            "title": "Interdisciplinary Index",
-            "type": "number"
-          },
-          "llm_active": {
-            "default": true,
-            "title": "Llm Active",
-            "type": "boolean"
-          },
-          "metrics_computed": {
-            "default": false,
-            "title": "Metrics Computed",
-            "type": "boolean"
-          },
-          "network_centrality": {
-            "default": 0.0,
-            "title": "Network Centrality",
-            "type": "number"
-          },
-          "next_prediction": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Prediction"
-          },
-          "open_science_score": {
-            "default": 0.0,
-            "title": "Open Science Score",
-            "type": "number"
-          },
-          "orcid": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Orcid"
-          },
-          "policy_patent_score": {
-            "default": 0.0,
-            "title": "Policy Patent Score",
-            "type": "number"
-          },
-          "research_consistency": {
-            "default": 0.0,
-            "title": "Research Consistency",
-            "type": "number"
-          },
-          "semantic_novelty": {
-            "default": 0.0,
-            "title": "Semantic Novelty",
-            "type": "number"
-          },
-          "similar_researchers": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/AuthorSuggestion"
-            },
-            "title": "Similar Researchers",
-            "type": "array"
-          },
-          "skills": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Skills",
-            "type": "array"
-          },
-          "tools": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Tools",
-            "type": "array"
-          },
-          "works": {
-            "items": {
-              "$ref": "#/components/schemas/Work"
-            },
-            "title": "Works",
-            "type": "array"
-          },
-          "works_count": {
-            "title": "Works Count",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "display_name",
-          "h_index",
-          "i10_index",
-          "works_count",
-          "cited_by_count",
-          "institution",
-          "academic_history",
-          "works"
-        ],
-        "title": "AuthorResponse",
-        "type": "object"
-      },
-      "AuthorSuggestion": {
-        "properties": {
-          "display_name": {
-            "title": "Display Name",
-            "type": "string"
-          },
-          "field_of_study": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Field Of Study"
-          },
-          "h_index": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "H Index"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "innovation_score": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Innovation Score"
-          },
-          "institution": {
-            "title": "Institution",
-            "type": "string"
-          },
-          "works_count": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Works Count"
-          }
-        },
-        "required": [
-          "id",
-          "display_name",
-          "institution"
-        ],
-        "title": "AuthorSuggestion",
-        "type": "object"
-      },
       "Body_upload_document_api_v1_agent_upload_document_post": {
         "properties": {
           "file": {
@@ -1455,25 +1168,6 @@
         "title": "Quest",
         "type": "object"
       },
-      "RefreshAuthorResponse": {
-        "description": "``GET /refresh_author`` \u2014 kicks the teleport worker.",
-        "properties": {
-          "author_id": {
-            "title": "Author Id",
-            "type": "string"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          }
-        },
-        "required": [
-          "status",
-          "author_id"
-        ],
-        "title": "RefreshAuthorResponse",
-        "type": "object"
-      },
       "RoadmapResponse": {
         "additionalProperties": true,
         "description": "``GET /assistant_professor_roadmap`` \u2014 milestone/checklist/template plan.",
@@ -1765,6 +1459,25 @@
         "title": "SystemStatusResponse",
         "type": "object"
       },
+      "TeleportAck": {
+        "description": "``POST /internal/teleport/{author_id}`` \u2014 202, the task is now queued.",
+        "properties": {
+          "author_id": {
+            "title": "Author Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "author_id"
+        ],
+        "title": "TeleportAck",
+        "type": "object"
+      },
       "TieupIdea": {
         "properties": {
           "description": {
@@ -1881,121 +1594,6 @@
           "type"
         ],
         "title": "ValidationError",
-        "type": "object"
-      },
-      "Work": {
-        "properties": {
-          "authors": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Authors"
-          },
-          "citations": {
-            "default": 0,
-            "title": "Citations",
-            "type": "integer"
-          },
-          "complexity_score": {
-            "default": 0.0,
-            "title": "Complexity Score",
-            "type": "number"
-          },
-          "creativity_score": {
-            "default": 0.0,
-            "title": "Creativity Score",
-            "type": "number"
-          },
-          "disruption_score": {
-            "default": 0.0,
-            "title": "Disruption Score",
-            "type": "number"
-          },
-          "doi": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Doi"
-          },
-          "id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
-          },
-          "impact_factor": {
-            "default": 0.0,
-            "title": "Impact Factor",
-            "type": "number"
-          },
-          "is_open_access": {
-            "default": false,
-            "title": "Is Open Access",
-            "type": "boolean"
-          },
-          "journal": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Journal"
-          },
-          "open_science_score": {
-            "default": 0.0,
-            "title": "Open Science Score",
-            "type": "number"
-          },
-          "semantic_novelty": {
-            "default": 0.0,
-            "title": "Semantic Novelty",
-            "type": "number"
-          },
-          "title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Title"
-          },
-          "year": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Year"
-          }
-        },
-        "title": "Work",
         "type": "object"
       }
     },
@@ -2796,6 +2394,65 @@
         ]
       }
     },
+    "/api/v1/internal/teleport/{author_id}": {
+      "post": {
+        "description": "Enqueue ``teleport_researcher(author_id)`` as a background task (202).",
+        "operationId": "trigger_teleport_api_v1_internal_teleport__author_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "author_id",
+            "required": true,
+            "schema": {
+              "title": "Author Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-internal-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Token"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeleportAck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Trigger Teleport",
+        "tags": [
+          "Internal"
+        ]
+      }
+    },
     "/api/v1/journal_advisor": {
       "get": {
         "operationId": "get_journal_advisor_api_v1_journal_advisor_get",
@@ -2990,123 +2647,6 @@
         "summary": "Presentation Outline",
         "tags": [
           "Papers"
-        ]
-      }
-    },
-    "/api/v1/refresh_author": {
-      "get": {
-        "description": "Explicitly re-runs the teleportation worker to update Firestore data.",
-        "operationId": "refresh_author_api_v1_refresh_author_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "name",
-            "required": true,
-            "schema": {
-              "title": "Name",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RefreshAuthorResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Refresh Author",
-        "tags": [
-          "Authors"
-        ]
-      }
-    },
-    "/api/v1/search_author": {
-      "get": {
-        "operationId": "search_author_api_v1_search_author_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "name",
-            "required": true,
-            "schema": {
-              "title": "Name",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Id"
-            }
-          },
-          {
-            "in": "query",
-            "name": "focus",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Focus"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthorResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Search Author",
-        "tags": [
-          "Authors"
         ]
       }
     },
