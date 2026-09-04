@@ -7,6 +7,13 @@
         "@playwright/mcp@latest"
       ]
     },
+    "mobile-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@mobilenext/mobile-mcp@latest"
+      ]
+    },
     "postgres": {
       "command": "npx",
       "args": [
