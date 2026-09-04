@@ -120,6 +120,32 @@ func TestReverseProxy_RewritesHostHeaderToTarget(t *testing.T) {
 	}
 }
 
+// TestProxyTransport_ResponseHeaderTimeoutNotShorterThanRequestTimeout locks
+// in a production incident: proxyTransport.ResponseHeaderTimeout fires
+// independently of the per-request context deadline (proxyRequestTimeout) set
+// in reverseProxy()'s returned handler, so a shorter transport-level timeout
+// silently truncates it. ResponseHeaderTimeout previously stood at 60s while
+// proxyRequestTimeout documented (and enforced via context) 120s -- a real
+// cold-compute daily_feed request was cut off with a 502 at exactly 60.3s,
+// well inside the documented ~40-80s cold-compute path for that route. A
+// real end-to-end request that takes 60-120s would make this an expensive,
+// flaky test to write directly, so this instead asserts the two durations
+// stay consistent -- the cheap invariant whose violation caused the bug.
+func TestProxyTransport_ResponseHeaderTimeoutNotShorterThanRequestTimeout(t *testing.T) {
+	transport, ok := proxyTransport.(*http.Transport)
+	if !ok {
+		t.Fatalf("proxyTransport is a %T, want *http.Transport", proxyTransport)
+	}
+	if transport.ResponseHeaderTimeout < proxyRequestTimeout {
+		t.Errorf(
+			"proxyTransport.ResponseHeaderTimeout = %v, proxyRequestTimeout = %v: "+
+				"the transport will truncate any proxied request before the "+
+				"per-request context deadline ever gets a chance to",
+			transport.ResponseHeaderTimeout, proxyRequestTimeout,
+		)
+	}
+}
+
 func TestReverseProxy_UpstreamDownReturnsBadGateway(t *testing.T) {
 	// A port nothing is listening on -- guaranteed connection refused.
 	gateway := newTestGateway("http://127.0.0.1:1")
