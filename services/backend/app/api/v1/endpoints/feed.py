@@ -1,13 +1,11 @@
 from typing import Optional, Dict, Any
-from fastapi import APIRouter, Depends, Query, HTTPException, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Query, HTTPException
 
 import re
 
 from app.schemas.core import ConjectureResponse
 from app.schemas.feed_extra import (
     DailyFeedItem,
-    DismissResponse,
     IndustryOpportunity,
     RoadmapResponse,
 )
@@ -21,12 +19,16 @@ from app.core.cache import daily_conjecture_cache
 from app.api.dependencies import (
     get_pipeline_services,
     get_openalex_service,
-    get_verified_user,
-    get_db,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
+
+# `POST /daily_feed/dismiss` moved to the Go gateway in Phase 2 (Python is
+# LLM-only, see decisions/0002 and docs/plans/2026-09-04-phase2-feed-to-go.md):
+#   - dismiss owner check + dismissed-ids write → services/backend-go/internal/feed/feed.go
+# Feed *generation* (`GET /daily_feed`, `/daily_conjecture`,
+# `/assistant_professor_roadmap`, `/industry_opportunities`) stays here — it is
+# embedding / LLM work.
 
 
 # NOTE: /daily_feed and /industry_opportunities return a bare JSON array (the web
@@ -42,38 +44,6 @@ async def get_daily_feed(
     return await pipeline_services.get_daily_feed(
         author_id, query_fallback=query_fallback
     )
-
-
-class DismissFeedItemRequest(BaseModel):
-    author_id: str
-    work_id: str
-
-
-@router.post("/daily_feed/dismiss", response_model=DismissResponse)
-async def dismiss_daily_feed_item(
-    request: DismissFeedItemRequest,
-    user: dict = Depends(get_verified_user),
-    db: AsyncSession = Depends(get_db),
-    pipeline_services: PipelineServices = Depends(get_pipeline_services),
-):
-    # Owner-scoped write: a signed-in user may only dismiss items from *their
-    # own* feed. `request.author_id` is an OpenAlex id (not the Firebase uid),
-    # so bind it through the caller's linked `users.openalex_id`. 401 with no
-    # token, 403 when the token's user is not that OpenAlex author.
-    from app.models.user_models import User
-    from sqlalchemy import select
-
-    uid = (user or {}).get("uid")
-    linked_openalex_id = (
-        await db.execute(select(User.openalex_id).where(User.id == uid))
-    ).scalar_one_or_none()
-    if not linked_openalex_id or linked_openalex_id != request.author_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only dismiss items from your own feed.",
-        )
-    await pipeline_services.dismiss_recommendation(request.author_id, request.work_id)
-    return {"success": True}
 
 
 def generate_fallback_conjecture(author_data: dict) -> ConjectureResponse:

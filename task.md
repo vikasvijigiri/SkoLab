@@ -285,3 +285,22 @@ first — and I'll scope it" / "okay go ahead with it"
 **Open decisions (in the PR):** `POST /daily_feed/dismiss` (a write keyed by OpenAlex `author_id`, not a uid) left public — binding it to the caller needs a uid→openalex_id map; `/zotero/*` stubs left public pending a real implementation.
 
 **Status:** Done — committed on `feat/security-hardening` (Tasks 1–4). Draft PR opened against `main`.
+
+---
+
+## 2026-09-04 — Phase 2: feed persistence + non-LLM CRUD → Go gateway
+
+**Asked:** Plan then conservatively implement Phase 2 of "Python is LLM-only" — classify every route in `feed.py` / `industry_academic.py` / `integrations.py` / `support.py`, move only the pure-CRUD / stub ones to the Go gateway, keep the exact `/daily_feed/dismiss` owner check.
+
+1. Wrote `docs/plans/2026-09-04-phase2-feed-to-go.md` with the full move/stay/needs-decision table. **Stay:** `GET /daily_feed` (embeddings + MMR), `GET /daily_conjecture` / `assistant_professor_roadmap` / `industry_opportunities` / `industry_academic_tieups` (LLM, and the last one private + owner-scoped).
+2. **Moved to Go** `internal/feed/feed.go` (new): `POST /daily_feed/dismiss` (owner check + dismissed-ids write), `GET /support/metrics` (static dict), `GET/POST /integrations/zotero/*` (3 OAuth stubs). Wired into `main.go` as one appended block; `daily_feed/dismiss` behind an `auth.VerifyUser()` group.
+3. Ported the dismiss owner check verbatim: `auth.VerifyUser()` → 401; `SELECT openalex_id FROM users WHERE id = $1` vs body `author_id` → 403 on mismatch or unlinked. Port of `dismiss_recommendation`: read/merge/upsert `cache_entries` key `pipeline_dismissed_recs::<doc_id>` with the `{"v":[...]}` envelope + 10y TTL, best-effort delete of `pipeline::daily_feed_<doc_id>`.
+4. Removed the handlers from Python: `feed.py` (dismiss + `DismissFeedItemRequest` + dead imports), deleted `endpoints/{support,integrations}.py` + `schemas/{support,integrations}.py` + their 4 test files, dropped `dismiss_recommendation` from `pipeline/feed.py` (grep-confirmed dead; `get_dismissed_recommendation_ids` kept — `get_daily_feed` still uses it), trimmed `router.py`, removed `/daily_feed/dismiss` from `test_auth_posture.py` `EXPECTED_AUTHED`, regenerated + LF-normalized `api-contracts/openapi.snapshot.json`. Updated `docs/backend-auth-posture.md` and the phase0 roadmap row.
+5. Go table tests `internal/feed/feed_test.go` (new): support/zotero shape guards + dismiss 401-no-token, 400-malformed, 503-no-DB. The 403-wrong-owner branch needs a live `users` table — flagged for manual/CI-DB review.
+6. Web client unchanged — `dismissDailyFeedItem` already POSTs the same gateway path with the Firebase `idToken` (verified `client.ts` `API_BASE_URL` → `:8080`).
+
+**[NEEDS DECISION]:** (a) if `REDIS_URL` is ever set on both services, Python's `PgBackedCache` prefers Redis and the Go PG-only writer could diverge — safe today (both unset in `render.yaml`; the dismissed-ids list, not the feed cache, is authoritative and Python cross-checks it); (b) malformed dismiss body is `400` in Go vs `422` in FastAPI — no client depends on it.
+
+**Verified:** Python `pytest -q` baseline `180 passed`; after changes see PR. `ruff check app` clean. **Go is UNVERIFIED — no Go toolchain on this box, GitHub Actions out of minutes. Review by hand.**
+
+**Status:** Done (Python verified; Go UNVERIFIED). Draft PR opened against `main` from `feat/phase2-feed-to-go`.
