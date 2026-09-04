@@ -17,6 +17,7 @@ import (
 	"github.com/skolab/backend-go/internal/auth"
 	"github.com/skolab/backend-go/internal/author"
 	"github.com/skolab/backend-go/internal/db"
+	"github.com/skolab/backend-go/internal/feed"
 	"github.com/skolab/backend-go/internal/middleware"
 	"github.com/skolab/backend-go/internal/quest"
 	"github.com/skolab/backend-go/internal/recommendation"
@@ -122,6 +123,24 @@ func main() {
 		recAPI.GET("/peers", recommendation.GetPeerRecommendations)
 		recAPI.POST("/peers/invite", recommendation.LogPeerInvite)
 		recAPI.POST("/peers/check-registered", recommendation.CheckRegisteredPeers)
+	}
+
+	// ── Phase 2: feed persistence + non-LLM CRUD — Go, no AI ────────────────
+	// Ported from services/backend feed.py / support.py / integrations.py as
+	// part of "Python is LLM-only" (decisions/0002;
+	// docs/plans/2026-09-04-phase2-feed-to-go.md). Feed *generation*
+	// (GET /api/v1/daily_feed and the daily_conjecture / roadmap / industry
+	// LLM routes) stays in Python and is still reached via NoRoute below.
+	r.GET("/api/v1/support/metrics", feed.GetSupportMetrics)
+	r.GET("/api/v1/integrations/zotero/auth", feed.ZoteroAuthInit)
+	r.GET("/api/v1/integrations/zotero/callback", feed.ZoteroAuthCallback)
+	r.POST("/api/v1/integrations/zotero/sync", feed.ZoteroSyncPapers)
+	// Owner-scoped write: VerifyUser() → 401 without a token; the handler then
+	// requires users.openalex_id (for the verified uid) == body author_id → 403.
+	feedAPI := r.Group("/api/v1/daily_feed")
+	feedAPI.Use(auth.VerifyUser())
+	{
+		feedAPI.POST("/dismiss", feed.DismissDailyFeedItem)
 	}
 
 	// ── Fallback: everything else → Python (AI / ML / enrichment) ────────────
