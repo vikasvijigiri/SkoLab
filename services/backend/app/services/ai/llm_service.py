@@ -124,6 +124,16 @@ class LLMService:
         self.default_models = groq_models + openrouter_models
         # Membership, not a name-shape guess — see the incident note above.
         self._openrouter_models = frozenset(openrouter_models)
+        # See config.py's llm_reasoning_model_prefixes docstring: some
+        # Groq models spend part of max_tokens on an internal reasoning
+        # trace before the final answer, so their effective budget gets a
+        # buffer applied in query() below rather than every call site
+        # needing to know this model-specific quirk.
+        self._reasoning_model_prefixes = tuple(
+            p.strip()
+            for p in settings.llm_reasoning_model_prefixes.split(",")
+            if p.strip()
+        )
 
         # Initialize official OpenRouter Client SDK
         if settings.openrouter_api_key:
@@ -298,7 +308,14 @@ class LLMService:
                         "temperature": temperature,
                     }
                     if max_tokens is not None:
-                        payload["max_tokens"] = max_tokens
+                        effective_max_tokens = max_tokens
+                        if model.startswith(self._reasoning_model_prefixes):
+                            # Reasoning trace comes out of the same budget
+                            # as the final answer — see config.py's
+                            # llm_reasoning_token_buffer docstring for the
+                            # live measurement behind this default.
+                            effective_max_tokens += settings.llm_reasoning_token_buffer
+                        payload["max_tokens"] = effective_max_tokens
                     if response_format is not None:
                         payload["response_format"] = response_format
                     if tools is not None:
