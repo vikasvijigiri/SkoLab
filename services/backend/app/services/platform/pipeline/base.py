@@ -7,6 +7,7 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
+from app.core.config import settings
 from app.db.database import AsyncSessionLocal
 from app.db.pg_cache import PgBackedCache
 from app.services.ai.llm_service import is_llm_working
@@ -21,7 +22,10 @@ class _PipelineBase:
         from app.services.ai.llm_service import LLMService
 
         self.llm_service = LLMService()
-        self.model = "llama-3.3-70b-versatile"
+        # Env-configurable (LLM_PRIMARY_MODEL) — see config.py's
+        # llm_primary_model docstring for why this must never be a
+        # hardcoded literal here.
+        self.model = settings.llm_primary_model
         self.openalex_service = OpenAlexService()
 
     @asynccontextmanager
