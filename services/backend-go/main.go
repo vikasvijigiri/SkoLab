@@ -248,6 +248,14 @@ func reverseProxy(target string) gin.HandlerFunc {
 		orig(req)
 		req.Header.Set("X-Forwarded-Host", req.Header.Get("Host"))
 		req.Header.Set("X-Gateway", "go")
+		// NewSingleHostReverseProxy's default Director rewrites req.URL but
+		// never req.Host, so the outbound request keeps the inbound Host
+		// header (skolab-gateway.onrender.com) while dialing the target's
+		// IP. On Render, the edge routes by Host header, not by the
+		// resolved IP — it saw the gateway's own hostname and sent the
+		// request straight back to the gateway, producing an infinite
+		// loop (HTTP 508, x-render-routing: loop) on every proxied route.
+		req.Host = targetURL.Host
 	}
 	// The Python backend sets its own CORS headers (see services/backend/app/main.py).
 	// The Go gateway is the sole CORS authority for browser-facing responses
