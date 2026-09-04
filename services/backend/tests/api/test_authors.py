@@ -12,24 +12,11 @@ from app.schemas.authors_extra import (
     CitationHeatmap,
     GrantMatch,
     JournalRecommendation,
-    NetworkCollaborator,
     RefreshAuthorResponse,
 )
 
 
 class _FakePipeline:
-    async def get_network_collaborators(self, *a, **k):
-        return [
-            {
-                "id": "A2",
-                "name": "Grace Hopper",
-                "institution": "USN",
-                "field": "CS",
-                "connection_path": "co-author",
-                "relevance_score": 0.8,
-            }
-        ]
-
     async def get_collaborator_synergy(self, *a, **k):
         return {"shared_topics": ["compilers"], "score": 0.7}
 
@@ -66,19 +53,6 @@ async def test_refresh_author_parses(client):
     r = await client.get("/api/v1/refresh_author", params={"name": "Ada Lovelace"})
     assert r.status_code == 200, r.text
     RefreshAuthorResponse(**r.json())
-
-
-async def test_network_collaborators_is_typed_array_and_bounds_limit(client):
-    ok = await client.get(
-        "/api/v1/network_collaborators", params={"author_id": "A1", "limit": 5}
-    )
-    assert ok.status_code == 200, ok.text
-    [NetworkCollaborator(**row) for row in ok.json()]
-
-    bad = await client.get(
-        "/api/v1/network_collaborators", params={"author_id": "A1", "limit": 5000}
-    )
-    assert bad.status_code == 422
 
 
 async def test_citation_heatmap_parses(client):

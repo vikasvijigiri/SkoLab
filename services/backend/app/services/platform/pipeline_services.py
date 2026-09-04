@@ -14,7 +14,6 @@ from app.services.platform.pipeline.feed import FeedMixin
 from app.services.platform.pipeline.grants import GrantsMixin
 from app.services.platform.pipeline.heatmap import HeatmapMixin
 from app.services.platform.pipeline.journals import JournalsMixin
-from app.services.platform.pipeline.network import NetworkMixin
 from app.services.platform.pipeline.synergy import SynergyMixin
 
 # Re-exported so existing `from ...pipeline_services import <name>` paths resolve.
@@ -38,7 +37,6 @@ class PipelineServices(
     SynergyMixin,
     HeatmapMixin,
     JournalsMixin,
-    NetworkMixin,
     AuthorChatMixin,
     _PipelineBase,
 ):
