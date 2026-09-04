@@ -86,6 +86,40 @@ func TestReverseProxy_SetsGatewayHeaders(t *testing.T) {
 	}
 }
 
+// TestReverseProxy_RewritesHostHeaderToTarget locks in a production incident:
+// httputil.NewSingleHostReverseProxy's default Director rewrites req.URL but
+// never req.Host, so without an explicit override the outbound request keeps
+// carrying the inbound Host header. On Render, the edge routes by Host header
+// rather than by resolved IP -- it saw the gateway's own hostname on a
+// request dialed to the Python service and sent it straight back to the
+// gateway, an infinite loop (HTTP 508, x-render-routing: loop) on every
+// proxied route.
+func TestReverseProxy_RewritesHostHeaderToTarget(t *testing.T) {
+	var gotHost string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotHost = r.Host
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	gateway := newTestGateway(upstream.URL)
+	defer gateway.Close()
+
+	// The inbound request's own Host (gateway.URL's host:port) must not leak
+	// through -- the upstream must see itself, not the gateway.
+	resp, err := http.Get(gateway.URL + "/anything")
+	if err != nil {
+		t.Fatalf("request to gateway failed: %v", err)
+	}
+	defer resp.Body.Close()
+	io.Copy(io.Discard, resp.Body)
+
+	wantHost := upstream.URL[len("http://"):]
+	if gotHost != wantHost {
+		t.Errorf("upstream saw Host = %q, want %q (the gateway's inbound Host leaked through)", gotHost, wantHost)
+	}
+}
+
 func TestReverseProxy_UpstreamDownReturnsBadGateway(t *testing.T) {
 	// A port nothing is listening on -- guaranteed connection refused.
 	gateway := newTestGateway("http://127.0.0.1:1")
