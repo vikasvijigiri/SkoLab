@@ -8,10 +8,8 @@ from app.schemas.authors_extra import (
     CollaboratorSynergyResponse,
     GrantMatch,
     JournalRecommendation,
-    NetworkCollaborator,
     RefreshAuthorResponse,
 )
-from app.api.pagination import PaginationParams
 from app.services.platform.pipeline_services import PipelineServices
 from app.services.platform.metrics_service import compute_author_metrics
 from app.services.ai.summarization_service import is_llm_working
@@ -20,7 +18,6 @@ from app.api.dependencies import get_pipeline_services, get_openalex_service, ge
 from app.core.cache import (
     suggestions_cache,
     profile_cache,
-    network_collaborators_cache,
     author_metrics_cache,
 )
 
@@ -694,28 +691,9 @@ async def get_author_metrics(
         raise HTTPException(status_code=422, detail=str(e))
 
 
-@router.get("/network_collaborators", response_model=list[NetworkCollaborator])
-async def get_network_collaborators(
-    author_id: str = Query(...),
-    exclude_ids: str = Query(""),
-    field: str = Query(""),
-    name: str = Query(""),
-    pagination: PaginationParams = Depends(),
-    pipeline_services: PipelineServices = Depends(get_pipeline_services),
-):
-    limit, offset = pagination.limit, pagination.offset
-    cache_key = f"{author_id}_{limit}_{offset}_{exclude_ids}_{field}_{name}"
-    cached_data = await network_collaborators_cache.get(cache_key)
-    if cached_data is not None:
-        return cached_data
-
-    excl_list = [x.strip() for x in exclude_ids.split(",")] if exclude_ids else []
-    data = await pipeline_services.get_network_collaborators(
-        author_id, limit, offset, excl_list, field, name
-    )
-    if data:
-        await network_collaborators_cache.set(cache_key, data)
-    return data
+# GET /network_collaborators — migrated to Go (internal/author/network.go).
+# Depth-1/2 co-author fan-out + Jaccard similarity, no LLM/embeddings — see
+# docs/plans/2026-09-04-network-collaborators-to-go.md.
 
 
 @router.get("/collaborator_synergy", response_model=CollaboratorSynergyResponse)

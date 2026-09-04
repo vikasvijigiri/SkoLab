@@ -11,24 +11,11 @@ from app.api.dependencies import get_openalex_service, get_pipeline_services
 from app.schemas.authors_extra import (
     GrantMatch,
     JournalRecommendation,
-    NetworkCollaborator,
     RefreshAuthorResponse,
 )
 
 
 class _FakePipeline:
-    async def get_network_collaborators(self, *a, **k):
-        return [
-            {
-                "id": "A2",
-                "name": "Grace Hopper",
-                "institution": "USN",
-                "field": "CS",
-                "connection_path": "co-author",
-                "relevance_score": 0.8,
-            }
-        ]
-
     async def get_collaborator_synergy(self, *a, **k):
         return {"shared_topics": ["compilers"], "score": 0.7}
 
@@ -58,22 +45,10 @@ async def test_refresh_author_parses(client):
     RefreshAuthorResponse(**r.json())
 
 
-async def test_network_collaborators_is_typed_array_and_bounds_limit(client):
-    ok = await client.get(
-        "/api/v1/network_collaborators", params={"author_id": "A1", "limit": 5}
-    )
-    assert ok.status_code == 200, ok.text
-    [NetworkCollaborator(**row) for row in ok.json()]
-
-    bad = await client.get(
-        "/api/v1/network_collaborators", params={"author_id": "A1", "limit": 5000}
-    )
-    assert bad.status_code == 422
-
-
-# test_citation_heatmap_parses removed — GET /citation_heatmap migrated to the Go
-# gateway (services/backend-go/internal/author/heatmap.go), same as resolve_email
-# / orbit_metrics before it.
+# test_network_collaborators_* and test_citation_heatmap_parses removed — GET
+# /network_collaborators and GET /citation_heatmap both migrated to the Go
+# gateway (services/backend-go/internal/author/{network,heatmap}.go), same as
+# resolve_email / orbit_metrics before them.
 
 
 async def test_match_grants_and_journal_advisor_are_typed_arrays(client):

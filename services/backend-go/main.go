@@ -107,6 +107,14 @@ func main() {
 	// exercised by clients / the Python test.
 	r.GET("/api/v1/citation_heatmap", author.GetCitationHeatmap)
 
+	// GET /network_collaborators — depth-1/2 co-author fan-out + Jaccard, no AI.
+	// Ported from services/backend/app/services/platform/pipeline/network.py
+	// (docs/plans/2026-09-04-network-collaborators-to-go.md). The web client
+	// calls the bare path on :8080; the /api/v1 alias keeps the old contract.
+	r.GET("/api/v1/network_collaborators", author.GetNetworkCollaborators)
+	r.GET("/network_collaborators", author.GetNetworkCollaborators)
+	r.GET("/api/v1/authors/network_collaborators", author.GetNetworkCollaborators)
+
 	// ── Leaderboard — PG query only ───────────────────────────────────────────
 	r.GET("/api/v1/leaderboard/:field", quest.GetLeaderboard)
 
