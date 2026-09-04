@@ -84,35 +84,29 @@ class LLMService:
         self.groq_api_key = settings.groq_api_key
         self.groq_base_url = "https://api.groq.com/openai/v1/chat/completions"
 
-        # Prioritized fallback model order. If one fails, the loop continues to the next.
-        # "openrouter/owl-alpha" was removed: it has no active endpoints on
-        # OpenRouter, and every query used to waste a full round-trip on it
-        # before falling back — worse, when combined with
-        # response_format={"type": "json_object"}, OpenRouter returned an
-        # empty `choices` list instead of an error, which query_openrouter
-        # used to treat as a *successful* response (see the fix there), so
-        # analyze_paper's JSON parsing failed on every single call instead of
-        # ever reaching a model that actually works.
+        # Prioritized fallback model order. If one fails, the loop continues
+        # to the next. Sourced from settings.llm_fallback_models
+        # (LLM_FALLBACK_MODELS env var) — never a hardcoded literal here.
+        # Incident, 2026-09-04: this used to be 5 Groq models followed by
+        # OpenRouter entries, all as string literals; Groq decommissioned
+        # every one of the 5, and with llm_max_fallback_models capping the
+        # loop at 4 attempts, every attempt was Groq and every one was dead
+        # — 100% of LLM calls failed before ever reaching an OpenRouter
+        # fallback. One config field means the next deprecation is a
+        # Render env var change, not a multi-file code deploy. See
+        # config.py's llm_fallback_models for the current default chain
+        # and how it was verified.
+        #
+        # "openrouter/owl-alpha" was removed from the chain (pre-existing
+        # fix, kept): it has no active endpoints on OpenRouter, and every
+        # query used to waste a full round-trip on it before falling back —
+        # worse, when combined with response_format={"type": "json_object"},
+        # OpenRouter returned an empty `choices` list instead of an error,
+        # which query_openrouter used to treat as a *successful* response
+        # (see the fix there), so analyze_paper's JSON parsing failed on
+        # every single call instead of ever reaching a model that works.
         self.default_models = [
-            # Groq models (Primary, fast)
-            "llama-3.3-70b-versatile",
-            "llama-3.1-8b-instant",
-            "llama3-8b-8192",
-            "mixtral-8x7b-32768",
-            "gemma2-9b-it",
-            # OpenRouter free models (Active slugs)
-            "google/gemma-4-31b-it:free",
-            "meta-llama/llama-3.3-70b-instruct:free",
-            "meta-llama/llama-3.2-3b-instruct:free",
-            "openai/gpt-oss-120b:free",
-            # OpenRouter standard paid models (Fallback options)
-            "meta-llama/llama-3.3-70b-instruct",
-            "google/gemma-2-9b-it",
-            "qwen/qwen-2.5-72b-instruct",
-            "meta-llama/llama-3-8b-instruct",
-            "openai/gpt-4o-mini",
-            # OpenRouter auto-router (Catch-all)
-            "openrouter/auto",
+            m.strip() for m in settings.llm_fallback_models.split(",") if m.strip()
         ]
 
         # Initialize official OpenRouter Client SDK

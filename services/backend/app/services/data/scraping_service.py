@@ -67,7 +67,10 @@ class ScrapingService:
         from app.services.ai.llm_service import LLMService
 
         self.llm_service = LLMService()
-        self.model = "llama-3.3-70b-versatile"
+        # Env-configurable (LLM_PRIMARY_MODEL) — see config.py's
+        # llm_primary_model docstring for why this must never be a
+        # hardcoded literal here.
+        self.model = settings.llm_primary_model
 
     async def scrape_url(self, url: str) -> str:
         """

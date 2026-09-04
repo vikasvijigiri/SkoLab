@@ -232,7 +232,11 @@ async def get_daily_conjecture(
     )
 
     prompt = {
-        "model": "llama-3.3-70b-versatile",
+        # Unused below — llm_service.query() picks the model from
+        # settings.llm_fallback_models, not from this dict. Kept in sync
+        # anyway so this doesn't mislead a future reader the way the old
+        # hardcoded literal did during the 2026-09-04 dead-model incident.
+        "model": settings.llm_primary_model,
         "messages": [
             {
                 "role": "system",
