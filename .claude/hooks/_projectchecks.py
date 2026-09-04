@@ -248,8 +248,16 @@ def _node_checks(root: Path):
     # `--audit-level=high` and not the default: a transitive `low` on a dev
     # dependency should not block delivery, and if it does, the gate gets turned
     # off within a week.
+    # `--package-lock-only`: audit the committed lockfile (the deterministic
+    # dependency contract), not a fresh `npm install` resolve. CI installs the
+    # web workspace lockfile-less with `--legacy-peer-deps` (the committed
+    # lockfile is Windows-generated and lacks the Linux native optionals), so a
+    # bare `npm audit` there evaluated a non-reproducible tree and flapped on
+    # advisories against versions the lockfile never pinned.
     if _package_manager(root) == "npm":
-        found.append(("audit", "npm audit --audit-level=high"))
+        found.append(
+            ("audit", "npm audit --audit-level=high --package-lock-only")
+        )
     return found
 
 

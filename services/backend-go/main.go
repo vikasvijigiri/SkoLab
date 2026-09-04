@@ -17,9 +17,12 @@ import (
 	"github.com/skolab/backend-go/internal/auth"
 	"github.com/skolab/backend-go/internal/author"
 	"github.com/skolab/backend-go/internal/db"
+	"github.com/skolab/backend-go/internal/feed"
+	"github.com/skolab/backend-go/internal/firestore"
 	"github.com/skolab/backend-go/internal/middleware"
 	"github.com/skolab/backend-go/internal/quest"
 	"github.com/skolab/backend-go/internal/recommendation"
+	"github.com/skolab/backend-go/internal/system"
 	"github.com/skolab/backend-go/internal/user"
 	"github.com/skolab/backend-go/internal/websocket"
 	"golang.org/x/time/rate"
@@ -38,6 +41,10 @@ func main() {
 	}
 
 	auth.InitFirebase()
+
+	// Firestore mirror tier for ported endpoints (e.g. /citation_heatmap). Uses
+	// the same ambient credentials as auth; degrades to a no-op if unavailable.
+	firestore.Init()
 
 	if err := db.InitDB(); err != nil {
 		log.Printf("WARNING: PostgreSQL init failed (%v) — DB-backed endpoints will be degraded\n", err)
@@ -96,6 +103,47 @@ func main() {
 	r.GET("/api/v1/authors/resolve_email", author.ResolveAuthorEmail)
 	r.GET("/authors/resolve_email", author.ResolveAuthorEmail)
 	r.GET("/resolve_email", author.ResolveAuthorEmail)
+	// citation_heatmap — ported from services/backend/app/services/platform/
+	// pipeline/heatmap.py (no LLM, no embedding). Only the /api/v1 form was ever
+	// exercised by clients / the Python test.
+	r.GET("/api/v1/citation_heatmap", author.GetCitationHeatmap)
+
+	// GET /network_collaborators — depth-1/2 co-author fan-out + Jaccard, no AI.
+	// Ported from services/backend/app/services/platform/pipeline/network.py
+	// (docs/plans/2026-09-04-network-collaborators-to-go.md). The web client
+	// calls the bare path on :8080; the /api/v1 alias keeps the old contract.
+	r.GET("/api/v1/network_collaborators", author.GetNetworkCollaborators)
+	r.GET("/network_collaborators", author.GetNetworkCollaborators)
+	r.GET("/api/v1/authors/network_collaborators", author.GetNetworkCollaborators)
+
+	// GET /author_metrics — Go serves the endpoint (OpenAlex fetch + 422 + 2 h
+	// cache) and calls Python POST /api/v1/internal/author_metrics_enrich for the
+	// one model-bound step; degrades to an empty bundle if that is unavailable.
+	// Ported from authors.py::get_author_metrics — decisions/0010. Was public,
+	// stays public. Android calls the bare path on :8080.
+	r.GET("/api/v1/author_metrics", author.GetAuthorMetrics)
+	r.GET("/author_metrics", author.GetAuthorMetrics)
+	r.GET("/api/v1/authors/author_metrics", author.GetAuthorMetrics)
+
+	// ── System metadata — non-LLM, ported from endpoints/system.py ──────────
+	// GET /api/v1/ (API-router root) and GET /api/v1/status (public status
+	// report: DB/cache probe + incidents + LLM-inference flag). /ai_status stays
+	// in Python and is still reached via NoRoute. decisions/0010.
+	r.GET("/api/v1/", system.Root)
+	r.GET("/api/v1/status", system.Status)
+
+	// GET /search_author + /refresh_author — cache → Postgres (researcher_metrics)
+	// → Firestore (global_researchers) → OpenAlex lookup that assembles the
+	// ~40-field AuthorResponse. No LLM, no embedding. Ported from
+	// services/backend/app/api/v1/endpoints/authors.py (decisions/0002). The LLM
+	// teleport enrichment worker stays Python: both handlers fire-and-forget
+	// POST {PYTHON_BACKEND_URL}/api/v1/internal/teleport/{id} with the shared
+	// secret header X-Internal-Token (INTERNAL_API_TOKEN). Both routes were
+	// public in Python — kept public here.
+	r.GET("/api/v1/search_author", author.SearchAuthor)
+	r.GET("/search_author", author.SearchAuthor)
+	r.GET("/api/v1/refresh_author", author.RefreshAuthor)
+	r.GET("/refresh_author", author.RefreshAuthor)
 
 	// ── Leaderboard — PG query only ───────────────────────────────────────────
 	r.GET("/api/v1/leaderboard/:field", quest.GetLeaderboard)
@@ -121,6 +169,24 @@ func main() {
 		recAPI.GET("/peers", recommendation.GetPeerRecommendations)
 		recAPI.POST("/peers/invite", recommendation.LogPeerInvite)
 		recAPI.POST("/peers/check-registered", recommendation.CheckRegisteredPeers)
+	}
+
+	// ── Phase 2: feed persistence + non-LLM CRUD — Go, no AI ────────────────
+	// Ported from services/backend feed.py / support.py / integrations.py as
+	// part of "Python is LLM-only" (decisions/0002;
+	// docs/plans/2026-09-04-phase2-feed-to-go.md). Feed *generation*
+	// (GET /api/v1/daily_feed and the daily_conjecture / roadmap / industry
+	// LLM routes) stays in Python and is still reached via NoRoute below.
+	r.GET("/api/v1/support/metrics", feed.GetSupportMetrics)
+	r.GET("/api/v1/integrations/zotero/auth", feed.ZoteroAuthInit)
+	r.GET("/api/v1/integrations/zotero/callback", feed.ZoteroAuthCallback)
+	r.POST("/api/v1/integrations/zotero/sync", feed.ZoteroSyncPapers)
+	// Owner-scoped write: VerifyUser() → 401 without a token; the handler then
+	// requires users.openalex_id (for the verified uid) == body author_id → 403.
+	feedAPI := r.Group("/api/v1/daily_feed")
+	feedAPI.Use(auth.VerifyUser())
+	{
+		feedAPI.POST("/dismiss", feed.DismissDailyFeedItem)
 	}
 
 	// ── Fallback: everything else → Python (AI / ML / enrichment) ────────────

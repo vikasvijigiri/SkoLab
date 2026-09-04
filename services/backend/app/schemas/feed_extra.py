@@ -33,10 +33,8 @@ class DailyFeedItem(BaseModel):
     key_findings: str | None = None
 
 
-class DismissResponse(BaseModel):
-    """``POST /daily_feed/dismiss``."""
-
-    success: bool
+# ``DismissResponse`` (``POST /daily_feed/dismiss``) moved to the Go gateway in
+# Phase 2 — the handler now lives in services/backend-go/internal/feed/feed.go.
 
 
 class IndustryOpportunity(BaseModel):

@@ -53,18 +53,17 @@ k6 run --out json=results/baseline-$(date +%Y%m%d).json baseline.js
 - **Error rate > 1%** → Investigate rate limiter, connection pool, or upstream circuit breaker
 - **Soak memory growth > 20%** → Investigate background task leaks or SQLAlchemy session leaks
 
-## CCU Limits (Based on Rate Limiter Config)
+## CCU Limits (rate limiting is the Go gateway's job)
 
-| Tier | Strict Endpoints | Standard Endpoints |
+| Layer | Limit | Where |
 |---|---|---|
-| Per-IP limit | 5 req/min | 60 req/min |
-| Backend enforcement | `TokenBucket` in `main.py` (`strict_paths`) | `TokenBucket` in `main.py` |
-| Edge enforcement | Cloudflare `rate_limit_search_auth` | N/A |
+| Gateway, global per-IP | 120 req/s, burst 30 | `middleware.NewRateLimiter` in `services/backend-go/main.go` |
+| Gateway, `/api/v1/recommendations/*` | 5 req/s, burst 5 | `recRL` in `services/backend-go/main.go` |
+| Edge | Cloudflare `rate_limit_search_auth` | Cloudflare WAF |
 
-> **Rate-limit note:** `strict_paths` in `main.py` no longer lists the
-> non-existent `/api/v1/papers/search` / `/api/v1/authors/search`; the strict
-> (5 req/min) tier is now `/agent/chat` and `/export` only. `/api/v1/search_author`
-> is deliberately on the **standard** 60 req/min tier because it backs live
-> autocomplete — so `spike.js` will not see 429s from author search. Whether the
-> expensive LLM GETs (`daily_conjecture`, `discovery/*`) should join the strict
-> tier is an open product decision.
+> **Rate-limit note:** the per-process `TokenBucket` / `RateLimiter` in the
+> Python `main.py` (and its `strict_paths` list) was retired on 2026-09-04
+> (`docs/plans/2026-09-04-retire-python-infra.md`) — it was redundant with the
+> gateway limiter and wrong under more than one uvicorn worker. Load tests
+> should expect 429s from the gateway's global per-IP limit, not from Python.
+> A per-route strict limit for `/agent/chat` on the gateway is a follow-up.
