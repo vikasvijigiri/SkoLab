@@ -106,13 +106,27 @@ class Settings:
     # sentence-transformers model — no PyTorch in the image, fits a 512 MB
     # box. Unset ⇒ fall back to the local model if the package is installed
     # (dev/CI), else degrade to zero vectors. Base URL is overridable in case
-    # HF moves the serverless endpoint.
+    # HF moves the serverless endpoint again.
+    #
+    # Incident, 2026-09-04: the old default, api-inference.huggingface.co,
+    # no longer resolves at all (confirmed: DNS lookup fails, not just an
+    # HTTP error) — HF moved the serverless Inference API to
+    # router.huggingface.co/hf-inference. Unlike the same day's Groq
+    # model-decommission incident (config.py's llm_fallback_models), this
+    # failure is silent rather than loud: _embed_via_api() returns None on
+    # any connection failure, embed_texts() then falls back to
+    # _embed_via_local() (absent in this image) or zero vectors — no error
+    # surfaces to a caller or to /ai_status, only degraded recommendation/
+    # similarity quality. Verified the new URL live with a real POST
+    # (BAAI/bge-small-en-v1.5, this deployment's own token) returning a
+    # real 384-dim vector before changing this default.
     hf_inference_token: str = field(
         default_factory=lambda: os.environ.get("HF_INFERENCE_TOKEN", "")
     )
     hf_inference_base_url: str = field(
         default_factory=lambda: os.environ.get(
-            "HF_INFERENCE_BASE_URL", "https://api-inference.huggingface.co/models"
+            "HF_INFERENCE_BASE_URL",
+            "https://router.huggingface.co/hf-inference/models",
         )
     )
 

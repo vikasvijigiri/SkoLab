@@ -46,6 +46,26 @@ async def test_empty_input_returns_empty(fake_cache):
     assert out.shape == (0, es._EMBED_DIM)
 
 
+def test_default_hf_base_url_is_not_the_decommissioned_host():
+    """Incident, 2026-09-04: api-inference.huggingface.co stopped resolving
+    at all (DNS failure, not an HTTP error) — HF moved the serverless
+    Inference API to router.huggingface.co/hf-inference. Because
+    _embed_via_api() returns None on any connection failure and
+    embed_texts() silently falls through to zero vectors, this broke with
+    no error visible anywhere — only degraded recommendation/similarity
+    quality. Verified the new default live: a real POST to it (this
+    deployment's own token) returned a real 384-dim vector.
+    """
+    from app.core.config import Settings
+
+    settings = Settings()
+    assert "api-inference.huggingface.co" not in settings.hf_inference_base_url
+    assert settings.hf_inference_base_url == "https://router.huggingface.co/hf-inference/models"
+
+    constructed_url = f"{settings.hf_inference_base_url.rstrip('/')}/{es._MODEL_NAME}"
+    assert constructed_url == "https://router.huggingface.co/hf-inference/models/BAAI/bge-small-en-v1.5"
+
+
 async def test_uses_api_when_available(monkeypatch, fake_cache):
     calls: dict[str, int] = {"api": 0, "local": 0}
 
