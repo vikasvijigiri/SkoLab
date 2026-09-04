@@ -11,7 +11,12 @@ from pydantic import BaseModel
 
 
 class RootResponse(BaseModel):
-    """``GET /`` on the API router."""
+    """``GET /`` on the API router.
+
+    The route itself moved to the Go gateway (``internal/system``,
+    decisions/0010); this model is retained as the byte-shape contract the Go
+    handler must match.
+    """
 
     message: str
 
@@ -47,7 +52,11 @@ class SystemServiceStatuses(BaseModel):
 
 
 class SystemStatusResponse(BaseModel):
-    """``GET /status``."""
+    """``GET /status``.
+
+    The route moved to the Go gateway (``internal/system``, decisions/0010);
+    this model is retained as the byte-shape contract the Go handler matches.
+    """
 
     status: str
     services: SystemServiceStatuses
