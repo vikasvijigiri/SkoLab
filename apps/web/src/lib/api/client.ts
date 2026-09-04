@@ -7,6 +7,25 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Thrown for a `202 Accepted` — the request was valid and the server is
+ * still computing (a slow LLM/embedding generation route with a
+ * bounded-wait + single-flight backend, see
+ * `services/backend/app/core/pending_compute.py`). Distinct from
+ * `ApiError`: this is not a failure, it's "ask again in `retryAfterMs`" —
+ * RFC 9110 §15.3.3 / §10.2.3. A caller that wants to poll on it (see
+ * `dailyFeedQuery` in `lib/api/queries.ts`) checks for this type in its
+ * `retry`/`retryDelay` options; any caller that doesn't will just see the
+ * query fail after React Query's default retry budget, same as any other
+ * thrown error.
+ */
+export class ApiPending extends Error {
+  constructor(public retryAfterMs: number) {
+    super(`Still processing — retry after ${retryAfterMs}ms`);
+    this.name = "ApiPending";
+  }
+}
+
 interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "DELETE";
   params?: Record<string, string | number | undefined>;
@@ -54,6 +73,10 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     throw err;
   }
 
+  if (res.status === 202) {
+    const seconds = Number(res.headers.get("Retry-After"));
+    throw new ApiPending(Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 4000);
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new ApiError(res.status, text || `Request to ${path} failed with ${res.status}`);
