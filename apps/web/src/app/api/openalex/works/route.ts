@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { OPENALEX_MAILTO } from "@/lib/openalex";
+import { OPENALEX_MAILTO, withOpenAlexKey } from "@/lib/openalex";
 
 /**
  * Server-side proxy for paper search and trending papers — keeps the OpenAlex call
@@ -12,9 +12,6 @@ export async function GET(req: NextRequest) {
   const focus = req.nextUrl.searchParams.get("focus");
 
   const url = new URL("https://api.openalex.org/works");
-  // Identifies us to OpenAlex's "polite pool" (higher, more reliable rate limits)
-  // instead of the anonymous common pool — matches services/backend's OpenAlexService.
-  url.searchParams.set("mailto", OPENALEX_MAILTO);
 
   if (q) {
     url.searchParams.set("search", q);
@@ -36,15 +33,14 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // OpenAlex grants the "polite pool" (higher, steadier limits) via EITHER the
-  // mailto param OR a User-Agent carrying mailto: — send both, matching
-  // services/backend's OpenAlexService. Without this the common pool 429s under
-  // even light bursts.
+  // A configured OPENALEX_API_KEY raises the daily budget ~10x; the mailto in
+  // the User-Agent is descriptive only now (the polite pool is retired).
+  withOpenAlexKey(url);
   const headers = { "User-Agent": `SkoLabWeb/1.0 (mailto:${OPENALEX_MAILTO})` };
 
   let res = await fetch(url, { headers, next: { revalidate: q ? 300 : 1800 } });
-  // One short backoff on a 429 — OpenAlex rate limits are per-second, so a
-  // brief wait usually clears it without bubbling an error to the user.
+  // One short backoff on a 429 — the budget window is short, so a brief wait
+  // often clears a transient burst without bubbling an error to the user.
   if (res.status === 429) {
     await new Promise((r) => setTimeout(r, 1200));
     res = await fetch(url, { headers, cache: "no-store" });
