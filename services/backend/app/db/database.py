@@ -65,7 +65,7 @@ else:
 
 import time
 import logging
-from sqlalchemy import event, text
+from sqlalchemy import event
 from app.core.telemetry import tracer
 
 db_logger = logging.getLogger("skolab.db")
@@ -110,10 +110,22 @@ def after_cursor_execute(conn, cursor, statement, parameters, context, executema
         # which is exactly what broke schema bootstrap against a real Postgres
         # in CI, since first-run DDL on a cold container can exceed 100 ms.
         head = statement.lstrip()[:6].upper()
-        if head.startswith(("SELECT", "WITH")):
+        if head.startswith(("SELECT", "WITH")) and not executemany:
             try:
-                res = conn.execute(text(f"EXPLAIN {statement}"), parameters)
-                plan = "\n".join(row[0] for row in res.fetchall())
+                # `parameters` here is in the DBAPI driver's own native form
+                # (e.g. asyncpg's positional $1/$2 style) exactly as captured
+                # off the wire — not the named-bind dict/list-of-dicts shape
+                # SQLAlchemy's `text()` + `Connection.execute()` expect. That
+                # mismatch is what "Failed to execute EXPLAIN automatically:
+                # List argument must consist only of dictionaries" actually
+                # was: a client-side parameter-shape validation error, raised
+                # before ever reaching Postgres — every single "slow query"
+                # log line carried a broken EXPLAIN attempt instead of a
+                # real plan. `cursor` is the raw DBAPI cursor already used to
+                # run the original statement, so re-running through it keeps
+                # the exact same parameter convention that already worked.
+                cursor.execute(f"EXPLAIN {statement}", parameters)
+                plan = "\n".join(row[0] for row in cursor.fetchall())
                 db_logger.info(f"EXPLAIN Plan for slow query:\n{plan}")
             except Exception as explain_exc:
                 db_logger.warning(
