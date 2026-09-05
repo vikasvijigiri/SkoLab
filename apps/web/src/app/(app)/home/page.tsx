@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Sparkles, FileText, Coins, Briefcase, BookOpen } from "lucide-react";
+import { Sparkles, FileText, Coins, Briefcase, BookOpen, Users2 } from "lucide-react";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import { useMyProfile } from "@/lib/hooks/useMyProfile";
 import { dismissDailyFeedItem } from "@/lib/api/endpoints";
@@ -19,6 +19,7 @@ import { AIDailyBriefCard, type BriefItem } from "@/components/feed/AIDailyBrief
 import { DailyChallengeCard } from "@/components/feed/DailyChallengeCard";
 import { ResearchActionRail } from "@/components/feed/ResearchActionRail";
 import { PulseFeedCard } from "@/components/feed/PulseFeedCard";
+import { PeerSuggestionsCard } from "@/components/feed/PeerSuggestionsCard";
 import type { DailyFeedItem, GrantMatch, JournalRecommendation, IndustryOpportunity } from "@/lib/types";
 
 const EMPTY_FEED: DailyFeedItem[] = [];
@@ -171,44 +172,58 @@ export default function HomePage() {
           ))}
         </div>
 
-        <div className="flex min-w-0 flex-col gap-3 lg:sticky lg:top-6 lg:self-start">
-          <h2 className="flex items-center gap-1.5 font-display text-[16px] font-semibold text-text-primary">
-            <Sparkles size={15} className="text-accent-violet" />
-            Recommended for you
-          </h2>
-          {feedLoading && (
+        <div className="flex min-w-0 flex-col gap-6 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto lg:pr-1">
+          <div className="flex min-w-0 flex-col gap-3">
+            <h2 className="flex items-center gap-1.5 font-display text-[16px] font-semibold text-text-primary">
+              <Sparkles size={15} className="text-accent-violet" />
+              Recommended for you
+            </h2>
+            {feedLoading && (
+              <div className="flex flex-col gap-3">
+                {[0, 1].map((i) => (
+                  <div key={i} className="h-40 animate-pulse rounded-[8px] bg-surface-subtle" />
+                ))}
+              </div>
+            )}
+            {!feedLoading && feed.length === 0 && (
+              <div className="rounded-[10px] border border-dashed border-border px-4 py-6 text-center">
+                <Sparkles size={18} className="mx-auto text-text-muted" />
+                <p className="mt-2 font-body text-[13px] font-medium text-text-primary">
+                  No recommendations yet
+                </p>
+                <p className="mt-0.5 font-body text-[12px] leading-relaxed text-text-muted">
+                  Add a research focus to your profile and fresh papers in your
+                  field will show up here.
+                </p>
+              </div>
+            )}
             <div className="flex flex-col gap-3">
-              {[0, 1].map((i) => (
-                <div key={i} className="h-40 animate-pulse rounded-[8px] bg-surface-subtle" />
+              {feed.map((item, i) => (
+                <motion.div
+                  key={item.id}
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: DURATION_SLOW, delay: 0.34 + i * 0.06, ease: EASE_STANDARD }}
+                >
+                  <PulseFeedCard
+                    item={item}
+                    onDismiss={author?.id ? () => handleDismiss(item.id) : undefined}
+                  />
+                </motion.div>
               ))}
             </div>
-          )}
-          {!feedLoading && feed.length === 0 && (
-            <div className="rounded-[10px] border border-dashed border-border px-4 py-6 text-center">
-              <Sparkles size={18} className="mx-auto text-text-muted" />
-              <p className="mt-2 font-body text-[13px] font-medium text-text-primary">
-                No recommendations yet
-              </p>
-              <p className="mt-0.5 font-body text-[12px] leading-relaxed text-text-muted">
-                Add a research focus to your profile and fresh papers in your
-                field will show up here.
-              </p>
-            </div>
-          )}
-          <div className="flex flex-col gap-3 lg:max-h-[calc(100vh-10rem)] lg:overflow-y-auto lg:pr-1">
-            {feed.map((item, i) => (
-              <motion.div
-                key={item.id}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: DURATION_SLOW, delay: 0.34 + i * 0.06, ease: EASE_STANDARD }}
-              >
-                <PulseFeedCard
-                  item={item}
-                  onDismiss={author?.id ? () => handleDismiss(item.id) : undefined}
-                />
-              </motion.div>
-            ))}
+          </div>
+
+          <div className="flex min-w-0 flex-col gap-3">
+            <h2 className="flex items-center gap-1.5 font-display text-[16px] font-semibold text-text-primary">
+              <Users2 size={15} className="text-accent-teal" />
+              Researchers you may know
+            </h2>
+            <PeerSuggestionsCard
+              peers={author?.similar_researchers ?? []}
+              loading={profileLoading}
+              unresolved={profileUnresolved}
+            />
           </div>
         </div>
       </div>
