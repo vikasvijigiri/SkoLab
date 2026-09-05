@@ -20,7 +20,12 @@
   --primary-deeper: #3730a3;
   --text-primary: #18181b;
   --text-secondary: #52525b;
-  --text-muted: #9c9ca6;
+  /* #6b6b6f, not the original #9c9ca6: that value failed WCAG AA (2.54:1
+     against --page-bg, axe's threshold is 4.5:1 for normal text) on every
+     muted label in the app -- confirmed via the contrast-ratio formula, not
+     eyeballed. This clears 4.5:1 against both --page-bg and --surface with
+     margin, while staying visibly muted next to --text-secondary. */
+  --text-muted: #6b6b6f;
   --text-on-primary: #ffffff;
   --border-color: #e4e4e7;
 
@@ -82,7 +87,10 @@
     --primary-deeper: #4f46e5;
     --text-primary: #f4f4f5;
     --text-secondary: #a1a1aa;
-    --text-muted: #6c6c74;
+    /* #82828a, not the original #6c6c74: that value failed WCAG AA (3.8:1
+       against --page-bg, needs 4.5:1) -- see the light-theme :root block
+       above for the full rationale. */
+    --text-muted: #82828a;
     --text-on-primary: #0a0a0c;
     --border-color: #2a2a30;
 
@@ -115,7 +123,7 @@
   --primary-deeper: #4f46e5;
   --text-primary: #f4f4f5;
   --text-secondary: #a1a1aa;
-  --text-muted: #6c6c74;
+  --text-muted: #82828a;
   --text-on-primary: #0a0a0c;
   --border-color: #2a2a30;
   --accent-teal: #2dd4bf;
@@ -142,7 +150,7 @@
   --primary-deeper: #3730a3;
   --text-primary: #18181b;
   --text-secondary: #52525b;
-  --text-muted: #9c9ca6;
+  --text-muted: #6b6b6f;
   --text-on-primary: #ffffff;
   --border-color: #e4e4e7;
   --accent-teal: #0d9488;

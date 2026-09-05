@@ -9,14 +9,14 @@ for (const path of ["/", "/login"]) {
       .withTags(["wcag2a", "wcag2aa"])
       .analyze();
 
-    // `color-contrast` is excluded from the blocking set: the landing/login
-    // pages have pre-existing marginal-contrast text (muted labels on the
-    // off-white ground) that predates the test suite and needs a design-token
-    // pass, not a code change. TODO(a11y): run a real contrast audit against
-    // globals.css and re-block this rule. Every other serious/critical rule
-    // (labels, roles, alt text, landmarks, ...) still blocks here.
+    // `color-contrast` used to be excluded here: --text-muted was #9c9ca6
+    // (light) / #6c6c74 (dark), 2.54:1 / 3.8:1 against --page-bg -- below
+    // the 4.5:1 WCAG AA threshold for normal text on 94 call sites across 36
+    // files. Retuned in globals.css to #6b6b6f / #82828a (>=4.5:1 against
+    // both --page-bg and --surface, computed via the real contrast-ratio
+    // formula, not eyeballed) -- this rule is no longer excluded.
     const blocking = results.violations.filter(
-      (v) => (v.impact === "serious" || v.impact === "critical") && v.id !== "color-contrast",
+      (v) => v.impact === "serious" || v.impact === "critical",
     );
     expect(blocking, JSON.stringify(blocking.map((v) => v.id), null, 2)).toEqual([]);
   });
