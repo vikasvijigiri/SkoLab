@@ -20,10 +20,10 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 describe("useMyProfile", () => {
-  it("returns the five-key shape", () => {
+  it("returns the expected key shape", () => {
     const { result } = renderHook(() => useMyProfile(), { wrapper });
     expect(Object.keys(result.current).sort()).toEqual(
-      ["author", "error", "firestoreProfile", "loading", "refetch"].sort(),
+      ["author", "error", "firestoreProfile", "loading", "refetch", "unresolved"].sort(),
     );
     expect(typeof result.current.refetch).toBe("function");
   });
