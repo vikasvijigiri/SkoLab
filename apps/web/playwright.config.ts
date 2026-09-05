@@ -27,7 +27,7 @@ export default defineConfig({
     // the same fading card. Forcing reduced motion makes every animation
     // complete instantly, so every scan sees the final DOM state -- the
     // same state a real user with "reduce motion" enabled always sees.
-    reducedMotion: "reduce",
+    contextOptions: { reducedMotion: "reduce" },
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
