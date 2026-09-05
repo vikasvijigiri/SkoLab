@@ -340,6 +340,19 @@ class Settings:
     # initialised. Set SENTRY_DSN in the deployment environment to enable error
     # aggregation. Never committed to the repo.
     sentry_dsn: str = field(default_factory=lambda: os.environ.get("SENTRY_DSN", ""))
+    # Fraction of requests that get a full performance trace (spans for the
+    # DB/HTTP/LLM calls inside them), not just error events. Was hardcoded to
+    # 0.0 with a comment reading "raise once a real DSN and traffic baseline
+    # exist" — that's now true. 0.2 is a conventional production default; the
+    # free Sentry plan's 5M-spans/month budget has enormous headroom at this
+    # app's traffic today, so this errs toward more signal rather than
+    # rationing a quota nowhere near being tested. Env-configurable so it can
+    # be dialed down as real traffic grows, with no code change.
+    sentry_traces_sample_rate: float = field(
+        default_factory=lambda: float(
+            os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.2")
+        )
+    )
 
     # ── Monitoring ───────────────────────────────────────────────────────────
     # Full name of the primary researcher. Used by add_monitors.py to resolve
