@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuthCard } from "@/components/auth/AuthCard";
@@ -9,7 +9,11 @@ import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/lib/hooks/AuthProvider";
-import { signUpWithEmail, signInWithGoogle } from "@/lib/firebase/auth";
+import {
+  signUpWithEmail,
+  signInWithGoogle,
+  completeGoogleRedirectSignIn,
+} from "@/lib/firebase/auth";
 import { friendlyAuthError } from "@/lib/firebase/errors";
 
 export default function SignupPage() {
@@ -20,6 +24,20 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<"email" | "google" | null>(null);
+
+  // Picks up the result of signInWithGoogle's redirect round trip -- see the
+  // matching effect in app/login/page.tsx for the full reasoning, including
+  // why this is gated on `configured`.
+  const redirectChecked = useRef(false);
+  useEffect(() => {
+    if (!configured || redirectChecked.current) return;
+    redirectChecked.current = true;
+    completeGoogleRedirectSignIn()
+      .then((user) => {
+        if (user) router.push("/onboarding");
+      })
+      .catch((err) => setError(friendlyAuthError(err)));
+  }, [configured, router]);
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
@@ -39,11 +57,12 @@ export default function SignupPage() {
     setError(null);
     setLoading("google");
     try {
+      // Navigates the whole page to Google -- this only throws if the
+      // redirect itself couldn't start. The actual sign-in result is picked
+      // up by completeGoogleRedirectSignIn above, after the round trip back.
       await signInWithGoogle();
-      router.push("/onboarding");
     } catch (err) {
       setError(friendlyAuthError(err));
-    } finally {
       setLoading(null);
     }
   }
