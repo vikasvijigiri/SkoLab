@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/hex"
 	"errors"
 	"io"
 	"log"
@@ -319,6 +320,32 @@ func reverseProxy(target string) gin.HandlerFunc {
 	// otherwise ReverseProxy appends them alongside the gateway's, producing duplicate
 	// Access-Control-Allow-Origin/Vary values that browsers reject as invalid CORS.
 	proxy.ModifyResponse = func(resp *http.Response) error {
+		// TEMPORARY diagnostic (debug/proxy-wire-diagnostics): every fix
+		// attempted for the discovery/predict corruption so far (gzip
+		// Flush, response buffering, HTTP/2 disable) has been disproven by
+		// an immediate live retest. Rather than guess a fifth time, log
+		// exactly what's on the wire at the one point before this handler
+		// touches anything, so the next fix is evidence-based, not another
+		// hypothesis. Remove this block once the real cause is found.
+		{
+			peek := make([]byte, 32)
+			n, _ := io.ReadFull(resp.Body, peek)
+			slog.Info("proxy_wire_diagnostic",
+				"path", resp.Request.URL.Path,
+				"outbound_accept_encoding", resp.Request.Header.Get("Accept-Encoding"),
+				"upstream_content_encoding", resp.Header.Get("Content-Encoding"),
+				"upstream_content_length_header", resp.Header.Get("Content-Length"),
+				"upstream_transfer_encoding", resp.TransferEncoding,
+				"resp_content_length_field", resp.ContentLength,
+				"proto", resp.Proto,
+				"peeked_bytes", n,
+				"peeked_hex", hex.EncodeToString(peek[:n]),
+			)
+			resp.Body = struct {
+				io.Reader
+				io.Closer
+			}{io.MultiReader(bytes.NewReader(peek[:n]), resp.Body), resp.Body}
+		}
 		resp.Header.Del("Access-Control-Allow-Origin")
 		resp.Header.Del("Access-Control-Allow-Credentials")
 		resp.Header.Del("Access-Control-Allow-Methods")
