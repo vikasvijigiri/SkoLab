@@ -79,7 +79,24 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new ApiError(res.status, text || `Request to ${path} failed with ${res.status}`);
+    // FastAPI errors come back as {"detail": "..."} (or {"detail": [{...}]} for
+    // 422 validation). Surface the human sentence, not the raw JSON blob — this
+    // message ends up rendered directly in banners (see FrontierPulseCard).
+    let message = text || `Request to ${path} failed with ${res.status}`;
+    if (text.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(text) as { detail?: unknown };
+        if (typeof parsed.detail === "string" && parsed.detail.trim()) {
+          message = parsed.detail;
+        } else if (Array.isArray(parsed.detail) && parsed.detail.length > 0) {
+          const first = parsed.detail[0] as { msg?: unknown };
+          if (typeof first?.msg === "string") message = first.msg;
+        }
+      } catch {
+        // not JSON after all — keep the raw text
+      }
+    }
+    throw new ApiError(res.status, message);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;

@@ -83,7 +83,7 @@ function buildBriefItems(opts: {
 
 export default function HomePage() {
   const { user, getIdToken } = useAuth();
-  const { firestoreProfile, author, loading: profileLoading, error: profileError, refetch: refetchProfile } = useMyProfile();
+  const { firestoreProfile, author, loading: profileLoading, error: profileError, unresolved: profileUnresolved, refetch: refetchProfile } = useMyProfile();
   const queryClient = useQueryClient();
 
   const name = firestoreProfile?.name || user?.displayName || undefined;
@@ -139,9 +139,9 @@ export default function HomePage() {
   const handleDismiss = (workId: string) => dismiss.mutate(workId);
 
   const sections = [
-    <FrontierPulseCard key="pulse" author={author} loading={profileLoading} error={profileError} onRetry={refetchProfile} />,
+    <FrontierPulseCard key="pulse" author={author} loading={profileLoading} error={profileError} unresolved={profileUnresolved} onRetry={refetchProfile} />,
     <AIDailyBriefCard key="brief" items={briefItems} loading={briefLoading} />,
-    <DailyChallengeCard key="challenge" conjecture={conjecture} loading={conjectureLoading} />,
+    <DailyChallengeCard key="challenge" conjecture={conjecture} loading={conjectureLoading} unresolved={profileUnresolved} />,
   ];
 
   return (

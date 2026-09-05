@@ -21,12 +21,17 @@ export async function GET(req: NextRequest) {
     url.searchParams.set("per-page", "20");
   } else {
     const year = new Date().getFullYear();
-    url.searchParams.set("filter", `publication_year:${year - 1}|${year}`);
     url.searchParams.set("per-page", "12");
     if (focus) {
-      url.searchParams.set("default.search", focus);
+      // `default.search` is only valid *inside* the filter param — passing it
+      // as a top-level query param is rejected by OpenAlex with a 400
+      // ("default.search is not a valid parameter"). A comma joins filter
+      // clauses; the value itself must not contain a comma, so strip any.
+      const safeFocus = focus.replace(/,/g, " ").trim();
+      url.searchParams.set("filter", `publication_year:${year - 1}|${year},default.search:${safeFocus}`);
       url.searchParams.set("sort", "relevance_score:desc");
     } else {
+      url.searchParams.set("filter", `publication_year:${year - 1}|${year}`);
       url.searchParams.set("sort", "cited_by_count:desc");
     }
   }

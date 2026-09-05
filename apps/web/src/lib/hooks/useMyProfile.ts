@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./AuthProvider";
 import { useFirestoreDoc } from "./useFirestoreDoc";
 import { authorQuery } from "@/lib/api/queries";
+import { ApiError } from "@/lib/api/client";
 import type { SkoLabUser } from "@/lib/types";
 
 /**
@@ -41,11 +42,18 @@ export function useMyProfile() {
 
   const loading = profileLoading || (Boolean(name) && authorQ.isLoading);
 
+  // A 404 from search_author is not a failure — it just means this person
+  // isn't matched to an OpenAlex profile yet (the common case for a brand-new
+  // account, or a name OpenAlex doesn't index). That's a calm cold-start
+  // state, not a red "something broke" banner with a Retry that can't help.
+  const authorNotFound =
+    authorQ.error instanceof ApiError && authorQ.error.status === 404;
+
   const error =
     profileError ??
-    (authorQ.error instanceof Error ? authorQ.error.message : null) ??
+    (!authorNotFound && authorQ.error instanceof Error ? authorQ.error.message : null) ??
     (!name && !profileLoading
-      ? "No name on file — set one in Profile to enable metrics lookup."
+      ? "Add your name in Profile to unlock impact metrics."
       : null);
 
   const refetch = useCallback(() => {
@@ -57,6 +65,10 @@ export function useMyProfile() {
     author: authorQ.data ?? null,
     loading,
     error,
+    /** True when the backend simply has no OpenAlex match for this user yet
+     * (a cold-start state, not an error). Consumers render a calm prompt
+     * instead of an error banner. */
+    unresolved: authorNotFound,
     refetch,
   };
 }
