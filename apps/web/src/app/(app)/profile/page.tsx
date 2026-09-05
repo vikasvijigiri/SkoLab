@@ -183,11 +183,38 @@ export default function ProfilePage() {
                 value={researchFocus}
                 onChange={(e) => setResearchFocus(e.target.value)}
               />
-              <Input
-                label="Academic status"
-                value={academicStatus}
-                onChange={(e) => setAcademicStatus(e.target.value)}
-              />
+              <div>
+                <Input
+                  label="Academic status"
+                  value={academicStatus}
+                  onChange={(e) => setAcademicStatus(e.target.value)}
+                />
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {[
+                    "PhD Student",
+                    "Postdoc",
+                    "Research Scientist",
+                    "Assistant Professor",
+                    "Professor",
+                    "Lecturer",
+                    "Industry Researcher",
+                    "Independent Researcher",
+                  ].map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setAcademicStatus(opt)}
+                      className={`cursor-pointer rounded-full border px-2.5 py-1 font-body text-[11.5px] transition-colors ${
+                        academicStatus === opt
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border text-text-muted hover:border-primary/40 hover:text-text-primary"
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div>
                 <label
                   htmlFor="profile-about"
