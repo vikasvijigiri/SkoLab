@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { Search as SearchIcon } from "lucide-react";
+import { LogOut, Search as SearchIcon } from "lucide-react";
 import { cn, focusRing } from "@/lib/utils";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import { useCommandPalette } from "@/components/command/CommandPaletteProvider";
@@ -64,10 +64,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <div className="border-t border-border px-3 py-4">
+        <div className="border-t border-border px-3 py-3">
           <div
             className={cn(
-              "rounded-md px-3 py-2 transition-colors duration-[var(--motion-fast)]",
+              "flex items-center gap-1 rounded-md pl-1 pr-1.5 transition-colors duration-[var(--motion-fast)]",
               pathname?.startsWith("/profile") ? "bg-primary/10" : "hover:bg-surface-subtle"
             )}
             style={{ transitionTimingFunction: "var(--ease-standard)" }}
@@ -76,7 +76,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link
               href="/profile"
               aria-current={pathname?.startsWith("/profile") ? "page" : undefined}
-              className={cn("flex items-center gap-3 rounded-md", focusRing)}
+              className={cn("flex min-w-0 flex-1 items-center gap-2.5 rounded-md py-2", focusRing)}
             >
               <div
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display text-[13px] font-bold text-white shadow-card"
@@ -88,17 +88,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <p className="truncate font-body text-[13px] font-medium text-text-primary">
                   {user?.displayName ?? "Researcher"}
                 </p>
+                <p className="truncate font-body text-[11.5px] text-text-muted">
+                  {user?.isAnonymous ? "Guest session" : (user?.email ?? "Researcher")}
+                </p>
               </div>
             </Link>
             <button
               onClick={() => signOut()}
+              aria-label="Sign out"
+              title="Sign out"
               className={cn(
-                "ml-12 cursor-pointer rounded-sm font-body text-[12px] text-text-muted transition-colors duration-[var(--motion-fast)] hover:text-primary",
+                "flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-muted transition-colors duration-[var(--motion-fast)] hover:bg-surface hover:text-notification",
                 focusRing
               )}
               style={{ transitionTimingFunction: "var(--ease-standard)" }}
             >
-              Sign out
+              <LogOut size={16} strokeWidth={1.8} />
             </button>
           </div>
         </div>
