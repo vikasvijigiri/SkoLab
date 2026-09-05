@@ -40,8 +40,8 @@ export default function LoginPage() {
     if (!configured || redirectChecked.current) return;
     redirectChecked.current = true;
     completeGoogleRedirectSignIn()
-      .then((user) => {
-        if (user) router.push("/home");
+      .then((res) => {
+        if (res) router.push(res.isNewUser ? "/onboarding" : "/home");
       })
       .catch((err) => setError(friendlyAuthError(err)));
   }, [configured, router]);
