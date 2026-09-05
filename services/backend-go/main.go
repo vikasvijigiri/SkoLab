@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"io"
 	"log"
@@ -251,13 +252,37 @@ const proxyRequestTimeout = 120 * time.Second
 // proxyRequestTimeout documented 120s as the intended bound — the mismatch
 // truncated any real request past 60s (confirmed live: a cold-compute
 // daily_feed call was cut off with a 502 at exactly 60.3s).
+//
+// TLSNextProto is set to an empty (non-nil) map to force HTTP/1.1 on this
+// connection, overriding ForceAttemptHTTP2's earlier "true". PYTHON_BACKEND_URL
+// is the Python service's public https://...onrender.com URL (confirmed live
+// in this gateway's own boot log), not a plain-HTTP internal address, so this
+// leg is real TLS -- and Cloudflare's edge in front of it negotiates real
+// HTTP/2 via ALPN when a client offers it, which Go's http.Transport does by
+// default for any TLS connection (ForceAttemptHTTP2 only makes it try harder
+// to prefer h2 even without a prior successful negotiation; removing that
+// flag alone does not disable HTTP/2). The uvicorn origin behind Cloudflare's
+// edge only ever speaks HTTP/1.1. Confirmed live and in isolation: every
+// proxied response large enough to need more than one upstream read/frame came
+// back as unreadable high-entropy bytes -- a different size than the correct
+// response every time, not merely garbled JSON -- while the identical request
+// sent straight to Python (bypassing this transport, and therefore any HTTP/2
+// negotiation Go does on its behalf) was clean every time, a native
+// (non-proxied) Go route was clean every time, and neither this gateway's own
+// gzip wrapping (one real, necessary Flush() fix) nor buffering the response
+// body (a second real, necessary fix) resolved it. That combination of
+// evidence -- proxied-only, size/frame-count-dependent, invisible to a raw
+// curl client that never goes through this Transport -- points at an HTTP/2
+// framing mismatch between Cloudflare's edge and this client specifically,
+// not at anything in this gateway's own gzip or buffering logic (both of
+// which stay fixed regardless, on their own separate merits).
 var proxyTransport http.RoundTripper = &http.Transport{
 	Proxy: http.ProxyFromEnvironment,
 	DialContext: (&net.Dialer{
 		Timeout:   10 * time.Second,
 		KeepAlive: 30 * time.Second,
 	}).DialContext,
-	ForceAttemptHTTP2:     true,
+	TLSNextProto:          map[string]func(string, *tls.Conn) http.RoundTripper{},
 	MaxIdleConns:          100,
 	MaxIdleConnsPerHost:   100,
 	IdleConnTimeout:       90 * time.Second,
