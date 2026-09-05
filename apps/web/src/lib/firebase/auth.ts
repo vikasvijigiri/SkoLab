@@ -109,7 +109,12 @@ export async function getResearcherProfile(uid: string): Promise<SkoLabUser | nu
 
 export async function updateResearcherProfile(
   uid: string,
-  fields: Partial<Pick<SkoLabUser, "name" | "researchFocus" | "academicStatus" | "about">>
+  fields: Partial<
+    Pick<
+      SkoLabUser,
+      "name" | "authorName" | "researchFocus" | "academicStatus" | "about" | "openAlexId"
+    >
+  >
 ) {
   await updateDoc(doc(requireDb(), "researchers", uid), { ...fields, lastActive: Date.now() });
 }
