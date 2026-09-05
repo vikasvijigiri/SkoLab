@@ -20,12 +20,19 @@
   --primary-deeper: #3730a3;
   --text-primary: #18181b;
   --text-secondary: #52525b;
-  /* #6b6b6f, not the original #9c9ca6: that value failed WCAG AA (2.54:1
-     against --page-bg, axe's threshold is 4.5:1 for normal text) on every
-     muted label in the app -- confirmed via the contrast-ratio formula, not
-     eyeballed. This clears 4.5:1 against both --page-bg and --surface with
-     margin, while staying visibly muted next to --text-secondary. */
-  --text-muted: #6b6b6f;
+  /* #656569, not #6b6b6f: #6b6b6f computes to 4.70:1 against --surface-subtle
+     (#f1f1f4) statically, comfortably above the 4.5:1 axe threshold on
+     paper -- but CI's own a11y suite kept failing on it anyway, at a
+     different sampled foreground each run (4.43, then 4.37, then 4.31) on
+     the same small (10px) monospace badge (HeroPreview's "skolab.app/home"
+     browser-chrome label). Every sampled color was consistently LIGHTER
+     than #6b6b6f itself, which is what sub-pixel/anti-aliased rendering of
+     small text looks like to axe's pixel-sampling contrast check, not a
+     token bug -- so the real fix is a bigger static margin, not a retry.
+     #656569 computes to ~5.15:1, leaving enough headroom that the same
+     rendering variance still clears 4.5:1. Before #6b6b6f there was
+     #9c9ca6, which failed WCAG AA outright (2.54:1 against --page-bg). */
+  --text-muted: #656569;
   --text-on-primary: #ffffff;
   --border-color: #e4e4e7;
 
@@ -154,7 +161,7 @@
   --primary-deeper: #3730a3;
   --text-primary: #18181b;
   --text-secondary: #52525b;
-  --text-muted: #6b6b6f;
+  --text-muted: #656569;
   --text-on-primary: #ffffff;
   --border-color: #e4e4e7;
   --accent-teal: #0d9488;

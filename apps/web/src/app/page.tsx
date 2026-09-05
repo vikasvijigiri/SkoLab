@@ -72,12 +72,6 @@ export default function LandingPage() {
           >
             Sign in
           </Link>
-          <Link
-            href="/signup"
-            className="hidden rounded-md bg-primary px-4 py-2 font-body text-[13px] font-semibold text-text-on-primary shadow-card transition-transform hover:scale-[1.03] sm:inline-block"
-          >
-            Get started
-          </Link>
         </div>
       </header>
 
