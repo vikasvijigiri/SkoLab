@@ -69,6 +69,7 @@ const SPARK = "0,34 14,30 28,31 42,24 56,25 70,17 84,18 98,10 112,12 126,5";
 export function HeroPreview() {
   return (
     <motion.div
+      id="hero-preview"
       initial={{ opacity: 0, y: 28 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.7, delay: 0.35, ease: EASE_STANDARD }}
