@@ -45,8 +45,15 @@ function buildUrl(path: string, params?: RequestOptions["params"]) {
   return url.toString();
 }
 
-/** Default per-request timeout. Override by passing an explicit `signal`. */
-const DEFAULT_TIMEOUT_MS = 15_000;
+/**
+ * Default per-request timeout. Override by passing an explicit `signal`.
+ * 30s, not 15s: the backend is on free-tier hosting that spins down after
+ * ~15 min idle, and the first request after a cold start (Go boot + DB pool
+ * + first OpenAlex round trip) routinely takes 20-40s. 15s guaranteed a wall
+ * of "timed out" errors on the first page load after any idle period. Paired
+ * with a retry-on-408 in the query client (components/providers.tsx).
+ */
+const DEFAULT_TIMEOUT_MS = 30_000;
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = "GET", params, body, idToken } = options;
