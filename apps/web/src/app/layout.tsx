@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Space_Grotesk, Syne, Inter, JetBrains_Mono } from "next/font/google";
 import { AuthProvider } from "@/lib/hooks/AuthProvider";
 import { MotionProvider } from "@/components/MotionProvider";
@@ -29,9 +29,44 @@ const jetbrainsMono = JetBrains_Mono({
   weight: ["500"],
 });
 
+// Resolves absolute URLs for OG/Twitter images and canonical links. No
+// hardcoded production domain: NEXT_PUBLIC_SITE_URL wins if set, otherwise
+// Vercel's own auto-injected VERCEL_PROJECT_PRODUCTION_URL (available at
+// build time on every Vercel deploy, preview or production) is used, so this
+// self-configures correctly the moment the project is linked — falls back to
+// localhost for `next dev`.
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : "http://localhost:3000");
+
+const title = "SkoLab";
+const description =
+  "Scientific Discovery & Analytics Platform — author search, citation networks, and AI-assisted research discovery.";
+
 export const metadata: Metadata = {
-  title: "SkoLab",
-  description: "Scientific Discovery & Analytics Platform",
+  metadataBase: new URL(siteUrl),
+  title: { default: title, template: `%s · ${title}` },
+  description,
+  openGraph: {
+    title,
+    description,
+    siteName: title,
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title,
+    description,
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#17171b" },
+  ],
 };
 
 export default function RootLayout({
