@@ -72,6 +72,73 @@ func TestGzip_PassesThroughWhenClientDoesNotAcceptIt(t *testing.T) {
 	}
 }
 
+// TestGzip_SurvivesAMidStreamFlush reproduces the exact shape of a real,
+// live production bug: httputil.ReverseProxy flushes its destination writer
+// between each chunk read from an upstream response reporting
+// ContentLength == -1 (any chunked/streaming response -- every proxied LLM
+// route here). Confirmed live against skolab-gateway's real
+// /discovery/predict: the proxied, gzip-wrapped response came back as
+// undecodable binary noise on every attempt, while the identical request
+// sent straight to the Python backend (no gateway, no gzip) came back as
+// clean JSON, and a native (non-proxied) Go gzip route decompressed
+// correctly every time -- isolating the break to a flush landing between
+// two writes on a gzip-wrapped connection.
+//
+// httptest.NewRecorder() cannot catch this: its Flush() is a no-op flag
+// with no real chunked-transfer-encoding framing behind it, so it cannot
+// reproduce a bug that only exists on a real net/http connection. This
+// spins up an actual httptest.Server (a real TCP loopback listener running
+// Go's real http.response/chunked writer -- the same type production runs
+// on) and fetches from it as a real client would.
+func TestGzip_SurvivesAMidStreamFlush(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(Gzip())
+	firstChunk := strings.Repeat("skolab-chunk-one-", 200)
+	secondChunk := strings.Repeat("skolab-chunk-two-", 200)
+	r.GET("/stream", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+		_, _ = c.Writer.Write([]byte(firstChunk))
+		// The exact call ReverseProxy makes between upstream reads for a
+		// chunked response -- this is what a writer wrapping Write() but not
+		// Flush() gets wrong.
+		c.Writer.Flush()
+		_, _ = c.Writer.Write([]byte(secondChunk))
+	})
+
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/stream", nil)
+	if err != nil {
+		t.Fatalf("building request: %v", err)
+	}
+	// Go's http.Transport auto-decompresses gzip whenever IT is the one that
+	// added Accept-Encoding -- setting it explicitly here, like a real
+	// browser does, means the raw (still-compressed) bytes reach this test
+	// exactly as they reached the real client that hit this bug.
+	req.Header.Set("Accept-Encoding", "gzip")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	gz, err := gzip.NewReader(resp.Body)
+	if err != nil {
+		t.Fatalf("response body is not valid gzip after a mid-stream flush: %v", err)
+	}
+	defer gz.Close()
+	decoded, err := io.ReadAll(gz)
+	if err != nil {
+		t.Fatalf("failed to decompress a response that was flushed mid-stream: %v", err)
+	}
+	want := firstChunk + secondChunk
+	if string(decoded) != want {
+		t.Errorf("decompressed body corrupted by the mid-stream flush (len %d vs want %d)", len(decoded), len(want))
+	}
+}
+
 func TestGzip_SkipsWebSocketUpgradeRequests(t *testing.T) {
 	r := newGzipTestRouter()
 
