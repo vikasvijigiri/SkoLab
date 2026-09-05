@@ -1,0 +1,37 @@
+# Root-level .dockerignore -- only apps/web's Docker build uses the repo root
+# as its context (services/backend and services/backend-go each build from
+# their own directory and have never needed this). Keeps the build context
+# to what apps/web's Dockerfile actually COPYs, instead of the whole
+# monorepo (Python/Go services, docs, CI state, other apps).
+
+.git
+.github
+.claude
+docs
+decisions
+infrastructure
+tests
+scripts
+
+services/backend
+services/backend-go
+apps/android-app
+
+# Present in the repo root for local dev; never needed inside the image.
+node_modules
+apps/web/node_modules
+apps/web/.next
+apps/web/test-results
+apps/web/e2e
+apps/web/playwright.config.ts
+apps/web/vitest.config.mts
+apps/web/eslint.config.mjs
+apps/web/README.md
+apps/web/AGENTS.md
+apps/web/CLAUDE.md
+apps/web/__shot.mjs
+
+*.md
+.env
+.env.local
+*.db
