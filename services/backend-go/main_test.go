@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -8,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/skolab/backend-go/internal/middleware"
 )
 
 // newTestGateway wraps reverseProxy(target) in a real gin engine served over a
@@ -213,7 +215,69 @@ func TestReverseProxy_BuffersAMultiChunkUpstreamResponse(t *testing.T) {
 	if string(got) != want {
 		t.Errorf("proxied body corrupted (len %d vs want %d)", len(got), len(want))
 	}
-	if resp.Header.Get("Content-Length") == "" {
-		t.Error("expected a real Content-Length once the response is buffered, got none")
+	// Deliberately NOT asserting Content-Length here: this handler's own
+	// buffering fix intentionally leaves it unset (see the inline comment on
+	// resp.ContentLength = -1 in reverseProxy()) so a later gzip-wrapping
+	// middleware -- exercised by the next test below -- can compress the
+	// buffered bytes without the client being told to expect the raw,
+	// pre-compression length.
+}
+
+// TestReverseProxy_BufferedResponseSurvivesGzipWrapping is the regression
+// test for a bug in an earlier version of the buffering fix above: it also
+// set Content-Length to the buffered, uncompressed body's length. That's
+// wrong the moment a gzip-wrapping middleware sits in front of this
+// handler (as middleware.Gzip() always does in the real gateway) -- it
+// compresses whatever this handler writes, so the client ends up being
+// promised a byte count that doesn't match what's actually sent. Confirmed
+// live: this exact combination produced a 502 at the real client (Cloudflare
+// detects the mismatch and breaks the response) even though the gateway's
+// own access log showed a clean 200, since that log only reflects the
+// status line, written before the mismatch is ever caught.
+func TestReverseProxy_BufferedResponseSurvivesGzipWrapping(t *testing.T) {
+	firstChunk := strings.Repeat("skolab-chunk-one-", 2000)
+	secondChunk := strings.Repeat("skolab-chunk-two-", 2000)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(firstChunk))
+		w.(http.Flusher).Flush()
+		_, _ = w.Write([]byte(secondChunk))
+	}))
+	defer upstream.Close()
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(middleware.Gzip())
+	r.NoRoute(reverseProxy(upstream.URL))
+	gateway := httptest.NewServer(r)
+	defer gateway.Close()
+
+	req, err := http.NewRequest(http.MethodGet, gateway.URL+"/anything", nil)
+	if err != nil {
+		t.Fatalf("building request: %v", err)
+	}
+	req.Header.Set("Accept-Encoding", "gzip")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request to gateway failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d -- a Content-Length/body mismatch breaks the response at exactly this step", resp.StatusCode, http.StatusOK)
+	}
+	gz, err := gzip.NewReader(resp.Body)
+	if err != nil {
+		t.Fatalf("response body is not valid gzip: %v", err)
+	}
+	defer gz.Close()
+	got, err := io.ReadAll(gz)
+	if err != nil {
+		t.Fatalf("failed to decompress the buffered-then-gzipped response: %v", err)
+	}
+	want := firstChunk + secondChunk
+	if string(got) != want {
+		t.Errorf("decompressed body corrupted (len %d vs want %d)", len(got), len(want))
 	}
 }

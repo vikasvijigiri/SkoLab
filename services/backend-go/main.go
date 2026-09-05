@@ -12,7 +12,6 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -327,15 +326,29 @@ func reverseProxy(target string) gin.HandlerFunc {
 		// predict and nexus-chat both return one complete JSON object once
 		// the LLM call finishes, never a chunked SSE-style stream), so
 		// buffering trades nothing real away.
+		//
+		// Deliberately NOT setting Content-Length here (an earlier version
+		// of this fix did, and it was wrong): middleware.Gzip() runs before
+		// this handler in the chain and, for a gzip-accepting client, wraps
+		// c.Writer so every subsequent Write() is compressed on the way out.
+		// A Content-Length set here describes the buffered RAW body -- bytes
+		// that never reach the wire as-is once Gzip() compresses them, so
+		// the client would be told to expect a byte count that doesn't match
+		// what's actually sent. Confirmed live: setting it produced a 502
+		// (the mismatch breaks the response at the transport level) even
+		// though the gateway's own access log showed 200, since that log
+		// only reflects the status line, written before the mismatch is
+		// ever detected. Leaving Content-Length unset keeps the response
+		// Transfer-Encoding: chunked, same as before this fix -- chunked
+		// framing doesn't need the length known upfront, and correctly wraps
+		// however many Write() calls end up happening, buffered or not.
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return err
 		}
 		resp.Body.Close()
 		resp.Body = io.NopCloser(bytes.NewReader(body))
-		resp.ContentLength = int64(len(body))
-		resp.Header.Set("Content-Length", strconv.Itoa(len(body)))
-		resp.TransferEncoding = nil
+		resp.ContentLength = -1
 		return nil
 	}
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
