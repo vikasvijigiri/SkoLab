@@ -54,6 +54,7 @@ def test_init_observability_with_dsn_does_not_crash(monkeypatch):
         SimpleNamespace(
             sentry_dsn="https://public@sentry.example.invalid/1",
             environment="test",
+            sentry_traces_sample_rate=0.2,
         ),
     )
 
@@ -62,6 +63,36 @@ def test_init_observability_with_dsn_does_not_crash(monkeypatch):
         assert sentry_sdk.get_client().is_active() is True
     finally:
         # Don't leak an active client into other tests.
+        sentry_sdk.init(dsn=None)
+
+
+def test_init_observability_applies_the_configured_traces_sample_rate(monkeypatch):
+    """traces_sample_rate used to be hardcoded to 0.0 -- Sentry's free
+    5M-spans/month budget sat completely unused regardless of traffic.
+    Now it comes from settings.sentry_traces_sample_rate (env-configurable,
+    default 0.2), and this asserts the value actually reaches the client,
+    not just that init_observability() runs without raising."""
+    from types import SimpleNamespace
+
+    import sentry_sdk
+
+    from app.core import observability as obs_mod
+
+    monkeypatch.setattr(
+        obs_mod,
+        "settings",
+        SimpleNamespace(
+            sentry_dsn="https://public@sentry.example.invalid/1",
+            environment="test",
+            sentry_traces_sample_rate=0.42,
+        ),
+    )
+
+    try:
+        obs_mod.init_observability()
+        client = sentry_sdk.get_client()
+        assert client.options["traces_sample_rate"] == 0.42
+    finally:
         sentry_sdk.init(dsn=None)
 
 
