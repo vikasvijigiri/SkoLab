@@ -20,9 +20,14 @@ export function makeQueryClient() {
         // page inside that window paints instantly instead of re-fetching.
         gcTime: 30 * 60_000,
         // One retry, backed off — a degraded backend was getting 3x the load
-        // (original + 2 retries) per query. Don't retry a 4xx; it won't change.
+        // (original + 2 retries) per query. Don't retry a 4xx; it won't
+        // change -- EXCEPT 408, which apiRequest throws for its own client
+        // timeout. On free-tier hosting the backend cold-starts and the
+        // first request after idle exceeds the timeout; that clears on a
+        // retry (the server is warm by then), so give 408 two attempts.
         retry: (failureCount, error) => {
           const status = (error as { status?: number })?.status;
+          if (status === 408) return failureCount < 2;
           if (status && status >= 400 && status < 500) return false;
           return failureCount < 1;
         },

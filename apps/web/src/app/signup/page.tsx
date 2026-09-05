@@ -33,8 +33,8 @@ export default function SignupPage() {
     if (!configured || redirectChecked.current) return;
     redirectChecked.current = true;
     completeGoogleRedirectSignIn()
-      .then((user) => {
-        if (user) router.push("/onboarding");
+      .then((res) => {
+        if (res) router.push(res.isNewUser ? "/onboarding" : "/home");
       })
       .catch((err) => setError(friendlyAuthError(err)));
   }, [configured, router]);

@@ -51,18 +51,24 @@ export async function signInWithGoogle(): Promise<void> {
 /**
  * Completes the redirect started by signInWithGoogle. Firebase redirects
  * back to the exact page that called signInWithRedirect, so this belongs in
- * a `useEffect` on mount in that same page (login/signup) -- not a one-time
- * global listener, since which page it should navigate to next (home vs.
- * onboarding) depends on which page initiated the sign-in.
+ * a `useEffect` on mount in that same page (login/signup).
  *
- * Returns the signed-in user if this page load is completing a real
- * redirect round trip, or null for an ordinary page visit (the common case).
+ * Returns { user, isNewUser } when this page load is completing a real
+ * redirect round trip, or null for an ordinary page visit. isNewUser drives
+ * routing: a first-time Google sign-in (even via the login page) goes to
+ * onboarding, not straight to a cold, empty /home.
  */
-export async function completeGoogleRedirectSignIn(): Promise<User | null> {
+export async function completeGoogleRedirectSignIn(): Promise<{
+  user: User;
+  isNewUser: boolean;
+} | null> {
   const cred = await getRedirectResult(requireAuth());
   if (!cred) return null;
-  await createResearcherProfile(cred.user, cred.user.displayName ?? "Researcher");
-  return cred.user;
+  const isNewUser = await createResearcherProfile(
+    cred.user,
+    cred.user.displayName ?? "Researcher",
+  );
+  return { user: cred.user, isNewUser };
 }
 
 export async function signInAsGuest() {
@@ -74,11 +80,15 @@ export async function signOutUser() {
   await fbSignOut(requireAuth());
 }
 
-/** Mirrors AuthManager.saveUserToFirestore — creates `researchers/{uid}` if it doesn't exist yet. */
-export async function createResearcherProfile(user: User, name: string) {
+/**
+ * Mirrors AuthManager.saveUserToFirestore — creates `researchers/{uid}` if it
+ * doesn't exist yet. Returns true when a new doc was created (i.e. this is a
+ * brand-new account), so callers can route first-timers into onboarding.
+ */
+export async function createResearcherProfile(user: User, name: string): Promise<boolean> {
   const ref = doc(requireDb(), "researchers", user.uid);
   const existing = await getDoc(ref);
-  if (existing.exists()) return;
+  if (existing.exists()) return false;
 
   const profile: Partial<SkoLabUser> = {
     uid: user.uid,
@@ -100,6 +110,7 @@ export async function createResearcherProfile(user: User, name: string) {
     lastActive: Date.now(),
   };
   await setDoc(ref, { ...profile, createdAt: serverTimestamp() });
+  return true;
 }
 
 export async function getResearcherProfile(uid: string): Promise<SkoLabUser | null> {
