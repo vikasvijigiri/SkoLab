@@ -19,6 +19,7 @@ import (
 	"github.com/skolab/backend-go/internal/db"
 	"github.com/skolab/backend-go/internal/feed"
 	"github.com/skolab/backend-go/internal/firestore"
+	"github.com/skolab/backend-go/internal/metrics"
 	"github.com/skolab/backend-go/internal/middleware"
 	"github.com/skolab/backend-go/internal/quest"
 	"github.com/skolab/backend-go/internal/recommendation"
@@ -55,6 +56,10 @@ func main() {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(requestLogger())
+	// Ahead of CORS/rate-limiting so a rejected request (429, a blocked
+	// origin) is still counted -- RED metrics (Rate, Errors, Duration) are
+	// meant to cover everything the gateway sees, not just what it serves.
+	r.Use(metrics.Middleware())
 	r.Use(middleware.CORS())
 
 	// ── Rate limiting: 120 req/s per IP, burst of 30 ─────────────────────────
@@ -69,6 +74,14 @@ func main() {
 	r.GET("/gateway-health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "online", "service": "go-gateway"})
 	})
+
+	// ── Observability ─────────────────────────────────────────────────────────
+	// infrastructure/prometheus.yml has scraped this exact path since the
+	// local observability stack was first stood up; the endpoint itself
+	// never existed until now. See internal/metrics's package doc for why
+	// this is hand-rolled against the standard library rather than
+	// github.com/prometheus/client_golang.
+	r.GET("/metrics", metrics.Handler())
 
 	// ── WebSockets ────────────────────────────────────────────────────────────
 	r.GET("/ws/colab/:workspace_id", func(c *gin.Context) {
