@@ -97,6 +97,55 @@ func TestRateLimiter_XForwardedForTakesPrecedenceOverRemoteAddr(t *testing.T) {
 	}
 }
 
+func TestRateLimiter_CFConnectingIPTakesPrecedenceOverXForwardedFor(t *testing.T) {
+	// Render's public edge is Cloudflare (confirmed live: every response
+	// carries CF-RAY / Server: cloudflare). CF-Connecting-IP is set by
+	// Cloudflare's edge from the real TCP connection and cannot be spoofed
+	// by the client; X-Forwarded-For, in contrast, is an ordinary header
+	// any client can set to an arbitrary value on the original request. If
+	// clientIP() ever keyed off X-Forwarded-For first, a request could
+	// rotate a fake X-Forwarded-For on every call and land in a fresh
+	// rate-limit bucket each time, defeating the limiter entirely.
+	rl := NewRateLimiter(rate.Limit(1), 1)
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(rl.Limit())
+	r.GET("/ping", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	req1 := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	req1.Header.Set("CF-Connecting-IP", "203.0.113.9")
+	req1.Header.Set("X-Forwarded-For", "1.1.1.1") // attacker-controlled, must be ignored
+	w1 := httptest.NewRecorder()
+	r.ServeHTTP(w1, req1)
+	if w1.Code != http.StatusOK {
+		t.Fatalf("first request: status = %d, want %d", w1.Code, http.StatusOK)
+	}
+
+	// Same real client (same CF-Connecting-IP), a *different* spoofed
+	// X-Forwarded-For each time -- must still hit the same bucket and be
+	// rate-limited, proving CF-Connecting-IP is what clientIP() actually
+	// keys on.
+	req2 := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	req2.Header.Set("CF-Connecting-IP", "203.0.113.9")
+	req2.Header.Set("X-Forwarded-For", "2.2.2.2")
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusTooManyRequests {
+		t.Errorf("second request from the same real client (spoofed X-Forwarded-For rotated): status = %d, want %d", w2.Code, http.StatusTooManyRequests)
+	}
+
+	// A genuinely different real client (different CF-Connecting-IP) must
+	// not share the first client's exhausted bucket.
+	req3 := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	req3.Header.Set("CF-Connecting-IP", "203.0.113.10")
+	req3.Header.Set("X-Forwarded-For", "1.1.1.1") // same spoofed value as req1, must not matter
+	w3 := httptest.NewRecorder()
+	r.ServeHTTP(w3, req3)
+	if w3.Code != http.StatusOK {
+		t.Errorf("a different real client: status = %d, want %d (separate bucket)", w3.Code, http.StatusOK)
+	}
+}
+
 func TestRateLimiter_RefillsOverTime(t *testing.T) {
 	rl := NewRateLimiter(rate.Limit(50), 1) // ~1 token per 20ms
 	r := newRateLimitedRouter(rl)

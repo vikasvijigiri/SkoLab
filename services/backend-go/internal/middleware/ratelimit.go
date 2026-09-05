@@ -64,8 +64,27 @@ func (rl *RateLimiter) cleanupLoop() {
 	}
 }
 
-// clientIP extracts the real client IP, respecting common reverse-proxy headers.
+// clientIP extracts the real client IP, respecting common reverse-proxy
+// headers.
+//
+// CF-Connecting-IP is checked first and is the only one of these that's
+// actually safe to trust for rate-limiting: Render's public edge is
+// Cloudflare (confirmed live -- every response carries CF-RAY and
+// Server: cloudflare), and Cloudflare's edge sets this header from the
+// real TCP connection, overwriting any client-supplied value of the same
+// name -- an end user cannot spoof it. X-Real-IP / X-Forwarded-For, by
+// contrast, are ordinary headers any client can set to an arbitrary value
+// on the original request; trusting them without knowing whether the
+// specific hop in front of this service actually overwrites (rather than
+// merely appends to) a client-supplied value means a request can rotate a
+// fake X-Forwarded-For on every call and land in a fresh rate-limit bucket
+// each time, defeating the limiter entirely. Kept as a fallback, in that
+// order, only for an environment with no Cloudflare in front (local dev,
+// docker-compose) where CF-Connecting-IP is never present.
 func clientIP(c *gin.Context) string {
+	if ip := c.GetHeader("CF-Connecting-IP"); ip != "" {
+		return strings.TrimSpace(ip)
+	}
 	if ip := c.GetHeader("X-Real-IP"); ip != "" {
 		return strings.TrimSpace(ip)
 	}
