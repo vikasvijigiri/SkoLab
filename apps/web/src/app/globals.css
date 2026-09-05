@@ -87,10 +87,14 @@
     --primary-deeper: #4f46e5;
     --text-primary: #f4f4f5;
     --text-secondary: #a1a1aa;
-    /* #82828a, not the original #6c6c74: that value failed WCAG AA (3.8:1
-       against --page-bg, needs 4.5:1) -- see the light-theme :root block
-       above for the full rationale. */
-    --text-muted: #82828a;
+    /* #898991, not #82828a: that value cleared --page-bg/--surface (see the
+       light-theme :root block above for the original rationale) but landed
+       at 4.51:1 against --surface-subtle (#232328) -- CI's own a11y suite
+       caught it as flaky (borderline enough to pass or fail run to run) on
+       the command palette's route-hint badge, which sits on
+       --surface-subtle specifically. This clears 4.5:1 against all three
+       surface tokens with real margin. */
+    --text-muted: #898991;
     --text-on-primary: #0a0a0c;
     --border-color: #2a2a30;
 
@@ -123,7 +127,7 @@
   --primary-deeper: #4f46e5;
   --text-primary: #f4f4f5;
   --text-secondary: #a1a1aa;
-  --text-muted: #82828a;
+  --text-muted: #898991;
   --text-on-primary: #0a0a0c;
   --border-color: #2a2a30;
   --accent-teal: #2dd4bf;

@@ -28,16 +28,23 @@ export default function LoginPage() {
   // Picks up the result of signInWithGoogle's redirect round trip -- Firebase
   // sends the browser back to this exact page. Runs once; the ref guards
   // React 19's dev-mode double-invoke from processing the same return twice.
+  // Gated on `configured`: requireAuth() throws "Firebase is not configured"
+  // when it isn't, which is already surfaced by <FirebaseConfigBanner />
+  // below -- without this guard, that same message rendered a second time,
+  // in the error paragraph, on every ordinary page load in that state, not
+  // just after a real failed sign-in attempt (confirmed live: CI's own a11y
+  // suite caught this exact regression by tripping on the notification
+  // color the first time this code path actually ran unconditionally).
   const redirectChecked = useRef(false);
   useEffect(() => {
-    if (redirectChecked.current) return;
+    if (!configured || redirectChecked.current) return;
     redirectChecked.current = true;
     completeGoogleRedirectSignIn()
       .then((user) => {
         if (user) router.push("/home");
       })
       .catch((err) => setError(friendlyAuthError(err)));
-  }, [router]);
+  }, [configured, router]);
 
   async function handleEmailLogin(e: React.FormEvent) {
     e.preventDefault();

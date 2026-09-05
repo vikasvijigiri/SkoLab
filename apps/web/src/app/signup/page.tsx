@@ -26,17 +26,18 @@ export default function SignupPage() {
   const [loading, setLoading] = useState<"email" | "google" | null>(null);
 
   // Picks up the result of signInWithGoogle's redirect round trip -- see the
-  // matching effect in app/login/page.tsx for the full reasoning.
+  // matching effect in app/login/page.tsx for the full reasoning, including
+  // why this is gated on `configured`.
   const redirectChecked = useRef(false);
   useEffect(() => {
-    if (redirectChecked.current) return;
+    if (!configured || redirectChecked.current) return;
     redirectChecked.current = true;
     completeGoogleRedirectSignIn()
       .then((user) => {
         if (user) router.push("/onboarding");
       })
       .catch((err) => setError(friendlyAuthError(err)));
-  }, [router]);
+  }, [configured, router]);
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
