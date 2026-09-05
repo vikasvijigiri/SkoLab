@@ -8,6 +8,12 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname, "../.."),
   },
+  // Traces the actual runtime dependency graph into `.next/standalone` (via
+  // @vercel/nft) so the production Docker image ships a `server.js` plus only
+  // the node_modules files this app really touches, not the whole hoisted
+  // workspace node_modules (React/Playwright/dev deps and all). Mirrors the
+  // multi-stage pattern already used for the Go and Python Dockerfiles.
+  output: "standalone",
   // `experimental.viewTransition` was removed here when next went 16.2.10 ->
   // 16.3.0 (the security bump for CVE-affected next/postcss/sharp). The key no
   // longer exists in 16.3's config schema, so it fails the typecheck, and
