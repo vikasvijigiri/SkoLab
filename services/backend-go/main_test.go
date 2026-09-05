@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -160,5 +161,59 @@ func TestReverseProxy_UpstreamDownReturnsBadGateway(t *testing.T) {
 
 	if resp.StatusCode != http.StatusBadGateway {
 		t.Errorf("status = %d, want %d when upstream is unreachable", resp.StatusCode, http.StatusBadGateway)
+	}
+}
+
+// TestReverseProxy_BuffersAMultiChunkUpstreamResponse locks in a real,
+// live production bug: any proxied route whose upstream response reports no
+// Content-Length (Transfer-Encoding: chunked -- every route on the Python
+// backend, since FastAPI doesn't set Content-Length up front) came back
+// corrupted at the real client once the body was large enough to arrive in
+// more than one upstream read. Confirmed live against skolab-gateway's real
+// /discovery/predict, with gzip entirely out of the picture (reproduced
+// identically with Accept-Encoding: identity and no Content-Encoding
+// anywhere in the response): the same request straight to
+// skolab-backend-py, no gateway involved, came back clean every time, and a
+// native (non-proxied) Go route serving a large gzip-wrapped body stayed
+// clean too -- isolating the break to ReverseProxy's own multi-chunk copy
+// path specifically, independent of this gateway's own gzip or header
+// handling (which a previous, real, and separately necessary fix already
+// addressed without resolving this).
+//
+// This upstream deliberately writes in two separate chunks with a Flush()
+// between them and never sets Content-Length, forcing exactly the
+// no-Content-Length, multi-write shape that broke in production -- for a
+// large enough body that it cannot complete in a single upstream read.
+func TestReverseProxy_BuffersAMultiChunkUpstreamResponse(t *testing.T) {
+	firstChunk := strings.Repeat("skolab-chunk-one-", 2000)
+	secondChunk := strings.Repeat("skolab-chunk-two-", 2000)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(firstChunk))
+		w.(http.Flusher).Flush()
+		_, _ = w.Write([]byte(secondChunk))
+	}))
+	defer upstream.Close()
+
+	gateway := newTestGateway(upstream.URL)
+	defer gateway.Close()
+
+	resp, err := http.Get(gateway.URL + "/anything")
+	if err != nil {
+		t.Fatalf("request to gateway failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	got, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("reading proxied response: %v", err)
+	}
+	want := firstChunk + secondChunk
+	if string(got) != want {
+		t.Errorf("proxied body corrupted (len %d vs want %d)", len(got), len(want))
+	}
+	if resp.Header.Get("Content-Length") == "" {
+		t.Error("expected a real Content-Length once the response is buffered, got none")
 	}
 }
