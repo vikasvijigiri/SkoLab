@@ -7,10 +7,13 @@ import { Orbs } from "@/components/ui/Orbs";
 
 export function AuthCard({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative flex min-h-full flex-1 flex-col overflow-hidden">
+    // min-h-dvh floor + overflow-x-clip (Orbs already self-clip). No vertical
+    // clip, so a tall card (e.g. onboarding step 3) grows the page and the
+    // document scrolls instead of the bottom being cut off.
+    <div className="relative flex min-h-dvh flex-col overflow-x-clip">
       <Orbs />
 
-      <header className="relative z-10 flex items-center gap-3 px-6 py-6 md:px-10">
+      <header className="relative z-10 flex shrink-0 items-center gap-3 px-6 py-6 md:px-10">
         <Link
           href="/"
           aria-label="Back to home"
@@ -24,16 +27,19 @@ export function AuthCard({ children }: { children: React.ReactNode }) {
         </Link>
       </header>
 
-      <div className="relative z-10 flex flex-1 items-center justify-center px-4 pb-16 pt-4">
+      <div className="relative z-10 flex flex-1 flex-col items-center px-4 pb-10 pt-2">
         <motion.div
           initial={{ opacity: 0, y: 16, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="w-full max-w-md"
+          // my-auto centers the card when there's spare vertical room, and
+          // collapses to natural flow (top-aligned, page scrolls) when the
+          // card is taller than the viewport.
+          className="my-auto w-full max-w-md"
         >
           <div className="overflow-hidden rounded-[18px] border border-border bg-surface shadow-elevated">
             <div className="h-1 w-full" style={{ background: "var(--gradient-hero)" }} aria-hidden />
-            <div className="p-8">{children}</div>
+            <div className="p-6 sm:p-8">{children}</div>
           </div>
           <p className="mt-5 text-center font-body text-[12px] text-text-muted">
             © {new Date().getFullYear()} SkoLab · Terms · Privacy

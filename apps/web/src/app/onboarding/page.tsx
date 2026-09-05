@@ -39,6 +39,76 @@ const SUBFIELDS: Record<string, string[]> = {
 
 const ORCID_RE = /^(?:https?:\/\/orcid\.org\/)?\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/i;
 
+// Common career stages, shown as quick-pick chips above the free-text field.
+const STATUS_OPTIONS = [
+  "PhD Student",
+  "Postdoc",
+  "Research Scientist",
+  "Assistant Professor",
+  "Professor",
+  "Lecturer",
+  "Industry Researcher",
+  "Independent Researcher",
+];
+
+// Topic suggestions for step 3, keyed by specific sub-field (matches the
+// SUBFIELDS values). Step 3 shows these as tap-to-add chips so it's "pick a
+// few" rather than "type into an empty box".
+const TOPICS_BY_SUBFIELD: Record<string, string[]> = {
+  "Condensed Matter Physics": ["superconductivity", "topological materials", "quantum magnetism", "strongly correlated electrons", "2D materials", "phase transitions"],
+  "Quantum Information": ["error correction", "quantum algorithms", "entanglement", "NISQ devices", "quantum simulation", "decoherence"],
+  Astrophysics: ["exoplanets", "gravitational waves", "dark matter", "galaxy formation", "black holes", "cosmology"],
+  "Particle Physics": ["Higgs physics", "neutrino oscillations", "dark matter searches", "collider phenomenology", "lattice QCD", "beyond standard model"],
+  "Optics & Photonics": ["metasurfaces", "integrated photonics", "nonlinear optics", "quantum optics", "ultrafast lasers", "plasmonics"],
+  NLP: ["large language models", "retrieval-augmented generation", "alignment", "evaluation", "multilinguality", "reasoning"],
+  "Computer Vision": ["diffusion models", "3D reconstruction", "video understanding", "self-supervised learning", "segmentation", "vision-language models"],
+  "Reinforcement Learning": ["offline RL", "RLHF", "exploration", "multi-agent RL", "world models", "sample efficiency"],
+  "Generative Models": ["diffusion models", "flow matching", "autoregressive models", "evaluation metrics", "controllable generation", "distillation"],
+  "ML Theory": ["generalization bounds", "optimization landscapes", "neural scaling laws", "feature learning", "kernel methods", "double descent"],
+  Genomics: ["single-cell sequencing", "GWAS", "long-read sequencing", "pangenomes", "regulatory genomics", "variant calling"],
+  "Molecular Biology": ["CRISPR", "RNA biology", "protein folding", "gene regulation", "cryo-EM", "synthetic circuits"],
+  Ecology: ["biodiversity loss", "food webs", "species distribution models", "microbiomes", "climate adaptation", "remote sensing"],
+  "Structural Biology": ["cryo-EM", "AlphaFold", "membrane proteins", "molecular dynamics", "drug binding", "conformational dynamics"],
+  "Synthetic Biology": ["genetic circuits", "metabolic engineering", "cell-free systems", "biosensors", "directed evolution", "minimal genomes"],
+  "Organic Chemistry": ["C–H activation", "photoredox catalysis", "total synthesis", "asymmetric catalysis", "flow chemistry", "reaction mechanisms"],
+  Electrochemistry: ["CO2 reduction", "water splitting", "battery interfaces", "fuel cells", "electrocatalysis", "solid electrolytes"],
+  Catalysis: ["single-atom catalysts", "heterogeneous catalysis", "enzyme mimics", "operando spectroscopy", "selectivity", "computational screening"],
+  "Computational Chemistry": ["DFT", "machine-learning potentials", "free energy methods", "excited states", "reaction networks", "force fields"],
+  "Polymer Science": ["self-assembly", "conjugated polymers", "recyclable plastics", "hydrogels", "block copolymers", "rheology"],
+  "2D Materials": ["graphene", "transition metal dichalcogenides", "moiré superlattices", "heterostructures", "valleytronics", "twistronics"],
+  Metamaterials: ["negative index", "acoustic metamaterials", "cloaking", "topological photonics", "programmable materials", "wavefront shaping"],
+  Semiconductors: ["wide bandgap", "2D transistors", "defect engineering", "photovoltaics", "quantum dots", "epitaxy"],
+  "Batteries & Energy Storage": ["solid-state batteries", "lithium metal anodes", "sodium-ion", "fast charging", "degradation", "recycling"],
+  Nanomaterials: ["nanoparticle synthesis", "self-assembly", "catalysis", "drug delivery", "plasmonics", "quantum dots"],
+  "Atmospheric Modeling": ["aerosol-cloud interactions", "convection parameterization", "climate sensitivity", "extreme events", "data assimilation", "ML emulators"],
+  Oceanography: ["ocean heat uptake", "mesoscale eddies", "carbon export", "sea-level rise", "AMOC", "biogeochemical cycles"],
+  "Carbon Capture": ["direct air capture", "MOFs", "mineralization", "amine scrubbing", "techno-economics", "storage monitoring"],
+  "Climate Policy": ["carbon pricing", "climate finance", "just transition", "mitigation pathways", "adaptation", "loss and damage"],
+  Paleoclimate: ["ice cores", "proxy reconstructions", "abrupt climate change", "orbital forcing", "sea-level history", "paleo data assimilation"],
+  "Computational Neuroscience": ["neural coding", "recurrent networks", "dendritic computation", "normative models", "spiking networks", "brain-inspired AI"],
+  "Systems Neuroscience": ["neural circuits", "in vivo imaging", "behavioral state", "sensorimotor integration", "population dynamics", "optogenetics"],
+  Neuroimaging: ["fMRI", "diffusion MRI", "connectomics", "decoding", "resting-state networks", "multimodal imaging"],
+  Neurodegeneration: ["tau pathology", "amyloid", "neuroinflammation", "proteostasis", "biomarkers", "alpha-synuclein"],
+  "Cognitive Neuroscience": ["working memory", "attention", "decision making", "predictive coding", "language processing", "learning"],
+  Econometrics: ["causal inference", "instrumental variables", "panel data", "high-dimensional methods", "synthetic control", "ML for economics"],
+  "Behavioral Economics": ["nudges", "present bias", "social preferences", "field experiments", "reference dependence", "belief formation"],
+  "Development Economics": ["cash transfers", "RCTs", "poverty traps", "financial inclusion", "education interventions", "agricultural productivity"],
+  "Market Design": ["matching markets", "auction theory", "school choice", "kidney exchange", "spectrum auctions", "mechanism design"],
+  Macroeconomics: ["monetary policy", "fiscal multipliers", "heterogeneous agents", "business cycles", "inflation dynamics", "financial frictions"],
+};
+
+// Fallback when the specific area is free text we don't recognise — keyed by macro field.
+const TOPICS_BY_FIELD: Record<string, string[]> = {
+  Physics: ["quantum computing", "condensed matter", "astrophysics", "particle physics", "photonics", "statistical mechanics"],
+  "Machine Learning": ["large language models", "diffusion models", "reinforcement learning", "representation learning", "interpretability", "efficient training"],
+  Biology: ["genomics", "CRISPR", "single-cell biology", "protein structure", "microbiomes", "systems biology"],
+  Chemistry: ["catalysis", "electrochemistry", "computational chemistry", "materials for energy", "photochemistry", "synthesis"],
+  "Materials Science": ["batteries", "2D materials", "semiconductors", "metamaterials", "additive manufacturing", "ML for materials"],
+  "Climate Science": ["climate modeling", "carbon capture", "extreme weather", "ocean dynamics", "climate policy", "remote sensing"],
+  Neuroscience: ["neural circuits", "computational neuroscience", "neuroimaging", "brain-machine interfaces", "neurodegeneration", "learning and memory"],
+  Economics: ["causal inference", "market design", "behavioral economics", "development", "labor economics", "macro-finance"],
+};
+
 const STEP_TITLES = ["Your field", "Connect your work", "Interests"];
 
 export default function OnboardingPage() {
@@ -63,6 +133,22 @@ export default function OnboardingPage() {
     const parts = [area.trim() || field, ...interests];
     return parts.filter(Boolean).join(" · ");
   }, [area, field, interests]);
+
+  // Topic chips tailored to what they picked in step 1 — sub-field first, then
+  // the macro field. Already-added ones drop off the list.
+  const suggestedTopics = useMemo(() => {
+    const key = Object.keys(TOPICS_BY_SUBFIELD).find(
+      (k) => k.toLowerCase() === area.trim().toLowerCase(),
+    );
+    const base = (key && TOPICS_BY_SUBFIELD[key]) || TOPICS_BY_FIELD[field] || [];
+    return base.filter((t) => !interests.includes(t));
+  }, [area, field, interests]);
+
+  function addTopic(v: string) {
+    if (v && !interests.includes(v) && interests.length < 6) {
+      setInterests((prev) => [...prev, v]);
+    }
+  }
 
   function addInterest() {
     const v = interestDraft.trim().replace(/,$/, "");
@@ -246,13 +332,50 @@ export default function OnboardingPage() {
                       ))}
                     </div>
                   )}
+                  {suggestedTopics.length > 0 && interests.length < 6 && (
+                    <div className="mt-2.5">
+                      <span className="mb-1.5 block font-body text-[11.5px] text-text-muted">
+                        Suggested for {area.trim() || field}
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {suggestedTopics.slice(0, 8).map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => addTopic(t)}
+                            className="cursor-pointer rounded-full border border-border px-2.5 py-1 font-body text-[11.5px] text-text-muted transition-colors hover:border-primary/40 hover:text-text-primary"
+                          >
+                            + {t}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <Input
-                  label="Academic status"
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  placeholder="e.g. PhD Candidate"
-                />
+                <div>
+                  <Input
+                    label="Academic status"
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                    placeholder="e.g. PhD Candidate"
+                  />
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {STATUS_OPTIONS.map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => setStatus(opt)}
+                        className={`cursor-pointer rounded-full border px-2.5 py-1 font-body text-[11.5px] transition-colors ${
+                          status === opt
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border text-text-muted hover:border-primary/40 hover:text-text-primary"
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </>
             )}
           </motion.div>
