@@ -9,11 +9,12 @@ scrape_configs:
   # MetricsStore was retired (docs/plans/2026-09-04-retire-python-infra.md).
   # Request metrics belong to the Go API gateway, which fronts every request.
   #
-  # [NEEDS DECISION] The gateway does not expose a Prometheus endpoint yet
-  # (no prometheus/client_golang dependency). Once a minimal promhttp handler
-  # is added at services/backend-go (tracked follow-up), this target starts
-  # returning data. Until then the scrape will fail — that is expected and
-  # preferable to scraping one of N Python workers for a partial picture.
+  # Resolved 2026-09-05: services/backend-go/internal/metrics serves this
+  # path — RED metrics (http_requests_total, http_request_duration_seconds,
+  # http_requests_in_flight), hand-rolled against the standard library
+  # rather than adding a prometheus/client_golang dependency (see that
+  # package's doc comment for why). Same exposition format either way; this
+  # target now returns real data.
   - job_name: 'skolab-gateway'
     metrics_path: '/metrics'
     static_configs:
