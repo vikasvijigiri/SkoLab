@@ -36,14 +36,23 @@ export const getNetworkCollaborators = (authorId: string, field?: string, name?:
     params: { author_id: authorId, field, name, limit },
   });
 
+// citation_heatmap is only registered on the Go gateway under /api/v1 (no
+// bare fallback, unlike search_author/refresh_author/network_collaborators
+// below); journal_advisor and match_grants never reached Go's own routes at
+// all -- they're Python-only, forwarded by the gateway's catch-all NoRoute
+// proxy with the request path preserved as-is, and Python has them
+// registered under /api/v1 too (app.include_router(api_router,
+// prefix="/api/v1")). A bare path 404s at both hops. Confirmed live: hitting
+// an author profile page threw two real 404s in the browser console before
+// this fix.
 export const getCitationHeatmap = (authorId: string) =>
-  apiRequest<CitationHeatmap>("/citation_heatmap", { params: { author_id: authorId } });
+  apiRequest<CitationHeatmap>("/api/v1/citation_heatmap", { params: { author_id: authorId } });
 
 export const getJournalAdvisor = (authorId: string) =>
-  apiRequest<JournalRecommendation[]>("/journal_advisor", { params: { author_id: authorId } });
+  apiRequest<JournalRecommendation[]>("/api/v1/journal_advisor", { params: { author_id: authorId } });
 
 export const getMatchGrants = (authorId: string) =>
-  apiRequest<GrantMatch[]>("/match_grants", { params: { author_id: authorId } });
+  apiRequest<GrantMatch[]>("/api/v1/match_grants", { params: { author_id: authorId } });
 
 // ---- Home / Feed ------------------------------------------------------------
 
