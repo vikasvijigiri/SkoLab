@@ -27,8 +27,11 @@ RUN npm ci
 
 FROM node:22-slim AS builder
 WORKDIR /app
+# Only the root node_modules exists -- npm workspaces hoist every dependency
+# there by default; apps/web/node_modules is never created at all, and an
+# earlier version of this COPY that assumed otherwise failed the real Render
+# build with "apps/web/node_modules": not found.
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY . .
 
 ARG NEXT_PUBLIC_API_BASE_URL
