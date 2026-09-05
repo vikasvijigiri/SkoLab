@@ -1,0 +1,47 @@
+name: Uptime Monitor
+
+# Continuous production monitoring with no third-party signup: this repo is
+# public, so scheduled runs are free and unlimited. A failing run shows up as
+# a red X in the Actions tab and emails whoever's notification settings are
+# configured for Actions failures on this repo (GitHub's default for the
+# workflow's own committer / repo watchers).
+#
+# Every check retries across a wide window before failing, on purpose: both
+# Render services are on the free tier and spin down after 15 minutes idle,
+# so a single slow response is an expected cold start, not an incident. Only
+# a target that stays unreachable across every retry is a real outage.
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  check-endpoints:
+    name: Check production endpoints
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Go gateway
+            url: https://skolab-gateway.onrender.com/gateway-health
+          - name: Python backend (liveness)
+            url: https://skolab-backend-py.onrender.com/livez
+          - name: Python backend (health)
+            url: https://skolab-backend-py.onrender.com/health
+    steps:
+      - name: Check ${{ matrix.name }}
+        run: |
+          url="${{ matrix.url }}"
+          attempts=5
+          delay=20
+          for i in $(seq 1 "$attempts"); do
+            if curl --fail --silent --show-error --max-time 60 -o /dev/null "$url"; then
+              echo "OK: $url responded 2xx on attempt $i/$attempts"
+              exit 0
+            fi
+            echo "Attempt $i/$attempts failed for $url (likely a cold start) — retrying in ${delay}s"
+            sleep "$delay"
+          done
+          echo "::error::$url did not respond with 2xx after $attempts attempts (~$((attempts * delay))s of retrying)"
+          exit 1
