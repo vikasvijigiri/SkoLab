@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -9,7 +10,16 @@ import { cn } from "@/lib/utils";
 import type { Conjecture } from "@/lib/types";
 import { TRANSITION_FAST } from "@/lib/motion";
 
-export function DailyChallengeCard({ conjecture, loading }: { conjecture: Conjecture | null; loading: boolean }) {
+export function DailyChallengeCard({
+  conjecture,
+  loading,
+  unresolved,
+}: {
+  conjecture: Conjecture | null;
+  loading: boolean;
+  /** No resolved research profile yet — the challenge can't be personalized. */
+  unresolved?: boolean;
+}) {
   const [selected, setSelected] = useState<number | null>(null);
 
   if (loading) {
@@ -23,8 +33,18 @@ export function DailyChallengeCard({ conjecture, loading }: { conjecture: Conjec
   if (!conjecture) {
     return (
       <Card>
-        <p className="font-body text-[13px] text-text-muted">
-          No challenge available right now — couldn&apos;t reach the backend.
+        <p className="font-body text-[13px] leading-relaxed text-text-secondary">
+          {unresolved ? (
+            <>
+              Your daily challenge is drawn from your field.{" "}
+              <Link href="/profile" className="font-medium text-primary">
+                Set a research focus
+              </Link>{" "}
+              to start.
+            </>
+          ) : (
+            "Today's challenge is still being prepared — check back shortly."
+          )}
         </p>
       </Card>
     );
