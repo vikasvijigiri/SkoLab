@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"log"
 	"log/slog"
 	"net"
@@ -10,6 +12,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -309,6 +312,30 @@ func reverseProxy(target string) gin.HandlerFunc {
 		// today and closes that failure mode before it can exist.
 		resp.Header.Del("Content-Encoding")
 		resp.Header.Del("Content-Length")
+
+		// Buffer the whole body instead of letting ReverseProxy stream it
+		// chunk-by-chunk. Confirmed live: any proxied route whose response
+		// doesn't fit in one upstream read (Python reports no Content-Length
+		// -- Transfer-Encoding: chunked -- for every route here, so this is
+		// purely a function of response size) came back corrupted at the
+		// client, gzip-wrapped or not, with the same request against Python
+		// directly (no gateway) coming back clean every time and a native,
+		// non-proxied, small Go route staying clean through the same gzip
+		// wrapper -- isolating the break to ReverseProxy's own multi-chunk
+		// copy path, not this gateway's own gzip or header handling. No
+		// route here streams a genuinely unbounded response (discovery/
+		// predict and nexus-chat both return one complete JSON object once
+		// the LLM call finishes, never a chunked SSE-style stream), so
+		// buffering trades nothing real away.
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		resp.Body.Close()
+		resp.Body = io.NopCloser(bytes.NewReader(body))
+		resp.ContentLength = int64(len(body))
+		resp.Header.Set("Content-Length", strconv.Itoa(len(body)))
+		resp.TransferEncoding = nil
 		return nil
 	}
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
