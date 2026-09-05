@@ -168,8 +168,19 @@ class PgBackedCache:
                 )
         return None
 
-    async def set(self, key: str, value: Any) -> None:
-        """Persist value to L1 and L2 (Redis/Database)."""
+    async def set(
+        self, key: str, value: Any, ttl_seconds: Optional[int] = None
+    ) -> None:
+        """Persist value to L1 and L2 (Redis/Database).
+
+        `ttl_seconds` overrides this cache's own TTL for this one write —
+        for a shared instance that serves callers wanting different TTLs
+        (see app/services/platform/pipeline/base.py's _pipeline_cache),
+        rather than each caller having to construct its own throwaway
+        PgBackedCache just to get a different TTL, which silently
+        resets the in-memory L1 layer on every single call.
+        """
+        effective_ttl = ttl_seconds if ttl_seconds is not None else self.ttl
         normalized_value = self._normalize_value(value)
         self._l1_set(key, normalized_value)
 
@@ -179,7 +190,7 @@ class PgBackedCache:
         if _redis_active and _redis_client:
             try:
                 await _redis_client.set(
-                    db_key, json.dumps(normalized_value), ex=self.ttl
+                    db_key, json.dumps(normalized_value), ex=effective_ttl
                 )
                 return
             except Exception as exc:
@@ -189,7 +200,7 @@ class PgBackedCache:
 
         # L2 — Database Fallback
         now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
-        expires_at = now + datetime.timedelta(seconds=self.ttl)
+        expires_at = now + datetime.timedelta(seconds=effective_ttl)
         payload = {"v": normalized_value}
 
         async with AsyncSessionLocal() as session:
