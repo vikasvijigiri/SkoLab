@@ -15,6 +15,16 @@ from app.services.data.openalex_service import OpenAlexService
 
 logger = logging.getLogger(__name__)
 
+# Shared across every _PipelineBase instance and every call to
+# _save_to_postgres/_load_from_postgres below. These used to construct a
+# fresh PgBackedCache(name="pipeline") on every single call — a brand-new
+# instance means a brand-new, empty `_l1` dict every time, so the 30s
+# in-memory L1 layer never actually served a hit for this cache namespace;
+# every "cached" read still went to Postgres. A per-call `ttl_seconds`
+# stays supported via PgBackedCache.set()'s own override parameter, so
+# different callers wanting different TTLs don't need their own instance.
+_pipeline_cache = PgBackedCache(ttl_seconds=3600, name="pipeline")
+
 
 class _PipelineBase:
     def __init__(self, db: Optional[AsyncSession] = None):
@@ -114,15 +124,19 @@ class _PipelineBase:
         self, cache_key: str, data: Dict[str, Any], ttl_seconds: int = 3600
     ) -> None:
         """Save data to PostgreSQL cache_entries with TTL via PgBackedCache."""
-        cache = PgBackedCache(ttl_seconds=ttl_seconds, name="pipeline")
-        await cache.set(cache_key, data)
+        await _pipeline_cache.set(cache_key, data, ttl_seconds=ttl_seconds)
 
     async def _load_from_postgres(
         self, cache_key: str, ttl_seconds: int = 3600
     ) -> Optional[Dict[str, Any]]:
-        """Load data from PostgreSQL cache_entries with TTL check."""
-        cache = PgBackedCache(ttl_seconds=ttl_seconds, name="pipeline")
-        return await cache.get(cache_key)
+        """Load data from PostgreSQL cache_entries with TTL check.
+
+        `ttl_seconds` is accepted for call-site compatibility but unused
+        here — a read's TTL was already applied when the value was
+        written (PgBackedCache.get() checks CacheEntry.expires_at, set
+        at write time), so there's nothing for a read to re-apply.
+        """
+        return await _pipeline_cache.get(cache_key)
 
     async def _fetch_author_profile(self, author_id: str) -> Optional[Dict[str, Any]]:
         """Helper to fetch author profile from OpenAlex or database."""
