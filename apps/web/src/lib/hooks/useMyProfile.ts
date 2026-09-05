@@ -30,17 +30,25 @@ export function useMyProfile() {
   } = useFirestoreDoc<SkoLabUser>(user ? `researchers/${user.uid}` : null);
 
   const name = firestoreProfile?.name || user?.displayName || "";
+  // The name to resolve against OpenAlex — prefer the "name as published"
+  // (authorName), which onboarding collects specifically because a display
+  // name and a byline often differ ("Sam Park" vs "Samuel J. Park").
+  const lookupName = firestoreProfile?.authorName?.trim() || name;
+  // openAlexId holds either an OpenAlex author id (A123…) or an ORCID
+  // (0000-0000-0000-0000, optionally as an orcid.org URL) — search_author
+  // accepts both; the Go side normalises an ORCID to `orcid:…` for OpenAlex.
+  const lookupId = firestoreProfile?.openAlexId?.trim() || undefined;
 
   const authorQ = useQuery({
     ...authorQuery(
-      name,
-      firestoreProfile?.openAlexId || undefined,
+      lookupName,
+      lookupId,
       firestoreProfile?.researchFocus || undefined,
     ),
-    enabled: Boolean(name),
+    enabled: Boolean(lookupName || lookupId),
   });
 
-  const loading = profileLoading || (Boolean(name) && authorQ.isLoading);
+  const loading = profileLoading || (Boolean(lookupName || lookupId) && authorQ.isLoading);
 
   // A 404 from search_author is not a failure — it just means this person
   // isn't matched to an OpenAlex profile yet (the common case for a brand-new
@@ -52,13 +60,13 @@ export function useMyProfile() {
   const error =
     profileError ??
     (!authorNotFound && authorQ.error instanceof Error ? authorQ.error.message : null) ??
-    (!name && !profileLoading
+    (!lookupName && !lookupId && !profileLoading
       ? "Add your name in Profile to unlock impact metrics."
       : null);
 
   const refetch = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: authorQuery(name).queryKey });
-  }, [queryClient, name]);
+    queryClient.invalidateQueries({ queryKey: authorQuery(lookupName).queryKey });
+  }, [queryClient, lookupName]);
 
   return {
     firestoreProfile: firestoreProfile ?? null,
