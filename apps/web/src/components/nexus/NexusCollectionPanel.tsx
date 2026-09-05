@@ -14,6 +14,10 @@ interface Props {
   searchQuery: string;
   searchResults: OpenAlexWork[];
   searching: boolean;
+  /** The last search request failed (network / rate limit / OpenAlex error). */
+  searchErrored?: boolean;
+  /** A search actually completed for the current query (used to show "no results"). */
+  searchRan?: boolean;
   resultsDismissed: boolean;
   searchContainerRef: RefObject<HTMLDivElement | null>;
   mobileHidden: boolean;
@@ -27,6 +31,8 @@ export function NexusCollectionPanel({
   searchQuery,
   searchResults,
   searching,
+  searchErrored,
+  searchRan,
   resultsDismissed,
   searchContainerRef,
   mobileHidden,
@@ -34,6 +40,11 @@ export function NexusCollectionPanel({
   onAddPaper,
   onRemovePaper,
 }: Props) {
+  const showStatus =
+    !searching &&
+    !resultsDismissed &&
+    searchQuery.trim().length >= 3 &&
+    (searchErrored || (searchRan && searchResults.length === 0));
   return (
     <aside
       className={cn(
@@ -116,6 +127,14 @@ export function NexusCollectionPanel({
               </motion.div>
             )}
           </AnimatePresence>
+
+          {showStatus && (
+            <p className="absolute left-0 right-0 top-11 z-50 rounded-md border border-border bg-surface px-3 py-2.5 font-body text-[12px] text-text-muted shadow-elevated">
+              {searchErrored
+                ? "Couldn't reach the paper database just now — try again in a moment."
+                : `No papers found for "${searchQuery.trim()}".`}
+            </p>
+          )}
         </div>
       </div>
 

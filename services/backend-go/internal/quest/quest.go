@@ -116,13 +116,10 @@ func GetLeaderboard(c *gin.Context) {
 		slog.Warn("leaderboard rows error", "err", pgr.Err())
 	}
 
-	if len(entries) == 0 {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{
-			"error": "no leaderboard data available for field '" + field + "'",
-		})
-		return
-	}
-
+	// An empty leaderboard for a valid field is a normal empty result, not an
+	// error — return 200 with [] so the client renders a "no one ranked here
+	// yet" empty state instead of a red "couldn't load" banner with a Retry
+	// that will never succeed. `entries` is already a non-nil empty slice.
 	c.JSON(http.StatusOK, entries)
 }
 

@@ -154,6 +154,8 @@ export default function NexusPage() {
         searchQuery={searchQuery}
         searchResults={searchResults}
         searching={search.isFetching}
+        searchErrored={search.isError}
+        searchRan={search.isFetched && debouncedSearch.trim().length >= 3}
         resultsDismissed={resultsDismissed}
         searchContainerRef={searchContainerRef}
         mobileHidden={mobilePane === "chat"}

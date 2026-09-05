@@ -1,4 +1,5 @@
-import { TriangleAlert, RotateCw } from "lucide-react";
+import Link from "next/link";
+import { TriangleAlert, RotateCw, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/Card";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
@@ -23,17 +24,35 @@ export function FrontierPulseCard({
   author,
   loading,
   error,
+  unresolved,
   onRetry,
 }: {
   author: AuthorResponse | null;
   loading: boolean;
   error?: string | null;
+  /** No OpenAlex match yet — a cold-start prompt, not an error. */
+  unresolved?: boolean;
   onRetry?: () => void;
 }) {
   if (loading) {
     return (
       <Card className="animate-pulse">
         <div className="h-16 rounded-[8px] bg-surface-subtle" />
+      </Card>
+    );
+  }
+
+  if (!author && unresolved && !error) {
+    return (
+      <Card className="flex items-center gap-2.5">
+        <Sparkles size={16} className="shrink-0 text-accent-violet" />
+        <p className="flex-1 font-body text-[12.5px] text-text-secondary">
+          Your impact metrics unlock once we match your published work.{" "}
+          <Link href="/profile" className="font-medium text-primary">
+            Add your name or ORCID
+          </Link>
+          .
+        </p>
       </Card>
     );
   }
