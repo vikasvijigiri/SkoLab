@@ -50,19 +50,20 @@ export function useMyProfile() {
 
   const loading = profileLoading || (Boolean(lookupName || lookupId) && authorQ.isLoading);
 
-  // A 404 from search_author is not a failure — it just means this person
-  // isn't matched to an OpenAlex profile yet (the common case for a brand-new
-  // account, or a name OpenAlex doesn't index). That's a calm cold-start
-  // state, not a red "something broke" banner with a Retry that can't help.
+  // "Unresolved" = no OpenAlex match to work from yet. Two shapes, both a
+  // calm cold-start state rather than a red "something broke" banner: nothing
+  // to look up at all (no name/id, e.g. a fresh guest), or a 404 from
+  // search_author (a name OpenAlex doesn't index). Neither has a Retry that
+  // could help — the fix is to add an identity in Profile.
+  const nothingToLookUp = !lookupName && !lookupId && !profileLoading;
   const authorNotFound =
     authorQ.error instanceof ApiError && authorQ.error.status === 404;
+  const unresolved = nothingToLookUp || authorNotFound;
 
   const error =
     profileError ??
     (!authorNotFound && authorQ.error instanceof Error ? authorQ.error.message : null) ??
-    (!lookupName && !lookupId && !profileLoading
-      ? "Add your name in Profile to unlock impact metrics."
-      : null);
+    null;
 
   const refetch = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: authorQuery(lookupName).queryKey });
@@ -73,10 +74,10 @@ export function useMyProfile() {
     author: authorQ.data ?? null,
     loading,
     error,
-    /** True when the backend simply has no OpenAlex match for this user yet
-     * (a cold-start state, not an error). Consumers render a calm prompt
-     * instead of an error banner. */
-    unresolved: authorNotFound,
+    /** True when there's no OpenAlex match to work from yet — no identity
+     * entered, or entered but not indexed. A cold-start state, not an error:
+     * consumers render a calm "connect your work" prompt, not an error banner. */
+    unresolved,
     refetch,
   };
 }
