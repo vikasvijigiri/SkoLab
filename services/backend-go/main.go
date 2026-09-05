@@ -60,6 +60,13 @@ func main() {
 	// origin) is still counted -- RED metrics (Rate, Errors, Duration) are
 	// meant to cover everything the gateway sees, not just what it serves.
 	r.Use(metrics.Middleware())
+	// Compresses every JSON response this gateway writes or proxies for a
+	// client that sends Accept-Encoding: gzip -- negligible CPU cost next
+	// to the network transfer time it saves, especially over a slower
+	// connection. Ahead of CORS/rate-limiting for the same reason metrics
+	// is: registering it early means c.Writer is already swapped before
+	// any handler downstream writes a body.
+	r.Use(middleware.Gzip())
 	r.Use(middleware.CORS())
 
 	// ── Rate limiting: 120 req/s per IP, burst of 30 ─────────────────────────
@@ -290,6 +297,18 @@ func reverseProxy(target string) gin.HandlerFunc {
 		resp.Header.Del("Access-Control-Allow-Methods")
 		resp.Header.Del("Access-Control-Allow-Headers")
 		resp.Header.Del("Vary")
+		// The Python backend doesn't set its own Content-Encoding today
+		// (confirmed: no GZipMiddleware anywhere in services/backend), but
+		// middleware.Gzip() unconditionally gzips every response this
+		// gateway writes, proxied ones included. If Python ever gains its
+		// own compression, an unstripped upstream Content-Encoding here
+		// would mean the body gets gzipped a second time on top of an
+		// encoding the gateway's own header claims not to have applied --
+		// most clients decode exactly one layer and would be left holding
+		// undecoded gzip bytes. Stripping both defensively costs nothing
+		// today and closes that failure mode before it can exist.
+		resp.Header.Del("Content-Encoding")
+		resp.Header.Del("Content-Length")
 		return nil
 	}
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
