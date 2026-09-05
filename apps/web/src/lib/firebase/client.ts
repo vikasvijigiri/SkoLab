@@ -2,9 +2,22 @@ import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/a
 import { getAuth, type Auth } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
 
+/**
+ * authDomain must be an origin that serves Firebase's /__/auth handler. We
+ * proxy /__/auth/* through this app's own origin (see next.config.ts) so the
+ * OAuth redirect flow is same-origin and survives browser storage
+ * partitioning — which breaks the default *.firebaseapp.com authDomain. In
+ * the browser, always use the current host; on the server (build/SSR, where
+ * no auth call runs) fall back to the env var or the known deploy host.
+ */
+const authDomain =
+  (typeof window !== "undefined" && window.location.host) ||
+  process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ||
+  "skolab-web.onrender.com";
+
 const firebaseConfig: FirebaseOptions = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  authDomain,
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "skolab-vvi",
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,

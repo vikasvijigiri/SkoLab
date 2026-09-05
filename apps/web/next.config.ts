@@ -21,6 +21,30 @@ const nextConfig: NextConfig = {
   // `view-transition-name` in the CSS. Cross-route card->hero morphs are still
   // unbuilt -- framer-motion `layoutId` only bridges simultaneously-mounted
   // elements. If they are built later, re-enable whatever 16.3 calls this.
+
+  // Firebase Auth redirect helper, proxied through this app's own origin.
+  // signInWithRedirect relies on a cross-origin iframe to the Firebase
+  // Hosting domain (skolab-vvi.firebaseapp.com); modern browsers partition
+  // third-party storage, so that iframe can't relay the result back and
+  // getRedirectResult() silently returns null -- the user lands back on the
+  // sign-in page as if nothing happened. Firebase's fix for apps not on
+  // Firebase Hosting is to serve /__/auth/* from the app's own domain
+  // (https://firebase.google.com/docs/auth/web/redirect-best-practices).
+  // A Next rewrite is a transparent proxy (not a 302), which is what that
+  // flow requires. Paired with authDomain = this app's host in
+  // lib/firebase/client.ts, the whole OAuth round trip is same-origin.
+  async rewrites() {
+    return [
+      {
+        source: "/__/auth/:path*",
+        destination: "https://skolab-vvi.firebaseapp.com/__/auth/:path*",
+      },
+      {
+        source: "/__/firebase/:path*",
+        destination: "https://skolab-vvi.firebaseapp.com/__/firebase/:path*",
+      },
+    ];
+  },
 };
 
 export default withSentryConfig(nextConfig, {
