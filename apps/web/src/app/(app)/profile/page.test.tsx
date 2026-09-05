@@ -40,6 +40,7 @@ describe("ProfilePage", () => {
     renderWithProviders(<ProfilePage />);
     const editBtn = screen.getByRole("button", { name: /edit/i });
     await userEvent.click(editBtn);
-    expect(screen.getByDisplayValue("Ada Lovelace")).toBeInTheDocument();
+    expect(screen.getByLabelText("Name")).toHaveValue("Ada Lovelace");
+    expect(screen.getByLabelText("Research focus")).toHaveValue("Analytical Engines");
   });
 });

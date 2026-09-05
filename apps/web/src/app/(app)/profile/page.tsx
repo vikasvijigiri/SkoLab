@@ -23,6 +23,8 @@ export default function ProfilePage() {
 
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
+  const [authorName, setAuthorName] = useState("");
+  const [orcid, setOrcid] = useState("");
   const [researchFocus, setResearchFocus] = useState("");
   const [academicStatus, setAcademicStatus] = useState("");
   const [about, setAbout] = useState("");
@@ -31,8 +33,17 @@ export default function ProfilePage() {
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  const orcidRe = /^(?:https?:\/\/orcid\.org\/)?\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/i;
+  const isOpenAlexId = /^A\d+$/i.test((firestoreProfile?.openAlexId ?? "").trim());
+  const orcidValid = orcid.trim() === "" || orcidRe.test(orcid.trim());
+
   function startEditing() {
     setName(firestoreProfile?.name ?? "");
+    setAuthorName(firestoreProfile?.authorName ?? firestoreProfile?.name ?? "");
+    // openAlexId can hold an OpenAlex id (resolved automatically) or an ORCID
+    // the user entered — only surface it in the ORCID field if it looks like one.
+    const oai = (firestoreProfile?.openAlexId ?? "").trim();
+    setOrcid(/^A\d+$/i.test(oai) ? "" : oai);
     setResearchFocus(firestoreProfile?.researchFocus ?? "");
     setAcademicStatus(firestoreProfile?.academicStatus ?? "Researcher");
     setAbout(firestoreProfile?.about ?? "");
@@ -42,10 +53,24 @@ export default function ProfilePage() {
 
   async function handleSave() {
     if (!user) return;
+    if (!orcidValid) {
+      setSaveError("That doesn't look like an ORCID (0000-0000-0000-0000).");
+      return;
+    }
     setSaving(true);
     setSaveError(null);
     try {
-      await updateResearcherProfile(user.uid, { name, researchFocus, academicStatus, about });
+      const normalizedOrcid = orcid.trim().replace(/^https?:\/\/orcid\.org\//i, "");
+      await updateResearcherProfile(user.uid, {
+        name,
+        authorName: authorName.trim() || name,
+        researchFocus,
+        academicStatus,
+        about,
+        // Keep an auto-resolved OpenAlex id untouched when the user leaves the
+        // ORCID field blank; otherwise the entered ORCID wins.
+        ...(normalizedOrcid || !isOpenAlexId ? { openAlexId: normalizedOrcid } : {}),
+      });
       const idToken = await getIdToken();
       if (idToken) {
         await syncUserProfile(idToken, user.uid, name, researchFocus).catch((err) => {
@@ -140,6 +165,19 @@ export default function ProfilePage() {
             )}
             <div className="mt-3 flex flex-col gap-3">
               <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} />
+              <Input
+                label="Name as it appears on your papers"
+                value={authorName}
+                onChange={(e) => setAuthorName(e.target.value)}
+                placeholder="e.g. S. J. Park"
+              />
+              <Input
+                label="ORCID"
+                value={orcid}
+                onChange={(e) => setOrcid(e.target.value)}
+                placeholder="0000-0000-0000-0000"
+                error={orcidValid ? undefined : "That doesn't look like an ORCID."}
+              />
               <Input
                 label="Research focus"
                 value={researchFocus}
