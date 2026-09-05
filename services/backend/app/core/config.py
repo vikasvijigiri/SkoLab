@@ -97,7 +97,11 @@ class Settings:
         default_factory=lambda: os.environ.get("OPENALEX_EMAIL", "")
     )
     openalex_api_key: str = field(
-        default_factory=lambda: os.environ.get("openalex_api", "")
+        # OPENALEX_API_KEY is the canonical name (Go gateway + web app read the
+        # same). "openalex_api" kept as a legacy fallback for older deployments.
+        default_factory=lambda: (
+            os.environ.get("OPENALEX_API_KEY") or os.environ.get("openalex_api", "")
+        )
     )
 
     # ── Embeddings ──────────────────────────────────────────────────────────
