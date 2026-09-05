@@ -1,7 +1,8 @@
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signInAnonymously,
   GoogleAuthProvider,
   signOut as fbSignOut,
@@ -24,9 +25,42 @@ export async function signInWithEmail(email: string, password: string) {
   return cred.user;
 }
 
-export async function signInWithGoogle() {
+/**
+ * Redirect-based, not signInWithPopup: the popup flow depends on a hidden
+ * cross-origin iframe (on Firebase's authDomain) relaying the result back to
+ * this origin via postMessage/shared storage. Confirmed live in production
+ * (Sentry SKOLAB-WEB-1) that this relay silently breaks under Edge's default
+ * tracking-prevention setting -- the popup completes Google's own screens
+ * fine, then fails on the follow-up call that depends on the relay, with a
+ * misleading "missing OAuth credential" error nowhere near the real cause.
+ * A full-page redirect never needs that cross-origin relay at all, so it
+ * isn't exposed to this class of failure -- confirmed by two Console-side
+ * fixes (JS origins, client secret) NOT changing the error, then a different
+ * browser working immediately, which pointed at the browser/relay, not
+ * server config.
+ *
+ * This function does not return a user -- the browser navigates away to
+ * Google and back. See completeGoogleRedirectSignIn, which every caller
+ * must run once on mount to pick up the result after the round trip.
+ */
+export async function signInWithGoogle(): Promise<void> {
   const provider = new GoogleAuthProvider();
-  const cred = await signInWithPopup(requireAuth(), provider);
+  await signInWithRedirect(requireAuth(), provider);
+}
+
+/**
+ * Completes the redirect started by signInWithGoogle. Firebase redirects
+ * back to the exact page that called signInWithRedirect, so this belongs in
+ * a `useEffect` on mount in that same page (login/signup) -- not a one-time
+ * global listener, since which page it should navigate to next (home vs.
+ * onboarding) depends on which page initiated the sign-in.
+ *
+ * Returns the signed-in user if this page load is completing a real
+ * redirect round trip, or null for an ordinary page visit (the common case).
+ */
+export async function completeGoogleRedirectSignIn(): Promise<User | null> {
+  const cred = await getRedirectResult(requireAuth());
+  if (!cred) return null;
   await createResearcherProfile(cred.user, cred.user.displayName ?? "Researcher");
   return cred.user;
 }

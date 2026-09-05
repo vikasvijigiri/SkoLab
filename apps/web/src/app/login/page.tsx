@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuthCard } from "@/components/auth/AuthCard";
@@ -9,7 +9,12 @@ import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/lib/hooks/AuthProvider";
-import { signInWithEmail, signInWithGoogle, signInAsGuest } from "@/lib/firebase/auth";
+import {
+  signInWithEmail,
+  signInWithGoogle,
+  signInAsGuest,
+  completeGoogleRedirectSignIn,
+} from "@/lib/firebase/auth";
 import { friendlyAuthError } from "@/lib/firebase/errors";
 
 export default function LoginPage() {
@@ -19,6 +24,20 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<"email" | "google" | "guest" | null>(null);
+
+  // Picks up the result of signInWithGoogle's redirect round trip -- Firebase
+  // sends the browser back to this exact page. Runs once; the ref guards
+  // React 19's dev-mode double-invoke from processing the same return twice.
+  const redirectChecked = useRef(false);
+  useEffect(() => {
+    if (redirectChecked.current) return;
+    redirectChecked.current = true;
+    completeGoogleRedirectSignIn()
+      .then((user) => {
+        if (user) router.push("/home");
+      })
+      .catch((err) => setError(friendlyAuthError(err)));
+  }, [router]);
 
   async function handleEmailLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -38,11 +57,12 @@ export default function LoginPage() {
     setError(null);
     setLoading("google");
     try {
+      // Navigates the whole page to Google -- this only throws if the
+      // redirect itself couldn't start. The actual sign-in result is picked
+      // up by completeGoogleRedirectSignIn above, after the round trip back.
       await signInWithGoogle();
-      router.push("/home");
     } catch (err) {
       setError(friendlyAuthError(err));
-    } finally {
       setLoading(null);
     }
   }
