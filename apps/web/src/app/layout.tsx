@@ -3,6 +3,7 @@ import { Space_Grotesk, Syne, Inter, JetBrains_Mono } from "next/font/google";
 import { AuthProvider } from "@/lib/hooks/AuthProvider";
 import { MotionProvider } from "@/components/MotionProvider";
 import { Providers } from "@/components/providers";
+import { siteUrl } from "@/lib/site-url";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -28,18 +29,6 @@ const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
   weight: ["500"],
 });
-
-// Resolves absolute URLs for OG/Twitter images and canonical links. No
-// hardcoded production domain: NEXT_PUBLIC_SITE_URL wins if set, otherwise
-// Vercel's own auto-injected VERCEL_PROJECT_PRODUCTION_URL (available at
-// build time on every Vercel deploy, preview or production) is used, so this
-// self-configures correctly the moment the project is linked — falls back to
-// localhost for `next dev`.
-const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.VERCEL_PROJECT_PRODUCTION_URL
-    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-    : "http://localhost:3000");
 
 const title = "SkoLab";
 const description =
