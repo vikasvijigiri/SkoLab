@@ -313,6 +313,30 @@ func reverseProxy(target string) gin.HandlerFunc {
 		// request straight back to the gateway, producing an infinite
 		// loop (HTTP 508, x-render-routing: loop) on every proxied route.
 		req.Host = targetURL.Host
+		// The actual root cause of the discovery/predict corruption (three
+		// prior fixes -- gzip Flush, response buffering, HTTP/2 disable --
+		// were each real but addressed the wrong layer): this outbound
+		// request's Accept-Encoding is not what the inbound client sent.
+		// Confirmed live via a wire-level diagnostic: whatever Cloudflare
+		// edge fronts skolab-gateway rewrites the request's own
+		// Accept-Encoding to "gzip, br" before this Director ever sees it,
+		// regardless of what the real client asked for. Cloudflare's edge
+		// in front of skolab-backend-py then honors that and returns a
+		// genuinely Brotli-compressed body with Content-Encoding: br --
+		// confirmed via the diagnostic's captured bytes, which had no gzip
+		// magic number and matched neither this gateway's own gzip wrapper
+		// nor plain JSON. Go's net/http has no built-in Brotli decoder, and
+		// ModifyResponse (below) was deleting Content-Encoding without ever
+		// decompressing the body -- so every proxied route this gateway
+		// doesn't natively serve was shipping raw Brotli bytes to the
+		// client labeled as if they were plain. Forcing identity here is
+		// the fix: confirmed live and directly, hitting skolab-backend-py
+		// with Accept-Encoding: identity gets a clean, uncompressed
+		// response with no Content-Encoding at all -- Cloudflare's edge in
+		// front of Python does honor identity, it just never received it
+		// before this override, since the client-facing edge had already
+		// replaced it by the time this Director ran.
+		req.Header.Set("Accept-Encoding", "identity")
 	}
 	// The Python backend sets its own CORS headers (see services/backend/app/main.py).
 	// The Go gateway is the sole CORS authority for browser-facing responses
@@ -351,16 +375,18 @@ func reverseProxy(target string) gin.HandlerFunc {
 		resp.Header.Del("Access-Control-Allow-Methods")
 		resp.Header.Del("Access-Control-Allow-Headers")
 		resp.Header.Del("Vary")
-		// The Python backend doesn't set its own Content-Encoding today
-		// (confirmed: no GZipMiddleware anywhere in services/backend), but
-		// middleware.Gzip() unconditionally gzips every response this
-		// gateway writes, proxied ones included. If Python ever gains its
-		// own compression, an unstripped upstream Content-Encoding here
-		// would mean the body gets gzipped a second time on top of an
-		// encoding the gateway's own header claims not to have applied --
-		// most clients decode exactly one layer and would be left holding
-		// undecoded gzip bytes. Stripping both defensively costs nothing
-		// today and closes that failure mode before it can exist.
+		// Python/uvicorn itself never sets Content-Encoding (confirmed: no
+		// GZipMiddleware anywhere in services/backend) -- the real source,
+		// found via the wire diagnostic above, was Cloudflare's edge in
+		// front of skolab-backend-py compressing with Brotli whenever the
+		// outbound request's Accept-Encoding allowed it, which this
+		// Director now forces to "identity" specifically to prevent. This
+		// delete is now just a defensive backstop, not the fix: if that
+		// override is ever removed or an edge ignores it, an unstripped
+		// Content-Encoding here would otherwise mean middleware.Gzip()
+		// gzips an already-compressed body a second time, and a client
+		// that decodes only one layer would be left holding undecoded
+		// bytes. Stripping it costs nothing and closes that failure mode.
 		resp.Header.Del("Content-Encoding")
 		resp.Header.Del("Content-Length")
 
