@@ -453,8 +453,25 @@ func pgSearchSuggestions(ctx context.Context, query string, limit int) ([]Author
 
 // ── Utility helpers ───────────────────────────────────────────────────────────
 
+// orcidRe matches a bare ORCID (NNNN-NNNN-NNNN-NNNX), the form onboarding and
+// the profile editor store in users.openalex_id when a researcher enters one.
+var orcidRe = regexp.MustCompile(`^\d{4}-\d{4}-\d{4}-\d{3}[\dXx]$`)
+
+// cleanAuthorID reduces an author identifier to what OpenAlex's /authors/{id}
+// endpoint expects. An OpenAlex URL/id collapses to its last path segment
+// (A5086198262). An ORCID — bare or as an orcid.org URL — must carry the
+// `orcid:` prefix for that endpoint (the bare digits 404), so it's normalised
+// to `orcid:NNNN-NNNN-NNNN-NNNX` rather than blindly truncated.
 func cleanAuthorID(id string) string {
-	parts := strings.Split(id, "/")
+	trimmed := strings.TrimSpace(id)
+	lower := strings.ToLower(trimmed)
+	lower = strings.TrimPrefix(lower, "https://orcid.org/")
+	lower = strings.TrimPrefix(lower, "http://orcid.org/")
+	lower = strings.TrimPrefix(lower, "orcid:")
+	if orcidRe.MatchString(lower) {
+		return "orcid:" + lower
+	}
+	parts := strings.Split(trimmed, "/")
 	return parts[len(parts)-1]
 }
 
