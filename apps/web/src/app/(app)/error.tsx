@@ -12,13 +12,18 @@ import { Button } from "@/components/ui/Button";
  * requireDb() failing before onSnapshot's own error callback could register)
  * crashed straight to Next's default dev overlay instead of a recoverable,
  * on-brand fallback.
+ *
+ * `retry` (not `unstable_retry`, which never shipped a matching runtime prop
+ * on this Next version) became stable in 16.3.0 — the installed version here.
+ * The error boundary was reachable but "Try again" was a dead button:
+ * `unstable_retry` was `undefined`, so clicking it threw immediately.
  */
 export default function AppError({
   error,
-  unstable_retry,
+  retry,
 }: {
   error: Error & { digest?: string };
-  unstable_retry: () => void;
+  retry: () => void;
 }) {
   useEffect(() => {
     console.error("[AppError]", error);
@@ -37,7 +42,7 @@ export default function AppError({
         <p className="font-body text-[13px] leading-relaxed text-text-secondary">
           {error.message || "This page hit an unexpected error."}
         </p>
-        <Button onClick={() => unstable_retry()}>Try again</Button>
+        <Button onClick={() => retry()}>Try again</Button>
       </Card>
     </div>
   );
