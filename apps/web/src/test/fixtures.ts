@@ -12,6 +12,7 @@ import type {
   PaperIntelligence,
   SimilarPaper,
   SimilarResearcher,
+  ActivityItem,
 } from "@/lib/types";
 
 export const mockSuggestion: AuthorSuggestion = {
@@ -44,6 +45,57 @@ export const mockSimilarResearchers: SimilarResearcher[] = [
     score: 0.79,
     why: "same institution · 2 shared collaborators · 79% topical match",
     shared_collaborators: 2,
+  },
+];
+
+export const mockActivityFeed: ActivityItem[] = [
+  {
+    id: "pub:W3000000001",
+    type: "paper_published",
+    verb: "published a new paper",
+    ts: "2026-08-20T00:00:00Z",
+    actor: {
+      id: "A5000000002",
+      display_name: "Grace Hopper",
+      institution: "Analytical Engine Institute",
+    },
+    object: {
+      kind: "work",
+      id: "W3000000001",
+      title: "Compilers for the analytical engine",
+      authors: ["Grace Hopper"],
+      year: 2026,
+      venue: "J. Computing",
+      citations: 3,
+    },
+    href: "/paper/W3000000001",
+    why: "In your network",
+  },
+  {
+    id: "conn:A5000000003:20260818",
+    type: "connection_made",
+    verb: "is now connected with you",
+    ts: "2026-08-18T00:00:00Z",
+    actor: { id: "A5000000003", display_name: "Katherine Johnson" },
+    href: "/author/A5000000003",
+    why: "New connection",
+  },
+  {
+    id: "trend:W3000000009",
+    type: "trending",
+    verb: "is gaining attention in Computer Science",
+    ts: "2026-08-01T00:00:00Z",
+    object: {
+      kind: "work",
+      id: "W3000000009",
+      title: "A widely-cited recent result",
+      authors: ["Alan Turing"],
+      year: 2026,
+      venue: "Nature",
+      citations: 140,
+    },
+    href: "/paper/W3000000009",
+    why: "140 citations already",
   },
 ];
 
