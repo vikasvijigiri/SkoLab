@@ -81,13 +81,8 @@ export function FrontierPulseCard({
   }
 
   return (
-    <Card accentColor="var(--gradient-hero)" className="relative overflow-hidden">
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.06]"
-        style={{ background: "var(--gradient-hero)" }}
-        aria-hidden
-      />
-      <div className="relative flex items-center gap-6 p-1">
+    <Card accentColor="var(--primary)">
+      <div className="flex items-center gap-6 p-1">
         <Stat label="Disruption" value={Math.round(author.disruption_score)} accent="var(--accent-orange)" />
         <Stat label="Skill Index" value={Math.round(author.average_skill_score)} accent="var(--primary)" />
         <Stat label="Works" value={author.works_count} accent="var(--accent-teal)" />

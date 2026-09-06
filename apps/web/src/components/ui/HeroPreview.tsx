@@ -76,15 +76,9 @@ export function HeroPreview() {
       className="relative mx-auto mt-14 w-full max-w-4xl"
       aria-hidden
     >
-      {/* Glow bed */}
-      <div
-        className="pointer-events-none absolute -inset-8 rounded-[32px] opacity-70 blur-2xl"
-        style={{ background: "var(--gradient-mesh)" }}
-      />
-
       <div
         className="relative overflow-hidden rounded-[16px] border border-border bg-surface shadow-elevated"
-        style={{ borderTop: "1px solid color-mix(in srgb, var(--primary) 30%, var(--border-color))" }}
+        style={{ borderTop: "2px solid var(--primary)" }}
       >
         {/* Browser chrome */}
         <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">

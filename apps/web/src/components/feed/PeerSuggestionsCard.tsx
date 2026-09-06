@@ -64,7 +64,7 @@ export function PeerSuggestionsCard({
         >
           <div
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display text-[13px] font-bold text-white shadow-card"
-            style={{ background: "var(--gradient-hero)" }}
+            style={{ background: "var(--primary)" }}
           >
             {(p.display_name || "?").slice(0, 1).toUpperCase()}
           </div>

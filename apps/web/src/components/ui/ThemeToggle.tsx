@@ -23,7 +23,7 @@ export function ThemeToggle() {
       aria-label={`Theme: ${theme}`}
       title={`Theme: ${theme} (click to change)`}
       suppressHydrationWarning
-      whileHover={{ scale: 1.12, boxShadow: "0 4px 14px color-mix(in srgb, var(--primary) 25%, transparent)" }}
+      whileHover={{ scale: 1.12 }}
       whileTap={{ scale: 0.92 }}
       transition={TRANSITION_FAST}
       className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-border bg-surface text-text-muted transition-colors duration-[var(--motion-fast)] hover:text-primary"

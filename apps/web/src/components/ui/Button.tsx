@@ -1,6 +1,6 @@
 "use client";
 
-import { ButtonHTMLAttributes, forwardRef, useState } from "react";
+import { ButtonHTMLAttributes, forwardRef } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { TRANSITION_FAST } from "@/lib/motion";
@@ -31,12 +31,6 @@ const Spinner = ({ size = 18 }: { size?: number }) => (
   />
 );
 
-const HOVER_GLOW: Record<Variant, string> = {
-  primary: "var(--shadow-glow-primary)",
-  outlined: "0 6px 18px color-mix(in srgb, var(--primary) 20%, transparent)",
-  ghost: "0 6px 18px color-mix(in srgb, var(--primary) 20%, transparent)",
-  text: "none",
-};
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   (
@@ -52,7 +46,6 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     },
     ref
   ) => {
-    const [hovered, setHovered] = useState(false);
     const base =
       "relative inline-flex items-center justify-center gap-2 rounded-md font-body font-semibold cursor-pointer transition-[background-color,color,border-color,opacity] disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
 
@@ -78,15 +71,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     };
 
     const isInert = disabled || loading;
-    const showShimmer = variant !== "text" && !isInert;
 
     return (
       <motion.button
         ref={ref}
         disabled={isInert}
-        onHoverStart={() => setHovered(true)}
-        onHoverEnd={() => setHovered(false)}
-        whileHover={isInert ? undefined : { scale: 1.025, boxShadow: HOVER_GLOW[variant] }}
+        whileHover={isInert ? undefined : { scale: 1.025 }}
         whileTap={isInert ? undefined : { scale: 0.97 }}
         transition={TRANSITION_FAST}
         className={cn(
@@ -98,17 +88,6 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         )}
         {...props}
       >
-        {/* Shimmer sweep, driven by the button's own hover state (can't self-trigger — this span ignores pointer events). */}
-        {showShimmer && (
-          <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-md">
-            <motion.span
-              className="absolute inset-y-0 w-1/3"
-              style={{ background: "linear-gradient(105deg, transparent 20%, rgba(255,255,255,0.16) 50%, transparent 80%)" }}
-              animate={{ x: hovered ? "220%" : "-120%" }}
-              transition={{ duration: 0.7, ease: "easeInOut" }}
-            />
-          </span>
-        )}
         {loading ? <Spinner size={variant === "primary" ? 22 : 20} /> : children}
       </motion.button>
     );

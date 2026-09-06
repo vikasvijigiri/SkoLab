@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import { motion, useMotionValue, useSpring } from "framer-motion";
 
-/** Magnetic, shimmering gradient CTA — for the single highest-priority action on a page (landing hero). */
+/** Magnetic solid-fill CTA — for the single highest-priority action on a page (landing hero). */
 export function MagneticCTA({
   children,
   onClick,
@@ -42,16 +42,9 @@ export function MagneticCTA({
       className={`relative overflow-hidden rounded-md ${className ?? ""}`}
     >
       <span
-        className="relative z-10 flex items-center justify-center gap-2 px-7 py-3.5 font-body text-[14px] font-semibold text-white"
-        style={{ background: "var(--gradient-hero)", boxShadow: "var(--shadow-glow-primary)" }}
+        className="relative z-10 flex items-center justify-center gap-2 bg-primary px-7 py-3.5 font-body text-[14px] font-semibold text-white shadow-card"
       >
-        <motion.span
-          className="pointer-events-none absolute inset-0"
-          style={{ background: "linear-gradient(105deg, transparent 35%, rgba(255,255,255,0.25) 50%, transparent 65%)" }}
-          animate={{ x: ["-100%", "200%"] }}
-          transition={{ duration: 2.6, repeat: Infinity, repeatDelay: 1.4, ease: "easeInOut" }}
-        />
-        <span className="relative z-10">{children}</span>
+        {children}
       </span>
     </motion.button>
   );
