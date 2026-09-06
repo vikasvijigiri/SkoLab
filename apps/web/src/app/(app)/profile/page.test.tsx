@@ -36,11 +36,24 @@ describe("ProfilePage", () => {
     expect(screen.getByText("First programmer.")).toBeInTheDocument();
   });
 
-  it("reveals the edit form when the edit control is clicked", async () => {
+  it("edit form is click-only — chips for focus/status, no text inputs (About is the one textarea)", async () => {
+    const { container } = renderWithProviders(<ProfilePage />);
+    await userEvent.click(screen.getByRole("button", { name: /edit/i }));
+
+    // Name is shown, not an input.
+    expect(container.querySelectorAll("input").length).toBe(0);
+    expect(container.querySelectorAll("textarea").length).toBe(1); // About only
+
+    // Field chips load from the taxonomy handler.
+    expect(await screen.findByRole("button", { name: "Physics and Astronomy" })).toBeInTheDocument();
+    expect(screen.getByText(/Current: Analytical Engines/)).toBeInTheDocument();
+  });
+
+  it("picking a field chip previews the new research focus", async () => {
+    const user = userEvent.setup();
     renderWithProviders(<ProfilePage />);
-    const editBtn = screen.getByRole("button", { name: /edit/i });
-    await userEvent.click(editBtn);
-    expect(screen.getByLabelText("Name")).toHaveValue("Ada Lovelace");
-    expect(screen.getByLabelText("Research focus")).toHaveValue("Analytical Engines");
+    await user.click(screen.getByRole("button", { name: /edit/i }));
+    await user.click(await screen.findByRole("button", { name: "Physics and Astronomy" }));
+    expect(screen.getByText("→ Physics and Astronomy")).toBeInTheDocument();
   });
 });
