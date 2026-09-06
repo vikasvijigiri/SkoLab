@@ -2,10 +2,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { nexusChat } from "@/lib/api/endpoints";
-import { openAlexWorksQuery } from "@/lib/api/queries";
-import { useDebounce } from "@/lib/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import { TRANSITION_FAST } from "@/lib/motion";
 import { NexusCollectionPanel } from "@/components/nexus/NexusCollectionPanel";
@@ -29,18 +27,9 @@ function reconstructAbstract(invertedIndex?: Record<string, number[]>): string {
 export default function NexusPage() {
   const [mobilePane, setMobilePane] = useState<"collection" | "chat">("collection");
   const [activeCollection, setActiveCollection] = useState<NexusCollectionPaper[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const debouncedSearch = useDebounce(searchQuery, 400);
   const [messages, setMessages] = useState<NexusMessage[]>([]);
   const [userMsg, setUserMsg] = useState("");
   const [guardError, setGuardError] = useState<string | null>(null);
-  const [resultsDismissed, setResultsDismissed] = useState(false);
-
-  const search = useQuery({
-    ...openAlexWorksQuery({ q: debouncedSearch }),
-    enabled: debouncedSearch.trim().length >= 3,
-  });
-  const searchResults: OpenAlexWork[] = search.data ?? [];
 
   const chat = useMutation({
     mutationFn: (msgs: NexusMessage[]) =>
@@ -55,25 +44,6 @@ export default function NexusPage() {
     guardError ?? (chat.isError ? "Failed to synthesize response. Check backend connection." : null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const searchContainerRef = useRef<HTMLDivElement>(null);
-
-  // Close the floating search dropdown on an outside click or Escape.
-  useEffect(() => {
-    function handlePointerDown(e: MouseEvent) {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
-        setResultsDismissed(true);
-      }
-    }
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setResultsDismissed(true);
-    }
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, []);
 
   // Auto-scroll the chat to the newest message.
   useEffect(() => {
@@ -95,8 +65,6 @@ export default function NexusPage() {
         doi: paper.doi,
       },
     ]);
-    setSearchQuery("");
-    setResultsDismissed(true);
   }
 
   function handleRemovePaper(id: string) {
@@ -151,18 +119,7 @@ export default function NexusPage() {
 
       <NexusCollectionPanel
         activeCollection={activeCollection}
-        searchQuery={searchQuery}
-        searchResults={searchResults}
-        searching={search.isFetching}
-        searchErrored={search.isError}
-        searchRan={search.isFetched && debouncedSearch.trim().length >= 3}
-        resultsDismissed={resultsDismissed}
-        searchContainerRef={searchContainerRef}
         mobileHidden={mobilePane === "chat"}
-        onSearchChange={(v) => {
-          setSearchQuery(v);
-          setResultsDismissed(false);
-        }}
         onAddPaper={handleAddPaper}
         onRemovePaper={handleRemovePaper}
       />
