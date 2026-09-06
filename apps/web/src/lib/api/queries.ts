@@ -14,6 +14,8 @@ import {
   openAlexWorks,
   openAlexWorkById,
   getLeaderboard,
+  getSimilarPapers,
+  getSimilarResearchers,
 } from "./endpoints";
 
 /**
@@ -164,4 +166,24 @@ export const leaderboardQuery = (field = "all") =>
     queryFn: () => getLeaderboard(field),
     staleTime: 5 * MIN,
     gcTime: 30 * MIN,
+  });
+
+// ── Similarity engine ────────────────────────────────────────────────────
+//   ["similar-papers", workId]
+//   ["similar-researchers", { authorId, userId }]
+
+export const similarPapersQuery = (workId: string) =>
+  queryOptions({
+    queryKey: ["similar-papers", workId] as const,
+    queryFn: () => getSimilarPapers(workId),
+    ...HOURLY,
+    enabled: Boolean(workId),
+  });
+
+export const similarResearchersQuery = (authorId: string, userId?: string) =>
+  queryOptions({
+    queryKey: ["similar-researchers", { authorId, userId: userId ?? null }] as const,
+    queryFn: () => getSimilarResearchers(authorId, { userId }),
+    ...HOURLY,
+    enabled: Boolean(authorId),
   });
