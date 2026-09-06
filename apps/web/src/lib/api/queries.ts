@@ -18,6 +18,9 @@ import {
   getSimilarResearchers,
   openAlexTaxonomy,
   openAlexAuthorsByName,
+  openAlexAuthorsByTaxon,
+  openAlexWorksByTaxon,
+  type TaxonLevel,
 } from "./endpoints";
 
 /**
@@ -225,4 +228,21 @@ export const openAlexAuthorMatchQuery = (name?: string) =>
     staleTime: 10 * MIN,
     gcTime: 30 * MIN,
     enabled: Boolean(name && name.trim().length >= 2),
+  });
+
+// Discovery drilldown — top authors / works for a taxonomy node.
+export const discoveryAuthorsQuery = (level: TaxonLevel, id?: string) =>
+  queryOptions({
+    queryKey: ["discovery-authors", level, id ?? null] as const,
+    queryFn: () => openAlexAuthorsByTaxon(level, id ?? ""),
+    ...HOURLY,
+    enabled: Boolean(id),
+  });
+
+export const discoveryWorksQuery = (level: TaxonLevel, id?: string) =>
+  queryOptions({
+    queryKey: ["discovery-works", level, id ?? null] as const,
+    queryFn: () => openAlexWorksByTaxon(level, id ?? ""),
+    ...HOURLY,
+    enabled: Boolean(id),
   });
