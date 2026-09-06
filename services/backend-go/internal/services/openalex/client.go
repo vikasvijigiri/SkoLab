@@ -102,6 +102,7 @@ type Work struct {
 	Authorships           []Authorship     `json:"authorships"`
 	Concepts              []Concept        `json:"concepts"`
 	Topics                []Topic          `json:"topics"`
+	ReferencedWorks       []string         `json:"referenced_works"`
 	AbstractInvertedIndex map[string][]int `json:"abstract_inverted_index"`
 }
 
@@ -219,6 +220,22 @@ func (c *Client) FetchAuthorByID(ctx context.Context, authorID string) (*Author,
 		return nil, err
 	}
 	return &a, nil
+}
+
+// FetchWorkByID retrieves a single work by its OpenAlex ID (URL or bare ID).
+// Used by the similarity engine to hydrate title/authors/year for kNN hits.
+func (c *Client) FetchWorkByID(ctx context.Context, workID string) (*Work, error) {
+	clean := cleanID(workID)
+	body, err := c.get(ctx, baseURL+"/works/"+clean, url.Values{})
+	if err != nil {
+		slog.Warn("openalex FetchWorkByID failed", "id", clean, "err", err)
+		return nil, err
+	}
+	var w Work
+	if err := json.Unmarshal(body, &w); err != nil {
+		return nil, err
+	}
+	return &w, nil
 }
 
 // FetchAuthorWorks returns recent works for an author, optionally filtered by ORCID.
