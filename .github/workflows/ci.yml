@@ -12,7 +12,11 @@ jobs:
 
     services:
       postgres:
-        image: postgres:15-alpine
+        # pgvector/pgvector image = stock postgres:15 + the `vector` extension
+        # available for `CREATE EXTENSION`. The similarity engine
+        # (work_embeddings / author_embeddings) needs it; plain postgres:15
+        # errors on `CREATE EXTENSION vector`.
+        image: pgvector/pgvector:pg15
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: ResQit2025!

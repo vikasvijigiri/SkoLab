@@ -547,6 +547,37 @@
         "title": "DailyFeedItem",
         "type": "object"
       },
+      "EmbedWorkAck": {
+        "properties": {
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "work_id": {
+            "title": "Work Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "work_id"
+        ],
+        "title": "EmbedWorkAck",
+        "type": "object"
+      },
+      "EmbedWorkRequest": {
+        "properties": {
+          "work_id": {
+            "title": "Work Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "work_id"
+        ],
+        "title": "EmbedWorkRequest",
+        "type": "object"
+      },
       "GrantMatch": {
         "additionalProperties": true,
         "description": "One row of ``GET /match_grants`` (bare JSON array).",
@@ -2282,6 +2313,66 @@
         "summary": "Author Metrics Enrich",
         "tags": [
           "Authors"
+        ]
+      }
+    },
+    "/api/v1/internal/similar/embed_work": {
+      "post": {
+        "description": "Fetch one OpenAlex work, embed title+abstract, upsert into\n``work_embeddings``. The Go gateway's ``/similar_papers`` cold path calls\nthis once for a query work it has never seen, then runs its kNN.\n\nSynchronous (not a background task): the caller waits on the row so its\nimmediately-following kNN sees it. Best-effort \u2014 any failure returns\n``ok: false`` and the caller falls back to OpenAlex ``related_works``.",
+        "operationId": "embed_work_api_v1_internal_similar_embed_work_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-internal-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmbedWorkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbedWorkAck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Embed Work",
+        "tags": [
+          "Internal"
         ]
       }
     },

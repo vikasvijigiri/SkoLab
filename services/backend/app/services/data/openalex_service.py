@@ -236,6 +236,27 @@ class OpenAlexService:
             )
         return None
 
+    async def fetch_work_by_id(self, work_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieve a single OpenAlex work by ID. Used by the similarity
+        engine's cold path (POST /internal/similar/embed_work)."""
+        clean_id = work_id.split("/")[-1]
+        url = f"{self.base_url}/works/{clean_id}"
+        params = {"mailto": self.email}
+        try:
+            await openalex_breaker._check_state()
+            async with _client() as client:
+                res = await client.get(url, params=params, headers=self.headers)
+                if res.status_code == 200:
+                    await openalex_breaker._on_success()
+                    return res.json()
+                await openalex_breaker._on_failure(Exception(f"HTTP {res.status_code}"))
+        except CircuitBreakerOpenError:
+            raise
+        except Exception as e:
+            await openalex_breaker._on_failure(e)
+            print(f"[OpenAlexService] Error fetching work {clean_id}: {e}", flush=True)
+        return None
+
     async def search_authors(
         self, query: str, per_page: int = 10
     ) -> List[Dict[str, Any]]:
