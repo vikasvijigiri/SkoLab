@@ -223,6 +223,51 @@ async def init_db() -> None:
                     flush=True,
                 )
 
+        # ── pgvector similarity tables (Postgres only) ───────────────────────
+        # SQLite (the offline-dev / fast-tier fallback) has no `vector` type,
+        # so this whole block is skipped there and the similarity engine
+        # simply has no store to read — its endpoints degrade to the OpenAlex
+        # fallback path. Mirrors alembic revision b2c3d4e5f6a7 for the
+        # Postgres deployments where `run_schema_create_all` is False.
+        if conn.dialect.name == "postgresql":
+            for ddl in (
+                "CREATE EXTENSION IF NOT EXISTS vector",
+                """
+                CREATE TABLE IF NOT EXISTS work_embeddings (
+                    work_id           text PRIMARY KEY,
+                    embedding         vector(384) NOT NULL,
+                    title             text,
+                    concepts          text[],
+                    referenced_works  text[],
+                    publication_year  integer,
+                    updated_at        timestamptz NOT NULL DEFAULT now()
+                )
+                """,
+                """
+                CREATE TABLE IF NOT EXISTS author_embeddings (
+                    author_id     text PRIMARY KEY,
+                    embedding     vector(384) NOT NULL,
+                    concepts      text[],
+                    coauthor_ids  text[],
+                    institution   text,
+                    works_count   integer,
+                    h_index       integer,
+                    updated_at    timestamptz NOT NULL DEFAULT now()
+                )
+                """,
+                "CREATE INDEX IF NOT EXISTS ix_work_embeddings_updated_at "
+                "ON work_embeddings (updated_at)",
+                "CREATE INDEX IF NOT EXISTS ix_author_embeddings_updated_at "
+                "ON author_embeddings (updated_at)",
+            ):
+                try:
+                    await conn.execute(text(ddl))
+                except Exception as e:
+                    print(
+                        f"[init_db] Note: pgvector similarity DDL skipped: {e}",
+                        flush=True,
+                    )
+
 
 import hmac
 import hashlib
