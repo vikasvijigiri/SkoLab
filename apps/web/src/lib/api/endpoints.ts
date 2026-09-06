@@ -18,6 +18,8 @@ import type {
   SimilarPaper,
   SimilarResearcher,
   SimilarResult,
+  OpenAlexTaxon,
+  OpenAlexAuthorHit,
 } from "@/lib/types";
 
 // ---- Authors / Search / Discovery -----------------------------------------
@@ -165,4 +167,26 @@ export const openAlexWorkById = async (id: string): Promise<OpenAlexWork> => {
   const res = await fetch(`/api/openalex/works/${encodeURIComponent(id)}`);
   if (!res.ok) throw new ApiError(res.status, `Couldn't load this paper (HTTP ${res.status}).`);
   return (await res.json()) as OpenAlexWork;
+};
+
+// ---- OpenAlex taxonomy + author match (click-only pickers) ------------------
+
+export const openAlexTaxonomy = async (
+  kind: "fields" | "subfields" | "topics",
+  parent?: string,
+): Promise<OpenAlexTaxon[]> => {
+  const params = new URLSearchParams({ kind });
+  if (parent) params.set("parent", parent);
+  const res = await fetch(`/api/openalex/taxonomy?${params.toString()}`);
+  if (!res.ok) throw new ApiError(res.status, `Taxonomy request failed (HTTP ${res.status}).`);
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+};
+
+export const openAlexAuthorsByName = async (q: string): Promise<OpenAlexAuthorHit[]> => {
+  if (!q.trim()) return [];
+  const res = await fetch(`/api/openalex/authors?q=${encodeURIComponent(q.trim())}`);
+  if (!res.ok) throw new ApiError(res.status, `Author search failed (HTTP ${res.status}).`);
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
 };

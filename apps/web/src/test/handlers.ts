@@ -55,8 +55,36 @@ export const handlers = [
   http.post(`${API}/api/v1/discovery/nexus-chat`, () =>
     HttpResponse.json({ content: "Synthesized answer." }),
   ),
-  // Same-origin Next route handler (not the gateway) — match any host.
+  // Same-origin Next route handlers (not the gateway) — match any host.
   http.get("*/api/openalex/works", () => HttpResponse.json(mockOpenAlexWorks)),
+  http.get("*/api/openalex/taxonomy", ({ request }) => {
+    const kind = new URL(request.url).searchParams.get("kind");
+    const by: Record<string, { id: string; display_name: string }[]> = {
+      fields: [
+        { id: "11", display_name: "Engineering" },
+        { id: "31", display_name: "Physics and Astronomy" },
+      ],
+      subfields: [{ id: "3104", display_name: "Condensed Matter Physics" }],
+      topics: [
+        { id: "T10001", display_name: "Superconductivity" },
+        { id: "T10002", display_name: "Topological materials" },
+      ],
+    };
+    return HttpResponse.json(by[kind ?? "fields"] ?? []);
+  }),
+  http.get("*/api/openalex/authors", () =>
+    HttpResponse.json([
+      {
+        id: "A5000000001",
+        display_name: "Ada Lovelace",
+        orcid: "0000-0002-1825-0097",
+        works_count: 120,
+        cited_by_count: 9001,
+        h_index: 42,
+        institution: "Analytical Engine Institute",
+      },
+    ]),
+  ),
 ];
 
 export const server = setupServer(...handlers);

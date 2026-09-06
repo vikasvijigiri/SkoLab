@@ -16,6 +16,8 @@ import {
   getLeaderboard,
   getSimilarPapers,
   getSimilarResearchers,
+  openAlexTaxonomy,
+  openAlexAuthorsByName,
 } from "./endpoints";
 
 /**
@@ -186,4 +188,41 @@ export const similarResearchersQuery = (authorId: string, userId?: string) =>
     queryFn: () => getSimilarResearchers(authorId, { userId }),
     ...HOURLY,
     enabled: Boolean(authorId),
+  });
+
+// ── OpenAlex taxonomy + author match (click-only onboarding/discovery) ────
+//   ["oa-taxonomy", kind, parent]   fields / subfields / topics
+//   ["oa-author-match", name]       "is this you?" onboarding picker
+const STATIC = { staleTime: 24 * HR, gcTime: 7 * 24 * HR } as const;
+
+export const openAlexFieldsQuery = () =>
+  queryOptions({
+    queryKey: ["oa-taxonomy", "fields", null] as const,
+    queryFn: () => openAlexTaxonomy("fields"),
+    ...STATIC,
+  });
+
+export const openAlexSubfieldsQuery = (fieldId?: string) =>
+  queryOptions({
+    queryKey: ["oa-taxonomy", "subfields", fieldId ?? null] as const,
+    queryFn: () => openAlexTaxonomy("subfields", fieldId),
+    ...STATIC,
+    enabled: Boolean(fieldId),
+  });
+
+export const openAlexTopicsQuery = (subfieldId?: string) =>
+  queryOptions({
+    queryKey: ["oa-taxonomy", "topics", subfieldId ?? null] as const,
+    queryFn: () => openAlexTaxonomy("topics", subfieldId),
+    ...STATIC,
+    enabled: Boolean(subfieldId),
+  });
+
+export const openAlexAuthorMatchQuery = (name?: string) =>
+  queryOptions({
+    queryKey: ["oa-author-match", name ?? null] as const,
+    queryFn: () => openAlexAuthorsByName(name ?? ""),
+    staleTime: 10 * MIN,
+    gcTime: 30 * MIN,
+    enabled: Boolean(name && name.trim().length >= 2),
   });
