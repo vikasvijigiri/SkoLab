@@ -125,7 +125,7 @@ async def test_pg_upsert_embeddings_writes_work_and_author_rows(monkeypatch):
         assert arow is not None
         assert "A_sim_co1" in (arow[0] or [])
         assert arow[1] == "MIT"
-        assert arow[2] == 40
+        assert arow[2] == 12  # h_index arg (works_count=40 is a different column)
         assert "Condensed Matter Physics" in (arow[3] or [])
     finally:
         await _cleanup(["W_sim_1", "W_sim_2"], ["A_sim_self"])
