@@ -24,6 +24,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<"email" | "google" | "guest" | null>(null);
+  // Click-only by default: providers first, the typed email form is opt-in.
+  const [showEmail, setShowEmail] = useState(false);
 
   // Picks up the result of signInWithGoogle's redirect round trip -- Firebase
   // sends the browser back to this exact page. Runs once; the ref guards
@@ -96,41 +98,53 @@ export default function LoginPage() {
 
       {!configured && <div className="mt-5"><FirebaseConfigBanner /></div>}
 
-      <form onSubmit={handleEmailLogin} className="mt-6 flex flex-col gap-3">
-        <Input
-          label="Email"
-          type="email"
-          placeholder="Email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <Input
-          label="Password"
-          type="password"
-          placeholder="Password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        {error && <p className="font-body text-[13px] text-notification">{error}</p>}
-        <Button type="submit" loading={loading === "email"}>
-          Sign in
-        </Button>
-      </form>
-
-      <div className="my-5 flex items-center gap-3">
-        <div className="h-px flex-1 bg-border" />
-        <span className="font-body text-[12px] text-text-muted">or</span>
-        <div className="h-px flex-1 bg-border" />
-      </div>
-
-      <div className="flex flex-col gap-3">
+      <div className="mt-6 flex flex-col gap-3">
         <GoogleSignInButton onClick={handleGoogle} loading={loading === "google"} />
         <Button variant="text" onClick={handleGuest} disabled={loading === "guest"}>
           Continue as guest
         </Button>
       </div>
+
+      {error && <p className="mt-3 font-body text-[13px] text-notification">{error}</p>}
+
+      {showEmail ? (
+        <>
+          <div className="my-5 flex items-center gap-3">
+            <div className="h-px flex-1 bg-border" />
+            <span className="font-body text-[12px] text-text-muted">or with email</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+          <form onSubmit={handleEmailLogin} className="flex flex-col gap-3">
+            <Input
+              label="Email"
+              type="email"
+              placeholder="Email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <Input
+              label="Password"
+              type="password"
+              placeholder="Password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <Button type="submit" loading={loading === "email"}>
+              Sign in
+            </Button>
+          </form>
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowEmail(true)}
+          className="mt-4 block w-full cursor-pointer text-center font-body text-[12.5px] text-text-muted underline-offset-2 transition-colors hover:text-text-secondary hover:underline"
+        >
+          Use email and password instead
+        </button>
+      )}
 
       <p className="mt-6 text-center font-body text-[13px] text-text-secondary">
         Don&apos;t have an account?{" "}
