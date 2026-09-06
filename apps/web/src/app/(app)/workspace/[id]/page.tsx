@@ -3,29 +3,38 @@
 import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trash2, MessageSquare, Sigma, FileText, ListChecks, Users2 } from "lucide-react";
+import { Trash2, MessageSquare, Sigma, FileText, ListChecks, Users2, Share2 } from "lucide-react";
 import { useFirestoreDoc } from "@/lib/hooks/useFirestoreDoc";
-import { deleteProject } from "@/lib/firebase/workspace";
+import { deleteProject, roleFor, canEdit as roleCanEdit } from "@/lib/firebase/workspace";
 import { cn } from "@/lib/utils";
 import { ErrorBanner, friendlyFirestoreError } from "@/components/ui/ErrorBanner";
 import { RailShell } from "@/components/layout/RailShell";
 import { ChatTab } from "@/components/workspace/ChatTab";
 import { EquationsTab } from "@/components/workspace/EquationsTab";
-import { ManuscriptTab } from "@/components/workspace/ManuscriptTab";
+import { DocumentsTab } from "@/components/workspace/DocumentsTab";
 import { TasksMeetingsTab } from "@/components/workspace/TasksMeetingsTab";
 import { MembersTab } from "@/components/workspace/MembersTab";
+import { ShareModal } from "@/components/workspace/ShareModal";
+import { PresenceStack } from "@/components/workspace/PresenceStack";
 import { useAuth } from "@/lib/hooks/AuthProvider";
-import type { CollabProject } from "@/lib/types";
+import type { CollabProject, CollabRole } from "@/lib/types";
 import { TRANSITION_FAST } from "@/lib/motion";
 
 const TABS = [
+  { name: "Documents", Icon: FileText },
   { name: "Chat", Icon: MessageSquare },
   { name: "Equations", Icon: Sigma },
-  { name: "Manuscript", Icon: FileText },
   { name: "Tasks & Meetings", Icon: ListChecks },
   { name: "Members", Icon: Users2 },
 ] as const;
 type Tab = (typeof TABS)[number]["name"];
+
+const ROLE_LABEL: Record<CollabRole, string> = {
+  owner: "Owner",
+  editor: "Editor",
+  reviewer: "Reviewer",
+  viewer: "Viewer",
+};
 
 export default function WorkspaceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -42,9 +51,11 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
   );
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const error = deleteError ?? subError;
-  const [tab, setTab] = useState<Tab>("Chat");
+  const [tab, setTab] = useState<Tab>("Documents");
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [activeDocId, setActiveDocId] = useState<string | null>(null);
 
   async function handleDelete() {
     setDeleting(true);
@@ -76,10 +87,13 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
     );
   }
 
-  const isOwner = project.ownerUid === user?.uid;
+  const myRole = roleFor(project, user?.uid);
+  const isOwner = myRole === "owner";
+  const canEdit = roleCanEdit(myRole);
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6 md:px-8 lg:max-w-5xl">
+      <ShareModal project={project} open={shareOpen} onClose={() => setShareOpen(false)} />
       <AnimatePresence>
         {error && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -94,12 +108,29 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
         transition={{ duration: 0.4 }}
         className="flex items-start justify-between gap-3"
       >
-        <div>
-          <h1 className="font-display text-[20px] font-bold text-text-primary">{project.name}</h1>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h1 className="truncate font-display text-[20px] font-bold text-text-primary">{project.name}</h1>
+            {myRole && (
+              <span className="shrink-0 rounded-full bg-surface-subtle px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-text-muted">
+                {ROLE_LABEL[myRole]}
+              </span>
+            )}
+          </div>
           {project.description && (
             <p className="mt-0.5 font-body text-[13.5px] text-text-secondary">{project.description}</p>
           )}
         </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <PresenceStack projectId={project.id} activeDocId={activeDocId} />
+          <button
+            type="button"
+            onClick={() => setShareOpen(true)}
+            className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 font-body text-[12.5px] font-medium text-text-secondary transition-colors hover:border-primary/40 hover:text-text-primary"
+          >
+            <Share2 size={14} />
+            Share
+          </button>
         {isOwner && (confirmDelete ? (
           <div className="flex shrink-0 items-center gap-2">
             <span className="font-body text-[12.5px] text-text-secondary">Delete for everyone?</span>
@@ -133,6 +164,7 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
             Delete
           </motion.button>
         ))}
+        </div>
       </motion.div>
 
       <div className="flex gap-1 overflow-x-auto rounded-full bg-surface-subtle p-1 lg:hidden">
@@ -205,17 +237,13 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
+            {tab === "Documents" && (
+              <DocumentsTab project={project} canEdit={canEdit} onActiveDocChange={setActiveDocId} />
+            )}
             {tab === "Chat" && <ChatTab projectId={project.id} />}
             {tab === "Equations" && <EquationsTab projectId={project.id} initialLatex={project.recentEquations} />}
-            {tab === "Manuscript" && (
-              <ManuscriptTab
-                projectId={project.id}
-                initialDraft={project.manuscriptDraft}
-                initialProgress={project.manuscriptProgress}
-              />
-            )}
             {tab === "Tasks & Meetings" && <TasksMeetingsTab projectId={project.id} />}
-            {tab === "Members" && <MembersTab project={project} />}
+            {tab === "Members" && <MembersTab project={project} onManageSharing={() => setShareOpen(true)} />}
           </motion.div>
         </AnimatePresence>
       </RailShell>
