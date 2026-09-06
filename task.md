@@ -304,3 +304,44 @@ first — and I'll scope it" / "okay go ahead with it"
 **Verified:** Python `pytest -q` baseline `180 passed`; after changes see PR. `ruff check app` clean. **Go is UNVERIFIED — no Go toolchain on this box, GitHub Actions out of minutes. Review by hand.**
 
 **Status:** Done (Python verified; Go UNVERIFIED). Draft PR opened against `main` from `feat/phase2-feed-to-go`.
+
+---
+
+## 2026-09-06 — World-class similarity engine (similar researchers + similar papers)
+
+**Asked:** Make the recommendation engine world-class; one engine powering
+connection suggestions (similar profiles) and similar papers. Non-LLM. Adopt
+a repo if one fits, else build it right. Engine first, then infra cleanup.
+
+Delivered as four stacked PRs (`docs/plans/2026-09-06-similarity-engine.md`,
+`decisions/0011-similarity-engine.md`):
+
+1. **Phase A (backend)** — `pgvector` store: migration `b2c3d4e5f6a7`
+   (`work_embeddings` / `author_embeddings`, 384-d, no ANN index yet),
+   mirrored in `init_db()` for Postgres deploys, skipped on SQLite. Teleport
+   worker `_pg_upsert_embeddings` embeds ≤25 recent works + stores the mean as
+   the author vector. `POST /internal/similar/embed_work` cold path +
+   `OpenAlexService.fetch_work_by_id`. `scripts/backfill_embeddings.py`. CI
+   Postgres image → `pgvector/pgvector:pg15`.
+2. **Phase B (gateway)** — `internal/similarity`: `vectors.go` (pgx kNN,
+   `$1::vector` binding, `excludedPeers`), `mmr.go` (λ=0.6, ported from
+   `engine.py`), `blend.go` (0.50 cosine / 0.25 co-author Jaccard / 0.15
+   concept / 0.10 institution, `SIM_W_*` env-tunable), `similar.go`
+   (`GET /api/v1/similar_papers`, `GET /api/v1/similar_researchers` with the
+   OpenAlex degraded fallback). 15 unit tests.
+3. **Phase C (web)** — `SimilarPaper` / `SimilarResearcher` types +
+   `getSimilarPapers` / `getSimilarResearchers` + queries. `RelatedPapersCard`
+   on the paper page. `PeerSuggestionsCard` upgraded to the live engine with a
+   "why" line; Home + author page rewired. msw fixtures + handlers, 6 tests.
+4. **Phase D (record)** — `decisions/0011`, 90-day `updated_at` sweep for the
+   embedding tables in `scripts/database/db-cleanup-retention.py`, this entry.
+
+**Boundary:** Go owns every kNN / blend / MMR / endpoint; Python only runs
+`bge-small` inference. No LLM on any similarity path.
+
+**Verified:** Phase A `pytest` green on the CI pgvector Postgres (185 passed
+after the fixture fix); Phase C `tsc` / `eslint` / `vitest` (56) / `next build`
+all pass locally. Phase B Go is CI-verified only (no local Go toolchain).
+
+**Status:** In progress — PRs #83 (A) + phase B/C/D branches; merging as CI
+goes green.
