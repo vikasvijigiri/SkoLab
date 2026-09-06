@@ -33,6 +33,7 @@ import {
   collaboratorsQuery,
   heatmapQuery,
   journalAdvisorQuery,
+  similarResearchersQuery,
 } from "@/lib/api/queries";
 import type { AuthorResponse } from "@/lib/types";
 
@@ -69,6 +70,22 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
   );
   const { data: heatmap } = useQuery(heatmapQuery(authorPk));
   const { data: journals = [] } = useQuery(journalAdvisorQuery(authorPk));
+  const { data: similar } = useQuery(similarResearchersQuery(authorPk));
+  // Prefer the live similarity engine; fall back to whatever search_author
+  // embedded (older payloads) so the section never regresses to empty.
+  const similarResearchers =
+    similar?.results && similar.results.length > 0
+      ? similar.results
+      : (author?.similar_researchers ?? []).map((s) => ({
+          author_id: s.id,
+          display_name: s.display_name,
+          institution: s.institution,
+          field_of_study: s.field_of_study ?? "",
+          h_index: s.h_index ?? 0,
+          score: 0,
+          why: "",
+          shared_collaborators: 0,
+        }));
 
   const refresh = useMutation({
     mutationFn: () => refreshAuthor(name, authorId),
@@ -354,22 +371,27 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
       )}
 
       {/* Similar researchers */}
-      {author.similar_researchers.length > 0 && (
+      {similarResearchers.length > 0 && (
         <Reveal>
           <Card>
             <SectionHeading icon={UserSearch} color="var(--accent-rose)">
               Similar Researchers
             </SectionHeading>
             <div className="mt-2.5 flex flex-col gap-2">
-              {author.similar_researchers.slice(0, 5).map((s) => (
+              {similarResearchers.slice(0, 5).map((s) => (
                 <Link
-                  key={s.id}
-                  href={`/author/${encodeURIComponent(s.id)}?name=${encodeURIComponent(s.display_name || "")}`}
+                  key={s.author_id}
+                  href={`/author/${encodeURIComponent(s.author_id)}?name=${encodeURIComponent(s.display_name || "")}`}
                   className="flex items-center justify-between gap-3 rounded-[8px] bg-surface-subtle p-2.5"
                 >
                   <div className="min-w-0">
                     <p className="truncate font-body text-[13px] font-medium text-text-primary">{s.display_name || "Unknown Researcher"}</p>
-                    <p className="truncate font-body text-[12px] text-text-secondary">{s.institution}</p>
+                    <p className="truncate font-body text-[12px] text-text-secondary">
+                      {s.field_of_study ? `${s.field_of_study} · ` : ""}{s.institution}
+                    </p>
+                    {s.why && (
+                      <p className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-wide text-text-muted">{s.why}</p>
+                    )}
                   </div>
                 </Link>
               ))}
