@@ -246,6 +246,24 @@ export interface OpenAlexWork {
   abstract_inverted_index?: Record<string, number[]>;
 }
 
+// OpenAlex topic taxonomy node (field / subfield / topic) — drives the
+// click-only pickers so no option list is hard-coded.
+export interface OpenAlexTaxon {
+  id: string;
+  display_name: string;
+}
+
+// OpenAlex author search hit — the "is this you?" onboarding picker.
+export interface OpenAlexAuthorHit {
+  id: string;
+  display_name: string;
+  orcid: string | null;
+  works_count: number;
+  cited_by_count: number;
+  h_index: number;
+  institution: string;
+}
+
 // POST /api/v1/discovery/predict  (Horizon foresight engine)
 export interface PaperSource {
   id: string;
