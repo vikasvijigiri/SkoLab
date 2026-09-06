@@ -300,6 +300,181 @@ async def _pg_upsert_researcher_works(
             await session.rollback()
 
 
+# ── pgvector persistence — similarity engine store ──────────────────────────
+# work_embeddings / author_embeddings (see alembic b2c3d4e5f6a7). bge-small
+# 384-d vectors, read by the Go gateway's /similar_papers and
+# /similar_researchers. Postgres-only: on the SQLite dev/CI fallback the tables
+# do not exist and every statement here is swallowed by the try/except, which
+# is the intended degradation (the engine falls back to OpenAlex).
+
+
+def _clean_oa_id(raw: str) -> str:
+    """`https://openalex.org/W123` / `W123` → `W123`."""
+    if not raw:
+        return ""
+    return raw.rstrip("/").split("/")[-1]
+
+
+def _vec_literal(vec) -> str:
+    """numpy row / list[float] → pgvector text literal `[0.1,0.2,...]`."""
+    return "[" + ",".join(f"{float(x):.7f}" for x in vec) + "]"
+
+
+async def _pg_upsert_embeddings(
+    clean_id: str,
+    works: List[Dict[str, Any]],
+    raw_works: List[Dict[str, Any]],
+    author_data: Dict[str, Any],
+    field: str,
+    expertise: List[str],
+    institution: str,
+    h_index: int,
+    works_count: int,
+) -> None:
+    """Embed up to 25 recent works (title + abstract) and upsert
+    `work_embeddings`; store the L2-normalised mean as the author vector in
+    `author_embeddings`. Never raises."""
+    import numpy as np
+    from sqlalchemy import text as _sql
+
+    from app.db.database import AsyncSessionLocal
+    from app.services.ai.embedding_service import embed_texts
+
+    # Pair each built work-dict with its raw OpenAlex record (for
+    # referenced_works + authorships, which _build_work_dict drops).
+    raw_by_id = {_clean_oa_id(r.get("id", "")): r for r in raw_works}
+    picked: List[Dict[str, Any]] = []
+    for w in works:
+        wid = _clean_oa_id(w.get("id", ""))
+        if not wid:
+            continue
+        text_blob = f"{w.get('title', '')} {w.get('abstract', '') or ''}".strip()
+        if not text_blob:
+            continue
+        picked.append(
+            {"wid": wid, "text": text_blob, "w": w, "raw": raw_by_id.get(wid, {})}
+        )
+        if len(picked) >= 25:
+            break
+
+    if not picked:
+        logger.info(
+            "[teleport] no embeddable works for %s — skipping vectors", clean_id
+        )
+        return
+
+    try:
+        vectors = await embed_texts([p["text"] for p in picked])
+    except Exception as exc:
+        logger.warning("[teleport] embed_texts failed for %s: %s", clean_id, exc)
+        return
+
+    vectors = np.asarray(vectors, dtype=np.float32)
+    if vectors.ndim != 2 or vectors.shape[0] != len(picked):
+        logger.warning(
+            "[teleport] unexpected embedding shape for %s: %s", clean_id, vectors.shape
+        )
+        return
+
+    # Author vector = L2-normalised mean of its work vectors. A zero mean
+    # (all-miss embeddings) is left as-is; the reader treats it as no signal.
+    mean_vec = vectors.mean(axis=0)
+    norm = float(np.linalg.norm(mean_vec))
+    if norm > 1e-9:
+        mean_vec = mean_vec / norm
+
+    coauthors: set[str] = set()
+    for p in picked:
+        for a in p["raw"].get("authorships") or []:
+            aid = _clean_oa_id((a.get("author") or {}).get("id", ""))
+            if aid and aid != clean_id:
+                coauthors.add(aid)
+
+    # Every param is explicitly CAST: asyncpg cannot infer the type of a bound
+    # NULL or an empty list, and errors with "could not determine data type of
+    # parameter" otherwise.
+    work_sql = _sql(
+        """
+        INSERT INTO work_embeddings
+            (work_id, embedding, title, concepts, referenced_works, publication_year, updated_at)
+        VALUES
+            (:work_id, CAST(:embedding AS vector), CAST(:title AS text),
+             CAST(:concepts AS text[]), CAST(:referenced_works AS text[]),
+             CAST(:year AS integer), now())
+        ON CONFLICT (work_id) DO UPDATE SET
+            embedding = EXCLUDED.embedding,
+            title = EXCLUDED.title,
+            concepts = EXCLUDED.concepts,
+            referenced_works = EXCLUDED.referenced_works,
+            publication_year = EXCLUDED.publication_year,
+            updated_at = now()
+        """
+    )
+    author_sql = _sql(
+        """
+        INSERT INTO author_embeddings
+            (author_id, embedding, concepts, coauthor_ids, institution, works_count, h_index, updated_at)
+        VALUES
+            (:author_id, CAST(:embedding AS vector), CAST(:concepts AS text[]),
+             CAST(:coauthor_ids AS text[]), CAST(:institution AS text),
+             CAST(:works_count AS integer), CAST(:h_index AS integer), now())
+        ON CONFLICT (author_id) DO UPDATE SET
+            embedding = EXCLUDED.embedding,
+            concepts = EXCLUDED.concepts,
+            coauthor_ids = EXCLUDED.coauthor_ids,
+            institution = EXCLUDED.institution,
+            works_count = EXCLUDED.works_count,
+            h_index = EXCLUDED.h_index,
+            updated_at = now()
+        """
+    )
+
+    async with AsyncSessionLocal() as session:
+        try:
+            for p, vec in zip(picked, vectors):
+                w = p["w"]
+                refs = [
+                    _clean_oa_id(r)
+                    for r in (p["raw"].get("referenced_works") or [])
+                    if r
+                ]
+                await session.execute(
+                    work_sql,
+                    {
+                        "work_id": p["wid"],
+                        "embedding": _vec_literal(vec),
+                        "title": (w.get("title") or "")[:2000],
+                        "concepts": [c for c in (w.get("concepts") or []) if c][:25],
+                        "referenced_works": refs[:200],
+                        "year": w.get("year"),
+                    },
+                )
+            await session.execute(
+                author_sql,
+                {
+                    "author_id": clean_id,
+                    "embedding": _vec_literal(mean_vec),
+                    "concepts": ([field] if field else [])
+                    + [e for e in (expertise or []) if e][:24],
+                    "coauthor_ids": sorted(coauthors)[:200],
+                    "institution": institution or None,
+                    "works_count": int(works_count or 0),
+                    "h_index": int(h_index or 0),
+                },
+            )
+            await session.commit()
+            logger.info(
+                "[teleport] PG embeddings saved for %s (%d works)",
+                clean_id,
+                len(picked),
+            )
+        except Exception as exc:
+            logger.warning(
+                "[teleport] PG embeddings write failed for %s: %s", clean_id, exc
+            )
+            await session.rollback()
+
+
 # ── Firestore persistence — full enriched document (large, cloud, unlimited) ──
 
 
@@ -589,6 +764,19 @@ async def teleport_researcher(author_id: str) -> None:
 
         # ── 5c. PostgreSQL — fast local researcher works caching ──────────────
         await _pg_upsert_researcher_works(clean_id, works)
+
+        # ── 5d. pgvector — similarity engine store (best-effort) ──────────────
+        await _pg_upsert_embeddings(
+            clean_id,
+            works,
+            raw_works,
+            author_data,
+            field,
+            expertise or [],
+            institution,
+            h_index,
+            works_count,
+        )
 
         # ── 5b. Firestore — full enriched document with works array ───────────
         # Stored here because the works array can be very large (50 items × fields).
