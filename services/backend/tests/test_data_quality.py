@@ -24,7 +24,6 @@ from app.models.researcher_models import ResearcherWork, ResearcherMetrics
 from app.models.content_models import DailyFeedItem, ScrapedOpportunity
 from app.models.analytics_models import UserSettings
 from app.services.data.researcher_worker import teleport_researcher
-from app.services.data.researcher_fetcher import PhysicsResearcherFetcher
 
 # Dynamically import hyphenated scripts
 import importlib.util
@@ -220,42 +219,6 @@ async def test_data_ingest_filters_researcher_worker(monkeypatch):
     dropped_logs.clear()
     await teleport_researcher("https://api.openalex.org/authors/bad_inst")
     assert any("institution" in log for log in dropped_logs)
-
-
-@pytest.mark.anyio
-async def test_data_ingest_filters_researcher_fetcher(monkeypatch):
-    """Verify that PhysicsResearcherFetcher drops Semantic Scholar profiles lacking name/institution."""
-    fetcher = PhysicsResearcherFetcher()
-
-    # Mock SS query response
-    class MockResponse:
-        status_code = 200
-
-        def json(self):
-            return {
-                "data": [
-                    {"authorId": "123", "name": "Unknown", "affiliations": ["MIT"]}
-                ]
-            }
-
-    monkeypatch.setattr(fetcher.client, "get", lambda *args, **kwargs: MockResponse())
-    res1 = await fetcher.get_researcher_details("Some Name")
-    assert res1 is None
-
-    # Mock missing affiliations
-    class MockResponseNoAff:
-        status_code = 200
-
-        def json(self):
-            return {
-                "data": [{"authorId": "123", "name": "Jane Doe", "affiliations": []}]
-            }
-
-    monkeypatch.setattr(
-        fetcher.client, "get", lambda *args, **kwargs: MockResponseNoAff()
-    )
-    res2 = await fetcher.get_researcher_details("Some Name")
-    assert res2 is None
 
 
 @pytest.mark.anyio
