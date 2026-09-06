@@ -3,12 +3,20 @@
 import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trash2, MessageSquare, Sigma, FileText, ListChecks, Users2, Share2 } from "lucide-react";
+import {
+  Trash2,
+  MessageSquare,
+  Sigma,
+  FileText,
+  ListChecks,
+  Users2,
+  Share2,
+  ArrowLeft,
+} from "lucide-react";
 import { useFirestoreDoc } from "@/lib/hooks/useFirestoreDoc";
 import { deleteProject, roleFor, canEdit as roleCanEdit } from "@/lib/firebase/workspace";
 import { cn } from "@/lib/utils";
 import { ErrorBanner, friendlyFirestoreError } from "@/components/ui/ErrorBanner";
-import { RailShell } from "@/components/layout/RailShell";
 import { ChatTab } from "@/components/workspace/ChatTab";
 import { EquationsTab } from "@/components/workspace/EquationsTab";
 import { DocumentsTab } from "@/components/workspace/DocumentsTab";
@@ -18,7 +26,6 @@ import { ShareModal } from "@/components/workspace/ShareModal";
 import { PresenceStack } from "@/components/workspace/PresenceStack";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import type { CollabProject, CollabRole } from "@/lib/types";
-import { TRANSITION_FAST } from "@/lib/motion";
 
 const TABS = [
   { name: "Documents", Icon: FileText },
@@ -34,6 +41,14 @@ const ROLE_LABEL: Record<CollabRole, string> = {
   editor: "Editor",
   reviewer: "Reviewer",
   viewer: "Viewer",
+};
+
+/** Auxiliary tabs get a centred, scrollable column so their content is
+ *  readable rather than stretched across a wide editor viewport. */
+const CENTERED: Partial<Record<Tab, string>> = {
+  Equations: "max-w-3xl",
+  "Tasks & Meetings": "max-w-3xl",
+  Members: "max-w-2xl",
 };
 
 export default function WorkspaceDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -63,9 +78,7 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
       await deleteProject(id);
       router.push("/workspace");
     } catch (err) {
-      setDeleteError(
-        friendlyFirestoreError(err as { code?: string; message?: string }),
-      );
+      setDeleteError(friendlyFirestoreError(err as { code?: string; message?: string }));
     } finally {
       setDeleting(false);
     }
@@ -81,8 +94,9 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
 
   if (!project) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-6 md:px-8">
-        <div className="h-64 animate-pulse rounded-[8px] bg-surface-subtle" />
+      <div className="flex h-full flex-col gap-3 p-4 md:p-6">
+        <div className="h-12 animate-pulse rounded-md bg-surface-subtle" />
+        <div className="flex-1 animate-pulse rounded-md bg-surface-subtle" />
       </div>
     );
   }
@@ -90,38 +104,32 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
   const myRole = roleFor(project, user?.uid);
   const isOwner = myRole === "owner";
   const canEdit = roleCanEdit(myRole);
+  const centeredClass = CENTERED[tab];
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6 md:px-8 lg:max-w-5xl">
+    <div className="flex h-full flex-col overflow-hidden bg-page-bg">
       <ShareModal project={project} open={shareOpen} onClose={() => setShareOpen(false)} />
-      <AnimatePresence>
-        {error && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <ErrorBanner message={error} />
-          </motion.div>
-        )}
-      </AnimatePresence>
 
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="flex items-start justify-between gap-3"
-      >
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h1 className="truncate font-display text-[20px] font-bold text-text-primary">{project.name}</h1>
-            {myRole && (
-              <span className="shrink-0 rounded-full bg-surface-subtle px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-text-muted">
-                {ROLE_LABEL[myRole]}
-              </span>
-            )}
-          </div>
-          {project.description && (
-            <p className="mt-0.5 font-body text-[13.5px] text-text-secondary">{project.description}</p>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
+      {/* ── Toolbar ─────────────────────────────────────────────────────── */}
+      <header className="flex h-12 shrink-0 items-center gap-2.5 border-b border-border bg-surface px-3 md:px-4">
+        <button
+          type="button"
+          onClick={() => router.push("/workspace")}
+          aria-label="Back to workspaces"
+          className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-subtle hover:text-text-primary"
+        >
+          <ArrowLeft size={16} />
+        </button>
+        <h1 className="truncate font-display text-[15px] font-semibold text-text-primary">
+          {project.name}
+        </h1>
+        {myRole && (
+          <span className="hidden shrink-0 rounded-full bg-surface-subtle px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-text-muted sm:inline">
+            {ROLE_LABEL[myRole]}
+          </span>
+        )}
+
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <PresenceStack projectId={project.id} activeDocId={activeDocId} />
           <button
             type="button"
@@ -129,124 +137,141 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
             className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 font-body text-[12.5px] font-medium text-text-secondary transition-colors hover:border-primary/40 hover:text-text-primary"
           >
             <Share2 size={14} />
-            Share
+            <span className="hidden sm:inline">Share</span>
           </button>
-        {isOwner && (confirmDelete ? (
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="font-body text-[12.5px] text-text-secondary">Delete for everyone?</span>
-            <motion.button
-              onClick={handleDelete}
-              disabled={deleting}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="cursor-pointer rounded-md px-2.5 py-1.5 font-body text-[12.5px] font-medium text-notification transition-colors hover:bg-notification/10 disabled:opacity-50"
-            >
-              {deleting ? "Deleting…" : "Confirm delete"}
-            </motion.button>
-            <motion.button
-              onClick={() => setConfirmDelete(false)}
-              disabled={deleting}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="cursor-pointer rounded-md px-2.5 py-1.5 font-body text-[12.5px] font-medium text-text-secondary transition-colors hover:bg-surface-subtle disabled:opacity-50"
-            >
-              Cancel
-            </motion.button>
-          </div>
-        ) : (
-          <motion.button
-            onClick={() => setConfirmDelete(true)}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 font-body text-[12.5px] font-medium text-notification transition-colors hover:bg-notification/10"
-          >
-            <Trash2 size={14} />
-            Delete
-          </motion.button>
-        ))}
-        </div>
-      </motion.div>
-
-      <div className="flex gap-1 overflow-x-auto rounded-full bg-surface-subtle p-1 lg:hidden">
-        {TABS.map((t) => (
-          <motion.button
-            key={t.name}
-            onClick={() => setTab(t.name)}
-            whileTap={{ scale: 0.96 }}
-            transition={TRANSITION_FAST}
-            className={cn(
-              "relative flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 font-body text-[12.5px] font-medium transition-colors duration-[var(--motion-fast)]",
-              tab === t.name
-                ? "text-text-on-primary"
-                : "text-text-secondary hover:bg-surface/60 hover:text-text-primary"
-            )}
-            style={{ transitionTimingFunction: "var(--ease-standard)" }}
-          >
-            {tab === t.name && (
-              <motion.span
-                layoutId="workspace-tab-active-mobile"
-                className="absolute inset-0 rounded-full bg-primary"
-                transition={{ type: "spring", stiffness: 400, damping: 32 }}
-              />
-            )}
-            <t.Icon size={13} className="relative z-10" />
-            <span className="relative z-10">{t.name}</span>
-          </motion.button>
-        ))}
-      </div>
-
-      <RailShell
-        rail={
-          <nav className="flex flex-col gap-1 rounded-lg bg-surface-subtle p-1.5">
-            {TABS.map((t) => (
-              <motion.button
-                key={t.name}
-                onClick={() => setTab(t.name)}
-                whileTap={{ scale: 0.97 }}
-                transition={TRANSITION_FAST}
-                className={cn(
-                  "relative flex items-center gap-2 rounded-md px-3 py-2 font-body text-[13px] font-medium transition-colors duration-[var(--motion-fast)]",
-                  tab === t.name
-                    ? "text-text-on-primary"
-                    : "text-text-secondary hover:bg-surface/60 hover:text-text-primary"
-                )}
-                style={{ transitionTimingFunction: "var(--ease-standard)" }}
+          {isOwner &&
+            (confirmDelete ? (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="rounded-md px-2 py-1.5 font-body text-[12px] font-semibold text-notification transition-colors hover:bg-notification/10 disabled:opacity-50"
+                >
+                  {deleting ? "Deleting…" : "Delete for everyone"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={deleting}
+                  className="rounded-md px-2 py-1.5 font-body text-[12px] text-text-muted transition-colors hover:text-text-primary disabled:opacity-50"
+                >
+                  Keep
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                aria-label="Delete project"
+                className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-notification/10 hover:text-notification"
               >
-                {tab === t.name && (
-                  <motion.span
-                    layoutId="workspace-tab-active-desktop"
-                    className="absolute inset-0 rounded-md bg-primary"
-                    transition={{ type: "spring", stiffness: 400, damping: 32 }}
-                  />
-                )}
-                <t.Icon size={14} className="relative z-10" />
-                <span className="relative z-10">{t.name}</span>
-              </motion.button>
+                <Trash2 size={15} />
+              </button>
             ))}
-          </nav>
-        }
-        railWidth="200px"
-        stickyRail
-        mobileRail="hidden"
-      >
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={tab}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            {tab === "Documents" && (
-              <DocumentsTab project={project} canEdit={canEdit} onActiveDocChange={setActiveDocId} />
+        </div>
+      </header>
+
+      {error && (
+        <div className="shrink-0 border-b border-border px-4 py-2">
+          <ErrorBanner message={error} />
+        </div>
+      )}
+
+      {/* ── Mobile tab strip ────────────────────────────────────────────── */}
+      <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-surface p-1.5 md:hidden">
+        {TABS.map((t) => (
+          <button
+            key={t.name}
+            type="button"
+            onClick={() => setTab(t.name)}
+            className={cn(
+              "flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 font-body text-[12.5px] font-medium transition-colors",
+              tab === t.name
+                ? "bg-primary text-text-on-primary"
+                : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary",
             )}
-            {tab === "Chat" && <ChatTab projectId={project.id} />}
-            {tab === "Equations" && <EquationsTab projectId={project.id} initialLatex={project.recentEquations} />}
-            {tab === "Tasks & Meetings" && <TasksMeetingsTab projectId={project.id} />}
-            {tab === "Members" && <MembersTab project={project} onManageSharing={() => setShareOpen(true)} />}
-          </motion.div>
-        </AnimatePresence>
-      </RailShell>
+          >
+            <t.Icon size={13} />
+            {t.name}
+          </button>
+        ))}
+      </nav>
+
+      {/* ── Body: activity rail + content ───────────────────────────────── */}
+      <div className="flex min-h-0 flex-1">
+        <nav className="hidden w-[52px] shrink-0 flex-col items-center gap-1 border-r border-border bg-surface py-2 md:flex">
+          {TABS.map((t) => (
+            <button
+              key={t.name}
+              type="button"
+              onClick={() => setTab(t.name)}
+              title={t.name}
+              aria-label={t.name}
+              aria-current={tab === t.name ? "page" : undefined}
+              className={cn(
+                "group relative flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
+                tab === t.name
+                  ? "bg-primary/10 text-primary"
+                  : "text-text-muted hover:bg-surface-subtle hover:text-text-primary",
+              )}
+            >
+              {tab === t.name && (
+                <motion.span
+                  layoutId="workspace-rail-active"
+                  className="absolute -left-2 h-5 w-0.5 rounded-r bg-primary"
+                  transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                />
+              )}
+              <t.Icon size={18} />
+              <span className="pointer-events-none absolute left-full z-20 ml-2 hidden whitespace-nowrap rounded-md bg-text-primary px-2 py-1 font-body text-[11px] font-medium text-surface shadow-card group-hover:block">
+                {t.name}
+              </span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={tab}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="h-full"
+            >
+              {tab === "Documents" ? (
+                <DocumentsTab
+                  project={project}
+                  canEdit={canEdit}
+                  onActiveDocChange={setActiveDocId}
+                />
+              ) : tab === "Chat" ? (
+                <ChatTab projectId={project.id} />
+              ) : (
+                <div
+                  className={cn(
+                    "mx-auto h-full overflow-y-auto p-4 md:p-6",
+                    centeredClass,
+                  )}
+                >
+                  {tab === "Equations" && (
+                    <EquationsTab
+                      projectId={project.id}
+                      initialLatex={project.recentEquations}
+                    />
+                  )}
+                  {tab === "Tasks & Meetings" && <TasksMeetingsTab projectId={project.id} />}
+                  {tab === "Members" && (
+                    <MembersTab project={project} onManageSharing={() => setShareOpen(true)} />
+                  )}
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </div>
     </div>
   );
 }

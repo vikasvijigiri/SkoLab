@@ -103,9 +103,9 @@ export function DocumentsTab({
   }
 
   return (
-    <div className="flex min-h-[26rem] flex-col gap-3 md:flex-row">
+    <div className="flex h-full flex-col md:flex-row">
       {/* File list */}
-      <aside className="flex shrink-0 flex-col gap-1 md:w-52">
+      <aside className="flex shrink-0 flex-col gap-0.5 overflow-y-auto border-b border-border p-2 md:w-52 md:border-b-0 md:border-r">
         <div className="flex items-center justify-between px-1 pb-1">
           <span className="font-mono text-[10.5px] font-semibold uppercase tracking-wide text-text-muted">
             Documents
@@ -187,7 +187,7 @@ export function DocumentsTab({
       </aside>
 
       {/* Editor + preview */}
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
+      <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-hidden p-3 md:p-4">
         {(error || subError) && <ErrorBanner message={error ?? subError!} />}
         {active ? (
           <DocEditorPane
@@ -199,7 +199,7 @@ export function DocumentsTab({
             onError={setError}
           />
         ) : (
-          <div className="flex min-h-[24rem] items-center justify-center rounded-md border border-border bg-surface font-body text-[13px] text-text-muted">
+          <div className="flex h-full items-center justify-center rounded-md border border-border bg-surface font-body text-[13px] text-text-muted">
             No documents yet.
           </div>
         )}
@@ -255,8 +255,8 @@ function DocEditorPane({
   }
 
   return (
-    <>
-      <div className="flex items-center justify-between">
+    <div className="flex h-full min-h-0 flex-col gap-2">
+      <div className="flex shrink-0 items-center justify-between">
         <span className="font-body text-[12px] text-text-muted">
           {saving ? "Saving…" : `Saved ${relTime(savedAt)} · ${doc.updatedByName}`}
         </span>
@@ -270,7 +270,7 @@ function DocEditorPane({
         </button>
       </div>
 
-      <div className={cn("grid gap-3", preview && "lg:grid-cols-2")}>
+      <div className={cn("flex min-h-0 flex-1 flex-col gap-3", preview && "lg:flex-row")}>
         <textarea
           value={draft}
           onChange={(e) => scheduleSave(e.target.value)}
@@ -281,10 +281,10 @@ function DocEditorPane({
               ? "Write in Markdown. Inline math with $…$, display math with $$…$$."
               : "You have read-only access to this document."
           }
-          className="min-h-[24rem] w-full resize-y rounded-md border border-border bg-surface-input p-3.5 font-mono text-[13px] leading-relaxed text-text-primary outline-none focus:border-primary read-only:opacity-80"
+          className="min-h-0 w-full flex-1 resize-none rounded-md border border-border bg-surface-input p-3.5 font-mono text-[13px] leading-relaxed text-text-primary outline-none focus:border-primary read-only:opacity-80"
         />
         {preview && (
-          <div className="min-h-[24rem] overflow-y-auto rounded-md border border-border bg-surface p-4 font-body text-[13.5px] leading-relaxed text-text-primary">
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-md border border-border bg-surface p-4 font-body text-[13.5px] leading-relaxed text-text-primary">
             {draft.trim() ? (
               draft.split(/\n{2,}/).map((para, i) => (
                 <p key={i} className={i > 0 ? "mt-3" : undefined}>
@@ -297,6 +297,6 @@ function DocEditorPane({
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 }
