@@ -5,43 +5,35 @@ import { renderWithProviders, screen } from "@/test/render";
 import { server } from "@/test/handlers";
 import NexusPage from "./page";
 
-describe("NexusPage", () => {
-  it("renders the Nexus workspace", () => {
-    renderWithProviders(<NexusPage />);
-    expect(screen.getByPlaceholderText(/search literature/i)).toBeInTheDocument();
+describe("NexusPage — click-only collection", () => {
+  it("renders the workspace with no search box", () => {
+    const { container } = renderWithProviders(<NexusPage />);
+    expect(screen.getByText(/Synthesis Collection/)).toBeInTheDocument();
+    // The only text field on the page is the chat compose box.
+    expect(container.querySelectorAll("input").length).toBe(1);
   });
 
-  it("searches OpenAlex via useQuery once the query passes 3 chars", async () => {
+  it("drills the taxonomy and adds a paper by tapping it", async () => {
     server.use(
       http.get("*/api/openalex/works", () =>
         HttpResponse.json([
           {
-            id: "https://openalex.org/W1",
-            display_name: "Attention is all you need",
-            publication_year: 2017,
+            id: "https://openalex.org/W9",
+            display_name: "A key paper",
+            publication_year: 2020,
+            authorships: [{ author: { display_name: "R. Grid" } }],
           },
         ]),
       ),
     );
     const user = userEvent.setup();
     renderWithProviders(<NexusPage />);
-    await user.type(screen.getByPlaceholderText(/search literature/i), "attention");
-    expect(await screen.findByText("Attention is all you need")).toBeInTheDocument();
-  });
 
-  it("adding a search result to the collection clears the search box", async () => {
-    server.use(
-      http.get("*/api/openalex/works", () =>
-        HttpResponse.json([
-          { id: "https://openalex.org/W9", display_name: "A key paper", publication_year: 2020 },
-        ]),
-      ),
-    );
-    const user = userEvent.setup();
-    renderWithProviders(<NexusPage />);
-    const box = screen.getByPlaceholderText(/search literature/i);
-    await user.type(box, "a key paper");
+    await user.click(await screen.findByRole("button", { name: "Physics and Astronomy" }));
+    await user.click(await screen.findByRole("button", { name: "Condensed Matter Physics" }));
+
     await user.click(await screen.findByText("A key paper"));
-    expect(box).toHaveValue("");
+    // Once added it shows in the collection and the count bumps.
+    expect(await screen.findByText(/Synthesis Collection \(1\)/)).toBeInTheDocument();
   });
 });
