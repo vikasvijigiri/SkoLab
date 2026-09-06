@@ -12,6 +12,8 @@ import {
   mockIndustryOpportunities,
   mockOpenAlexWorks,
   mockPaperIntelligence,
+  mockSimilarPapers,
+  mockSimilarResearchers,
 } from "./fixtures";
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
@@ -43,6 +45,12 @@ export const handlers = [
   http.get(`${API}/api/v1/industry_opportunities`, () => HttpResponse.json(mockIndustryOpportunities)),
   http.get(`${API}/match_grants`, () => HttpResponse.json(mockGrants)),
   http.get(`${API}/api/v1/analyze_paper`, () => HttpResponse.json(mockPaperIntelligence)),
+  http.get(`${API}/api/v1/similar_papers`, () =>
+    HttpResponse.json({ results: mockSimilarPapers, degraded: false }),
+  ),
+  http.get(`${API}/api/v1/similar_researchers`, () =>
+    HttpResponse.json({ results: mockSimilarResearchers, degraded: false }),
+  ),
   http.post(`${API}/api/v1/discovery/predict`, () => HttpResponse.json(mockBreakthroughPrediction)),
   http.post(`${API}/api/v1/discovery/nexus-chat`, () =>
     HttpResponse.json({ content: "Synthesized answer." }),
