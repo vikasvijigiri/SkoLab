@@ -71,6 +71,7 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
+  const [docFocus, setDocFocus] = useState(false);
 
   async function handleDelete() {
     setDeleting(true);
@@ -105,13 +106,14 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
   const isOwner = myRole === "owner";
   const canEdit = roleCanEdit(myRole);
   const centeredClass = CENTERED[tab];
+  const chromeHidden = docFocus && tab === "Documents";
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-page-bg">
       <ShareModal project={project} open={shareOpen} onClose={() => setShareOpen(false)} />
 
       {/* ── Toolbar ─────────────────────────────────────────────────────── */}
-      <header className="flex h-12 shrink-0 items-center gap-2.5 border-b border-border bg-surface px-3 md:px-4">
+      <header className="flex h-[52px] shrink-0 items-center gap-2.5 border-b border-border bg-surface px-3 md:px-4">
         <button
           type="button"
           onClick={() => router.push("/workspace")}
@@ -179,57 +181,61 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
       )}
 
       {/* ── Mobile tab strip ────────────────────────────────────────────── */}
-      <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-surface p-1.5 md:hidden">
-        {TABS.map((t) => (
-          <button
-            key={t.name}
-            type="button"
-            onClick={() => setTab(t.name)}
-            className={cn(
-              "flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 font-body text-[12.5px] font-medium transition-colors",
-              tab === t.name
-                ? "bg-primary text-text-on-primary"
-                : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary",
-            )}
-          >
-            <t.Icon size={13} />
-            {t.name}
-          </button>
-        ))}
-      </nav>
-
-      {/* ── Body: activity rail + content ───────────────────────────────── */}
-      <div className="flex min-h-0 flex-1">
-        <nav className="hidden w-[52px] shrink-0 flex-col items-center gap-1 border-r border-border bg-surface py-2 md:flex">
+      {!chromeHidden && (
+        <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-surface p-1.5 md:hidden">
           {TABS.map((t) => (
             <button
               key={t.name}
               type="button"
               onClick={() => setTab(t.name)}
-              title={t.name}
-              aria-label={t.name}
-              aria-current={tab === t.name ? "page" : undefined}
               className={cn(
-                "group relative flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
+                "flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 font-body text-[12.5px] font-medium transition-colors",
                 tab === t.name
-                  ? "bg-primary/10 text-primary"
-                  : "text-text-muted hover:bg-surface-subtle hover:text-text-primary",
+                  ? "bg-primary text-text-on-primary"
+                  : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary",
               )}
             >
-              {tab === t.name && (
-                <motion.span
-                  layoutId="workspace-rail-active"
-                  className="absolute -left-2 h-5 w-0.5 rounded-r bg-primary"
-                  transition={{ type: "spring", stiffness: 400, damping: 32 }}
-                />
-              )}
-              <t.Icon size={18} />
-              <span className="pointer-events-none absolute left-full z-20 ml-2 hidden whitespace-nowrap rounded-md bg-text-primary px-2 py-1 font-body text-[11px] font-medium text-surface shadow-card group-hover:block">
-                {t.name}
-              </span>
+              <t.Icon size={13} />
+              {t.name}
             </button>
           ))}
         </nav>
+      )}
+
+      {/* ── Body: activity rail + content ───────────────────────────────── */}
+      <div className="flex min-h-0 flex-1">
+        {!chromeHidden && (
+          <nav className="hidden w-14 shrink-0 flex-col items-center gap-1 border-r border-border bg-surface py-2 md:flex">
+            {TABS.map((t) => (
+              <button
+                key={t.name}
+                type="button"
+                onClick={() => setTab(t.name)}
+                title={t.name}
+                aria-label={t.name}
+                aria-current={tab === t.name ? "page" : undefined}
+                className={cn(
+                  "group relative flex h-10 w-10 items-center justify-center rounded-md transition-colors",
+                  tab === t.name
+                    ? "bg-primary text-text-on-primary"
+                    : "text-text-muted hover:bg-surface-subtle hover:text-text-primary",
+                )}
+              >
+                {tab === t.name && (
+                  <motion.span
+                    layoutId="workspace-rail-active"
+                    className="absolute -left-2 h-5 w-[2px] rounded-r bg-primary"
+                    transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                  />
+                )}
+                <t.Icon size={18} />
+                <span className="pointer-events-none absolute left-full z-20 ml-2 hidden whitespace-nowrap rounded-md bg-text-primary px-2 py-1 font-body text-[11px] font-medium text-surface group-hover:block">
+                  {t.name}
+                </span>
+              </button>
+            ))}
+          </nav>
+        )}
 
         <div className="min-w-0 flex-1 overflow-hidden">
           <AnimatePresence mode="wait">
@@ -246,6 +252,7 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
                   project={project}
                   canEdit={canEdit}
                   onActiveDocChange={setActiveDocId}
+                  onFocusChange={setDocFocus}
                 />
               ) : tab === "Chat" ? (
                 <ChatTab projectId={project.id} />
