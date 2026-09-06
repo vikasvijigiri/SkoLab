@@ -70,7 +70,7 @@ export function DailyChallengeCard({
               key={opt}
               onClick={() => setSelected(i)}
               disabled={revealed}
-              whileHover={revealed ? undefined : { scale: 1.015, boxShadow: "0 4px 14px color-mix(in srgb, var(--primary) 18%, transparent)" }}
+              whileHover={revealed ? undefined : { scale: 1.015 }}
               whileTap={revealed ? undefined : { scale: 0.985 }}
               transition={TRANSITION_FAST}
               className={cn(

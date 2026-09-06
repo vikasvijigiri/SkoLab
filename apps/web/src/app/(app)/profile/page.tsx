@@ -130,7 +130,7 @@ export default function ProfilePage() {
           <div className="flex items-center gap-4 lg:flex-col lg:items-start lg:text-left">
             <div
               className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full font-display text-[22px] font-bold text-white shadow-card"
-              style={{ background: "var(--gradient-hero)" }}
+              style={{ background: "var(--primary)" }}
             >
               {(firestoreProfile?.name || user?.displayName || "?").slice(0, 1).toUpperCase()}
             </div>

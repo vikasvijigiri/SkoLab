@@ -32,12 +32,6 @@ export function RadarChart({ axes, size = 260 }: { axes: Axis[]; size?: number }
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <defs>
-        <filter id="radar-glow" x="-30%" y="-30%" width="160%" height="160%">
-          <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="var(--primary)" floodOpacity="0.35" />
-        </filter>
-      </defs>
-
       {ringLevels.map((level) => {
         const ringPoints = Array.from({ length: n }, (_, i) => pointFor(i, radius * level).join(",")).join(" ");
         return (
@@ -64,7 +58,6 @@ export function RadarChart({ axes, size = 260 }: { axes: Axis[]; size?: number }
         fill="color-mix(in srgb, var(--primary) 18%, transparent)"
         stroke="var(--primary)"
         strokeWidth={1.5}
-        filter="url(#radar-glow)"
         style={{ transformOrigin: `${center}px ${center}px` }}
         initial={{ scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}

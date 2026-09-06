@@ -9,7 +9,6 @@ import { useAuth } from "@/lib/hooks/AuthProvider";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { Orbs } from "@/components/ui/Orbs";
 import { Reveal } from "@/components/ui/Reveal";
 import { HeroPreview } from "@/components/ui/HeroPreview";
 import { MagneticCTA } from "@/components/ui/MagneticCTA";
@@ -51,17 +50,7 @@ export default function LandingPage() {
   }, [loading, user, router]);
 
   return (
-    <div className="relative flex min-h-full flex-1 flex-col overflow-hidden">
-      <Orbs />
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage: "radial-gradient(circle, color-mix(in srgb, var(--text-muted) 14%, transparent) 1px, transparent 1px)",
-          backgroundSize: "28px 28px",
-        }}
-        aria-hidden
-      />
-
+    <div className="relative flex min-h-full flex-1 flex-col overflow-hidden bg-page-bg">
       <header className="relative z-10 flex items-center justify-between px-6 py-6 md:px-12">
         <span className="font-display text-[20px] font-bold text-text-primary">SkoLab</span>
         <div className="flex items-center gap-4">
@@ -94,14 +83,7 @@ export default function LandingPage() {
         >
           Quantify research impact.
           <br />
-          <motion.span
-            className="inline-block bg-clip-text text-transparent"
-            style={{ backgroundImage: "var(--gradient-hero)", backgroundSize: "200% auto" }}
-            animate={{ backgroundPosition: ["0% center", "100% center", "0% center"] }}
-            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-          >
-            Predict what&apos;s next.
-          </motion.span>
+          <span className="text-primary">Predict what&apos;s next.</span>
         </motion.h1>
 
         <motion.p
@@ -147,13 +129,10 @@ export default function LandingPage() {
         <div className="mt-14 grid w-full max-w-5xl grid-cols-1 gap-4 text-left sm:grid-cols-2 lg:grid-cols-4">
           {FEATURES.map((f, i) => (
             <Reveal key={f.title} delay={i * 0.08}>
-              <Card glow accentColor={f.accent} className="h-full">
+              <Card accentColor={f.accent} className="h-full">
                 <div
                   className="mb-3 flex h-9 w-9 items-center justify-center rounded-[8px]"
-                  style={{
-                    backgroundColor: `color-mix(in srgb, ${f.accent} 14%, transparent)`,
-                    boxShadow: `0 0 20px color-mix(in srgb, ${f.accent} 22%, transparent)`,
-                  }}
+                  style={{ backgroundColor: `color-mix(in srgb, ${f.accent} 12%, var(--surface))` }}
                 >
                   <f.icon size={17} style={{ color: f.accent }} />
                 </div>
