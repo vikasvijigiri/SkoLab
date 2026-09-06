@@ -6,10 +6,11 @@ import { cn } from "@/lib/utils";
 import { TRANSITION_NORMAL } from "@/lib/motion";
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
-  /** Tints a top accent bar + hover glow with this color. */
+  /** Solid 2px top accent bar in this color. */
   accentColor?: string;
   interactive?: boolean;
-  /** Showcase mode (landing/feature cards): lifts + glows accentColor on hover. */
+  /** Showcase mode (landing/feature cards): lifts on hover with a plain
+   * elevated shadow — no coloured glow. */
   glow?: boolean;
 }
 
@@ -29,12 +30,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
     if (glow) {
       return (
         <motion.div
-          whileHover={{
-            y: -5,
-            boxShadow: accentColor
-              ? `var(--shadow-elevated), 0 0 0 1px color-mix(in srgb, ${accentColor} 25%, transparent)`
-              : "var(--shadow-elevated)",
-          }}
+          whileHover={{ y: -5, boxShadow: "var(--shadow-elevated)" }}
           transition={TRANSITION_NORMAL}
           className={cn("rounded-lg bg-surface p-4 shadow-card", className)}
           style={sharedStyle}

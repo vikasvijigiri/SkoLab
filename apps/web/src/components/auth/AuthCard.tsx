@@ -3,16 +3,13 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
-import { Orbs } from "@/components/ui/Orbs";
 
 export function AuthCard({ children }: { children: React.ReactNode }) {
   return (
-    // min-h-dvh floor + overflow-x-clip (Orbs already self-clip). No vertical
-    // clip, so a tall card (e.g. onboarding step 3) grows the page and the
-    // document scrolls instead of the bottom being cut off.
-    <div className="relative flex min-h-dvh flex-col overflow-x-clip">
-      <Orbs />
-
+    // Solid --page-bg, no decorative layers. min-h-dvh floor + overflow-x-clip;
+    // no vertical clip, so a tall card (onboarding step 3) grows the page and
+    // the document scrolls instead of the bottom being cut off.
+    <div className="relative flex min-h-dvh flex-col overflow-x-clip bg-page-bg">
       <header className="relative z-10 flex shrink-0 items-center gap-3 px-6 py-6 md:px-10">
         <Link
           href="/"
@@ -38,7 +35,7 @@ export function AuthCard({ children }: { children: React.ReactNode }) {
           className="my-auto w-full max-w-md"
         >
           <div className="overflow-hidden rounded-[18px] border border-border bg-surface shadow-elevated">
-            <div className="h-1 w-full" style={{ background: "var(--gradient-hero)" }} aria-hidden />
+            <div className="h-1 w-full bg-primary" aria-hidden />
             <div className="p-6 sm:p-8">{children}</div>
           </div>
           <p className="mt-5 text-center font-body text-[12px] text-text-muted">

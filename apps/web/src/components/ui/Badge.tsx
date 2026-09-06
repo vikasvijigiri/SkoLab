@@ -43,7 +43,7 @@ export function Chip({ selected = false, className, children, ...props }: ChipPr
   return (
     <motion.button
       type="button"
-      whileHover={{ scale: 1.05, boxShadow: "0 4px 14px color-mix(in srgb, var(--primary) 25%, transparent)" }}
+      whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.95 }}
       transition={TRANSITION_FAST}
       className={cn(

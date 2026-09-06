@@ -135,7 +135,7 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
           <div className="flex items-start gap-4">
             <div
               className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full font-display text-[22px] font-bold text-white shadow-card"
-              style={{ background: "var(--gradient-hero)" }}
+              style={{ background: "var(--primary)" }}
             >
               {(author.display_name || "Unknown").slice(0, 1).toUpperCase()}
             </div>

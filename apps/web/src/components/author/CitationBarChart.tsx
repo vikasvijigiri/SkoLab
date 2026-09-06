@@ -15,7 +15,7 @@ export function CitationBarChart({ data }: { data: CitationHeatmap }) {
                 className="w-full rounded-t-[4px] transition-[height] duration-[var(--motion-normal)]"
                 style={{
                   height: `${h}%`,
-                  background: "var(--gradient-hero)",
+                  background: "var(--primary)",
                   transitionTimingFunction: "var(--ease-standard)",
                 }}
                 title={`${cites} citations in ${year}`}

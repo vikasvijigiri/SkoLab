@@ -11,9 +11,9 @@ import { DURATION_NORMAL, EASE_STANDARD } from "@/lib/motion";
 import type { LeaderboardEntry } from "@/lib/types";
 
 const MEDAL: Record<number, string> = {
-  1: "linear-gradient(135deg, #fbbf24, #d97706)",
-  2: "linear-gradient(135deg, #e2e8f0, #94a3b8)",
-  3: "linear-gradient(135deg, #f0a878, #c2703d)",
+  1: "#c08a2e", // gold
+  2: "#8b93a1", // silver
+  3: "#b06a3c", // bronze
 };
 
 export function LeaderboardRow({ entry, index }: { entry: LeaderboardEntry; index: number }) {
