@@ -12,16 +12,19 @@ vi.mock("@/lib/hooks/useMyProfile", () => ({
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
-describe("HorizonPage", () => {
-  it("renders the prediction after submitting the field", async () => {
+describe("HorizonPage — click-only", () => {
+  it("has no text inputs and predicts after clicking a field chip", async () => {
     server.use(
       http.post(`${API}/api/v1/discovery/predict`, () =>
         HttpResponse.json({ ...mockBreakthroughPrediction, breakthrough_name: "Fusion compilers" }),
       ),
     );
     const user = userEvent.setup();
-    renderWithProviders(<HorizonPage />);
-    await user.type(screen.getByLabelText(/Scientific or Technological Field/i), "fusion");
+    const { container } = renderWithProviders(<HorizonPage />);
+
+    const chip = await screen.findByRole("button", { name: "Physics and Astronomy" });
+    expect(container.querySelector("input, textarea")).toBeNull();
+    await user.click(chip);
     await user.click(screen.getByRole("button", { name: /forge discovery/i }));
     expect(await screen.findByText("Fusion compilers")).toBeInTheDocument();
   });
@@ -30,7 +33,7 @@ describe("HorizonPage", () => {
     server.use(http.post(`${API}/api/v1/discovery/predict`, () => new HttpResponse(null, { status: 500 })));
     const user = userEvent.setup();
     renderWithProviders(<HorizonPage />);
-    await user.type(screen.getByLabelText(/Scientific or Technological Field/i), "fusion");
+    await user.click(await screen.findByRole("button", { name: "Physics and Astronomy" }));
     await user.click(screen.getByRole("button", { name: /forge discovery/i }));
     expect(await screen.findByText(/Foresight engine timed out/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();

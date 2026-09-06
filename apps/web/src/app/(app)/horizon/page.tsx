@@ -72,7 +72,6 @@ export default function HorizonPage() {
         {!loading && !prediction && (
           <HorizonInputForm
             field={field}
-            focusArea={focusArea}
             error={error}
             onFieldChange={setField}
             onFocusChange={setFocusArea}
