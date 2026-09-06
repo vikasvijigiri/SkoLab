@@ -12,30 +12,31 @@
  */
 
 /*
- * Warm "reading" palette. SkoLab users are researchers on screen for hours,
- * so the surfaces are warm paper tones rather than clinical cool greys, text
- * is a soft charcoal instead of pure black, and the indigo brand colour is
- * de-saturated a notch. Informed by Solarized's principle: keep brightness
- * contrast low but hue contrast intact, so it stays readable without
- * glaring. Every text token's contrast against the surface it sits on was
- * checked with the WCAG relative-luminance formula (>=4.5:1, with margin so
- * the a11y suite's sub-pixel sampling doesn't flake).
+ * Light palette — "quiet precision". SkoLab users read on screen for hours,
+ * so the page ground is a soft near-white with a whisper of warmth (never a
+ * yellow cream, never a glaring pure white), and CARDS are true #fff so the
+ * surface hierarchy is real, the way Linear / Notion / Height do it. Ink is a
+ * near-black with a faint cool cast — crisper than the old warm charcoal —
+ * and one decisive indigo carries the brand. Shadows are cool slate-tinted,
+ * low-spread; borders are neutral hairlines. Every text token's contrast
+ * against the surface it sits on is checked with the WCAG relative-luminance
+ * formula (>=4.5:1, with margin so the a11y suite's sub-pixel sampling of
+ * small anti-aliased text doesn't flake).
  */
 :root {
-  --page-bg: #faf8f4;
-  --surface: #fffdf9;
-  --surface-subtle: #f2eee5;
-  --primary: #4c56c6;
-  --primary-dark: #3f48ab;
-  --primary-deeper: #343c93;
-  --text-primary: #2b2a27;
-  --text-secondary: #5b574e;
-  /* ~5.3:1 on --surface-subtle, ~5.7:1 on --page-bg. Warm charcoal, not the
-     old cool #656569. Keep the margin: axe's pixel sampling of small
-     anti-aliased text reads a touch lighter than the declared value. */
-  --text-muted: #666257;
+  --page-bg: #f7f7f5;
+  --surface: #ffffff;
+  --surface-subtle: #eeeeec;
+  --primary: #4a52cf;
+  --primary-dark: #3e46b6;
+  --primary-deeper: #333a99;
+  --text-primary: #1b1d23;
+  --text-secondary: #565863;
+  /* ~5.4:1 on --surface-subtle, ~6.2:1 on --surface. Cool neutral grey; keep
+     the margin — axe's pixel sampling reads a touch lighter than declared. */
+  --text-muted: #5f616d;
   --text-on-primary: #ffffff;
-  --border-color: #e7e1d3;
+  --border-color: #e5e5e2;
 
   --accent-teal: #0f766e;
   --accent-teal-dark: #115e56;
@@ -49,14 +50,14 @@
   --accent-pink: #be185d;
 
   --notification: #dc2626;
-  --match-bg: #eef0fb;
-  --match-text: #343c93;
+  --match-bg: #eceefb;
+  --match-text: #333a99;
 
-  /* Form controls — crisp, bordered fields on their own surface, not a flat
-     grey fill. --ring is derived from --primary via var(), so it re-resolves
-     per theme at the element that uses it; one definition here is enough. */
-  --surface-input: #fffdf9;
-  --border-input: #d9d2c2;
+  /* Form controls — crisp bordered fields on true white, not a flat grey fill.
+     --ring is derived from --primary via var(), so it re-resolves per theme at
+     the element that uses it; one definition here is enough. */
+  --surface-input: #ffffff;
+  --border-input: #d6d6d2;
   --ring: color-mix(in srgb, var(--primary) 22%, transparent);
   --shadow-focus: 0 0 0 3px var(--ring);
 
@@ -68,13 +69,13 @@
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
   --ease-enter: cubic-bezier(0, 0, 0.2, 1);
 
-  /* Elevation — real shadows, not border-only. Warm-tinted (rgba 58,50,38)
-     rather than neutral grey, so they read as paper shadow on the warm
-     surfaces instead of a cool halo. */
-  --shadow-xs: 0 1px 2px rgba(58, 50, 38, 0.05);
-  --shadow-card: 0 1px 2px rgba(58, 50, 38, 0.05), 0 1px 6px rgba(58, 50, 38, 0.06);
-  --shadow-card-hover: 0 4px 10px rgba(58, 50, 38, 0.07), 0 12px 28px rgba(58, 50, 38, 0.09);
-  --shadow-elevated: 0 12px 24px rgba(58, 50, 38, 0.09), 0 24px 56px rgba(58, 50, 38, 0.13);
+  /* Elevation — real shadows, not border-only. Cool slate-tinted (rgba
+     18,20,31) and low-spread, so a card reads as a crisp lift off the ground
+     rather than a soft smudge. */
+  --shadow-xs: 0 1px 2px rgba(18, 20, 31, 0.05);
+  --shadow-card: 0 1px 2px rgba(18, 20, 31, 0.05), 0 2px 6px rgba(18, 20, 31, 0.05);
+  --shadow-card-hover: 0 4px 12px rgba(18, 20, 31, 0.08), 0 10px 22px rgba(18, 20, 31, 0.08);
+  --shadow-elevated: 0 8px 20px rgba(18, 20, 31, 0.10), 0 20px 44px rgba(18, 20, 31, 0.12);
   /* No coloured glow — solid surfaces only. Kept as an alias so any stray
      reference resolves to a plain shadow instead of a blue aura. */
   --shadow-glow-primary: var(--shadow-card-hover);
@@ -148,29 +149,29 @@
 }
 
 :root[data-theme="light"] {
-  --page-bg: #faf8f4;
-  --surface: #fffdf9;
-  --surface-subtle: #f2eee5;
-  --primary: #4c56c6;
-  --primary-dark: #3f48ab;
-  --primary-deeper: #343c93;
-  --text-primary: #2b2a27;
-  --text-secondary: #5b574e;
-  --text-muted: #666257;
+  --page-bg: #f7f7f5;
+  --surface: #ffffff;
+  --surface-subtle: #eeeeec;
+  --primary: #4a52cf;
+  --primary-dark: #3e46b6;
+  --primary-deeper: #333a99;
+  --text-primary: #1b1d23;
+  --text-secondary: #565863;
+  --text-muted: #5f616d;
   --text-on-primary: #ffffff;
-  --border-color: #e7e1d3;
+  --border-color: #e5e5e2;
   --accent-teal: #0f766e;
   --accent-amber: #b45309;
   --accent-indigo: #3b5bd9;
   --accent-rose: #be123c;
-  --match-bg: #eef0fb;
-  --match-text: #343c93;
-  --surface-input: #fffdf9;
-  --border-input: #d9d2c2;
-  --shadow-xs: 0 1px 2px rgba(58, 50, 38, 0.05);
-  --shadow-card: 0 1px 2px rgba(58, 50, 38, 0.05), 0 1px 6px rgba(58, 50, 38, 0.06);
-  --shadow-card-hover: 0 4px 10px rgba(58, 50, 38, 0.07), 0 12px 28px rgba(58, 50, 38, 0.09);
-  --shadow-elevated: 0 12px 24px rgba(58, 50, 38, 0.09), 0 24px 56px rgba(58, 50, 38, 0.13);
+  --match-bg: #eceefb;
+  --match-text: #333a99;
+  --surface-input: #ffffff;
+  --border-input: #d6d6d2;
+  --shadow-xs: 0 1px 2px rgba(18, 20, 31, 0.05);
+  --shadow-card: 0 1px 2px rgba(18, 20, 31, 0.05), 0 2px 6px rgba(18, 20, 31, 0.05);
+  --shadow-card-hover: 0 4px 12px rgba(18, 20, 31, 0.08), 0 10px 22px rgba(18, 20, 31, 0.08);
+  --shadow-elevated: 0 8px 20px rgba(18, 20, 31, 0.10), 0 20px 44px rgba(18, 20, 31, 0.12);
   --shadow-glow-primary: var(--shadow-card-hover);
 }
 
@@ -242,6 +243,11 @@ body {
   background: var(--page-bg);
   color: var(--text-primary);
   font-family: var(--font-body);
+  /* Inter tuning — disambiguated 1/l/i, an open 4, and contextual alternates.
+     The small precision every serious tool ships. */
+  font-feature-settings: "cv05", "cv08", "cv11", "calt";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Tailwind v3.3+/v4 dropped the automatic pointer cursor on <button> — every
