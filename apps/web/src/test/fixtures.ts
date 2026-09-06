@@ -10,6 +10,8 @@ import type {
   NetworkCollaborator,
   OpenAlexWork,
   PaperIntelligence,
+  SimilarPaper,
+  SimilarResearcher,
 } from "@/lib/types";
 
 export const mockSuggestion: AuthorSuggestion = {
@@ -20,6 +22,30 @@ export const mockSuggestion: AuthorSuggestion = {
   h_index: 42,
   works_count: 120,
 };
+
+export const mockSimilarPapers: SimilarPaper[] = [
+  {
+    work_id: "W2000000001",
+    title: "A related paper on analytical engines",
+    authors: ["Grace Hopper", "Alan Turing"],
+    year: 1951,
+    score: 0.87,
+    why: "87% topical · 3 shared references",
+  },
+];
+
+export const mockSimilarResearchers: SimilarResearcher[] = [
+  {
+    author_id: "A5000000002",
+    display_name: "Grace Hopper",
+    institution: "Analytical Engine Institute",
+    field_of_study: "Computer Science",
+    h_index: 55,
+    score: 0.79,
+    why: "same institution · 2 shared collaborators · 79% topical match",
+    shared_collaborators: 2,
+  },
+];
 
 export function makeAuthorResponse(overrides: Partial<AuthorResponse> = {}): AuthorResponse {
   return {

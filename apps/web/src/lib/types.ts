@@ -39,6 +39,35 @@ export interface AuthorSuggestion {
   works_count?: number;
 }
 
+// Similarity engine (Go gateway internal/similarity — pgvector kNN + graph blend).
+export interface SimilarPaper {
+  work_id: string;
+  title: string;
+  authors: string[];
+  year: number;
+  score: number;
+  /** Human explanation, e.g. "83% topical · 4 shared references". */
+  why: string;
+}
+
+export interface SimilarResearcher {
+  author_id: string;
+  display_name: string;
+  institution: string;
+  field_of_study: string;
+  h_index: number;
+  score: number;
+  /** e.g. "same institution · 3 shared collaborators · 79% topical match". */
+  why: string;
+  shared_collaborators: number;
+}
+
+/** Every similarity endpoint wraps its list and flags a degraded (OpenAlex-only) result. */
+export interface SimilarResult<T> {
+  results: T[];
+  degraded: boolean;
+}
+
 export interface Work {
   id?: string;
   title?: string;

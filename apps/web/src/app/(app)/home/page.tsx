@@ -13,6 +13,7 @@ import {
   industryOpportunitiesQuery,
   matchGrantsQuery,
   journalAdvisorQuery,
+  similarResearchersQuery,
 } from "@/lib/api/queries";
 import { FrontierPulseCard } from "@/components/feed/FrontierPulseCard";
 import { AIDailyBriefCard, type BriefItem } from "@/components/feed/AIDailyBriefCard";
@@ -104,6 +105,10 @@ export default function HomePage() {
   const grantsQ = useQuery({ ...matchGrantsQuery(authorId ?? ""), enabled: ready && !!authorId });
   const oppsQ = useQuery({ ...industryOpportunitiesQuery(topic || "AI", name), enabled: ready });
   const journalQ = useQuery({ ...journalAdvisorQuery(authorId ?? ""), enabled: ready && !!authorId });
+  const peersQ = useQuery({
+    ...similarResearchersQuery(authorId ?? "", user?.uid),
+    enabled: ready && !!authorId,
+  });
 
   const feed = feedQ.data ?? EMPTY_FEED;
   const feedLoading = feedQ.isPending;
@@ -220,8 +225,8 @@ export default function HomePage() {
               Researchers you may know
             </h2>
             <PeerSuggestionsCard
-              peers={author?.similar_researchers ?? []}
-              loading={profileLoading}
+              peers={peersQ.data?.results ?? []}
+              loading={profileLoading || (!!authorId && peersQ.isPending)}
               unresolved={profileUnresolved}
             />
           </div>

@@ -1,20 +1,22 @@
 import Link from "next/link";
 import { Users2, ArrowUpRight } from "lucide-react";
 import { Card } from "@/components/ui/Card";
-import type { AuthorSuggestion } from "@/lib/types";
+import type { SimilarResearcher } from "@/lib/types";
 
 /**
- * "Researchers you may know" — ranked from the requesting user's own OpenAlex
- * profile (search_author returns `similar_researchers`, a co-authorship /
- * field-proximity list). Only meaningful once the user's identity resolves,
- * so a cold-start user sees a prompt to connect it rather than an empty box.
+ * "Researchers you may know" — ranked by the Go similarity engine
+ * (`/similar_researchers`): embedding cosine over the user's profile vector
+ * blended with shared-collaborator overlap, shared concepts and cohort, MMR
+ * diversified, with the people already in the user's circle removed. No LLM.
+ * A cold-start user (no resolved OpenAlex identity) sees a prompt to connect
+ * it rather than an empty box.
  */
 export function PeerSuggestionsCard({
   peers,
   loading,
   unresolved,
 }: {
-  peers: AuthorSuggestion[];
+  peers: SimilarResearcher[];
   loading: boolean;
   /** No OpenAlex match yet — nothing to rank peers against. */
   unresolved?: boolean;
@@ -23,7 +25,7 @@ export function PeerSuggestionsCard({
     return (
       <div className="flex flex-col gap-2">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-14 animate-pulse rounded-[8px] bg-surface-subtle" />
+          <div key={i} className="h-16 animate-pulse rounded-[8px] bg-surface-subtle" />
         ))}
       </div>
     );
@@ -57,8 +59,8 @@ export function PeerSuggestionsCard({
     <div className="flex flex-col gap-2">
       {peers.slice(0, 6).map((p) => (
         <Link
-          key={p.id}
-          href={`/author/${encodeURIComponent(p.id)}?name=${encodeURIComponent(p.display_name || "")}`}
+          key={p.author_id}
+          href={`/author/${encodeURIComponent(p.author_id)}?name=${encodeURIComponent(p.display_name || "")}`}
           className="group flex items-center gap-3 rounded-[8px] border border-border bg-surface p-2.5 transition-colors duration-[var(--motion-fast)] hover:border-primary/40"
           style={{ transitionTimingFunction: "var(--ease-standard)" }}
         >
@@ -76,8 +78,13 @@ export function PeerSuggestionsCard({
               {p.field_of_study ? `${p.field_of_study} · ` : ""}
               {p.institution || "Independent"}
             </p>
+            {p.why && (
+              <p className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-wide text-text-muted">
+                {p.why}
+              </p>
+            )}
           </div>
-          {typeof p.h_index === "number" && p.h_index > 0 && (
+          {p.h_index > 0 && (
             <span className="shrink-0 font-mono text-[11px] tabular-nums text-text-muted">
               h {p.h_index}
             </span>

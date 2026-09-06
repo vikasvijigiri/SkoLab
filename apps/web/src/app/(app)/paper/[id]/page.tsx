@@ -20,6 +20,7 @@ import { Reveal } from "@/components/ui/Reveal";
 import { MathText, Formula } from "@/components/ui/MathText";
 import { RailShell } from "@/components/layout/RailShell";
 import { TableOfContents } from "@/components/paper/TableOfContents";
+import { RelatedPapersCard } from "@/components/paper/RelatedPapersCard";
 import type { PaperIntelligence } from "@/lib/types";
 import { paperWorkQuery, paperAnalysisQuery } from "@/lib/api/queries";
 
@@ -142,6 +143,8 @@ export function PaperDetailContent({ id }: { id: string }) {
           </p>
         </Card>
       </motion.div>
+
+      <RelatedPapersCard workId={id} />
 
       {intelLoading && (
         <Card className="mt-4 animate-pulse">

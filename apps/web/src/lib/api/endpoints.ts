@@ -15,6 +15,9 @@ import type {
   BreakthroughPrediction,
   NexusChatPaper,
   NexusMessage,
+  SimilarPaper,
+  SimilarResearcher,
+  SimilarResult,
 } from "@/lib/types";
 
 // ---- Authors / Search / Discovery -----------------------------------------
@@ -50,6 +53,21 @@ export const getCitationHeatmap = (authorId: string) =>
 
 export const getJournalAdvisor = (authorId: string) =>
   apiRequest<JournalRecommendation[]>("/api/v1/journal_advisor", { params: { author_id: authorId } });
+
+// ---- Similarity engine (Go gateway — pgvector kNN + graph blend, no LLM) ----
+
+export const getSimilarPapers = (workId: string, limit = 8) =>
+  apiRequest<SimilarResult<SimilarPaper>>("/api/v1/similar_papers", {
+    params: { work_id: workId, limit },
+  });
+
+export const getSimilarResearchers = (
+  authorId: string,
+  opts: { userId?: string; limit?: number } = {},
+) =>
+  apiRequest<SimilarResult<SimilarResearcher>>("/api/v1/similar_researchers", {
+    params: { author_id: authorId, user_id: opts.userId, limit: opts.limit ?? 8 },
+  });
 
 export const getMatchGrants = (authorId: string) =>
   apiRequest<GrantMatch[]>("/api/v1/match_grants", { params: { author_id: authorId } });
