@@ -263,6 +263,18 @@ export interface NexusChatPaper {
   abstract: string;
 }
 
+// Overleaf-style collaborator roles.
+export type CollabRole = "owner" | "editor" | "reviewer" | "viewer";
+
+export interface CollabMember {
+  uid: string;
+  name: string;
+  email: string;
+  phone?: string;
+  /** Absent on rows written before roles existed — treat as "editor". */
+  role?: CollabRole;
+}
+
 // Firestore collabs_groups/{id}
 export interface CollabProject {
   id: string;
@@ -270,12 +282,34 @@ export interface CollabProject {
   description: string;
   ownerUid: string;
   ownerName: string;
-  members: { uid: string; name: string; email: string; phone?: string }[];
+  members: CollabMember[];
   memberUids: string[];
   recentEquations: string;
   manuscriptProgress: number;
   manuscriptDraft: string;
   createdAt?: unknown;
+  /** Bumped on any document save; drives the dashboard's "updated" sort. */
+  updatedAt?: number;
+  updatedByName?: string;
+}
+
+// Firestore collabs_groups/{id}/documents/{docId}
+export interface CollabDocument {
+  id: string;
+  title: string;
+  body: string;
+  order: number;
+  updatedAt: number;
+  updatedByUid: string;
+  updatedByName: string;
+}
+
+// Firestore collabs_groups/{id}/presence/{uid} — heartbeat, stale after ~45s.
+export interface CollabPresence {
+  uid: string;
+  name: string;
+  docId: string | null;
+  lastSeen: number;
 }
 
 export interface CollabMessage {

@@ -1,18 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, FolderKanban, Users2 } from "lucide-react";
+import { Plus, FolderKanban, Users2, Search } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ErrorBanner, friendlyFirestoreError } from "@/components/ui/ErrorBanner";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import { useFirestoreCollection } from "@/lib/hooks/useFirestoreCollection";
-import { subscribeProjects, createProject } from "@/lib/firebase/workspace";
-import type { CollabProject } from "@/lib/types";
+import { subscribeProjects, createProject, roleFor } from "@/lib/firebase/workspace";
+import type { CollabProject, CollabRole } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { TRANSITION_FAST, DURATION_SLOW, EASE_STANDARD } from "@/lib/motion";
+
+type ScopeFilter = "all" | "owned" | "shared";
+const SCOPES: { key: ScopeFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "owned", label: "Owned by me" },
+  { key: "shared", label: "Shared with me" },
+];
+const ROLE_LABEL: Record<CollabRole, string> = {
+  owner: "Owner",
+  editor: "Editor",
+  reviewer: "Reviewer",
+  viewer: "Viewer",
+};
+
+function relTime(ts?: number) {
+  if (!ts) return null;
+  const s = Math.round((Date.now() - ts) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)}m ago`;
+  if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+  return `${Math.round(s / 86400)}d ago`;
+}
 
 export default function WorkspaceListPage() {
   const { user } = useAuth();
@@ -30,6 +53,20 @@ export default function WorkspaceListPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [scope, setScope] = useState<ScopeFilter>("all");
+  const [q, setQ] = useState("");
+
+  const shownProjects = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return projects
+      .filter((p) => {
+        if (scope === "owned" && p.ownerUid !== user?.uid) return false;
+        if (scope === "shared" && p.ownerUid === user?.uid) return false;
+        if (term && !`${p.name} ${p.description}`.toLowerCase().includes(term)) return false;
+        return true;
+      })
+      .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+  }, [projects, scope, q, user?.uid]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -125,8 +162,44 @@ export default function WorkspaceListPage() {
         </Card>
       )}
 
+      {!loading && projects.length > 0 && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex gap-1 rounded-full bg-surface-subtle p-1">
+            {SCOPES.map((s) => (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => setScope(s.key)}
+                className={cn(
+                  "rounded-full px-3 py-1 font-body text-[12.5px] font-medium transition-colors",
+                  scope === s.key ? "bg-primary text-text-on-primary" : "text-text-secondary hover:text-text-primary"
+                )}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+          <div className="relative sm:w-64">
+            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search projects…"
+              className="h-9 w-full rounded-md border border-border-input bg-surface-input pl-8 pr-3 font-body text-[13px] text-text-primary outline-none focus:border-primary"
+            />
+          </div>
+        </div>
+      )}
+
+      {!loading && projects.length > 0 && shownProjects.length === 0 && (
+        <p className="py-8 text-center font-body text-[13px] text-text-muted">No projects match.</p>
+      )}
+
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
-        {projects.map((p, i) => (
+        {shownProjects.map((p, i) => {
+          const myRole = roleFor(p, user?.uid);
+          const updated = relTime(p.updatedAt);
+          return (
           <motion.div
             key={p.id}
             initial={{ opacity: 0, y: 16 }}
@@ -135,9 +208,9 @@ export default function WorkspaceListPage() {
           >
             <Link href={`/workspace/${p.id}`} className="block h-full">
               <Card glow interactive accentColor="var(--accent-teal)" className="flex h-full flex-col">
-                <div className="flex items-center justify-between">
+                <div className="flex items-start justify-between gap-2">
                   <h3 className="font-display text-[15px] font-semibold text-text-primary">{p.name}</h3>
-                  <span className="flex items-center gap-1 font-mono text-[11px] text-text-muted">
+                  <span className="flex shrink-0 items-center gap-1 font-mono text-[11px] text-text-muted">
                     <Users2 size={12} />
                     {p.members.length}
                   </span>
@@ -145,20 +218,19 @@ export default function WorkspaceListPage() {
                 {p.description && (
                   <p className="mt-1 font-body text-[13px] text-text-secondary">{p.description}</p>
                 )}
-                <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-subtle">
-                  {/* scaleX transform instead of animating width — avoids layout
-                      recalculation on every frame (width triggers reflow, transform doesn't). */}
-                  <motion.div
-                    className="h-full w-full origin-left rounded-full bg-accent-teal"
-                    initial={{ scaleX: 0 }}
-                    animate={{ scaleX: (p.manuscriptProgress ?? 0) }}
-                    transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                  />
+                <div className="mt-auto flex items-center gap-2 pt-3 font-body text-[11px] text-text-muted">
+                  {myRole && (
+                    <span className="rounded-full bg-surface-subtle px-1.5 py-0.5 font-mono uppercase tracking-wide">
+                      {ROLE_LABEL[myRole]}
+                    </span>
+                  )}
+                  {updated && <span>Updated {updated}{p.updatedByName ? ` · ${p.updatedByName}` : ""}</span>}
                 </div>
               </Card>
             </Link>
           </motion.div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
