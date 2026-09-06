@@ -4,35 +4,27 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
-import { Search, SearchX, Flame, Trophy } from "lucide-react";
-import { Input } from "@/components/ui/Input";
+import { SearchX, Flame, Trophy, ChevronRight } from "lucide-react";
 import { Chip } from "@/components/ui/Badge";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { RailShell } from "@/components/layout/RailShell";
 import { cn } from "@/lib/utils";
-import { useDebounce } from "@/lib/hooks/useDebounce";
 import {
-  authorSuggestionsQuery,
   leaderboardQuery,
   openAlexWorksQuery,
+  openAlexFieldsQuery,
+  openAlexSubfieldsQuery,
+  openAlexTopicsQuery,
+  discoveryAuthorsQuery,
+  discoveryWorksQuery,
 } from "@/lib/api/queries";
+import type { OpenAlexTaxon } from "@/lib/types";
 import { AuthorResultCard } from "@/components/discovery/AuthorResultCard";
 import { PaperResultCard } from "@/components/discovery/PaperResultCard";
 import { LeaderboardRow } from "@/components/discovery/LeaderboardRow";
 import { TRANSITION_FAST } from "@/lib/motion";
 
 type Mode = "researchers" | "papers";
-
-const POPULAR_FIELDS = [
-  "Physics",
-  "Computer Science",
-  "Biology",
-  "Chemistry",
-  "Medicine",
-  "Mathematics",
-  "Engineering",
-  "Neuroscience",
-];
 
 export default function DiscoveryPage() {
   return <DiscoveryContent />;
@@ -42,35 +34,59 @@ export default function DiscoveryPage() {
 export function DiscoveryContent() {
   const searchParams = useSearchParams();
   const [mode, setMode] = useState<Mode>(searchParams.get("tab") === "papers" ? "papers" : "researchers");
-  const [query, setQuery] = useState("");
-  const [activeField, setActiveField] = useState<string | null>(null);
-  const debouncedQuery = useDebounce(query, 300);
-  const hasQuery = debouncedQuery.trim().length >= 3;
 
-  // ── Default (no-query) content: leaderboard / trending papers ──────────────
+  // Taxonomy drilldown — the only way to navigate. Nothing is typed.
+  const [field, setField] = useState<OpenAlexTaxon | null>(null);
+  const [subfield, setSubfield] = useState<OpenAlexTaxon | null>(null);
+  const [topic, setTopic] = useState<OpenAlexTaxon | null>(null);
+
+  const fieldsQ = useQuery(openAlexFieldsQuery());
+  const subfieldsQ = useQuery(openAlexSubfieldsQuery(field?.id));
+  const topicsQ = useQuery(openAlexTopicsQuery(subfield?.id));
+
+  // Deepest selected node drives the results.
+  const node = topic
+    ? ({ level: "topic", id: topic.id, label: topic.display_name } as const)
+    : subfield
+      ? ({ level: "subfield", id: subfield.id, label: subfield.display_name } as const)
+      : field
+        ? ({ level: "field", id: field.id, label: field.display_name } as const)
+        : null;
+
   const leaderboard = useQuery({
-    ...leaderboardQuery(activeField ?? "all"),
-    enabled: !hasQuery && mode === "researchers",
+    ...leaderboardQuery("all"),
+    enabled: !node && mode === "researchers",
   });
   const trending = useQuery({
-    ...openAlexWorksQuery({ focus: activeField ?? undefined }),
-    enabled: !hasQuery && mode === "papers",
+    ...openAlexWorksQuery({}),
+    enabled: !node && mode === "papers",
+  });
+  const nodeAuthors = useQuery({
+    ...discoveryAuthorsQuery(node?.level ?? "field", node?.id),
+    enabled: Boolean(node) && mode === "researchers",
+  });
+  const nodeWorks = useQuery({
+    ...discoveryWorksQuery(node?.level ?? "field", node?.id),
+    enabled: Boolean(node) && mode === "papers",
   });
 
-  // ── Query results: author suggestions / paper search ─────────────────────
-  const authors = useQuery({
-    ...authorSuggestionsQuery(debouncedQuery),
-    enabled: hasQuery && mode === "researchers",
-  });
-  const papers = useQuery({
-    ...openAlexWorksQuery({ q: debouncedQuery }),
-    enabled: hasQuery && mode === "papers",
-  });
+  const active =
+    mode === "researchers" ? (node ? nodeAuthors : leaderboard) : node ? nodeWorks : trending;
 
-  const defaultActive = mode === "researchers" ? leaderboard : trending;
-  const searchActive = mode === "researchers" ? authors : papers;
-  const defaultRows = mode === "researchers" ? (leaderboard.data ?? []) : (trending.data ?? []);
-  const searchRows = mode === "researchers" ? (authors.data ?? []) : (papers.data ?? []);
+  function reset(level: "root" | "field" | "subfield") {
+    if (level === "root") setField(null);
+    if (level !== "subfield") setSubfield(null);
+    setTopic(null);
+  }
+
+  // Which chip set to show next, and its click handler.
+  const nextLevel: { title: string; q: typeof fieldsQ; pick: (t: OpenAlexTaxon) => void } | null = !field
+    ? { title: "Pick a field", q: fieldsQ, pick: (t) => { setField(t); setSubfield(null); setTopic(null); } }
+    : !subfield
+      ? { title: "Narrow it down", q: subfieldsQ, pick: (t) => { setSubfield(t); setTopic(null); } }
+      : !topic
+        ? { title: "Pick a topic", q: topicsQ, pick: setTopic }
+        : null;
 
   const railContent = (
     <div className="flex flex-col gap-4">
@@ -83,9 +99,7 @@ export function DiscoveryContent() {
             transition={TRANSITION_FAST}
             className={cn(
               "relative flex-1 rounded-full py-2 font-body text-[13px] font-medium capitalize transition-colors duration-[var(--motion-fast)]",
-              mode === m
-                ? "text-text-on-primary"
-                : "text-text-secondary hover:bg-surface/60 hover:text-text-primary"
+              mode === m ? "text-text-on-primary" : "text-text-secondary hover:bg-surface/60 hover:text-text-primary",
             )}
             style={{ transitionTimingFunction: "var(--ease-standard)" }}
           >
@@ -101,38 +115,73 @@ export function DiscoveryContent() {
         ))}
       </div>
 
-      <Input
-        leadingIcon={<Search size={16} />}
-        placeholder={mode === "researchers" ? "Search researchers by name..." : "Search papers by title..."}
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
+      {/* Breadcrumb — every crumb is a button back to that level. */}
+      <div className="flex flex-wrap items-center gap-1 font-body text-[12px] text-text-muted">
+        <button
+          type="button"
+          onClick={() => reset("root")}
+          className={cn("cursor-pointer hover:text-text-primary", !field && "font-semibold text-text-primary")}
+        >
+          All fields
+        </button>
+        {field && (
+          <>
+            <ChevronRight size={12} />
+            <button
+              type="button"
+              onClick={() => reset("field")}
+              className={cn("cursor-pointer hover:text-text-primary", !subfield && "font-semibold text-text-primary")}
+            >
+              {field.display_name}
+            </button>
+          </>
+        )}
+        {subfield && (
+          <>
+            <ChevronRight size={12} />
+            <button
+              type="button"
+              onClick={() => reset("subfield")}
+              className={cn("cursor-pointer hover:text-text-primary", !topic && "font-semibold text-text-primary")}
+            >
+              {subfield.display_name}
+            </button>
+          </>
+        )}
+        {topic && (
+          <>
+            <ChevronRight size={12} />
+            <span className="font-semibold text-text-primary">{topic.display_name}</span>
+          </>
+        )}
+      </div>
 
-      {query.trim().length > 0 && query.trim().length < 3 && (
-        <p className="font-body text-[12.5px] text-text-muted">Keep typing — at least 3 characters.</p>
-      )}
-
-      {!hasQuery && (
-        <div className="flex flex-wrap gap-2 lg:flex-col lg:items-stretch lg:gap-1.5">
-          {POPULAR_FIELDS.map((field) => {
-            const isActive = activeField === field;
-            return (
-              <Chip
-                key={field}
-                selected={isActive}
-                onClick={() => setActiveField(isActive ? null : field)}
-                className="lg:justify-start"
-              >
-                {field}
-              </Chip>
-            );
-          })}
+      {nextLevel && (
+        <div>
+          <span className="mb-1.5 block font-body text-[11.5px] font-semibold uppercase tracking-wide text-text-muted">
+            {nextLevel.title}
+          </span>
+          {nextLevel.q.isPending ? (
+            <div className="flex flex-wrap gap-1.5">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-7 w-24 animate-pulse rounded-full bg-surface-subtle" />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-1.5 lg:flex-col lg:items-stretch">
+              {(nextLevel.q.data ?? []).map((t) => (
+                <Chip key={t.id} onClick={() => nextLevel.pick(t)} className="lg:justify-start">
+                  {t.display_name}
+                </Chip>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 
-  const resultsGridClass = "grid grid-cols-1 gap-2.5 lg:grid-cols-2 xl:grid-cols-3";
+  const gridClass = "grid grid-cols-1 gap-2.5 lg:grid-cols-2 xl:grid-cols-3";
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-4 px-4 py-6 md:px-8 lg:max-w-6xl">
@@ -146,95 +195,67 @@ export function DiscoveryContent() {
       </motion.h1>
 
       <RailShell rail={railContent} railWidth="260px" mobileRail="collapsible" stickyRail>
-        {/* ---- Default (no-query) state: trending / leaderboard ---- */}
-        {!hasQuery && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-1.5 text-text-secondary">
-              {mode === "researchers" ? <Trophy size={14} /> : <Flame size={14} />}
-              <span className="font-body text-[12.5px] font-semibold uppercase tracking-wide">
-                {mode === "researchers"
-                  ? activeField
-                    ? `Top in ${activeField}`
-                    : "Top Researchers"
-                  : activeField
-                    ? `Trending in ${activeField}`
-                    : "Trending This Year"}
-              </span>
-            </div>
-
-            <AnimatePresence>
-              {defaultActive.isError && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                  <ErrorBanner message="Couldn't load right now." onRetry={() => defaultActive.refetch()} />
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <div className={resultsGridClass}>
-              {defaultActive.isPending &&
-                [0, 1, 2, 3].map((i) => (
-                  <div key={i} className="h-16 animate-pulse rounded-[8px] bg-surface-subtle" />
-                ))}
-
-              {!defaultActive.isPending &&
-                !defaultActive.isError &&
-                mode === "researchers" &&
-                (leaderboard.data ?? []).map((entry, i) => (
-                  <LeaderboardRow key={entry.id} entry={entry} index={i} />
-                ))}
-
-              {!defaultActive.isPending &&
-                !defaultActive.isError &&
-                mode === "papers" &&
-                (trending.data ?? []).map((w, i) => <PaperResultCard key={w.id} w={w} index={i} />)}
-            </div>
-
-            {!defaultActive.isPending && !defaultActive.isError && defaultRows.length === 0 && (
-              <div className="flex flex-col items-center gap-2 py-10 text-center">
-                <SearchX size={26} className="text-text-muted" />
-                <p className="font-body text-[13.5px] text-text-muted">Nothing here yet for this field.</p>
-              </div>
-            )}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-1.5 text-text-secondary">
+            {mode === "researchers" ? <Trophy size={14} /> : <Flame size={14} />}
+            <span className="font-body text-[12.5px] font-semibold uppercase tracking-wide">
+              {node
+                ? `${mode === "researchers" ? "Top researchers" : "Top papers"} in ${node.label}`
+                : mode === "researchers"
+                  ? "Top Researchers"
+                  : "Trending This Year"}
+            </span>
           </div>
-        )}
 
-        <AnimatePresence>
-          {searchActive.isError && hasQuery && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <ErrorBanner
-                message="Couldn't complete the search. Try again."
-                onRetry={() => searchActive.refetch()}
-              />
-            </motion.div>
+          <AnimatePresence>
+            {active.isError && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <ErrorBanner message="Couldn't load right now." onRetry={() => active.refetch()} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className={gridClass}>
+            {active.isPending &&
+              [0, 1, 2, 3].map((i) => (
+                <div key={i} className="h-16 animate-pulse rounded-[8px] bg-surface-subtle" />
+              ))}
+
+            {!active.isPending && !active.isError && mode === "researchers" && !node &&
+              (leaderboard.data ?? []).map((entry, i) => (
+                <LeaderboardRow key={entry.id} entry={entry} index={i} />
+              ))}
+
+            {!active.isPending && !active.isError && mode === "researchers" && node &&
+              (nodeAuthors.data ?? []).map((a, i) => (
+                <AuthorResultCard
+                  key={a.id}
+                  index={i}
+                  a={{
+                    id: a.id,
+                    display_name: a.display_name,
+                    institution: a.institution,
+                    field_of_study: node.label,
+                    h_index: a.h_index,
+                  }}
+                />
+              ))}
+
+            {!active.isPending && !active.isError && mode === "papers" &&
+              ((node ? nodeWorks.data : trending.data) ?? []).map((w, i) => (
+                <PaperResultCard key={w.id} w={w} index={i} />
+              ))}
+          </div>
+
+          {!active.isPending && !active.isError && (active.data ?? []).length === 0 && (
+            <div className="flex flex-col items-center gap-2 py-10 text-center">
+              <SearchX size={26} className="text-text-muted" />
+              <p className="font-body text-[13.5px] text-text-muted">
+                {node ? "Nothing here yet for this topic." : "Pick a field on the left to explore."}
+              </p>
+            </div>
           )}
-        </AnimatePresence>
-
-        <AnimatePresence>
-          {hasQuery && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col gap-3">
-              <div className={resultsGridClass}>
-                {searchActive.isPending &&
-                  [0, 1, 2].map((i) => (
-                    <div key={i} className="h-16 animate-pulse rounded-[8px] bg-surface-subtle" />
-                  ))}
-
-                {!searchActive.isPending &&
-                  mode === "researchers" &&
-                  (authors.data ?? []).map((a, i) => <AuthorResultCard key={a.id} a={a} index={i} />)}
-                {!searchActive.isPending &&
-                  mode === "papers" &&
-                  (papers.data ?? []).map((w, i) => <PaperResultCard key={w.id} w={w} index={i} />)}
-              </div>
-
-              {!searchActive.isPending && !searchActive.isError && searchRows.length === 0 && (
-                <div className="flex flex-col items-center gap-2 py-10 text-center">
-                  <SearchX size={26} className="text-text-muted" />
-                  <p className="font-body text-[13.5px] text-text-muted">No results found.</p>
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+        </div>
       </RailShell>
     </div>
   );
