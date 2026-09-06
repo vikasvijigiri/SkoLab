@@ -197,6 +197,25 @@ func TestWhyResearcher(t *testing.T) {
 	}
 }
 
+func TestLooksLikePerson(t *testing.T) {
+	people := []string{"Ada Lovelace", "J. R. R. Tolkien", "María García-Aroca"}
+	notPeople := []string{
+		"", "Leibniz Association", "Helmholtz Open Science Office",
+		"Barcelona Declaration on Open Research Information",
+		"CERN", "The LHCb Collaboration", "Max Planck Institute",
+	}
+	for _, n := range people {
+		if !looksLikePerson(n) {
+			t.Fatalf("looksLikePerson(%q) = false, want true", n)
+		}
+	}
+	for _, n := range notPeople {
+		if looksLikePerson(n) {
+			t.Fatalf("looksLikePerson(%q) = true, want false", n)
+		}
+	}
+}
+
 func TestSortByScoreDesc(t *testing.T) {
 	xs := []scoredResearcher{{score: 0.2}, {score: 0.9}, {score: 0.5}}
 	sortByScoreDesc(xs)
