@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,6 +17,23 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/skolab/backend-go/internal/services/openalex"
 )
+
+// nonPersonRe drops OpenAlex "author" entities that are really institutions,
+// consortia or declarations — the degraded /similar_researchers fallback
+// derives candidates from paper authorships, which routinely include these.
+// Mirrors author.nonPersonRe.
+var nonPersonRe = regexp.MustCompile(
+	`(?i)\b(collaboration|group|consortium|committee|team|network|project|society|association|declaration|office|initiative|program|programme|working group|institute|university|department|laborator|centre|center|foundation|council|agency|organization|organisation)\b`,
+)
+
+func looksLikePerson(name string) bool {
+	name = strings.TrimSpace(name)
+	if name == "" || nonPersonRe.MatchString(name) {
+		return false
+	}
+	// A person's name is at least two whitespace-separated tokens.
+	return strings.Contains(name, " ")
+}
 
 var (
 	oaClient   = openalex.New()
@@ -340,6 +358,9 @@ func openAlexResearcherFallback(ctx context.Context, authorID string, limit int)
 	if err != nil {
 		return out
 	}
+	// Collect a wider pool than `limit` — the name filter below drops the
+	// institution / consortium "authors" OpenAlex mixes into authorships.
+	pool := limit * 4
 	seen := map[string]bool{cleanID(authorID): true}
 	var ids []string
 	for _, w := range works {
@@ -350,25 +371,31 @@ func openAlexResearcherFallback(ctx context.Context, authorID string, limit int)
 			}
 			seen[id] = true
 			ids = append(ids, id)
-			if len(ids) >= limit {
+			if len(ids) >= pool {
 				break
 			}
 		}
-		if len(ids) >= limit {
+		if len(ids) >= pool {
 			break
 		}
 	}
 	names := hydrateResearchers(ctx, ids)
 	for _, id := range ids {
 		n := names[id]
+		if n.name == "" || !looksLikePerson(n.name) {
+			continue // institution / consortium / unresolved — not a peer
+		}
 		out.Results = append(out.Results, SimilarResearcher{
 			AuthorID:     id,
-			DisplayName:  orDefault(n.name, "Researcher"),
+			DisplayName:  n.name,
 			Institution:  n.institution,
 			FieldOfStudy: field,
 			HIndex:       n.hIndex,
 			Why:          "works on " + topic,
 		})
+		if len(out.Results) >= limit {
+			break
+		}
 	}
 	return out
 }
