@@ -190,3 +190,25 @@ export const openAlexAuthorsByName = async (q: string): Promise<OpenAlexAuthorHi
   const data = await res.json();
   return Array.isArray(data) ? data : [];
 };
+
+export type TaxonLevel = "field" | "subfield" | "topic";
+
+export const openAlexAuthorsByTaxon = async (
+  level: TaxonLevel,
+  id: string,
+): Promise<OpenAlexAuthorHit[]> => {
+  const res = await fetch(`/api/openalex/authors?${level}=${encodeURIComponent(id)}`);
+  if (!res.ok) throw new ApiError(res.status, `Discovery request failed (HTTP ${res.status}).`);
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+};
+
+export const openAlexWorksByTaxon = async (
+  level: TaxonLevel,
+  id: string,
+): Promise<OpenAlexWork[]> => {
+  const res = await fetch(`/api/openalex/works?${level}=${encodeURIComponent(id)}`);
+  if (!res.ok) throw new ApiError(res.status, `Discovery request failed (HTTP ${res.status}).`);
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+};
