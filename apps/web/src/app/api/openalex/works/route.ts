@@ -7,11 +7,29 @@ import { OPENALEX_MAILTO, withOpenAlexKey } from "@/lib/openalex";
  * `q`, returns high-citation papers from the last two years (optionally scoped by
  * `focus`), mirroring the Android app's ApiService.getTrendingPapers().
  */
+const TAXON_FILTER = { topic: "topics.id", subfield: "topics.subfield.id", field: "topics.field.id" } as const;
+
 export async function GET(req: NextRequest) {
-  const q = req.nextUrl.searchParams.get("q");
-  const focus = req.nextUrl.searchParams.get("focus");
+  const sp = req.nextUrl.searchParams;
+  const q = sp.get("q");
+  const focus = sp.get("focus");
 
   const url = new URL("https://api.openalex.org/works");
+
+  // Click-only Discovery drilldown: top works for a taxonomy node.
+  const taxonEntry = Object.entries(TAXON_FILTER).find(([k]) => sp.get(k));
+  if (!q && taxonEntry) {
+    const [key, field] = taxonEntry;
+    const id = (sp.get(key) ?? "").replace(/^https?:\/\/openalex\.org\//i, "");
+    url.searchParams.set("per-page", "18");
+    url.searchParams.set("filter", `${field}:${id}`);
+    url.searchParams.set("sort", "cited_by_count:desc");
+    withOpenAlexKey(url);
+    const headers = { "User-Agent": `SkoLabWeb/1.0 (mailto:${OPENALEX_MAILTO})` };
+    const r = await fetch(url, { headers, next: { revalidate: 1800 } });
+    if (!r.ok) return NextResponse.json({ error: "openalex request failed" }, { status: r.status });
+    return NextResponse.json((await r.json()).results ?? []);
+  }
 
   if (q) {
     url.searchParams.set("search", q);
