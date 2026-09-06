@@ -117,6 +117,26 @@ async def offload_and_prune():
             except Exception as e:
                 print(f"[FAIL] Error pruning expired rows from '{table}': {e}")
 
+        # 4b. Similarity engine vectors — no expires_at column; prune by age.
+        # ~2 KB/row, 500 MB DB ceiling → cap total footprint. A pruned author/
+        # work is silently re-embedded on its next teleport / similar_papers hit.
+        # Skips cleanly when the pgvector tables do not exist (SQLite / not yet
+        # migrated).
+        embed_cutoff = now_utc - datetime.timedelta(days=90)
+        for table in ("work_embeddings", "author_embeddings"):
+            try:
+                del_res = await conn.execute(
+                    text(f"DELETE FROM {table} WHERE updated_at < :cutoff;"),  # noqa: S608
+                    {"cutoff": embed_cutoff},
+                )
+                await conn.commit()
+                if del_res.rowcount > 0:
+                    print(
+                        f"[PASS] Pruned {del_res.rowcount} stale rows from '{table}'."
+                    )
+            except Exception as e:
+                print(f"[FAIL] Error pruning stale rows from '{table}': {e}")
+
         # 5. Resolve broken database relations (orphaned foreign/relationship keys)
         try:
             # Connections referencing non-existent users
