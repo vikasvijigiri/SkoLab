@@ -48,6 +48,9 @@ export function DocumentsTab({
   );
 
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const migrated = useRef(false);
 
@@ -67,24 +70,34 @@ export function DocumentsTab({
   }, [active?.id, onActiveDocChange]);
 
   async function addDoc() {
-    const title = window.prompt("New document name", "section");
-    if (title === null) return;
+    // Auto-named; the user renames inline afterwards — no prompt.
+    const title = `Section ${documents.length + 1}`;
     const id = await createDocument(project.id, title, documents.length, by).catch((err) => {
       setError(friendlyFirestoreError(err as { code?: string; message?: string }));
       return null;
     });
-    if (id) setActiveId(id);
+    if (id) {
+      setActiveId(id);
+      setRenamingId(id);
+      setRenameDraft(title);
+    }
   }
 
-  async function renameDoc(d: CollabDocument) {
-    const title = window.prompt("Rename document", d.title);
-    if (title === null || !title.trim()) return;
-    await updateDocument(project.id, d.id, { title: title.trim() }, by).catch(() => {});
+  function beginRename(d: CollabDocument) {
+    setRenamingId(d.id);
+    setRenameDraft(d.title);
+  }
+
+  async function commitRename(d: CollabDocument) {
+    const title = renameDraft.trim();
+    setRenamingId(null);
+    if (!title || title === d.title) return;
+    await updateDocument(project.id, d.id, { title }, by).catch(() => {});
   }
 
   async function removeDoc(d: CollabDocument) {
+    setConfirmDeleteId(null);
     if (documents.length <= 1) return;
-    if (!window.confirm(`Delete “${d.title}”? This can't be undone.`)) return;
     await deleteDocument(project.id, d.id).catch(() => {});
     if (activeId === d.id) setActiveId(documents.find((x) => x.id !== d.id)?.id ?? null);
   }
@@ -116,24 +129,58 @@ export function DocumentsTab({
               d.id === active?.id ? "bg-primary/10 text-primary" : "text-text-secondary hover:bg-surface-subtle"
             )}
           >
-            <button
-              type="button"
-              onClick={() => setActiveId(d.id)}
-              onDoubleClick={() => canEdit && renameDoc(d)}
-              className="flex min-w-0 flex-1 items-center gap-2"
-            >
-              <FileText size={13} className="shrink-0" />
-              <span className="truncate font-body text-[12.5px]">{d.title}</span>
-            </button>
-            {canEdit && documents.length > 1 && (
+            {renamingId === d.id ? (
+              <input
+                ref={(el) => el?.focus()}
+                value={renameDraft}
+                onChange={(e) => setRenameDraft(e.target.value)}
+                onBlur={() => commitRename(d)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitRename(d);
+                  if (e.key === "Escape") setRenamingId(null);
+                }}
+                aria-label={`Rename ${d.title}`}
+                className="min-w-0 flex-1 rounded border border-primary bg-surface-input px-1.5 py-0.5 font-body text-[12.5px] text-text-primary outline-none"
+              />
+            ) : (
               <button
                 type="button"
-                onClick={() => removeDoc(d)}
-                aria-label={`Delete ${d.title}`}
-                className="shrink-0 opacity-0 transition-opacity hover:text-notification group-hover:opacity-100"
+                onClick={() => setActiveId(d.id)}
+                onDoubleClick={() => canEdit && beginRename(d)}
+                className="flex min-w-0 flex-1 items-center gap-2"
               >
-                <Trash2 size={12} />
+                <FileText size={13} className="shrink-0" />
+                <span className="truncate font-body text-[12.5px]">{d.title}</span>
               </button>
+            )}
+            {canEdit && documents.length > 1 && renamingId !== d.id && (
+              confirmDeleteId === d.id ? (
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => removeDoc(d)}
+                    className="rounded px-1 font-body text-[10.5px] font-semibold text-notification hover:bg-notification/10"
+                  >
+                    Delete
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteId(null)}
+                    className="rounded px-1 font-body text-[10.5px] text-text-muted hover:text-text-primary"
+                  >
+                    Keep
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteId(d.id)}
+                  aria-label={`Delete ${d.title}`}
+                  className="shrink-0 opacity-0 transition-opacity hover:text-notification group-hover:opacity-100"
+                >
+                  <Trash2 size={12} />
+                </button>
+              )
             )}
           </div>
         ))}

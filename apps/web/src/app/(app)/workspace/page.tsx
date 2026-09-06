@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, FolderKanban, Users2, Search } from "lucide-react";
+import { Plus, FolderKanban, Users2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -54,19 +54,16 @@ export default function WorkspaceListPage() {
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [scope, setScope] = useState<ScopeFilter>("all");
-  const [q, setQ] = useState("");
 
   const shownProjects = useMemo(() => {
-    const term = q.trim().toLowerCase();
     return projects
       .filter((p) => {
         if (scope === "owned" && p.ownerUid !== user?.uid) return false;
         if (scope === "shared" && p.ownerUid === user?.uid) return false;
-        if (term && !`${p.name} ${p.description}`.toLowerCase().includes(term)) return false;
         return true;
       })
       .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
-  }, [projects, scope, q, user?.uid]);
+  }, [projects, scope, user?.uid]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -163,36 +160,27 @@ export default function WorkspaceListPage() {
       )}
 
       {!loading && projects.length > 0 && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex gap-1 rounded-full bg-surface-subtle p-1">
-            {SCOPES.map((s) => (
-              <button
-                key={s.key}
-                type="button"
-                onClick={() => setScope(s.key)}
-                className={cn(
-                  "rounded-full px-3 py-1 font-body text-[12.5px] font-medium transition-colors",
-                  scope === s.key ? "bg-primary text-text-on-primary" : "text-text-secondary hover:text-text-primary"
-                )}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-          <div className="relative sm:w-64">
-            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search projects…"
-              className="h-9 w-full rounded-md border border-border-input bg-surface-input pl-8 pr-3 font-body text-[13px] text-text-primary outline-none focus:border-primary"
-            />
-          </div>
+        <div className="flex gap-1 self-start rounded-full bg-surface-subtle p-1">
+          {SCOPES.map((s) => (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => setScope(s.key)}
+              className={cn(
+                "rounded-full px-3 py-1 font-body text-[12.5px] font-medium transition-colors",
+                scope === s.key ? "bg-primary text-text-on-primary" : "text-text-secondary hover:text-text-primary"
+              )}
+            >
+              {s.label}
+            </button>
+          ))}
         </div>
       )}
 
       {!loading && projects.length > 0 && shownProjects.length === 0 && (
-        <p className="py-8 text-center font-body text-[13px] text-text-muted">No projects match.</p>
+        <p className="py-8 text-center font-body text-[13px] text-text-muted">
+          No projects in this view.
+        </p>
       )}
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
