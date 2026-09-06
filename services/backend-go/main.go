@@ -26,6 +26,7 @@ import (
 	"github.com/skolab/backend-go/internal/middleware"
 	"github.com/skolab/backend-go/internal/quest"
 	"github.com/skolab/backend-go/internal/recommendation"
+	"github.com/skolab/backend-go/internal/similarity"
 	"github.com/skolab/backend-go/internal/system"
 	"github.com/skolab/backend-go/internal/user"
 	"github.com/skolab/backend-go/internal/websocket"
@@ -147,6 +148,16 @@ func main() {
 	r.GET("/api/v1/author_metrics", author.GetAuthorMetrics)
 	r.GET("/author_metrics", author.GetAuthorMetrics)
 	r.GET("/api/v1/authors/author_metrics", author.GetAuthorMetrics)
+
+	// ── Similarity engine — pgvector kNN + co-author/concept blend + MMR ─────
+	// internal/similarity. Reads the work_embeddings / author_embeddings store
+	// the Python teleport worker populates (embedding compute is model work =
+	// Python, decisions/0010; ranking is a DB query = Go). Cold rows degrade to
+	// OpenAlex related_works / topic-derived co-authors.
+	r.GET("/api/v1/similar_papers", similarity.GetSimilarPapers)
+	r.GET("/similar_papers", similarity.GetSimilarPapers)
+	r.GET("/api/v1/similar_researchers", similarity.GetSimilarResearchers)
+	r.GET("/similar_researchers", similarity.GetSimilarResearchers)
 
 	// ── System metadata — non-LLM, ported from endpoints/system.py ──────────
 	// GET /api/v1/ (API-router root) and GET /api/v1/status (public status
