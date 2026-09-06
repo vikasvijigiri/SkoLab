@@ -58,19 +58,21 @@ async def test_pg_upsert_embeddings_writes_work_and_author_rows(monkeypatch):
         "app.services.ai.embedding_service.embed_texts", _fake_embed_texts()
     )
 
+    # All values are synthetic fixtures — the engine reads every real topic /
+    # institution / name from OpenAlex or Postgres at runtime, never a literal.
     works = [
         {
             "id": "https://openalex.org/W_sim_1",
-            "title": "Topological superconductivity in 2D",
-            "abstract": "We study Majorana bound states.",
-            "concepts": ["Physics", "Superconductivity"],
+            "title": "Synthetic work one",
+            "abstract": "Fixture abstract one.",
+            "concepts": ["Field Alpha", "Subtopic One"],
             "year": 2023,
         },
         {
             "id": "https://openalex.org/W_sim_2",
-            "title": "Quantum magnetism and spin liquids",
-            "abstract": "Frustrated lattices.",
-            "concepts": ["Physics"],
+            "title": "Synthetic work two",
+            "abstract": "Fixture abstract two.",
+            "concepts": ["Field Alpha"],
             "year": 2024,
         },
     ]
@@ -96,9 +98,9 @@ async def test_pg_upsert_embeddings_writes_work_and_author_rows(monkeypatch):
             works,
             raw_works,
             {"id": "A_sim_self"},
-            "Physics",
-            ["Condensed Matter Physics"],
-            "MIT",
+            "Field Alpha",
+            ["Subfield Beta"],
+            "Institution X",
             12,
             40,
         )
@@ -124,9 +126,9 @@ async def test_pg_upsert_embeddings_writes_work_and_author_rows(monkeypatch):
         assert n_works == 2
         assert arow is not None
         assert "A_sim_co1" in (arow[0] or [])
-        assert arow[1] == "MIT"
+        assert arow[1] == "Institution X"
         assert arow[2] == 12  # h_index arg (works_count=40 is a different column)
-        assert "Condensed Matter Physics" in (arow[3] or [])
+        assert "Subfield Beta" in (arow[3] or [])
     finally:
         await _cleanup(["W_sim_1", "W_sim_2"], ["A_sim_self"])
 
@@ -139,9 +141,9 @@ async def test_embed_work_route_upserts_row(client, monkeypatch):
     async def _fake_fetch_work(self, work_id):
         return {
             "id": f"https://openalex.org/{work_id}",
-            "title": "A test work about lattices",
-            "abstract_inverted_index": {"lattice": [0], "physics": [1]},
-            "concepts": [{"display_name": "Physics"}],
+            "title": "Synthetic route work",
+            "abstract_inverted_index": {"fixture": [0], "abstract": [1]},
+            "concepts": [{"display_name": "Field Alpha"}],
             "referenced_works": [],
             "publication_year": 2022,
         }
