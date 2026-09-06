@@ -80,7 +80,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             >
               <div
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display text-[13px] font-bold text-white shadow-card"
-                style={{ background: "var(--gradient-hero)" }}
+                style={{ background: "var(--primary)" }}
               >
                 {(user?.displayName ?? user?.email ?? "?").slice(0, 1).toUpperCase()}
               </div>
