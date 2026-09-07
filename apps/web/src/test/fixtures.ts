@@ -13,6 +13,7 @@ import type {
   SimilarPaper,
   SimilarResearcher,
   ActivityItem,
+  ScienceNewsItem,
 } from "@/lib/types";
 
 export const mockSuggestion: AuthorSuggestion = {
@@ -96,6 +97,23 @@ export const mockActivityFeed: ActivityItem[] = [
     },
     href: "/paper/W3000000009",
     why: "140 citations already",
+  },
+];
+
+export const mockScienceNews: ScienceNewsItem[] = [
+  {
+    title: "A new state of matter observed in a spin liquid",
+    url: "https://www.quantamagazine.org/example-a",
+    source: "Quanta Magazine",
+    published: "2026-09-06T10:00:00Z",
+    summary: "Physicists report evidence for long-sought quantum behaviour.",
+  },
+  {
+    title: "Telescope survey maps a million galaxies",
+    url: "https://phys.org/news/example-b",
+    source: "Phys.org",
+    published: "2026-09-05T12:00:00Z",
+    summary: "The dataset will sharpen models of cosmic structure.",
   },
 ];
 
