@@ -1,6 +1,9 @@
 # DESIGN.md — SkoLab (web)
 
-**Status:** proposed — direction chosen, 3 `[NEEDS CLARIFICATION]` markers for Gate 1
+**Status:** adopted — direction C; Gate 1 resolved 2026-09-07 (direction C
+confirmed, palette delegated + contrast-verified, Inter font swap, Landing as
+the reference screen). Rollout in progress —
+`docs/plans/2026-09-07-web-visual-identity-round1.md`.
 **Owns:** the web surface only (`apps/web`). The Android client is a separate,
 deliberately flat surface and is out of scope here.
 **Supersedes:** the unwritten contract that lived only as inline rationale in
@@ -38,9 +41,9 @@ Figma account is view-only, so there is nothing to ground tokens against via
 
 ### The problem with the current surface
 
-The current "quiet precision" system is well-built — real elevation, a synced
-dark mode, WCAG-luminance-checked contrast, a coherent three-font stack. It is
-not slop. Its weakness is **recessiveness**, not taste:
+The "quiet precision" system this replaces was well-built — real elevation, a
+synced dark mode, WCAG-luminance-checked contrast, a coherent font stack. It was
+not slop. Its weakness was **recessiveness**, not taste:
 
 - One indigo, used sparingly; the ten accent colors are hidden inside charts.
 - Body text sits at 13px almost everywhere; interior page titles at 22px.
@@ -77,15 +80,12 @@ should feel they are using an instrument, not a note-taking app.
   type scale, spacing rhythm, and hover behaviour is touched, and the data-viz
   palette needs a real consistency pass.
 
-`[NEEDS CLARIFICATION: Brand positioning drives the final call between C (calm
-scholarly instrument, this contract), B (dark-first pro terminal), and A
-(editorial/scholarly-prestige). C is scoped here and recommended; confirm the
-positioning or name the pivot.]`
-
-`[NEEDS CLARIFICATION: Are there existing SkoLab brand assets — a founder-chosen
-brand colour, a logo/wordmark, a marketing-site palette? None were found in the
-repo. If the indigo in globals.css is provisional, the exact --primary and
---accent-signal hues below are proposals for the user to ratify, not decisions.]`
+**Gate 1 (2026-09-07):** direction **C confirmed** ("industry-standard best
+practice", no pivot). **No existing brand assets** — palette delegated ("if you
+have better solid colors, use them"); the hues in the token table below are the
+adopted values, contrast-verified by `scripts/check-contrast.mjs`. Fonts:
+"LinkedIn-style" → Space Grotesk dropped for a two-family Inter + JetBrains Mono
+stack (see Type).
 
 ---
 
@@ -135,16 +135,18 @@ never need a `dark:` prefix. Keep the three blocks (`:root`,
 | `--text-secondary` | `#565863` | `#b1ac9f` | Supporting body (unchanged) |
 | `--text-muted` | `#5f616d` | `#9c978a` | Captions, mono eyebrows (unchanged) |
 | `--border-color` | `#e5e5e2` | `#38392f` | Hairlines, dividers, card borders (unchanged) |
-| `--primary` | `#3a5bd9` *(was `#4a52cf`)* | `#93a5ff` *(was `#9aa0ea`)* | Brand: links, active nav, secondary CTA outline, "influence" metric, focus of attention. A confident professional royal-indigo — trust-blue, not violet |
-| `--primary-dark` | `#2f4cc0` | `#7f92f5` | Primary hover / pressed |
-| `--primary-deeper` | `#263f9e` | `#6b80ea` | Primary on large filled blocks needing AA body contrast |
-| `--accent-signal` | `#dd4d2e` | `#ff7a5c` | **Primary CTA fill, "live"/new badges, the one thing on a screen that must be clicked.** Warm coral against the cool primary. Never more than one signal region per viewport. |
-| `--accent-signal-dark` | `#c33f22` | `#ff6749` | Signal hover / pressed |
+| `--primary` | `#3552cf` *(was `#4a52cf`)* | `#93a5ff` *(was `#9aa0ea`)* | Brand: links, active nav, secondary CTA outline, "influence" metric, focus of attention. A confident professional royal-indigo — trust-blue, not violet |
+| `--primary-dark` | `#2c46b8` | `#7f92f5` | Primary hover / pressed |
+| `--primary-deeper` | `#233a99` | `#6b80ea` | Primary on large filled blocks needing AA body contrast |
+| `--accent-signal` | `#c9401f` | `#ff7a5c` | **Primary CTA fill, "live"/new badges, the one thing on a screen that must be clicked.** Warm coral against the cool primary. Never more than one signal region per viewport. |
+| `--accent-signal-dark` | `#af3819` | `#ff6749` | Signal hover / pressed |
 
-> **These five hues are proposals.** Task 1 of the rollout runs a WCAG
-> relative-luminance check (`scripts/check-contrast.mjs`) over every pair below;
-> a value that misses is nudged within its hue family and the final number is
-> written back into this table. Solid fills only — no gradients anywhere.
+> **Verified.** `apps/web/scripts/check-contrast.mjs` (run in rollout Task 1)
+> checks every contrast pair below on both themes — all pass with margin
+> (light: white-on-`--accent-signal` 4.96:1, white-on-`--primary` 6.44:1;
+> dark equivalents ≥6.7:1). The light `--accent-signal` was darkened from an
+> initial `#dd4d2e` proposal (4.06:1) so white label text clears AA. Solid
+> fills only — no gradients anywhere.
 | `--text-on-primary` | `#ffffff` | `#1a1b18` | Text on `--primary` / `--accent-signal` fills |
 | `--success` | `#047857` | `#34d399` | Confirmation, positive delta (alias of `--accent-emerald`) |
 | `--warning` | `#b45309` | `#f0a83a` | Caution (alias of `--accent-amber`) |
@@ -158,7 +160,7 @@ Do not invent a chart colour outside this list. Order is the assignment order.
 
 | Metric role | Token | Light | Dark |
 |---|---|---|---|
-| Influence | `--metric-influence` | `#3a5bd9` (`--primary`) | `#93a5ff` |
+| Influence | `--metric-influence` | `#3552cf` (`--primary`) | `#93a5ff` |
 | Disruption | `--metric-disruption` | `#c2410c` (`--accent-orange`) | `#fb923c` |
 | Novelty | `--metric-novelty` | `#0e7490` (`--accent-cyan`) | `#22d3ee` |
 | Future impact | `--metric-future-impact` | `#6d4bd0` (`--accent-violet`) | `#c4b5fd` |
@@ -358,8 +360,8 @@ Non-negotiable. A miss is release-blocking unless a documented exception names
 the rule, the reason, the owner, and the expiry.
 
 - [ ] Contrast meets WCAG AA against the **actual** background — including the
-      new `--primary` (`#3a5bd9` / `#93a5ff`) and `--accent-signal`
-      (`#dd4d2e` / `#ff7a5c`): body text ≥4.5:1, large text and UI ≥3:1, on both
+      new `--primary` (`#3552cf` / `#93a5ff`) and `--accent-signal`
+      (`#c9401f` / `#ff7a5c`): body text ≥4.5:1, large text and UI ≥3:1, on both
       themes. **Verify with the luminance formula before the tokens land**; if a
       proposed hue misses, darken/lighten it within the same hue family and
       record the final value.
@@ -415,10 +417,8 @@ identity is proven on something real before it is spread.
 5. **Workspace / nexus / horizon.** The deep feature surfaces; last because they
    are the most complex and benefit from the patterns settling first.
 
-`[NEEDS CLARIFICATION: Reference-screen order — Landing first (recommended:
-no data deps, fastest loop, identity showcase) or Discovery first (the product's
-core click-only UX, but slower to iterate)? Everything after step 1 follows in
-the order above regardless.]`
+**Gate 1 (2026-09-07):** Landing first, confirmed. Everything after step 1
+follows the order above.
 
 ---
 

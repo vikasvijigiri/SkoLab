@@ -98,7 +98,7 @@ The three open questions were answered before implementation started:
   "do recommended / industry-standard best practice." No pivot.
 - **Brand colour + fonts:** no existing brand assets; palette delegated
   ("if you have better solid colors, use them"). `DESIGN.md` now specifies
-  `--primary #3a5bd9` (professional royal-indigo) and `--accent-signal #dd4d2e`
+  `--primary #3552cf` (professional royal-indigo) and `--accent-signal #c9401f`
   (warm coral); Task 1's `check-contrast.mjs` verifies and tunes. **Fonts:**
   "LinkedIn-style" — swap Space Grotesk → Inter, two-family stack (see
   Constraints).
@@ -130,7 +130,7 @@ to the visual layer. Nothing in `MEMORY.md` / `ISSUES.md` / `decisions/` governs
 
 | File | Action | Owns after |
 |---|---|---|
-| `apps/web/src/app/globals.css` | Modify | The full token set incl. `--primary` (`#3a5bd9`/`#93a5ff`), `--accent-signal`/`-dark` (`#dd4d2e`/`#ff7a5c`), dark values for `--accent-orange/violet/cyan/pink/emerald`, `--ring` (signal-derived), `--shadow-signal`, type-scale `--text-*` tokens, `.eyebrow`/`.data` utilities, and `--font-display` remapped to `var(--font-inter)` |
+| `apps/web/src/app/globals.css` | Modify | The full token set incl. `--primary` (`#3552cf`/`#93a5ff`), `--accent-signal`/`-dark` (`#c9401f`/`#ff7a5c`), dark values for `--accent-orange/violet/cyan/pink/emerald`, `--ring` (signal-derived), `--shadow-signal`, type-scale `--text-*` tokens, `.eyebrow`/`.data` utilities, and `--font-display` remapped to `var(--font-inter)` |
 | `apps/web/src/app/layout.tsx` | Modify | Remove the `Space_Grotesk` import + its `.variable` from the `<html>` className |
 | `apps/web/scripts/check-contrast.mjs` | Create | Standalone WCAG relative-luminance contrast check for the token pairs; exits 1 on any miss |
 | `apps/web/package.json` | Modify | Adds `"check:contrast"` script |
@@ -176,7 +176,7 @@ and inspect" rule → Tasks 1 (contrast) and 6 (axe + visual).
 ---
 
 ## Progress
-- [ ] Task 1 — Token system in globals.css + contrast check
+- [x] Task 1 — Token system in globals.css + contrast check
 - [ ] Task 2 — Button/MagneticCTA: signal variant, remove scale hover
 - [ ] Task 3 — Card: p-5 default + left accent bar
 - [ ] Task 4 — Extract SegmentedControl, adopt in Discovery
@@ -195,9 +195,9 @@ provably clears its WCAG threshold on both themes.
   (`:root` line ~26, `@media (prefers-color-scheme: dark)` line ~84,
   `:root[data-theme="dark"]` line ~124, `:root[data-theme="light"]` line ~151):
   set `--primary` / `--primary-dark` / `--primary-deeper` to the new
-  professional royal-indigo (`#3a5bd9` / `#2f4cc0` / `#263f9e` light;
+  professional royal-indigo (`#3552cf` / `#2c46b8` / `#233a99` light;
   `#93a5ff` / `#7f92f5` / `#6b80ea` dark); add `--accent-signal` /
-  `--accent-signal-dark` (`#dd4d2e` / `#c33f22` light; `#ff7a5c` / `#ff6749`
+  `--accent-signal-dark` (`#c9401f` / `#af3819` light; `#ff7a5c` / `#ff6749`
   dark); add the missing dark values for `--accent-orange` `--accent-violet`
   `--accent-cyan` `--accent-pink` `--accent-emerald` (per `DESIGN.md` data-viz
   table); change `--ring` to
