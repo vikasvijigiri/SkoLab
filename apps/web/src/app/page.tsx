@@ -176,7 +176,7 @@ export default function LandingPage() {
         <Reveal>
           <section className="mt-24 max-w-2xl text-center">
             <p className="eyebrow">
-              <span className="text-text-muted/70">01 —</span> The one idea
+              <span className="text-primary">01 —</span> The one idea
             </p>
             <p className="mt-4 font-display text-h2 font-bold leading-snug text-text-primary md:text-display-m">
               A name is all you give it. You get back a full impact signature, a
@@ -208,7 +208,7 @@ export default function LandingPage() {
         <Reveal>
           <section className="mt-24 w-full max-w-3xl">
             <p className="eyebrow text-center">
-              <span className="text-text-muted/70">02 —</span> How it works
+              <span className="text-primary">02 —</span> How it works
             </p>
             <ol className="mt-6 flex flex-col gap-4 sm:flex-row">
               {STEPS.map((s, i) => (
@@ -242,7 +242,7 @@ export default function LandingPage() {
         {/* ── FAQ ───────────────────────────────────────────────────────── */}
         <section className="mt-24 w-full max-w-2xl">
           <p className="eyebrow text-center">
-            <span className="text-text-muted/70">03 —</span> Questions
+            <span className="text-primary">03 —</span> Questions
           </p>
           <div className="mt-6 flex flex-col gap-2">
             {FAQ.map((item) => (

@@ -181,7 +181,7 @@ and inspect" rule → Tasks 1 (contrast) and 6 (axe + visual).
 - [x] Task 3 — Card: p-5 default + left accent bar
 - [x] Task 4 — Extract SegmentedControl, adopt in Discovery
 - [x] Task 5 — Rebuild Landing to the contract
-- [ ] Task 6 — Landing visual QA + identity sign-off render
+- [x] Task 6 — Landing visual QA + identity sign-off render
 
 ---
 
@@ -427,6 +427,24 @@ committed baselines (no visual-diff gate in Round 1).
   ```
 **Done when:** axe is clean at all sizes, the screenshots exist, and the QA
 block is filled with a pass (or a named, dated exception).
+
+**QA result (2026-09-07):**
+```
+Surface/state: Landing — desktop 1440 / tablet 834 / mobile 390, light + dark
+Check: WCAG AA (axe, wcag2a+wcag2aa) + DESIGN.md token / anti-pattern read
+Result: PASS. axe 6/6 green (0 serious/critical). Screenshots at
+  apps/web/e2e/__screens__/landing-{desktop,tablet,mobile}-{light,dark}.png.
+  Type reads with authority (Inter 700 @ 60px hero, 32px section bodies);
+  mono `.eyebrow` + 01–03 numerals + hairline rules present; coral signal CTA
+  is the one action colour, one per viewport; outcome cards keep the top
+  accent bar (feature cards); spacing on the 96px section grid; no gradient /
+  glass / blob / scale-pop. Dark mode: warm-charcoal ground, periwinkle
+  primary, coral signal — correct.
+Exception: none. Note: the initial spec screenshotted before <Reveal> sections
+  scrolled into view (blank mid-page); fixed by scrolling the page to trigger
+  every whileInView before the shot + axe. A small left/right dev-overlay
+  artefact in the shots is `next dev` chrome, absent from a production build.
+```
 
 ---
 
