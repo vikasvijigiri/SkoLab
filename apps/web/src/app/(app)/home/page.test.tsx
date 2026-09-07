@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import { http, HttpResponse } from "msw";
 import { renderWithProviders, screen } from "@/test/render";
 import { server } from "@/test/handlers";
@@ -21,8 +21,16 @@ vi.mock("@/lib/hooks/useMyProfile", () => ({
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
+beforeEach(() => {
+  try {
+    localStorage.clear();
+  } catch {
+    /* ignore */
+  }
+});
+
 describe("HomePage", () => {
-  it("greets the user and renders the daily-feed recommendations from the API", async () => {
+  it("greets the user and blends recommended papers into the unified feed", async () => {
     server.use(
       http.get(`${API}/api/v1/daily_feed`, () =>
         HttpResponse.json([
@@ -40,32 +48,34 @@ describe("HomePage", () => {
     );
     renderWithProviders(<HomePage />);
     expect(screen.getByText(/Good to see you, Ada/i)).toBeInTheDocument();
-    // Appears in both the feed rail and the AI Daily Brief top-paper row.
     expect((await screen.findAllByText("A very relevant paper")).length).toBeGreaterThan(0);
   });
 
-  it("renders the activity stream from /activity_feed", async () => {
+  it("blends network activity and science news into the same feed", async () => {
     renderWithProviders(<HomePage />);
-    // From the default mockActivityFeed handler.
-    expect(
-      await screen.findByText("Compilers for the analytical engine"),
-    ).toBeInTheDocument();
+    // activity paper_published title is wrapped: `X published "…"`.
+    expect(await screen.findByText(/Compilers for the analytical engine/)).toBeInTheDocument();
     expect(screen.getByText(/is now connected with you/i)).toBeInTheDocument();
-  });
-
-  it("renders the science-news strip from /science_news", async () => {
-    renderWithProviders(<HomePage />);
-    expect(await screen.findByText(/In the news/i)).toBeInTheDocument();
+    // science news headline appears as a feed card.
     expect(
       await screen.findByText("A new state of matter observed in a spin liquid"),
     ).toBeInTheDocument();
   });
 
-  it("still renders the shell when the feed API fails", async () => {
+  it("exposes the lens filter with a default 'For you'", async () => {
+    renderWithProviders(<HomePage />);
+    expect(await screen.findByRole("button", { name: "For you" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Papers" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Roles" })).toBeInTheDocument();
+  });
+
+  it("still renders the shell when the recommendations API fails", async () => {
     server.use(http.get(`${API}/api/v1/daily_feed`, () => new HttpResponse(null, { status: 500 })));
     renderWithProviders(<HomePage />);
+    expect(screen.getByText(/Good to see you, Ada/i)).toBeInTheDocument();
+    // Other sources still populate the feed.
     expect(
-      await screen.findByText(/No recommendations yet/i),
+      await screen.findByText(/Compilers for the analytical engine/),
     ).toBeInTheDocument();
   });
 });

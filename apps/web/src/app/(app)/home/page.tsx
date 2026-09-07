@@ -1,15 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText, Coins, Briefcase, BookOpen, Users2, FolderKanban, Sparkles, Newspaper } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { FileText, Coins, Briefcase, BookOpen, Users2, FolderKanban } from "lucide-react";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import { useMyProfile } from "@/lib/hooks/useMyProfile";
 import { useFirestoreCollection } from "@/lib/hooks/useFirestoreCollection";
 import { subscribeProjects } from "@/lib/firebase/workspace";
-import { dismissDailyFeedItem } from "@/lib/api/endpoints";
 import {
   dailyFeedQuery,
   dailyConjectureQuery,
@@ -22,14 +21,10 @@ import {
 } from "@/lib/api/queries";
 import { AIDailyBriefCard, type BriefItem } from "@/components/feed/AIDailyBriefCard";
 import { DailyChallengeCard } from "@/components/feed/DailyChallengeCard";
-import { PulseFeedCard } from "@/components/feed/PulseFeedCard";
 import { PeerSuggestionsCard } from "@/components/feed/PeerSuggestionsCard";
-import { ActivityFeedItem } from "@/components/feed/ActivityFeedItem";
-import { ScienceNewsCard } from "@/components/feed/ScienceNewsCard";
+import { UnifiedFeed } from "@/components/feed/UnifiedFeed";
 import { IdentityRailCard } from "@/components/feed/IdentityRailCard";
 import { Card } from "@/components/ui/Card";
-import { cn } from "@/lib/utils";
-import { DURATION_SLOW, EASE_STANDARD } from "@/lib/motion";
 import type {
   ActivityItem,
   ScienceNewsItem,
@@ -43,6 +38,7 @@ import type {
 const EMPTY_FEED: DailyFeedItem[] = [];
 const EMPTY_ACTIVITY: ActivityItem[] = [];
 const EMPTY_NEWS: ScienceNewsItem[] = [];
+const EMPTY_JOBS: IndustryOpportunity[] = [];
 
 /** Each insight is a distinct fact from a distinct source — separate rows, not a
  * run-on paragraph. */
@@ -140,17 +136,14 @@ function WorkspacesRailCard({ uid }: { uid?: string }) {
   );
 }
 
-type Sort = "latest" | "top";
-
 export default function HomePage() {
-  const { user, getIdToken } = useAuth();
+  const { user } = useAuth();
   const {
     firestoreProfile,
     author,
     loading: profileLoading,
     unresolved: profileUnresolved,
   } = useMyProfile();
-  const queryClient = useQueryClient();
 
   const name = firestoreProfile?.name || user?.displayName || undefined;
   // A topic/field, not the person's name — daily_feed uses it as a literal
@@ -172,50 +165,36 @@ export default function HomePage() {
   const newsQ = useQuery({ ...scienceNewsQuery(topic), enabled: ready });
 
   const feed = feedQ.data ?? EMPTY_FEED;
-  const feedLoading = feedQ.isPending;
   const conjecture = conjectureQ.data ?? null;
   const activity = activityQ.data?.items ?? EMPTY_ACTIVITY;
-  const activityLoading = activityQ.isPending;
   const news = newsQ.data?.items ?? EMPTY_NEWS;
+  const jobs = oppsQ.data ?? EMPTY_JOBS;
 
   const topGrant = grantsQ.data?.[0];
   const topOpportunity = oppsQ.data?.[0];
   const topJournal = journalQ.data?.[0];
   const briefLoading = !(feedQ.isFetched || grantsQ.isFetched || oppsQ.isFetched || journalQ.isFetched);
+  const feedLoading =
+    feedQ.isPending || activityQ.isPending || newsQ.isPending || oppsQ.isPending;
 
   const briefItems = useMemo(
     () => buildBriefItems({ topPaper: feed[0], topGrant, topOpportunity, topJournal }),
     [feed, topGrant, topOpportunity, topJournal],
   );
 
-  const [sort, setSort] = useState<Sort>("latest");
-  const sortedActivity = useMemo(() => {
-    if (sort === "latest") return activity;
-    return [...activity].sort(
-      (a, b) => (b.object?.citations ?? 0) - (a.object?.citations ?? 0),
-    );
-  }, [activity, sort]);
-
   const greetName =
     firestoreProfile?.name?.split(" ")[0] || user?.displayName?.split(" ")[0] || "there";
 
-  // Optimistic feed removal — a failed dismiss just means the paper may reappear.
-  const dismiss = useMutation({
-    mutationFn: async (workId: string) => {
-      if (!author?.id) return { success: true };
-      const idToken = await getIdToken();
-      return dismissDailyFeedItem(idToken, author.id, workId);
-    },
-    onMutate: (workId: string) => {
-      const key = dailyFeedQuery(authorId, topic).queryKey;
-      queryClient.setQueryData<DailyFeedItem[]>(key, (prev) =>
-        (prev ?? []).filter((item) => item.id !== workId),
-      );
-    },
-  });
-
   const rightRail = (
     <>
+      <IdentityRailCard
+        name={name ?? "Researcher"}
+        status={firestoreProfile?.academicStatus}
+        author={author}
+        loading={profileLoading}
+        unresolved={profileUnresolved}
+      />
+      <WorkspacesRailCard uid={user?.uid} />
       <div className="flex flex-col gap-3">
         <h2 className="flex items-center gap-1.5 font-display text-[15px] font-semibold text-text-primary">
           <Users2 size={14} className="text-accent-teal" />
@@ -236,23 +215,9 @@ export default function HomePage() {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-[1240px] gap-6 px-4 py-6 md:px-6">
-      {/* ── Left rail — identity + workspaces (data, never nav) ───────────── */}
-      <aside className="hidden w-[248px] shrink-0 lg:block">
-        <div className="sticky top-6 flex flex-col gap-4">
-          <IdentityRailCard
-            name={name ?? "Researcher"}
-            status={firestoreProfile?.academicStatus}
-            author={author}
-            loading={profileLoading}
-            unresolved={profileUnresolved}
-          />
-          <WorkspacesRailCard uid={user?.uid} />
-        </div>
-      </aside>
-
-      {/* ── Center — the feed ────────────────────────────────────────────── */}
-      <div className="flex min-w-0 flex-1 flex-col gap-4 lg:max-w-[620px]">
+    <div className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6 lg:grid lg:grid-cols-[minmax(0,72fr)_minmax(0,25fr)] lg:gap-[3%]">
+      {/* ── Main column (≈72%) — the feed ───────────────────────────────── */}
+      <div className="flex min-w-0 flex-col gap-4">
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
           <h1 className="font-display text-[20px] font-bold text-text-primary">
             Good to see you, {greetName}
@@ -264,110 +229,24 @@ export default function HomePage() {
 
         <AIDailyBriefCard items={briefItems} loading={briefLoading} />
 
-        {/* activity stream */}
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-[15px] font-semibold text-text-primary">Activity</h2>
-          <div className="flex items-center gap-0.5 rounded-full border border-border p-0.5">
-            {(["latest", "top"] as const).map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setSort(s)}
-                className={cn(
-                  "rounded-full px-2.5 py-0.5 font-body text-[11.5px] font-medium capitalize transition-colors",
-                  sort === s
-                    ? "bg-primary text-text-on-primary"
-                    : "text-text-muted hover:text-text-primary",
-                )}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        </div>
+        {/* One blended, self-labelling research feed — papers · news · network
+            · roles, ranked together, with a lens filter and Save / Not-relevant. */}
+        <UnifiedFeed
+          papers={feed}
+          news={news}
+          activity={activity}
+          jobs={jobs}
+          loading={feedLoading}
+        />
 
-        {activityLoading ? (
-          <div className="flex flex-col gap-3">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="h-28 animate-pulse rounded-[8px] bg-surface-subtle" />
-            ))}
-          </div>
-        ) : sortedActivity.length === 0 ? (
-          <Card className="text-center">
-            <Sparkles size={18} className="mx-auto text-text-muted" />
-            <p className="mt-2 font-body text-[13px] font-medium text-text-primary">Your feed is warming up</p>
-            <p className="mt-0.5 font-body text-[12px] leading-relaxed text-text-muted">
-              Connect with researchers and their new work shows up here. Meanwhile, see the recommendations below.
-            </p>
-          </Card>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {sortedActivity.map((item, i) => (
-              <motion.div
-                key={item.id}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: DURATION_SLOW, delay: Math.min(i, 6) * 0.05, ease: EASE_STANDARD }}
-              >
-                <ActivityFeedItem item={item} />
-              </motion.div>
-            ))}
-          </div>
-        )}
-
-        {/* in the news */}
-        {(newsQ.isPending || news.length > 0) && (
-          <div className="mt-2 flex flex-col gap-3">
-            <h2 className="flex items-center gap-1.5 font-display text-[15px] font-semibold text-text-primary">
-              <Newspaper size={14} className="text-accent-teal" />
-              In the news
-            </h2>
-            <ScienceNewsCard items={news} loading={newsQ.isPending} />
-          </div>
-        )}
-
-        {/* recommended papers */}
-        <div className="mt-2 flex flex-col gap-3">
-          <h2 className="flex items-center gap-1.5 font-display text-[15px] font-semibold text-text-primary">
-            <Sparkles size={14} className="text-accent-violet" />
-            Recommended for you
-          </h2>
-          {feedLoading && (
-            <div className="flex flex-col gap-3">
-              {[0, 1].map((i) => (
-                <div key={i} className="h-40 animate-pulse rounded-[8px] bg-surface-subtle" />
-              ))}
-            </div>
-          )}
-          {!feedLoading && feed.length === 0 && (
-            <div className="rounded-[10px] border border-dashed border-border px-4 py-6 text-center">
-              <Sparkles size={18} className="mx-auto text-text-muted" />
-              <p className="mt-2 font-body text-[13px] font-medium text-text-primary">No recommendations yet</p>
-              <p className="mt-0.5 font-body text-[12px] leading-relaxed text-text-muted">
-                Add a research focus to your profile and fresh papers in your field will show up here.
-              </p>
-            </div>
-          )}
-          {feed.map((item, i) => (
-            <motion.div
-              key={item.id}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: DURATION_SLOW, delay: 0.1 + Math.min(i, 6) * 0.06, ease: EASE_STANDARD }}
-            >
-              <PulseFeedCard item={item} onDismiss={author?.id ? () => dismiss.mutate(item.id) : undefined} />
-            </motion.div>
-          ))}
-        </div>
-
-        {/* Right-rail content, stacked inline below the feed on < xl screens so
-            mobile users still get peer suggestions + the daily challenge. */}
-        <div className="mt-2 flex flex-col gap-6 xl:hidden">{rightRail}</div>
+        {/* Rail content stacked inline below the feed on < lg so nothing is
+            lost on tablet / mobile. */}
+        <div className="mt-2 flex flex-col gap-5 lg:hidden">{rightRail}</div>
       </div>
 
-      {/* ── Right rail — people + challenge (xl+) ────────────────────────── */}
-      <aside className="hidden w-[320px] shrink-0 xl:block">
-        <div className="sticky top-6 flex flex-col gap-6">{rightRail}</div>
+      {/* ── Right rail (≈25%) — identity · workspaces · people · challenge ── */}
+      <aside className="hidden lg:block">
+        <div className="sticky top-6 flex flex-col gap-5">{rightRail}</div>
       </aside>
     </div>
   );
