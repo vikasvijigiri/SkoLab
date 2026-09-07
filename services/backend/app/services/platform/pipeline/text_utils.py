@@ -7,6 +7,20 @@ these names) so existing import paths still resolve after the split.
 from app.db.pg_cache import PgBackedCache
 
 
+def bare_openalex_id(raw: object) -> object:
+    """Last path segment of an OpenAlex id.
+
+    ``"https://openalex.org/W123"`` -> ``"W123"``; an already-bare id or a
+    non-string value is returned unchanged. Clients build a ``/paper/<id>``
+    route from ``daily_feed`` ids and the canonical URL form 400s once
+    URL-encoded, so the array this pipeline returns must carry bare ids —
+    the same normalisation the Go gateway applies to every id it emits.
+    """
+    if isinstance(raw, str) and raw:
+        return raw.rstrip("/").split("/")[-1]
+    return raw
+
+
 def is_field_semantically_relevant(
     collab_field: str, collab_path: str, discipline: str
 ) -> bool:

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Users2, ArrowUpRight } from "lucide-react";
 import { Card } from "@/components/ui/Card";
+import { shortOpenAlexId } from "@/lib/utils";
 import type { SimilarResearcher } from "@/lib/types";
 
 /**
@@ -60,7 +61,7 @@ export function PeerSuggestionsCard({
       {peers.slice(0, 6).map((p) => (
         <Link
           key={p.author_id}
-          href={`/author/${encodeURIComponent(p.author_id)}?name=${encodeURIComponent(p.display_name || "")}`}
+          href={`/author/${encodeURIComponent(shortOpenAlexId(p.author_id))}?name=${encodeURIComponent(p.display_name || "")}`}
           className="group flex items-center gap-3 rounded-[8px] border border-border bg-surface p-2.5 transition-colors duration-[var(--motion-fast)] hover:border-primary/40"
           style={{ transitionTimingFunction: "var(--ease-standard)" }}
         >

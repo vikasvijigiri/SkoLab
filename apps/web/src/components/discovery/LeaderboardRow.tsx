@@ -6,7 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { prefetchAuthor } from "@/lib/api/prefetch";
-import { cn, focusRing } from "@/lib/utils";
+import { cn, focusRing, shortOpenAlexId } from "@/lib/utils";
 import { DURATION_NORMAL, EASE_STANDARD } from "@/lib/motion";
 import type { LeaderboardEntry } from "@/lib/types";
 
@@ -29,7 +29,7 @@ export function LeaderboardRow({ entry, index }: { entry: LeaderboardEntry; inde
       {/* Deep-links straight to the author by id — a name-based search here can
           resolve to the wrong same-initial person when names collide. */}
       <Link
-        href={`/author/${encodeURIComponent(entry.id)}?name=${encodeURIComponent(entry.user_name)}`}
+        href={`/author/${encodeURIComponent(shortOpenAlexId(entry.id))}?name=${encodeURIComponent(entry.user_name)}`}
         onMouseEnter={warm}
         onFocus={warm}
         className={cn("block rounded-lg", focusRing)}

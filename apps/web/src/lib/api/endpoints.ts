@@ -1,4 +1,5 @@
 import { apiRequest, ApiError } from "./client";
+import { shortOpenAlexId } from "@/lib/utils";
 import type {
   AuthorSuggestion,
   AuthorResponse,
@@ -184,7 +185,9 @@ export const openAlexWorks = async (opts: { q?: string; focus?: string } = {}): 
 };
 
 export const openAlexWorkById = async (id: string): Promise<OpenAlexWork> => {
-  const res = await fetch(`/api/openalex/works/${encodeURIComponent(id)}`);
+  // Tolerate a full URL id ("https://openalex.org/W…") from a stale link,
+  // bookmark, or hand-typed URL — OpenAlex 400s on the URL-encoded form.
+  const res = await fetch(`/api/openalex/works/${encodeURIComponent(shortOpenAlexId(id))}`);
   if (!res.ok) throw new ApiError(res.status, `Couldn't load this paper (HTTP ${res.status}).`);
   return (await res.json()) as OpenAlexWork;
 };

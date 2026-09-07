@@ -7,12 +7,12 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { MathText } from "@/components/ui/MathText";
 import { prefetchPaper } from "@/lib/api/prefetch";
-import { cn, focusRing } from "@/lib/utils";
+import { cn, focusRing, shortOpenAlexId } from "@/lib/utils";
 import { DURATION_NORMAL, EASE_STANDARD } from "@/lib/motion";
 import type { OpenAlexWork } from "@/lib/types";
 
 export function PaperResultCard({ w, index }: { w: OpenAlexWork; index: number }) {
-  const shortId = w.id.split("/").pop() ?? w.id;
+  const shortId = shortOpenAlexId(w.id);
   const qc = useQueryClient();
   const warm = () => prefetchPaper(qc, shortId);
   return (

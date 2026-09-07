@@ -16,6 +16,7 @@ from app.api.dependencies import (
 from app.api.v1.endpoints import feed as feed_module
 from app.core import pending_compute
 from app.schemas.feed_extra import DailyFeedItem
+from app.services.platform.pipeline.text_utils import bare_openalex_id
 
 
 class _FakePipeline:
@@ -52,6 +53,23 @@ def _overrides(app):
     yield
     app.dependency_overrides.clear()
     pending_compute._inflight.clear()
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("https://openalex.org/W7206172422", "W7206172422"),
+        ("https://api.openalex.org/works/W123", "W123"),
+        ("https://openalex.org/W123/", "W123"),
+        ("W7206172422", "W7206172422"),
+        ("", ""),
+        (None, None),
+    ],
+)
+def test_bare_openalex_id_normalises_daily_feed_ids(raw, expected):
+    # daily_feed items must carry the bare id — clients build `/paper/<id>` from
+    # it and the canonical URL form 400s once URL-encoded.
+    assert bare_openalex_id(raw) == expected
 
 
 async def test_daily_feed_is_a_typed_array(client):

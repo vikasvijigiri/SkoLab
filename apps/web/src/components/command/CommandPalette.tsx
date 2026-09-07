@@ -10,6 +10,7 @@ import { useDebounce } from "@/lib/hooks/useDebounce";
 import { useRecentlyViewed } from "@/lib/hooks/useRecentlyViewed";
 import { applyTheme, initialTheme, nextTheme } from "@/lib/theme";
 import { getAuthorSuggestions } from "@/lib/api/endpoints";
+import { shortOpenAlexId } from "@/lib/utils";
 import { MathText } from "@/components/ui/MathText";
 import type { AuthorSuggestion, OpenAlexWork } from "@/lib/types";
 
@@ -165,7 +166,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                 key={a.id}
                 onSelect={() =>
                   go(
-                    `/author/${encodeURIComponent(a.id)}?name=${encodeURIComponent(a.display_name)}&focus=${encodeURIComponent(a.field_of_study ?? "")}`
+                    `/author/${encodeURIComponent(shortOpenAlexId(a.id))}?name=${encodeURIComponent(a.display_name)}&focus=${encodeURIComponent(a.field_of_study ?? "")}`
                   )
                 }
                 className={itemClass}
@@ -183,7 +184,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
         {papers.length > 0 && (
           <Command.Group heading="Papers" className={groupHeadingClass}>
             {papers.map((w) => {
-              const shortId = w.id.split("/").pop() ?? w.id;
+              const shortId = shortOpenAlexId(w.id);
               return (
                 <Command.Item key={w.id} onSelect={() => go(`/paper/${encodeURIComponent(shortId)}`)} className={itemClass}>
                   <FileText size={15} className="shrink-0 text-text-muted" />
