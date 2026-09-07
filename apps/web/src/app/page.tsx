@@ -4,40 +4,79 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Sparkles, Radar, Users2, Award, ArrowRight } from "lucide-react";
+import {
+  Sparkles,
+  Radar,
+  Users2,
+  MousePointerClick,
+  ListChecks,
+  ArrowRight,
+  Plus,
+} from "lucide-react";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
-import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Reveal } from "@/components/ui/Reveal";
-import { HeroPreview } from "@/components/ui/HeroPreview";
 import { MagneticCTA } from "@/components/ui/MagneticCTA";
+import { LandingTryDemo } from "@/components/landing/LandingTryDemo";
 import { EASE_STANDARD } from "@/lib/motion";
 
-const FEATURES = [
-  {
-    icon: Sparkles,
-    title: "AI Gap Finder",
-    body: "Surface unexplored literature gaps and next research frontiers, generated per-profile.",
-    accent: "var(--accent-violet)",
-  },
+const OUTCOMES = [
   {
     icon: Radar,
-    title: "8-Axis Impact Radar",
-    body: "Disruption, novelty, influence, complexity, and more — one glance at a researcher's signature.",
+    title: "Measure",
+    body:
+      "Eight axes of real standing — disruption, novelty, influence, consistency — not just an h-index. One glance reads a whole career.",
     accent: "var(--primary)",
   },
   {
-    icon: Users2,
-    title: "Live CoLab Workspace",
-    body: "Shared equations, manuscripts, tasks and chat — synced in real time with your team.",
-    accent: "var(--accent-teal)",
+    icon: Sparkles,
+    title: "Discover",
+    body:
+      "The papers and people working closest to your problem, ranked by a similarity engine — surfaced from a click, never a query you have to craft.",
+    accent: "var(--accent-violet)",
   },
   {
-    icon: Award,
-    title: "Grant & Journal Matching",
-    body: "Personalized funding opportunities and submission targets ranked by fit.",
-    accent: "var(--accent-amber)",
+    icon: Users2,
+    title: "Collaborate",
+    body:
+      "A live workspace — shared manuscript, equations, tasks and chat — synced in real time with your lab.",
+    accent: "var(--accent-teal)",
+  },
+];
+
+const STEPS = [
+  { icon: MousePointerClick, text: "Click a field — not a search box." },
+  { icon: Plus, text: "Pick the researcher or the paper." },
+  { icon: ListChecks, text: "Read the signature, or open a workspace." },
+];
+
+const ROLES = [
+  { who: "PhD students", line: "See where a field is thin before you commit a thesis to it." },
+  { who: "Principal investigators", line: "Benchmark a hire, a collaborator, or your own group in seconds." },
+  { who: "Lab groups", line: "One workspace for the draft, the maths, and the meeting notes." },
+];
+
+const FAQ = [
+  {
+    q: "Do I have to write search queries?",
+    a: "No. Every surface is built from clickable options fetched live — fields, sub-fields, topics, researchers, papers. Typing is reserved for the manuscript editor and chat.",
+  },
+  {
+    q: "Is it free?",
+    a: "The core — author search, impact signatures, discovery, and the CoLab workspace — is free. AI-heavy features (per-profile gap analysis, breakthrough prediction) are a premium add-on.",
+  },
+  {
+    q: "How is “impact” scored?",
+    a: "From public data (OpenAlex, Crossref, ORCID, arXiv): citation velocity, disruption index, concept novelty, co-authorship centrality and more, combined into an eight-axis signature. Nothing is invented — every axis traces back to a source.",
+  },
+  {
+    q: "Is my data private?",
+    a: "Your profile, workspaces and connections are yours. Public bibliometric data is public; anything you create in a workspace is visible only to the people you invite.",
+  },
+  {
+    q: "Which parts use AI?",
+    a: "Deliberately few. Ranking, similarity and metrics are ordinary computation. Large language models are used only for the premium analysis features, and always labelled where they run.",
   },
 ];
 
@@ -50,8 +89,9 @@ export default function LandingPage() {
   }, [loading, user, router]);
 
   return (
-    <div className="relative flex min-h-full flex-1 flex-col overflow-hidden bg-page-bg">
-      <header className="relative z-10 flex items-center justify-between px-6 py-6 md:px-12">
+    <div className="relative flex min-h-full flex-1 flex-col bg-page-bg">
+      {/* ── Nav — no exit links ─────────────────────────────────────────── */}
+      <header className="relative z-10 flex items-center justify-between px-6 py-5 md:px-12">
         <span className="font-display text-[20px] font-bold text-text-primary">SkoLab</span>
         <div className="flex items-center gap-4">
           <ThemeToggle />
@@ -64,86 +104,180 @@ export default function LandingPage() {
         </div>
       </header>
 
-      <main className="relative z-10 flex flex-1 flex-col items-center px-6 pb-16 pt-10 text-center md:pt-16">
-        <motion.span
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mb-5 inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-4 py-1.5 font-mono text-[11px] font-medium tracking-wide text-text-muted"
-        >
-          <Sparkles size={12} className="text-accent-violet" />
-          SCIENTIFIC DISCOVERY &amp; ANALYTICS PLATFORM
-        </motion.span>
+      <main className="relative z-10 flex flex-1 flex-col items-center px-6 pb-20">
+        {/* ── Hero ──────────────────────────────────────────────────────── */}
+        <section className="flex w-full max-w-3xl flex-col items-center pt-10 text-center md:pt-16">
+          <motion.span
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="mb-5 inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-4 py-1.5 font-mono text-[11px] font-medium tracking-wide text-text-muted"
+          >
+            <Sparkles size={12} className="text-accent-violet" />
+            THE IMPACT LAYER FOR RESEARCH
+          </motion.span>
 
-        <motion.h1
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.1, ease: EASE_STANDARD }}
-          className="max-w-3xl font-display text-[40px] font-bold leading-[1.1] tracking-tight text-text-primary md:text-[56px]"
-        >
-          Quantify research impact.
-          <br />
-          <span className="text-primary">Predict what&apos;s next.</span>
-        </motion.h1>
+          <motion.h1
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1, ease: EASE_STANDARD }}
+            className="max-w-3xl font-display text-[38px] font-bold leading-[1.1] tracking-tight text-text-primary md:text-[54px]"
+          >
+            Know any researcher&apos;s real standing
+            <br />
+            <span className="text-primary">in one glance.</span>
+          </motion.h1>
 
-        <motion.p
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2, ease: EASE_STANDARD }}
-          className="mt-6 max-w-xl font-body text-[16px] leading-relaxed text-text-secondary"
-        >
-          SkoLab links researchers, papers, and institutions in real time — AI-scored metrics,
-          career-trajectory prediction, and live collaboration in one platform.
-        </motion.p>
+          <motion.p
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2, ease: EASE_STANDARD }}
+            className="mt-5 max-w-xl font-body text-[16px] leading-relaxed text-text-secondary"
+          >
+            Impact signatures, career-trajectory prediction, and a live collaboration
+            workspace for research teams. No search queries to write.
+          </motion.p>
 
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.3, ease: EASE_STANDARD }}
-          className="mt-9 flex flex-col items-center gap-3 sm:flex-row"
-        >
-          <MagneticCTA onClick={() => router.push("/signup")}>
-            Get started free
-            <ArrowRight size={16} />
-          </MagneticCTA>
-          <Link href="/login">
-            <Button variant="outlined" className="sm:w-56">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.3, ease: EASE_STANDARD }}
+            className="mt-8 flex flex-col items-center gap-3 sm:flex-row"
+          >
+            <MagneticCTA onClick={() => router.push("/signup")}>
+              Get started free
+              <ArrowRight size={16} />
+            </MagneticCTA>
+            <Link href="/login" className="font-body text-[13.5px] font-medium text-text-secondary hover:text-primary">
               I already have an account
-            </Button>
-          </Link>
-        </motion.div>
+            </Link>
+          </motion.div>
 
-        <HeroPreview />
+          <LandingTryDemo />
+        </section>
 
-        <div className="mt-12 flex flex-col items-center gap-3">
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-muted">
-            Built on trusted open research data
+        {/* ── Proof strip ───────────────────────────────────────────────── */}
+        <section className="mt-14 flex w-full max-w-4xl flex-col items-center gap-3 border-y border-border py-6 text-center">
+          <p className="font-display text-[15px] font-semibold text-text-primary">
+            Every researcher in the open record — <span className="text-primary">~2.4M</span> profiles,{" "}
+            <span className="text-primary">240M+</span> papers, every field.
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 font-body text-[13px] font-semibold text-text-secondary">
-            {["OpenAlex", "Crossref", "ORCID", "arXiv", "Semantic Scholar"].map((src) => (
-              <span key={src}>{src}</span>
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1">
+            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-muted">Built on</span>
+            {["OpenAlex", "Crossref", "ORCID", "arXiv"].map((s) => (
+              <span key={s} className="font-body text-[13px] font-semibold text-text-secondary">
+                {s}
+              </span>
             ))}
           </div>
-        </div>
+        </section>
 
-        <div className="mt-14 grid w-full max-w-5xl grid-cols-1 gap-4 text-left sm:grid-cols-2 lg:grid-cols-4">
-          {FEATURES.map((f, i) => (
-            <Reveal key={f.title} delay={i * 0.08}>
-              <Card accentColor={f.accent} className="h-full">
+        {/* ── The one idea ──────────────────────────────────────────────── */}
+        <Reveal>
+          <section className="mt-16 max-w-2xl text-center">
+            <p className="font-mono text-[11px] font-semibold uppercase tracking-wider text-primary">
+              The one idea
+            </p>
+            <p className="mt-3 font-display text-[24px] font-bold leading-snug text-text-primary md:text-[28px]">
+              A name is all you give it. You get back a full impact signature, a
+              citation-velocity curve, and the researchers working closest to the
+              same problem.
+            </p>
+          </section>
+        </Reveal>
+
+        {/* ── Outcomes ──────────────────────────────────────────────────── */}
+        <section className="mt-14 grid w-full max-w-5xl grid-cols-1 gap-4 text-left md:grid-cols-3">
+          {OUTCOMES.map((o, i) => (
+            <Reveal key={o.title} delay={i * 0.08}>
+              <Card accentColor={o.accent} className="h-full">
                 <div
                   className="mb-3 flex h-9 w-9 items-center justify-center rounded-[8px]"
-                  style={{ backgroundColor: `color-mix(in srgb, ${f.accent} 12%, var(--surface))` }}
+                  style={{ backgroundColor: `color-mix(in srgb, ${o.accent} 12%, var(--surface))` }}
                 >
-                  <f.icon size={17} style={{ color: f.accent }} />
+                  <o.icon size={17} style={{ color: o.accent }} />
                 </div>
-                <h3 className="font-display text-[15px] font-semibold text-text-primary">{f.title}</h3>
-                <p className="mt-1.5 font-body text-[13px] leading-relaxed text-text-secondary">
-                  {f.body}
-                </p>
+                <h3 className="font-display text-[16px] font-semibold text-text-primary">{o.title}</h3>
+                <p className="mt-1.5 font-body text-[13px] leading-relaxed text-text-secondary">{o.body}</p>
               </Card>
             </Reveal>
           ))}
-        </div>
+        </section>
+
+        {/* ── How it works ──────────────────────────────────────────────── */}
+        <Reveal>
+          <section className="mt-16 w-full max-w-3xl">
+            <p className="text-center font-mono text-[11px] font-semibold uppercase tracking-wider text-primary">
+              How it works
+            </p>
+            <ol className="mt-5 flex flex-col gap-3 sm:flex-row sm:gap-4">
+              {STEPS.map((s, i) => (
+                <li
+                  key={i}
+                  className="flex flex-1 items-start gap-3 rounded-[12px] border border-border bg-surface p-4"
+                >
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 font-mono text-[12px] font-bold text-primary">
+                    {i + 1}
+                  </span>
+                  <div>
+                    <s.icon size={16} className="mb-1.5 text-text-muted" />
+                    <p className="font-body text-[13px] leading-relaxed text-text-primary">{s.text}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
+        </Reveal>
+
+        {/* ── Who it's for ──────────────────────────────────────────────── */}
+        <section className="mt-16 grid w-full max-w-4xl grid-cols-1 gap-3 sm:grid-cols-3">
+          {ROLES.map((r) => (
+            <div key={r.who} className="rounded-[12px] border border-border bg-surface p-4">
+              <p className="font-display text-[14px] font-semibold text-text-primary">{r.who}</p>
+              <p className="mt-1 font-body text-[12.5px] leading-relaxed text-text-secondary">{r.line}</p>
+            </div>
+          ))}
+        </section>
+
+        {/* ── FAQ ───────────────────────────────────────────────────────── */}
+        <section className="mt-16 w-full max-w-2xl">
+          <p className="text-center font-mono text-[11px] font-semibold uppercase tracking-wider text-primary">
+            Questions
+          </p>
+          <div className="mt-5 flex flex-col gap-2">
+            {FAQ.map((item) => (
+              <details
+                key={item.q}
+                className="group rounded-[10px] border border-border bg-surface px-4 py-3 [&_summary::-webkit-details-marker]:hidden"
+              >
+                <summary className="flex cursor-pointer list-none items-center justify-between font-body text-[13.5px] font-semibold text-text-primary">
+                  {item.q}
+                  <Plus
+                    size={15}
+                    className="shrink-0 text-text-muted transition-transform duration-200 group-open:rotate-45"
+                  />
+                </summary>
+                <p className="mt-2 font-body text-[12.5px] leading-relaxed text-text-secondary">{item.a}</p>
+              </details>
+            ))}
+          </div>
+        </section>
+
+        {/* ── Final CTA ─────────────────────────────────────────────────── */}
+        <Reveal>
+          <section className="mt-20 flex w-full max-w-3xl flex-col items-center gap-4 rounded-[16px] border border-border bg-surface px-6 py-10 text-center shadow-card">
+            <h2 className="font-display text-[24px] font-bold text-text-primary md:text-[28px]">
+              See your own impact signature.
+            </h2>
+            <p className="max-w-md font-body text-[14px] leading-relaxed text-text-secondary">
+              Free to start. No search queries, no credit card.
+            </p>
+            <MagneticCTA onClick={() => router.push("/signup")}>
+              Get started free
+              <ArrowRight size={16} />
+            </MagneticCTA>
+          </section>
+        </Reveal>
       </main>
 
       <footer className="relative z-10 border-t border-border px-6 py-8 md:px-12">
@@ -152,8 +286,8 @@ export default function LandingPage() {
           <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 font-body text-[12.5px] text-text-muted">
             <Link href="/login" className="transition-colors hover:text-primary">Sign in</Link>
             <Link href="/signup" className="transition-colors hover:text-primary">Get started</Link>
-            <span className="transition-colors hover:text-primary">Privacy</span>
-            <span className="transition-colors hover:text-primary">Terms</span>
+            <span>Privacy</span>
+            <span>Terms</span>
           </div>
           <span className="font-body text-[12px] text-text-muted">© {new Date().getFullYear()} SkoLab</span>
         </div>

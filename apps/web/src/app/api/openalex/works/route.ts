@@ -20,7 +20,9 @@ export async function GET(req: NextRequest) {
   const taxonEntry = Object.entries(TAXON_FILTER).find(([k]) => sp.get(k));
   if (!q && taxonEntry) {
     const [key, field] = taxonEntry;
-    const id = (sp.get(key) ?? "").replace(/^https?:\/\/openalex\.org\//i, "");
+    // Last path segment only: OpenAlex's filter grammar 400s on a path-prefixed
+    // id ("topics.subfield.id:subfields/1102").
+    const id = ((sp.get(key) ?? "").replace(/^https?:\/\/openalex\.org\//i, "").split("/").pop() ?? "");
     url.searchParams.set("per-page", "18");
     url.searchParams.set("filter", `${field}:${id}`);
     url.searchParams.set("sort", "cited_by_count:desc");

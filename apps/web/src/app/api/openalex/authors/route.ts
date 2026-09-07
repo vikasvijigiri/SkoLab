@@ -11,8 +11,14 @@ import { OPENALEX_MAILTO, withOpenAlexKey } from "@/lib/openalex";
  */
 const TAXON_FILTER = { topic: "topics.id", subfield: "topics.subfield.id", field: "topics.field.id" } as const;
 
+/** Reduce any OpenAlex id form to its bare key:
+ *  "https://openalex.org/subfields/1102" | "subfields/1102" | "1102" -> "1102".
+ *  OpenAlex's filter grammar rejects a path-prefixed id (topics.subfield.id:
+ *  subfields/1102 -> 400), so the last segment is the only safe form. */
 function bareId(v: string): string {
-  return v.trim().replace(/^https?:\/\/openalex\.org\//i, "");
+  const s = v.trim().replace(/^https?:\/\/openalex\.org\//i, "");
+  const seg = s.split("/").pop() ?? s;
+  return seg;
 }
 
 export async function GET(req: NextRequest) {
