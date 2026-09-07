@@ -441,7 +441,10 @@ export default function ProfilePage() {
 
       <Reveal delay={0.16}>
         <Card>
-          <h2 className="flex items-center gap-1.5 font-display text-[15px] font-semibold text-notification">
+          <h2
+            id="danger"
+            className="flex scroll-mt-6 items-center gap-1.5 font-display text-[15px] font-semibold text-notification"
+          >
             <ShieldAlert size={15} />
             Danger zone
           </h2>
