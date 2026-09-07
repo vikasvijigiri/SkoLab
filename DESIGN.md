@@ -135,11 +135,16 @@ never need a `dark:` prefix. Keep the three blocks (`:root`,
 | `--text-secondary` | `#565863` | `#b1ac9f` | Supporting body (unchanged) |
 | `--text-muted` | `#5f616d` | `#9c978a` | Captions, mono eyebrows (unchanged) |
 | `--border-color` | `#e5e5e2` | `#38392f` | Hairlines, dividers, card borders (unchanged) |
-| `--primary` | `#4f3fe0` *(was `#4a52cf`)* | `#a79bff` *(was `#9aa0ea`)* | Brand: links, active nav, secondary CTA outline, "influence" metric, focus of attention |
-| `--primary-dark` | `#4234c4` | `#8f80f5` | Primary hover / pressed |
-| `--primary-deeper` | `#362aa0` | `#7a6bec` | Primary on large filled blocks needing AA body contrast |
-| `--accent-signal` | `#e0512f` | `#ff7d5c` | **Primary CTA fill, "live"/new badges, the one thing on a screen that must be clicked.** Never more than one signal region per viewport. |
-| `--accent-signal-dark` | `#c8431f` | `#ff6a44` | Signal hover / pressed |
+| `--primary` | `#3a5bd9` *(was `#4a52cf`)* | `#93a5ff` *(was `#9aa0ea`)* | Brand: links, active nav, secondary CTA outline, "influence" metric, focus of attention. A confident professional royal-indigo — trust-blue, not violet |
+| `--primary-dark` | `#2f4cc0` | `#7f92f5` | Primary hover / pressed |
+| `--primary-deeper` | `#263f9e` | `#6b80ea` | Primary on large filled blocks needing AA body contrast |
+| `--accent-signal` | `#dd4d2e` | `#ff7a5c` | **Primary CTA fill, "live"/new badges, the one thing on a screen that must be clicked.** Warm coral against the cool primary. Never more than one signal region per viewport. |
+| `--accent-signal-dark` | `#c33f22` | `#ff6749` | Signal hover / pressed |
+
+> **These five hues are proposals.** Task 1 of the rollout runs a WCAG
+> relative-luminance check (`scripts/check-contrast.mjs`) over every pair below;
+> a value that misses is nudged within its hue family and the final number is
+> written back into this table. Solid fills only — no gradients anywhere.
 | `--text-on-primary` | `#ffffff` | `#1a1b18` | Text on `--primary` / `--accent-signal` fills |
 | `--success` | `#047857` | `#34d399` | Confirmation, positive delta (alias of `--accent-emerald`) |
 | `--warning` | `#b45309` | `#f0a83a` | Caution (alias of `--accent-amber`) |
@@ -153,7 +158,7 @@ Do not invent a chart colour outside this list. Order is the assignment order.
 
 | Metric role | Token | Light | Dark |
 |---|---|---|---|
-| Influence | `--metric-influence` | `#4f3fe0` (`--primary`) | `#a79bff` |
+| Influence | `--metric-influence` | `#3a5bd9` (`--primary`) | `#93a5ff` |
 | Disruption | `--metric-disruption` | `#c2410c` (`--accent-orange`) | `#fb923c` |
 | Novelty | `--metric-novelty` | `#0e7490` (`--accent-cyan`) | `#22d3ee` |
 | Future impact | `--metric-future-impact` | `#6d4bd0` (`--accent-violet`) | `#c4b5fd` |
@@ -178,34 +183,42 @@ Do not invent a chart colour outside this list. Order is the assignment order.
 
 ## Type
 
-Three families, all already loaded via `next/font` — no fourth. The change is
-**scale and role**, not the stack.
+**Two families** — a professional humanist sans for everything a person reads,
+and a monospace for data. This is a deliberate change from the current
+three-family stack: **Space Grotesk is dropped.** Its geometric character reads
+"tech startup"; the identity target is the clean, corporate-humanist typography
+of LinkedIn / Stripe / Ramp, where hierarchy comes from **weight and scale, not
+a display face**. Both remaining families are already loaded via `next/font`.
 
-- **Display / headings:** Space Grotesk, weight 700, tracking `-0.02em`. Used at
-  the top of every page and for marketing. Interior pages currently under-set
-  their `<h1>` — that ends.
-- **Body:** Inter, 400/500/600. Default body rises from 13px to **14.5px**.
-  Keep the `font-feature-settings: "cv05","cv08","cv11","calt"` tuning.
-- **Mono:** JetBrains Mono, weight 500 — **promoted to a structural role.** All
-  numeric data, all axis and metric values, all uppercase section eyebrows, all
-  timestamps and IDs. This is the single biggest "instrument" lever and it costs
-  nothing new.
+- **Display + body:** **Inter**, 400 / 500 / 600 / 700. One family for headings
+  and body alike. Headings use 600–700 at the scale below with `-0.02em`
+  tracking on the largest sizes; body is 400. Default body rises from 13px to
+  **14.5px**. Keep the `font-feature-settings: "cv05","cv08","cv11","calt"`
+  tuning.
+- **Mono:** JetBrains Mono, weight 500 — **structural role.** Every numeric data
+  value, axis and metric label, uppercase section eyebrow, timestamp and ID.
+  This is the one place SkoLab departs from a generic corporate stack, and it
+  earns its place: tabular figures make dense bibliometric data legible.
+- **Wiring:** `--font-display` in `globals.css` is remapped from
+  `var(--font-space-grotesk)` to `var(--font-inter)`; the `Space_Grotesk` import
+  is removed from `layout.tsx`. Every existing `className="font-display …"`
+  keeps working and now resolves to Inter — no per-file churn.
 
 ### Scale (the agent does not pick sizes)
 
-| Role | Size / line-height | Family | Where |
+| Role | Size / line-height | Family / weight | Where |
 |---|---|---|---|
-| Display XL | 60 / 1.05 | Space Grotesk 700 | Landing hero only |
-| Display L | 44 / 1.1 | Space Grotesk 700 | Marketing section heads |
-| Display M | 32 / 1.15 | Space Grotesk 700 | App page `<h1>` (Discovery, Home, Profile…) |
-| H2 | 22 / 1.25 | Space Grotesk 700 | Section headings |
-| H3 | 17 / 1.3 | Space Grotesk 600 | Card titles, sub-sections |
+| Display XL | 60 / 1.05, `-0.02em` | Inter 700 | Landing hero only |
+| Display L | 44 / 1.1, `-0.02em` | Inter 700 | Marketing section heads |
+| Display M | 32 / 1.15, `-0.01em` | Inter 700 | App page `<h1>` (Discovery, Home, Profile…) |
+| H2 | 22 / 1.25 | Inter 600 | Section headings |
+| H3 | 17 / 1.3 | Inter 600 | Card titles, sub-sections |
 | Body L | 16 / 1.6 | Inter 400 | Long-form (paper abstract, FAQ) |
 | Body | 14.5 / 1.6 | Inter 400 | Default UI body |
 | Body S | 13 / 1.5 | Inter 400 | Dense rows, secondary detail |
 | Caption | 12 / 1.4 | Inter 500 | Timestamps, helper text |
 | Eyebrow | 11.5 / 1.4, `0.08em`, uppercase | JetBrains Mono 500 | Section labels, `--text-muted` |
-| Data | 13–15 / 1 tnum | JetBrains Mono 500 | Every metric value, h-index, citation count |
+| Data | 13–15 / 1, tnum | JetBrains Mono 500 | Every metric value, h-index, citation count |
 | Section numeral | 40 / 1 | JetBrains Mono 500, `--text-muted` | Long-page section markers (`01`, `02`…) |
 
 Minimum for sentence and paragraph copy: 13px. Labels and eyebrows may go to
@@ -345,8 +358,8 @@ Non-negotiable. A miss is release-blocking unless a documented exception names
 the rule, the reason, the owner, and the expiry.
 
 - [ ] Contrast meets WCAG AA against the **actual** background — including the
-      new `--primary` (`#4f3fe0` / `#a79bff`) and `--accent-signal`
-      (`#e0512f` / `#ff7d5c`): body text ≥4.5:1, large text and UI ≥3:1, on both
+      new `--primary` (`#3a5bd9` / `#93a5ff`) and `--accent-signal`
+      (`#dd4d2e` / `#ff7a5c`): body text ≥4.5:1, large text and UI ≥3:1, on both
       themes. **Verify with the luminance formula before the tokens land**; if a
       proposed hue misses, darken/lighten it within the same hue family and
       record the final value.
@@ -371,7 +384,8 @@ Output is checked against this list.
 - [ ] `scale()` hover/press on buttons or cards (replace with colour + 1px lift).
 - [ ] Spacing off the 4px grid — the `py-1.5` / `gap-2.5` / `mt-0.5` habit.
 - [ ] Colours outside the token tables (including chart colours).
-- [ ] A fourth font family, or a serif display swap without a decision record.
+- [ ] A third font family (the stack is Inter + JetBrains Mono — nothing else),
+      or a display face reintroduced without a decision record.
 - [ ] `--primary` and `--accent-signal` both fighting for the primary-action
       slot in one viewport.
 - [ ] Decorative motion on data; count-ups that re-fire on every render.
