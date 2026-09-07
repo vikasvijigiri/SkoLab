@@ -59,14 +59,14 @@ export function UnifiedFeed({
 
   return (
     <section className="flex flex-col gap-3" aria-labelledby={headingId}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex min-h-9 flex-wrap items-center justify-between gap-2">
         <h2 id={headingId} className="font-display text-[15px] font-semibold text-text-primary">
           Your feed
         </h2>
         <div
           role="group"
           aria-label="Filter the feed"
-          className="-mr-1 flex items-center gap-1 overflow-x-auto pr-1 [mask-image:linear-gradient(to_right,#000_92%,transparent)]"
+          className="-mr-1 flex h-9 items-center gap-1 overflow-x-auto pr-1 [mask-image:linear-gradient(to_right,#000_92%,transparent)]"
         >
           {LENSES.map((l) => (
             <button
@@ -94,11 +94,17 @@ export function UnifiedFeed({
         role={shown.length > 0 ? "feed" : undefined}
         aria-busy={busy || undefined}
         aria-label={shown.length > 0 ? "Research feed" : undefined}
-        className="flex flex-col gap-3"
+        // Reserve ~2 cards of height during the load so the skeleton->content
+        // swap doesn't shrink the column and shift the page (CLS).
+        className={cn("flex flex-col gap-3", (busy || shown.length === 0) && "min-h-[320px]")}
       >
         {busy ? (
-          [0, 1, 2, 3].map((i) => (
-            <div key={i} className="h-32 animate-pulse rounded-[8px] bg-surface-subtle" aria-hidden="true" />
+          [0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="h-[150px] animate-pulse rounded-[8px] bg-surface-subtle"
+              aria-hidden="true"
+            />
           ))
         ) : shown.length === 0 ? (
           <Card className="text-center">
