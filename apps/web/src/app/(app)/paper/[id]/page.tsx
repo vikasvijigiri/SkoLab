@@ -22,6 +22,8 @@ import { MathText, Formula } from "@/components/ui/MathText";
 import { RailShell } from "@/components/layout/RailShell";
 import { TableOfContents } from "@/components/paper/TableOfContents";
 import { RelatedPapersCard } from "@/components/paper/RelatedPapersCard";
+import { AbstractCard } from "@/components/paper/AbstractCard";
+import { PaperCite } from "@/components/paper/PaperCite";
 import { AuthorInline } from "@/components/discovery/AuthorInline";
 import type { PaperIntelligence } from "@/lib/types";
 import { paperWorkQuery, paperAnalysisQuery } from "@/lib/api/queries";
@@ -138,9 +140,14 @@ export function PaperDetailContent({ id }: { id: string }) {
     <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 lg:max-w-5xl">
       <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
         <Card accentColor="var(--primary)">
-          <h1 className="font-display text-[19px] font-bold leading-snug text-text-primary">
-            <MathText text={work.display_name} />
-          </h1>
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="font-display text-[19px] font-bold leading-snug text-text-primary">
+              <MathText text={work.display_name} />
+            </h1>
+            <div className="shrink-0">
+              <PaperCite work={work} />
+            </div>
+          </div>
 
           {work.authorships && work.authorships.length > 0 && (
             <p className="mt-2">
@@ -190,6 +197,8 @@ export function PaperDetailContent({ id }: { id: string }) {
           </div>
         </Card>
       </motion.div>
+
+      <AbstractCard index={work.abstract_inverted_index} />
 
       <RelatedPapersCard workId={id} />
 
