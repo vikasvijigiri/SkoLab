@@ -18,7 +18,7 @@ export function TopBar() {
   const { toggle: toggleCommandPalette } = useCommandPalette();
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-3 md:px-5">
+    <header className="flex h-14 shrink-0 items-center gap-4 border-b border-border bg-surface px-4 md:px-6">
       {/* logo — top-left */}
       <Link
         href="/home"
@@ -40,7 +40,7 @@ export function TopBar() {
         aria-label="Search"
         title="Search (⌘K)"
         className={cn(
-          "flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full border border-border bg-surface-subtle px-3 font-body text-[12.5px] text-text-muted transition-colors hover:border-primary/40 hover:text-text-primary md:max-w-[460px]",
+          "flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full border border-border bg-surface-subtle px-3 font-body text-[12.5px] text-text-muted transition-colors hover:border-primary/40 hover:text-text-primary md:max-w-[420px] lg:max-w-[480px]",
           focusRing,
         )}
         style={{ transitionTimingFunction: "var(--ease-standard)" }}
@@ -50,8 +50,11 @@ export function TopBar() {
         <kbd className="hidden rounded border border-border px-1 py-0.5 font-mono text-[10px] sm:inline">⌘K</kbd>
       </button>
 
-      {/* nav + bell + account — right */}
-      <nav aria-label="Primary" className="hidden shrink-0 items-center gap-0.5 md:flex">
+      {/* primary nav — right-aligned, evenly spaced icon+label tabs */}
+      <nav
+        aria-label="Primary"
+        className="ml-auto hidden shrink-0 items-center gap-1.5 md:flex lg:gap-2"
+      >
         {BAR_NAV.map((item) => {
           const active = pathname?.startsWith(item.href);
           return (
@@ -61,17 +64,17 @@ export function TopBar() {
               aria-current={active ? "page" : undefined}
               title={item.label}
               className={cn(
-                "relative flex h-12 w-[62px] flex-col items-center justify-center gap-0.5 rounded-md font-body text-[10.5px] font-medium transition-colors",
+                "relative flex h-12 w-[76px] flex-col items-center justify-center gap-1 rounded-lg font-body text-[11px] font-medium leading-none transition-colors",
                 active ? "text-primary" : "text-text-muted hover:bg-surface-subtle hover:text-text-primary",
                 focusRing,
               )}
             >
-              <item.Icon size={18} strokeWidth={1.8} />
-              <span className="max-w-[60px] truncate lg:inline">{item.label}</span>
+              <item.Icon size={19} strokeWidth={1.8} />
+              <span className="whitespace-nowrap">{item.label}</span>
               {active && (
                 <motion.span
                   layoutId="topnav-active"
-                  className="absolute -bottom-[7px] h-[2px] w-7 rounded-full bg-primary"
+                  className="absolute -bottom-[7px] h-[2px] w-8 rounded-full bg-primary"
                   transition={{ type: "spring", stiffness: 400, damping: 32 }}
                 />
               )}
@@ -80,7 +83,8 @@ export function TopBar() {
         })}
       </nav>
 
-      <div className="ml-auto flex shrink-0 items-center gap-1.5 md:ml-1">
+      {/* bell + account — kept apart from the nav by a hairline divider */}
+      <div className="flex shrink-0 items-center gap-1.5 md:ml-3 md:border-l md:border-border md:pl-3">
         <NotificationsBell />
         <ProfileMenu />
       </div>
