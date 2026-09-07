@@ -16,11 +16,16 @@ export default function AppGroupLayout({ children }: { children: React.ReactNode
 
   if (loading || !user) {
     return (
-      <div className="flex min-h-full flex-1 items-center justify-center bg-page-bg">
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex min-h-full flex-1 items-center justify-center bg-page-bg"
+      >
         <span
           className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent"
-          aria-label="Loading"
+          aria-hidden="true"
         />
+        <span className="sr-only">Loading your workspace…</span>
       </div>
     );
   }

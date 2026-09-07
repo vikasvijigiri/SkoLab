@@ -16,9 +16,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-dvh w-full flex-col overflow-hidden">
+      {/* WCAG 2.4.1 — skip the ~8 top-bar tab stops. Visible only on focus. */}
+      <a
+        href="#main-content"
+        className={cn(
+          "sr-only z-50 rounded-md bg-primary px-4 py-2 font-body text-[13px] font-semibold text-text-on-primary",
+          "focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:shadow-elevated",
+          focusRing,
+        )}
+      >
+        Skip to content
+      </a>
+
       <TopBar />
 
-      <main className="min-h-0 flex-1 overflow-y-auto bg-page-bg">{children}</main>
+      <main id="main-content" className="min-h-0 flex-1 overflow-y-auto bg-page-bg">
+        {children}
+      </main>
 
       <nav
         aria-label="Primary"

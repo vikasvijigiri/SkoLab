@@ -30,7 +30,14 @@ export function DailyChallengeCard({
     );
   }
 
-  if (!conjecture) {
+  // A partial/malformed payload (missing title or options) must fall back to
+  // the calm placeholder, not crash the whole Home page.
+  if (
+    !conjecture ||
+    typeof conjecture.title !== "string" ||
+    !Array.isArray(conjecture.options) ||
+    conjecture.options.length === 0
+  ) {
     return (
       <Card>
         <p className="font-body text-[13px] leading-relaxed text-text-secondary">
@@ -52,7 +59,9 @@ export function DailyChallengeCard({
 
   return (
     <Card accentColor="var(--accent-amber)">
-      <Badge accentColor="var(--accent-amber)">{conjecture.category.toUpperCase()}</Badge>
+      <Badge accentColor="var(--accent-amber)">
+        {(conjecture.category || "challenge").toUpperCase()}
+      </Badge>
       <h3 className="mt-2.5 font-display text-[15px] font-semibold text-text-primary">
         <MathText text={conjecture.title} />
       </h3>
