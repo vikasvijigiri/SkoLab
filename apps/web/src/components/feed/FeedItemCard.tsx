@@ -11,7 +11,7 @@ import {
   BookmarkCheck,
   X,
   ArrowUpRight,
-  HelpCircle,
+  Info,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { MathText } from "@/components/ui/MathText";
@@ -19,11 +19,11 @@ import { prefetchPaper } from "@/lib/api/prefetch";
 import { cn, focusRing } from "@/lib/utils";
 import type { FeedKind, UnifiedItem } from "@/lib/feed/unifiedFeed";
 
-const KIND: Record<FeedKind, { Icon: typeof FileText; tint: string; label: string; action: string }> = {
-  paper: { Icon: FileText, tint: "var(--primary)", label: "Paper", action: "Read" },
-  news: { Icon: Newspaper, tint: "var(--accent-teal)", label: "News", action: "Read" },
-  activity: { Icon: Users2, tint: "var(--accent-violet)", label: "Network", action: "View" },
-  job: { Icon: Briefcase, tint: "var(--accent-orange)", label: "Role", action: "View" },
+const KIND: Record<FeedKind, { Icon: typeof FileText; tint: string; label: string }> = {
+  paper: { Icon: FileText, tint: "var(--primary)", label: "Paper" },
+  news: { Icon: Newspaper, tint: "var(--accent-teal)", label: "News" },
+  activity: { Icon: Users2, tint: "var(--accent-violet)", label: "Network" },
+  job: { Icon: Briefcase, tint: "var(--accent-orange)", label: "Role" },
 };
 
 function ago(ts: number): string {
@@ -53,97 +53,90 @@ export function FeedItemCard({
     if (isPaper) prefetchPaper(qc, item.id.replace(/^paper:/, ""));
   };
 
-  const Primary = item.external ? (
-    <a
-      href={item.href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-center gap-1 rounded-md border border-border px-2.5 py-1 font-body text-[12px] font-medium text-text-secondary transition-colors hover:border-primary/40 hover:text-text-primary"
-    >
-      {k.action} <ArrowUpRight size={12} />
-    </a>
-  ) : (
-    <Link
-      href={item.href}
-      onMouseEnter={warm}
-      onFocus={warm}
-      className="rounded-md border border-border px-2.5 py-1 font-body text-[12px] font-medium text-text-secondary transition-colors hover:border-primary/40 hover:text-text-primary"
-    >
-      {k.action}
-    </Link>
+  const headline = (
+    <h3 className="font-display text-[14.5px] font-semibold leading-snug text-text-primary group-hover:text-primary">
+      <MathText text={item.title} />
+      {item.external && (
+        <ArrowUpRight size={13} className="ml-1 inline-block -translate-y-px text-text-muted" />
+      )}
+    </h3>
   );
 
   return (
     <Card interactive={false} className="flex flex-col gap-2">
-      {/* kind chip + when */}
+      {/* kind chip + source + when */}
       <div className="flex items-center gap-1.5">
         <span
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[9.5px] font-semibold uppercase tracking-wide"
-          style={{ backgroundColor: `color-mix(in srgb, ${k.tint} 14%, transparent)`, color: k.tint }}
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide"
+          style={{
+            backgroundColor: `color-mix(in srgb, ${k.tint} 14%, transparent)`,
+            // Blend toward ink so the small chip label clears WCAG AA on the
+            // tinted background (raw accent-orange measured ~4.4:1).
+            color: `color-mix(in srgb, ${k.tint} 62%, var(--text-primary))`,
+          }}
         >
-          <k.Icon size={10} />
+          <k.Icon size={11} aria-hidden="true" />
           {k.label}
         </span>
         {item.source && (
-          <span className="truncate font-body text-[10.5px] text-text-muted">{item.source}</span>
+          <span className="truncate font-body text-[11.5px] text-text-muted">{item.source}</span>
         )}
-        {item.ts > 0 && <span className="font-mono text-[10px] text-text-muted">· {ago(item.ts)}</span>}
+        {item.ts > 0 && (
+          <time dateTime={new Date(item.ts).toISOString()} className="font-mono text-[11px] text-text-muted">
+            · {ago(item.ts)}
+          </time>
+        )}
       </div>
 
-      {/* headline */}
+      {/* headline — the single primary target for the card */}
       {item.external ? (
         <a href={item.href} target="_blank" rel="noopener noreferrer" className={cn("group rounded", focusRing)}>
-          <h3 className="font-display text-[14.5px] font-semibold leading-snug text-text-primary group-hover:text-primary">
-            <MathText text={item.title} />
-          </h3>
+          {headline}
         </a>
       ) : (
-        <Link
-          href={item.href}
-          onMouseEnter={warm}
-          onFocus={warm}
-          className={cn("group rounded", focusRing)}
-        >
-          <h3 className="font-display text-[14.5px] font-semibold leading-snug text-text-primary group-hover:text-primary">
-            <MathText text={item.title} />
-          </h3>
+        <Link href={item.href} onMouseEnter={warm} onFocus={warm} className={cn("group rounded", focusRing)}>
+          {headline}
         </Link>
       )}
 
       {item.meta && (
-        <p className="line-clamp-2 font-body text-[12px] leading-relaxed text-text-secondary">
+        <p className="line-clamp-2 max-w-[68ch] font-body text-[12px] leading-relaxed text-text-secondary">
           <MathText text={item.meta} />
         </p>
       )}
 
-      {/* why + actions */}
+      {/* why + save / dismiss */}
       <div className="mt-0.5 flex items-center justify-between gap-2">
-        <p className="flex min-w-0 items-center gap-1 font-body text-[11px] text-text-muted">
-          <HelpCircle size={11} className="shrink-0" />
+        <p className="flex min-w-0 items-center gap-1 font-body text-[11.5px] text-text-muted">
+          <Info size={11} className="shrink-0" aria-hidden="true" />
           <span className="truncate">{item.why}</span>
         </p>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {Primary}
+        <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
             onClick={onToggleSave}
-            aria-label={saved ? "Remove from saved" : "Save"}
+            aria-pressed={saved}
+            aria-label={saved ? "Saved — tap to remove" : "Save this"}
             title={saved ? "Saved" : "Save"}
             className={cn(
-              "flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-surface-subtle",
+              "flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-surface-subtle",
               saved ? "text-primary" : "text-text-muted hover:text-text-primary",
+              focusRing,
             )}
           >
-            {saved ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
+            {saved ? <BookmarkCheck size={15} /> : <Bookmark size={15} />}
           </button>
           <button
             type="button"
             onClick={onDismiss}
-            aria-label="Not relevant — hide and show fewer like this"
+            aria-label="Not relevant — hide this and show fewer like it"
             title="Not relevant"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-subtle hover:text-text-primary"
+            className={cn(
+              "flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-subtle hover:text-text-primary",
+              focusRing,
+            )}
           >
-            <X size={14} />
+            <X size={15} />
           </button>
         </div>
       </div>

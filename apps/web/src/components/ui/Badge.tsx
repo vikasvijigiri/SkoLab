@@ -18,7 +18,10 @@ export function Badge({ accentColor = "var(--primary)", className, style, childr
       style={{
         backgroundColor: `color-mix(in srgb, ${accentColor} 10%, transparent)`,
         border: `0.5px solid color-mix(in srgb, ${accentColor} 40%, transparent)`,
-        color: accentColor,
+        // Blend the accent toward the ink so small badge text clears WCAG AA
+        // (raw accent-amber on its 10% tint measured ~4.3:1). Theme-safe:
+        // --text-primary is dark in light mode, light in dark mode.
+        color: `color-mix(in srgb, ${accentColor} 62%, var(--text-primary))`,
         ...style,
       }}
       {...props}

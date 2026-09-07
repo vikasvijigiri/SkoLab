@@ -79,7 +79,7 @@ export function PeerSuggestionsCard({
               {p.institution || "Independent"}
             </p>
             {p.why && (
-              <p className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-wide text-text-muted">
+              <p className="mt-0.5 truncate font-mono text-[11px] uppercase tracking-wide text-text-muted">
                 {p.why}
               </p>
             )}
