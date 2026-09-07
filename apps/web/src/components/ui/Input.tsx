@@ -1,6 +1,7 @@
 "use client";
 
 import { InputHTMLAttributes, forwardRef, useId, useState } from "react";
+import { AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -19,7 +20,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className="w-full">
         {label && (
-          <label htmlFor={inputId} className="mb-1.5 block font-body text-[12.5px] font-medium text-text-secondary">
+          <label htmlFor={inputId} className="eyebrow mb-2 block">
             {label}
           </label>
         )}
@@ -37,8 +38,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               onBlur?.(e);
             }}
             className={cn(
-              "h-12 w-full rounded-md border bg-surface-input px-3.5 font-body text-[14px] text-text-primary placeholder:text-text-muted outline-none transition-[border-color,box-shadow] duration-[var(--motion-fast)]",
-              "focus:border-primary focus:shadow-[var(--shadow-focus)]",
+              "h-12 w-full rounded-md border bg-surface-input px-4 font-body text-body text-text-primary placeholder:text-text-muted outline-none transition-[border-color,box-shadow] duration-[var(--motion-fast)]",
+              "focus:border-accent-signal focus:shadow-[var(--shadow-focus)]",
               showError ? "border-notification" : "border-border-input",
               leadingIcon && "pl-10",
               className
@@ -47,7 +48,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             {...props}
           />
         </div>
-        {showError && <p className="mt-1 font-body text-[12px] text-notification">{error}</p>}
+        {showError && (
+          <p className="mt-1 flex items-center gap-1 font-body text-[12px] text-notification">
+            <AlertCircle size={12} aria-hidden />
+            {error}
+          </p>
+        )}
       </div>
     );
   }

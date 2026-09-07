@@ -32,26 +32,26 @@ export function LeaderboardRow({ entry, index }: { entry: LeaderboardEntry; inde
         href={`/author/${encodeURIComponent(shortOpenAlexId(entry.id))}?name=${encodeURIComponent(entry.user_name)}`}
         onMouseEnter={warm}
         onFocus={warm}
-        className={cn("block rounded-lg", focusRing)}
+        className={cn("block rounded-md", focusRing)}
       >
-        <Card glow interactive className="flex h-full items-center gap-3">
+        <Card glow interactive accentColor={medal ?? "var(--primary)"} accentSide="left" className="flex h-full items-center gap-3">
           <div className="relative shrink-0">
             <div
-              className="flex h-11 w-11 items-center justify-center rounded-full font-display text-[14px] font-bold text-white"
+              className="flex h-11 w-11 items-center justify-center rounded-full font-display text-[14px] font-bold text-text-on-primary"
               style={{ background: medal ?? "var(--primary)" }}
             >
               {entry.user_name.slice(0, 1).toUpperCase()}
             </div>
             <div
-              className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-surface font-mono text-[10px] font-bold text-white"
+              className="data absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-surface text-[10px] font-bold text-text-on-primary"
               style={{ background: medal ?? "var(--text-muted)" }}
             >
               {entry.rank}
             </div>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate font-body text-[14px] font-semibold text-text-primary">{entry.user_name}</p>
-            <p className="truncate font-body text-[12.5px] text-text-secondary">{entry.institution}</p>
+            <p className="truncate font-body text-body font-semibold text-text-primary">{entry.user_name}</p>
+            <p className="truncate font-body text-body-s text-text-secondary">{entry.institution}</p>
           </div>
           <Badge accentColor="var(--primary)">{entry.entropy_score} pts</Badge>
         </Card>

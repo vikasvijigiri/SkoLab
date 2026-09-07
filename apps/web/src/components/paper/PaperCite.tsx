@@ -47,9 +47,9 @@ export function PaperCite({ work }: { work: OpenAlexWork }) {
         {open && (
           <motion.div
             role="menu"
-            initial={{ opacity: 0, y: -4, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.98 }}
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.12 }}
             className="absolute right-0 top-9 z-20 w-40 overflow-hidden rounded-lg border border-border bg-surface shadow-elevated"
           >

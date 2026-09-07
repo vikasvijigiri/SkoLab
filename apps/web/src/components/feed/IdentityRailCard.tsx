@@ -11,7 +11,7 @@ function Stat({ label, value, accent }: { label: string; value: number; accent: 
       <p className="font-mono text-[15px] font-medium tabular-nums" style={{ color: accent }}>
         <AnimatedCounter to={value} />
       </p>
-      <p className="mt-0.5 font-body text-[11px] font-medium uppercase tracking-wide text-text-muted">
+      <p className="mt-1 font-body text-[11px] font-medium uppercase tracking-wide text-text-muted">
         {label}
       </p>
     </div>
@@ -40,22 +40,22 @@ export function IdentityRailCard({
   if (loading) {
     return (
       <Card className="animate-pulse">
-        <div className="h-24 rounded-[8px] bg-surface-subtle" />
+        <div className="h-24 rounded-md bg-surface-subtle" />
       </Card>
     );
   }
 
   return (
     <Card className="flex flex-col gap-3">
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-3">
         <span
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-display text-[15px] font-bold text-white shadow-card"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-display text-h3 font-bold text-white shadow-card"
           style={{ background: "var(--primary)" }}
         >
           {(name.trim()[0] ?? "?").toUpperCase()}
         </span>
         <div className="min-w-0">
-          <p className="truncate font-display text-[14px] font-semibold text-text-primary">{name}</p>
+          <p className="truncate font-display text-body font-semibold text-text-primary">{name}</p>
           {status && (
             <p className="truncate font-body text-[11.5px] text-text-secondary">{status}</p>
           )}

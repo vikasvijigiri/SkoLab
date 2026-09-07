@@ -26,7 +26,7 @@ export function PeerSuggestionsCard({
     return (
       <div className="flex flex-col gap-2">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-16 animate-pulse rounded-[8px] bg-surface-subtle" />
+          <div key={i} className="h-16 animate-pulse rounded-md bg-surface-subtle" />
         ))}
       </div>
     );
@@ -36,10 +36,10 @@ export function PeerSuggestionsCard({
     return (
       <Card className="text-center">
         <Users2 size={18} className="mx-auto text-text-muted" />
-        <p className="mt-2 font-body text-[13px] font-medium text-text-primary">
+        <p className="mt-2 font-body text-body-s font-medium text-text-primary">
           {unresolved ? "Connect your work to see peers" : "No suggestions yet"}
         </p>
-        <p className="mt-0.5 font-body text-[12px] leading-relaxed text-text-muted">
+        <p className="mt-1 font-body text-[12px] leading-relaxed text-text-muted">
           {unresolved ? (
             <>
               Add your ORCID or published name in{" "}
@@ -62,17 +62,17 @@ export function PeerSuggestionsCard({
         <Link
           key={p.author_id}
           href={`/author/${encodeURIComponent(shortOpenAlexId(p.author_id))}?name=${encodeURIComponent(p.display_name || "")}`}
-          className="group flex items-center gap-3 rounded-[8px] border border-border bg-surface p-2.5 transition-colors duration-[var(--motion-fast)] hover:border-primary/40"
+          className="group flex items-center gap-3 rounded-md border border-border bg-surface p-2.5 transition-colors duration-[var(--motion-fast)] hover:border-primary/40"
           style={{ transitionTimingFunction: "var(--ease-standard)" }}
         >
           <div
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display text-[13px] font-bold text-white shadow-card"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display text-body-s font-bold text-white shadow-card"
             style={{ background: "var(--primary)" }}
           >
             {(p.display_name || "?").slice(0, 1).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate font-body text-[13px] font-medium text-text-primary">
+            <p className="truncate font-body text-body-s font-medium text-text-primary">
               {p.display_name || "Unknown researcher"}
             </p>
             <p className="truncate font-body text-[12px] text-text-secondary">
@@ -80,7 +80,7 @@ export function PeerSuggestionsCard({
               {p.institution || "Independent"}
             </p>
             {p.why && (
-              <p className="mt-0.5 truncate font-mono text-[11px] uppercase tracking-wide text-text-muted">
+              <p className="mt-1 truncate font-mono text-[11px] uppercase tracking-wide text-text-muted">
                 {p.why}
               </p>
             )}

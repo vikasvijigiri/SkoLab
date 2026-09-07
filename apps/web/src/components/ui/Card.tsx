@@ -6,8 +6,11 @@ import { cn } from "@/lib/utils";
 import { TRANSITION_NORMAL } from "@/lib/motion";
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
-  /** Solid 2px top accent bar in this color. */
+  /** Solid accent bar in this color. */
   accentColor?: string;
+  /** Where the accent bar sits: a 2px `top` bar (feature/marketing cards, the
+   * default) or a 3px `left` bar (data cards — reads as a ledger row). */
+  accentSide?: "top" | "left";
   interactive?: boolean;
   /** Showcase mode (landing/feature cards): lifts on hover with a plain
    * elevated shadow — no coloured glow. */
@@ -19,10 +22,11 @@ interface CardProps extends HTMLAttributes<HTMLDivElement> {
  * app's own design language, independent of the Android app's flat style.
  */
 export const Card = forwardRef<HTMLDivElement, CardProps>(
-  ({ accentColor, interactive = false, glow = false, className, style, children, ...props }, ref) => {
+  ({ accentColor, accentSide = "top", interactive = false, glow = false, className, style, children, ...props }, ref) => {
     const sharedStyle = {
       border: "1px solid var(--border-color)",
-      borderTop: accentColor ? `2px solid ${accentColor}` : undefined,
+      borderTop: accentColor && accentSide === "top" ? `2px solid ${accentColor}` : undefined,
+      borderLeft: accentColor && accentSide === "left" ? `3px solid ${accentColor}` : undefined,
       transitionTimingFunction: "var(--ease-standard)",
       ...style,
     };
@@ -32,7 +36,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
         <motion.div
           whileHover={{ y: -5, boxShadow: "var(--shadow-elevated)" }}
           transition={TRANSITION_NORMAL}
-          className={cn("rounded-lg bg-surface p-4 shadow-card", className)}
+          className={cn("rounded-lg bg-surface p-5 shadow-card", className)}
           style={sharedStyle}
           {...(props as React.ComponentProps<typeof motion.div>)}
         >
@@ -45,7 +49,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       <div
         ref={ref}
         className={cn(
-          "rounded-lg bg-surface p-4 shadow-card transition-[transform,box-shadow] duration-[var(--motion-normal)]",
+          "rounded-lg bg-surface p-5 shadow-card transition-[transform,box-shadow] duration-[var(--motion-normal)]",
           interactive &&
             "cursor-pointer hover:-translate-y-0.5 hover:shadow-card-hover active:translate-y-0 active:scale-[0.99]",
           className

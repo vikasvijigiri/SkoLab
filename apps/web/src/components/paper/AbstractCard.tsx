@@ -33,7 +33,7 @@ export function AbstractCard({ index }: { index?: Record<string, number[]> | nul
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="mt-1.5 font-body text-[12px] font-medium text-primary hover:underline"
+          className="mt-2 font-body text-[12px] font-medium text-primary hover:underline"
         >
           {expanded ? "Show less" : "Show more"}
         </button>

@@ -8,8 +8,9 @@ describe("StatTile", () => {
     expect(screen.getByText("H-Index")).toBeInTheDocument();
   });
 
-  it("renders a value cell (AnimatedCounter owns the number animation)", () => {
+  it("renders a value cell in the mono data role (AnimatedCounter owns the animation)", () => {
     const { container } = render(<StatTile label="Works" value={120} />);
-    expect(container.querySelector(".font-mono")).not.toBeNull();
+    // `.data` is DESIGN.md's mono/tabular-nums utility (globals.css @utility).
+    expect(container.querySelector(".data")).not.toBeNull();
   });
 });

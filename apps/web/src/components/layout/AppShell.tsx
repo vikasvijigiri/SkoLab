@@ -20,7 +20,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <a
         href="#main-content"
         className={cn(
-          "sr-only z-50 rounded-md bg-primary px-4 py-2 font-body text-[13px] font-semibold text-text-on-primary",
+          "sr-only z-50 rounded-md bg-primary px-4 py-2 font-body text-body-s font-semibold text-text-on-primary",
           "focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:shadow-elevated",
           focusRing,
         )}

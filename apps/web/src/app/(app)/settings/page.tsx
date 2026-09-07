@@ -31,11 +31,11 @@ function Section({
   return (
     <section id={id} className="scroll-mt-6">
       <div className="mb-2 flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-primary/10 text-primary">
+        <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-primary">
           <Icon size={16} />
         </span>
         <div>
-          <h2 className="font-display text-[15px] font-semibold text-text-primary">{title}</h2>
+          <h2 className="font-display text-h3 font-semibold text-text-primary">{title}</h2>
           <p className="font-body text-[12px] text-text-muted">{desc}</p>
         </div>
       </div>
@@ -57,15 +57,15 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-8 px-4 py-8 md:px-6">
       <div>
-        <h1 className="font-display text-[22px] font-bold text-text-primary">Settings</h1>
-        <p className="mt-0.5 font-body text-[13px] text-text-secondary">
+        <h1 className="font-display text-display-m font-bold text-text-primary">Settings</h1>
+        <p className="mt-1 font-body text-body-s text-text-secondary">
           Appearance, notifications and your account.
         </p>
       </div>
 
       <Section icon={Palette} title="Appearance" desc="How SkoLab looks on this device.">
         <div className="flex flex-col gap-2">
-          <span className="font-body text-[12.5px] font-medium text-text-primary">Theme</span>
+          <span className="font-body text-body-s font-medium text-text-primary">Theme</span>
           <div className="flex gap-2">
             {THEMES.map((t) => (
               <button
@@ -73,7 +73,7 @@ export default function SettingsPage() {
                 type="button"
                 onClick={() => pick(t.key)}
                 className={cn(
-                  "flex flex-1 flex-col items-center gap-1.5 rounded-[10px] border px-3 py-3 font-body text-[12px] font-medium transition-colors",
+                  "flex flex-1 flex-col items-center gap-2 rounded-md border px-3 py-3 font-body text-[12px] font-medium transition-colors",
                   theme === t.key
                     ? "border-primary bg-primary/5 text-primary"
                     : "border-border text-text-secondary hover:border-primary/40 hover:text-text-primary",
@@ -93,7 +93,7 @@ export default function SettingsPage() {
         desc="New connections and papers from your network appear in the bell."
       >
         <label className="flex cursor-pointer items-center justify-between gap-4">
-          <span className="font-body text-[12.5px] text-text-primary">
+          <span className="font-body text-body-s text-text-primary">
             Show the unread count badge on the bell
           </span>
           <input
@@ -116,22 +116,22 @@ export default function SettingsPage() {
         desc="Your identity and how your data is used."
       >
         <dl className="flex flex-col divide-y divide-border">
-          <div className="flex items-center justify-between py-2.5">
-            <dt className="font-body text-[12.5px] text-text-muted">Signed in as</dt>
-            <dd className="font-body text-[12.5px] font-medium text-text-primary">
+          <div className="flex items-center justify-between py-3">
+            <dt className="font-body text-body-s text-text-muted">Signed in as</dt>
+            <dd className="font-body text-body-s font-medium text-text-primary">
               {user?.isAnonymous ? "Guest session" : (user?.email ?? "Researcher")}
             </dd>
           </div>
           <Link
             href="/profile"
-            className="flex items-center justify-between py-2.5 font-body text-[12.5px] text-text-secondary transition-colors hover:text-primary"
+            className="flex items-center justify-between py-3 font-body text-body-s text-text-secondary transition-colors hover:text-primary"
           >
             Edit your profile, research focus and links
             <ChevronRight size={15} />
           </Link>
           <Link
             href="/profile#danger"
-            className="flex items-center justify-between py-2.5 font-body text-[12.5px] text-text-secondary transition-colors hover:text-notification"
+            className="flex items-center justify-between py-3 font-body text-body-s text-text-secondary transition-colors hover:text-notification"
           >
             Delete your account
             <ChevronRight size={15} />

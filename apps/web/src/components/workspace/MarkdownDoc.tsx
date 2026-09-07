@@ -44,7 +44,7 @@ export function MarkdownDoc({ source }: { source: string }) {
         blocks.push(
           <pre
             key={`c${blocks.length}`}
-            className="my-4 overflow-x-auto rounded-md bg-surface-subtle p-3.5 font-mono text-[12.5px] leading-relaxed text-text-primary"
+            className="my-4 overflow-x-auto rounded-md bg-surface-subtle p-3.5 font-mono text-body-s leading-relaxed text-text-primary"
           >
             {code.join("\n")}
           </pre>,
@@ -73,7 +73,7 @@ export function MarkdownDoc({ source }: { source: string }) {
       flushPara();
       flushList();
       const level = (h[1] ?? "#").length;
-      const sizes = ["text-[20px]", "text-[17px]", "text-[15px]", "text-[13.5px]"];
+      const sizes = ["text-[20px]", "text-[17px]", "text-[15px]", "text-body-s"];
       const size = sizes[Math.min(level, sizes.length) - 1];
       blocks.push(
         <p
@@ -124,5 +124,5 @@ export function MarkdownDoc({ source }: { source: string }) {
   if (blocks.length === 0) {
     return <span className="text-text-muted">Nothing to preview yet.</span>;
   }
-  return <div className="font-body text-[13.5px]">{blocks}</div>;
+  return <div className="font-body text-body-s">{blocks}</div>;
 }

@@ -1,25 +1,19 @@
 import type { Metadata, Viewport } from "next";
-import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { AuthProvider } from "@/lib/hooks/AuthProvider";
 import { MotionProvider } from "@/components/MotionProvider";
 import { Providers } from "@/components/providers";
 import { siteUrl } from "@/lib/site-url";
 import "./globals.css";
 
-// Only faces the app actually renders. Syne (was `--font-heading`) had zero
-// usages — dropped. `adjustFontFallback` (default) already emits a
-// size-adjusted system fallback so the swap doesn't reflow.
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-  display: "swap",
-});
-
+// Two faces (DESIGN.md): Inter carries display + body — the geometric
+// Space Grotesk display face was dropped for a "LinkedIn-style" humanist stack
+// where hierarchy comes from weight + scale. `adjustFontFallback` (default)
+// emits a size-adjusted system fallback so the swap doesn't reflow.
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
+  weight: ["400", "500", "600", "700"],
   display: "swap",
 });
 
@@ -67,7 +61,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <head>
         <script

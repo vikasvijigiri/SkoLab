@@ -114,7 +114,7 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
   if (isPending || !author) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-6 md:px-8">
-        <div className="h-48 animate-pulse rounded-[8px] bg-surface-subtle" />
+        <div className="h-48 animate-pulse rounded-md bg-surface-subtle" />
       </div>
     );
   }
@@ -150,22 +150,20 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
         <Card accentColor="var(--primary)">
           <div className="flex items-start gap-4">
             <div
-              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full font-display text-[22px] font-bold text-white shadow-card"
+              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full font-display text-[22px] font-bold text-text-on-primary shadow-card"
               style={{ background: "var(--primary)" }}
             >
               {(author.display_name || "Unknown").slice(0, 1).toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
-                <h1 className="truncate font-display text-[19px] font-bold text-text-primary">
+                <h1 className="truncate font-display text-display-m font-bold text-text-primary">
                   {author.display_name || "Unknown Researcher"}
                 </h1>
                 <motion.button
                   onClick={() => refresh.mutate()}
                   disabled={refreshing}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className="flex shrink-0 cursor-pointer items-center gap-1 font-body text-[12px] font-medium text-primary disabled:opacity-50"
+                  className="flex shrink-0 cursor-pointer items-center gap-1 font-body text-[12px] font-medium text-primary transition-colors hover:text-primary-dark disabled:opacity-50"
                 >
                   <motion.span animate={refreshing ? { rotate: 360 } : {}} transition={{ duration: 0.8, repeat: refreshing ? Infinity : 0, ease: "linear" }}>
                     <RefreshCw size={12} />
@@ -173,7 +171,7 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
                   {refreshing ? "Refreshing…" : "Refresh"}
                 </motion.button>
               </div>
-              <p className="mt-0.5 font-body text-[13.5px] text-text-secondary">
+              <p className="mt-1 font-body text-body-s text-text-secondary">
                 {author.institution}
                 {author.field_of_study ? ` · ${author.field_of_study}` : ""}
               </p>
@@ -182,7 +180,7 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
                   href={`https://orcid.org/${author.orcid.replace(/^https?:\/\/orcid\.org\//, "")}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-1 inline-flex items-center gap-1.5 font-mono text-[11.5px] text-text-secondary transition-colors hover:text-primary hover:underline"
+                  className="mt-1 inline-flex items-center gap-2 font-mono text-[11.5px] text-text-secondary transition-colors hover:text-primary hover:underline"
                 >
                   {/* ORCID brand green as a decorative dot — the low-contrast
                       #A6CE39 never carries text, so no WCAG issue. */}
@@ -192,7 +190,7 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
                 </a>
               )}
               {author.expertise.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
+                <div className="mt-2 flex flex-wrap gap-2">
                   {author.expertise.slice(0, 5).map((e) => (
                     <Badge key={e} accentColor="var(--accent-indigo)">
                       {e}
@@ -212,7 +210,7 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
       </motion.div>
 
       {/* Stats quad */}
-      <div className="flex gap-2.5">
+      <div className="flex gap-3">
         <StatTile label="H-Index" value={author.h_index} />
         <StatTile label="i10-Index" value={author.i10_index} />
         <StatTile label="Works" value={author.works_count} />
@@ -259,7 +257,7 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
         </Reveal>
       ) : (
         <Card>
-          <p className="font-body text-[13px] text-text-muted">
+          <p className="font-body text-body-s text-text-muted">
             Metrics are still being computed for this researcher — check back shortly.
           </p>
         </Card>
@@ -287,12 +285,12 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
               <SectionHeading icon={BookOpen} color="var(--accent-emerald)">
                 Journal Advisor
               </SectionHeading>
-              <div className="mt-2.5 flex flex-col gap-2">
+              <div className="mt-3 flex flex-col gap-2">
                 {journals.map((j) => (
-                  <div key={j.journal_name} className="flex items-start justify-between gap-3 rounded-[8px] bg-surface-subtle p-2.5">
+                  <div key={j.journal_name} className="flex items-start justify-between gap-3 rounded-md bg-surface-subtle p-3">
                     <div className="min-w-0">
-                      <p className="font-body text-[13px] font-medium text-text-primary">{j.journal_name}</p>
-                      <p className="mt-0.5 font-body text-[11px] text-text-muted">
+                      <p className="font-body text-body-s font-medium text-text-primary">{j.journal_name}</p>
+                      <p className="mt-1 font-body text-[11px] text-text-muted">
                         ~{j.works_count.toLocaleString()} papers/yr · {j.is_oa ? "Open Access" : "Hybrid/Subscription"}
                         {j.citation_impact > 0 && ` · ${j.citation_impact} citation impact`}
                       </p>
@@ -314,15 +312,15 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
               <SectionHeading icon={Users2} color="var(--accent-teal)">
                 Suggested Connections
               </SectionHeading>
-              <div className="mt-2.5 flex flex-col gap-2">
+              <div className="mt-3 flex flex-col gap-2">
                 {collaborators.slice(0, 5).map((c) => (
                   <Link
                     key={c.id}
                     href={`/author/${encodeURIComponent(shortOpenAlexId(c.id))}?name=${encodeURIComponent(c.name || "")}`}
-                    className="flex items-center justify-between gap-3 rounded-[8px] bg-surface-subtle p-2.5 transition-colors hover:bg-surface-subtle/60 hover:ring-1 hover:ring-primary/30"
+                    className="flex items-center justify-between gap-3 rounded-md bg-surface-subtle p-3 transition-colors hover:bg-surface-subtle/60 hover:ring-1 hover:ring-primary/30"
                   >
                     <div className="min-w-0">
-                      <p className="truncate font-body text-[13px] font-medium text-text-primary">{c.name}</p>
+                      <p className="truncate font-body text-body-s font-medium text-text-primary">{c.name}</p>
                       <p className="truncate font-body text-[12px] text-text-secondary">
                         <MathText text={c.connection_path} />
                       </p>
@@ -345,7 +343,7 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
             <SectionHeading icon={Sparkles} color="var(--accent-violet)">
               AI Gap Finder
             </SectionHeading>
-            <p className="mt-2 whitespace-pre-line font-body text-[13px] leading-relaxed text-text-secondary">
+            <p className="mt-2 whitespace-pre-line font-body text-body-s leading-relaxed text-text-secondary">
               <MarkdownText text={author.next_prediction} />
             </p>
           </Card>
@@ -359,22 +357,22 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
             <SectionHeading icon={FileText} color="var(--accent-indigo)">
               Publications
             </SectionHeading>
-            <div className="mt-2.5 flex flex-col divide-y divide-border">
+            <div className="mt-3 flex flex-col divide-y divide-border">
               {sortedWorks.map((w) => (
-                <div key={w.id ?? w.title} className="py-2.5 first:pt-0 last:pb-0">
+                <div key={w.id ?? w.title} className="py-3 first:pt-0 last:pb-0">
                   {w.id ? (
                     <Link
                       href={`/paper/${encodeURIComponent(shortOpenAlexId(w.id))}`}
-                      className="font-body text-[13.5px] font-medium text-text-primary hover:text-primary"
+                      className="font-body text-body-s font-medium text-text-primary hover:text-primary"
                     >
                       <MathText text={w.title ?? ""} />
                     </Link>
                   ) : (
-                    <p className="font-body text-[13.5px] font-medium text-text-primary">
+                    <p className="font-body text-body-s font-medium text-text-primary">
                       <MathText text={w.title ?? ""} />
                     </p>
                   )}
-                  <p className="mt-0.5 flex flex-wrap items-baseline gap-x-1 font-body text-[12px] text-text-secondary">
+                  <p className="mt-1 flex flex-wrap items-baseline gap-x-1 font-body text-[12px] text-text-secondary">
                     {w.authors && w.authors.length > 0 && (
                       <AuthorInline
                         authors={w.authors.map(splitAuthorPair)}
@@ -401,20 +399,20 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
             <SectionHeading icon={UserSearch} color="var(--accent-rose)">
               Similar Researchers
             </SectionHeading>
-            <div className="mt-2.5 flex flex-col gap-2">
+            <div className="mt-3 flex flex-col gap-2">
               {similarResearchers.slice(0, 5).map((s) => (
                 <Link
                   key={s.author_id}
                   href={`/author/${encodeURIComponent(shortOpenAlexId(s.author_id))}?name=${encodeURIComponent(s.display_name || "")}`}
-                  className="flex items-center justify-between gap-3 rounded-[8px] bg-surface-subtle p-2.5"
+                  className="flex items-center justify-between gap-3 rounded-md bg-surface-subtle p-3"
                 >
                   <div className="min-w-0">
-                    <p className="truncate font-body text-[13px] font-medium text-text-primary">{s.display_name || "Unknown Researcher"}</p>
+                    <p className="truncate font-body text-body-s font-medium text-text-primary">{s.display_name || "Unknown Researcher"}</p>
                     <p className="truncate font-body text-[12px] text-text-secondary">
                       {s.field_of_study ? `${s.field_of_study} · ` : ""}{s.institution}
                     </p>
                     {s.why && (
-                      <p className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-wide text-text-muted">{s.why}</p>
+                      <p className="mt-1 data truncate text-[10px] uppercase tracking-wide text-text-muted">{s.why}</p>
                     )}
                   </div>
                 </Link>

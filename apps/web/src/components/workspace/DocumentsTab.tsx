@@ -118,7 +118,7 @@ export function DocumentsTab({
       {/* ── File panel (one rung down the surface ladder) ─────────────── */}
       {!focus && (
         <aside className="flex shrink-0 flex-col border-b border-border bg-surface-subtle md:w-56 md:border-b-0 md:border-r">
-          <div className="flex items-center justify-between px-3 pb-1.5 pt-3">
+          <div className="flex items-center justify-between px-3 pb-2 pt-3">
             <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-text-muted">
               Files
             </span>
@@ -130,7 +130,7 @@ export function DocumentsTab({
               <div
                 key={d.id}
                 className={cn(
-                  "group relative flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-colors",
+                  "group relative flex items-center gap-2 rounded-md px-3 py-2 text-left transition-colors",
                   d.id === active?.id
                     ? "bg-primary/10 text-primary"
                     : "text-text-secondary hover:bg-surface hover:text-text-primary",
@@ -150,7 +150,7 @@ export function DocumentsTab({
                       if (e.key === "Escape") setRenamingId(null);
                     }}
                     aria-label={`Rename ${d.title}`}
-                    className="min-w-0 flex-1 rounded border border-primary bg-surface px-1.5 py-0.5 font-body text-[12.5px] text-text-primary outline-none"
+                    className="min-w-0 flex-1 rounded border border-primary bg-surface px-1.5 py-0.5 font-body text-body-s text-text-primary outline-none"
                   />
                 ) : (
                   <button
@@ -160,7 +160,7 @@ export function DocumentsTab({
                     className="flex min-w-0 flex-1 items-center gap-2"
                   >
                     <FileText size={13} className="shrink-0 opacity-70" />
-                    <span className="truncate font-body text-[12.5px]">{d.title}</span>
+                    <span className="truncate font-body text-body-s">{d.title}</span>
                   </button>
                 )}
                 {canEdit && documents.length > 1 && renamingId !== d.id && (
@@ -201,7 +201,7 @@ export function DocumentsTab({
               <button
                 type="button"
                 onClick={addDoc}
-                className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-border py-1.5 font-body text-[11.5px] font-medium text-text-muted transition-colors hover:border-primary/50 hover:text-text-primary"
+                className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-border py-2 font-body text-[11.5px] font-medium text-text-muted transition-colors hover:border-primary/50 hover:text-text-primary"
               >
                 <Plus size={13} />
                 New document
@@ -230,7 +230,7 @@ export function DocumentsTab({
             onError={setError}
           />
         ) : (
-          <div className="flex h-full items-center justify-center font-body text-[13px] text-text-muted">
+          <div className="flex h-full items-center justify-center font-body text-body-s text-text-muted">
             No documents yet.
           </div>
         )}
@@ -313,7 +313,7 @@ function DocEditorPane({
           <button
             type="button"
             onClick={() => setPreview((v) => !v)}
-            className="flex items-center gap-1.5 rounded-md px-2 py-1 transition-colors hover:bg-surface-subtle hover:text-text-primary"
+            className="flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-surface-subtle hover:text-text-primary"
           >
             {preview ? <EyeOff size={12} /> : <Eye size={12} />}
             {preview ? "Hide preview" : "Preview"}
@@ -322,7 +322,7 @@ function DocEditorPane({
             type="button"
             onClick={onToggleFocus}
             title="Focus mode (⌘.)"
-            className="flex items-center gap-1.5 rounded-md px-2 py-1 transition-colors hover:bg-surface-subtle hover:text-text-primary"
+            className="flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-surface-subtle hover:text-text-primary"
           >
             {focus ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
             {focus ? "Exit focus" : "Focus"}

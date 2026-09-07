@@ -27,9 +27,16 @@
   --page-bg: #f7f7f5;
   --surface: #ffffff;
   --surface-subtle: #eeeeec;
-  --primary: #4a52cf;
-  --primary-dark: #3e46b6;
-  --primary-deeper: #333a99;
+  /* "Confident Modernist" (DESIGN.md): a professional royal-indigo — trust-blue,
+     not violet. Contrast-verified by scripts/check-contrast.mjs. */
+  --primary: #3552cf;
+  --primary-dark: #2c46b8;
+  --primary-deeper: #233a99;
+  /* The one action colour: primary CTA fill, "live"/new state. Warm coral
+     against the cool primary. Darkened from the DESIGN.md proposal so white
+     label text clears WCAG AA (4.96:1) — check-contrast.mjs is the gate. */
+  --accent-signal: #c9401f;
+  --accent-signal-dark: #af3819;
   --text-primary: #1b1d23;
   --text-secondary: #565863;
   /* ~5.4:1 on --surface-subtle, ~6.2:1 on --surface. Cool neutral grey; keep
@@ -54,11 +61,13 @@
   --match-text: #333a99;
 
   /* Form controls — crisp bordered fields on true white, not a flat grey fill.
-     --ring is derived from --primary via var(), so it re-resolves per theme at
-     the element that uses it; one definition here is enough. */
+     --ring is derived from --accent-signal via var(), so it re-resolves per
+     theme at the element that uses it; one definition here is enough. Focus is
+     deliberately the signal colour, never the brand — so it can never be
+     mistaken for a selected/active state. */
   --surface-input: #ffffff;
   --border-input: #d6d6d2;
-  --ring: color-mix(in srgb, var(--primary) 22%, transparent);
+  --ring: color-mix(in srgb, var(--accent-signal) 30%, transparent);
   --shadow-focus: 0 0 0 3px var(--ring);
 
   /* Motion — plain vars (used via arbitrary values, e.g. duration-[var(--motion-fast)]) */
@@ -79,6 +88,9 @@
   /* No coloured glow — solid surfaces only. Kept as an alias so any stray
      reference resolves to a plain shadow instead of a blue aura. */
   --shadow-glow-primary: var(--shadow-card-hover);
+  /* The one deliberate coloured shadow: hero CTA only. Re-resolves per theme
+     via var(--accent-signal). */
+  --shadow-signal: 0 6px 20px color-mix(in srgb, var(--accent-signal) 28%, transparent);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -89,9 +101,11 @@
     --page-bg: #1a1b18;
     --surface: #232420;
     --surface-subtle: #2b2c26;
-    --primary: #9aa0ea;
-    --primary-dark: #7f86df;
-    --primary-deeper: #6b72cf;
+    --primary: #93a5ff;
+    --primary-dark: #7f92f5;
+    --primary-deeper: #6b80ea;
+    --accent-signal: #ff7a5c;
+    --accent-signal-dark: #ff6749;
     --text-primary: #e9e5da;
     --text-secondary: #b1ac9f;
     /* #9c978a: ~4.9:1 on --surface-subtle (#2b2c26), higher on the darker
@@ -104,6 +118,13 @@
     --accent-amber: #f0a83a;
     --accent-indigo: #7fa8f5;
     --accent-rose: #f9899b;
+    /* Dark values for the rest of the data-viz palette (DESIGN.md table) —
+       previously only the four above were themed. */
+    --accent-orange: #fb923c;
+    --accent-violet: #c4b5fd;
+    --accent-cyan: #22d3ee;
+    --accent-pink: #f472b6;
+    --accent-emerald: #34d399;
 
     --match-bg: #26263f;
     --match-text: #b3b8f0;
@@ -116,6 +137,7 @@
     --shadow-card-hover: 0 4px 10px rgba(0, 0, 0, 0.5), 0 16px 32px rgba(0, 0, 0, 0.55);
     --shadow-elevated: 0 12px 24px rgba(0, 0, 0, 0.55), 0 24px 64px rgba(0, 0, 0, 0.6);
     --shadow-glow-primary: var(--shadow-card-hover);
+    --shadow-signal: 0 6px 20px color-mix(in srgb, var(--accent-signal) 28%, transparent);
   }
 }
 
@@ -125,9 +147,11 @@
   --page-bg: #1a1b18;
   --surface: #232420;
   --surface-subtle: #2b2c26;
-  --primary: #9aa0ea;
-  --primary-dark: #7f86df;
-  --primary-deeper: #6b72cf;
+  --primary: #93a5ff;
+  --primary-dark: #7f92f5;
+  --primary-deeper: #6b80ea;
+  --accent-signal: #ff7a5c;
+  --accent-signal-dark: #ff6749;
   --text-primary: #e9e5da;
   --text-secondary: #b1ac9f;
   --text-muted: #9c978a;
@@ -137,6 +161,11 @@
   --accent-amber: #f0a83a;
   --accent-indigo: #7fa8f5;
   --accent-rose: #f9899b;
+  --accent-orange: #fb923c;
+  --accent-violet: #c4b5fd;
+  --accent-cyan: #22d3ee;
+  --accent-pink: #f472b6;
+  --accent-emerald: #34d399;
   --match-bg: #26263f;
   --match-text: #b3b8f0;
   --surface-input: #1e1f1b;
@@ -146,15 +175,18 @@
   --shadow-card-hover: 0 4px 10px rgba(0, 0, 0, 0.5), 0 16px 32px rgba(0, 0, 0, 0.55);
   --shadow-elevated: 0 12px 24px rgba(0, 0, 0, 0.55), 0 24px 64px rgba(0, 0, 0, 0.6);
   --shadow-glow-primary: var(--shadow-card-hover);
+  --shadow-signal: 0 6px 20px color-mix(in srgb, var(--accent-signal) 28%, transparent);
 }
 
 :root[data-theme="light"] {
   --page-bg: #f7f7f5;
   --surface: #ffffff;
   --surface-subtle: #eeeeec;
-  --primary: #4a52cf;
-  --primary-dark: #3e46b6;
-  --primary-deeper: #333a99;
+  --primary: #3552cf;
+  --primary-dark: #2c46b8;
+  --primary-deeper: #233a99;
+  --accent-signal: #c9401f;
+  --accent-signal-dark: #af3819;
   --text-primary: #1b1d23;
   --text-secondary: #565863;
   --text-muted: #5f616d;
@@ -184,6 +216,8 @@
   --color-primary: var(--primary);
   --color-primary-dark: var(--primary-dark);
   --color-primary-deeper: var(--primary-deeper);
+  --color-accent-signal: var(--accent-signal);
+  --color-accent-signal-dark: var(--accent-signal-dark);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-muted: var(--text-muted);
@@ -217,16 +251,22 @@
   --color-metric-consistency: var(--accent-amber);
   --color-metric-policy: #64748b;
 
-  --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  /* Two-family stack (DESIGN.md): Inter carries display + body — "LinkedIn-style"
+     humanist, hierarchy from weight + scale, not a display face. --font-display
+     is kept as a name so the ~45 `font-display` call sites need no churn; it now
+     resolves to Inter. JetBrains Mono is the one departure — structural, for
+     data. */
+  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-body: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
 
-  /* Elevation utilities: shadow-xs, shadow-card, shadow-card-hover, shadow-elevated, shadow-glow-primary */
+  /* Elevation utilities: shadow-xs, shadow-card, shadow-card-hover, shadow-elevated, shadow-glow-primary, shadow-signal */
   --shadow-xs: var(--shadow-xs);
   --shadow-card: var(--shadow-card);
   --shadow-card-hover: var(--shadow-card-hover);
   --shadow-elevated: var(--shadow-elevated);
   --shadow-glow-primary: var(--shadow-glow-primary);
+  --shadow-signal: var(--shadow-signal);
 }
 
 /* Static (mode-independent) overrides to Tailwind's default radius scale. */
@@ -236,6 +276,48 @@
   --radius-md: 14px;
   --radius-lg: 18px;
   --radius-xl: 24px;
+
+  /* Type scale (DESIGN.md). Tailwind v4 turns each --text-* into a `text-*`
+     utility that also sets line-height / letter-spacing from the paired keys.
+     Body L / Caption reuse Tailwind's `text-base` / `text-xs`. */
+  --text-display-xl: 3.75rem;
+  --text-display-xl--line-height: 1.05;
+  --text-display-xl--letter-spacing: -0.02em;
+  --text-display-l: 2.75rem;
+  --text-display-l--line-height: 1.1;
+  --text-display-l--letter-spacing: -0.02em;
+  --text-display-m: 2rem;
+  --text-display-m--line-height: 1.15;
+  --text-display-m--letter-spacing: -0.01em;
+  --text-h2: 1.375rem;
+  --text-h2--line-height: 1.25;
+  --text-h3: 1.0625rem;
+  --text-h3--line-height: 1.3;
+  --text-body: 0.90625rem;      /* 14.5px — default UI body */
+  --text-body--line-height: 1.6;
+  --text-body-s: 0.8125rem;     /* 13px — dense rows */
+  --text-body-s--line-height: 1.5;
+  --text-eyebrow: 0.71875rem;   /* 11.5px — uppercase mono label */
+  --text-eyebrow--line-height: 1.4;
+  --text-eyebrow--letter-spacing: 0.08em;
+}
+
+/* Mono structural roles (DESIGN.md Type): use as `className="eyebrow"` /
+   `className="data"` rather than re-declaring the mono + tnum + tracking each
+   time. */
+@utility eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-eyebrow);
+  line-height: var(--text-eyebrow--line-height);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+@utility data {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 
 body {

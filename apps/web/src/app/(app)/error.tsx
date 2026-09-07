@@ -36,10 +36,10 @@ export default function AppError({
         <span className="flex h-10 w-10 items-center justify-center rounded-full bg-notification/10 text-notification">
           <TriangleAlert size={18} />
         </span>
-        <h1 className="font-display text-[17px] font-semibold text-text-primary">
+        <h1 className="font-display text-h3 font-semibold text-text-primary">
           Something went wrong
         </h1>
-        <p className="font-body text-[13px] leading-relaxed text-text-secondary">
+        <p className="font-body text-body-s leading-relaxed text-text-secondary">
           {error.message || "This page hit an unexpected error."}
         </p>
         <Button onClick={() => retry()}>Try again</Button>

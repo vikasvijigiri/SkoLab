@@ -22,7 +22,7 @@ import type { OpenAlexTaxon } from "@/lib/types";
 import { AuthorResultCard } from "@/components/discovery/AuthorResultCard";
 import { PaperResultCard } from "@/components/discovery/PaperResultCard";
 import { LeaderboardRow } from "@/components/discovery/LeaderboardRow";
-import { TRANSITION_FAST } from "@/lib/motion";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 
 type Mode = "researchers" | "papers";
 
@@ -89,30 +89,16 @@ export function DiscoveryContent() {
         : null;
 
   const modeToggle = (
-    <div className="flex w-full gap-1 rounded-full bg-surface-subtle p-1 sm:w-auto">
-      {(["researchers", "papers"] as const).map((m) => (
-        <motion.button
-          key={m}
-          onClick={() => setMode(m)}
-          whileTap={{ scale: 0.96 }}
-          transition={TRANSITION_FAST}
-          className={cn(
-            "relative flex-1 rounded-full px-4 py-1.5 font-body text-[13px] font-medium capitalize transition-colors duration-[var(--motion-fast)] sm:flex-none",
-            mode === m ? "text-text-on-primary" : "text-text-secondary hover:bg-surface/60 hover:text-text-primary",
-          )}
-          style={{ transitionTimingFunction: "var(--ease-standard)" }}
-        >
-          {mode === m && (
-            <motion.span
-              layoutId="discovery-mode-pill"
-              className="absolute inset-0 rounded-full bg-primary"
-              transition={{ type: "spring", stiffness: 400, damping: 32 }}
-            />
-          )}
-          <span className="relative z-10">{m}</span>
-        </motion.button>
-      ))}
-    </div>
+    <SegmentedControl
+      aria-label="Show researchers or papers"
+      layoutId="discovery-mode-pill"
+      options={[
+        { value: "researchers", label: "researchers" },
+        { value: "papers", label: "papers" },
+      ]}
+      value={mode}
+      onChange={(v) => setMode(v as Mode)}
+    />
   );
 
   const railContent = (
@@ -160,17 +146,15 @@ export function DiscoveryContent() {
 
       {nextLevel && (
         <div>
-          <span className="mb-1.5 block font-body text-[11.5px] font-semibold uppercase tracking-wide text-text-muted">
-            {nextLevel.title}
-          </span>
+          <span className="eyebrow mb-2 block">{nextLevel.title}</span>
           {nextLevel.q.isPending ? (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {[0, 1, 2, 3, 4].map((i) => (
                 <div key={i} className="h-7 w-24 animate-pulse rounded-full bg-surface-subtle" />
               ))}
             </div>
           ) : (
-            <div className="flex flex-wrap gap-1.5 lg:flex-col lg:items-stretch">
+            <div className="flex flex-wrap gap-2 lg:flex-col lg:items-stretch">
               {(nextLevel.q.data ?? []).map((t) => (
                 <Chip key={t.id} onClick={() => nextLevel.pick(t)} className="lg:justify-start">
                   {t.display_name}
@@ -183,7 +167,7 @@ export function DiscoveryContent() {
     </div>
   );
 
-  const gridClass = "grid grid-cols-1 gap-2.5 lg:grid-cols-2 xl:grid-cols-3";
+  const gridClass = "grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3";
 
   const resultCount = !active.isPending && !active.isError ? (active.data ?? []).length : null;
 
@@ -196,8 +180,8 @@ export function DiscoveryContent() {
         className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
       >
         <div>
-          <h1 className="font-display text-[22px] font-bold text-text-primary">Discovery</h1>
-          <p className="mt-0.5 font-body text-[13px] text-text-secondary">
+          <h1 className="font-display text-display-m font-bold text-text-primary">Discovery</h1>
+          <p className="mt-1 font-body text-body-s text-text-secondary">
             Browse the literature and the people behind it, one field at a time.
           </p>
         </div>
@@ -206,9 +190,9 @@ export function DiscoveryContent() {
 
       <RailShell rail={railContent} railWidth="260px" mobileRail="collapsible" stickyRail>
         <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-1.5 text-text-secondary">
+          <div className="flex items-center gap-2 text-text-secondary">
             {mode === "researchers" ? <Trophy size={14} /> : <Flame size={14} />}
-            <span className="font-body text-[12.5px] font-semibold uppercase tracking-wide">
+            <span className="eyebrow">
               {node
                 ? `${mode === "researchers" ? "Top researchers" : "Top papers"} in ${node.label}`
                 : mode === "researchers"
@@ -216,7 +200,7 @@ export function DiscoveryContent() {
                   : "Trending This Year"}
             </span>
             {resultCount !== null && resultCount > 0 && (
-              <span className="font-mono text-[11px] text-text-muted">· {resultCount}</span>
+              <span className="data text-[11px] text-text-muted">· {resultCount}</span>
             )}
           </div>
 
@@ -231,7 +215,7 @@ export function DiscoveryContent() {
           <div className={gridClass}>
             {active.isPending &&
               [0, 1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="h-[88px] animate-pulse rounded-lg bg-surface-subtle" />
+                <div key={i} className="h-[88px] animate-pulse rounded-md bg-surface-subtle" />
               ))}
 
             {!active.isPending && !active.isError && mode === "researchers" && !node &&
@@ -261,12 +245,12 @@ export function DiscoveryContent() {
           </div>
 
           {!active.isPending && !active.isError && (active.data ?? []).length === 0 && (
-            <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-surface-subtle/40 px-4 py-12 text-center">
+            <div className="flex flex-col items-center gap-3 rounded-md border border-dashed border-border bg-surface-subtle/40 px-4 py-12 text-center">
               <SearchX size={24} className="text-text-muted" />
-              <p className="font-body text-[13.5px] font-medium text-text-primary">
+              <p className="font-body text-body font-medium text-text-primary">
                 {node ? "Nothing here yet for this topic" : "Start with a field"}
               </p>
-              <p className="max-w-xs font-body text-[12.5px] leading-relaxed text-text-muted">
+              <p className="max-w-xs font-body text-body-s leading-relaxed text-text-muted">
                 {node
                   ? "Try a broader level in the breadcrumb, or switch between researchers and papers."
                   : "Pick a field from the panel to see its top researchers and most-cited work."}

@@ -9,7 +9,7 @@ export function CitationBarChart({ data }: { data: CitationHeatmap }) {
         const cites = data.citations[i] ?? 0;
         const h = Math.max(4, (cites / max) * 100);
         return (
-          <div key={year} className="flex flex-1 flex-col items-center gap-1.5">
+          <div key={year} className="flex flex-1 flex-col items-center gap-2">
             <div className="flex h-24 w-full items-end">
               <div
                 className="w-full rounded-t-[4px] transition-[height] duration-[var(--motion-normal)]"

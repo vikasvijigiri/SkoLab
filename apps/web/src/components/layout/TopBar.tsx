@@ -26,7 +26,7 @@ export function TopBar() {
         aria-label="SkoLab home"
       >
         <span
-          className="flex h-7 w-7 items-center justify-center rounded-[7px] font-display text-[14px] font-bold text-white"
+          className="flex h-7 w-7 items-center justify-center rounded-[7px] font-display text-body font-bold text-white"
           style={{ background: "var(--primary)" }}
         >
           S
@@ -40,7 +40,7 @@ export function TopBar() {
         aria-label="Search"
         title="Search (⌘K)"
         className={cn(
-          "flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full border border-border bg-surface-subtle px-3 font-body text-[12.5px] text-text-muted transition-colors hover:border-primary/40 hover:text-text-primary md:max-w-[420px] lg:max-w-[480px]",
+          "flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full border border-border bg-surface-subtle px-3 font-body text-body-s text-text-muted transition-colors hover:border-primary/40 hover:text-text-primary md:max-w-[420px] lg:max-w-[480px]",
           focusRing,
         )}
         style={{ transitionTimingFunction: "var(--ease-standard)" }}
@@ -53,7 +53,7 @@ export function TopBar() {
       {/* primary nav — right-aligned, evenly spaced icon+label tabs */}
       <nav
         aria-label="Primary"
-        className="ml-auto hidden shrink-0 items-center gap-1.5 md:flex lg:gap-2"
+        className="ml-auto hidden shrink-0 items-center gap-2 md:flex lg:gap-2"
       >
         {BAR_NAV.map((item) => {
           const active = pathname?.startsWith(item.href);
@@ -84,7 +84,7 @@ export function TopBar() {
       </nav>
 
       {/* bell + account — kept apart from the nav by a hairline divider */}
-      <div className="flex shrink-0 items-center gap-1.5 md:ml-3 md:border-l md:border-border md:pl-3">
+      <div className="flex shrink-0 items-center gap-2 md:ml-3 md:border-l md:border-border md:pl-3">
         <NotificationsBell />
         <ProfileMenu />
       </div>

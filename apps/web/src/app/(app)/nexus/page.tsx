@@ -95,11 +95,9 @@ export default function NexusPage() {
         {(["collection", "chat"] as const).map((p) => (
           <motion.button
             key={p}
-            onClick={() => setMobilePane(p)}
-            whileTap={{ scale: 0.96 }}
-            transition={TRANSITION_FAST}
+            onClick={() => setMobilePane(p)}            transition={TRANSITION_FAST}
             className={cn(
-              "relative flex-1 rounded-md py-1.5 font-body text-[12.5px] font-medium transition-colors duration-[var(--motion-fast)]",
+              "relative flex-1 rounded-md py-2 font-body text-body-s font-medium transition-colors duration-[var(--motion-fast)]",
               mobilePane === p ? "text-text-on-primary" : "text-text-secondary"
             )}
           >

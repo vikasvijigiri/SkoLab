@@ -74,7 +74,7 @@ export function NexusCollectionPanel({
           <div className="flex h-7 w-7 items-center justify-center rounded bg-accent-purple/10 text-accent-purple">
             <BookOpen size={15} />
           </div>
-          <span className="font-display text-[14px] font-bold text-text-primary">
+          <span className="font-display text-body font-bold text-text-primary">
             Synthesis Collection ({activeCollection.length})
           </span>
         </div>
@@ -121,17 +121,17 @@ export function NexusCollectionPanel({
 
         {next && (
           <div>
-            <span className="mb-1.5 block font-body text-[10.5px] font-semibold uppercase tracking-wide text-text-muted">
+            <span className="mb-2 block font-body text-[10.5px] font-semibold uppercase tracking-wide text-text-muted">
               {next.title}
             </span>
             {next.q.isPending ? (
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-2">
                 {[0, 1, 2, 3].map((i) => (
                   <div key={i} className="h-6 w-20 animate-pulse rounded-full bg-surface-subtle" />
                 ))}
               </div>
             ) : (
-              <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto">
+              <div className="flex max-h-32 flex-wrap gap-2 overflow-y-auto">
                 {(next.q.data ?? []).map((t) => (
                   <Chip key={t.id} onClick={() => next.pick(t)}>
                     {t.display_name}
@@ -143,12 +143,12 @@ export function NexusCollectionPanel({
         )}
 
         {node && (
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             <span className="font-body text-[10.5px] font-semibold uppercase tracking-wide text-text-muted">
               Top papers — tap to add
             </span>
             {worksQ.isPending ? (
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-2">
                 {[0, 1, 2].map((i) => (
                   <div key={i} className="h-12 animate-pulse rounded bg-surface-subtle" />
                 ))}
@@ -173,7 +173,7 @@ export function NexusCollectionPanel({
                         <p className="line-clamp-2 font-semibold leading-snug text-text-primary">
                           <MathText text={paper.display_name} />
                         </p>
-                        <p className="mt-0.5 text-[11px] text-text-muted">
+                        <p className="mt-1 text-[11px] text-text-muted">
                           {paper.authorships?.slice(0, 2).map((a) => a.author.display_name).join(", ")}
                           {paper.publication_year ? ` · ${paper.publication_year}` : ""}
                         </p>
@@ -201,7 +201,7 @@ export function NexusCollectionPanel({
             <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-dashed border-border text-text-muted">
               <BookOpen size={20} />
             </div>
-            <p className="font-body text-[13px] text-text-muted">
+            <p className="font-body text-body-s text-text-muted">
               Your collection is empty. Drill into a topic above and tap papers to add them.
             </p>
           </div>
@@ -219,18 +219,16 @@ export function NexusCollectionPanel({
                 <Card className="group relative flex flex-col gap-1 border-border/30 bg-surface/80 p-3 pr-8 shadow-sm">
                   <motion.button
                     onClick={() => onRemovePaper(p.id)}
-                    whileHover={{ scale: 1.12 }}
-                    whileTap={{ scale: 0.9 }}
                     transition={TRANSITION_FAST}
                     className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded text-text-muted opacity-0 transition-colors duration-[var(--motion-fast)] hover:bg-notification/10 hover:text-notification focus:opacity-100 group-hover:opacity-100"
                   >
                     <Trash2 size={13} />
                   </motion.button>
-                  <h4 className="line-clamp-2 font-display text-[13px] font-semibold leading-snug text-text-primary">
+                  <h4 className="line-clamp-2 font-display text-body-s font-semibold leading-snug text-text-primary">
                     <MathText text={p.title} />
                   </h4>
-                  <p className="mt-0.5 truncate font-body text-[11.5px] text-text-secondary">{p.authors.join(", ")}</p>
-                  <div className="mt-2 flex items-center gap-1.5">
+                  <p className="mt-1 truncate font-body text-[11.5px] text-text-secondary">{p.authors.join(", ")}</p>
+                  <div className="mt-2 flex items-center gap-2">
                     <Badge accentColor="var(--accent-purple)" className="px-1.5 text-[10px]">
                       {p.year}
                     </Badge>

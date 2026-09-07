@@ -126,7 +126,7 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-6 md:px-8">
-        <div className="h-64 animate-pulse rounded-[8px] bg-surface-subtle" />
+        <div className="h-64 animate-pulse rounded-md bg-surface-subtle" />
       </div>
     );
   }
@@ -148,23 +148,23 @@ export default function ProfilePage() {
         <Card accentColor="var(--primary)">
           <div className="flex items-center gap-4 lg:flex-col lg:items-start lg:text-left">
             <div
-              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full font-display text-[22px] font-bold text-white shadow-card"
+              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full font-display text-display-m font-bold text-white shadow-card"
               style={{ background: "var(--primary)" }}
             >
               {(firestoreProfile?.name || user?.displayName || "?").slice(0, 1).toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
-              <h1 className="truncate font-display text-[19px] font-bold text-text-primary">
+              <h1 className="truncate font-display text-h2 font-bold text-text-primary">
                 {firestoreProfile?.name || user?.displayName || "Researcher"}
               </h1>
-              <p className="truncate font-body text-[13px] text-text-secondary">{user?.email}</p>
-              <Badge accentColor="var(--accent-teal)" className="mt-1.5 w-fit">
+              <p className="truncate font-body text-body-s text-text-secondary">{user?.email}</p>
+              <Badge accentColor="var(--accent-teal)" className="mt-2 w-fit">
                 {firestoreProfile?.academicStatus ?? "Researcher"}
               </Badge>
             </div>
           </div>
           {!editing && (
-            <Button variant="outlined" fullWidth={false} onClick={startEditing} className="mt-4 gap-1.5 lg:w-full">
+            <Button variant="outlined" fullWidth={false} onClick={startEditing} className="mt-4 gap-2 lg:w-full">
               <Pencil size={14} />
               Edit
             </Button>
@@ -176,7 +176,7 @@ export default function ProfilePage() {
       {editing ? (
         <Reveal>
           <Card>
-            <h2 className="font-display text-[15px] font-semibold text-text-primary">Edit profile</h2>
+            <h2 className="font-display text-h3 font-semibold text-text-primary">Edit profile</h2>
             {saveError && (
               <div className="mt-3">
                 <ErrorBanner message={saveError} />
@@ -185,18 +185,18 @@ export default function ProfilePage() {
             <div className="mt-3 flex flex-col gap-4">
               {/* Name comes from your sign-in provider — shown, not edited. */}
               <div>
-                <span className="mb-1 block font-body text-[12.5px] font-medium text-text-secondary">Name</span>
-                <p className="font-body text-[14px] text-text-primary">{displayName}</p>
+                <span className="mb-1 block font-body text-body-s font-medium text-text-secondary">Name</span>
+                <p className="font-body text-body text-text-primary">{displayName}</p>
               </div>
 
               {/* Linked OpenAlex profile — re-link by picking, never typing. */}
               <div>
-                <span className="mb-1.5 block font-body text-[12.5px] font-medium text-text-secondary">
+                <span className="mb-2 block font-body text-body-s font-medium text-text-secondary">
                   Linked OpenAlex profile
                 </span>
                 {!showLink ? (
                   <div className="flex items-center gap-2">
-                    <p className="font-body text-[13px] text-text-secondary">
+                    <p className="font-body text-body-s text-text-secondary">
                       {me?.display_name ||
                         (firestoreProfile?.openAlexId
                           ? firestoreProfile.authorName || firestoreProfile.openAlexId
@@ -213,7 +213,7 @@ export default function ProfilePage() {
                 ) : matchQ.isPending ? (
                   <div className="flex flex-col gap-2">
                     {[0, 1, 2].map((i) => (
-                      <div key={i} className="h-14 animate-pulse rounded-[8px] bg-surface-subtle" />
+                      <div key={i} className="h-14 animate-pulse rounded-md bg-surface-subtle" />
                     ))}
                   </div>
                 ) : (
@@ -226,21 +226,21 @@ export default function ProfilePage() {
                           setMe(a);
                           setShowLink(false);
                         }}
-                        className={`flex items-start justify-between gap-3 rounded-[8px] border p-2.5 text-left transition-colors ${
+                        className={`flex items-start justify-between gap-3 rounded-md border p-2.5 text-left transition-colors ${
                           me?.id === a.id
                             ? "border-primary bg-primary/10"
                             : "border-border-input bg-surface-input hover:border-primary/40"
                         }`}
                       >
                         <div className="min-w-0">
-                          <p className="truncate font-body text-[13px] font-medium text-text-primary">
+                          <p className="truncate font-body text-body-s font-medium text-text-primary">
                             {a.display_name}
                           </p>
                           <p className="truncate font-mono text-[10.5px] uppercase tracking-wide text-text-muted">
                             {a.institution || "Independent"} · {a.works_count} works · h {a.h_index}
                           </p>
                         </div>
-                        {me?.id === a.id && <Check size={15} className="mt-0.5 shrink-0 text-primary" />}
+                        {me?.id === a.id && <Check size={15} className="mt-1 shrink-0 text-primary" />}
                       </button>
                     ))}
                     {(matchQ.data ?? []).length === 0 && (
@@ -261,23 +261,23 @@ export default function ProfilePage() {
 
               {/* Research focus — pick a field, optionally a sub-field. */}
               <div>
-                <span className="mb-1.5 block font-body text-[12.5px] font-medium text-text-secondary">
+                <span className="mb-2 block font-body text-body-s font-medium text-text-secondary">
                   Research focus
                 </span>
-                <p className="mb-2 font-body text-[12.5px] text-text-muted">
+                <p className="mb-2 font-body text-body-s text-text-muted">
                   Current: {firestoreProfile?.researchFocus || "not set"}
                   {nextFocus !== (firestoreProfile?.researchFocus ?? "") && (
                     <span className="text-primary"> → {nextFocus}</span>
                   )}
                 </p>
                 {fieldsQ.isPending ? (
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-2">
                     {[0, 1, 2, 3, 4].map((i) => (
                       <div key={i} className="h-7 w-24 animate-pulse rounded-full bg-surface-subtle" />
                     ))}
                   </div>
                 ) : (
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-2">
                     {(fieldsQ.data ?? []).map((t) => (
                       <Chip
                         key={t.id}
@@ -293,7 +293,7 @@ export default function ProfilePage() {
                   </div>
                 )}
                 {field && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
+                  <div className="mt-2 flex flex-wrap gap-2">
                     {(subfieldsQ.data ?? []).map((t) => (
                       <Chip
                         key={t.id}
@@ -308,16 +308,16 @@ export default function ProfilePage() {
               </div>
 
               <div>
-                <span className="mb-1.5 block font-body text-[12.5px] font-medium text-text-secondary">
+                <span className="mb-2 block font-body text-body-s font-medium text-text-secondary">
                   Academic status
                 </span>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-2">
                   {STATUS_OPTIONS.map((opt) => (
                     <button
                       key={opt}
                       type="button"
                       onClick={() => setAcademicStatus(opt)}
-                      className={`cursor-pointer rounded-full border px-2.5 py-1 font-body text-[11.5px] transition-colors ${
+                      className={`cursor-pointer rounded-full border px-3 py-1 font-body text-[11.5px] transition-colors ${
                         academicStatus === opt
                           ? "border-primary bg-primary/10 text-primary"
                           : "border-border text-text-muted hover:border-primary/40 hover:text-text-primary"
@@ -332,7 +332,7 @@ export default function ProfilePage() {
               <div>
                 <label
                   htmlFor="profile-about"
-                  className="mb-1.5 block font-body text-[13px] font-medium text-text-secondary"
+                  className="mb-2 block font-body text-body-s font-medium text-text-secondary"
                 >
                   About <span className="font-normal text-text-muted">(free text — the one place you write)</span>
                 </label>
@@ -341,7 +341,7 @@ export default function ProfilePage() {
                   value={about}
                   onChange={(e) => setAbout(e.target.value)}
                   rows={4}
-                  className="w-full rounded-sm border border-transparent bg-surface-subtle px-4 py-3 font-body text-[14px] text-text-primary outline-none focus:border-primary"
+                  className="w-full rounded-sm border border-transparent bg-surface-subtle px-4 py-3 font-body text-body text-text-primary outline-none focus:border-primary"
                 />
               </div>
 
@@ -359,14 +359,14 @@ export default function ProfilePage() {
       ) : (
         <Reveal>
           <Card>
-            <h2 className="font-display text-[15px] font-semibold text-text-primary">Research focus</h2>
-            <p className="mt-1.5 font-body text-[13.5px] text-text-secondary">
+            <h2 className="font-display text-h3 font-semibold text-text-primary">Research focus</h2>
+            <p className="mt-2 font-body text-body-s text-text-secondary">
               {firestoreProfile?.researchFocus || "Not set yet."}
             </p>
             {firestoreProfile?.about && (
               <>
-                <h2 className="mt-4 font-display text-[15px] font-semibold text-text-primary">About</h2>
-                <p className="mt-1.5 font-body text-[13.5px] leading-relaxed text-text-secondary">
+                <h2 className="mt-4 font-display text-h3 font-semibold text-text-primary">About</h2>
+                <p className="mt-2 font-body text-body-s leading-relaxed text-text-secondary">
                   {firestoreProfile.about}
                 </p>
               </>
@@ -378,13 +378,13 @@ export default function ProfilePage() {
       {author && (author.expertise.length > 0 || author.skills.length > 0) && (
         <Reveal delay={0.04}>
           <Card>
-            <h2 className="font-display text-[15px] font-semibold text-text-primary">Research Areas & Skills</h2>
+            <h2 className="font-display text-h3 font-semibold text-text-primary">Research Areas & Skills</h2>
             {author.expertise.length > 0 && (
               <div className="mt-3">
                 <h3 className="font-body text-[11px] font-medium uppercase tracking-wide text-text-muted">
                   Research Areas
                 </h3>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                <div className="mt-2 flex flex-wrap gap-2">
                   {author.expertise.map((e) => (
                     <Badge key={e} accentColor="var(--accent-indigo)">
                       {e}
@@ -398,7 +398,7 @@ export default function ProfilePage() {
                 <h3 className="font-body text-[11px] font-medium uppercase tracking-wide text-text-muted">
                   Skills
                 </h3>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                <div className="mt-2 flex flex-wrap gap-2">
                   {author.skills.map((s) => (
                     <Badge key={s} accentColor="var(--accent-amber)">
                       {s}
@@ -414,22 +414,22 @@ export default function ProfilePage() {
       {author && (
         <Reveal delay={0.08}>
           <Card>
-            <h2 className="flex items-center gap-1.5 font-display text-[15px] font-semibold text-text-primary">
+            <h2 className="flex items-center gap-2 font-display text-h3 font-semibold text-text-primary">
               <TrendingUp size={15} className="text-primary" />
               Metrics snapshot
             </h2>
-            <div className="mt-3 flex gap-2.5">
+            <div className="mt-3 flex gap-3">
               {[
                 { label: "H-Index", value: author.h_index },
                 { label: "i10-Index", value: author.i10_index },
                 { label: "Works", value: author.works_count },
                 { label: "Citations", value: author.cited_by_count },
               ].map((s) => (
-                <div key={s.label} className="flex-1 rounded-[8px] bg-surface-subtle px-3 py-2.5 text-center">
+                <div key={s.label} className="flex-1 rounded-md bg-surface-subtle px-3 py-3 text-center">
                   <p className="font-mono text-[17px] font-semibold text-text-primary">
                     <AnimatedCounter to={s.value} />
                   </p>
-                  <p className="mt-0.5 font-body text-[10.5px] uppercase tracking-wide text-text-muted">
+                  <p className="mt-1 font-body text-[10.5px] uppercase tracking-wide text-text-muted">
                     {s.label}
                   </p>
                 </div>
@@ -443,12 +443,12 @@ export default function ProfilePage() {
         <Card>
           <h2
             id="danger"
-            className="flex scroll-mt-6 items-center gap-1.5 font-display text-[15px] font-semibold text-notification"
+            className="flex scroll-mt-6 items-center gap-2 font-display text-h3 font-semibold text-notification"
           >
             <ShieldAlert size={15} />
             Danger zone
           </h2>
-          <p className="mt-1.5 font-body text-[13px] text-text-secondary">
+          <p className="mt-2 font-body text-body-s text-text-secondary">
             Permanently delete your account and all associated data. This can&apos;t be undone.
           </p>
           {confirmDelete ? (

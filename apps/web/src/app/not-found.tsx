@@ -19,16 +19,16 @@ export default function NotFound() {
         <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
           <Compass size={18} />
         </span>
-        <h1 className="font-display text-[17px] font-semibold text-text-primary">
+        <h1 className="font-display text-h3 font-semibold text-text-primary">
           Page not found
         </h1>
-        <p className="font-body text-[13px] leading-relaxed text-text-secondary">
+        <p className="font-body text-body-s leading-relaxed text-text-secondary">
           Nothing lives at this address — the link may be out of date, or the
           page may have moved.
         </p>
         <Link
           href="/"
-          className="inline-flex h-11 w-full items-center justify-center rounded-md bg-primary px-6 text-[13px] font-semibold text-text-on-primary transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          className="inline-flex h-11 w-full items-center justify-center rounded-md bg-primary px-6 text-body-s font-semibold text-text-on-primary transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         >
           Back to home
         </Link>
