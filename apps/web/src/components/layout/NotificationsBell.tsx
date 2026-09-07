@@ -28,19 +28,19 @@ function Row({ n, onNavigate }: { n: Notification; onNavigate: () => void }) {
       href={n.href}
       onClick={onNavigate}
       className={cn(
-        "flex items-start gap-2.5 px-3 py-2.5 transition-colors hover:bg-surface-subtle",
+        "flex items-start gap-3 px-3 py-3 transition-colors hover:bg-surface-subtle",
         n.unread && "bg-primary/[0.04]",
       )}
     >
       <span
-        className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+        className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
         style={{ backgroundColor: `color-mix(in srgb, ${tint} 14%, transparent)`, color: tint }}
       >
         <Icon size={13} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block font-body text-[12.5px] leading-snug text-text-primary">{n.text}</span>
-        <span className="mt-0.5 block font-mono text-[10px] text-text-muted">{ago(n.ts)}</span>
+        <span className="block font-body text-body-s leading-snug text-text-primary">{n.text}</span>
+        <span className="mt-1 block font-mono text-[10px] text-text-muted">{ago(n.ts)}</span>
       </span>
       {n.unread && <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
     </Link>
@@ -87,14 +87,14 @@ export function NotificationsBell() {
         {open && (
           <motion.div
             role="menu"
-            initial={{ opacity: 0, y: -6, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.98 }}
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.14 }}
-            className="absolute right-0 top-11 z-50 w-[340px] overflow-hidden rounded-[12px] border border-border bg-surface shadow-elevated"
+            className="absolute right-0 top-11 z-50 w-[340px] overflow-hidden rounded-md border border-border bg-surface shadow-elevated"
           >
-            <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
-              <span className="font-display text-[13px] font-semibold text-text-primary">Notifications</span>
+            <div className="flex items-center justify-between border-b border-border px-3 py-3">
+              <span className="font-display text-body-s font-semibold text-text-primary">Notifications</span>
               {unreadCount > 0 && (
                 <button
                   type="button"

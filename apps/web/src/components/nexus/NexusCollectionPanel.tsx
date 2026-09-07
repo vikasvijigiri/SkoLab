@@ -219,8 +219,6 @@ export function NexusCollectionPanel({
                 <Card className="group relative flex flex-col gap-1 border-border/30 bg-surface/80 p-3 pr-8 shadow-sm">
                   <motion.button
                     onClick={() => onRemovePaper(p.id)}
-                    whileHover={{ scale: 1.12 }}
-                    whileTap={{ scale: 0.9 }}
                     transition={TRANSITION_FAST}
                     className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded text-text-muted opacity-0 transition-colors duration-[var(--motion-fast)] hover:bg-notification/10 hover:text-notification focus:opacity-100 group-hover:opacity-100"
                   >

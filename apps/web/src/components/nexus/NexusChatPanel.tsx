@@ -75,9 +75,7 @@ export function NexusChatPanel({
                 <motion.button
                   key={prompt}
                   onClick={() => onSend(prompt)}
-                  whileHover={{ y: -2, boxShadow: "var(--shadow-card-hover)" }}
-                  whileTap={{ scale: 0.98 }}
-                  transition={TRANSITION_FAST}
+                  whileHover={{ y: -2, boxShadow: "var(--shadow-card-hover)" }}                  transition={TRANSITION_FAST}
                   className="w-full text-left p-3 rounded-lg border border-border bg-surface/40 hover:bg-surface/90 hover:border-primary/30 transition-colors duration-[var(--motion-fast)] font-body text-body-s text-text-secondary flex items-center justify-between"
                 >
                   <span>{prompt}</span>

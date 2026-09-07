@@ -38,7 +38,7 @@ export default function RootError({
         <h1 className="font-display text-[17px] font-semibold text-text-primary">
           Something went wrong
         </h1>
-        <p className="font-body text-[13px] leading-relaxed text-text-secondary">
+        <p className="font-body text-body-s leading-relaxed text-text-secondary">
           {error.message || "This page hit an unexpected error."}
         </p>
         <Button onClick={() => retry()}>Try again</Button>
