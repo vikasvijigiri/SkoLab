@@ -345,3 +345,33 @@ all pass locally. Phase B Go is CI-verified only (no local Go toolchain).
 
 **Status:** In progress — PRs #83 (A) + phase B/C/D branches; merging as CI
 goes green.
+
+---
+
+## 2026-09-07 — Bolder web UI (design contract + Round 1 plan)
+
+**Asked:** "can you design more beautiful UI for our web app using Figma?" —
+then chose a **bolder visual identity**, all web surfaces in scope,
+"industry-standard best practice"; "LinkedIn-style fonts", solid colours.
+
+**Figma:** connected account is view-only (no editor seat, no linked file), so
+`mcp__figma__*` generate/create tools are unusable. Deliverable is a written
+contract + code, not a Figma file.
+
+1. **`DESIGN.md`** (repo root, new) — direction **"Confident Modernist"** (A
+   editorial / B dark-terminal considered + rejected). Keeps the `globals.css`
+   token architecture and the calm light ground; identity from scale, a
+   professional royal-indigo `--primary #3a5bd9`, a warm `--accent-signal
+   #dd4d2e` for action, the metric palette promoted to brand-level data-viz,
+   a hairline+numeral structural grid. **Two-family type stack: Inter (display
+   + body, replacing Space Grotesk) + JetBrains Mono (data)** — "LinkedIn-style"
+   humanist. Referenced from `CLAUDE.md`.
+2. **`docs/plans/2026-09-07-web-visual-identity-round1.md`** — Round 1 only:
+   token changes + `check-contrast.mjs` WCAG gate, shared primitives (Button
+   `signal` variant, Card `p-5` + left accent, extract `SegmentedControl`,
+   drop `scale()` hover-pop), and the **Landing page** rebuilt as the reference
+   screen with a desktop/tablet/mobile/dark render for sign-off. 6 tasks, 4
+   rounds. Discovery/auth/core-app/workspace are each a later plan.
+
+**Branch:** `design/web-visual-contract`. **Status:** plan approved (Gate 1 via
+`ExitPlanMode`, 3 markers resolved); implementation of Round 1 starting.
