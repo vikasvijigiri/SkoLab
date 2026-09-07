@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText, Coins, Briefcase, BookOpen, Users2, FolderKanban, Sparkles } from "lucide-react";
+import { FileText, Coins, Briefcase, BookOpen, Users2, FolderKanban, Sparkles, Newspaper } from "lucide-react";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import { useMyProfile } from "@/lib/hooks/useMyProfile";
 import { useFirestoreCollection } from "@/lib/hooks/useFirestoreCollection";
@@ -18,18 +18,21 @@ import {
   journalAdvisorQuery,
   similarResearchersQuery,
   activityFeedQuery,
+  scienceNewsQuery,
 } from "@/lib/api/queries";
 import { AIDailyBriefCard, type BriefItem } from "@/components/feed/AIDailyBriefCard";
 import { DailyChallengeCard } from "@/components/feed/DailyChallengeCard";
 import { PulseFeedCard } from "@/components/feed/PulseFeedCard";
 import { PeerSuggestionsCard } from "@/components/feed/PeerSuggestionsCard";
 import { ActivityFeedItem } from "@/components/feed/ActivityFeedItem";
+import { ScienceNewsCard } from "@/components/feed/ScienceNewsCard";
 import { IdentityRailCard } from "@/components/feed/IdentityRailCard";
 import { Card } from "@/components/ui/Card";
 import { cn } from "@/lib/utils";
 import { DURATION_SLOW, EASE_STANDARD } from "@/lib/motion";
 import type {
   ActivityItem,
+  ScienceNewsItem,
   CollabProject,
   DailyFeedItem,
   GrantMatch,
@@ -39,6 +42,7 @@ import type {
 
 const EMPTY_FEED: DailyFeedItem[] = [];
 const EMPTY_ACTIVITY: ActivityItem[] = [];
+const EMPTY_NEWS: ScienceNewsItem[] = [];
 
 /** Each insight is a distinct fact from a distinct source — separate rows, not a
  * run-on paragraph. */
@@ -165,12 +169,14 @@ export default function HomePage() {
     enabled: ready && !!authorId,
   });
   const activityQ = useQuery({ ...activityFeedQuery(authorId, user?.uid), enabled: ready });
+  const newsQ = useQuery({ ...scienceNewsQuery(topic), enabled: ready });
 
   const feed = feedQ.data ?? EMPTY_FEED;
   const feedLoading = feedQ.isPending;
   const conjecture = conjectureQ.data ?? null;
   const activity = activityQ.data?.items ?? EMPTY_ACTIVITY;
   const activityLoading = activityQ.isPending;
+  const news = newsQ.data?.items ?? EMPTY_NEWS;
 
   const topGrant = grantsQ.data?.[0];
   const topOpportunity = oppsQ.data?.[0];
@@ -306,6 +312,17 @@ export default function HomePage() {
                 <ActivityFeedItem item={item} />
               </motion.div>
             ))}
+          </div>
+        )}
+
+        {/* in the news */}
+        {(newsQ.isPending || news.length > 0) && (
+          <div className="mt-2 flex flex-col gap-3">
+            <h2 className="flex items-center gap-1.5 font-display text-[15px] font-semibold text-text-primary">
+              <Newspaper size={14} className="text-accent-teal" />
+              In the news
+            </h2>
+            <ScienceNewsCard items={news} loading={newsQ.isPending} />
           </div>
         )}
 
