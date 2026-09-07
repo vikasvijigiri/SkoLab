@@ -241,6 +241,16 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[Postgres] Database initialization failed: {e}", flush=True)
 
+    # Fail loud (in the deploy log, once) if the DB is behind alembic head —
+    # the 2026-09 `researcher_metrics.openalex_id` drift went unnoticed for days
+    # because every read swallows its own error. Never blocks startup.
+    try:
+        from app.db.schema_guard import check_schema_current
+
+        await check_schema_current()
+    except Exception as e:  # pragma: no cover - guard must never break boot
+        print(f"[schema_guard] drift check failed: {e}", flush=True)
+
     # 2. Verify Firestore & Clear Cache
     from app.services.data.researcher_worker import (
         check_connection_sync,
@@ -338,31 +348,36 @@ async def lifespan(app: FastAPI):
             print(f"[mDNS] Registration failed: {exc}")
             traceback.print_exc()
 
-    # Start SRE Host Disk Capacity Monitor background task
-    async def monitor_disk_space():
-        import shutil
+    # SRE background maintenance: disk-capacity alerting + download-artefact TTL.
+    # The disk alerter fires only on crossing an escalating band (80/85/90/95),
+    # re-alerts a standing condition at most hourly, and rounds the percentage
+    # so Sentry groups it into one issue (2026-09 audit — the old monitor logged
+    # CRITICAL every 60 s and filed a new issue per 0.1 % wobble).
+    from app.core.observability import (
+        DiskUsageAlerter,
+        check_disk_usage,
+        prune_downloads_dir,
+    )
 
+    async def sre_maintenance_loop():
+        alerter = DiskUsageAlerter()
+        ticks = 0
         while True:
-            try:
-                disk = shutil.disk_usage("/")
-                pct = (disk.used / disk.total) * 100
-                if pct > 80.0:
-                    logger.critical(
-                        f"[CRITICAL_ALERT] Disk capacity crossed 80% boundary! Current usage: {pct:.1f}%",
-                        extra={"disk_usage_percent": pct},
-                    )
-            except Exception as e:
-                logger.error(f"Disk space monitor failed: {e}")
+            check_disk_usage(alerter)
+            # Sweep stale generated downloads every ~6 h (360 * 60 s).
+            if ticks % 360 == 0:
+                await asyncio.to_thread(prune_downloads_dir)
+            ticks += 1
             await asyncio.sleep(60.0)
 
-    disk_monitor_task = asyncio.create_task(monitor_disk_space())
+    maintenance_task = asyncio.create_task(sre_maintenance_loop())
 
     yield
 
     # ── [Shutdown] ──
-    disk_monitor_task.cancel()
+    maintenance_task.cancel()
     try:
-        await disk_monitor_task
+        await maintenance_task
     except asyncio.CancelledError:
         pass
 

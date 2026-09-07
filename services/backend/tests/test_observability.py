@@ -59,7 +59,7 @@ def test_init_observability_with_dsn_does_not_crash(monkeypatch):
     )
 
     try:
-        obs_mod.init_observability()  # must not raise ImportError
+        obs_mod.init_observability(force=True)  # must not raise ImportError
         assert sentry_sdk.get_client().is_active() is True
     finally:
         # Don't leak an active client into other tests.
@@ -89,7 +89,7 @@ def test_init_observability_applies_the_configured_traces_sample_rate(monkeypatc
     )
 
     try:
-        obs_mod.init_observability()
+        obs_mod.init_observability(force=True)
         client = sentry_sdk.get_client()
         assert client.options["traces_sample_rate"] == 0.42
     finally:
