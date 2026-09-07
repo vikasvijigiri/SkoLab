@@ -58,9 +58,11 @@ function BriefRow({ item }: { item: BriefItem }) {
 
 export function AIDailyBriefCard({ items, loading }: { items: BriefItem[]; loading: boolean }) {
   if (loading) {
+    // Height tuned to a typical 2–3-row brief so the swap to real content
+    // doesn't shift the feed below it (CLS).
     return (
       <Card className="animate-pulse">
-        <div className="h-20 rounded-[8px] bg-surface-subtle" />
+        <div className="h-[116px] rounded-[8px] bg-surface-subtle" />
       </Card>
     );
   }
