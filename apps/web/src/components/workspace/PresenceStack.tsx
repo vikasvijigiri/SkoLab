@@ -31,7 +31,7 @@ export function PresenceStack({ projectId, activeDocId }: { projectId: string; a
   if (others.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-1.5" title={`${others.length} other${others.length > 1 ? "s" : ""} viewing`}>
+    <div className="flex items-center gap-2" title={`${others.length} other${others.length > 1 ? "s" : ""} viewing`}>
       <div className="flex -space-x-1.5">
         {others.slice(0, 4).map((p) => (
           <div

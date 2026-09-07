@@ -12,7 +12,7 @@ export default function NexusLoading() {
         <div className="h-10 w-full animate-pulse rounded-full bg-surface-subtle" />
         <div className="flex flex-col gap-2">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-14 animate-pulse rounded-[8px] bg-surface-subtle" />
+            <div key={i} className="h-14 animate-pulse rounded-md bg-surface-subtle" />
           ))}
         </div>
       </div>
@@ -20,8 +20,8 @@ export default function NexusLoading() {
       {/* Chat pane */}
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex flex-1 flex-col justify-end gap-3">
-          <div className="h-16 w-2/3 animate-pulse self-start rounded-[10px] bg-surface-subtle" />
-          <div className="h-10 w-1/2 animate-pulse self-end rounded-[10px] bg-surface-subtle" />
+          <div className="h-16 w-2/3 animate-pulse self-start rounded-md bg-surface-subtle" />
+          <div className="h-10 w-1/2 animate-pulse self-end rounded-md bg-surface-subtle" />
         </div>
         <div className="h-12 w-full animate-pulse rounded-full bg-surface-subtle" />
       </div>

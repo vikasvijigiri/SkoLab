@@ -60,7 +60,7 @@ export function UnifiedFeed({
   return (
     <section className="flex flex-col gap-3" aria-labelledby={headingId}>
       <div className="flex min-h-9 flex-wrap items-center justify-between gap-2">
-        <h2 id={headingId} className="font-display text-[15px] font-semibold text-text-primary">
+        <h2 id={headingId} className="font-display text-h3 font-semibold text-text-primary">
           Your feed
         </h2>
         <div
@@ -75,7 +75,7 @@ export function UnifiedFeed({
               onClick={() => setLens(l.key)}
               aria-pressed={lens === l.key}
               className={cn(
-                "shrink-0 rounded-full px-3 py-1.5 font-body text-[12px] font-medium transition-colors",
+                "shrink-0 rounded-full px-3 py-2 font-body text-[12px] font-medium transition-colors",
                 lens === l.key
                   ? "bg-primary text-text-on-primary"
                   : "text-text-muted hover:bg-surface-subtle hover:text-text-primary",
@@ -102,17 +102,17 @@ export function UnifiedFeed({
           [0, 1, 2].map((i) => (
             <div
               key={i}
-              className="h-[150px] animate-pulse rounded-[8px] bg-surface-subtle"
+              className="h-[150px] animate-pulse rounded-md bg-surface-subtle"
               aria-hidden="true"
             />
           ))
         ) : shown.length === 0 ? (
           <Card className="text-center">
             <Sparkles size={18} className="mx-auto text-text-muted" />
-            <p className="mt-2 font-body text-[13px] font-medium text-text-primary">
+            <p className="mt-2 font-body text-body-s font-medium text-text-primary">
               {lens === "all" ? "Your feed is warming up" : "Nothing here yet"}
             </p>
-            <p className="mt-0.5 font-body text-[12px] leading-relaxed text-text-muted">
+            <p className="mt-1 font-body text-[12px] leading-relaxed text-text-muted">
               {lens === "all"
                 ? "Add a research focus and connect with a few researchers — papers, news and roles in your field land here."
                 : "Try “For you”, or check back soon."}

@@ -95,12 +95,12 @@ function WorkspacesRailCard({ uid }: { uid?: string }) {
 
   return (
     <Card className="flex flex-col gap-2">
-      <h2 className="flex items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+      <h2 className="eyebrow flex items-center gap-2">
         <FolderKanban size={11} />
         Your workspaces
       </h2>
       {loading ? (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           {[0, 1].map((i) => (
             <div key={i} className="h-6 animate-pulse rounded bg-surface-subtle" />
           ))}
@@ -115,7 +115,7 @@ function WorkspacesRailCard({ uid }: { uid?: string }) {
             <li key={p.id}>
               <Link
                 href={`/workspace/${p.id}`}
-                className="block truncate rounded px-1.5 py-1 font-body text-[12.5px] text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary"
+                className="block truncate rounded px-2 py-1 font-body text-body-s text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary"
               >
                 {p.name}
               </Link>
@@ -187,7 +187,7 @@ export function HomeClient() {
       />
       <WorkspacesRailCard uid={user?.uid} />
       <div className="flex flex-col gap-3">
-        <h2 className="flex items-center gap-1.5 font-display text-[15px] font-semibold text-text-primary">
+        <h2 className="flex items-center gap-2 font-display text-h3 font-semibold text-text-primary">
           <Users2 size={14} className="text-accent-teal" />
           Researchers you may know
         </h2>
@@ -210,10 +210,10 @@ export function HomeClient() {
       {/* ── Main column (≈72%) — the feed ───────────────────────────────── */}
       <div className="flex min-w-0 flex-col gap-4">
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-          <h1 className="font-display text-[20px] font-bold text-text-primary">
+          <h1 className="font-display text-display-m font-bold text-text-primary">
             Good to see you, {greetName}
           </h1>
-          <p className="mt-0.5 font-body text-[13px] text-text-secondary">
+          <p className="mt-1 font-body text-body-s text-text-secondary">
             What&apos;s moving in your field today.
           </p>
         </motion.div>

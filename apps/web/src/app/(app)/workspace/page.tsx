@@ -97,8 +97,8 @@ export default function WorkspaceListPage() {
         transition={{ duration: 0.4 }}
         className="flex items-center justify-between"
       >
-        <h1 className="font-display text-[22px] font-bold text-text-primary">CoLab Workspace</h1>
-        <Button fullWidth={false} onClick={() => setCreating((v) => !v)} className="gap-1.5">
+        <h1 className="font-display text-display-m font-bold text-text-primary">CoLab Workspace</h1>
+        <Button fullWidth={false} onClick={() => setCreating((v) => !v)} className="gap-2">
           <Plus size={16} />
           {creating ? "Cancel" : "New Project"}
         </Button>
@@ -145,7 +145,7 @@ export default function WorkspaceListPage() {
       {loading && (
         <div className="flex flex-col gap-3">
           {[0, 1].map((i) => (
-            <div key={i} className="h-24 animate-pulse rounded-[8px] bg-surface-subtle" />
+            <div key={i} className="h-24 animate-pulse rounded-md bg-surface-subtle" />
           ))}
         </div>
       )}
@@ -153,7 +153,7 @@ export default function WorkspaceListPage() {
       {!loading && !error && projects.length === 0 && !creating && (
         <Card className="flex flex-col items-center gap-2 py-10 text-center">
           <FolderKanban size={28} className="text-text-muted" />
-          <p className="font-body text-[13.5px] text-text-muted">
+          <p className="font-body text-body-s text-text-muted">
             No workspaces yet. Create one to start collaborating in real time.
           </p>
         </Card>
@@ -167,7 +167,7 @@ export default function WorkspaceListPage() {
               type="button"
               onClick={() => setScope(s.key)}
               className={cn(
-                "rounded-full px-3 py-1 font-body text-[12.5px] font-medium transition-colors",
+                "rounded-full px-3 py-1 font-body text-body-s font-medium transition-colors",
                 scope === s.key ? "bg-primary text-text-on-primary" : "text-text-secondary hover:text-text-primary"
               )}
             >
@@ -178,7 +178,7 @@ export default function WorkspaceListPage() {
       )}
 
       {!loading && projects.length > 0 && shownProjects.length === 0 && (
-        <p className="py-8 text-center font-body text-[13px] text-text-muted">
+        <p className="py-8 text-center font-body text-body-s text-text-muted">
           No projects in this view.
         </p>
       )}
@@ -197,14 +197,14 @@ export default function WorkspaceListPage() {
             <Link href={`/workspace/${p.id}`} className="block h-full">
               <Card glow interactive accentColor="var(--accent-teal)" className="flex h-full flex-col">
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-display text-[15px] font-semibold text-text-primary">{p.name}</h3>
+                  <h3 className="font-display text-h3 font-semibold text-text-primary">{p.name}</h3>
                   <span className="flex shrink-0 items-center gap-1 font-mono text-[11px] text-text-muted">
                     <Users2 size={12} />
                     {p.members.length}
                   </span>
                 </div>
                 {p.description && (
-                  <p className="mt-1 font-body text-[13px] text-text-secondary">{p.description}</p>
+                  <p className="mt-1 font-body text-body-s text-text-secondary">{p.description}</p>
                 )}
                 <div className="mt-auto flex items-center gap-2 pt-3 font-body text-[11px] text-text-muted">
                   {myRole && (

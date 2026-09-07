@@ -104,24 +104,24 @@ export default function LandingPage() {
         </div>
       </header>
 
-      <main className="relative z-10 flex flex-1 flex-col items-center px-6 pb-20">
+      <main className="relative z-10 flex flex-1 flex-col items-center px-6 pb-24">
         {/* ── Hero ──────────────────────────────────────────────────────── */}
-        <section className="flex w-full max-w-3xl flex-col items-center pt-10 text-center md:pt-16">
+        <section className="flex w-full max-w-3xl flex-col items-center pt-12 text-center md:pt-20">
           <motion.span
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="mb-5 inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-4 py-1.5 font-mono text-[11px] font-medium tracking-wide text-text-muted"
+            className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-2 font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted"
           >
             <Sparkles size={12} className="text-accent-violet" />
-            THE IMPACT LAYER FOR RESEARCH
+            The impact layer for research
           </motion.span>
 
           <motion.h1
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1, ease: EASE_STANDARD }}
-            className="max-w-3xl font-display text-[38px] font-bold leading-[1.1] tracking-tight text-text-primary md:text-[54px]"
+            className="max-w-3xl font-display text-[40px] font-bold leading-[1.05] tracking-[-0.02em] text-text-primary md:text-display-xl"
           >
             Know any researcher&apos;s real standing
             <br />
@@ -132,7 +132,7 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2, ease: EASE_STANDARD }}
-            className="mt-5 max-w-xl font-body text-[16px] leading-relaxed text-text-secondary"
+            className="mt-6 max-w-xl font-body text-[16px] leading-relaxed text-text-secondary"
           >
             Impact signatures, career-trajectory prediction, and a live collaboration
             workspace for research teams. No search queries to write.
@@ -142,7 +142,7 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3, ease: EASE_STANDARD }}
-            className="mt-8 flex flex-col items-center gap-3 sm:flex-row"
+            className="mt-8 flex flex-col items-center gap-4 sm:flex-row"
           >
             <MagneticCTA onClick={() => router.push("/signup")}>
               Get started free
@@ -157,13 +157,13 @@ export default function LandingPage() {
         </section>
 
         {/* ── Proof strip ───────────────────────────────────────────────── */}
-        <section className="mt-14 flex w-full max-w-4xl flex-col items-center gap-3 border-y border-border py-6 text-center">
-          <p className="font-display text-[15px] font-semibold text-text-primary">
+        <section className="mt-24 flex w-full max-w-4xl flex-col items-center gap-4 border-y border-border py-8 text-center">
+          <p className="font-display text-[16px] font-semibold text-text-primary">
             Every researcher in the open record — <span className="text-primary">~2.4M</span> profiles,{" "}
             <span className="text-primary">240M+</span> papers, every field.
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1">
-            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-muted">Built on</span>
+          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-1">
+            <span className="eyebrow">Built on</span>
             {["OpenAlex", "Crossref", "ORCID", "arXiv"].map((s) => (
               <span key={s} className="font-body text-[13px] font-semibold text-text-secondary">
                 {s}
@@ -174,11 +174,11 @@ export default function LandingPage() {
 
         {/* ── The one idea ──────────────────────────────────────────────── */}
         <Reveal>
-          <section className="mt-16 max-w-2xl text-center">
-            <p className="font-mono text-[11px] font-semibold uppercase tracking-wider text-primary">
-              The one idea
+          <section className="mt-24 max-w-2xl text-center">
+            <p className="eyebrow">
+              <span className="text-primary">01 —</span> The one idea
             </p>
-            <p className="mt-3 font-display text-[24px] font-bold leading-snug text-text-primary md:text-[28px]">
+            <p className="mt-4 font-display text-h2 font-bold leading-snug text-text-primary md:text-display-m">
               A name is all you give it. You get back a full impact signature, a
               citation-velocity curve, and the researchers working closest to the
               same problem.
@@ -187,18 +187,18 @@ export default function LandingPage() {
         </Reveal>
 
         {/* ── Outcomes ──────────────────────────────────────────────────── */}
-        <section className="mt-14 grid w-full max-w-5xl grid-cols-1 gap-4 text-left md:grid-cols-3">
+        <section className="mt-24 grid w-full max-w-5xl grid-cols-1 gap-4 text-left md:grid-cols-3">
           {OUTCOMES.map((o, i) => (
             <Reveal key={o.title} delay={i * 0.08}>
               <Card accentColor={o.accent} className="h-full">
                 <div
-                  className="mb-3 flex h-9 w-9 items-center justify-center rounded-[8px]"
+                  className="mb-4 flex h-9 w-9 items-center justify-center rounded-xs"
                   style={{ backgroundColor: `color-mix(in srgb, ${o.accent} 12%, var(--surface))` }}
                 >
                   <o.icon size={17} style={{ color: o.accent }} />
                 </div>
-                <h3 className="font-display text-[16px] font-semibold text-text-primary">{o.title}</h3>
-                <p className="mt-1.5 font-body text-[13px] leading-relaxed text-text-secondary">{o.body}</p>
+                <h3 className="font-display text-h3 font-semibold text-text-primary">{o.title}</h3>
+                <p className="mt-2 font-body text-body-s leading-relaxed text-text-secondary">{o.body}</p>
               </Card>
             </Reveal>
           ))}
@@ -206,22 +206,22 @@ export default function LandingPage() {
 
         {/* ── How it works ──────────────────────────────────────────────── */}
         <Reveal>
-          <section className="mt-16 w-full max-w-3xl">
-            <p className="text-center font-mono text-[11px] font-semibold uppercase tracking-wider text-primary">
-              How it works
+          <section className="mt-24 w-full max-w-3xl">
+            <p className="eyebrow text-center">
+              <span className="text-primary">02 —</span> How it works
             </p>
-            <ol className="mt-5 flex flex-col gap-3 sm:flex-row sm:gap-4">
+            <ol className="mt-6 flex flex-col gap-4 sm:flex-row">
               {STEPS.map((s, i) => (
                 <li
                   key={i}
-                  className="flex flex-1 items-start gap-3 rounded-[12px] border border-border bg-surface p-4"
+                  className="flex flex-1 items-start gap-3 rounded-md border border-border bg-surface p-5"
                 >
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 font-mono text-[12px] font-bold text-primary">
+                  <span className="data flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[12px] font-bold text-primary">
                     {i + 1}
                   </span>
                   <div>
-                    <s.icon size={16} className="mb-1.5 text-text-muted" />
-                    <p className="font-body text-[13px] leading-relaxed text-text-primary">{s.text}</p>
+                    <s.icon size={16} className="mb-2 text-text-muted" />
+                    <p className="font-body text-body-s leading-relaxed text-text-primary">{s.text}</p>
                   </div>
                 </li>
               ))}
@@ -230,25 +230,25 @@ export default function LandingPage() {
         </Reveal>
 
         {/* ── Who it's for ──────────────────────────────────────────────── */}
-        <section className="mt-16 grid w-full max-w-4xl grid-cols-1 gap-3 sm:grid-cols-3">
+        <section className="mt-24 grid w-full max-w-4xl grid-cols-1 gap-4 sm:grid-cols-3">
           {ROLES.map((r) => (
-            <div key={r.who} className="rounded-[12px] border border-border bg-surface p-4">
+            <div key={r.who} className="rounded-md border border-border bg-surface p-5">
               <p className="font-display text-[14px] font-semibold text-text-primary">{r.who}</p>
-              <p className="mt-1 font-body text-[12.5px] leading-relaxed text-text-secondary">{r.line}</p>
+              <p className="mt-1 font-body text-body-s leading-relaxed text-text-secondary">{r.line}</p>
             </div>
           ))}
         </section>
 
         {/* ── FAQ ───────────────────────────────────────────────────────── */}
-        <section className="mt-16 w-full max-w-2xl">
-          <p className="text-center font-mono text-[11px] font-semibold uppercase tracking-wider text-primary">
-            Questions
+        <section className="mt-24 w-full max-w-2xl">
+          <p className="eyebrow text-center">
+            <span className="text-primary">03 —</span> Questions
           </p>
-          <div className="mt-5 flex flex-col gap-2">
+          <div className="mt-6 flex flex-col gap-2">
             {FAQ.map((item) => (
               <details
                 key={item.q}
-                className="group rounded-[10px] border border-border bg-surface px-4 py-3 [&_summary::-webkit-details-marker]:hidden"
+                className="group rounded-md border border-border bg-surface px-4 py-3 [&_summary::-webkit-details-marker]:hidden"
               >
                 <summary className="flex cursor-pointer list-none items-center justify-between font-body text-[13.5px] font-semibold text-text-primary">
                   {item.q}
@@ -265,11 +265,11 @@ export default function LandingPage() {
 
         {/* ── Final CTA ─────────────────────────────────────────────────── */}
         <Reveal>
-          <section className="mt-20 flex w-full max-w-3xl flex-col items-center gap-4 rounded-[16px] border border-border bg-surface px-6 py-10 text-center shadow-card">
-            <h2 className="font-display text-[24px] font-bold text-text-primary md:text-[28px]">
+          <section className="mt-24 flex w-full max-w-3xl flex-col items-center gap-4 rounded-lg border border-border bg-surface px-8 py-12 text-center shadow-card">
+            <h2 className="font-display text-display-m font-bold text-text-primary">
               See your own impact signature.
             </h2>
-            <p className="max-w-md font-body text-[14px] leading-relaxed text-text-secondary">
+            <p className="max-w-md font-body text-body leading-relaxed text-text-secondary">
               Free to start. No search queries, no credit card.
             </p>
             <MagneticCTA onClick={() => router.push("/signup")}>

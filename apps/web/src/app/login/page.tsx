@@ -91,8 +91,8 @@ export default function LoginPage() {
 
   return (
     <AuthCard>
-      <h1 className="font-display text-[24px] font-bold text-text-primary">Welcome back</h1>
-      <p className="mt-1.5 font-body text-[14px] text-text-secondary">
+      <h1 className="font-display text-h2 font-bold text-text-primary">Welcome back</h1>
+      <p className="mt-2 font-body text-body text-text-secondary">
         Sign in to continue to SkoLab.
       </p>
 
@@ -105,7 +105,7 @@ export default function LoginPage() {
         </Button>
       </div>
 
-      {error && <p className="mt-3 font-body text-[13px] text-notification">{error}</p>}
+      {error && <p className="mt-3 font-body text-body-s text-notification">{error}</p>}
 
       {showEmail ? (
         <>
@@ -140,13 +140,13 @@ export default function LoginPage() {
         <button
           type="button"
           onClick={() => setShowEmail(true)}
-          className="mt-4 block w-full cursor-pointer text-center font-body text-[12.5px] text-text-muted underline-offset-2 transition-colors hover:text-text-secondary hover:underline"
+          className="mt-4 block w-full cursor-pointer text-center font-body text-body-s text-text-muted underline-offset-2 transition-colors hover:text-text-secondary hover:underline"
         >
           Use email and password instead
         </button>
       )}
 
-      <p className="mt-6 text-center font-body text-[13px] text-text-secondary">
+      <p className="mt-6 text-center font-body text-body-s text-text-secondary">
         Don&apos;t have an account?{" "}
         <Link href="/signup" className="font-medium text-primary">
           Sign up

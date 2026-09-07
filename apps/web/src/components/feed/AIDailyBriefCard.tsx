@@ -16,9 +16,9 @@ export interface BriefItem {
 
 function BriefRowInner({ item, external }: { item: BriefItem; external: boolean }) {
   return (
-    <div className="flex items-start gap-2.5">
+    <div className="flex items-start gap-3">
       <span
-        className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
+        className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
         style={{ backgroundColor: `color-mix(in srgb, ${item.color} 16%, transparent)`, color: item.color }}
       >
         <item.icon size={13} />
@@ -27,9 +27,9 @@ function BriefRowInner({ item, external }: { item: BriefItem; external: boolean 
         <p className="font-mono text-[11px] font-semibold uppercase tracking-wide text-text-muted">
           {item.label}
         </p>
-        <p className="mt-0.5 flex items-start gap-1 font-body text-[13px] leading-snug text-text-primary">
+        <p className="mt-1 flex items-start gap-1 font-body text-body-s leading-snug text-text-primary">
           <span className="min-w-0"><MarkdownText text={item.text} /></span>
-          {external && <ExternalLink size={11} className="mt-0.5 shrink-0 text-text-muted" />}
+          {external && <ExternalLink size={11} className="mt-1 shrink-0 text-text-muted" />}
         </p>
       </div>
     </div>
@@ -62,7 +62,7 @@ export function AIDailyBriefCard({ items, loading }: { items: BriefItem[]; loadi
     // doesn't shift the feed below it (CLS).
     return (
       <Card className="animate-pulse">
-        <div className="h-[116px] rounded-[8px] bg-surface-subtle" />
+        <div className="h-[116px] rounded-md bg-surface-subtle" />
       </Card>
     );
   }
@@ -72,7 +72,7 @@ export function AIDailyBriefCard({ items, loading }: { items: BriefItem[]; loadi
       <div className="flex items-center gap-2">
         <span
           aria-hidden="true"
-          className="flex h-6 w-6 items-center justify-center rounded-full text-[13px]"
+          className="flex h-6 w-6 items-center justify-center rounded-full text-body-s"
           style={{ backgroundColor: "color-mix(in srgb, var(--accent-violet) 16%, transparent)" }}
         >
           ✨
@@ -83,7 +83,7 @@ export function AIDailyBriefCard({ items, loading }: { items: BriefItem[]; loadi
       </div>
 
       {items.length === 0 ? (
-        <p className="mt-2.5 font-body text-[13.5px] leading-relaxed text-text-secondary">
+        <p className="mt-3 font-body text-body-s leading-relaxed text-text-secondary">
           Building your personalized brief — check back shortly.
         </p>
       ) : (

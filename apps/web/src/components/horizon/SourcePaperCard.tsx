@@ -7,8 +7,8 @@ import type { PaperSource } from "@/lib/types";
 /** One reference-study card in the Horizon prediction result (pioneering / latest). */
 export function SourcePaperCard({ paper, accentColor }: { paper: PaperSource; accentColor: string }) {
   return (
-    <Card className="border-border/30 bg-surface/30 flex flex-col gap-1.5">
-      <h4 className="font-display text-[13.5px] font-semibold text-text-primary line-clamp-2">
+    <Card className="border-border/30 bg-surface/30 flex flex-col gap-2">
+      <h4 className="font-display text-body-s font-semibold text-text-primary line-clamp-2">
         <MathText text={paper.title} />
       </h4>
       <p className="font-body text-[12px] text-text-secondary">

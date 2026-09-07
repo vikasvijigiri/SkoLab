@@ -25,18 +25,18 @@ export function PaperResultCard({ w, index }: { w: OpenAlexWork; index: number }
         href={`/paper/${encodeURIComponent(shortId)}`}
         onMouseEnter={warm}
         onFocus={warm}
-        className={cn("block rounded-lg", focusRing)}
+        className={cn("block rounded-md", focusRing)}
       >
-        <Card glow interactive accentColor="var(--accent-cyan)" className="flex h-full flex-col gap-1.5">
-          <p className="font-display text-[14.5px] font-semibold leading-snug text-text-primary">
+        <Card glow interactive accentColor="var(--accent-cyan)" accentSide="left" className="flex h-full flex-col gap-2">
+          <p className="font-display text-body font-semibold leading-snug text-text-primary">
             <MathText text={w.display_name} />
           </p>
-          <p className="font-body text-[12.5px] text-text-secondary">
+          <p className="font-body text-body-s text-text-secondary">
             {w.authorships?.slice(0, 3).map((a) => a.author.display_name).join(", ")}
             {w.publication_year ? ` · ${w.publication_year}` : ""}
             {w.primary_location?.source?.display_name ? ` · ${w.primary_location.source.display_name}` : ""}
           </p>
-          <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
+          <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
             {w.cited_by_count !== undefined && (
               <Badge accentColor="var(--accent-cyan)">{w.cited_by_count.toLocaleString()} citations</Badge>
             )}
