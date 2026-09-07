@@ -6,7 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { prefetchAuthor } from "@/lib/api/prefetch";
-import { cn, focusRing } from "@/lib/utils";
+import { cn, focusRing, shortOpenAlexId } from "@/lib/utils";
 import { DURATION_NORMAL, EASE_STANDARD } from "@/lib/motion";
 import type { AuthorSuggestion } from "@/lib/types";
 
@@ -21,7 +21,7 @@ export function AuthorResultCard({ a, index }: { a: AuthorSuggestion; index: num
       transition={{ duration: DURATION_NORMAL, delay: Math.min(index * 0.05, 0.3), ease: EASE_STANDARD }}
     >
       <Link
-        href={`/author/${encodeURIComponent(a.id)}?name=${encodeURIComponent(a.display_name)}&focus=${encodeURIComponent(a.field_of_study ?? "")}`}
+        href={`/author/${encodeURIComponent(shortOpenAlexId(a.id))}?name=${encodeURIComponent(a.display_name)}&focus=${encodeURIComponent(a.field_of_study ?? "")}`}
         onMouseEnter={warm}
         onFocus={warm}
         className={cn("block rounded-lg", focusRing)}

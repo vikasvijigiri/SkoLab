@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
 import { MathText } from "@/components/ui/MathText";
 import { similarPapersQuery } from "@/lib/api/queries";
+import { shortOpenAlexId } from "@/lib/utils";
 
 /**
  * "Related papers" — pgvector kNN over paper embeddings, re-ranked with
@@ -37,7 +38,7 @@ export function RelatedPapersCard({ workId }: { workId: string }) {
           {papers.map((p) => (
             <Link
               key={p.work_id}
-              href={`/paper/${encodeURIComponent(p.work_id)}`}
+              href={`/paper/${encodeURIComponent(shortOpenAlexId(p.work_id))}`}
               className="group flex items-start gap-3 rounded-[8px] border border-border bg-surface p-2.5 transition-colors duration-[var(--motion-fast)] hover:border-primary/40"
               style={{ transitionTimingFunction: "var(--ease-standard)" }}
             >

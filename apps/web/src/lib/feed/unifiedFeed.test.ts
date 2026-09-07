@@ -78,6 +78,16 @@ describe("buildUnifiedFeed", () => {
     expect(out[0]!.id).toBe("news:u1");
   });
 
+  it("normalises a canonical OpenAlex URL id to a bare /paper/ route and cache key", () => {
+    const out = buildUnifiedFeed(
+      { papers: [paper("https://openalex.org/W7206172422")] },
+      noPrefs,
+    );
+    const item = out.find((i) => i.kind === "paper")!;
+    expect(item.href).toBe("/paper/W7206172422");
+    expect(item.id).toBe("paper:W7206172422");
+  });
+
   it("breaks runs of 3+ of the same kind", () => {
     const out = buildUnifiedFeed(
       {

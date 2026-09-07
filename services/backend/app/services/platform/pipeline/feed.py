@@ -21,6 +21,7 @@ from app.services.ai.embedding_service import embed_query, embed_texts
 from app.services.ai.llm_service import is_llm_working
 from app.services.platform.pipeline.text_utils import (
     _pg_dismissed_recs_cache,
+    bare_openalex_id,
     extract_metadata_from_abstract,
     is_prestigious_journal,
 )
@@ -852,7 +853,10 @@ class FeedMixin:
                         journal = "Scientific Journal"
             year = paper.get("publication_year") or 2025
             doi = paper.get("doi")
-            openalex_id = paper.get("id")
+            # Bare id ("W123"), not the canonical URL ("https://openalex.org/W123"):
+            # clients build a `/paper/<id>` route from this and the URL form 400s
+            # once encoded. See bare_openalex_id.
+            openalex_id = bare_openalex_id(paper.get("id"))
             publication_date = paper.get("publication_date") or f"{year}-01-01"
 
             abstract = paper.get("_custom_abstract")

@@ -35,6 +35,7 @@ import {
   journalAdvisorQuery,
   similarResearchersQuery,
 } from "@/lib/api/queries";
+import { shortOpenAlexId } from "@/lib/utils";
 import type { AuthorResponse } from "@/lib/types";
 
 function authorLabel(authorPair: string) {
@@ -352,7 +353,7 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
               {sortedWorks.map((w) => (
                   <Link
                     key={w.id ?? w.title}
-                    href={w.id ? `/paper/${encodeURIComponent(w.id)}` : "#"}
+                    href={w.id ? `/paper/${encodeURIComponent(shortOpenAlexId(w.id))}` : "#"}
                     className="py-2.5 first:pt-0 last:pb-0"
                   >
                     <p className="font-body text-[13.5px] font-medium text-text-primary hover:text-primary">
@@ -381,7 +382,7 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
               {similarResearchers.slice(0, 5).map((s) => (
                 <Link
                   key={s.author_id}
-                  href={`/author/${encodeURIComponent(s.author_id)}?name=${encodeURIComponent(s.display_name || "")}`}
+                  href={`/author/${encodeURIComponent(shortOpenAlexId(s.author_id))}?name=${encodeURIComponent(s.display_name || "")}`}
                   className="flex items-center justify-between gap-3 rounded-[8px] bg-surface-subtle p-2.5"
                 >
                   <div className="min-w-0">
