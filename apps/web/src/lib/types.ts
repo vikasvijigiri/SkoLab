@@ -285,14 +285,31 @@ export interface PaperIntelligence {
 }
 
 // GET /api/openalex/works (server proxy of https://api.openalex.org/works)
+// The `/works/[id]` route returns the raw OpenAlex record verbatim, so fields
+// beyond the search-list subset (author ids, affiliations, OA status, DOI,
+// biblio, topics) are present on the single-work response even though the list
+// endpoint doesn't populate them.
 export interface OpenAlexWork {
   id: string;
   display_name: string;
   publication_year?: number;
+  publication_date?: string;
   doi?: string;
+  type?: string;
   cited_by_count?: number;
-  primary_location?: { source?: { display_name?: string } };
-  authorships?: { author: { display_name: string } }[];
+  primary_location?: { source?: { display_name?: string; id?: string } };
+  authorships?: {
+    author: { id?: string; display_name: string; orcid?: string | null };
+    institutions?: { display_name?: string }[];
+  }[];
+  open_access?: { is_oa?: boolean; oa_status?: string };
+  biblio?: {
+    volume?: string | null;
+    issue?: string | null;
+    first_page?: string | null;
+    last_page?: string | null;
+  };
+  topics?: { id?: string; display_name?: string }[];
   abstract_inverted_index?: Record<string, number[]>;
 }
 

@@ -14,6 +14,7 @@ import {
   Sparkles,
   FileText,
   UserSearch,
+  ExternalLink,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -27,6 +28,7 @@ import { CitationBarChart } from "@/components/author/CitationBarChart";
 import { StatTile } from "@/components/author/StatTile";
 import { MetricPill } from "@/components/author/MetricPill";
 import { SectionHeading } from "@/components/author/SectionHeading";
+import { AuthorInline, splitAuthorPair } from "@/components/discovery/AuthorInline";
 import { refreshAuthor } from "@/lib/api/endpoints";
 import {
   authorQuery,
@@ -37,10 +39,6 @@ import {
 } from "@/lib/api/queries";
 import { shortOpenAlexId } from "@/lib/utils";
 import type { AuthorResponse } from "@/lib/types";
-
-function authorLabel(authorPair: string) {
-  return authorPair.split("|")[0];
-}
 
 export default function AuthorDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -179,6 +177,20 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
                 {author.institution}
                 {author.field_of_study ? ` · ${author.field_of_study}` : ""}
               </p>
+              {author.orcid && (
+                <a
+                  href={`https://orcid.org/${author.orcid.replace(/^https?:\/\/orcid\.org\//, "")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 inline-flex items-center gap-1.5 font-mono text-[11.5px] text-text-secondary transition-colors hover:text-primary hover:underline"
+                >
+                  {/* ORCID brand green as a decorative dot — the low-contrast
+                      #A6CE39 never carries text, so no WCAG issue. */}
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-[#A6CE39]" aria-hidden="true" />
+                  ORCID {author.orcid.replace(/^https?:\/\/orcid\.org\//, "")}
+                  <ExternalLink size={10} aria-hidden="true" />
+                </a>
+              )}
               {author.expertise.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {author.expertise.slice(0, 5).map((e) => (
@@ -191,15 +203,9 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-4">
             <Button variant="primary" fullWidth={false} disabled title="Coming soon">
-              Connect
-            </Button>
-            <Button variant="outlined" fullWidth={false} disabled title="Coming soon">
-              Message
-            </Button>
-            <Button variant="ghost" fullWidth={false} disabled title="Coming soon">
-              Collaborate
+              Connect — coming soon
             </Button>
           </div>
         </Card>
@@ -310,7 +316,11 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
               </SectionHeading>
               <div className="mt-2.5 flex flex-col gap-2">
                 {collaborators.slice(0, 5).map((c) => (
-                  <div key={c.id} className="flex items-center justify-between gap-3 rounded-[8px] bg-surface-subtle p-2.5">
+                  <Link
+                    key={c.id}
+                    href={`/author/${encodeURIComponent(shortOpenAlexId(c.id))}?name=${encodeURIComponent(c.name || "")}`}
+                    className="flex items-center justify-between gap-3 rounded-[8px] bg-surface-subtle p-2.5 transition-colors hover:bg-surface-subtle/60 hover:ring-1 hover:ring-primary/30"
+                  >
                     <div className="min-w-0">
                       <p className="truncate font-body text-[13px] font-medium text-text-primary">{c.name}</p>
                       <p className="truncate font-body text-[12px] text-text-secondary">
@@ -320,7 +330,7 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
                     <Badge accentColor="var(--accent-teal)" className="shrink-0">
                       {c.relevance_score}%
                     </Badge>
-                  </div>
+                  </Link>
                 ))}
               </div>
             </Card>
@@ -351,21 +361,34 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
             </SectionHeading>
             <div className="mt-2.5 flex flex-col divide-y divide-border">
               {sortedWorks.map((w) => (
-                  <Link
-                    key={w.id ?? w.title}
-                    href={w.id ? `/paper/${encodeURIComponent(shortOpenAlexId(w.id))}` : "#"}
-                    className="py-2.5 first:pt-0 last:pb-0"
-                  >
-                    <p className="font-body text-[13.5px] font-medium text-text-primary hover:text-primary">
+                <div key={w.id ?? w.title} className="py-2.5 first:pt-0 last:pb-0">
+                  {w.id ? (
+                    <Link
+                      href={`/paper/${encodeURIComponent(shortOpenAlexId(w.id))}`}
+                      className="font-body text-[13.5px] font-medium text-text-primary hover:text-primary"
+                    >
+                      <MathText text={w.title ?? ""} />
+                    </Link>
+                  ) : (
+                    <p className="font-body text-[13.5px] font-medium text-text-primary">
                       <MathText text={w.title ?? ""} />
                     </p>
-                    <p className="mt-0.5 font-body text-[12px] text-text-secondary">
-                      {w.authors?.slice(0, 3).map(authorLabel).join(", ")}
+                  )}
+                  <p className="mt-0.5 flex flex-wrap items-baseline gap-x-1 font-body text-[12px] text-text-secondary">
+                    {w.authors && w.authors.length > 0 && (
+                      <AuthorInline
+                        authors={w.authors.map(splitAuthorPair)}
+                        max={4}
+                        className="text-[12px]"
+                      />
+                    )}
+                    <span className="text-text-muted">
                       {w.journal ? ` · ${w.journal}` : ""}
                       {w.year ? ` · ${w.year}` : ""} · {w.citations} citations
-                    </p>
-                  </Link>
-                ))}
+                    </span>
+                  </p>
+                </div>
+              ))}
             </div>
           </Card>
         </Reveal>
