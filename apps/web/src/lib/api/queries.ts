@@ -16,6 +16,7 @@ import {
   getLeaderboard,
   getSimilarPapers,
   getSimilarResearchers,
+  getActivityFeed,
   openAlexTaxonomy,
   openAlexAuthorsByName,
   openAlexAuthorsByTaxon,
@@ -191,6 +192,17 @@ export const similarResearchersQuery = (authorId: string, userId?: string) =>
     queryFn: () => getSimilarResearchers(authorId, { userId }),
     ...HOURLY,
     enabled: Boolean(authorId),
+  });
+
+// Home activity feed — connected researchers' new work + connection events +
+// a field-trending floor. Runs as soon as auth resolves; author_id/user_id
+// sharpen it but are not required (the floor still returns).
+export const activityFeedQuery = (authorId?: string, userId?: string) =>
+  queryOptions({
+    queryKey: ["activity-feed", { authorId: authorId ?? null, userId: userId ?? null }] as const,
+    queryFn: () => getActivityFeed({ authorId, userId }),
+    staleTime: 10 * MIN,
+    gcTime: 1 * HR,
   });
 
 // ── OpenAlex taxonomy + author match (click-only onboarding/discovery) ────

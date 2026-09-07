@@ -2,3 +2,18 @@
 # against `json.dumps(...) + "\n"` output — it must stay LF regardless of the
 # checkout platform's autocrlf setting.
 api-contracts/openapi.snapshot.json text eol=lf
+
+# ── GitHub language stats (Linguist) ────────────────────────────────────────
+# The agent/workflow-automation layer is Python but it is NOT product code —
+# it is the SDLC harness that runs coding agents against this repo. Excluding
+# it from the language bar makes the stats reflect the shipped app (the Go
+# gateway + Next.js web + the Python LLM service), not the tooling around it.
+.claude/**            linguist-vendored
+tools/**             linguist-vendored
+scripts/**           linguist-vendored
+infrastructure/**    linguist-vendored
+templates/**         linguist-documentation
+guide/**             linguist-documentation
+# Alembic migrations and generated OpenAPI artefacts are machine-shaped.
+services/backend/alembic/versions/**  linguist-generated
+api-contracts/**                      linguist-generated

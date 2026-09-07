@@ -14,6 +14,7 @@ vi.mock("@/lib/hooks/useMyProfile", () => ({
     author: { id: "A1", field_of_study: "Computer Science" },
     loading: false,
     error: null,
+    unresolved: false,
     refetch: vi.fn(),
   }),
 }));
@@ -41,6 +42,15 @@ describe("HomePage", () => {
     expect(screen.getByText(/Good to see you, Ada/i)).toBeInTheDocument();
     // Appears in both the feed rail and the AI Daily Brief top-paper row.
     expect((await screen.findAllByText("A very relevant paper")).length).toBeGreaterThan(0);
+  });
+
+  it("renders the activity stream from /activity_feed", async () => {
+    renderWithProviders(<HomePage />);
+    // From the default mockActivityFeed handler.
+    expect(
+      await screen.findByText("Compilers for the analytical engine"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/is now connected with you/i)).toBeInTheDocument();
   });
 
   it("still renders the shell when the feed API fails", async () => {

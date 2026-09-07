@@ -68,6 +68,45 @@ export interface SimilarResult<T> {
   degraded: boolean;
 }
 
+// ── Home activity feed (Go gateway /api/v1/activity_feed — no LLM) ──────────
+
+export type ActivityType = "paper_published" | "connection_made" | "trending";
+
+export interface ActivityActor {
+  id: string;
+  display_name: string;
+  institution?: string;
+}
+
+export interface ActivityObject {
+  kind: "work";
+  id: string;
+  title: string;
+  authors?: string[];
+  year?: number;
+  venue?: string;
+  citations?: number;
+}
+
+export interface ActivityItem {
+  id: string;
+  type: ActivityType;
+  /** Human phrase for the card headline, e.g. "published a new paper". */
+  verb: string;
+  /** ISO timestamp — the feed is sorted newest-first on this. */
+  ts: string;
+  actor?: ActivityActor;
+  object?: ActivityObject;
+  href: string;
+  why?: string;
+}
+
+/** `degraded` = the user's network could not be read; feed is the trending floor only. */
+export interface ActivityFeedResult {
+  items: ActivityItem[];
+  degraded: boolean;
+}
+
 export interface Work {
   id?: string;
   title?: string;
