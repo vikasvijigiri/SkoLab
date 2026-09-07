@@ -113,7 +113,7 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
       <ShareModal project={project} open={shareOpen} onClose={() => setShareOpen(false)} />
 
       {/* ── Toolbar ─────────────────────────────────────────────────────── */}
-      <header className="flex h-[52px] shrink-0 items-center gap-2.5 border-b border-border bg-surface px-3 md:px-4">
+      <header className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border bg-surface px-3 md:px-4">
         <button
           type="button"
           onClick={() => router.push("/workspace")}
@@ -122,11 +122,11 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
         >
           <ArrowLeft size={16} />
         </button>
-        <h1 className="truncate font-display text-[15px] font-semibold text-text-primary">
+        <h1 className="truncate font-display text-h3 font-semibold text-text-primary">
           {project.name}
         </h1>
         {myRole && (
-          <span className="hidden shrink-0 rounded-full bg-surface-subtle px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-text-muted sm:inline">
+          <span className="hidden shrink-0 rounded-full bg-surface-subtle px-2 py-0.5 data text-[10px] uppercase tracking-wide text-text-muted sm:inline">
             {ROLE_LABEL[myRole]}
           </span>
         )}
@@ -136,19 +136,19 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
           <button
             type="button"
             onClick={() => setShareOpen(true)}
-            className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 font-body text-[12.5px] font-medium text-text-secondary transition-colors hover:border-primary/40 hover:text-text-primary"
+            className="flex items-center gap-2 rounded-md border border-border px-3 py-2 font-body text-body-s font-medium text-text-secondary transition-colors hover:border-primary/40 hover:text-text-primary"
           >
             <Share2 size={14} />
             <span className="hidden sm:inline">Share</span>
           </button>
           {isOwner &&
             (confirmDelete ? (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={handleDelete}
                   disabled={deleting}
-                  className="rounded-md px-2 py-1.5 font-body text-[12px] font-semibold text-notification transition-colors hover:bg-notification/10 disabled:opacity-50"
+                  className="rounded-md px-2 py-2 font-body text-[12px] font-semibold text-notification transition-colors hover:bg-notification/10 disabled:opacity-50"
                 >
                   {deleting ? "Deleting…" : "Delete for everyone"}
                 </button>
@@ -156,7 +156,7 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
                   type="button"
                   onClick={() => setConfirmDelete(false)}
                   disabled={deleting}
-                  className="rounded-md px-2 py-1.5 font-body text-[12px] text-text-muted transition-colors hover:text-text-primary disabled:opacity-50"
+                  className="rounded-md px-2 py-2 font-body text-[12px] text-text-muted transition-colors hover:text-text-primary disabled:opacity-50"
                 >
                   Keep
                 </button>
@@ -189,7 +189,7 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
               type="button"
               onClick={() => setTab(t.name)}
               className={cn(
-                "flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 font-body text-[12.5px] font-medium transition-colors",
+                "flex shrink-0 items-center gap-2 rounded-md px-3 py-2 font-body text-body-s font-medium transition-colors",
                 tab === t.name
                   ? "bg-primary text-text-on-primary"
                   : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary",

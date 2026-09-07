@@ -11,7 +11,7 @@ export default function HomeLoading() {
     >
       <div className="flex min-w-0 flex-col gap-4">
         {/* greeting */}
-        <div className="h-7 w-56 animate-pulse rounded-[6px] bg-surface-subtle" />
+        <div className="h-7 w-56 animate-pulse rounded-xs bg-surface-subtle" />
         {/* daily brief — matches AIDailyBriefCard's loading height */}
         <div className="h-[148px] animate-pulse rounded-lg bg-surface-subtle" />
         {/* "Your feed" heading + lens row (h-9, matches UnifiedFeed) */}
@@ -24,12 +24,12 @@ export default function HomeLoading() {
           </div>
         </div>
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-[150px] animate-pulse rounded-[8px] bg-surface-subtle" />
+          <div key={i} className="h-[150px] animate-pulse rounded-md bg-surface-subtle" />
         ))}
       </div>
       <div className="hidden flex-col gap-5 lg:flex">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-28 animate-pulse rounded-[8px] bg-surface-subtle" />
+          <div key={i} className="h-28 animate-pulse rounded-md bg-surface-subtle" />
         ))}
       </div>
     </div>

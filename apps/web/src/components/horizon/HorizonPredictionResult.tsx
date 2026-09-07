@@ -29,7 +29,7 @@ export function HorizonPredictionResult({
       className="flex flex-col gap-6"
     >
       <div className="flex justify-between">
-        <Button variant="outlined" fullWidth={false} onClick={onReset} className="h-10 gap-1.5 px-4 py-0">
+        <Button variant="outlined" fullWidth={false} onClick={onReset} className="h-10 gap-2 px-4 py-0">
           <ArrowLeft size={14} />
           Forge Another Prediction
         </Button>
@@ -60,11 +60,11 @@ export function HorizonPredictionResult({
         <Card className="border-border/40 bg-surface/40 flex flex-col gap-3">
           <div className="flex items-center gap-2 text-primary">
             <Compass size={16} />
-            <h3 className="font-display text-[15px] font-bold text-text-primary">
+            <h3 className="font-display text-h3 font-bold text-text-primary">
               Scientific Foundation &amp; Rationale
             </h3>
           </div>
-          <p className="font-body text-[13.5px] leading-relaxed text-text-secondary">
+          <p className="font-body text-body-s leading-relaxed text-text-secondary">
             <MathText text={prediction.scientific_logic} />
           </p>
         </Card>
@@ -72,11 +72,11 @@ export function HorizonPredictionResult({
         <Card className="border-border/40 bg-surface/40 flex flex-col gap-3">
           <div className="flex items-center gap-2 text-primary">
             <Star size={16} />
-            <h3 className="font-display text-[15px] font-bold text-text-primary">
+            <h3 className="font-display text-h3 font-bold text-text-primary">
               Business Opportunity &amp; Commercialization
             </h3>
           </div>
-          <p className="mb-2 font-body text-[13.5px] leading-relaxed text-text-secondary">
+          <p className="mb-2 font-body text-body-s leading-relaxed text-text-secondary">
             <MathText text={prediction.business_application} />
           </p>
           <div className="flex flex-col gap-2">
@@ -85,7 +85,7 @@ export function HorizonPredictionResult({
             </h4>
             <ul className="flex flex-col gap-2">
               {prediction.roadmap_steps.map((step, i) => (
-                <li key={i} className="flex gap-2.5 font-body text-[12.5px] text-text-secondary">
+                <li key={i} className="flex gap-3 font-body text-body-s text-text-secondary">
                   <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-mono text-[11px] font-semibold">
                     {i + 1}
                   </span>
@@ -102,11 +102,11 @@ export function HorizonPredictionResult({
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2 text-text-primary">
           <BookOpen size={16} />
-          <h3 className="font-display text-[15px] font-bold">Reference Studies &amp; Supporting Literature</h3>
+          <h3 className="font-display text-h3 font-bold">Reference Studies &amp; Supporting Literature</h3>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-3">
             <span className="font-mono text-[10.5px] font-bold uppercase tracking-wider text-text-muted">
               Pioneering Publications (High-Impact foundations)
             </span>
@@ -115,7 +115,7 @@ export function HorizonPredictionResult({
             ))}
           </div>
 
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-3">
             <span className="font-mono text-[10.5px] font-bold uppercase tracking-wider text-text-muted">
               Latest Publications (Active Research Frontier)
             </span>

@@ -12,7 +12,7 @@ export function Badge({ accentColor = "var(--primary)", className, style, childr
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-[4px] px-2 py-0.5 font-mono text-[11px] font-medium tracking-wide",
+        "inline-flex items-center rounded-xs px-2 py-0.5 font-mono text-[11px] font-medium tracking-wide",
         className
       )}
       style={{
@@ -46,12 +46,12 @@ export function Chip({ selected = false, className, children, ...props }: ChipPr
   return (
     <motion.button
       type="button"
-      whileHover={{ scale: 1.05 }}
-      whileTap={{ scale: 0.95 }}
       transition={TRANSITION_FAST}
       className={cn(
         "inline-flex h-8 cursor-pointer items-center rounded-full px-3 font-body text-[12px] font-medium transition-colors duration-[var(--motion-fast)]",
-        selected ? "bg-primary text-text-on-primary" : "bg-surface-subtle text-primary",
+        selected
+          ? "bg-primary text-text-on-primary"
+          : "bg-surface-subtle text-primary hover:bg-surface-subtle/70",
         className
       )}
       style={{ transitionTimingFunction: "var(--ease-standard)" }}

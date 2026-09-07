@@ -30,7 +30,7 @@ export function EquationsTab({ projectId, initialLatex }: { projectId: string; i
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="font-body text-[12.5px] text-text-muted">
+      <p className="font-body text-body-s text-text-muted">
         Shared LaTeX blackboard — last write wins, same as the mobile app.
       </p>
       <AnimatePresence>
@@ -45,7 +45,7 @@ export function EquationsTab({ projectId, initialLatex }: { projectId: string; i
         onChange={(e) => setValue(e.target.value)}
         rows={10}
         placeholder="\\int_0^\\infty e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}"
-        className="w-full rounded-sm bg-surface-subtle p-3 font-mono text-[13px] text-text-primary outline-none focus:ring-1 focus:ring-primary"
+        className="w-full rounded-sm bg-surface-subtle p-3 font-mono text-body-s text-text-primary outline-none focus:ring-1 focus:ring-primary"
       />
       <Button fullWidth={false} className="w-32" onClick={handleSave} loading={saving}>
         Save

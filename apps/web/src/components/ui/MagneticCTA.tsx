@@ -37,12 +37,10 @@ export function MagneticCTA({
       onMouseMove={handleMouseMove}
       onMouseLeave={reset}
       onClick={onClick}
-      whileHover={{ scale: 1.04 }}
-      whileTap={{ scale: 0.96 }}
       className={`relative overflow-hidden rounded-md ${className ?? ""}`}
     >
       <span
-        className="relative z-10 flex items-center justify-center gap-2 bg-primary px-7 py-3.5 font-body text-[14px] font-semibold text-white shadow-card"
+        className="relative z-10 flex items-center justify-center gap-2 bg-accent-signal px-8 py-4 font-body text-[14px] font-semibold text-text-on-primary shadow-signal"
       >
         {children}
       </span>

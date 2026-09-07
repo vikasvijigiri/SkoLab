@@ -24,15 +24,15 @@ export function AuthorResultCard({ a, index }: { a: AuthorSuggestion; index: num
         href={`/author/${encodeURIComponent(shortOpenAlexId(a.id))}?name=${encodeURIComponent(a.display_name)}&focus=${encodeURIComponent(a.field_of_study ?? "")}`}
         onMouseEnter={warm}
         onFocus={warm}
-        className={cn("block rounded-lg", focusRing)}
+        className={cn("block rounded-md", focusRing)}
       >
-        <Card glow interactive className="flex h-full items-center gap-3">
+        <Card glow interactive accentColor="var(--primary)" accentSide="left" className="flex h-full items-center gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary font-display text-[14px] font-bold text-text-on-primary">
             {a.display_name.slice(0, 1).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate font-body text-[14px] font-semibold text-text-primary">{a.display_name}</p>
-            <p className="truncate font-body text-[12.5px] text-text-secondary">
+            <p className="truncate font-body text-body font-semibold text-text-primary">{a.display_name}</p>
+            <p className="truncate font-body text-body-s text-text-secondary">
               {a.institution}
               {a.field_of_study ? ` · ${a.field_of_study}` : ""}
             </p>

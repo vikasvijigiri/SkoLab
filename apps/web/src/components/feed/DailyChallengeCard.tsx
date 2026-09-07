@@ -25,7 +25,7 @@ export function DailyChallengeCard({
   if (loading) {
     return (
       <Card className="animate-pulse">
-        <div className="h-24 rounded-[8px] bg-surface-subtle" />
+        <div className="h-24 rounded-md bg-surface-subtle" />
       </Card>
     );
   }
@@ -40,7 +40,7 @@ export function DailyChallengeCard({
   ) {
     return (
       <Card>
-        <p className="font-body text-[13px] leading-relaxed text-text-secondary">
+        <p className="font-body text-body-s leading-relaxed text-text-secondary">
           {unresolved ? (
             <>
               Your daily challenge is drawn from your field.{" "}
@@ -62,10 +62,10 @@ export function DailyChallengeCard({
       <Badge accentColor="var(--accent-amber)">
         {(conjecture.category || "challenge").toUpperCase()}
       </Badge>
-      <h3 className="mt-2.5 font-display text-[15px] font-semibold text-text-primary">
+      <h3 className="mt-3 font-display text-h3 font-semibold text-text-primary">
         <MathText text={conjecture.title} />
       </h3>
-      <p className="mt-1.5 font-body text-[13px] leading-relaxed text-text-secondary">
+      <p className="mt-2 font-body text-body-s leading-relaxed text-text-secondary">
         <MathText text={conjecture.hypothesis} />
       </p>
 
@@ -79,11 +79,9 @@ export function DailyChallengeCard({
               key={opt}
               onClick={() => setSelected(i)}
               disabled={revealed}
-              whileHover={revealed ? undefined : { scale: 1.015 }}
-              whileTap={revealed ? undefined : { scale: 0.985 }}
               transition={TRANSITION_FAST}
               className={cn(
-                "cursor-pointer rounded-[8px] border px-3 py-2.5 text-left font-body text-[13px] transition-colors duration-[var(--motion-fast)] disabled:cursor-default",
+                "cursor-pointer rounded-md border px-3 py-3 text-left font-body text-body-s transition-colors duration-[var(--motion-fast)] disabled:cursor-default",
                 revealed && isCorrect && "border-accent-emerald bg-accent-emerald/10 text-text-primary",
                 revealed && isSelected && !isCorrect && "border-notification bg-notification/10 text-text-primary",
                 revealed && !isSelected && !isCorrect && "border-border text-text-muted",
@@ -98,7 +96,7 @@ export function DailyChallengeCard({
       </div>
 
       {selected !== null && (
-        <p className="mt-3 font-body text-[12.5px] leading-relaxed text-text-secondary">
+        <p className="mt-3 font-body text-body-s leading-relaxed text-text-secondary">
           <span className="font-medium text-text-primary">Explanation: </span>
           <MathText text={conjecture.explanation} />
         </p>

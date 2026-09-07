@@ -15,9 +15,9 @@ import { MathText } from "@/components/ui/MathText";
 import type { AuthorSuggestion, OpenAlexWork } from "@/lib/types";
 
 const groupHeadingClass =
-  "px-2 pb-1 pt-2 font-mono text-[10.5px] font-semibold uppercase tracking-wide text-text-muted [&_[cmdk-group-items]]:mt-1.5";
+  "px-2 pb-1 pt-2 font-mono text-[10.5px] font-semibold uppercase tracking-wide text-text-muted [&_[cmdk-group-items]]:mt-2";
 const itemClass =
-  "flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 font-body text-[13.5px] text-text-primary aria-selected:bg-surface-subtle";
+  "flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 font-body text-[13.5px] text-text-primary aria-selected:bg-surface-subtle";
 
 export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const router = useRouter();
@@ -94,7 +94,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
       contentClassName="cmdk-content fixed left-1/2 top-[12vh] z-50 w-full max-w-lg overflow-hidden rounded-lg border border-border bg-surface shadow-elevated"
       className="flex flex-col"
     >
-      <div className="flex items-center gap-2.5 border-b border-border px-4">
+      <div className="flex items-center gap-3 border-b border-border px-4">
         <Search size={16} className="shrink-0 text-text-muted" />
         <Command.Input
           // A command palette is a modal dialog whose whole purpose is to type
@@ -151,7 +151,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
             </Command.Item>
             <Command.Item
               onSelect={handleSignOut}
-              className="flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 font-body text-[13.5px] text-notification aria-selected:bg-notification/10"
+              className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 font-body text-[13.5px] text-notification aria-selected:bg-notification/10"
             >
               <LogOut size={15} />
               Sign out

@@ -77,21 +77,21 @@ export function ProfileMenu() {
         {open && (
           <motion.div
             role="menu"
-            initial={{ opacity: 0, y: -6, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.98 }}
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.14 }}
-            className="absolute right-0 top-11 z-50 w-64 overflow-hidden rounded-[12px] border border-border bg-surface shadow-elevated"
+            className="absolute right-0 top-11 z-50 w-64 overflow-hidden rounded-md border border-border bg-surface shadow-elevated"
           >
-            <div className="flex items-center gap-2.5 border-b border-border px-3 py-3">
+            <div className="flex items-center gap-3 border-b border-border px-3 py-3">
               <span
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display text-[13px] font-bold text-white shadow-card"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display text-body-s font-bold text-white shadow-card"
                 style={{ background: "var(--primary)" }}
               >
                 {initial}
               </span>
               <span className="min-w-0">
-                <span className="block truncate font-body text-[13px] font-semibold text-text-primary">{name}</span>
+                <span className="block truncate font-body text-body-s font-semibold text-text-primary">{name}</span>
                 <span className="block truncate font-body text-[11.5px] text-text-muted">{sub}</span>
               </span>
             </div>
@@ -106,7 +106,7 @@ export function ProfileMenu() {
                     role="menuitem"
                     onClick={() => setOpen(false)}
                     className={cn(
-                      "flex items-center gap-2.5 px-3 py-2 font-body text-[13px] transition-colors hover:bg-surface-subtle",
+                      "flex items-center gap-3 px-3 py-2 font-body text-body-s transition-colors hover:bg-surface-subtle",
                       active ? "text-primary" : "text-text-secondary hover:text-text-primary",
                     )}
                   >
@@ -122,7 +122,7 @@ export function ProfileMenu() {
                 type="button"
                 onClick={cycleTheme}
                 role="menuitem"
-                className="flex w-full items-center gap-2.5 px-3 py-2 font-body text-[13px] text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary"
+                className="flex w-full items-center gap-3 px-3 py-2 font-body text-body-s text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary"
               >
                 <ThemeIcon size={15} strokeWidth={1.8} />
                 <span className="flex-1 text-left">Theme</span>
@@ -138,7 +138,7 @@ export function ProfileMenu() {
                   void signOut();
                 }}
                 role="menuitem"
-                className="flex w-full items-center gap-2.5 px-3 py-2 font-body text-[13px] text-text-secondary transition-colors hover:bg-notification/10 hover:text-notification"
+                className="flex w-full items-center gap-3 px-3 py-2 font-body text-body-s text-text-secondary transition-colors hover:bg-notification/10 hover:text-notification"
               >
                 <LogOut size={15} strokeWidth={1.8} />
                 Sign out

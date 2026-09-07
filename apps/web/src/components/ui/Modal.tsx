@@ -62,14 +62,14 @@ export function Modal({
             role="dialog"
             aria-modal="true"
             aria-label={title}
-            initial={{ opacity: 0, y: 12, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 12, scale: 0.98 }}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
             transition={TRANSITION_FAST}
             className={`w-full ${widthClass} rounded-lg border border-border bg-surface shadow-elevated outline-none`}
           >
             <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
-              <h2 className="font-display text-[15px] font-semibold text-text-primary">{title}</h2>
+              <h2 className="font-display text-h3 font-semibold text-text-primary">{title}</h2>
               <button
                 type="button"
                 onClick={onClose}

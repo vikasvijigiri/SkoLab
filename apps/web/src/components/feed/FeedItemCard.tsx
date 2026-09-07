@@ -65,7 +65,7 @@ export function FeedItemCard({
   return (
     <Card interactive={false} className="flex flex-col gap-2">
       {/* kind chip + source + when */}
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
         <span
           className="flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide"
           style={{
@@ -106,7 +106,7 @@ export function FeedItemCard({
       )}
 
       {/* why + save / dismiss */}
-      <div className="mt-0.5 flex items-center justify-between gap-2">
+      <div className="mt-1 flex items-center justify-between gap-2">
         <p className="flex min-w-0 items-center gap-1 font-body text-[11.5px] text-text-muted">
           <Info size={11} className="shrink-0" aria-hidden="true" />
           <span className="truncate">{item.why}</span>

@@ -45,7 +45,7 @@ export function TableOfContents({ sections }: { sections: Section[] }) {
           key={section.id}
           href={`#${section.id}`}
           className={cn(
-            "border-l-2 py-1.5 pl-3 font-body text-[12.5px] leading-snug transition-colors duration-[var(--motion-fast)]",
+            "border-l-2 py-2 pl-3 font-body text-[12.5px] leading-snug transition-colors duration-[var(--motion-fast)]",
             activeId === section.id
               ? "border-primary text-text-primary font-medium"
               : "border-border text-text-muted hover:text-text-primary"

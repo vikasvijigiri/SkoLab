@@ -22,7 +22,7 @@ export function RelatedPapersCard({ workId }: { workId: string }) {
 
   return (
     <Card id="related-papers" accentColor="var(--accent-cyan)" className="mt-4 scroll-mt-6">
-      <h2 className="flex items-center gap-1.5 font-display text-[15px] font-semibold text-text-primary">
+      <h2 className="flex items-center gap-2 font-display text-h3 font-semibold text-text-primary">
         <Compass size={15} style={{ color: "var(--accent-cyan)" }} />
         Related papers
       </h2>
@@ -30,7 +30,7 @@ export function RelatedPapersCard({ workId }: { workId: string }) {
       {isLoading ? (
         <div className="mt-3 flex flex-col gap-2">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-14 animate-pulse rounded-[8px] bg-surface-subtle" />
+            <div key={i} className="h-14 animate-pulse rounded-md bg-surface-subtle" />
           ))}
         </div>
       ) : (
@@ -39,7 +39,7 @@ export function RelatedPapersCard({ workId }: { workId: string }) {
             <Link
               key={p.work_id}
               href={`/paper/${encodeURIComponent(shortOpenAlexId(p.work_id))}`}
-              className="group flex items-start gap-3 rounded-[8px] border border-border bg-surface p-2.5 transition-colors duration-[var(--motion-fast)] hover:border-primary/40"
+              className="group flex items-start gap-3 rounded-md border border-border bg-surface p-2.5 transition-colors duration-[var(--motion-fast)] hover:border-primary/40"
               style={{ transitionTimingFunction: "var(--ease-standard)" }}
             >
               <div className="min-w-0 flex-1">
@@ -47,21 +47,21 @@ export function RelatedPapersCard({ workId }: { workId: string }) {
                   <MathText text={p.title || "Untitled"} />
                 </p>
                 {(p.authors.length > 0 || p.year > 0) && (
-                  <p className="mt-0.5 truncate font-body text-[12px] text-text-secondary">
+                  <p className="mt-1 truncate font-body text-[12px] text-text-secondary">
                     {p.authors.slice(0, 3).join(", ")}
                     {p.authors.length > 3 ? " et al." : ""}
                     {p.year ? `${p.authors.length ? " · " : ""}${p.year}` : ""}
                   </p>
                 )}
                 {p.why && (
-                  <p className="mt-0.5 font-mono text-[10.5px] uppercase tracking-wide text-text-muted">
+                  <p className="mt-1 font-mono text-[10.5px] uppercase tracking-wide text-text-muted">
                     {p.why}
                   </p>
                 )}
               </div>
               <ArrowUpRight
                 size={14}
-                className="mt-0.5 shrink-0 text-text-muted opacity-0 transition-opacity group-hover:opacity-100"
+                className="mt-1 shrink-0 text-text-muted opacity-0 transition-opacity group-hover:opacity-100"
               />
             </Link>
           ))}

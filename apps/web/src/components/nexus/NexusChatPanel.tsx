@@ -49,7 +49,7 @@ export function NexusChatPanel({
           <Sparkles size={16} />
         </div>
         <div className="min-w-0">
-          <h2 className="font-display text-[15px] font-bold text-text-primary">Nexus Synthesis Assistant</h2>
+          <h2 className="font-display text-h3 font-bold text-text-primary">Nexus Synthesis Assistant</h2>
           <p className="font-body text-[12px] text-text-muted truncate">
             {activeCollectionCount > 0
               ? `Synthesizing context across ${activeCollectionCount} selected studies`
@@ -64,8 +64,8 @@ export function NexusChatPanel({
             <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-4 animate-pulse">
               <MessageSquare size={20} />
             </div>
-            <h3 className="font-display text-[16px] font-bold text-text-primary">Ask Nexus AI</h3>
-            <p className="font-body text-[13px] text-text-muted mt-2 leading-relaxed">
+            <h3 className="font-display text-h3 font-bold text-text-primary">Ask Nexus AI</h3>
+            <p className="font-body text-body-s text-text-muted mt-2 leading-relaxed">
               Add papers on the left workspace panel. Once your collection is ready, ask Nexus to analyze, search for
               methodology overlaps, find knowledge gaps, or synthesize business opportunities.
             </p>
@@ -75,10 +75,8 @@ export function NexusChatPanel({
                 <motion.button
                   key={prompt}
                   onClick={() => onSend(prompt)}
-                  whileHover={{ y: -2, boxShadow: "var(--shadow-card-hover)" }}
-                  whileTap={{ scale: 0.98 }}
-                  transition={TRANSITION_FAST}
-                  className="w-full text-left p-3 rounded-lg border border-border bg-surface/40 hover:bg-surface/90 hover:border-primary/30 transition-colors duration-[var(--motion-fast)] font-body text-[12.5px] text-text-secondary flex items-center justify-between"
+                  whileHover={{ y: -2, boxShadow: "var(--shadow-card-hover)" }}                  transition={TRANSITION_FAST}
+                  className="w-full text-left p-3 rounded-lg border border-border bg-surface/40 hover:bg-surface/90 hover:border-primary/30 transition-colors duration-[var(--motion-fast)] font-body text-body-s text-text-secondary flex items-center justify-between"
                 >
                   <span>{prompt}</span>
                   <ChevronRight size={14} className="text-text-muted" />
@@ -91,7 +89,7 @@ export function NexusChatPanel({
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div
-                  className={`max-w-[85%] rounded-lg px-4 py-3 font-body text-[13.5px] leading-relaxed shadow-sm ${
+                  className={`max-w-[85%] rounded-lg px-4 py-3 font-body text-body-s leading-relaxed shadow-sm ${
                     msg.role === "user"
                       ? "bg-primary text-text-on-primary rounded-br-none"
                       : "bg-surface border border-border text-text-primary rounded-bl-none"
@@ -116,7 +114,7 @@ export function NexusChatPanel({
             )}
 
             {chatError && (
-              <div className="flex items-center gap-2 rounded-md border border-notification/20 bg-notification/10 p-3 text-notification font-body text-[12.5px]">
+              <div className="flex items-center gap-2 rounded-md border border-notification/20 bg-notification/10 p-3 text-notification font-body text-body-s">
                 <AlertCircle size={15} />
                 <span>{chatError}</span>
               </div>
@@ -144,7 +142,7 @@ export function NexusChatPanel({
             value={userMsg}
             onChange={(e) => onUserMsgChange(e.target.value)}
             disabled={activeCollectionCount === 0 || chatLoading}
-            className="h-11 text-[13px] bg-surface"
+            className="h-11 text-body-s bg-surface"
           />
           <Button
             type="submit"
