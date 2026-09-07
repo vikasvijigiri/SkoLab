@@ -107,6 +107,17 @@ export interface ActivityFeedResult {
   degraded: boolean;
 }
 
+// ── Science news (Go gateway /api/v1/science_news — public RSS, no LLM) ─────
+
+export interface ScienceNewsItem {
+  title: string;
+  url: string;
+  source: string;
+  /** ISO timestamp, or "" when the feed omitted a date. */
+  published: string;
+  summary: string;
+}
+
 export interface Work {
   id?: string;
   title?: string;

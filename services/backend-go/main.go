@@ -25,6 +25,7 @@ import (
 	"github.com/skolab/backend-go/internal/firestore"
 	"github.com/skolab/backend-go/internal/metrics"
 	"github.com/skolab/backend-go/internal/middleware"
+	"github.com/skolab/backend-go/internal/pulse"
 	"github.com/skolab/backend-go/internal/quest"
 	"github.com/skolab/backend-go/internal/recommendation"
 	"github.com/skolab/backend-go/internal/similarity"
@@ -166,6 +167,13 @@ func main() {
 	// aggregation + sort, so Go edge not Python (decisions/0010).
 	r.GET("/api/v1/activity_feed", activity.GetActivityFeed)
 	r.GET("/activity_feed", activity.GetActivityFeed)
+
+	// ── Science news — public RSS/Atom aggregation, no AI ───────────────────
+	// internal/pulse. Quanta / Phys.org / ScienceDaily / Nature, fetched +
+	// parsed + 45-min in-memory cache. Headline + link + short summary only,
+	// always links out.
+	r.GET("/api/v1/science_news", pulse.GetScienceNews)
+	r.GET("/science_news", pulse.GetScienceNews)
 
 	// ── System metadata — non-LLM, ported from endpoints/system.py ──────────
 	// GET /api/v1/ (API-router root) and GET /api/v1/status (public status
