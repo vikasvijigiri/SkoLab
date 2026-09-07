@@ -55,19 +55,19 @@ export function TasksMeetingsTab({ projectId }: { projectId: string }) {
   return (
     <div className="flex flex-col gap-4">
       <Card>
-        <h3 className="flex items-center gap-1.5 font-display text-[14px] font-semibold text-text-primary">
+        <h3 className="flex items-center gap-2 font-display text-body font-semibold text-text-primary">
           <ListChecks size={15} className="text-accent-teal" />
           Tasks
         </h3>
-        <div className="mt-2 flex flex-col gap-1.5">
-          {tasks.length === 0 && <p className="font-body text-[13px] text-text-muted">No tasks yet.</p>}
+        <div className="mt-2 flex flex-col gap-2">
+          {tasks.length === 0 && <p className="font-body text-body-s text-text-muted">No tasks yet.</p>}
           {tasks.map((t, i) => (
             <motion.label
               key={t.id}
               initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.25, delay: i * 0.03 }}
-              className="flex items-center gap-2.5 rounded-[8px] bg-surface-subtle px-3 py-2"
+              className="flex items-center gap-3 rounded-md bg-surface-subtle px-3 py-2"
             >
               <input
                 type="checkbox"
@@ -80,7 +80,7 @@ export function TasksMeetingsTab({ projectId }: { projectId: string }) {
                 className="h-4 w-4 accent-accent-teal"
               />
               <span
-                className={`font-body text-[13.5px] ${t.isCompleted ? "text-text-muted line-through" : "text-text-primary"}`}
+                className={`font-body text-body-s ${t.isCompleted ? "text-text-muted line-through" : "text-text-primary"}`}
               >
                 {t.title}
               </span>
@@ -97,21 +97,21 @@ export function TasksMeetingsTab({ projectId }: { projectId: string }) {
       </Card>
 
       <Card>
-        <h3 className="flex items-center gap-1.5 font-display text-[14px] font-semibold text-text-primary">
+        <h3 className="flex items-center gap-2 font-display text-body font-semibold text-text-primary">
           <CalendarClock size={15} className="text-accent-indigo" />
           Meetings
         </h3>
-        <div className="mt-2 flex flex-col gap-1.5">
-          {meetings.length === 0 && <p className="font-body text-[13px] text-text-muted">Nothing scheduled.</p>}
+        <div className="mt-2 flex flex-col gap-2">
+          {meetings.length === 0 && <p className="font-body text-body-s text-text-muted">Nothing scheduled.</p>}
           {meetings.map((m, i) => (
             <motion.div
               key={m.id}
               initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.25, delay: i * 0.03 }}
-              className="rounded-[8px] bg-surface-subtle px-3 py-2"
+              className="rounded-md bg-surface-subtle px-3 py-2"
             >
-              <p className="font-body text-[13.5px] font-medium text-text-primary">{m.title}</p>
+              <p className="font-body text-body-s font-medium text-text-primary">{m.title}</p>
               <p className="font-body text-[12px] text-text-secondary">{m.when}</p>
             </motion.div>
           ))}

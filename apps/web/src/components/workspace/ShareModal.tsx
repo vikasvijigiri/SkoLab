@@ -100,7 +100,7 @@ export function ShareModal({
 
       {canManage && (
         <form onSubmit={handleInvite} className="mb-4 flex flex-col gap-2">
-          <p className="font-body text-[12.5px] font-medium text-text-secondary">
+          <p className="font-body text-body-s font-medium text-text-secondary">
             Invite a collaborator
           </p>
           <div className="flex gap-2">
@@ -113,7 +113,7 @@ export function ShareModal({
             <select
               value={inviteRole}
               onChange={(e) => setInviteRole(e.target.value as CollabRole)}
-              className="shrink-0 rounded-md border border-border-input bg-surface-input px-2.5 font-body text-[13px] text-text-primary outline-none focus:border-primary"
+              className="shrink-0 rounded-md border border-border-input bg-surface-input px-3 font-body text-body-s text-text-primary outline-none focus:border-primary"
             >
               {ASSIGNABLE.map((r) => (
                 <option key={r} value={r}>
@@ -129,8 +129,8 @@ export function ShareModal({
         </form>
       )}
 
-      <div className="flex flex-col gap-1.5">
-        <p className="font-body text-[12.5px] font-medium text-text-secondary">
+      <div className="flex flex-col gap-2">
+        <p className="font-body text-body-s font-medium text-text-secondary">
           People with access ({project.members.length})
         </p>
         {project.members.map((m) => {
@@ -145,7 +145,7 @@ export function ShareModal({
                 {m.name.slice(0, 1).toUpperCase()}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate font-body text-[13px] font-medium text-text-primary">{m.name}</p>
+                <p className="truncate font-body text-body-s font-medium text-text-primary">{m.name}</p>
                 <p className="truncate font-body text-[11.5px] text-text-muted">
                   {m.email || ROLE_HINT[role]}
                 </p>
@@ -184,7 +184,7 @@ export function ShareModal({
       <button
         type="button"
         onClick={copyLink}
-        className="mt-4 flex w-full items-center justify-center gap-2 rounded-md border border-border px-3 py-2 font-body text-[12.5px] font-medium text-text-secondary transition-colors hover:border-primary/40 hover:text-text-primary"
+        className="mt-4 flex w-full items-center justify-center gap-2 rounded-md border border-border px-3 py-2 font-body text-body-s font-medium text-text-secondary transition-colors hover:border-primary/40 hover:text-text-primary"
       >
         {copied ? <Check size={14} className="text-accent-teal" /> : <Link2 size={14} />}
         {copied ? "Link copied" : "Copy project link"}

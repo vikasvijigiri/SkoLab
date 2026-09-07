@@ -39,7 +39,7 @@ export function ManuscriptTab({
         <div className="flex items-center justify-between">
           <label
             htmlFor="manuscript-progress"
-            className="font-body text-[12.5px] font-medium text-text-secondary"
+            className="font-body text-body-s font-medium text-text-secondary"
           >
             Progress
           </label>
@@ -67,7 +67,7 @@ export function ManuscriptTab({
         onChange={(e) => setDraft(e.target.value)}
         rows={12}
         placeholder="Start drafting your manuscript..."
-        className="w-full rounded-sm bg-surface-subtle p-3 font-body text-[13.5px] leading-relaxed text-text-primary outline-none focus:ring-1 focus:ring-primary"
+        className="w-full rounded-sm bg-surface-subtle p-3 font-body text-body-s leading-relaxed text-text-primary outline-none focus:ring-1 focus:ring-primary"
       />
       <Button fullWidth={false} className="w-32" onClick={handleSave} loading={saving}>
         Save

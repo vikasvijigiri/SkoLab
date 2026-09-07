@@ -41,14 +41,14 @@ export function HorizonLoadingPanel({ loadingStep }: { loadingStep: number }) {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: -15, opacity: 0 }}
             transition={{ duration: 0.25 }}
-            className="font-mono text-[12.5px] text-text-muted"
+            className="font-mono text-body-s text-text-muted"
           >
             {LOADING_STEPS[loadingStep]}
           </motion.p>
         </AnimatePresence>
       </div>
 
-      <div className="mt-6 flex gap-1.5">
+      <div className="mt-6 flex gap-2">
         {LOADING_STEPS.map((_, i) => (
           <div
             key={i}

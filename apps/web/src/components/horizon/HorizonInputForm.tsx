@@ -62,17 +62,17 @@ export function HorizonInputForm({
       <Card accentColor="var(--primary)" className="border-border/50 bg-surface/60 backdrop-blur-md">
         <div className="flex flex-col gap-5">
           <div>
-            <span className="mb-2 block font-body text-[12.5px] font-medium text-text-secondary">
+            <span className="mb-2 block font-body text-body-s font-medium text-text-secondary">
               Scientific or technological field
             </span>
             {fieldsQ.isPending ? (
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-2">
                 {[0, 1, 2, 3, 4].map((i) => (
                   <div key={i} className="h-7 w-28 animate-pulse rounded-full bg-surface-subtle" />
                 ))}
               </div>
             ) : (
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-2">
                 {(fieldsQ.data ?? []).map((t) => (
                   <Chip key={t.id} selected={fieldTaxon?.id === t.id} onClick={() => pickField(t)}>
                     {t.display_name}
@@ -84,17 +84,17 @@ export function HorizonInputForm({
 
           {fieldTaxon && (
             <div>
-              <span className="mb-2 block font-body text-[12.5px] font-medium text-text-secondary">
+              <span className="mb-2 block font-body text-body-s font-medium text-text-secondary">
                 Focus area <span className="text-text-muted">(optional)</span>
               </span>
               {subfieldsQ.isPending ? (
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-2">
                   {[0, 1, 2].map((i) => (
                     <div key={i} className="h-7 w-28 animate-pulse rounded-full bg-surface-subtle" />
                   ))}
                 </div>
               ) : (
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-2">
                   {(subfieldsQ.data ?? []).map((t) => (
                     <Chip key={t.id} selected={focusTaxon?.id === t.id} onClick={() => pickFocus(t)}>
                       {t.display_name}
@@ -121,7 +121,7 @@ export function HorizonInputForm({
       </Card>
 
       <div className="flex flex-col gap-3">
-        <h3 className="font-body text-[13px] font-bold uppercase tracking-wide text-text-muted">
+        <h3 className="font-body text-body-s font-bold uppercase tracking-wide text-text-muted">
           Or jump straight into a frontier
         </h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -146,7 +146,7 @@ export function HorizonInputForm({
               >
                 <div>
                   <h4 className="font-display text-[14.5px] font-semibold text-text-primary">{domain.name}</h4>
-                  <p className="mt-1.5 font-body text-[12.5px] leading-snug text-text-muted">{domain.desc}</p>
+                  <p className="mt-1.5 font-body text-body-s leading-snug text-text-muted">{domain.desc}</p>
                 </div>
                 <div className="mt-4 flex items-center justify-end text-primary">
                   <ArrowRight size={14} className="opacity-60" />
@@ -161,14 +161,14 @@ export function HorizonInputForm({
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="flex items-center gap-2.5 rounded-md border border-notification/20 bg-notification/10 p-3 text-notification"
+          className="flex items-center gap-3 rounded-md border border-notification/20 bg-notification/10 p-3 text-notification"
         >
           <AlertCircle size={16} className="shrink-0" />
-          <span className="min-w-0 flex-1 font-body text-[13px] font-medium">{error}</span>
+          <span className="min-w-0 flex-1 font-body text-body-s font-medium">{error}</span>
           <button
             type="button"
             onClick={() => onSubmit()}
-            className="shrink-0 cursor-pointer rounded-md border border-notification/30 px-2.5 py-1 font-body text-[12px] font-medium text-notification transition-colors duration-[var(--motion-fast)] hover:bg-notification/10"
+            className="shrink-0 cursor-pointer rounded-md border border-notification/30 px-3 py-1 font-body text-[12px] font-medium text-notification transition-colors duration-[var(--motion-fast)] hover:bg-notification/10"
           >
             Retry
           </button>

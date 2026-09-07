@@ -53,9 +53,9 @@ export function ChatTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="flex h-[420px] flex-col">
-      <div className="flex-1 overflow-y-auto rounded-[8px] bg-surface-subtle p-3">
+      <div className="flex-1 overflow-y-auto rounded-md bg-surface-subtle p-3">
         {messages.length === 0 && (
-          <p className="text-center font-body text-[13px] text-text-muted">No messages yet — say hello.</p>
+          <p className="text-center font-body text-body-s text-text-muted">No messages yet — say hello.</p>
         )}
         <div className="flex flex-col gap-2">
           {messages.map((m, i) => {
@@ -71,7 +71,7 @@ export function ChatTab({ projectId }: { projectId: string }) {
                 {!mine && <span className="mb-0.5 font-body text-[11px] text-text-muted">{m.senderName}</span>}
                 <div
                   className={cn(
-                    "max-w-[75%] rounded-[8px] px-3 py-2 font-body text-[13.5px] shadow-xs",
+                    "max-w-[75%] rounded-md px-3 py-2 font-body text-body-s shadow-xs",
                     mine ? "bg-primary text-text-on-primary" : "bg-surface text-text-primary"
                   )}
                 >
@@ -85,7 +85,7 @@ export function ChatTab({ projectId }: { projectId: string }) {
       </div>
       <form onSubmit={handleSend} className="mt-2.5 flex gap-2">
         <Input placeholder="Message the team..." value={text} onChange={(e) => setText(e.target.value)} />
-        <Button type="submit" fullWidth={false} loading={sending} className="w-24 gap-1.5">
+        <Button type="submit" fullWidth={false} loading={sending} className="w-24 gap-2">
           <Send size={14} />
           Send
         </Button>
