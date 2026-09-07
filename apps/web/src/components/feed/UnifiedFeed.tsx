@@ -102,17 +102,17 @@ export function UnifiedFeed({
           [0, 1, 2].map((i) => (
             <div
               key={i}
-              className="h-[150px] animate-pulse rounded-[8px] bg-surface-subtle"
+              className="h-[150px] animate-pulse rounded-md bg-surface-subtle"
               aria-hidden="true"
             />
           ))
         ) : shown.length === 0 ? (
           <Card className="text-center">
             <Sparkles size={18} className="mx-auto text-text-muted" />
-            <p className="mt-2 font-body text-[13px] font-medium text-text-primary">
+            <p className="mt-2 font-body text-body-s font-medium text-text-primary">
               {lens === "all" ? "Your feed is warming up" : "Nothing here yet"}
             </p>
-            <p className="mt-0.5 font-body text-[12px] leading-relaxed text-text-muted">
+            <p className="mt-1 font-body text-[12px] leading-relaxed text-text-muted">
               {lens === "all"
                 ? "Add a research focus and connect with a few researchers — papers, news and roles in your field land here."
                 : "Try “For you”, or check back soon."}

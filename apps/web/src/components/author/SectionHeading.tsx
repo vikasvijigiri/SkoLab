@@ -11,8 +11,8 @@ export function SectionHeading({
   children: React.ReactNode;
 }) {
   return (
-    <h2 className="flex items-center gap-1.5 font-display text-[15px] font-semibold text-text-primary">
-      <Icon size={15} style={{ color }} />
+    <h2 className="flex items-center gap-2 font-display text-h3 font-semibold text-text-primary">
+      <Icon size={16} style={{ color }} />
       {children}
     </h2>
   );
