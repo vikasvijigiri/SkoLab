@@ -36,6 +36,48 @@ describe("AuthorDetailContent", () => {
     expect(screen.getByText("Impact Signature")).toBeInTheDocument();
   });
 
+  it("links publication co-authors, suggested connections, and the ORCID", async () => {
+    server.use(
+      http.get(`${API}/search_author`, () =>
+        HttpResponse.json(
+          makeAuthorResponse({
+            display_name: "Ada Lovelace",
+            orcid: "0000-0002-1825-0097",
+            works: [
+              {
+                id: "W7001",
+                title: "Notes on the Analytical Engine",
+                year: 1843,
+                is_open_access: true,
+                citations: 12,
+                creativity_score: 0,
+                complexity_score: 0,
+                impact_factor: 0,
+                disruption_score: 0,
+                semantic_novelty: 0,
+                open_science_score: 0,
+                authors: ["Ada Lovelace|https://openalex.org/A5000000001", "Michael Faraday|https://openalex.org/A5000000042"],
+              },
+            ],
+          }),
+        ),
+      ),
+    );
+    renderWithProviders(<AuthorDetailContent authorId="A5000000001" />);
+
+    // co-author in a publication row
+    const faraday = await screen.findByRole("link", { name: "Michael Faraday" });
+    expect(faraday).toHaveAttribute("href", "/author/A5000000042?name=Michael%20Faraday");
+
+    // suggested-connections row (default mockCollaborators handler → Charles Babbage / A5000000002)
+    const conn = await screen.findByRole("link", { name: /babbage/i });
+    expect(conn).toHaveAttribute("href", "/author/A5000000002?name=Charles%20Babbage");
+
+    // ORCID
+    const orcid = screen.getByRole("link", { name: /0000-0002-1825-0097/ });
+    expect(orcid).toHaveAttribute("href", "https://orcid.org/0000-0002-1825-0097");
+  });
+
   it("shows an ErrorBanner with Retry on failure and refetches on click", async () => {
     let calls = 0;
     server.use(
