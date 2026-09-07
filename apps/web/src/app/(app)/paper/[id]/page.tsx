@@ -13,6 +13,7 @@ import {
   Globe,
   Compass,
 } from "lucide-react";
+import { ExternalLink, Unlock } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
@@ -21,12 +22,9 @@ import { MathText, Formula } from "@/components/ui/MathText";
 import { RailShell } from "@/components/layout/RailShell";
 import { TableOfContents } from "@/components/paper/TableOfContents";
 import { RelatedPapersCard } from "@/components/paper/RelatedPapersCard";
+import { AuthorInline } from "@/components/discovery/AuthorInline";
 import type { PaperIntelligence } from "@/lib/types";
 import { paperWorkQuery, paperAnalysisQuery } from "@/lib/api/queries";
-
-function authorLabel(authorPair: string) {
-  return authorPair.split("|")[0];
-}
 
 const CONFIDENCE_COLOR: Record<PaperIntelligence["confidence"], string> = {
   High: "var(--accent-emerald)",
@@ -90,9 +88,16 @@ export function PaperDetailContent({ id }: { id: string }) {
     ...paperAnalysisQuery({ title: work?.display_name, doi: work?.doi, openalexId: work?.id }),
     enabled: Boolean(work?.id),
   });
-  const intelligence = intelQ.data ?? null;
+  // Only trust a well-formed intelligence payload — a malformed `{}` / `[]` from
+  // a degraded backend used to crash the whole page on `.key_findings.length`.
+  const raw = intelQ.data;
+  const intelligence: PaperIntelligence | null =
+    raw && typeof raw === "object" && Array.isArray((raw as PaperIntelligence).key_findings)
+      ? (raw as PaperIntelligence)
+      : null;
   const intelLoading = intelQ.isPending;
-  const intelError = intelQ.isError ? "Couldn't analyze this paper." : null;
+  const intelError =
+    intelQ.isError || (intelQ.isSuccess && !intelligence) ? "Couldn't analyze this paper." : null;
 
   if (error && !work) {
     return (
@@ -109,6 +114,9 @@ export function PaperDetailContent({ id }: { id: string }) {
       </div>
     );
   }
+
+  const firstAffiliation = work.authorships?.[0]?.institutions?.[0]?.display_name || null;
+  const workType = work.type ? work.type.replace(/-/g, " ") : null;
 
   const tocSections = intelligence
     ? (
@@ -133,14 +141,53 @@ export function PaperDetailContent({ id }: { id: string }) {
           <h1 className="font-display text-[19px] font-bold leading-snug text-text-primary">
             <MathText text={work.display_name} />
           </h1>
-          <p className="mt-2 font-body text-[13.5px] text-text-secondary">
-            {work.authorships?.map((a) => authorLabel(a.author.display_name)).join(", ")}
-          </p>
-          <p className="mt-1 font-body text-[12.5px] text-text-muted">
-            {work.primary_location?.source?.display_name}
-            {work.publication_year ? ` · ${work.publication_year}` : ""}
-            {work.cited_by_count !== undefined ? ` · ${work.cited_by_count} citations` : ""}
-          </p>
+
+          {work.authorships && work.authorships.length > 0 && (
+            <p className="mt-2">
+              <AuthorInline
+                authors={work.authorships.map((a) => ({
+                  name: a.author.display_name,
+                  id: a.author.id,
+                }))}
+                max={12}
+              />
+            </p>
+          )}
+
+          {firstAffiliation && (
+            <p className="mt-0.5 font-body text-[12px] text-text-muted">{firstAffiliation}</p>
+          )}
+
+          {/* metadata strip — venue · year · type · OA · citations · DOI */}
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-body text-[12.5px] text-text-muted">
+            {work.primary_location?.source?.display_name && (
+              <span className="text-text-secondary">{work.primary_location.source.display_name}</span>
+            )}
+            {work.publication_year && <span>· {work.publication_year}</span>}
+            {workType && (
+              <span className="rounded bg-surface-subtle px-1.5 py-0.5 font-mono text-[10.5px] uppercase tracking-wide">
+                {workType}
+              </span>
+            )}
+            {work.open_access?.is_oa && (
+              <Badge accentColor="var(--accent-emerald)" className="gap-1">
+                <Unlock size={10} aria-hidden="true" />
+                Open Access
+              </Badge>
+            )}
+            {work.cited_by_count !== undefined && <span>· {work.cited_by_count.toLocaleString()} citations</span>}
+            {work.doi && (
+              <a
+                href={work.doi}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-0.5 text-primary hover:underline"
+              >
+                DOI
+                <ExternalLink size={11} aria-hidden="true" />
+              </a>
+            )}
+          </div>
         </Card>
       </motion.div>
 
