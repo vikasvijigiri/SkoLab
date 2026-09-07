@@ -53,6 +53,14 @@ describe("HomePage", () => {
     expect(screen.getByText(/is now connected with you/i)).toBeInTheDocument();
   });
 
+  it("renders the science-news strip from /science_news", async () => {
+    renderWithProviders(<HomePage />);
+    expect(await screen.findByText(/In the news/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText("A new state of matter observed in a spin liquid"),
+    ).toBeInTheDocument();
+  });
+
   it("still renders the shell when the feed API fails", async () => {
     server.use(http.get(`${API}/api/v1/daily_feed`, () => new HttpResponse(null, { status: 500 })));
     renderWithProviders(<HomePage />);
