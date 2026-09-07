@@ -46,12 +46,12 @@ export function Chip({ selected = false, className, children, ...props }: ChipPr
   return (
     <motion.button
       type="button"
-      whileHover={{ scale: 1.05 }}
-      whileTap={{ scale: 0.95 }}
       transition={TRANSITION_FAST}
       className={cn(
         "inline-flex h-8 cursor-pointer items-center rounded-full px-3 font-body text-[12px] font-medium transition-colors duration-[var(--motion-fast)]",
-        selected ? "bg-primary text-text-on-primary" : "bg-surface-subtle text-primary",
+        selected
+          ? "bg-primary text-text-on-primary"
+          : "bg-surface-subtle text-primary hover:bg-surface-subtle/70",
         className
       )}
       style={{ transitionTimingFunction: "var(--ease-standard)" }}

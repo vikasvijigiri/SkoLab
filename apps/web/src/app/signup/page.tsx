@@ -70,8 +70,8 @@ export default function SignupPage() {
 
   return (
     <AuthCard>
-      <h1 className="font-display text-[24px] font-bold text-text-primary">Create your account</h1>
-      <p className="mt-1.5 font-body text-[14px] text-text-secondary">
+      <h1 className="font-display text-h2 font-bold text-text-primary">Create your account</h1>
+      <p className="mt-2 font-body text-body text-text-secondary">
         Join SkoLab and start mapping your research impact.
       </p>
 
@@ -81,7 +81,7 @@ export default function SignupPage() {
         <GoogleSignInButton onClick={handleGoogle} loading={loading === "google"} />
       </div>
 
-      {error && <p className="mt-3 font-body text-[13px] text-notification">{error}</p>}
+      {error && <p className="mt-3 font-body text-body-s text-notification">{error}</p>}
 
       {showEmail ? (
         <>
@@ -125,13 +125,13 @@ export default function SignupPage() {
         <button
           type="button"
           onClick={() => setShowEmail(true)}
-          className="mt-4 block w-full cursor-pointer text-center font-body text-[12.5px] text-text-muted underline-offset-2 transition-colors hover:text-text-secondary hover:underline"
+          className="mt-4 block w-full cursor-pointer text-center font-body text-body-s text-text-muted underline-offset-2 transition-colors hover:text-text-secondary hover:underline"
         >
           Use email and password instead
         </button>
       )}
 
-      <p className="mt-6 text-center font-body text-[13px] text-text-secondary">
+      <p className="mt-6 text-center font-body text-body-s text-text-secondary">
         Already have an account?{" "}
         <Link href="/login" className="font-medium text-primary">
           Sign in

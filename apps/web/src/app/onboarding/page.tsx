@@ -73,10 +73,8 @@ function ChipRow({
           key={opt.id}
           type="button"
           onClick={() => onPick(opt.display_name)}
-          whileHover={{ scale: 1.04 }}
-          whileTap={{ scale: 0.96 }}
           transition={TRANSITION_FAST}
-          className={`cursor-pointer rounded-full border px-3 py-1.5 font-body text-[12px] font-medium transition-colors duration-[var(--motion-fast)] ${
+          className={`cursor-pointer rounded-full border px-3 py-2 font-body text-[12px] font-medium transition-colors duration-[var(--motion-fast)] ${
             isSelected(opt.display_name)
               ? "border-primary bg-primary text-text-on-primary"
               : "border-border-input bg-surface-input text-text-secondary hover:border-primary/40 hover:text-text-primary"
@@ -175,7 +173,7 @@ export default function OnboardingPage() {
 
   return (
     <AuthCard>
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
         {STEP_TITLES.map((_, i) => (
           <span
             key={i}
@@ -187,10 +185,10 @@ export default function OnboardingPage() {
         ))}
       </div>
 
-      <h1 className="mt-4 font-display text-[22px] font-bold text-text-primary">
+      <h1 className="mt-4 font-display text-h2 font-bold text-text-primary">
         {STEP_TITLES[step]}
       </h1>
-      <p className="mt-1 font-body text-[13.5px] text-text-secondary">
+      <p className="mt-1 font-body text-body-s text-text-secondary">
         {step === 0 && "This tailors your feed, matches, impact radar and peer suggestions."}
         {step === 1 && "Pick your OpenAlex profile so your metrics and network are live from day one."}
         {step === 2 && "Tap a few topics you follow. We use these to rank papers and researchers for you."}
@@ -209,7 +207,7 @@ export default function OnboardingPage() {
             {step === 0 && (
               <>
                 <div>
-                  <span className="mb-1.5 block font-body text-[12.5px] font-medium text-text-secondary">
+                  <span className="eyebrow mb-2 block">
                     Primary field
                   </span>
                   <ChipRow
@@ -223,7 +221,7 @@ export default function OnboardingPage() {
 
                 {field && (
                   <div>
-                    <span className="mb-1.5 block font-body text-[12.5px] font-medium text-text-secondary">
+                    <span className="eyebrow mb-2 block">
                       Specific area <span className="text-text-muted">(optional)</span>
                     </span>
                     <ChipRow
@@ -245,11 +243,11 @@ export default function OnboardingPage() {
                 {matchQ.isPending ? (
                   <div className="flex flex-col gap-2">
                     {[0, 1, 2].map((i) => (
-                      <div key={i} className="h-16 animate-pulse rounded-[8px] bg-surface-subtle" />
+                      <div key={i} className="h-16 animate-pulse rounded-md bg-surface-subtle" />
                     ))}
                   </div>
                 ) : matches.length === 0 || declinedMatch ? (
-                  <div className="rounded-md bg-surface-subtle px-3 py-3 font-body text-[12.5px] leading-relaxed text-text-muted">
+                  <div className="rounded-md bg-surface-subtle px-3 py-3 font-body text-body-s leading-relaxed text-text-muted">
                     <Sparkles size={12} className="mr-1 inline text-accent-violet" />
                     {matches.length === 0
                       ? "We couldn't find a matching OpenAlex profile from your name. You can link it later in Profile — your metrics stay empty until then."
@@ -271,20 +269,20 @@ export default function OnboardingPage() {
                         key={a.id}
                         type="button"
                         onClick={() => setMe(a)}
-                        className={`flex items-start justify-between gap-3 rounded-[8px] border p-3 text-left transition-colors ${
+                        className={`flex items-start justify-between gap-3 rounded-md border p-3 text-left transition-colors ${
                           me?.id === a.id
                             ? "border-primary bg-primary/10"
                             : "border-border-input bg-surface-input hover:border-primary/40"
                         }`}
                       >
                         <div className="min-w-0">
-                          <p className="truncate font-body text-[13px] font-medium text-text-primary">
+                          <p className="truncate font-body text-body-s font-medium text-text-primary">
                             {a.display_name}
                           </p>
                           <p className="truncate font-body text-[12px] text-text-secondary">
                             {a.institution || "Independent"}
                           </p>
-                          <p className="mt-0.5 font-mono text-[10.5px] uppercase tracking-wide text-text-muted">
+                          <p className="data mt-1 text-[10.5px] uppercase tracking-wide text-text-muted">
                             {a.works_count} works · h {a.h_index}
                             {a.orcid ? " · ORCID linked" : ""}
                           </p>
@@ -310,11 +308,11 @@ export default function OnboardingPage() {
             {step === 2 && (
               <>
                 <div>
-                  <span className="mb-1.5 block font-body text-[12.5px] font-medium text-text-secondary">
+                  <span className="eyebrow mb-2 block">
                     Topics you follow {interests.length > 0 && `(${interests.length}/6)`}
                   </span>
                   {interests.length > 0 && (
-                    <div className="mb-2.5 flex flex-wrap gap-1.5">
+                    <div className="mb-3 flex flex-wrap gap-2">
                       {interests.map((t) => (
                         <span
                           key={t}
@@ -334,13 +332,13 @@ export default function OnboardingPage() {
                     </div>
                   )}
                   {topicsQ.isPending ? (
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex flex-wrap gap-2">
                       {[0, 1, 2, 3, 4, 5].map((i) => (
                         <div key={i} className="h-7 w-28 animate-pulse rounded-full bg-surface-subtle" />
                       ))}
                     </div>
                   ) : suggestedTopics.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex flex-wrap gap-2">
                       {suggestedTopics.slice(0, 14).map((t) => (
                         <button
                           key={t.id}
@@ -361,10 +359,10 @@ export default function OnboardingPage() {
                 </div>
 
                 <div>
-                  <span className="mb-1.5 block font-body text-[12.5px] font-medium text-text-secondary">
+                  <span className="eyebrow mb-2 block">
                     Academic status
                   </span>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-2">
                     {STATUS_OPTIONS.map((opt) => (
                       <button
                         key={opt}
@@ -387,7 +385,7 @@ export default function OnboardingPage() {
         </AnimatePresence>
       </div>
 
-      {error && <p className="mt-2 font-body text-[13px] text-notification">{error}</p>}
+      {error && <p className="mt-2 font-body text-body-s text-notification">{error}</p>}
 
       <div className="mt-4 flex items-center gap-2">
         {step > 0 && (

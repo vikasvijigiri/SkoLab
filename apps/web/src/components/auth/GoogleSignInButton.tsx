@@ -16,11 +16,9 @@ export function GoogleSignInButton({
       type="button"
       onClick={onClick}
       disabled={loading}
-      whileHover={loading ? undefined : { scale: 1.02, boxShadow: "0 6px 18px rgba(0,0,0,0.12)" }}
-      whileTap={loading ? undefined : { scale: 0.98 }}
       transition={TRANSITION_FAST}
       className={cn(
-        "flex h-13 w-full cursor-pointer items-center justify-center gap-3 rounded-md border border-border bg-white font-body text-[14px] font-medium text-[#1f1f1f] transition-opacity duration-[var(--motion-fast)] disabled:opacity-50"
+        "flex h-12 w-full cursor-pointer items-center justify-center gap-3 rounded-md border border-border bg-white font-body text-body font-medium text-[#1f1f1f] transition-[opacity,box-shadow,border-color] duration-[var(--motion-fast)] hover:border-text-muted/40 hover:shadow-card disabled:opacity-50"
       )}
       style={{ transitionTimingFunction: "var(--ease-standard)" }}
     >
