@@ -375,3 +375,25 @@ contract + code, not a Figma file.
 
 **Branch:** `design/web-visual-contract`. **Status:** plan approved (Gate 1 via
 `ExitPlanMode`, 3 markers resolved); implementation of Round 1 starting.
+
+---
+
+## 2026-09-07 (cont.) — Bolder web UI: full rollout
+
+**Asked:** (follow-up to the DESIGN.md + Round 1 entry above) "continue,
+proceed with full fledge, completely".
+
+Applied the `DESIGN.md` "Confident Modernist" contract across the **entire**
+`apps/web` surface on `design/web-visual-contract`, in five committed rounds
+after Round 1 (`9cb8aad` Discovery+auth, `a1a3c80` core app screens, `13085f9`
+workspace/nexus/horizon, `9a03b89` shell+profile+settings+scale-pop removal,
+`4972c1c` final sweep). Type scale (Inter, `text-display-*/-h*/-body*`), mono
+`.data`/`.eyebrow` roles, 4px spacing grid, token radii, `--accent-signal`
+CTAs, `Card accentSide` ledger bars, and no `scale()` hover-pop anywhere.
+
+**Verified:** full vitest 30 files / 110 green after every round; `tsc` +
+`eslint` + `next build` clean; `e2e/{landing,rollout}-visual.spec.ts` axe WCAG
+AA 14/14 across public routes, light + dark.
+
+**Status:** rollout complete on `design/web-visual-contract`; ready for PR
+(awaiting the go-ahead to push).

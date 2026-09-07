@@ -90,6 +90,25 @@ and deferred them to the design contract — this plan is that deferred work.
 Approved via `ExitPlanMode` on 2026-09-07. Direction C, Inter font swap, Landing
 reference screen — all confirmed (see resolutions below).
 
+## Full rollout — COMPLETE (2026-09-07)
+
+After Round 1 (this plan's 6 tasks), the user asked to "proceed completely", so
+the contract was applied across the whole web surface on the same branch:
+
+| Commit | Scope |
+|---|---|
+| `9cb8aad` | Discovery + auth (login / signup / onboarding) + Input / Chip primitives |
+| `a1a3c80` | home, paper/[id], author/[id] + StatTile / MetricPill / SectionHeading / feed cards |
+| `13085f9` | workspace / nexus / horizon (23 files) |
+| `9a03b89` | app shell (TopBar, ProfileMenu, NotificationsBell), settings, profile, error/404 + all remaining scale-pops removed |
+| `4972c1c` | final sweep — loading skeletons, stray arbitrary-px headings, last half-step spacing |
+
+Every rollout commit verified: full unit suite (30 files / 110) green, `tsc` +
+`eslint` + `next build` clean. `e2e/rollout-visual.spec.ts` renders every public
+route (landing, login, signup) in light + dark and asserts axe WCAG AA — 8/8
+green. Authed routes are covered by the unit suite + build (they redirect to
+`/login` without Firebase).
+
 ## Gate 1 resolutions
 
 The three open questions were answered before implementation started:

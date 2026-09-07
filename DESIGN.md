@@ -1,9 +1,12 @@
 # DESIGN.md — SkoLab (web)
 
-**Status:** adopted — direction C; Gate 1 resolved 2026-09-07 (direction C
-confirmed, palette delegated + contrast-verified, Inter font swap, Landing as
-the reference screen). Rollout in progress —
-`docs/plans/2026-09-07-web-visual-identity-round1.md`.
+**Status:** adopted — direction C; Gate 1 resolved 2026-09-07. **Rollout
+complete (2026-09-07):** tokens + primitives + all web surfaces (landing, auth,
+discovery, home, paper, author, workspace, nexus, horizon, settings, profile,
+app shell) migrated to this contract. Plan:
+`docs/plans/2026-09-07-web-visual-identity-round1.md`. Verified: full unit suite
+(30 files / 110), `tsc`, `eslint`, `next build` all green; Playwright axe WCAG
+AA clean on every public route in light + dark.
 **Owns:** the web surface only (`apps/web`). The Android client is a separate,
 deliberately flat surface and is out of scope here.
 **Supersedes:** the unwritten contract that lived only as inline rationale in
