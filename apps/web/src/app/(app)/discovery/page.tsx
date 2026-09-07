@@ -88,33 +88,35 @@ export function DiscoveryContent() {
         ? { title: "Pick a topic", q: topicsQ, pick: setTopic }
         : null;
 
+  const modeToggle = (
+    <div className="flex w-full gap-1 rounded-full bg-surface-subtle p-1 sm:w-auto">
+      {(["researchers", "papers"] as const).map((m) => (
+        <motion.button
+          key={m}
+          onClick={() => setMode(m)}
+          whileTap={{ scale: 0.96 }}
+          transition={TRANSITION_FAST}
+          className={cn(
+            "relative flex-1 rounded-full px-4 py-1.5 font-body text-[13px] font-medium capitalize transition-colors duration-[var(--motion-fast)] sm:flex-none",
+            mode === m ? "text-text-on-primary" : "text-text-secondary hover:bg-surface/60 hover:text-text-primary",
+          )}
+          style={{ transitionTimingFunction: "var(--ease-standard)" }}
+        >
+          {mode === m && (
+            <motion.span
+              layoutId="discovery-mode-pill"
+              className="absolute inset-0 rounded-full bg-primary"
+              transition={{ type: "spring", stiffness: 400, damping: 32 }}
+            />
+          )}
+          <span className="relative z-10">{m}</span>
+        </motion.button>
+      ))}
+    </div>
+  );
+
   const railContent = (
     <div className="flex flex-col gap-4">
-      <div className="flex gap-1 rounded-full bg-surface-subtle p-1">
-        {(["researchers", "papers"] as const).map((m) => (
-          <motion.button
-            key={m}
-            onClick={() => setMode(m)}
-            whileTap={{ scale: 0.96 }}
-            transition={TRANSITION_FAST}
-            className={cn(
-              "relative flex-1 rounded-full py-2 font-body text-[13px] font-medium capitalize transition-colors duration-[var(--motion-fast)]",
-              mode === m ? "text-text-on-primary" : "text-text-secondary hover:bg-surface/60 hover:text-text-primary",
-            )}
-            style={{ transitionTimingFunction: "var(--ease-standard)" }}
-          >
-            {mode === m && (
-              <motion.span
-                layoutId="discovery-mode-pill"
-                className="absolute inset-0 rounded-full bg-primary"
-                transition={{ type: "spring", stiffness: 400, damping: 32 }}
-              />
-            )}
-            <span className="relative z-10">{m}</span>
-          </motion.button>
-        ))}
-      </div>
-
       {/* Breadcrumb — every crumb is a button back to that level. */}
       <div className="flex flex-wrap items-center gap-1 font-body text-[12px] text-text-muted">
         <button
@@ -183,16 +185,24 @@ export function DiscoveryContent() {
 
   const gridClass = "grid grid-cols-1 gap-2.5 lg:grid-cols-2 xl:grid-cols-3";
 
+  const resultCount = !active.isPending && !active.isError ? (active.data ?? []).length : null;
+
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-4 px-4 py-6 md:px-8 lg:max-w-6xl">
-      <motion.h1
+    <div className="mx-auto flex max-w-2xl flex-col gap-5 px-4 py-6 md:px-8 lg:max-w-6xl">
+      <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="font-display text-[22px] font-bold text-text-primary"
+        className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
       >
-        Discovery
-      </motion.h1>
+        <div>
+          <h1 className="font-display text-[22px] font-bold text-text-primary">Discovery</h1>
+          <p className="mt-0.5 font-body text-[13px] text-text-secondary">
+            Browse the literature and the people behind it, one field at a time.
+          </p>
+        </div>
+        {modeToggle}
+      </motion.div>
 
       <RailShell rail={railContent} railWidth="260px" mobileRail="collapsible" stickyRail>
         <div className="flex flex-col gap-3">
@@ -205,6 +215,9 @@ export function DiscoveryContent() {
                   ? "Top Researchers"
                   : "Trending This Year"}
             </span>
+            {resultCount !== null && resultCount > 0 && (
+              <span className="font-mono text-[11px] text-text-muted">· {resultCount}</span>
+            )}
           </div>
 
           <AnimatePresence>
@@ -217,8 +230,8 @@ export function DiscoveryContent() {
 
           <div className={gridClass}>
             {active.isPending &&
-              [0, 1, 2, 3].map((i) => (
-                <div key={i} className="h-16 animate-pulse rounded-[8px] bg-surface-subtle" />
+              [0, 1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="h-[88px] animate-pulse rounded-lg bg-surface-subtle" />
               ))}
 
             {!active.isPending && !active.isError && mode === "researchers" && !node &&
@@ -248,10 +261,15 @@ export function DiscoveryContent() {
           </div>
 
           {!active.isPending && !active.isError && (active.data ?? []).length === 0 && (
-            <div className="flex flex-col items-center gap-2 py-10 text-center">
-              <SearchX size={26} className="text-text-muted" />
-              <p className="font-body text-[13.5px] text-text-muted">
-                {node ? "Nothing here yet for this topic." : "Pick a field on the left to explore."}
+            <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-surface-subtle/40 px-4 py-12 text-center">
+              <SearchX size={24} className="text-text-muted" />
+              <p className="font-body text-[13.5px] font-medium text-text-primary">
+                {node ? "Nothing here yet for this topic" : "Start with a field"}
+              </p>
+              <p className="max-w-xs font-body text-[12.5px] leading-relaxed text-text-muted">
+                {node
+                  ? "Try a broader level in the breadcrumb, or switch between researchers and papers."
+                  : "Pick a field from the panel to see its top researchers and most-cited work."}
               </p>
             </div>
           )}
