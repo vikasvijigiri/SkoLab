@@ -88,7 +88,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     const text = await res.text().catch(() => "");
     // FastAPI errors come back as {"detail": "..."} (or {"detail": [{...}]} for
     // 422 validation). Surface the human sentence, not the raw JSON blob — this
-    // message ends up rendered directly in banners (see FrontierPulseCard).
+    // message ends up rendered directly in banners (see ErrorBanner usages).
     let message = text || `Request to ${path} failed with ${res.status}`;
     if (text.startsWith("{")) {
       try {

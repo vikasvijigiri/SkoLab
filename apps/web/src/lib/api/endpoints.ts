@@ -18,6 +18,7 @@ import type {
   SimilarPaper,
   SimilarResearcher,
   SimilarResult,
+  ActivityFeedResult,
   OpenAlexTaxon,
   OpenAlexAuthorHit,
 } from "@/lib/types";
@@ -73,6 +74,16 @@ export const getSimilarResearchers = (
 
 export const getMatchGrants = (authorId: string) =>
   apiRequest<GrantMatch[]>("/api/v1/match_grants", { params: { author_id: authorId } });
+
+// ---- Home activity feed (Go gateway — merged recency stream, no LLM) --------
+// Connected researchers' new papers + newly accepted connections + a
+// highly-cited-recent field floor. `degraded` when the network is unreadable.
+export const getActivityFeed = (
+  opts: { authorId?: string; userId?: string; limit?: number } = {},
+) =>
+  apiRequest<ActivityFeedResult>("/api/v1/activity_feed", {
+    params: { author_id: opts.authorId, user_id: opts.userId, limit: opts.limit ?? 20 },
+  });
 
 // ---- Home / Feed ------------------------------------------------------------
 
