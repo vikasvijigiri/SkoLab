@@ -298,3 +298,27 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Print — drop the app chrome (top bar, bottom nav, sticky rail, dev overlays)
+   and let the page content flow on white. */
+@media print {
+  header,
+  nav[aria-label="Primary"],
+  aside[aria-label],
+  [data-nextjs-toast],
+  #__next-build-watcher {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+  main {
+    overflow: visible !important;
+  }
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.85em;
+    color: #555;
+  }
+}

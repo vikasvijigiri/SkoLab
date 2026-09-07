@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { FeedItemCard } from "./FeedItemCard";
 import { buildUnifiedFeed, type FeedKind } from "@/lib/feed/unifiedFeed";
 import { useFeedPrefs } from "@/lib/hooks/useFeedPrefs";
-import { cn } from "@/lib/utils";
+import { cn, focusRing } from "@/lib/utils";
 import { DURATION_SLOW, EASE_STANDARD } from "@/lib/motion";
 import type {
   ActivityItem,
@@ -79,6 +79,7 @@ export function UnifiedFeed({
                 lens === l.key
                   ? "bg-primary text-text-on-primary"
                   : "text-text-muted hover:bg-surface-subtle hover:text-text-primary",
+                focusRing,
               )}
             >
               {l.label}
