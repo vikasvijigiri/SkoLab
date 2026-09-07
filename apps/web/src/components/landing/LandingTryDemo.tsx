@@ -9,6 +9,7 @@ import { Chip } from "@/components/ui/Badge";
 import {
   openAlexFieldsQuery,
   openAlexSubfieldsQuery,
+  openAlexTopicsQuery,
   discoveryAuthorsQuery,
 } from "@/lib/api/queries";
 import { EASE_STANDARD } from "@/lib/motion";
@@ -16,10 +17,12 @@ import type { OpenAlexAuthorHit, OpenAlexTaxon } from "@/lib/types";
 
 /**
  * Ungated "try it" hero demo — the product thesis made tangible: the visitor
- * never types, they click a field → a sub-field → a researcher, and a real
+ * never types, they click a field → sub-field → topic → researcher, and a real
  * impact signature renders from public OpenAlex data. No signup, no backend
  * metrics call (OpenAlexAuthorHit already carries the numbers), nothing
- * hardcoded — the first field/sub-field are whatever OpenAlex returns first.
+ * hardcoded — every level is whatever OpenAlex returns first. (OpenAlex's
+ * /authors endpoint only filters by topics.id, not field/subfield, so the
+ * drilldown goes one level deeper than Discovery's paper view.)
  */
 
 const AXES = [
@@ -124,6 +127,7 @@ export function LandingTryDemo() {
   // rest with no setState-in-effect and nothing hardcoded.
   const [pickedField, setPickedField] = useState<OpenAlexTaxon | null>(null);
   const [pickedSub, setPickedSub] = useState<OpenAlexTaxon | null>(null);
+  const [pickedTopic, setPickedTopic] = useState<OpenAlexTaxon | null>(null);
   const [pickedAuthor, setPickedAuthor] = useState<OpenAlexAuthorHit | null>(null);
 
   const fieldsQ = useQuery(openAlexFieldsQuery());
@@ -132,9 +136,12 @@ export function LandingTryDemo() {
   const subfieldsQ = useQuery(openAlexSubfieldsQuery(field?.id));
   const subfield = pickedSub ?? subfieldsQ.data?.[0] ?? null;
 
+  const topicsQ = useQuery(openAlexTopicsQuery(subfield?.id));
+  const topic = pickedTopic ?? topicsQ.data?.[0] ?? null;
+
   const authorsQ = useQuery({
-    ...discoveryAuthorsQuery("subfield", subfield?.id),
-    enabled: Boolean(subfield?.id),
+    ...discoveryAuthorsQuery("topic", topic?.id),
+    enabled: Boolean(topic?.id),
   });
 
   const authors = authorsQ.data ?? [];
@@ -177,6 +184,7 @@ export function LandingTryDemo() {
               onPick={(t) => {
                 setPickedField(t);
                 setPickedSub(null);
+                setPickedTopic(null);
                 setPickedAuthor(null);
               }}
             />
@@ -194,6 +202,7 @@ export function LandingTryDemo() {
                 loading={subfieldsQ.isPending}
                 onPick={(t) => {
                   setPickedSub(t);
+                  setPickedTopic(null);
                   setPickedAuthor(null);
                 }}
               />
@@ -201,6 +210,24 @@ export function LandingTryDemo() {
           )}
 
           {subfield && (
+            <div>
+              <p className="mb-1.5 flex items-center gap-1 font-body text-[10.5px] font-semibold uppercase tracking-wide text-text-muted">
+                <ChevronRight size={11} />
+                Pick a topic
+              </p>
+              <ChipRow
+                items={topicsQ.data ?? []}
+                activeId={topic?.id}
+                loading={topicsQ.isPending}
+                onPick={(t) => {
+                  setPickedTopic(t);
+                  setPickedAuthor(null);
+                }}
+              />
+            </div>
+          )}
+
+          {topic && (
             <div>
               <p className="mb-1.5 flex items-center gap-1 font-body text-[10.5px] font-semibold uppercase tracking-wide text-text-muted">
                 <ChevronRight size={11} />

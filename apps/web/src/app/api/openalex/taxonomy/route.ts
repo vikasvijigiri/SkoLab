@@ -19,8 +19,11 @@ const KINDS = {
   topics: { path: "topics", filter: "subfield.id", perPage: 40, sort: "works_count:desc" },
 } as const;
 
+/** Any OpenAlex id form -> its bare key (last path segment). OpenAlex's filter
+ *  grammar 400s on a path-prefixed id, and a raw "fields/11" leaks through the
+ *  old URL-only strip. */
 function bareId(v: string): string {
-  return v.trim().replace(/^https?:\/\/openalex\.org\//i, "");
+  return v.trim().replace(/^https?:\/\/openalex\.org\//i, "").split("/").pop() ?? v.trim();
 }
 
 export async function GET(req: NextRequest) {
