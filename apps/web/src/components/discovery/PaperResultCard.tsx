@@ -36,11 +36,25 @@ export function PaperResultCard({ w, index }: { w: OpenAlexWork; index: number }
             {w.publication_year ? ` · ${w.publication_year}` : ""}
             {w.primary_location?.source?.display_name ? ` · ${w.primary_location.source.display_name}` : ""}
           </p>
-          {w.cited_by_count !== undefined && (
-            <Badge accentColor="var(--accent-cyan)" className="w-fit">
-              {w.cited_by_count} citations
-            </Badge>
-          )}
+          <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
+            {w.cited_by_count !== undefined && (
+              <Badge accentColor="var(--accent-cyan)">{w.cited_by_count.toLocaleString()} citations</Badge>
+            )}
+            {w.open_access?.is_oa && (
+              <span className="inline-flex items-center gap-1 font-mono text-[10.5px] font-medium uppercase tracking-wide text-accent-emerald">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent-emerald" aria-hidden="true" />
+                Open Access
+              </span>
+            )}
+            {(w.topics ?? []).slice(0, 2).map(
+              (t) =>
+                t.display_name && (
+                  <Badge key={t.id ?? t.display_name} accentColor="var(--accent-indigo)">
+                    {t.display_name}
+                  </Badge>
+                ),
+            )}
+          </div>
         </Card>
       </Link>
     </motion.div>
