@@ -245,11 +245,16 @@ class Settings:
     )
     # llm_fast_model: for a background/routine task that wants a small,
     # cheap, low-latency model rather than the heavier primary — e.g.
-    # agent_service.py's chat-history summarizer. qwen3.8-27b isn't a
-    # reasoning model (see llm_fallback_models above), so it answers
-    # directly with no internal reasoning trace eating into max_tokens.
+    # agent_service.py's chat-history summarizer.
+    #
+    # Owner's directive (2026-09-07): GPT-OSS-120B for complex tasks,
+    # GPT-OSS-20B for the simpler ones. So the split is 120b (primary) vs
+    # 20b (fast), both first-class Groq models. gpt-oss-20b IS a reasoning
+    # model, so llm_service.py's reasoning-token buffer
+    # (llm_reasoning_model_prefixes = "openai/gpt-oss") already applies and a
+    # tight per-call max_tokens won't truncate before the answer starts.
     llm_fast_model: str = field(
-        default_factory=lambda: os.environ.get("LLM_FAST_MODEL", "qwen/qwen3.8-27b")
+        default_factory=lambda: os.environ.get("LLM_FAST_MODEL", "openai/gpt-oss-20b")
     )
     # llm_groq_models / llm_openrouter_models: the two halves of the
     # fallback chain llm_service.py's LLMService tries by default, each

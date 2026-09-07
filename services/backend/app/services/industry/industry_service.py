@@ -7,6 +7,7 @@ from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.data.openalex_service import OpenAlexService
 from app.services.data.scraping_service import ScrapingService
+from app.core.observability import log_ai_degradation
 from app.models.content_models import ScrapedOpportunity
 
 logger = logging.getLogger(__name__)
@@ -334,7 +335,10 @@ async def fetch_industry_opportunities(
                     await db.rollback()
 
     except Exception as e:
-        logger.error(f"Error while scraping opportunities: {e}")
+        # Scraping leans on the LLM to parse listings; when the provider is
+        # rate-limited or the circuit is open this is expected degradation and
+        # we fall back to OpenAlex funders below — WARNING, not a Sentry issue.
+        log_ai_degradation(logger, "Opportunity scraping failed", e)
 
     if scraped_items:
         return scraped_items
