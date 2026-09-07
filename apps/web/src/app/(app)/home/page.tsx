@@ -216,6 +216,14 @@ export default function HomePage() {
 
   const rightRail = (
     <>
+      <IdentityRailCard
+        name={name ?? "Researcher"}
+        status={firestoreProfile?.academicStatus}
+        author={author}
+        loading={profileLoading}
+        unresolved={profileUnresolved}
+      />
+      <WorkspacesRailCard uid={user?.uid} />
       <div className="flex flex-col gap-3">
         <h2 className="flex items-center gap-1.5 font-display text-[15px] font-semibold text-text-primary">
           <Users2 size={14} className="text-accent-teal" />
@@ -236,23 +244,9 @@ export default function HomePage() {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-[1240px] gap-6 px-4 py-6 md:px-6">
-      {/* ── Left rail — identity + workspaces (data, never nav) ───────────── */}
-      <aside className="hidden w-[248px] shrink-0 lg:block">
-        <div className="sticky top-6 flex flex-col gap-4">
-          <IdentityRailCard
-            name={name ?? "Researcher"}
-            status={firestoreProfile?.academicStatus}
-            author={author}
-            loading={profileLoading}
-            unresolved={profileUnresolved}
-          />
-          <WorkspacesRailCard uid={user?.uid} />
-        </div>
-      </aside>
-
-      {/* ── Center — the feed ────────────────────────────────────────────── */}
-      <div className="flex min-w-0 flex-1 flex-col gap-4 lg:max-w-[620px]">
+    <div className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6 lg:grid lg:grid-cols-[minmax(0,72fr)_minmax(0,25fr)] lg:gap-[3%]">
+      {/* ── Main column (≈72%) — the feed ───────────────────────────────── */}
+      <div className="flex min-w-0 flex-col gap-4">
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
           <h1 className="font-display text-[20px] font-bold text-text-primary">
             Good to see you, {greetName}
@@ -360,14 +354,14 @@ export default function HomePage() {
           ))}
         </div>
 
-        {/* Right-rail content, stacked inline below the feed on < xl screens so
-            mobile users still get peer suggestions + the daily challenge. */}
-        <div className="mt-2 flex flex-col gap-6 xl:hidden">{rightRail}</div>
+        {/* Rail content stacked inline below the feed on < lg so nothing is
+            lost on tablet / mobile. */}
+        <div className="mt-2 flex flex-col gap-5 lg:hidden">{rightRail}</div>
       </div>
 
-      {/* ── Right rail — people + challenge (xl+) ────────────────────────── */}
-      <aside className="hidden w-[320px] shrink-0 xl:block">
-        <div className="sticky top-6 flex flex-col gap-6">{rightRail}</div>
+      {/* ── Right rail (≈25%) — identity · workspaces · people · challenge ── */}
+      <aside className="hidden lg:block">
+        <div className="sticky top-6 flex flex-col gap-5">{rightRail}</div>
       </aside>
     </div>
   );
