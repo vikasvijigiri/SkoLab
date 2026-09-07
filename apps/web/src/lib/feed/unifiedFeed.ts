@@ -1,3 +1,4 @@
+import { shortOpenAlexId } from "@/lib/utils";
 import type {
   ActivityItem,
   DailyFeedItem,
@@ -61,24 +62,30 @@ function toMs(iso?: string): number {
 }
 
 function fromPapers(items: DailyFeedItem[]): UnifiedItem[] {
-  return items.map((p) => ({
-    id: `paper:${p.id}`,
-    kind: "paper" as const,
-    title: p.title,
-    why:
-      typeof p.relevance_score === "number"
-        ? `${Math.round(p.relevance_score)}% match to your work`
-        : "recommended for your field",
-    href: `/paper/${encodeURIComponent(p.id)}`,
-    external: false,
-    ts: toMs(p.publication_date) || (p.year ? Date.UTC(p.year, 0, 1) : 0),
-    source: p.journal,
-    meta: [p.authors?.slice(0, 3).join(", "), p.year ? String(p.year) : ""]
-      .filter(Boolean)
-      .join(" · "),
-    score: 0,
-    _match: typeof p.relevance_score === "number" ? p.relevance_score / 100 : 0.5,
-  })) as (UnifiedItem & { _match: number })[];
+  return items.map((p) => {
+    // daily_feed returns canonical OpenAlex URL ids ("https://openalex.org/W…").
+    // The route param and every cache key must be the bare id, or the paper
+    // page's OpenAlex fetch 400s. Do it once, here, at the source.
+    const workId = shortOpenAlexId(p.id ?? "");
+    return {
+      id: `paper:${workId}`,
+      kind: "paper" as const,
+      title: p.title,
+      why:
+        typeof p.relevance_score === "number"
+          ? `${Math.round(p.relevance_score)}% match to your work`
+          : "recommended for your field",
+      href: `/paper/${encodeURIComponent(workId)}`,
+      external: false,
+      ts: toMs(p.publication_date) || (p.year ? Date.UTC(p.year, 0, 1) : 0),
+      source: p.journal,
+      meta: [p.authors?.slice(0, 3).join(", "), p.year ? String(p.year) : ""]
+        .filter(Boolean)
+        .join(" · "),
+      score: 0,
+      _match: typeof p.relevance_score === "number" ? p.relevance_score / 100 : 0.5,
+    };
+  }) as (UnifiedItem & { _match: number })[];
 }
 
 function fromNews(items: ScienceNewsItem[]): UnifiedItem[] {
