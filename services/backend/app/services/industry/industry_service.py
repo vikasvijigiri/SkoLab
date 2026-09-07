@@ -41,6 +41,13 @@ async def fetch_industry_opportunities(
                 )
         except Exception as e:
             logger.error(f"Error loading profile info for {name}: {e}")
+            # Clear the aborted transaction so the cache read below runs on a
+            # clean session instead of also failing with "Could not locate
+            # column in row" (the cascade behind SKOLAB-BACKEND-8/-9).
+            try:
+                await db.rollback()
+            except Exception:
+                pass
 
     # 2. Try reading from Database cache first using resolved_focus
     cached_list = []
@@ -92,6 +99,10 @@ async def fetch_industry_opportunities(
                 return cached_list
         except Exception as e:
             logger.error(f"Error checking cache: {e}")
+            try:
+                await db.rollback()
+            except Exception:
+                pass
 
     # 3. Run Scraping if cache is empty
     logger.info(f"Cache miss for focus: {resolved_focus}. Launching ScrapingService...")

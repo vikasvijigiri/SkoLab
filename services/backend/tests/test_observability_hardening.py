@@ -157,6 +157,40 @@ def test_prune_downloads_dir_is_a_safe_noop_on_a_missing_directory(tmp_path):
 # ── init_observability pytest guard ──────────────────────────────────────────
 
 
+# ── get_db rolls back a poisoned transaction ───────────────────────────────
+
+
+async def test_get_db_rolls_back_when_the_request_raises(monkeypatch):
+    """A propagating error must not return the connection to the pool inside an
+    aborted transaction — that is the SKOLAB-BACKEND-8/-9 cascade."""
+    from app.db import database as db_mod
+
+    events: list[str] = []
+
+    class _FakeSession:
+        async def rollback(self):
+            events.append("rollback")
+
+        async def close(self):
+            events.append("close")
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            await self.close()
+            return False
+
+    monkeypatch.setattr(db_mod, "AsyncSessionLocal", lambda: _FakeSession())
+
+    gen = db_mod.get_db()
+    await gen.__anext__()
+    with pytest.raises(RuntimeError):
+        await gen.athrow(RuntimeError("boom"))
+
+    assert events == ["rollback", "close"]
+
+
 def test_init_observability_is_a_noop_under_pytest_even_with_a_dsn(monkeypatch):
     """The pytest guard: a developer's local DSN must not ship test exceptions
     to the production project (that is how `/boom` and `/readyz` "db is down
