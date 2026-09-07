@@ -157,9 +157,20 @@ Base = declarative_base()
 
 # ── FastAPI dependency ────────────────────────────────────────────────────────
 async def get_db() -> AsyncSession:
-    """Yields a database session for use in FastAPI route dependencies."""
+    """Yields a database session for use in FastAPI route dependencies.
+
+    Rolls back on a propagating error so the underlying connection is never
+    returned to the pool inside an aborted transaction — the next checkout of
+    that connection would otherwise fail every query with SQLAlchemy's
+    "Could not locate column in row" (an aborted-txn result has no row
+    description). See the 2026-09 Sentry cluster on /industry_opportunities.
+    """
     async with AsyncSessionLocal() as session:
-        yield session
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
 
 
 # ── Schema initialisation ─────────────────────────────────────────────────────

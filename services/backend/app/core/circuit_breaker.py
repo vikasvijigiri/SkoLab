@@ -74,7 +74,11 @@ class CircuitBreaker:
     async def _transition_to_open(self):
         self._state = CircuitState.OPEN
         self._last_failure_time = time.monotonic()
-        logger.error(
+        # WARNING, not ERROR: an open breaker is the design working — it sheds
+        # load off a failing dependency and callers fall back. The upstream
+        # failures are logged on their own; this transition is not a defect and
+        # should not create a Sentry issue.
+        logger.warning(
             f"[CircuitBreaker] '{self.name}' tripped to OPEN after "
             f"{self._failure_count} consecutive failures. "
             f"Cooldown: {self.recovery_timeout}s."
