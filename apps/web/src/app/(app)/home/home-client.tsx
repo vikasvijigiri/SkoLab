@@ -237,9 +237,14 @@ export function HomeClient() {
 
       {/* ── Right rail (≈25%) — identity · workspaces · people · challenge ── */}
       <aside aria-label="Your profile and suggestions" className="hidden lg:block">
-        {/* Sticky, but scroll its own overflow so a tall rail never traps its
-            bottom card off-screen (top bar h-14 + top-6 ≈ 5rem). */}
-        <div className="sticky top-6 flex max-h-[calc(100dvh-6rem)] flex-col gap-5 overflow-y-auto pr-1">
+        {/* One scrollbar only. The rail rides the page's own scrollbar — no
+            second, independent scroll container beside it (that gutter was the
+            wasted space). The aside stretches to the feed's height, so the
+            sticky child stays pinned 24px below the top bar for the whole
+            scroll. The rail's content fits within the viewport, so nothing is
+            clipped; if it ever outgrows the viewport, re-introduce an internal
+            scroll with `scrollbar-gutter: stable` rather than a raw overflow. */}
+        <div className="sticky top-6 flex min-w-0 flex-col gap-5">
           {rightRail}
         </div>
       </aside>
