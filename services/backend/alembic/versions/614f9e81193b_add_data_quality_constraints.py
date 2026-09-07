@@ -19,36 +19,55 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _pg() -> bool:
+    return op.get_bind().dialect.name == "postgresql"
+
+
+def _add_constraint(table: str, name: str, body: str) -> None:
+    """(Re)create a table constraint idempotently.
+
+    Base.metadata.create_all builds from the *current* models, which now carry
+    these constraints, so on a fresh DB they already exist. Postgres has no
+    ``ADD CONSTRAINT IF NOT EXISTS``, so drop-then-add. Postgres only — SQLite
+    can't ALTER constraints and never runs this chain in practice.
+    """
+    if _pg():
+        op.execute(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {name}")
+        op.execute(f"ALTER TABLE {table} ADD CONSTRAINT {name} {body}")
+
+
 def upgrade() -> None:
     """Upgrade schema."""
-    # --- Check and Unique Constraints ---
-    op.create_unique_constraint(
-        "uq_user_preference_key", "user_preferences", ["user_id", "preference_key"]
+    # --- Check and Unique Constraints (idempotent) ---
+    _add_constraint(
+        "user_preferences",
+        "uq_user_preference_key",
+        "UNIQUE (user_id, preference_key)",
     )
-    op.create_check_constraint(
-        "chk_connection_status",
+    _add_constraint(
         "connections",
-        "status IN ('pending', 'accepted', 'blocked')",
+        "chk_connection_status",
+        "CHECK (status IN ('pending', 'accepted', 'blocked'))",
     )
-    op.create_check_constraint(
-        "chk_agent_chat_role",
+    _add_constraint(
         "agent_chat_history",
-        "role IN ('user', 'assistant', 'system')",
+        "chk_agent_chat_role",
+        "CHECK (role IN ('user', 'assistant', 'system'))",
     )
-    op.create_check_constraint(
-        "chk_scraped_opportunity_status",
+    _add_constraint(
         "scraped_opportunities",
-        "status IN ('Active', 'Inactive')",
+        "chk_scraped_opportunity_status",
+        "CHECK (status IN ('Active', 'Inactive'))",
     )
-    op.create_check_constraint(
+    _add_constraint(
+        "user_settings",
         "chk_user_settings_theme",
-        "user_settings",
-        "theme IN ('dark', 'light', 'system')",
+        "CHECK (theme IN ('dark', 'light', 'system'))",
     )
-    op.create_check_constraint(
-        "chk_user_settings_visibility",
+    _add_constraint(
         "user_settings",
-        "profile_visibility IN ('public', 'connections', 'private')",
+        "chk_user_settings_visibility",
+        "CHECK (profile_visibility IN ('public', 'connections', 'private'))",
     )
 
     # --- Column Length limits ---
@@ -769,12 +788,14 @@ def downgrade() -> None:
     )
     op.alter_column("users", "id", type_=sa.String(), existing_type=sa.String(100))
 
-    # --- Constraints Drop ---
-    op.drop_constraint("chk_user_settings_visibility", "user_settings", type_="check")
-    op.drop_constraint("chk_user_settings_theme", "user_settings", type_="check")
-    op.drop_constraint(
-        "chk_scraped_opportunity_status", "scraped_opportunities", type_="check"
-    )
-    op.drop_constraint("chk_agent_chat_role", "agent_chat_history", type_="check")
-    op.drop_constraint("chk_connection_status", "connections", type_="check")
-    op.drop_constraint("uq_user_preference_key", "user_preferences", type_="unique")
+    # --- Constraints Drop (idempotent) ---
+    if _pg():
+        for table, name in (
+            ("user_settings", "chk_user_settings_visibility"),
+            ("user_settings", "chk_user_settings_theme"),
+            ("scraped_opportunities", "chk_scraped_opportunity_status"),
+            ("agent_chat_history", "chk_agent_chat_role"),
+            ("connections", "chk_connection_status"),
+            ("user_preferences", "uq_user_preference_key"),
+        ):
+            op.execute(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {name}")

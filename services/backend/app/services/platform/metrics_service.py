@@ -326,8 +326,12 @@ async def analyze_author_metrics_context(
         # 500. See app/core/exceptions.py. (The Go gateway degrades this to an
         # empty bundle on its side — decisions/0010.)
         from app.core.exceptions import AIUnavailable
+        from app.core.observability import log_ai_degradation
 
-        logger.error(f"Error analyzing metrics with LLM: {e}")
+        # Provider down / rate-limited / circuit open → WARNING (expected, the
+        # Go gateway serves an empty bundle). A real parsing/logic bug still
+        # logs ERROR with a traceback.
+        log_ai_degradation(logger, "Author metrics LLM analysis failed", e)
         raise AIUnavailable(
             "Author metrics analysis is temporarily unavailable."
         ) from e
