@@ -30,25 +30,38 @@ const paperItem: UnifiedItem = {
 };
 
 describe("FeedItemCard", () => {
-  it("renders a kind chip, why line and an external primary action for news", () => {
+  it("renders the kind chip, a why line, and the headline as the single primary target (external)", () => {
     renderWithProviders(
       <FeedItemCard item={newsItem} saved={false} onToggleSave={vi.fn()} onDismiss={vi.fn()} />,
     );
     expect(screen.getByText("News")).toBeInTheDocument();
     expect(screen.getByText(/science news from Quanta Magazine/i)).toBeInTheDocument();
-    const read = screen.getByRole("link", { name: /read/i });
-    expect(read).toHaveAttribute("href", "https://x/1");
-    expect(read).toHaveAttribute("target", "_blank");
+    const link = screen.getByRole("link", { name: /A quantum result/i });
+    expect(link).toHaveAttribute("href", "https://x/1");
+    expect(link).toHaveAttribute("target", "_blank");
+    // no redundant "Read" button any more
+    expect(screen.queryByRole("link", { name: /^read$/i })).not.toBeInTheDocument();
   });
 
-  it("fires save and dismiss callbacks", async () => {
+  it("renders a real <time> element for the timestamp", () => {
+    const { container } = renderWithProviders(
+      <FeedItemCard item={newsItem} saved={false} onToggleSave={vi.fn()} onDismiss={vi.fn()} />,
+    );
+    const t = container.querySelector("time");
+    expect(t).not.toBeNull();
+    expect(t?.getAttribute("datetime")).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("fires save and dismiss callbacks and exposes aria-pressed on save", async () => {
     const onToggleSave = vi.fn();
     const onDismiss = vi.fn();
     const user = userEvent.setup();
     renderWithProviders(
       <FeedItemCard item={paperItem} saved={false} onToggleSave={onToggleSave} onDismiss={onDismiss} />,
     );
-    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    const save = screen.getByRole("button", { name: /save this/i });
+    expect(save).toHaveAttribute("aria-pressed", "false");
+    await user.click(save);
     await user.click(screen.getByRole("button", { name: /not relevant/i }));
     expect(onToggleSave).toHaveBeenCalledOnce();
     expect(onDismiss).toHaveBeenCalledOnce();
@@ -58,6 +71,7 @@ describe("FeedItemCard", () => {
     renderWithProviders(
       <FeedItemCard item={paperItem} saved onToggleSave={vi.fn()} onDismiss={vi.fn()} />,
     );
-    expect(screen.getByRole("button", { name: /remove from saved/i })).toBeInTheDocument();
+    const save = screen.getByRole("button", { name: /saved — tap to remove/i });
+    expect(save).toHaveAttribute("aria-pressed", "true");
   });
 });

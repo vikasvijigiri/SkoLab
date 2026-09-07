@@ -24,7 +24,7 @@ function BriefRowInner({ item, external }: { item: BriefItem; external: boolean 
         <item.icon size={13} />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="font-mono text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+        <p className="font-mono text-[11px] font-semibold uppercase tracking-wide text-text-muted">
           {item.label}
         </p>
         <p className="mt-0.5 flex items-start gap-1 font-body text-[13px] leading-snug text-text-primary">
@@ -69,14 +69,15 @@ export function AIDailyBriefCard({ items, loading }: { items: BriefItem[]; loadi
     <Card accentColor="var(--accent-violet)" className="relative overflow-hidden">
       <div className="flex items-center gap-2">
         <span
+          aria-hidden="true"
           className="flex h-6 w-6 items-center justify-center rounded-full text-[13px]"
           style={{ backgroundColor: "color-mix(in srgb, var(--accent-violet) 16%, transparent)" }}
         >
           ✨
         </span>
-        <p className="font-mono text-[10px] font-semibold uppercase tracking-wide text-accent-violet">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-accent-violet">
           Your Daily Brief
-        </p>
+        </h2>
       </div>
 
       {items.length === 0 ? (

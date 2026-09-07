@@ -11,7 +11,7 @@ function Stat({ label, value, accent }: { label: string; value: number; accent: 
       <p className="font-mono text-[15px] font-medium tabular-nums" style={{ color: accent }}>
         <AnimatedCounter to={value} />
       </p>
-      <p className="mt-0.5 font-body text-[9.5px] font-medium uppercase tracking-wide text-text-muted">
+      <p className="mt-0.5 font-body text-[11px] font-medium uppercase tracking-wide text-text-muted">
         {label}
       </p>
     </div>

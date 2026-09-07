@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Coins, Briefcase, BookOpen, Users2, FolderKanban } from "lucide-react";
+import { Coins, Briefcase, BookOpen, Users2, FolderKanban } from "lucide-react";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import { useMyProfile } from "@/lib/hooks/useMyProfile";
 import { useFirestoreCollection } from "@/lib/hooks/useFirestoreCollection";
@@ -41,24 +41,15 @@ const EMPTY_NEWS: ScienceNewsItem[] = [];
 const EMPTY_JOBS: IndustryOpportunity[] = [];
 
 /** Each insight is a distinct fact from a distinct source — separate rows, not a
- * run-on paragraph. */
+ * run-on paragraph. Papers are deliberately NOT here: they lead the unified
+ * feed below, and duplicating feed[0] into the brief is the redundancy the
+ * feed was meant to remove. */
 function buildBriefItems(opts: {
-  topPaper?: DailyFeedItem;
   topGrant?: GrantMatch;
   topOpportunity?: IndustryOpportunity;
   topJournal?: JournalRecommendation;
 }): BriefItem[] {
   const items: BriefItem[] = [];
-  if (opts.topPaper) {
-    items.push({
-      key: "paper",
-      icon: FileText,
-      color: "var(--accent-cyan)",
-      label: "New paper",
-      text: `**${opts.topPaper.title}** — ${opts.topPaper.relevance_score}% match`,
-      href: `/paper/${encodeURIComponent(opts.topPaper.id)}`,
-    });
-  }
   if (opts.topGrant) {
     items.push({
       key: "grant",
@@ -104,10 +95,10 @@ function WorkspacesRailCard({ uid }: { uid?: string }) {
 
   return (
     <Card className="flex flex-col gap-2">
-      <p className="flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+      <h2 className="flex items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-text-muted">
         <FolderKanban size={11} />
         Your workspaces
-      </p>
+      </h2>
       {loading ? (
         <div className="flex flex-col gap-1.5">
           {[0, 1].map((i) => (
@@ -178,12 +169,16 @@ export default function HomePage() {
     feedQ.isPending || activityQ.isPending || newsQ.isPending || oppsQ.isPending;
 
   const briefItems = useMemo(
-    () => buildBriefItems({ topPaper: feed[0], topGrant, topOpportunity, topJournal }),
-    [feed, topGrant, topOpportunity, topJournal],
+    () => buildBriefItems({ topGrant, topOpportunity, topJournal }),
+    [topGrant, topOpportunity, topJournal],
   );
 
   const greetName =
     firestoreProfile?.name?.split(" ")[0] || user?.displayName?.split(" ")[0] || "there";
+
+  useEffect(() => {
+    document.title = "Home · SkoLab";
+  }, []);
 
   const rightRail = (
     <>
@@ -245,8 +240,12 @@ export default function HomePage() {
       </div>
 
       {/* ── Right rail (≈25%) — identity · workspaces · people · challenge ── */}
-      <aside className="hidden lg:block">
-        <div className="sticky top-6 flex flex-col gap-5">{rightRail}</div>
+      <aside aria-label="Your profile and suggestions" className="hidden lg:block">
+        {/* Sticky, but scroll its own overflow so a tall rail never traps its
+            bottom card off-screen (top bar h-14 + top-6 ≈ 5rem). */}
+        <div className="sticky top-6 flex max-h-[calc(100dvh-6rem)] flex-col gap-5 overflow-y-auto pr-1">
+          {rightRail}
+        </div>
       </aside>
     </div>
   );
