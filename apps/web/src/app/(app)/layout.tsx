@@ -6,6 +6,25 @@ import { useAuth } from "@/lib/hooks/AuthProvider";
 import { AppShell } from "@/components/layout/AppShell";
 import { CommandPaletteProvider } from "@/components/command/CommandPaletteProvider";
 
+/** Neutral body skeleton shown while auth resolves — rendered *inside* AppShell
+ *  so the top bar stays put and only the content area swaps (no full-page CLS). */
+function AppBodySkeleton() {
+  return (
+    <div
+      role="status"
+      aria-label="Loading"
+      className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6"
+    >
+      <div className="h-7 w-56 animate-pulse rounded-[6px] bg-surface-subtle" />
+      <div className="mt-4 flex flex-col gap-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-32 animate-pulse rounded-[8px] bg-surface-subtle" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function AppGroupLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -14,25 +33,13 @@ export default function AppGroupLayout({ children }: { children: React.ReactNode
     if (!loading && !user) router.replace("/login");
   }, [loading, user, router]);
 
-  if (loading || !user) {
-    return (
-      <div
-        role="status"
-        aria-live="polite"
-        className="flex min-h-full flex-1 items-center justify-center bg-page-bg"
-      >
-        <span
-          className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent"
-          aria-hidden="true"
-        />
-        <span className="sr-only">Loading your workspace…</span>
-      </div>
-    );
-  }
+  // Loaded but unauthenticated → the effect above redirects; render nothing
+  // rather than flashing the app chrome.
+  if (!loading && !user) return null;
 
   return (
     <CommandPaletteProvider>
-      <AppShell>{children}</AppShell>
+      <AppShell>{loading ? <AppBodySkeleton /> : children}</AppShell>
     </CommandPaletteProvider>
   );
 }

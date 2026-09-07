@@ -1,33 +1,33 @@
 import type { Metadata, Viewport } from "next";
-import { Space_Grotesk, Syne, Inter, JetBrains_Mono } from "next/font/google";
+import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
 import { AuthProvider } from "@/lib/hooks/AuthProvider";
 import { MotionProvider } from "@/components/MotionProvider";
 import { Providers } from "@/components/providers";
 import { siteUrl } from "@/lib/site-url";
 import "./globals.css";
 
+// Only faces the app actually renders. Syne (was `--font-heading`) had zero
+// usages — dropped. `adjustFontFallback` (default) already emits a
+// size-adjusted system fallback so the swap doesn't reflow.
 const spaceGrotesk = Space_Grotesk({
   variable: "--font-space-grotesk",
   subsets: ["latin"],
   weight: ["500", "600", "700"],
-});
-
-const syne = Syne({
-  variable: "--font-syne",
-  subsets: ["latin"],
-  weight: ["600", "700"],
+  display: "swap",
 });
 
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
   weight: ["400", "500", "600"],
+  display: "swap",
 });
 
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
   subsets: ["latin"],
   weight: ["500"],
+  display: "swap",
 });
 
 const title = "SkoLab";
@@ -67,7 +67,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${spaceGrotesk.variable} ${syne.variable} ${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <head>
         <script
