@@ -22,7 +22,7 @@ import type { OpenAlexTaxon } from "@/lib/types";
 import { AuthorResultCard } from "@/components/discovery/AuthorResultCard";
 import { PaperResultCard } from "@/components/discovery/PaperResultCard";
 import { LeaderboardRow } from "@/components/discovery/LeaderboardRow";
-import { TRANSITION_FAST } from "@/lib/motion";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 
 type Mode = "researchers" | "papers";
 
@@ -89,30 +89,16 @@ export function DiscoveryContent() {
         : null;
 
   const modeToggle = (
-    <div className="flex w-full gap-1 rounded-full bg-surface-subtle p-1 sm:w-auto">
-      {(["researchers", "papers"] as const).map((m) => (
-        <motion.button
-          key={m}
-          onClick={() => setMode(m)}
-          whileTap={{ scale: 0.96 }}
-          transition={TRANSITION_FAST}
-          className={cn(
-            "relative flex-1 rounded-full px-4 py-1.5 font-body text-[13px] font-medium capitalize transition-colors duration-[var(--motion-fast)] sm:flex-none",
-            mode === m ? "text-text-on-primary" : "text-text-secondary hover:bg-surface/60 hover:text-text-primary",
-          )}
-          style={{ transitionTimingFunction: "var(--ease-standard)" }}
-        >
-          {mode === m && (
-            <motion.span
-              layoutId="discovery-mode-pill"
-              className="absolute inset-0 rounded-full bg-primary"
-              transition={{ type: "spring", stiffness: 400, damping: 32 }}
-            />
-          )}
-          <span className="relative z-10">{m}</span>
-        </motion.button>
-      ))}
-    </div>
+    <SegmentedControl
+      aria-label="Show researchers or papers"
+      layoutId="discovery-mode-pill"
+      options={[
+        { value: "researchers", label: "researchers" },
+        { value: "papers", label: "papers" },
+      ]}
+      value={mode}
+      onChange={(v) => setMode(v as Mode)}
+    />
   );
 
   const railContent = (

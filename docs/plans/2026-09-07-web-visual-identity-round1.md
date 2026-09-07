@@ -179,7 +179,7 @@ and inspect" rule → Tasks 1 (contrast) and 6 (axe + visual).
 - [x] Task 1 — Token system in globals.css + contrast check
 - [ ] Task 2 — Button/MagneticCTA: signal variant, remove scale hover
 - [x] Task 3 — Card: p-5 default + left accent bar
-- [ ] Task 4 — Extract SegmentedControl, adopt in Discovery
+- [x] Task 4 — Extract SegmentedControl, adopt in Discovery
 - [ ] Task 5 — Rebuild Landing to the contract
 - [ ] Task 6 — Landing visual QA + identity sign-off render
 
