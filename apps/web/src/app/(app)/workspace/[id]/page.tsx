@@ -136,7 +136,7 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
           <button
             type="button"
             onClick={() => setShareOpen(true)}
-            className="flex items-center gap-2 rounded-md border border-border px-3 py-1.5 font-body text-body-s font-medium text-text-secondary transition-colors hover:border-primary/40 hover:text-text-primary"
+            className="flex items-center gap-2 rounded-md border border-border px-3 py-2 font-body text-body-s font-medium text-text-secondary transition-colors hover:border-primary/40 hover:text-text-primary"
           >
             <Share2 size={14} />
             <span className="hidden sm:inline">Share</span>
@@ -148,7 +148,7 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
                   type="button"
                   onClick={handleDelete}
                   disabled={deleting}
-                  className="rounded-md px-2 py-1.5 font-body text-[12px] font-semibold text-notification transition-colors hover:bg-notification/10 disabled:opacity-50"
+                  className="rounded-md px-2 py-2 font-body text-[12px] font-semibold text-notification transition-colors hover:bg-notification/10 disabled:opacity-50"
                 >
                   {deleting ? "Deleting…" : "Delete for everyone"}
                 </button>
@@ -156,7 +156,7 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
                   type="button"
                   onClick={() => setConfirmDelete(false)}
                   disabled={deleting}
-                  className="rounded-md px-2 py-1.5 font-body text-[12px] text-text-muted transition-colors hover:text-text-primary disabled:opacity-50"
+                  className="rounded-md px-2 py-2 font-body text-[12px] text-text-muted transition-colors hover:text-text-primary disabled:opacity-50"
                 >
                   Keep
                 </button>
@@ -189,7 +189,7 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
               type="button"
               onClick={() => setTab(t.name)}
               className={cn(
-                "flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 font-body text-body-s font-medium transition-colors",
+                "flex shrink-0 items-center gap-2 rounded-md px-3 py-2 font-body text-body-s font-medium transition-colors",
                 tab === t.name
                   ? "bg-primary text-text-on-primary"
                   : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary",

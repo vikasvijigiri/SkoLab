@@ -12,7 +12,7 @@ export function Badge({ accentColor = "var(--primary)", className, style, childr
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-[4px] px-2 py-0.5 font-mono text-[11px] font-medium tracking-wide",
+        "inline-flex items-center rounded-xs px-2 py-0.5 font-mono text-[11px] font-medium tracking-wide",
         className
       )}
       style={{

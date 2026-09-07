@@ -49,7 +49,7 @@ export function NexusChatPanel({
           <Sparkles size={16} />
         </div>
         <div className="min-w-0">
-          <h2 className="font-display text-[15px] font-bold text-text-primary">Nexus Synthesis Assistant</h2>
+          <h2 className="font-display text-h3 font-bold text-text-primary">Nexus Synthesis Assistant</h2>
           <p className="font-body text-[12px] text-text-muted truncate">
             {activeCollectionCount > 0
               ? `Synthesizing context across ${activeCollectionCount} selected studies`
@@ -64,7 +64,7 @@ export function NexusChatPanel({
             <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-4 animate-pulse">
               <MessageSquare size={20} />
             </div>
-            <h3 className="font-display text-[16px] font-bold text-text-primary">Ask Nexus AI</h3>
+            <h3 className="font-display text-h3 font-bold text-text-primary">Ask Nexus AI</h3>
             <p className="font-body text-body-s text-text-muted mt-2 leading-relaxed">
               Add papers on the left workspace panel. Once your collection is ready, ask Nexus to analyze, search for
               methodology overlaps, find knowledge gaps, or synthesize business opportunities.

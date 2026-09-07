@@ -67,7 +67,7 @@ function BulletList({ items }: { items: string[] }) {
     <ul className="flex flex-col gap-2">
       {items.map((item, i) => (
         <li key={i} className="flex gap-2 font-body text-body-s leading-relaxed text-text-secondary">
-          <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-text-muted" />
+          <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-text-muted" />
           <MathText text={item} />
         </li>
       ))}

@@ -32,8 +32,8 @@ export function HorizonLoadingPanel({ loadingStep }: { loadingStep: number }) {
         <Sparkles size={28} className="animate-pulse text-primary" />
       </div>
 
-      <h3 className="font-display text-[18px] font-bold text-text-primary">Synthesizing Future Horizon</h3>
-      <div className="mt-2.5 h-6 overflow-hidden">
+      <h3 className="font-display text-h3 font-bold text-text-primary">Synthesizing Future Horizon</h3>
+      <div className="mt-3 h-6 overflow-hidden">
         <AnimatePresence mode="wait">
           <motion.p
             key={loadingStep}

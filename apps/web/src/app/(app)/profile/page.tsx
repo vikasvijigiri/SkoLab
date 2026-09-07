@@ -158,7 +158,7 @@ export default function ProfilePage() {
                 {firestoreProfile?.name || user?.displayName || "Researcher"}
               </h1>
               <p className="truncate font-body text-body-s text-text-secondary">{user?.email}</p>
-              <Badge accentColor="var(--accent-teal)" className="mt-1.5 w-fit">
+              <Badge accentColor="var(--accent-teal)" className="mt-2 w-fit">
                 {firestoreProfile?.academicStatus ?? "Researcher"}
               </Badge>
             </div>
@@ -360,13 +360,13 @@ export default function ProfilePage() {
         <Reveal>
           <Card>
             <h2 className="font-display text-h3 font-semibold text-text-primary">Research focus</h2>
-            <p className="mt-1.5 font-body text-body-s text-text-secondary">
+            <p className="mt-2 font-body text-body-s text-text-secondary">
               {firestoreProfile?.researchFocus || "Not set yet."}
             </p>
             {firestoreProfile?.about && (
               <>
                 <h2 className="mt-4 font-display text-h3 font-semibold text-text-primary">About</h2>
-                <p className="mt-1.5 font-body text-body-s leading-relaxed text-text-secondary">
+                <p className="mt-2 font-body text-body-s leading-relaxed text-text-secondary">
                   {firestoreProfile.about}
                 </p>
               </>
@@ -384,7 +384,7 @@ export default function ProfilePage() {
                 <h3 className="font-body text-[11px] font-medium uppercase tracking-wide text-text-muted">
                   Research Areas
                 </h3>
-                <div className="mt-1.5 flex flex-wrap gap-2">
+                <div className="mt-2 flex flex-wrap gap-2">
                   {author.expertise.map((e) => (
                     <Badge key={e} accentColor="var(--accent-indigo)">
                       {e}
@@ -398,7 +398,7 @@ export default function ProfilePage() {
                 <h3 className="font-body text-[11px] font-medium uppercase tracking-wide text-text-muted">
                   Skills
                 </h3>
-                <div className="mt-1.5 flex flex-wrap gap-2">
+                <div className="mt-2 flex flex-wrap gap-2">
                   {author.skills.map((s) => (
                     <Badge key={s} accentColor="var(--accent-amber)">
                       {s}
@@ -448,7 +448,7 @@ export default function ProfilePage() {
             <ShieldAlert size={15} />
             Danger zone
           </h2>
-          <p className="mt-1.5 font-body text-body-s text-text-secondary">
+          <p className="mt-2 font-body text-body-s text-text-secondary">
             Permanently delete your account and all associated data. This can&apos;t be undone.
           </p>
           {confirmDelete ? (

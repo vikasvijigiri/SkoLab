@@ -287,7 +287,7 @@ export default function OnboardingPage() {
                             {a.orcid ? " · ORCID linked" : ""}
                           </p>
                         </div>
-                        {me?.id === a.id && <Check size={16} className="mt-0.5 shrink-0 text-primary" />}
+                        {me?.id === a.id && <Check size={16} className="mt-1 shrink-0 text-primary" />}
                       </button>
                     ))}
                     <button
@@ -316,7 +316,7 @@ export default function OnboardingPage() {
                       {interests.map((t) => (
                         <span
                           key={t}
-                          className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 font-body text-[12px] font-medium text-primary"
+                          className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 font-body text-[12px] font-medium text-primary"
                         >
                           {t}
                           <button
@@ -345,7 +345,7 @@ export default function OnboardingPage() {
                           type="button"
                           disabled={interests.length >= 6}
                           onClick={() => toggleInterest(t.display_name)}
-                          className="cursor-pointer rounded-full border border-border px-2.5 py-1 font-body text-[11.5px] text-text-muted transition-colors hover:border-primary/40 hover:text-text-primary disabled:opacity-40"
+                          className="cursor-pointer rounded-full border border-border px-3 py-1 font-body text-[11.5px] text-text-muted transition-colors hover:border-primary/40 hover:text-text-primary disabled:opacity-40"
                         >
                           + {t.display_name}
                         </button>
@@ -368,7 +368,7 @@ export default function OnboardingPage() {
                         key={opt}
                         type="button"
                         onClick={() => setStatus(opt)}
-                        className={`cursor-pointer rounded-full border px-2.5 py-1 font-body text-[11.5px] transition-colors ${
+                        className={`cursor-pointer rounded-full border px-3 py-1 font-body text-[11.5px] transition-colors ${
                           status === opt
                             ? "border-primary bg-primary/10 text-primary"
                             : "border-border text-text-muted hover:border-primary/40 hover:text-text-primary"

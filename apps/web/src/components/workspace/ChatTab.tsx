@@ -83,7 +83,7 @@ export function ChatTab({ projectId }: { projectId: string }) {
         </div>
         <div ref={bottomRef} />
       </div>
-      <form onSubmit={handleSend} className="mt-2.5 flex gap-2">
+      <form onSubmit={handleSend} className="mt-3 flex gap-2">
         <Input placeholder="Message the team..." value={text} onChange={(e) => setText(e.target.value)} />
         <Button type="submit" fullWidth={false} loading={sending} className="w-24 gap-2">
           <Send size={14} />

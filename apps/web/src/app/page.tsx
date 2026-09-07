@@ -111,7 +111,7 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="mb-6 inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-4 py-2 font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted"
+            className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-2 font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted"
           >
             <Sparkles size={12} className="text-accent-violet" />
             The impact layer for research
@@ -248,7 +248,7 @@ export default function LandingPage() {
             {FAQ.map((item) => (
               <details
                 key={item.q}
-                className="group rounded-[10px] border border-border bg-surface px-4 py-3 [&_summary::-webkit-details-marker]:hidden"
+                className="group rounded-md border border-border bg-surface px-4 py-3 [&_summary::-webkit-details-marker]:hidden"
               >
                 <summary className="flex cursor-pointer list-none items-center justify-between font-body text-[13.5px] font-semibold text-text-primary">
                   {item.q}

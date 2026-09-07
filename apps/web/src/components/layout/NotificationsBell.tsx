@@ -42,7 +42,7 @@ function Row({ n, onNavigate }: { n: Notification; onNavigate: () => void }) {
         <span className="block font-body text-body-s leading-snug text-text-primary">{n.text}</span>
         <span className="mt-1 block font-mono text-[10px] text-text-muted">{ago(n.ts)}</span>
       </span>
-      {n.unread && <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
+      {n.unread && <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
     </Link>
   );
 }

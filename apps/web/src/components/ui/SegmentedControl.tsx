@@ -71,7 +71,7 @@ export function SegmentedControl({
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(o.value)}
             className={cn(
-              "relative flex-1 rounded-full px-4 py-1.5 text-[13px] font-medium transition-colors duration-[var(--motion-fast)] sm:flex-none",
+              "relative flex-1 rounded-full px-4 py-2 text-[13px] font-medium transition-colors duration-[var(--motion-fast)] sm:flex-none",
               mono ? "font-mono uppercase tracking-wide" : "font-body capitalize",
               selected
                 ? "text-text-on-primary"

@@ -83,7 +83,7 @@ export function AIDailyBriefCard({ items, loading }: { items: BriefItem[]; loadi
       </div>
 
       {items.length === 0 ? (
-        <p className="mt-2.5 font-body text-body-s leading-relaxed text-text-secondary">
+        <p className="mt-3 font-body text-body-s leading-relaxed text-text-secondary">
           Building your personalized brief — check back shortly.
         </p>
       ) : (

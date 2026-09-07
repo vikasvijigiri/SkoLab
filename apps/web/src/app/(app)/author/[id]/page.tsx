@@ -285,7 +285,7 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
               <SectionHeading icon={BookOpen} color="var(--accent-emerald)">
                 Journal Advisor
               </SectionHeading>
-              <div className="mt-2.5 flex flex-col gap-2">
+              <div className="mt-3 flex flex-col gap-2">
                 {journals.map((j) => (
                   <div key={j.journal_name} className="flex items-start justify-between gap-3 rounded-md bg-surface-subtle p-3">
                     <div className="min-w-0">
@@ -312,7 +312,7 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
               <SectionHeading icon={Users2} color="var(--accent-teal)">
                 Suggested Connections
               </SectionHeading>
-              <div className="mt-2.5 flex flex-col gap-2">
+              <div className="mt-3 flex flex-col gap-2">
                 {collaborators.slice(0, 5).map((c) => (
                   <Link
                     key={c.id}
@@ -357,7 +357,7 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
             <SectionHeading icon={FileText} color="var(--accent-indigo)">
               Publications
             </SectionHeading>
-            <div className="mt-2.5 flex flex-col divide-y divide-border">
+            <div className="mt-3 flex flex-col divide-y divide-border">
               {sortedWorks.map((w) => (
                 <div key={w.id ?? w.title} className="py-3 first:pt-0 last:pb-0">
                   {w.id ? (
@@ -399,7 +399,7 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
             <SectionHeading icon={UserSearch} color="var(--accent-rose)">
               Similar Researchers
             </SectionHeading>
-            <div className="mt-2.5 flex flex-col gap-2">
+            <div className="mt-3 flex flex-col gap-2">
               {similarResearchers.slice(0, 5).map((s) => (
                 <Link
                   key={s.author_id}

@@ -103,7 +103,7 @@ function ChipRow({
 }) {
   if (loading) {
     return (
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-2">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="h-6 w-20 animate-pulse rounded-full bg-surface-subtle" />
         ))}
@@ -111,7 +111,7 @@ function ChipRow({
     );
   }
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap gap-2">
       {items.slice(0, 8).map((t) => (
         <Chip key={t.id} selected={t.id === activeId} onClick={() => onPick(t)}>
           {t.display_name}
@@ -161,7 +161,7 @@ export function LandingTryDemo() {
       initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, delay: 0.3, ease: EASE_STANDARD }}
-      className="mx-auto mt-12 w-full max-w-3xl overflow-hidden rounded-[16px] border border-border bg-surface text-left shadow-elevated"
+      className="mx-auto mt-12 w-full max-w-3xl overflow-hidden rounded-lg border border-border bg-surface text-left shadow-elevated"
       style={{ borderTop: "2px solid var(--primary)" }}
     >
       <div className="flex items-center gap-2 border-b border-border px-4 py-2">
@@ -174,7 +174,7 @@ export function LandingTryDemo() {
         {/* click path */}
         <div className="flex flex-col gap-3">
           <div>
-            <p className="mb-1.5 font-body text-[10.5px] font-semibold uppercase tracking-wide text-text-muted">
+            <p className="mb-2 font-body text-[10.5px] font-semibold uppercase tracking-wide text-text-muted">
               Pick a field
             </p>
             <ChipRow
@@ -192,7 +192,7 @@ export function LandingTryDemo() {
 
           {field && (
             <div>
-              <p className="mb-1.5 flex items-center gap-1 font-body text-[10.5px] font-semibold uppercase tracking-wide text-text-muted">
+              <p className="mb-2 flex items-center gap-1 font-body text-[10.5px] font-semibold uppercase tracking-wide text-text-muted">
                 <ChevronRight size={11} />
                 Narrow it
               </p>
@@ -211,7 +211,7 @@ export function LandingTryDemo() {
 
           {subfield && (
             <div>
-              <p className="mb-1.5 flex items-center gap-1 font-body text-[10.5px] font-semibold uppercase tracking-wide text-text-muted">
+              <p className="mb-2 flex items-center gap-1 font-body text-[10.5px] font-semibold uppercase tracking-wide text-text-muted">
                 <ChevronRight size={11} />
                 Pick a topic
               </p>
@@ -229,18 +229,18 @@ export function LandingTryDemo() {
 
           {topic && (
             <div>
-              <p className="mb-1.5 flex items-center gap-1 font-body text-[10.5px] font-semibold uppercase tracking-wide text-text-muted">
+              <p className="mb-2 flex items-center gap-1 font-body text-[10.5px] font-semibold uppercase tracking-wide text-text-muted">
                 <ChevronRight size={11} />
                 Pick a researcher
               </p>
               {authorsQ.isPending ? (
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-2">
                   {[0, 1, 2, 3].map((i) => (
                     <div key={i} className="h-6 w-28 animate-pulse rounded-full bg-surface-subtle" />
                   ))}
                 </div>
               ) : (
-                <div className="flex max-h-[92px] flex-wrap gap-1.5 overflow-y-auto">
+                <div className="flex max-h-[92px] flex-wrap gap-2 overflow-y-auto">
                   {authors.slice(0, 8).map((a) => (
                     <Chip
                       key={a.id}
@@ -257,7 +257,7 @@ export function LandingTryDemo() {
         </div>
 
         {/* signature */}
-        <div className="flex flex-col items-center gap-2 rounded-[12px] border border-border bg-surface-subtle/40 p-3">
+        <div className="flex flex-col items-center gap-2 rounded-md border border-border bg-surface-subtle/40 p-3">
           <p className="self-start font-body text-[10px] font-semibold uppercase tracking-wide text-text-muted">
             Impact signature
           </p>
@@ -271,7 +271,7 @@ export function LandingTryDemo() {
               </p>
               <div className="grid w-full grid-cols-3 gap-1">
                 {tiles.map((t) => (
-                  <div key={t.label} className="rounded-[8px] border border-border bg-surface p-1.5 text-center">
+                  <div key={t.label} className="rounded-md border border-border bg-surface p-1.5 text-center">
                     <p className="font-mono text-[12px] font-bold text-text-primary">{t.value}</p>
                     <p className="font-body text-[8px] uppercase tracking-wide text-text-muted">{t.label}</p>
                   </div>
@@ -286,7 +286,7 @@ export function LandingTryDemo() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between border-t border-border bg-surface-subtle/40 px-4 py-2.5">
+      <div className="flex items-center justify-between border-t border-border bg-surface-subtle/40 px-4 py-3">
         <p className="font-body text-[11px] text-text-muted">
           Public-data snapshot. The full profile adds 8 AI-scored axes — disruption, novelty, influence…
         </p>

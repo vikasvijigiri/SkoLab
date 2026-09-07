@@ -62,10 +62,10 @@ export function DailyChallengeCard({
       <Badge accentColor="var(--accent-amber)">
         {(conjecture.category || "challenge").toUpperCase()}
       </Badge>
-      <h3 className="mt-2.5 font-display text-[15px] font-semibold text-text-primary">
+      <h3 className="mt-3 font-display text-h3 font-semibold text-text-primary">
         <MathText text={conjecture.title} />
       </h3>
-      <p className="mt-1.5 font-body text-body-s leading-relaxed text-text-secondary">
+      <p className="mt-2 font-body text-body-s leading-relaxed text-text-secondary">
         <MathText text={conjecture.hypothesis} />
       </p>
 

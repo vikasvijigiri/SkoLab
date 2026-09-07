@@ -52,7 +52,7 @@ export function ManuscriptTab({
           max={100}
           value={progress}
           onChange={(e) => setProgress(Number(e.target.value))}
-          className="mt-1.5 w-full accent-accent-teal"
+          className="mt-2 w-full accent-accent-teal"
         />
       </div>
       <AnimatePresence>

@@ -15,10 +15,10 @@ function AppBodySkeleton() {
       aria-label="Loading"
       className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6"
     >
-      <div className="h-7 w-56 animate-pulse rounded-[6px] bg-surface-subtle" />
+      <div className="h-7 w-56 animate-pulse rounded-xs bg-surface-subtle" />
       <div className="mt-4 flex flex-col gap-4">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="h-32 animate-pulse rounded-[8px] bg-surface-subtle" />
+          <div key={i} className="h-32 animate-pulse rounded-md bg-surface-subtle" />
         ))}
       </div>
     </div>

@@ -118,7 +118,7 @@ export function DocumentsTab({
       {/* ── File panel (one rung down the surface ladder) ─────────────── */}
       {!focus && (
         <aside className="flex shrink-0 flex-col border-b border-border bg-surface-subtle md:w-56 md:border-b-0 md:border-r">
-          <div className="flex items-center justify-between px-3 pb-1.5 pt-3">
+          <div className="flex items-center justify-between px-3 pb-2 pt-3">
             <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-text-muted">
               Files
             </span>
@@ -130,7 +130,7 @@ export function DocumentsTab({
               <div
                 key={d.id}
                 className={cn(
-                  "group relative flex items-center gap-2 rounded-md px-3 py-1.5 text-left transition-colors",
+                  "group relative flex items-center gap-2 rounded-md px-3 py-2 text-left transition-colors",
                   d.id === active?.id
                     ? "bg-primary/10 text-primary"
                     : "text-text-secondary hover:bg-surface hover:text-text-primary",
@@ -201,7 +201,7 @@ export function DocumentsTab({
               <button
                 type="button"
                 onClick={addDoc}
-                className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-border py-1.5 font-body text-[11.5px] font-medium text-text-muted transition-colors hover:border-primary/50 hover:text-text-primary"
+                className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-border py-2 font-body text-[11.5px] font-medium text-text-muted transition-colors hover:border-primary/50 hover:text-text-primary"
               >
                 <Plus size={13} />
                 New document

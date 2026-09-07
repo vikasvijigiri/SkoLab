@@ -146,7 +146,7 @@ export function HorizonInputForm({
               >
                 <div>
                   <h4 className="font-display text-[14.5px] font-semibold text-text-primary">{domain.name}</h4>
-                  <p className="mt-1.5 font-body text-body-s leading-snug text-text-muted">{domain.desc}</p>
+                  <p className="mt-2 font-body text-body-s leading-snug text-text-muted">{domain.desc}</p>
                 </div>
                 <div className="mt-4 flex items-center justify-end text-primary">
                   <ArrowRight size={14} className="opacity-60" />

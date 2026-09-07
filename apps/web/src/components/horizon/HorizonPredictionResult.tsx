@@ -60,7 +60,7 @@ export function HorizonPredictionResult({
         <Card className="border-border/40 bg-surface/40 flex flex-col gap-3">
           <div className="flex items-center gap-2 text-primary">
             <Compass size={16} />
-            <h3 className="font-display text-[15px] font-bold text-text-primary">
+            <h3 className="font-display text-h3 font-bold text-text-primary">
               Scientific Foundation &amp; Rationale
             </h3>
           </div>
@@ -72,7 +72,7 @@ export function HorizonPredictionResult({
         <Card className="border-border/40 bg-surface/40 flex flex-col gap-3">
           <div className="flex items-center gap-2 text-primary">
             <Star size={16} />
-            <h3 className="font-display text-[15px] font-bold text-text-primary">
+            <h3 className="font-display text-h3 font-bold text-text-primary">
               Business Opportunity &amp; Commercialization
             </h3>
           </div>
@@ -102,7 +102,7 @@ export function HorizonPredictionResult({
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2 text-text-primary">
           <BookOpen size={16} />
-          <h3 className="font-display text-[15px] font-bold">Reference Studies &amp; Supporting Literature</h3>
+          <h3 className="font-display text-h3 font-bold">Reference Studies &amp; Supporting Literature</h3>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

@@ -60,7 +60,7 @@ export function UnifiedFeed({
   return (
     <section className="flex flex-col gap-3" aria-labelledby={headingId}>
       <div className="flex min-h-9 flex-wrap items-center justify-between gap-2">
-        <h2 id={headingId} className="font-display text-[15px] font-semibold text-text-primary">
+        <h2 id={headingId} className="font-display text-h3 font-semibold text-text-primary">
           Your feed
         </h2>
         <div
@@ -75,7 +75,7 @@ export function UnifiedFeed({
               onClick={() => setLens(l.key)}
               aria-pressed={lens === l.key}
               className={cn(
-                "shrink-0 rounded-full px-3 py-1.5 font-body text-[12px] font-medium transition-colors",
+                "shrink-0 rounded-full px-3 py-2 font-body text-[12px] font-medium transition-colors",
                 lens === l.key
                   ? "bg-primary text-text-on-primary"
                   : "text-text-muted hover:bg-surface-subtle hover:text-text-primary",

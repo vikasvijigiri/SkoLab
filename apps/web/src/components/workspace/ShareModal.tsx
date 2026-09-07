@@ -189,7 +189,7 @@ export function ShareModal({
         {copied ? <Check size={14} className="text-accent-teal" /> : <Link2 size={14} />}
         {copied ? "Link copied" : "Copy project link"}
       </button>
-      <p className="mt-1.5 text-center font-body text-[11px] text-text-muted">
+      <p className="mt-2 text-center font-body text-[11px] text-text-muted">
         Anyone you invite can open this link; it does not grant access on its own.
       </p>
     </Modal>

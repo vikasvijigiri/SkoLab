@@ -87,7 +87,7 @@ export function TasksMeetingsTab({ projectId }: { projectId: string }) {
             </motion.label>
           ))}
         </div>
-        <form onSubmit={handleAddTask} className="mt-2.5 flex gap-2">
+        <form onSubmit={handleAddTask} className="mt-3 flex gap-2">
           <Input placeholder="Add a task..." value={newTask} onChange={(e) => setNewTask(e.target.value)} />
           <Button type="submit" fullWidth={false} className="w-24 gap-1">
             <Plus size={14} />
@@ -116,7 +116,7 @@ export function TasksMeetingsTab({ projectId }: { projectId: string }) {
             </motion.div>
           ))}
         </div>
-        <form onSubmit={handleScheduleMeeting} className="mt-2.5 flex flex-col gap-2 sm:flex-row">
+        <form onSubmit={handleScheduleMeeting} className="mt-3 flex flex-col gap-2 sm:flex-row">
           <Input placeholder="Meeting title" value={meetingTitle} onChange={(e) => setMeetingTitle(e.target.value)} />
           <Input placeholder="When (e.g. Fri 3pm)" value={meetingWhen} onChange={(e) => setMeetingWhen(e.target.value)} />
           <Button type="submit" fullWidth={false} className="w-32 shrink-0">
