@@ -96,6 +96,7 @@ type Work struct {
 	Title                 string           `json:"title"`
 	DOI                   string           `json:"doi"`
 	PublicationYear       int              `json:"publication_year"`
+	PublicationDate       string           `json:"publication_date"`
 	CitedByCount          int              `json:"cited_by_count"`
 	PrimaryLocation       PrimaryLocation  `json:"primary_location"`
 	OpenAccess            OpenAccess       `json:"open_access"`

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/skolab/backend-go/internal/activity"
 	"github.com/skolab/backend-go/internal/auth"
 	"github.com/skolab/backend-go/internal/author"
 	"github.com/skolab/backend-go/internal/db"
@@ -158,6 +159,13 @@ func main() {
 	r.GET("/similar_papers", similarity.GetSimilarPapers)
 	r.GET("/api/v1/similar_researchers", similarity.GetSimilarResearchers)
 	r.GET("/similar_researchers", similarity.GetSimilarResearchers)
+
+	// ── Home activity feed — merged recency stream, no AI ───────────────────
+	// internal/activity. Connected researchers' new papers (OpenAlex) + newly
+	// accepted connections (PG) + a highly-cited-recent field floor. Pure
+	// aggregation + sort, so Go edge not Python (decisions/0010).
+	r.GET("/api/v1/activity_feed", activity.GetActivityFeed)
+	r.GET("/activity_feed", activity.GetActivityFeed)
 
 	// ── System metadata — non-LLM, ported from endpoints/system.py ──────────
 	// GET /api/v1/ (API-router root) and GET /api/v1/status (public status
