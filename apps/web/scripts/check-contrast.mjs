@@ -10,6 +10,7 @@
  */
 
 // --- token values — MUST mirror src/app/globals.css -------------------------
+// Direction B (Instrument, DESIGN.md 2026-09-08): dark is the base theme.
 const LIGHT = {
   "page-bg": "#f7f7f5",
   surface: "#ffffff",
@@ -18,26 +19,26 @@ const LIGHT = {
   "text-secondary": "#565863",
   "text-muted": "#5f616d",
   "text-on-primary": "#ffffff",
-  primary: "#3552cf",
-  "primary-dark": "#2c46b8",
-  "primary-deeper": "#233a99",
+  primary: "#4b3fd6",
+  "primary-dark": "#3f34c2",
+  "primary-deeper": "#332aa0",
   "accent-signal": "#c9401f",
   "accent-signal-dark": "#af3819",
 };
 
 const DARK = {
-  "page-bg": "#1a1b18",
-  surface: "#232420",
-  "surface-subtle": "#2b2c26",
-  "text-primary": "#e9e5da",
-  "text-secondary": "#b1ac9f",
-  "text-muted": "#9c978a",
-  "text-on-primary": "#1a1b18",
-  primary: "#93a5ff",
-  "primary-dark": "#7f92f5",
-  "primary-deeper": "#6b80ea",
-  "accent-signal": "#ff7a5c",
-  "accent-signal-dark": "#ff6749",
+  "page-bg": "#0b0d10",
+  surface: "#14171b",
+  "surface-subtle": "#1c2026",
+  "text-primary": "#e6e9ee",
+  "text-secondary": "#aab1bd",
+  "text-muted": "#8b93a0",
+  "text-on-primary": "#0b0d10",
+  primary: "#8f88ff",
+  "primary-dark": "#a49dff",
+  "primary-deeper": "#6b62f0",
+  "accent-signal": "#ff6b4a",
+  "accent-signal-dark": "#ff8163",
 };
 
 // [foreground token, background token, minimum ratio, note]

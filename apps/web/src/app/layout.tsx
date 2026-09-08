@@ -45,10 +45,11 @@ export const metadata: Metadata = {
   },
 };
 
+// Direction B (Instrument): dark is the base. `theme-color` tracks --page-bg.
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#17171b" },
+    { media: "(prefers-color-scheme: light)", color: "#f7f7f5" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b0d10" },
   ],
 };
 

@@ -26,7 +26,7 @@ export function TopBar() {
         aria-label="SkoLab home"
       >
         <span
-          className="flex h-7 w-7 items-center justify-center rounded-[7px] font-display text-body font-bold text-white"
+          className="flex h-7 w-7 items-center justify-center rounded-[7px] font-display text-body font-bold text-text-on-primary"
           style={{ background: "var(--primary)" }}
         >
           S

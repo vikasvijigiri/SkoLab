@@ -3,9 +3,9 @@ import { render, screen } from "@/test/render";
 import { Card } from "./Card";
 
 describe("Card", () => {
-  it("uses the on-grid p-5 padding by default", () => {
+  it("uses the on-grid p-4 padding by default (direction B density)", () => {
     render(<Card>body</Card>);
-    expect(screen.getByText("body").className).toContain("p-5");
+    expect(screen.getByText("body").className).toContain("p-4");
   });
 
   it("draws the accent as a 2px top bar by default", () => {
@@ -30,12 +30,14 @@ describe("Card", () => {
     expect(el.style.borderTop).not.toContain("2px");
   });
 
-  it("keeps the hover-translate affordance when interactive", () => {
+  it("keeps a hover-translate affordance (not a scale) when interactive", () => {
     render(
       <Card interactive data-testid="c">
         body
       </Card>,
     );
-    expect(screen.getByTestId("c").className).toContain("hover:-translate-y-0.5");
+    const cls = screen.getByTestId("c").className;
+    expect(cls).toContain("hover:-translate-y-px");
+    expect(cls).not.toMatch(/scale/);
   });
 });

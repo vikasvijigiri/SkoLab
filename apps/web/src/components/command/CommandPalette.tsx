@@ -90,7 +90,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
       onOpenChange={handleOpenChange}
       label="Command Menu"
       shouldFilter={false}
-      overlayClassName="cmdk-overlay fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]"
+      overlayClassName="cmdk-overlay fixed inset-0 z-50 bg-[color-mix(in_srgb,var(--page-bg)_72%,transparent)]"
       contentClassName="cmdk-content fixed left-1/2 top-[12vh] z-50 w-full max-w-lg overflow-hidden rounded-lg border border-border bg-surface shadow-elevated"
       className="flex flex-col"
     >

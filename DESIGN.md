@@ -264,11 +264,11 @@ current behaviour; everything listed re-pitches for the dark base.
 ### Buttons (`apps/web/src/components/ui/Button.tsx`)
 
 - **Variants:** `signal` (the one primary action — `--accent-signal` fill,
-  `--text-on-primary` = dark label, h-11, `--radius-xs`, weight 600) · `primary`
-  (`--primary` fill, dark label, for brand/nav actions) · `outlined` (1px
-  `--primary` border, `--primary` text, transparent) · `ghost` (transparent,
-  `--text-secondary`, hover `--surface-subtle`) · `text` (`--primary`, inline).
-- **Size `lg`:** h-13 / 15px — marketing / hero only.
+  `--text-on-primary` = dark label, h-12, weight 600) · `primary` (`--primary`
+  fill, dark label, for brand/nav actions) · `outlined` (1px `--primary` border,
+  `--primary` text, transparent) · `ghost` (transparent, `--text-secondary`,
+  hover `--surface-subtle`) · `text` (`--primary`, inline).
+- **Size `lg`:** h-14 / 15px — marketing / hero only.
 - **Hover:** background → the `-hover` token + a 1px `translateY(-1px)` lift.
   **No `scale()` on hover or press** — the generic-AI tell, banned.
 - **States:** default · hover · focus-visible (2px `--ring`, offset 2) · pressed

@@ -38,7 +38,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               onBlur?.(e);
             }}
             className={cn(
-              "h-12 w-full rounded-md border bg-surface-input px-4 font-body text-body text-text-primary placeholder:text-text-muted outline-none transition-[border-color,box-shadow] duration-[var(--motion-fast)]",
+              "h-10 w-full rounded-xs border bg-surface-input px-3 font-body text-body text-text-primary placeholder:text-text-muted outline-none transition-[border-color,box-shadow] duration-[var(--motion-fast)]",
               "focus:border-accent-signal focus:shadow-[var(--shadow-focus)]",
               showError ? "border-notification" : "border-border-input",
               leadingIcon && "pl-10",
