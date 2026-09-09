@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useMutation } from "@tanstack/react-query";
-import { Sparkles } from "lucide-react";
+import { ArrowUpRight, Sparkles } from "lucide-react";
 import { getHorizonPrediction } from "@/lib/api/endpoints";
 import { cn } from "@/lib/utils";
 import { useMyProfile } from "@/lib/hooks/useMyProfile";
@@ -51,13 +51,16 @@ export default function HorizonPage() {
       )}
     >
       {/* Page Title & Tagline */}
-      <div className="mb-8 flex flex-col gap-2">
-        <div className="flex items-center gap-2">
+      <div className="mb-8 flex max-w-3xl flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <Sparkles size={18} />
           </div>
           <span className="font-mono text-[12px] font-bold uppercase tracking-wider text-primary">
             Horizon Foresight Engine
+          </span>
+          <span className="rounded-full border border-border bg-surface px-2.5 py-1 font-body text-[11px] font-medium text-text-muted">
+            Evidence-led discovery
           </span>
         </div>
         <h1 className="font-display text-[28px] font-extrabold tracking-tight text-text-primary md:text-[32px]">
@@ -66,6 +69,10 @@ export default function HorizonPage() {
         <p className="max-w-2xl font-body text-[14.5px] leading-relaxed text-text-secondary">
           Analyze pioneering global literature to synthesize business-ready breakthroughs and commercial roadmap predictions.
         </p>
+        <div className="flex items-center gap-2 font-body text-[12px] text-text-muted">
+          <ArrowUpRight size={14} className="text-primary" />
+          Start with a field, then sharpen the signal with an optional focus area.
+        </div>
       </div>
 
       <AnimatePresence mode="wait">
