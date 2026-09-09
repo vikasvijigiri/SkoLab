@@ -6,6 +6,8 @@
     "name": "SkoLab"
   },
   "skills": [
-    "./.claude/skills"
+    "./.claude/skills",
+    "./vendor/claude-skills/addyosmani",
+    "./vendor/claude-skills/vercel"
   ]
 }
