@@ -45,10 +45,12 @@ export const metadata: Metadata = {
   },
 };
 
+// Professional network theme: light is the default; dark remains an explicit
+// user preference. `theme-color` tracks each palette's page ground.
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#17171b" },
+    { media: "(prefers-color-scheme: light)", color: "#f3f2ef" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b0d10" },
   ],
 };
 
