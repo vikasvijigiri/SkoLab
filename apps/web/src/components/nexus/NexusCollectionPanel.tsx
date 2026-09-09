@@ -69,14 +69,16 @@ export function NexusCollectionPanel({
         mobileHidden && "hidden md:flex",
       )}
     >
-      <div className="flex flex-col gap-3 border-b border-border p-4">
+      <div className="flex flex-col gap-3 border-b border-border bg-surface/60 p-4">
         <div className="flex items-center gap-2">
           <div className="flex h-7 w-7 items-center justify-center rounded bg-accent-purple/10 text-accent-purple">
             <BookOpen size={15} />
           </div>
-          <span className="font-display text-body font-bold text-text-primary">
-            Synthesis Collection ({activeCollection.length})
-          </span>
+          <div className="min-w-0">
+            <span className="block font-display text-body font-bold text-text-primary">Synthesis Collection</span>
+            <span className="mt-0.5 block font-body text-[11px] text-text-muted">Build a focused evidence set for Nexus.</span>
+          </div>
+          <span className="ml-auto rounded-full bg-accent-purple/10 px-2 py-0.5 font-mono text-[11px] font-semibold text-accent-purple">{activeCollection.length}</span>
         </div>
 
         <div className="flex flex-wrap items-center gap-1 font-body text-[11.5px] text-text-muted">

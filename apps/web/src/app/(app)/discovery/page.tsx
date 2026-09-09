@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
-import { SearchX, Flame, Trophy, ChevronRight } from "lucide-react";
+import { SearchX, Flame, Trophy, ChevronRight, Compass } from "lucide-react";
 import { Chip } from "@/components/ui/Badge";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { RailShell } from "@/components/layout/RailShell";
@@ -102,7 +102,7 @@ export function DiscoveryContent() {
   );
 
   const railContent = (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 rounded-xl border border-border/80 bg-surface/70 p-4 shadow-card">
       {/* Breadcrumb — every crumb is a button back to that level. */}
       <div className="flex flex-wrap items-center gap-1 font-body text-[12px] text-text-muted">
         <button
@@ -179,11 +179,17 @@ export function DiscoveryContent() {
         transition={{ duration: 0.4 }}
         className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
       >
-        <div>
-          <h1 className="font-display text-display-m font-bold text-text-primary">Discovery</h1>
+        <div className="flex items-start gap-3">
+          <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-indigo/10 text-accent-indigo">
+            <Compass size={20} />
+          </div>
+          <div>
+          <div className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-accent-indigo">Research intelligence</div>
+          <h1 className="mt-1 font-display text-display-m font-bold text-text-primary">Discovery</h1>
           <p className="mt-1 font-body text-body-s text-text-secondary">
             Browse the literature and the people behind it, one field at a time.
           </p>
+          </div>
         </div>
         {modeToggle}
       </motion.div>
@@ -191,7 +197,9 @@ export function DiscoveryContent() {
       <RailShell rail={railContent} railWidth="260px" mobileRail="collapsible" stickyRail>
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2 text-text-secondary">
-            {mode === "researchers" ? <Trophy size={14} /> : <Flame size={14} />}
+            <span className={cn("flex h-7 w-7 items-center justify-center rounded-lg", mode === "researchers" ? "bg-accent-amber/15 text-accent-amber" : "bg-accent-orange/15 text-accent-orange")}>
+              {mode === "researchers" ? <Trophy size={14} /> : <Flame size={14} />}
+            </span>
             <span className="eyebrow">
               {node
                 ? `${mode === "researchers" ? "Top researchers" : "Top papers"} in ${node.label}`
@@ -200,7 +208,7 @@ export function DiscoveryContent() {
                   : "Trending This Year"}
             </span>
             {resultCount !== null && resultCount > 0 && (
-              <span className="data text-[11px] text-text-muted">· {resultCount}</span>
+              <span className="rounded-full bg-surface-subtle px-2 py-0.5 data text-[11px] text-text-muted">{resultCount} results</span>
             )}
           </div>
 
