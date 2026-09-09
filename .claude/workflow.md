@@ -491,3 +491,4 @@ These skills are reusable capabilities, not additional lifecycle stages:
 | Analyze | `data-analysis` | a cost/quality/behavior question this layer's own telemetry can answer |
 | Secure | `security` | the deterministic security gate and independent review, at the high risk tier |
 | Ground engineering practice | `engineering-standards` | backend, frontend, and fullstack implementation, diagnosis, and scaling, grounded in current industry practice for whatever stack the target repo actually uses |
+| Build UI | `frontend-ui` | a user-facing surface being built or audited for component quality, the WCAG AA floor, motion, responsive states, and distinctiveness against `DESIGN.md` — visual build quality, where `engineering-standards` owns the code architecture behind it |

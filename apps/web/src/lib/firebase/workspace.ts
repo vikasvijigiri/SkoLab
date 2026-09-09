@@ -18,7 +18,6 @@ import {
 import { requireDb } from "./client";
 import type {
   CollabProject,
-  CollabMember,
   CollabRole,
   CollabDocument,
   CollabPresence,

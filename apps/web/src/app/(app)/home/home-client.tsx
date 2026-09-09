@@ -206,9 +206,9 @@ export function HomeClient() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6 lg:grid lg:grid-cols-[minmax(0,72fr)_minmax(0,25fr)] lg:gap-[3%]">
+    <div className="mx-auto w-full max-w-[1128px] px-4 py-8 md:px-6 lg:grid lg:grid-cols-[minmax(0,70fr)_minmax(0,27fr)] lg:gap-[3%]">
       {/* ── Main column (≈72%) — the feed ───────────────────────────────── */}
-      <div className="flex min-w-0 flex-col gap-4">
+      <div className="flex min-w-0 flex-col gap-5">
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
           <h1 className="font-display text-display-m font-bold text-text-primary">
             Good to see you, {greetName}

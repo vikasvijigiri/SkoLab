@@ -65,7 +65,7 @@ export function ProfileMenu() {
         )}
       >
         <span
-          className="flex h-8 w-8 items-center justify-center rounded-full font-display text-[12px] font-bold text-white shadow-card"
+          className="flex h-8 w-8 items-center justify-center rounded-full font-display text-[12px] font-bold text-text-on-primary shadow-card"
           style={{ background: "var(--primary)" }}
         >
           {initial}
@@ -85,7 +85,7 @@ export function ProfileMenu() {
           >
             <div className="flex items-center gap-3 border-b border-border px-3 py-3">
               <span
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display text-body-s font-bold text-white shadow-card"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display text-body-s font-bold text-text-on-primary shadow-card"
                 style={{ background: "var(--primary)" }}
               >
                 {initial}

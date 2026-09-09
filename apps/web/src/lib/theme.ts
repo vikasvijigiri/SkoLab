@@ -14,8 +14,8 @@ export function applyTheme(theme: Theme) {
 
 /** The layout's inline script already applies the stored theme to <html> before hydration; read it back here. */
 export function initialTheme(): Theme {
-  if (typeof window === "undefined") return "system";
-  return (localStorage.getItem(STORAGE_KEY) as Theme | null) ?? "system";
+  if (typeof window === "undefined") return "light";
+  return (localStorage.getItem(STORAGE_KEY) as Theme | null) ?? "light";
 }
 
 export function nextTheme(current: Theme): Theme {

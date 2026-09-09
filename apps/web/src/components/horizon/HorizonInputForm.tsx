@@ -142,7 +142,7 @@ export function HorizonInputForm({
               <Card
                 glow
                 accentColor={domain.color}
-                className="flex h-full flex-col justify-between border-border/40 bg-surface/30 p-4 transition-all duration-300 hover:border-primary/30"
+                className="flex h-full flex-col justify-between border-border/40 bg-surface/30 p-4 transition-[border-color,background-color] duration-300 hover:border-primary/30"
               >
                 <div>
                   <h4 className="font-display text-[14.5px] font-semibold text-text-primary">{domain.name}</h4>

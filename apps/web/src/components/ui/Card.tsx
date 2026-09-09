@@ -18,8 +18,11 @@ interface CardProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 /**
- * Real elevation (soft layered shadows), not border-only depth — the web
- * app's own design language, independent of the Android app's flat style.
+ * Elevation on the dark base is border + light, not a drop-shadow slab
+ * (DESIGN.md direction B) — `--shadow-card` resolves to a hairline border plus
+ * a top highlight on dark, and to soft layered shadows on the light override.
+ * A data card takes a 3px left accent bar (ledger row); a feature card a 2px
+ * top bar.
  */
 export const Card = forwardRef<HTMLDivElement, CardProps>(
   ({ accentColor, accentSide = "top", interactive = false, glow = false, className, style, children, ...props }, ref) => {
@@ -34,9 +37,9 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
     if (glow) {
       return (
         <motion.div
-          whileHover={{ y: -5, boxShadow: "var(--shadow-elevated)" }}
+          whileHover={{ y: -1, boxShadow: "var(--shadow-elevated)" }}
           transition={TRANSITION_NORMAL}
-          className={cn("rounded-lg bg-surface p-5 shadow-card", className)}
+          className={cn("rounded-sm bg-surface p-4 shadow-card", className)}
           style={sharedStyle}
           {...(props as React.ComponentProps<typeof motion.div>)}
         >
@@ -49,9 +52,9 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       <div
         ref={ref}
         className={cn(
-          "rounded-lg bg-surface p-5 shadow-card transition-[transform,box-shadow] duration-[var(--motion-normal)]",
+          "rounded-sm bg-surface p-4 shadow-card transition-[transform,box-shadow] duration-[var(--motion-normal)]",
           interactive &&
-            "cursor-pointer hover:-translate-y-0.5 hover:shadow-card-hover active:translate-y-0 active:scale-[0.99]",
+            "cursor-pointer hover:-translate-y-px hover:shadow-card-hover active:translate-y-0",
           className
         )}
         style={sharedStyle}

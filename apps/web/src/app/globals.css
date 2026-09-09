@@ -1,49 +1,173 @@
 @import "tailwindcss";
 
 /*
- * SkoLab WEB design tokens — an independent design language from the Android
- * app. The mobile client is flat/border-only by deliberate constraint; the
- * web app is a separate surface and free to use real elevation, a bolder
- * brand color, and richer depth. Raw values live on bare custom properties
- * below, swapped per color scheme; `@theme inline` maps them into Tailwind's
- * `--color-*`/`--shadow-*` namespaces so semantic utilities (bg-surface,
- * text-primary, shadow-card, ...) never need a `dark:` prefix — the
- * underlying variable itself changes.
+ * SkoLab WEB design tokens — direction B, "Instrument" (DESIGN.md, 2026-09-08).
+ * DARK IS THE BASE. Raw values live on bare custom properties on `:root`
+ * (dark); the light theme is a complete override, applied by
+ * `@media (prefers-color-scheme: light)` for a `:root` with no explicit
+ * `data-theme`, and by `:root[data-theme="light"]` when the user has chosen it.
+ * `:root[data-theme="dark"]` re-states the base so a manual dark choice wins
+ * over a system light preference. `@theme inline` maps the raw vars into
+ * Tailwind's `--color-*` / `--shadow-*` namespaces so semantic utilities
+ * (bg-surface, text-primary, shadow-card, …) never need a `dark:` prefix — the
+ * underlying variable itself changes. Keep the three blocks in sync.
+ *
+ * Elevation on the near-black ground is BORDER + LIGHT, not drop shadow
+ * (DESIGN.md). Type is one notch denser than direction C; radii are crisper;
+ * motion is faster and mechanical. JetBrains Mono is a structural role.
  */
 
-/*
- * Light palette — "quiet precision". SkoLab users read on screen for hours,
- * so the page ground is a soft near-white with a whisper of warmth (never a
- * yellow cream, never a glaring pure white), and CARDS are true #fff so the
- * surface hierarchy is real, the way Linear / Notion / Height do it. Ink is a
- * near-black with a faint cool cast — crisper than the old warm charcoal —
- * and one decisive indigo carries the brand. Shadows are cool slate-tinted,
- * low-spread; borders are neutral hairlines. Every text token's contrast
- * against the surface it sits on is checked with the WCAG relative-luminance
- * formula (>=4.5:1, with margin so the a11y suite's sub-pixel sampling of
- * small anti-aliased text doesn't flake).
- */
 :root {
+  color-scheme: dark;
+
+  /* Ground: near-black with a faint cool cast — "deep slate", not "void". */
+  --page-bg: #0b0d10;
+  --surface: #14171b;
+  --surface-subtle: #1c2026;
+  --surface-raised: #20242b;
+  --border-color: #282d35;
+  --border-strong: #3a414c;
+
+  --text-primary: #e6e9ee;
+  --text-secondary: #aab1bd;
+  --text-muted: #8b93a0;
+  --text-on-primary: #0b0d10;
+
+  /* Brand: an indigo-violet that pops on dark. Nav, links, "influence", focus
+     of attention. Bright fills take the dark ground as their label colour. */
+  --primary: #8f88ff;
+  --primary-dark: #a49dff;
+  --primary-deeper: #6b62f0;
+
+  /* The one primary action per viewport — warm against the cool brand. */
+  --accent-signal: #ff6b4a;
+  --accent-signal-dark: #ff8163;
+
+  /* Status only: live / new / streaming / presence / positive delta. */
+  --accent-live: #37dd87;
+
+  --border-input: #39414d;
+  --surface-input: #1c2026;
+
+  /* Data-viz palette (DESIGN.md), dark-tuned. One categorical set. */
+  --accent-teal: #3ec9b8;
+  --accent-teal-dark: #2fb3a3;
+  --accent-amber: #f5c451;
+  --accent-indigo: #6ea8ff;
+  --accent-emerald: #4fd08a;
+  --accent-rose: #ff6470;
+  --accent-violet: #c4a7ff;
+  --accent-orange: #ff8a5c;
+  --accent-cyan: #3fd0e0;
+  --accent-pink: #ff7ab8;
+
+  --notification: #ff6470;
+  --match-bg: color-mix(in srgb, var(--primary) 16%, transparent);
+  --match-text: #b7b2ff;
+
+  --ring: color-mix(in srgb, var(--accent-signal) 55%, transparent);
+  --shadow-focus: 0 0 0 2px var(--ring);
+
+  /* Motion — faster, mechanical (DESIGN.md). */
+  --motion-fast: 120ms;
+  --motion-normal: 200ms;
+  --motion-slow: 320ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --ease-enter: cubic-bezier(0, 0, 0.2, 1);
+
+  /* Elevation = border + light on the dark ground. */
+  --shadow-xs: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  --shadow-card: 0 0 0 1px var(--border-color), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  --shadow-card-hover: 0 0 0 1px var(--border-strong), 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-elevated: 0 0 0 1px var(--border-strong), 0 16px 40px rgba(0, 0, 0, 0.6);
+  --shadow-glow-primary: var(--shadow-card-hover);
+  --shadow-signal: 0 0 0 1px var(--accent-signal), 0 0 24px color-mix(in srgb, var(--accent-signal) 30%, transparent);
+}
+
+/* Light theme — a complete, first-class override. Applied when the system asks
+   for light and the user has not pinned a theme. Values carried over from the
+   direction-C system (well-calibrated, contrast-checked), with `--primary`
+   re-pitched darker so it clears AA on white. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+
+    --page-bg: #f7f7f5;
+    --surface: #ffffff;
+    --surface-subtle: #eeeeec;
+    --surface-raised: #ffffff;
+    --border-color: #e5e5e2;
+    --border-strong: #d1d1cc;
+
+    --text-primary: #1b1d23;
+    --text-secondary: #565863;
+    --text-muted: #5f616d;
+    --text-on-primary: #ffffff;
+
+    --primary: #4b3fd6;
+    --primary-dark: #3f34c2;
+    --primary-deeper: #332aa0;
+
+    --accent-signal: #c9401f;
+    --accent-signal-dark: #af3819;
+    --accent-live: #0f7a48;
+
+    --border-input: #d6d6d2;
+    --surface-input: #ffffff;
+
+    --accent-teal: #0f766e;
+    --accent-teal-dark: #115e56;
+    --accent-amber: #b45309;
+    --accent-indigo: #3b5bd9;
+    --accent-emerald: #047857;
+    --accent-rose: #be123c;
+    --accent-violet: #6d4bd0;
+    --accent-orange: #c2410c;
+    --accent-cyan: #0e7490;
+    --accent-pink: #be185d;
+
+    --notification: #dc2626;
+    --match-bg: #eceefb;
+    --match-text: #333a99;
+
+    --ring: color-mix(in srgb, var(--accent-signal) 30%, transparent);
+
+    --shadow-xs: 0 1px 2px rgba(18, 20, 31, 0.05);
+    --shadow-card: 0 1px 2px rgba(18, 20, 31, 0.05), 0 2px 6px rgba(18, 20, 31, 0.05);
+    --shadow-card-hover: 0 4px 12px rgba(18, 20, 31, 0.08), 0 10px 22px rgba(18, 20, 31, 0.08);
+    --shadow-elevated: 0 8px 20px rgba(18, 20, 31, 0.10), 0 20px 44px rgba(18, 20, 31, 0.12);
+    --shadow-signal: 0 6px 20px color-mix(in srgb, var(--accent-signal) 28%, transparent);
+  }
+}
+
+/* Manual light choice — wins over a system dark preference. Mirrors the media
+   block above. */
+:root[data-theme="light"] {
+  color-scheme: light;
+
   --page-bg: #f7f7f5;
   --surface: #ffffff;
   --surface-subtle: #eeeeec;
-  /* "Confident Modernist" (DESIGN.md): a professional royal-indigo — trust-blue,
-     not violet. Contrast-verified by scripts/check-contrast.mjs. */
-  --primary: #3552cf;
-  --primary-dark: #2c46b8;
-  --primary-deeper: #233a99;
-  /* The one action colour: primary CTA fill, "live"/new state. Warm coral
-     against the cool primary. Darkened from the DESIGN.md proposal so white
-     label text clears WCAG AA (4.96:1) — check-contrast.mjs is the gate. */
-  --accent-signal: #c9401f;
-  --accent-signal-dark: #af3819;
+  --surface-raised: #ffffff;
+  --border-color: #e5e5e2;
+  --border-strong: #d1d1cc;
+
   --text-primary: #1b1d23;
   --text-secondary: #565863;
-  /* ~5.4:1 on --surface-subtle, ~6.2:1 on --surface. Cool neutral grey; keep
-     the margin — axe's pixel sampling reads a touch lighter than declared. */
   --text-muted: #5f616d;
   --text-on-primary: #ffffff;
-  --border-color: #e5e5e2;
+
+  --primary: #4b3fd6;
+  --primary-dark: #3f34c2;
+  --primary-deeper: #332aa0;
+
+  --accent-signal: #c9401f;
+  --accent-signal-dark: #af3819;
+  --accent-live: #0f7a48;
+
+  --border-input: #d6d6d2;
+  --surface-input: #ffffff;
 
   --accent-teal: #0f766e;
   --accent-teal-dark: #115e56;
@@ -60,157 +184,117 @@
   --match-bg: #eceefb;
   --match-text: #333a99;
 
-  /* Form controls — crisp bordered fields on true white, not a flat grey fill.
-     --ring is derived from --accent-signal via var(), so it re-resolves per
-     theme at the element that uses it; one definition here is enough. Focus is
-     deliberately the signal colour, never the brand — so it can never be
-     mistaken for a selected/active state. */
-  --surface-input: #ffffff;
-  --border-input: #d6d6d2;
   --ring: color-mix(in srgb, var(--accent-signal) 30%, transparent);
-  --shadow-focus: 0 0 0 3px var(--ring);
 
-  /* Motion — plain vars (used via arbitrary values, e.g. duration-[var(--motion-fast)]) */
-  --motion-fast: 150ms;
-  --motion-normal: 300ms;
-  --motion-slow: 400ms;
-  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
-  --ease-enter: cubic-bezier(0, 0, 0.2, 1);
-
-  /* Elevation — real shadows, not border-only. Cool slate-tinted (rgba
-     18,20,31) and low-spread, so a card reads as a crisp lift off the ground
-     rather than a soft smudge. */
   --shadow-xs: 0 1px 2px rgba(18, 20, 31, 0.05);
   --shadow-card: 0 1px 2px rgba(18, 20, 31, 0.05), 0 2px 6px rgba(18, 20, 31, 0.05);
   --shadow-card-hover: 0 4px 12px rgba(18, 20, 31, 0.08), 0 10px 22px rgba(18, 20, 31, 0.08);
   --shadow-elevated: 0 8px 20px rgba(18, 20, 31, 0.10), 0 20px 44px rgba(18, 20, 31, 0.12);
-  /* No coloured glow — solid surfaces only. Kept as an alias so any stray
-     reference resolves to a plain shadow instead of a blue aura. */
-  --shadow-glow-primary: var(--shadow-card-hover);
-  /* The one deliberate coloured shadow: hero CTA only. Re-resolves per theme
-     via var(--accent-signal). */
   --shadow-signal: 0 6px 20px color-mix(in srgb, var(--accent-signal) 28%, transparent);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* Warm charcoal, not pure black: a slight warm cast at #1a1b18 reads as
-       "dim lamp" rather than "void", which is the low-eye-strain target for
-       night reading. Text is a warm off-white, never #fff. */
-    --page-bg: #1a1b18;
-    --surface: #232420;
-    --surface-subtle: #2b2c26;
-    --primary: #93a5ff;
-    --primary-dark: #7f92f5;
-    --primary-deeper: #6b80ea;
-    --accent-signal: #ff7a5c;
-    --accent-signal-dark: #ff6749;
-    --text-primary: #e9e5da;
-    --text-secondary: #b1ac9f;
-    /* #9c978a: ~4.9:1 on --surface-subtle (#2b2c26), higher on the darker
-       surfaces. Warm muted grey; keeps the a11y margin. */
-    --text-muted: #9c978a;
-    --text-on-primary: #1a1b18;
-    --border-color: #38392f;
-
-    --accent-teal: #2dd4bf;
-    --accent-amber: #f0a83a;
-    --accent-indigo: #7fa8f5;
-    --accent-rose: #f9899b;
-    /* Dark values for the rest of the data-viz palette (DESIGN.md table) —
-       previously only the four above were themed. */
-    --accent-orange: #fb923c;
-    --accent-violet: #c4b5fd;
-    --accent-cyan: #22d3ee;
-    --accent-pink: #f472b6;
-    --accent-emerald: #34d399;
-
-    --match-bg: #26263f;
-    --match-text: #b3b8f0;
-
-    --surface-input: #1e1f1b;
-    --border-input: #40413a;
-
-    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 6px rgba(0, 0, 0, 0.4);
-    --shadow-card-hover: 0 4px 10px rgba(0, 0, 0, 0.5), 0 16px 32px rgba(0, 0, 0, 0.55);
-    --shadow-elevated: 0 12px 24px rgba(0, 0, 0, 0.55), 0 24px 64px rgba(0, 0, 0, 0.6);
-    --shadow-glow-primary: var(--shadow-card-hover);
-    --shadow-signal: 0 6px 20px color-mix(in srgb, var(--accent-signal) 28%, transparent);
-  }
-}
-
-/* Manual override (theme toggle) takes precedence over system preference.
-   Mirrors the two blocks above — keep all three in sync. */
+/* Manual dark choice — wins over a system light preference. Re-states the base. */
 :root[data-theme="dark"] {
-  --page-bg: #1a1b18;
-  --surface: #232420;
-  --surface-subtle: #2b2c26;
-  --primary: #93a5ff;
-  --primary-dark: #7f92f5;
-  --primary-deeper: #6b80ea;
-  --accent-signal: #ff7a5c;
-  --accent-signal-dark: #ff6749;
-  --text-primary: #e9e5da;
-  --text-secondary: #b1ac9f;
-  --text-muted: #9c978a;
-  --text-on-primary: #1a1b18;
-  --border-color: #38392f;
-  --accent-teal: #2dd4bf;
-  --accent-amber: #f0a83a;
-  --accent-indigo: #7fa8f5;
-  --accent-rose: #f9899b;
-  --accent-orange: #fb923c;
-  --accent-violet: #c4b5fd;
-  --accent-cyan: #22d3ee;
-  --accent-pink: #f472b6;
-  --accent-emerald: #34d399;
-  --match-bg: #26263f;
-  --match-text: #b3b8f0;
-  --surface-input: #1e1f1b;
-  --border-input: #40413a;
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 6px rgba(0, 0, 0, 0.4);
-  --shadow-card-hover: 0 4px 10px rgba(0, 0, 0, 0.5), 0 16px 32px rgba(0, 0, 0, 0.55);
-  --shadow-elevated: 0 12px 24px rgba(0, 0, 0, 0.55), 0 24px 64px rgba(0, 0, 0, 0.6);
-  --shadow-glow-primary: var(--shadow-card-hover);
-  --shadow-signal: 0 6px 20px color-mix(in srgb, var(--accent-signal) 28%, transparent);
+  color-scheme: dark;
+
+  --page-bg: #0b0d10;
+  --surface: #14171b;
+  --surface-subtle: #1c2026;
+  --surface-raised: #20242b;
+  --border-color: #282d35;
+  --border-strong: #3a414c;
+
+  --text-primary: #e6e9ee;
+  --text-secondary: #aab1bd;
+  --text-muted: #8b93a0;
+  --text-on-primary: #0b0d10;
+
+  --primary: #8f88ff;
+  --primary-dark: #a49dff;
+  --primary-deeper: #6b62f0;
+
+  --accent-signal: #ff6b4a;
+  --accent-signal-dark: #ff8163;
+  --accent-live: #37dd87;
+
+  --border-input: #39414d;
+  --surface-input: #1c2026;
+
+  --accent-teal: #3ec9b8;
+  --accent-teal-dark: #2fb3a3;
+  --accent-amber: #f5c451;
+  --accent-indigo: #6ea8ff;
+  --accent-emerald: #4fd08a;
+  --accent-rose: #ff6470;
+  --accent-violet: #c4a7ff;
+  --accent-orange: #ff8a5c;
+  --accent-cyan: #3fd0e0;
+  --accent-pink: #ff7ab8;
+
+  --notification: #ff6470;
+  --match-bg: color-mix(in srgb, var(--primary) 16%, transparent);
+  --match-text: #b7b2ff;
+
+  --ring: color-mix(in srgb, var(--accent-signal) 55%, transparent);
+
+  --shadow-xs: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  --shadow-card: 0 0 0 1px var(--border-color), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  --shadow-card-hover: 0 0 0 1px var(--border-strong), 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-elevated: 0 0 0 1px var(--border-strong), 0 16px 40px rgba(0, 0, 0, 0.6);
+  --shadow-signal: 0 0 0 1px var(--accent-signal), 0 0 24px color-mix(in srgb, var(--accent-signal) 30%, transparent);
 }
 
+/* Professional network theme (decision 0013). This intentionally sits after
+ * the legacy Instrument blocks while the feature-by-feature migration is in
+ * progress: it makes the bright, compact professional workspace the default
+ * without breaking an explicit dark-mode choice. */
+:root:not([data-theme="dark"]),
 :root[data-theme="light"] {
-  --page-bg: #f7f7f5;
+  color-scheme: light;
+  --page-bg: #f3f2ef;
   --surface: #ffffff;
-  --surface-subtle: #eeeeec;
-  --primary: #3552cf;
-  --primary-dark: #2c46b8;
-  --primary-deeper: #233a99;
-  --accent-signal: #c9401f;
-  --accent-signal-dark: #af3819;
-  --text-primary: #1b1d23;
-  --text-secondary: #565863;
-  --text-muted: #5f616d;
+  --surface-subtle: #f3f2ef;
+  --surface-raised: #ffffff;
+  --border-color: #e0dfdc;
+  --border-strong: #cfcac4;
+  --text-primary: #191919;
+  --text-secondary: #666666;
+  --text-muted: #666666;
   --text-on-primary: #ffffff;
-  --border-color: #e5e5e2;
-  --accent-teal: #0f766e;
-  --accent-amber: #b45309;
-  --accent-indigo: #3b5bd9;
-  --accent-rose: #be123c;
-  --match-bg: #eceefb;
-  --match-text: #333a99;
+  --primary: #0a66c2;
+  --primary-dark: #004182;
+  --primary-deeper: #003a70;
+  --accent-signal: #0a66c2;
+  --accent-signal-dark: #004182;
+  --accent-live: #057642;
+  --border-input: #b7b7b7;
   --surface-input: #ffffff;
-  --border-input: #d6d6d2;
-  --shadow-xs: 0 1px 2px rgba(18, 20, 31, 0.05);
-  --shadow-card: 0 1px 2px rgba(18, 20, 31, 0.05), 0 2px 6px rgba(18, 20, 31, 0.05);
-  --shadow-card-hover: 0 4px 12px rgba(18, 20, 31, 0.08), 0 10px 22px rgba(18, 20, 31, 0.08);
-  --shadow-elevated: 0 8px 20px rgba(18, 20, 31, 0.10), 0 20px 44px rgba(18, 20, 31, 0.12);
-  --shadow-glow-primary: var(--shadow-card-hover);
+  --accent-teal: #0f766e;
+  --accent-teal-dark: #115e56;
+  --accent-amber: #915907;
+  --accent-indigo: #0a66c2;
+  --accent-emerald: #057642;
+  --accent-rose: #b24020;
+  --accent-violet: #5b4bb7;
+  --accent-orange: #b24020;
+  --accent-cyan: #0b6e99;
+  --accent-pink: #a83279;
+  --notification: #cc1016;
+  --match-bg: #e8f3ff;
+  --match-text: #004182;
+  --ring: color-mix(in srgb, var(--primary) 34%, transparent);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-card-hover: 0 2px 7px rgba(0, 0, 0, 0.12);
+  --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.16);
+  --shadow-signal: none;
 }
 
 @theme inline {
   --color-page-bg: var(--page-bg);
   --color-surface: var(--surface);
   --color-surface-subtle: var(--surface-subtle);
+  --color-surface-raised: var(--surface-raised);
   --color-surface-input: var(--surface-input);
   --color-border-input: var(--border-input);
   --color-primary: var(--primary);
@@ -218,11 +302,13 @@
   --color-primary-deeper: var(--primary-deeper);
   --color-accent-signal: var(--accent-signal);
   --color-accent-signal-dark: var(--accent-signal-dark);
+  --color-accent-live: var(--accent-live);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-muted: var(--text-muted);
   --color-text-on-primary: var(--text-on-primary);
   --color-border: var(--border-color);
+  --color-border-strong: var(--border-strong);
 
   --color-accent-teal: var(--accent-teal);
   --color-accent-teal-dark: var(--accent-teal-dark);
@@ -249,13 +335,11 @@
   --color-metric-open-science: var(--accent-emerald);
   --color-metric-collab: var(--accent-teal);
   --color-metric-consistency: var(--accent-amber);
-  --color-metric-policy: #64748b;
+  --color-metric-policy: #98a2b3;
 
-  /* Two-family stack (DESIGN.md): Inter carries display + body — "LinkedIn-style"
-     humanist, hierarchy from weight + scale, not a display face. --font-display
-     is kept as a name so the ~45 `font-display` call sites need no churn; it now
-     resolves to Inter. JetBrains Mono is the one departure — structural, for
-     data. */
+  /* Two-family stack (DESIGN.md): Inter carries display + body; JetBrains Mono
+     is a structural role for data, labels, and interface chrome. `--font-display`
+     is kept as a name so existing `font-display` call sites need no churn. */
   --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-body: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
@@ -269,37 +353,38 @@
   --shadow-signal: var(--shadow-signal);
 }
 
-/* Static (mode-independent) overrides to Tailwind's default radius scale. */
+/* Static (mode-independent) overrides. Radius is crisper than direction C —
+   "instrument", not "friendly" (DESIGN.md Layout). */
 @theme {
-  --radius-xs: 6px;
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 18px;
-  --radius-xl: 24px;
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
 
-  /* Type scale (DESIGN.md). Tailwind v4 turns each --text-* into a `text-*`
-     utility that also sets line-height / letter-spacing from the paired keys.
-     Body L / Caption reuse Tailwind's `text-base` / `text-xs`. */
-  --text-display-xl: 3.75rem;
+  /* Type scale (DESIGN.md direction B) — one notch denser than round 1.
+     Tailwind v4 turns each --text-* into a `text-*` utility that also sets
+     line-height / letter-spacing from the paired keys. */
+  --text-display-xl: 3.625rem;      /* 58px */
   --text-display-xl--line-height: 1.05;
   --text-display-xl--letter-spacing: -0.02em;
-  --text-display-l: 2.75rem;
+  --text-display-l: 2.5rem;         /* 40px */
   --text-display-l--line-height: 1.1;
   --text-display-l--letter-spacing: -0.02em;
-  --text-display-m: 2rem;
+  --text-display-m: 1.875rem;       /* 30px — app <h1> */
   --text-display-m--line-height: 1.15;
-  --text-display-m--letter-spacing: -0.01em;
-  --text-h2: 1.375rem;
+  --text-display-m--letter-spacing: -0.015em;
+  --text-h2: 1.25rem;               /* 20px */
   --text-h2--line-height: 1.25;
-  --text-h3: 1.0625rem;
+  --text-h3: 1rem;                  /* 16px */
   --text-h3--line-height: 1.3;
-  --text-body: 0.90625rem;      /* 14.5px — default UI body */
-  --text-body--line-height: 1.6;
-  --text-body-s: 0.8125rem;     /* 13px — dense rows */
+  --text-body: 0.875rem;            /* 14px — default UI body */
+  --text-body--line-height: 1.55;
+  --text-body-s: 0.78125rem;        /* 12.5px — dense rows */
   --text-body-s--line-height: 1.5;
-  --text-eyebrow: 0.71875rem;   /* 11.5px — uppercase mono label */
+  --text-eyebrow: 0.6875rem;        /* 11px — uppercase mono label */
   --text-eyebrow--line-height: 1.4;
-  --text-eyebrow--letter-spacing: 0.08em;
+  --text-eyebrow--letter-spacing: 0.09em;
 }
 
 /* Mono structural roles (DESIGN.md Type): use as `className="eyebrow"` /
@@ -309,7 +394,7 @@
   font-family: var(--font-mono);
   font-size: var(--text-eyebrow);
   line-height: var(--text-eyebrow--line-height);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   font-weight: 500;
   color: var(--text-muted);
@@ -324,17 +409,14 @@ body {
   background: var(--page-bg);
   color: var(--text-primary);
   font-family: var(--font-body);
-  /* Inter tuning — disambiguated 1/l/i, an open 4, and contextual alternates.
-     The small precision every serious tool ships. */
+  /* Inter tuning — disambiguated 1/l/i, an open 4, and contextual alternates. */
   font-feature-settings: "cv05", "cv08", "cv11", "calt";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Tailwind v3.3+/v4 dropped the automatic pointer cursor on <button> — every
-   button needs cursor-pointer opted in explicitly, which is why it was
-   inconsistent across the app. One base-layer rule covers every button
-   (including framer-motion's motion.button, which renders a real <button>)
+/* Tailwind v3.3+/v4 dropped the automatic pointer cursor on <button> — one
+   base-layer rule covers every button (including framer-motion's motion.button)
    instead of chasing down each call site; @layer base keeps this below
    Tailwind's own utilities (e.g. disabled:cursor-not-allowed) in the cascade. */
 @layer base {
@@ -380,8 +462,7 @@ body {
   }
 }
 
-/* Print — drop the app chrome (top bar, bottom nav, sticky rail, dev overlays)
-   and let the page content flow on white. */
+/* Print — drop the app chrome and let content flow on white. */
 @media print {
   header,
   nav[aria-label="Primary"],
