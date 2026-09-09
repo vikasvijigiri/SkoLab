@@ -148,7 +148,7 @@ export default function ProfilePage() {
         <Card accentColor="var(--primary)">
           <div className="flex items-center gap-4 lg:flex-col lg:items-start lg:text-left">
             <div
-              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full font-display text-display-m font-bold text-white shadow-card"
+              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full font-display text-display-m font-bold text-text-on-primary shadow-card"
               style={{ background: "var(--primary)" }}
             >
               {(firestoreProfile?.name || user?.displayName || "?").slice(0, 1).toUpperCase()}

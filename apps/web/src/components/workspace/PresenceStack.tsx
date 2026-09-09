@@ -37,7 +37,7 @@ export function PresenceStack({ projectId, activeDocId }: { projectId: string; a
           <div
             key={p.uid}
             title={p.name}
-            className="flex h-6 w-6 items-center justify-center rounded-full border border-surface bg-accent-teal font-display text-[10px] font-bold text-white"
+            className="flex h-6 w-6 items-center justify-center rounded-full border border-surface bg-accent-teal font-display text-[10px] font-bold text-text-on-primary"
           >
             {p.name.slice(0, 1).toUpperCase()}
           </div>

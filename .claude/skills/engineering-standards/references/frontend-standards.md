@@ -144,6 +144,13 @@ no amount of memoization or bundle-splitting downstream recovers the loss.
   images, font subsetting/preloading, third-party script budget and
   loading strategy) rather than leaving each addition to individual
   judgment at insert time.
+- **Rule set:** `frontend-performance-rules.md` (this directory) holds the
+  React/Next performance rules by priority — waterfalls, bundle size,
+  server rendering, re-renders, rendering cost, JS micro-cost — adapted
+  from `vercel-labs/agent-skills` `react-best-practices` and
+  `addyosmani/agent-skills` `performance-checklist`. Read it when a task
+  carries a performance requirement or a suspected regression. The CWV
+  budgets above stay here; that file owns what moves them.
 
 ## Type safety and contracts
 

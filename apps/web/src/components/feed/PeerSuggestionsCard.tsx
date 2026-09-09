@@ -66,7 +66,7 @@ export function PeerSuggestionsCard({
           style={{ transitionTimingFunction: "var(--ease-standard)" }}
         >
           <div
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display text-body-s font-bold text-white shadow-card"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display text-body-s font-bold text-text-on-primary shadow-card"
             style={{ background: "var(--primary)" }}
           >
             {(p.display_name || "?").slice(0, 1).toUpperCase()}

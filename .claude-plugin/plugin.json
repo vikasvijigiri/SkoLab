@@ -1,0 +1,13 @@
+{
+  "name": "skolab-frontend-foundation",
+  "version": "1.0.0",
+  "description": "Frontend engineering, React/Next.js UI quality, browser verification, accessibility, and performance skills vendored from the Notion-selected source repositories.",
+  "author": {
+    "name": "SkoLab"
+  },
+  "skills": [
+    "./.claude/skills",
+    "./vendor/claude-skills/addyosmani",
+    "./vendor/claude-skills/vercel"
+  ]
+}

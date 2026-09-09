@@ -49,7 +49,7 @@ export function IdentityRailCard({
     <Card className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
         <span
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-display text-h3 font-bold text-white shadow-card"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-display text-h3 font-bold text-text-on-primary shadow-card"
           style={{ background: "var(--primary)" }}
         >
           {(name.trim()[0] ?? "?").toUpperCase()}

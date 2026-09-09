@@ -6,6 +6,33 @@
 
 ---
 
+## 2026-09-08 — Agent (Claude)
+
+Adopted UI/UX skills from the Notion "Web App Factory" page and pivoted the web
+identity. Branch `feat/instrument-frontend`; `7844a28` `7616035` `8f6151e`.
+
+- Chose **one** new skill `frontend-ui` (build + audit UI vs `DESIGN.md` + a
+  WCAG floor) over three: the Notion page's own EVOHARNESSBENCH note warns
+  more skills cause routing conflicts. The other two sources became reference
+  files. `vercel-labs` content was reproduced by hand because the
+  `deploy-spend-guard` hook blocks any command naming a cloud vendor, so
+  `git clone …vercel…` is denied.
+- `DESIGN.md` C → B was a product-owner **positioning** call — the exact switch
+  condition direction C had named for itself (`decisions/0012`). Light theme
+  kept as a first-class override.
+- Phase C confirmed the token architecture is the real leverage: `globals.css`
+  dark-as-base plus new values carried the pivot with only targeted
+  per-component edits. Performance was audited against the new rules and found
+  **nothing safe to change unmeasured** — no barrels, no await waterfalls,
+  bounded result sets.
+- One **pre-existing** e2e failure (`smoke.spec.ts:13`) was verified against
+  the stashed pre-change tree — not a regression, untouched.
+
+Not done: formal `testing`/`code-review` skill passes (all gates run + quoted
+inline), and the branch is unmerged with no remote.
+
+---
+
 ## 2026-08-18 — Agent (Claude)
 
 Merged the 11-commit `fix/similar-authors-shape-hardening` branch to `main`

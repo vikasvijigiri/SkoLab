@@ -47,7 +47,7 @@ export function Modal({
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-[color-mix(in_srgb,var(--text-primary)_45%,transparent)] p-4 pt-[8vh]"
+          className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-[color-mix(in_srgb,var(--page-bg)_72%,transparent)] p-4 pt-[8vh]"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -62,13 +62,13 @@ export function Modal({
             role="dialog"
             aria-modal="true"
             aria-label={title}
-            initial={{ opacity: 0, y: 12 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 12 }}
+            exit={{ opacity: 0, y: 8 }}
             transition={TRANSITION_FAST}
-            className={`w-full ${widthClass} rounded-lg border border-border bg-surface shadow-elevated outline-none`}
+            className={`w-full ${widthClass} rounded-sm border border-border-strong bg-surface-raised shadow-elevated outline-none`}
           >
-            <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
+            <div className="flex items-center justify-between border-b border-border px-5 py-3">
               <h2 className="font-display text-h3 font-semibold text-text-primary">{title}</h2>
               <button
                 type="button"

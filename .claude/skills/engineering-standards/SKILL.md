@@ -76,6 +76,14 @@ for vetted external repos to consult. Those rules load on their own
   `task-analysis`. If it names an existing failure, hand off to
   `debugging`. Otherwise, answer directly and stop — most consultations are
   a grounding read, not a new unit of work.
+- **Boundary with `frontend-ui`:** this skill owns the code-level frontend
+  decisions — component wiring and boundaries, state ownership, data
+  fetching, rendering strategy, bundle governance, and the performance rule
+  set in `references/frontend-performance-rules.md`. `frontend-ui` owns how
+  the surface looks, feels, and reads to a user and whether it clears the
+  WCAG AA floor. A task that is "make this fast/scalable/correctly wired" is
+  here; "make this production-quality UI / check accessibility / it looks
+  AI-generated" is `frontend-ui`.
 
 ## Success
 
