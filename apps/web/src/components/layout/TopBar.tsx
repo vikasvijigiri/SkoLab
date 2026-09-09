@@ -19,7 +19,7 @@ export function TopBar() {
 
   return (
     <header className="h-16 shrink-0 border-b border-border bg-surface">
-      <div className="mx-auto flex h-full w-full max-w-[1440px] items-center gap-3 px-4 md:px-6">
+      <div className="mx-auto flex h-full w-full max-w-[1128px] items-center gap-3 px-4 md:px-6">
         {/* logo — top-left */}
         <Link
           href="/home"
