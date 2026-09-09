@@ -81,7 +81,14 @@ export function TopBar() {
                   focusRing,
                 )}
               >
-                <item.Icon size={19} strokeWidth={1.8} />
+                <item.Icon
+                  size={19}
+                  strokeWidth={active ? 2 : 1.8}
+                  className={cn(
+                    "transition-colors duration-[var(--motion-fast)]",
+                    active ? "text-primary" : item.iconTone,
+                  )}
+                />
                 <span className="whitespace-nowrap">{item.label}</span>
                 {active && (
                   <motion.span

@@ -52,7 +52,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               )}
               style={{ transitionTimingFunction: "var(--ease-standard)" }}
             >
-              <item.Icon size={20} strokeWidth={1.8} />
+              <item.Icon
+                size={20}
+                strokeWidth={active ? 2 : 1.8}
+                className={active ? "text-primary" : item.iconTone}
+              />
               {item.label}
             </Link>
           );
