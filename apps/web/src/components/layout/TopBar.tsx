@@ -18,7 +18,7 @@ export function TopBar() {
   const { toggle: toggleCommandPalette } = useCommandPalette();
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-4 border-b border-border bg-surface px-4 md:px-6">
+    <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border bg-surface px-4 md:px-6">
       {/* logo — top-left */}
       <Link
         href="/home"
@@ -26,12 +26,12 @@ export function TopBar() {
         aria-label="SkoLab home"
       >
         <span
-          className="flex h-7 w-7 items-center justify-center rounded-[7px] font-display text-body font-bold text-text-on-primary"
+          className="flex h-9 w-9 items-center justify-center rounded-[4px] font-display text-[22px] font-bold leading-none text-text-on-primary"
           style={{ background: "var(--primary)" }}
         >
           S
         </span>
-        <span className="hidden font-display text-[17px] font-bold text-text-primary sm:inline">SkoLab</span>
+        <span className="hidden font-display text-[18px] font-semibold tracking-[-0.02em] text-text-primary sm:inline">SkoLab</span>
       </Link>
 
       {/* search — centre */}
@@ -40,7 +40,7 @@ export function TopBar() {
         aria-label="Search"
         title="Search (⌘K)"
         className={cn(
-          "flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full border border-border bg-surface-subtle px-3 font-body text-body-s text-text-muted transition-colors hover:border-primary/40 hover:text-text-primary md:max-w-[420px] lg:max-w-[480px]",
+          "flex h-11 min-w-0 flex-1 items-center gap-2 rounded-full border border-border bg-surface-subtle px-4 font-body text-[14px] text-text-secondary transition-colors hover:border-primary hover:bg-surface md:max-w-[360px] lg:max-w-[380px]",
           focusRing,
         )}
         style={{ transitionTimingFunction: "var(--ease-standard)" }}
@@ -53,7 +53,7 @@ export function TopBar() {
       {/* primary nav — right-aligned, evenly spaced icon+label tabs */}
       <nav
         aria-label="Primary"
-        className="ml-auto hidden shrink-0 items-center gap-2 md:flex lg:gap-2"
+        className="ml-auto hidden shrink-0 items-center gap-1 md:flex lg:gap-2"
       >
         {BAR_NAV.map((item) => {
           const active = pathname?.startsWith(item.href);
@@ -64,8 +64,8 @@ export function TopBar() {
               aria-current={active ? "page" : undefined}
               title={item.label}
               className={cn(
-                "relative flex h-12 w-[76px] flex-col items-center justify-center gap-1 rounded-lg font-body text-[11px] font-medium leading-none transition-colors",
-                active ? "text-primary" : "text-text-muted hover:bg-surface-subtle hover:text-text-primary",
+                "relative flex h-14 w-[76px] flex-col items-center justify-center gap-1 font-body text-[12px] font-medium leading-none transition-colors",
+                active ? "text-primary" : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary",
                 focusRing,
               )}
             >
@@ -74,7 +74,7 @@ export function TopBar() {
               {active && (
                 <motion.span
                   layoutId="topnav-active"
-                  className="absolute -bottom-[7px] h-[2px] w-8 rounded-full bg-primary"
+                  className="absolute -bottom-[1px] h-[2px] w-full bg-primary"
                   transition={{ type: "spring", stiffness: 400, damping: 32 }}
                 />
               )}

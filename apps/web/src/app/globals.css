@@ -244,6 +244,52 @@
   --shadow-signal: 0 0 0 1px var(--accent-signal), 0 0 24px color-mix(in srgb, var(--accent-signal) 30%, transparent);
 }
 
+/* Professional network theme (decision 0013). This intentionally sits after
+ * the legacy Instrument blocks while the feature-by-feature migration is in
+ * progress: it makes the bright, compact professional workspace the default
+ * without breaking an explicit dark-mode choice. */
+:root:not([data-theme="dark"]),
+:root[data-theme="light"] {
+  color-scheme: light;
+  --page-bg: #f3f2ef;
+  --surface: #ffffff;
+  --surface-subtle: #f3f2ef;
+  --surface-raised: #ffffff;
+  --border-color: #e0dfdc;
+  --border-strong: #cfcac4;
+  --text-primary: #191919;
+  --text-secondary: #666666;
+  --text-muted: #666666;
+  --text-on-primary: #ffffff;
+  --primary: #0a66c2;
+  --primary-dark: #004182;
+  --primary-deeper: #003a70;
+  --accent-signal: #0a66c2;
+  --accent-signal-dark: #004182;
+  --accent-live: #057642;
+  --border-input: #b7b7b7;
+  --surface-input: #ffffff;
+  --accent-teal: #0f766e;
+  --accent-teal-dark: #115e56;
+  --accent-amber: #915907;
+  --accent-indigo: #0a66c2;
+  --accent-emerald: #057642;
+  --accent-rose: #b24020;
+  --accent-violet: #5b4bb7;
+  --accent-orange: #b24020;
+  --accent-cyan: #0b6e99;
+  --accent-pink: #a83279;
+  --notification: #cc1016;
+  --match-bg: #e8f3ff;
+  --match-text: #004182;
+  --ring: color-mix(in srgb, var(--primary) 34%, transparent);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-card-hover: 0 2px 7px rgba(0, 0, 0, 0.12);
+  --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.16);
+  --shadow-signal: none;
+}
+
 @theme inline {
   --color-page-bg: var(--page-bg);
   --color-surface: var(--surface);

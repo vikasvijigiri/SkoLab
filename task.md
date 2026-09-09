@@ -397,3 +397,58 @@ AA 14/14 across public routes, light + dark.
 
 **Status:** rollout complete on `design/web-visual-contract`; ready for PR
 (awaiting the go-ahead to push).
+
+---
+
+## 2026-09-08 — Adopt UI/UX harness repos + pivot web identity to dark-first "Instrument"
+
+**Asked:** "Connect to notion notes … go to their repos … install into our root
+directory … improve the frontend and UI/UX … make the UI/UX/frontend world class
+production grade FAANG level, futuristic, modern, ultra fast." Then chose
+(AskUserQuestion): direction **B (Instrument, dark-first)** + **full applied
+overhaul**.
+
+1. Assessed the repos on the Notion "Web App Factory" page. Adopted
+   `addyosmani/agent-skills` + the `vercel-labs` skill set (non-overlapping);
+   skipped `wshobson/agents`, `obra/superpowers`, `anthropics/skills` (they
+   overlap our lifecycle layer).
+2. **Phase A** (`7844a28`): one new skill `.claude/skills/frontend-ui/` +
+   `engineering-standards/references/frontend-performance-rules.md`; vendored
+   `addyosmani` at `vendor/harness-skills/`. Layer validators green.
+3. **Phase B** (`7616035`): `DESIGN.md` rewritten C → B (dark-first); decision
+   `0012`.
+4. **Phase C** (`8f6151e`): `apps/web` migrated — `globals.css` dark-as-base,
+   primitives, shell, avatars. Token layer carried the bulk.
+5. **Verified:** layer validators; `apps/web` vitest 110, tsc, lint, build,
+   `check:contrast` (both themes), Playwright axe WCAG AA — all green. One
+   pre-existing e2e failure (`smoke.spec.ts:13`) confirmed unrelated.
+6. Plan: `docs/plans/2026-09-08-instrument-frontend.md`.
+
+**Status:** Done on branch `feat/instrument-frontend` (unmerged, no remote).
+Formal `testing`/`code-review` skill passes and merge still pending the owner's
+go-ahead.
+
+---
+
+## 2026-09-09 - Replace frontend capability layer and adopt professional-network UI
+
+**Asked:** "Use the best for front end development" after requesting a
+LinkedIn-style interface, theme, and typography, then asked to use the Notion
+frontend/UI/UX repository collection and replace the local Claude layer.
+
+1. Queried Notion's Web App Factory page and selected the strongest frontend
+   pair: `addyosmani/agent-skills` plus `vercel-labs/agent-skills`.
+2. Cloned both repositories at shallow depth and installed their skills under
+   `.claude/skills/`.
+3. Moved the previous repository-native `.claude` layer to the recoverable
+   `.claude.previous-20260909` backup and added provenance documentation plus a
+   plugin manifest.
+4. Applied the requested visual language: light professional-network default,
+   neutral canvas, white panels, restrained blue, compact top navigation, and
+   Inter typography; dark mode remains explicit.
+5. Verified contrast, 110 Vitest tests, TypeScript, lint, production build, and
+   Playwright screenshot smoke checks at desktop/mobile and light/dark themes.
+6. Remaining known issue: lint reports one pre-existing unused `CollabMember`
+   import warning in `src/lib/firebase/workspace.ts`; no new errors were found.
+
+**Status:** Done - frontend skills installed and UI foundation verified.

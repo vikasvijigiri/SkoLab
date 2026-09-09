@@ -10,20 +10,20 @@
  */
 
 // --- token values — MUST mirror src/app/globals.css -------------------------
-// Direction B (Instrument, DESIGN.md 2026-09-08): dark is the base theme.
+// Professional network theme (DESIGN.md / decision 0013): light is the base.
 const LIGHT = {
-  "page-bg": "#f7f7f5",
+  "page-bg": "#f3f2ef",
   surface: "#ffffff",
-  "surface-subtle": "#eeeeec",
-  "text-primary": "#1b1d23",
-  "text-secondary": "#565863",
-  "text-muted": "#5f616d",
+  "surface-subtle": "#f3f2ef",
+  "text-primary": "#191919",
+  "text-secondary": "#666666",
+  "text-muted": "#666666",
   "text-on-primary": "#ffffff",
-  primary: "#4b3fd6",
-  "primary-dark": "#3f34c2",
-  "primary-deeper": "#332aa0",
-  "accent-signal": "#c9401f",
-  "accent-signal-dark": "#af3819",
+  primary: "#0a66c2",
+  "primary-dark": "#004182",
+  "primary-deeper": "#003a70",
+  "accent-signal": "#0a66c2",
+  "accent-signal-dark": "#004182",
 };
 
 const DARK = {

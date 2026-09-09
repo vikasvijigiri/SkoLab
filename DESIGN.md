@@ -1,4 +1,11 @@
-# DESIGN.md — SkoLab (web)
+# DESIGN.md - SkoLab (web)
+
+> Current direction (2026-09-09): Professional Network. The supplied
+> LinkedIn-style reference supersedes the dark-first default: SkoLab now uses a
+> bright neutral canvas, white bordered panels, professional blue actions,
+> compact utility navigation, and Inter-led typography. This adapts the visual
+> language only; SkoLab keeps its own branding and content. Dark mode remains an
+> explicit user choice. See decision 0013.
 
 **Status:** adopted — **direction B (Instrument)**; positioning pivot confirmed
 by the product owner 2026-09-08. Supersedes direction C ("Confident Modernist",
