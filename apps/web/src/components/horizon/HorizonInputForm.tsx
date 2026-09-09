@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, AlertCircle } from "lucide-react";
+import { ArrowRight, AlertCircle, Crosshair, Layers3 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -59,10 +59,22 @@ export function HorizonInputForm({
       transition={{ duration: 0.3 }}
       className="flex flex-col gap-8"
     >
-      <Card accentColor="var(--primary)" className="border-border/50 bg-surface/60 backdrop-blur-md">
+      <Card accentColor="var(--primary)" className="border-border/50 bg-surface/70 backdrop-blur-md">
         <div className="flex flex-col gap-5">
+          <div className="flex items-start gap-3 border-b border-border/70 pb-4">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Layers3 size={17} />
+            </div>
+            <div>
+              <h2 className="font-display text-[17px] font-bold text-text-primary">Define your frontier</h2>
+              <p className="mt-1 font-body text-[12px] leading-relaxed text-text-muted">
+                Choose a research field to map its next high-impact opportunity.
+              </p>
+            </div>
+          </div>
           <div>
-            <span className="mb-2 block font-body text-body-s font-medium text-text-secondary">
+            <span className="mb-2 flex items-center gap-1.5 font-body text-body-s font-medium text-text-secondary">
+              <Crosshair size={14} className="text-primary" />
               Scientific or technological field
             </span>
             {fieldsQ.isPending ? (
@@ -121,9 +133,12 @@ export function HorizonInputForm({
       </Card>
 
       <div className="flex flex-col gap-3">
-        <h3 className="font-body text-body-s font-bold uppercase tracking-wide text-text-muted">
-          Or jump straight into a frontier
-        </h3>
+        <div>
+          <h3 className="font-body text-body-s font-bold uppercase tracking-wide text-text-muted">
+            Jump straight into a frontier
+          </h3>
+          <p className="mt-1 font-body text-[12px] text-text-muted">Curated starting points for a faster first pass.</p>
+        </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {FRONTIER_DOMAINS.map((domain, i) => (
             <motion.button

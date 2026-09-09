@@ -44,7 +44,7 @@ export function NexusChatPanel({
         mobileHidden && "hidden md:flex"
       )}
     >
-      <header className="h-16 border-b border-border flex items-center px-6 gap-3 shrink-0 bg-surface/20 backdrop-blur-md">
+      <header className="h-16 border-b border-border flex items-center px-6 gap-3 shrink-0 bg-surface/70 backdrop-blur-md">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <Sparkles size={16} />
         </div>
@@ -56,27 +56,31 @@ export function NexusChatPanel({
               : "Awaiting workspace papers"}
           </p>
         </div>
+        <span className="ml-auto hidden rounded-full border border-border bg-surface px-2.5 py-1 font-body text-[11px] font-medium text-text-muted sm:inline-flex">
+          {activeCollectionCount > 0 ? `${activeCollectionCount} sources connected` : "Add sources to begin"}
+        </span>
       </header>
 
       <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4">
         {messages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center max-w-lg mx-auto text-center py-10 px-4">
-            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-4 animate-pulse">
+            <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-4 shadow-[0_0_0_8px_color-mix(in_srgb,var(--primary)_6%,transparent)]">
               <MessageSquare size={20} />
             </div>
+            <div className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-primary">Contextual synthesis</div>
             <h3 className="font-display text-h3 font-bold text-text-primary">Ask Nexus AI</h3>
             <p className="font-body text-body-s text-text-muted mt-2 leading-relaxed">
               Add papers on the left workspace panel. Once your collection is ready, ask Nexus to analyze, search for
               methodology overlaps, find knowledge gaps, or synthesize business opportunities.
             </p>
 
-            <div className="mt-8 flex flex-col gap-2 w-full">
+            <div className="mt-8 grid w-full gap-2 sm:grid-cols-3">
               {STARTER_PROMPTS.map((prompt) => (
                 <motion.button
                   key={prompt}
                   onClick={() => onSend(prompt)}
                   whileHover={{ y: -2, boxShadow: "var(--shadow-card-hover)" }}                  transition={TRANSITION_FAST}
-                  className="w-full text-left p-3 rounded-lg border border-border bg-surface/40 hover:bg-surface/90 hover:border-primary/30 transition-colors duration-[var(--motion-fast)] font-body text-body-s text-text-secondary flex items-center justify-between"
+                  className="w-full text-left p-3 rounded-lg border border-border bg-surface/60 hover:bg-surface hover:border-primary/30 transition-colors duration-[var(--motion-fast)] font-body text-body-s text-text-secondary flex items-center justify-between gap-2"
                 >
                   <span>{prompt}</span>
                   <ChevronRight size={14} className="text-text-muted" />
