@@ -21,6 +21,8 @@ export default function HomeLoading() {
             ))}
           </div>
         </div>
+        {/* profile-strength card (matches ProfileStrengthCard) */}
+        <div className="h-[220px] animate-pulse rounded-md bg-surface-subtle" />
         {/* "Your feed" heading + lens row (h-9, matches UnifiedFeed) */}
         <div className="flex h-9 items-center justify-between">
           <div className="h-4 w-20 animate-pulse rounded bg-surface-subtle" />
