@@ -11,7 +11,6 @@ import { useFirestoreCollection } from "@/lib/hooks/useFirestoreCollection";
 import { subscribeProjects } from "@/lib/firebase/workspace";
 import {
   dailyFeedQuery,
-  dailyConjectureQuery,
   industryOpportunitiesQuery,
   matchGrantsQuery,
   journalAdvisorQuery,
@@ -20,12 +19,12 @@ import {
   scienceNewsQuery,
 } from "@/lib/api/queries";
 import { AIDailyBriefCard, type BriefItem } from "@/components/feed/AIDailyBriefCard";
-import { DailyChallengeCard } from "@/components/feed/DailyChallengeCard";
 import { PeerSuggestionsCard } from "@/components/feed/PeerSuggestionsCard";
 import { UnifiedFeed } from "@/components/feed/UnifiedFeed";
 import { IdentityRailCard } from "@/components/feed/IdentityRailCard";
 import { Card } from "@/components/ui/Card";
 import { ProfileStrengthCard } from "@/components/product/ProfileStrengthCard";
+import { ResearchCommandCenter, ResearchLoopNote } from "@/components/product/ResearchCommandCenter";
 import type {
   ActivityItem,
   ScienceNewsItem,
@@ -145,7 +144,6 @@ export function HomeClient() {
   const ready = !profileLoading;
 
   const feedQ = useQuery({ ...dailyFeedQuery(authorId, topic), enabled: ready });
-  const conjectureQ = useQuery({ ...dailyConjectureQuery(authorId, name), enabled: ready });
   const grantsQ = useQuery({ ...matchGrantsQuery(authorId ?? ""), enabled: ready && !!authorId });
   const oppsQ = useQuery({ ...industryOpportunitiesQuery(topic || "AI", name), enabled: ready });
   const journalQ = useQuery({ ...journalAdvisorQuery(authorId ?? ""), enabled: ready && !!authorId });
@@ -157,7 +155,6 @@ export function HomeClient() {
   const newsQ = useQuery({ ...scienceNewsQuery(topic), enabled: ready });
 
   const feed = feedQ.data ?? EMPTY_FEED;
-  const conjecture = conjectureQ.data ?? null;
   const activity = activityQ.data?.items ?? EMPTY_ACTIVITY;
   const news = newsQ.data?.items ?? EMPTY_NEWS;
   const jobs = oppsQ.data ?? EMPTY_JOBS;
@@ -198,17 +195,28 @@ export function HomeClient() {
           unresolved={profileUnresolved}
         />
       </div>
-      <DailyChallengeCard
-        conjecture={conjecture}
-        loading={conjectureQ.isPending}
+      <ProfileStrengthCard
+        name={name}
+        firestoreProfile={firestoreProfile}
+        author={author}
         unresolved={profileUnresolved}
+        loading={profileLoading}
       />
     </>
   );
 
   return (
-    <div className="mx-auto w-full max-w-[1128px] px-4 py-8 md:px-6 lg:grid lg:grid-cols-[minmax(0,70fr)_minmax(0,27fr)] lg:gap-[3%]">
-      {/* ── Main column (≈72%) — the feed ───────────────────────────────── */}
+    <div className="mx-auto w-full max-w-[1320px] px-4 py-8 md:px-6 lg:grid lg:grid-cols-[minmax(0,20fr)_minmax(0,53fr)_minmax(0,27fr)] lg:gap-[2.5%]">
+      {/* ── Left column (≈20%) — the Daily Brief, its own scrollbar ──────── */}
+      <aside aria-label="Your daily brief" className="hidden lg:block">
+        {/* Independent of the page scroll: pinned 24px below the top bar, its
+            own overflow when the brief outgrows the viewport. */}
+        <div className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto pr-1 [scrollbar-width:thin]">
+          <AIDailyBriefCard items={briefItems} loading={briefLoading} layout="stack" />
+        </div>
+      </aside>
+
+      {/* ── Center column (≈53%) — command center + the feed ────────────── */}
       <div className="flex min-w-0 flex-col gap-5">
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
           <h1 className="font-display text-display-m font-bold text-text-primary">
@@ -219,15 +227,13 @@ export function HomeClient() {
           </p>
         </motion.div>
 
-        <AIDailyBriefCard items={briefItems} loading={briefLoading} />
+        {/* The brief has no column of its own below lg — it stacks here. */}
+        <div className="lg:hidden">
+          <AIDailyBriefCard items={briefItems} loading={briefLoading} />
+        </div>
 
-        <ProfileStrengthCard
-          name={name}
-          firestoreProfile={firestoreProfile}
-          author={author}
-          unresolved={profileUnresolved}
-          loading={profileLoading}
-        />
+        <ResearchCommandCenter topic={topic} projectCount={0} />
+        <ResearchLoopNote />
 
         {/* One blended, self-labelling research feed — papers · news · network
             · roles, ranked together, with a lens filter and Save / Not-relevant. */}
@@ -244,15 +250,12 @@ export function HomeClient() {
         <div className="mt-2 flex flex-col gap-5 lg:hidden">{rightRail}</div>
       </div>
 
-      {/* ── Right rail (≈25%) — identity · workspaces · people · challenge ── */}
+      {/* ── Right rail (≈27%) — identity · workspaces · people · strength ── */}
       <aside aria-label="Your profile and suggestions" className="hidden lg:block">
-        {/* One scrollbar only. The rail rides the page's own scrollbar — no
-            second, independent scroll container beside it (that gutter was the
-            wasted space). The aside stretches to the feed's height, so the
-            sticky child stays pinned 24px below the top bar for the whole
-            scroll. The rail's content fits within the viewport, so nothing is
-            clipped; if it ever outgrows the viewport, re-introduce an internal
-            scroll with `scrollbar-gutter: stable` rather than a raw overflow. */}
+        {/* Rides the page's own scrollbar — the sticky child stays pinned 24px
+            below the top bar for the whole scroll. If the rail ever outgrows
+            the viewport, add `overflow-y-auto` with a max-height as the left
+            column does. */}
         <div className="sticky top-6 flex min-w-0 flex-col gap-5">
           {rightRail}
         </div>
