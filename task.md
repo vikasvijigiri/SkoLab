@@ -481,3 +481,28 @@ frontend/UI/UX repository collection and replace the local Claude layer.
    import warning in `src/lib/firebase/workspace.ts`; no new errors were found.
 
 **Status:** Done - frontend skills installed and UI foundation verified.
+
+---
+
+## 2026-09-10 — CoLab research publishing toolkit
+
+**Asked:** Make the project editor professional enough for calls, paper sharing,
+plagiarism/originality checks, standard journal templates, and a differentiated
+research workflow beyond a conventional Overleaf editor.
+
+1. Added live call-room launch using a deterministic Jitsi project room and
+   paper sharing using Web Share with clipboard fallback.
+2. Added four editable manuscript starters: IMRaD, IEEE-style technical paper,
+   Nature-style article, and systematic review.
+3. Added an originality preflight that checks project-local structure, citation
+   markers, quotations and word counts without fabricating an internet
+   plagiarism score.
+4. Added an explicit Crossref Similarity Check/iThenticate handoff for
+   publisher-grade similarity reports; no unsupported provider was invented.
+5. Preserved Firestore document autosave, role permissions, retry/error paths,
+   preview, focus mode and existing collaboration tabs.
+6. Verified TypeScript, ESLint, production build, full Vitest (110/110), and
+   pushed commits `b076515` and `350da93` to `origin/main`.
+
+**Status:** Done — deployed feature pass; native video signaling and a licensed
+similarity provider remain separate backend/integration work.
