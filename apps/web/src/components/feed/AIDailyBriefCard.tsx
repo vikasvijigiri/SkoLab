@@ -1,11 +1,17 @@
+"use client";
+
+import { useId } from "react";
 import Link from "next/link";
 import { ExternalLink, type LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { MarkdownText } from "@/components/ui/MathText";
+import { cn, focusRing } from "@/lib/utils";
 
 export interface BriefItem {
   key: string;
   icon: LucideIcon;
+  /** A design token (`var(--accent-*)`) — one hue per service so grant, role
+   * and journal briefs stay visually distinct across the rail. */
   color: string;
   label: string;
   /** Markdown-lite (supports **bold** and inline/display LaTeX) — rendered via MarkdownText. */
@@ -14,61 +20,72 @@ export interface BriefItem {
   href?: string;
 }
 
-function BriefRowInner({ item, external }: { item: BriefItem; external: boolean }) {
+function BriefCardInner({ item, external }: { item: BriefItem; external: boolean }) {
   return (
-    <div className="flex items-start gap-3">
-      <span
-        className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
-        style={{ backgroundColor: `color-mix(in srgb, ${item.color} 16%, transparent)`, color: item.color }}
-      >
-        <item.icon size={13} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="font-mono text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+    <>
+      <div className="flex items-center gap-2">
+        <span
+          aria-hidden="true"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
+          style={{ backgroundColor: `color-mix(in srgb, ${item.color} 16%, transparent)`, color: item.color }}
+        >
+          <item.icon size={13} />
+        </span>
+        <p
+          className="min-w-0 flex-1 truncate font-mono text-[11px] font-semibold uppercase tracking-wide"
+          style={{ color: item.color }}
+        >
           {item.label}
         </p>
-        <p className="mt-1 flex items-start gap-1 font-body text-body-s leading-snug text-text-primary">
-          <span className="min-w-0"><MarkdownText text={item.text} /></span>
-          {external && <ExternalLink size={11} className="mt-1 shrink-0 text-text-muted" />}
-        </p>
+        {external && <ExternalLink size={11} className="shrink-0 text-text-muted" />}
       </div>
-    </div>
+      <p className="mt-2 line-clamp-4 font-body text-body-s leading-snug text-text-primary">
+        <MarkdownText text={item.text} />
+      </p>
+    </>
   );
 }
 
-function BriefRow({ item }: { item: BriefItem }) {
-  if (!item.href) return <BriefRowInner item={item} external={false} />;
+/** One service = one colour-accented card. A left accent bar reads as a ledger
+ * row (Card's `accentSide="left"` convention for data cards). */
+function BriefCard({ item }: { item: BriefItem }) {
+  const external = !!item.href && item.href.startsWith("http");
+  const card = (
+    <Card
+      accentColor={item.color}
+      accentSide="left"
+      interactive={!!item.href}
+      className="flex h-full w-64 flex-col"
+    >
+      <BriefCardInner item={item} external={external} />
+    </Card>
+  );
 
-  const rowClass =
-    "-mx-1 block rounded-md px-1 py-0.5 transition-colors duration-[var(--motion-fast)] hover:bg-surface-subtle";
-
-  if (item.href.startsWith("http")) {
-    return (
-      <a href={item.href} target="_blank" rel="noopener noreferrer" className={rowClass}>
-        <BriefRowInner item={item} external />
-      </a>
-    );
+  if (!item.href) {
+    return <li className="shrink-0 snap-start">{card}</li>;
   }
+
+  const linkClass = cn("block h-full rounded-sm", focusRing);
   return (
-    <Link href={item.href} className={rowClass}>
-      <BriefRowInner item={item} external={false} />
-    </Link>
+    <li className="shrink-0 snap-start">
+      {external ? (
+        <a href={item.href} target="_blank" rel="noopener noreferrer" className={linkClass}>
+          {card}
+        </a>
+      ) : (
+        <Link href={item.href} className={linkClass}>
+          {card}
+        </Link>
+      )}
+    </li>
   );
 }
 
 export function AIDailyBriefCard({ items, loading }: { items: BriefItem[]; loading: boolean }) {
-  if (loading) {
-    // Height tuned to a typical 2–3-row brief so the swap to real content
-    // doesn't shift the feed below it (CLS).
-    return (
-      <Card className="animate-pulse">
-        <div className="h-[116px] rounded-md bg-surface-subtle" />
-      </Card>
-    );
-  }
+  const headingId = useId();
 
   return (
-    <Card accentColor="var(--accent-violet)" className="relative overflow-hidden">
+    <section aria-labelledby={headingId} className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <span
           aria-hidden="true"
@@ -77,22 +94,40 @@ export function AIDailyBriefCard({ items, loading }: { items: BriefItem[]; loadi
         >
           ✨
         </span>
-        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-accent-violet">
+        <h2
+          id={headingId}
+          className="font-mono text-[11px] font-semibold uppercase tracking-wide text-accent-violet"
+        >
           Your Daily Brief
         </h2>
       </div>
 
-      {items.length === 0 ? (
-        <p className="mt-3 font-body text-body-s leading-relaxed text-text-secondary">
+      {loading ? (
+        <div className="flex gap-3 overflow-hidden">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-[132px] w-64 shrink-0 animate-pulse rounded-sm bg-surface-subtle" />
+          ))}
+        </div>
+      ) : items.length === 0 ? (
+        <p className="font-body text-body-s leading-relaxed text-text-secondary">
           Building your personalized brief — check back shortly.
         </p>
       ) : (
-        <div className="mt-3 flex flex-col gap-3">
+        <ul
+          // Horizontally scrollable rail — a right-edge fade hints at the
+          // overflow (matches UnifiedFeed's lens row). Keyboard users reach each
+          // card through its own link, which scrolls the rail into view.
+          aria-label="Daily brief"
+          className={cn(
+            "-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1",
+            "[scrollbar-width:thin] [mask-image:linear-gradient(to_right,#000_92%,transparent)]",
+          )}
+        >
           {items.map((item) => (
-            <BriefRow key={item.key} item={item} />
+            <BriefCard key={item.key} item={item} />
           ))}
-        </div>
+        </ul>
       )}
-    </Card>
+    </section>
   );
 }

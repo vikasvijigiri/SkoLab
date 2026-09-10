@@ -12,8 +12,15 @@ export default function HomeLoading() {
       <div className="flex min-w-0 flex-col gap-4">
         {/* greeting */}
         <div className="h-7 w-56 animate-pulse rounded-xs bg-surface-subtle" />
-        {/* daily brief — matches AIDailyBriefCard's loading height */}
-        <div className="h-[148px] animate-pulse rounded-lg bg-surface-subtle" />
+        {/* daily brief — heading + horizontal card rail (matches AIDailyBriefCard) */}
+        <div className="flex flex-col gap-3">
+          <div className="h-4 w-32 animate-pulse rounded bg-surface-subtle" />
+          <div className="flex gap-3 overflow-hidden">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-[132px] w-64 shrink-0 animate-pulse rounded-sm bg-surface-subtle" />
+            ))}
+          </div>
+        </div>
         {/* "Your feed" heading + lens row (h-9, matches UnifiedFeed) */}
         <div className="flex h-9 items-center justify-between">
           <div className="h-4 w-20 animate-pulse rounded bg-surface-subtle" />
