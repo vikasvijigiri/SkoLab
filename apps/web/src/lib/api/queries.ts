@@ -22,8 +22,13 @@ import {
   openAlexAuthorsByName,
   openAlexAuthorsByTaxon,
   openAlexWorksByTaxon,
+  openAlexResearchers,
+  serverFilterParams,
+  fetchDeceasedFlags,
+  fetchCollabFlags,
   type TaxonLevel,
 } from "./endpoints";
+import type { DiscoveryFilterState, DiscoverySort } from "@/lib/types";
 
 /**
  * Typed `queryOptions` factories — the single place a query key and its fetcher
@@ -267,4 +272,46 @@ export const discoveryWorksQuery = (level: TaxonLevel, id?: string) =>
     queryFn: () => openAlexWorksByTaxon(level, id ?? ""),
     ...HOURLY,
     enabled: Boolean(id),
+  });
+
+// ── Fit-first researcher grid ────────────────────────────────────────────
+//   ["discovery-researchers", subfieldId, <server-filter params>, sort]
+//   ["discovery-deceased", [orcid, …]]  ["discovery-collab-flags", [id, …]]
+// Only the server-affecting filter slice is in the key — career stage,
+// activity, momentum, focus and shares-institution are client post-filters and
+// must not trigger a refetch.
+
+export const discoveryResearchersQuery = (
+  subfieldId: string | undefined,
+  filters: DiscoveryFilterState,
+  sort: DiscoverySort,
+) =>
+  queryOptions({
+    queryKey: [
+      "discovery-researchers",
+      subfieldId ?? null,
+      serverFilterParams(filters),
+      sort,
+    ] as const,
+    queryFn: () => openAlexResearchers({ subfieldId: subfieldId ?? "", filters, sort }),
+    ...HOURLY,
+    enabled: Boolean(subfieldId),
+  });
+
+export const deceasedFlagsQuery = (orcids: string[]) =>
+  queryOptions({
+    queryKey: ["discovery-deceased", [...orcids].sort()] as const,
+    queryFn: () => fetchDeceasedFlags(orcids),
+    staleTime: 24 * HR,
+    gcTime: 7 * 24 * HR,
+    enabled: orcids.length > 0,
+  });
+
+export const collabFlagsQuery = (ids: string[]) =>
+  queryOptions({
+    queryKey: ["discovery-collab-flags", [...ids].sort()] as const,
+    queryFn: () => fetchCollabFlags(ids),
+    staleTime: 30 * MIN,
+    gcTime: 2 * HR,
+    enabled: ids.length > 0,
   });
