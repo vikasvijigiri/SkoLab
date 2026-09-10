@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Palette, ShieldCheck, Bell, Sun, Moon, MonitorSmartphone, ChevronRight } from "lucide-react";
+import { Palette, ShieldCheck, Bell, Sun, Moon, MonitorSmartphone, ChevronRight, Database, LockKeyhole } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import { useLocalStorage } from "@/lib/hooks/useLocalStorage";
@@ -48,6 +48,8 @@ export default function SettingsPage() {
   const { user } = useAuth();
   const [theme, setTheme] = useState<Theme>(initialTheme);
   const [badge, setBadge] = useLocalStorage<boolean>("notifications:badge", true);
+  const [privateAi, setPrivateAi] = useLocalStorage<boolean>("trust:private-ai", true);
+  const [strictCitations, setStrictCitations] = useLocalStorage<boolean>("trust:strict-citations", true);
 
   function pick(t: Theme) {
     setTheme(t);
@@ -141,6 +143,31 @@ export default function SettingsPage() {
           Public bibliometric data (OpenAlex, Crossref, ORCID) is public. Anything you create in a
           workspace is visible only to people you invite.
         </p>
+      </Section>
+
+      <Section
+        id="trust"
+        icon={LockKeyhole}
+        title="Trust & research data"
+        desc="Controls for unpublished work, source quality and AI assistance."
+      >
+        <div className="flex flex-col divide-y divide-border">
+          <label aria-label="Keep private work private" className="flex cursor-pointer items-start justify-between gap-4 py-3">
+            <span>
+              <span className="flex items-center gap-2 font-body text-body-s font-medium text-text-primary"><Database size={14} className="text-accent-teal" /> Keep private work private</span>
+              <span className="mt-1 block max-w-lg font-body text-[11.5px] leading-relaxed text-text-muted">Treat project documents and unpublished evidence as workspace-only context for SkoLab AI features.</span>
+            </span>
+            <input type="checkbox" checked={privateAi} onChange={(e) => setPrivateAi(e.target.checked)} className="mt-1 h-4 w-4 accent-[var(--primary)]" />
+          </label>
+          <label aria-label="Require source-backed answers" className="flex cursor-pointer items-start justify-between gap-4 py-3">
+            <span>
+              <span className="font-body text-body-s font-medium text-text-primary">Require source-backed answers</span>
+              <span className="mt-1 block max-w-lg font-body text-[11.5px] leading-relaxed text-text-muted">Prefer traceable papers and explicit uncertainty over unsupported summaries.</span>
+            </span>
+            <input type="checkbox" checked={strictCitations} onChange={(e) => setStrictCitations(e.target.checked)} className="mt-1 h-4 w-4 accent-[var(--primary)]" />
+          </label>
+        </div>
+        <p className="mt-3 rounded-md bg-surface-subtle px-3 py-2 font-body text-[11px] leading-relaxed text-text-muted">These preferences are saved on this device today. Institutional policy enforcement and audit exports belong in the next backend release.</p>
       </Section>
     </div>
   );
