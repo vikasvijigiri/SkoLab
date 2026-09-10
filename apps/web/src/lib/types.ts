@@ -447,3 +447,82 @@ export interface CollabMeeting {
   when: string;
   timestamp: number;
 }
+
+// ── Discovery: fit-first collaborator finder (docs/plans/2026-09-10-discovery-fit-first.md) ──
+
+/** One OpenAlex `/authors` row after the proxy widens `select` and `mapAuthor.ts`
+ *  normalises it. `topics[].value` is the per-topic share (0–1). */
+export interface OpenAlexAuthorRaw {
+  id: string;
+  display_name: string;
+  orcid: string | null;
+  works_count: number;
+  cited_by_count: number;
+  h_index: number;
+  i10_index: number;
+  two_yr_mean_citedness: number;
+  institution: string;
+  country: string | null;
+  inst_type: string | null;
+  counts_by_year: { year: number; works_count: number; cited_by_count: number }[];
+  affiliations: { institution: string; years: number[] }[];
+  topics: { id: string; display_name: string; value: number; subfield_id: string | null; field_id: string | null }[];
+}
+
+export type ActivityState = "active" | "winding_down" | "dormant";
+export type MomentumState = "rising" | "steady" | "cooling";
+export type CareerStage = "emerging" | "established" | "senior";
+
+export interface ResearcherSignals {
+  activity: ActivityState;
+  momentum: MomentumState;
+  /** Years between the earliest visible activity and now (OpenAlex only exposes ~10y). */
+  yearsActiveVisible: number;
+  careerStage: CareerStage;
+  /** Decade start-years touched, ascending, e.g. `[2000, 2010, 2020]`. */
+  activeDecades: number[];
+  /** 0–1: the author's topic_share for the scoped field/subfield (or their max). */
+  topicalFocus: number;
+  /** 0–100 percentile of h-index within the field, or `null` when no distribution is available. */
+  standingPercentile: number | null;
+  /** cited_by_count per year, oldest→newest — for the momentum sparkline. */
+  sparkline: number[];
+}
+
+export interface ResearcherResult {
+  id: string;
+  display_name: string;
+  orcid: string | null;
+  institution: string;
+  country: string | null;
+  instType: string | null;
+  hIndex: number;
+  i10: number;
+  worksCount: number;
+  citedBy: number;
+  twoYrMean: number;
+  /** Topic display names, most-concentrated first — for the fit Jaccard and card chips. */
+  topics: string[];
+  signals: ResearcherSignals;
+  /** Merged in by the page from `scoreFit`. */
+  fit?: { score: number; why: string };
+  /** Merged in from the Wikidata `P570` enrichment; present only when verified. */
+  deceased?: { year: number };
+  /** Merged in from the collab-flags seam; `true` only when a researcher self-declared. */
+  openToCollaboration?: boolean;
+}
+
+export type DiscoverySort = "fit" | "momentum" | "standing" | "recent";
+
+export interface DiscoveryFilterState {
+  careerStage: CareerStage[];
+  activity: ActivityState[];
+  momentum: MomentumState[];
+  /** One of `TOPICAL_FOCUS_STOPS` (0, .25, .5, .75). */
+  topicalFocusMin: number;
+  hasOrcid: boolean;
+  /** Minimal connection-distance proxy — same last-known institution as the viewer. */
+  sharesInstitution: boolean;
+  countries: string[];
+  instTypes: string[];
+}
