@@ -1,34 +1,44 @@
 # HANDOFF
 
-> Current status (2026-09-09): professional-network UI audit is green on
-> `feat/instrument-frontend`; 19 Playwright checks, 110 unit tests, TypeScript,
-> lint, build, contrast, and production dependency audit pass. The branch is
-> ready to push and open as a PR. The previous Claude layer is preserved locally
-> at `.claude.previous-20260909`; the active layer is sourced from addyosmani
-> and Vercel frontend skills under `.claude/skills/`.
+> Current status (2026-09-10): `main` is at `cff6997` (PR #119 merged) with the
+> Discovery **fit-first collaborator finder** shipped — see `LOG.md`'s
+> 2026-09-10 entry and `decisions/0014`. Working tree clean apart from
+> `.claude/hooks/state/*` bookkeeping. No open feature branch.
 
 > Current-state snapshot, not history. Overwritten in place at the end of
 > every session. For history, see `LOG.md`; for why a decision was made, see
 > `decisions/`.
 
-**Last updated:** 2026-09-08
+**Last updated:** 2026-09-10
+
+> **Note:** the sections below "Where the repository is" predate several merges
+> (daily brief, research surfaces, discovery fit-first) and are stale — trust
+> `LOG.md` and `git log` over them until a full `documentation` pass refreshes
+> this file.
 
 ## Where the repository is
 
-`main` is at `1ab8c31`. Active work is on branch **`feat/instrument-frontend`**
-(3 commits ahead, unmerged, no remote):
+`main` is at `cff6997` — merge of PR #119
+(`feat/discovery-fit-first`, base `206e845`), branch deleted local + remote.
 
-- `7844a28` — Phase A: `.claude/skills/frontend-ui/` + `engineering-standards/
-  references/frontend-performance-rules.md`, adapted from `addyosmani/agent-skills`
-  and `vercel-labs`. `vendor/harness-skills/addyosmani-agent-skills/` vendored
-  (skill content only).
-- `7616035` — Phase B: `DESIGN.md` rewritten C → B (dark-first "Instrument");
-  `decisions/0012-instrument-visual-identity.md`.
-- `8f6151e` — Phase C: `apps/web` migrated to the dark-first contract —
-  `globals.css` dark-as-base, primitives, shell, avatars.
+- Discovery's researcher surface is now fit-first: defaults to the viewer's
+  resolved subfield, ranks by a no-embeddings fit score, shows activity /
+  momentum / career-stage / decades / topical-focus / standing / ORCID /
+  deceased signals with a click-only filter rail.
+- New: `apps/web/src/lib/discovery/*`, `apps/web/src/components/discovery/*`,
+  `apps/web/src/app/api/enrich/{deaths,collab-flags}`. No Go/Python change.
+- Plan `docs/plans/2026-09-10-discovery-fit-first.md` (all 11 tasks ticked,
+  `## Approved`); decision `decisions/0014-discovery-fit-first-collaborator.md`.
+- Verified before merge: tsc 0, lint 0, vitest 39 files / 160 tests,
+  check:contrast pass, Playwright `discovery-researchers` + `rollout-visual`
+  10/10 (axe AA), `next build` 0.
 
-Plan: `docs/plans/2026-09-08-instrument-frontend.md` (all phases ticked;
-`## Approved`).
+### Earlier (stale) — instrument-frontend, 2026-09-08
+
+`main` was at `1ab8c31`; branch `feat/instrument-frontend`
+(`7844a28` `7616035` `8f6151e`) — dark-first "Instrument" identity,
+`decisions/0012`, plan `docs/plans/2026-09-08-instrument-frontend.md`. Status
+of that branch relative to current `main` is unverified here.
 
 ## Verification behind the branch
 
