@@ -6,6 +6,36 @@
 
 ---
 
+## 2026-09-10 — Discovery fit-first collaborator finder
+
+Shipped via PR #119 (merge commit `cff6997`), merged to `main` and synced;
+feature branch `feat/discovery-fit-first` deleted. Squash base `206e845`.
+
+- Discovery's "Top researchers in <field>" list is now a fit-first collaborator
+  finder: defaults to the signed-in user's resolved subfield, ranks by a
+  no-embeddings fit score (concept Jaccard + institution + topical focus), and
+  shows per-researcher signals — activity/liveness dot, momentum sparkline,
+  career stage, active decades, topical focus, field-normalised standing,
+  ORCID-verified, and a Wikidata-`P570`-verified "in memoriam" mark.
+- All in the `apps/web` Next.js + OpenAlex route-handler layer — no Go/Python
+  change (no toolchain on this box, `decisions/0009`). New pure modules under
+  `lib/discovery/` with every threshold in one env-overridable `config.ts`;
+  two `app/api/enrich/*` routes (Wikidata deaths, collab-flag seam).
+- Found + fixed en route: `/authors` has no `topics.subfield.id`/`topics.field.id`
+  filter, so the route now expands a node to its `topics.id` list — this also
+  repaired the previously-400ing researcher drilldown.
+- Click-only invariant kept (no `<input>`); topical focus is a 4-stop segmented
+  control, connection distance a "shares your institution" proxy (real
+  2nd-degree + an embedding fit term deferred). "Open to collaboration" is a
+  typed seam, empty until professors self-declare.
+- Plan `docs/plans/2026-09-10-discovery-fit-first.md`; decision `0014`.
+- Verified: tsc 0, lint 0, vitest 39 files / 160 tests, check:contrast pass,
+  Playwright `discovery-researchers` + `rollout-visual` 10/10 (axe AA clean),
+  `next build` 0. No CI exists for this repo; branch protection unreadable on
+  the free private repo (advisory only).
+
+---
+
 ## 2026-09-08 — Agent (Claude)
 
 Adopted UI/UX skills from the Notion "Web App Factory" page and pivoted the web
