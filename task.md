@@ -506,3 +506,21 @@ research workflow beyond a conventional Overleaf editor.
 
 **Status:** Done — deployed feature pass; native video signaling and a licensed
 similarity provider remain separate backend/integration work.
+
+---
+
+## 2026-09-10 â€” CoLab and Discovery layout alignment
+
+**Asked:** Make the CoLab side system and Discovery surface use the same
+content width and border rhythm as the rest of the application.
+
+1. Standardized the research content frame to a 1128px maximum with shared
+   responsive gutters on workspace list, workspace detail, and Discovery.
+2. Matched the CoLab rail system to Discovery: 56px project rail + 204px file
+   rail = 260px, with consistent border treatment.
+3. Unified the main CoLab frame and Discovery cards to the same compact border
+   radius and edge alignment.
+4. Verified TypeScript, ESLint, production build, full Vitest (111/111), and
+   diff whitespace checks before release.
+
+**Status:** Ready to sync and deploy after remote smoke verification.

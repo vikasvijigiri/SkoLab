@@ -32,12 +32,8 @@ for (const route of ROUTES) {
     expect(response?.status(), `${route.path} returned an HTTP error`).toBeLessThan(500);
     // Give auth and Firestore-backed shells a bounded settling window before
     // capturing evidence; a screenshot of the top bar alone is not a valid
-    // page verification.
+    // page verification. The poll also covers first-load Next.js compilation.
     await page.waitForTimeout(route.protected ? 2000 : 500);
-    await page.screenshot({
-      path: `e2e/__screens__/route-audit/${route.name}.png`,
-      fullPage: true,
-    });
 
     if (route.protected) {
       // Local CI without Firebase redirects; deployed environments with a
@@ -51,8 +47,16 @@ for (const route of ROUTES) {
     } else {
       await expect(page.locator("body")).not.toBeEmpty();
     }
-    const visibleText = (await page.locator("body").innerText()).trim();
-    expect(visibleText.length, `${route.path} rendered no meaningful text`).toBeGreaterThan(20);
+    await expect
+      .poll(async () => (await page.locator("body").innerText()).trim().length, {
+        timeout: 10000,
+        message: `${route.path} rendered no meaningful text`,
+      })
+      .toBeGreaterThan(20);
+    await page.screenshot({
+      path: `e2e/__screens__/route-audit/${route.name}.png`,
+      fullPage: true,
+    });
     expect(pageErrors, `${route.path} threw a browser exception`).toEqual([]);
   });
 }

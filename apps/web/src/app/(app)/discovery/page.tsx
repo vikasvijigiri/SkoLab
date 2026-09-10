@@ -103,7 +103,7 @@ export function DiscoveryContent() {
   );
 
   const railContent = (
-    <div className="flex flex-col gap-4 rounded-xl border border-border/80 bg-surface/70 p-4 shadow-card">
+    <div className="flex flex-col gap-4 rounded-sm border border-border/80 bg-surface/70 p-4 shadow-card">
       {/* Breadcrumb — every crumb is a button back to that level. */}
       <div className="flex flex-wrap items-center gap-1 font-body text-[12px] text-text-muted">
         <button
@@ -196,7 +196,7 @@ export function DiscoveryContent() {
   }
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-5 px-4 py-6 md:px-8 lg:max-w-6xl">
+    <div className="mx-auto flex w-full max-w-[1128px] flex-col gap-5 px-4 py-6 md:px-6">
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -220,7 +220,7 @@ export function DiscoveryContent() {
 
       <RailShell rail={railContent} railWidth="260px" mobileRail="collapsible" stickyRail>
         <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-3 rounded-xl border border-accent-indigo/20 bg-accent-indigo/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 rounded-sm border border-accent-indigo/20 bg-accent-indigo/5 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent-indigo/15 text-accent-indigo">
                 <Lightbulb size={15} />
