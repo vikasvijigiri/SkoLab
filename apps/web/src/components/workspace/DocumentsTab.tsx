@@ -16,6 +16,7 @@ import {
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import { cn } from "@/lib/utils";
 import type { CollabProject, CollabDocument } from "@/lib/types";
+import { WorkspaceResearchActions } from "@/components/workspace/ResearchTools";
 
 function relTime(ts: number) {
   const s = Math.round((Date.now() - ts) / 1000);
@@ -222,7 +223,9 @@ export function DocumentsTab({
           <DocEditorPane
             key={active.id}
             projectId={project.id}
+            projectName={project.name}
             doc={active}
+            documents={documents}
             canEdit={canEdit}
             by={by}
             focus={focus}
@@ -243,7 +246,9 @@ export function DocumentsTab({
  *  documents remounts it and the draft re-initialises from `doc.body`. */
 function DocEditorPane({
   projectId,
+  projectName,
   doc,
+  documents,
   canEdit,
   by,
   focus,
@@ -251,7 +256,9 @@ function DocEditorPane({
   onError,
 }: {
   projectId: string;
+  projectName: string;
   doc: CollabDocument;
+  documents: CollabDocument[];
   canEdit: boolean;
   by: Author;
   focus: boolean;
@@ -294,10 +301,26 @@ function DocEditorPane({
     }, 800);
   }
 
+  async function applyTemplate(body: string) {
+    if (!canEdit) return;
+    setDraft(body);
+    setSaving(true);
+    try {
+      await updateDocument(projectId, doc.id, { body }, by);
+      setSavedAt(Date.now());
+      setJustSaved(true);
+      setTimeout(() => setJustSaved(false), 1400);
+    } catch (err) {
+      onError(friendlyFirestoreError(err as { code?: string; message?: string }));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* Meta strip */}
-      <div className="flex h-9 shrink-0 items-center justify-between border-b border-border px-4 font-body text-[11.5px] text-text-muted">
+      <div className="flex min-h-9 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-1.5 font-body text-[11.5px] text-text-muted">
         <span className="flex items-center gap-2 tabular-nums">
           <span
             className={cn(
@@ -310,6 +333,15 @@ function DocEditorPane({
           {words > 0 && <span>{words} words · ~{readMin} min</span>}
         </span>
         <span className="flex items-center gap-1">
+          <WorkspaceResearchActions
+            projectId={projectId}
+            projectName={projectName}
+            documentTitle={doc.title}
+            documentBody={draft}
+            documents={documents}
+            canEdit={canEdit}
+            onApplyTemplate={applyTemplate}
+          />
           <button
             type="button"
             onClick={() => setPreview((v) => !v)}
