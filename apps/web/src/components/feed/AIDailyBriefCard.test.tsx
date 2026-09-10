@@ -62,4 +62,15 @@ describe("AIDailyBriefCard", () => {
     renderWithProviders(<AIDailyBriefCard items={[]} loading={false} />);
     expect(screen.getByText(/building your personalized brief/i)).toBeInTheDocument();
   });
+
+  it("stacks the cards vertically and full-width in the 'stack' layout", () => {
+    renderWithProviders(<AIDailyBriefCard items={items} loading={false} layout="stack" />);
+    const rail = screen.getByRole("list", { name: /daily brief/i });
+    expect(rail.className).toContain("flex-col");
+    expect(rail.className).not.toContain("overflow-x-auto");
+    // each card fills the column rather than a fixed 256px rail width
+    const firstCard = within(rail).getAllByRole("listitem")[0]?.querySelector("div");
+    expect(firstCard?.className).toContain("w-full");
+    expect(firstCard?.className).not.toContain("w-64");
+  });
 });
