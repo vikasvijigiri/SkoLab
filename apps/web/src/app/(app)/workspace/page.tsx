@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, FolderKanban, Users2 } from "lucide-react";
+import { Plus, FolderKanban, Users2, ArrowRight, Compass, Lightbulb } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -97,12 +97,36 @@ export default function WorkspaceListPage() {
         transition={{ duration: 0.4 }}
         className="flex items-center justify-between"
       >
-        <h1 className="font-display text-display-m font-bold text-text-primary">CoLab Workspace</h1>
+        <div>
+          <p className="eyebrow text-accent-teal">Research project control room</p>
+          <h1 className="mt-1 font-display text-display-m font-bold text-text-primary">CoLab Workspace</h1>
+          <p className="mt-1 max-w-xl font-body text-body-s text-text-secondary">Keep questions, evidence, decisions, experiments and collaborators in one durable research record.</p>
+        </div>
         <Button fullWidth={false} onClick={() => setCreating((v) => !v)} className="gap-2">
           <Plus size={16} />
           {creating ? "Cancel" : "New Project"}
         </Button>
       </motion.div>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <Link href="/discovery" className="group rounded-md border border-accent-indigo/20 bg-accent-indigo/5 p-4 transition-colors hover:border-accent-indigo/50">
+          <Compass size={17} className="text-accent-indigo" />
+          <p className="mt-3 font-display text-h3 font-semibold text-text-primary">Bring in a signal</p>
+          <p className="mt-1 font-body text-[12px] text-text-secondary">Map a field before you commit the team.</p>
+          <span className="mt-3 inline-flex items-center gap-1 font-body text-[12px] font-semibold text-accent-indigo">Discovery <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" /></span>
+        </Link>
+        <Link href="/horizon" className="group rounded-md border border-accent-amber/20 bg-accent-amber/5 p-4 transition-colors hover:border-accent-amber/50">
+          <Lightbulb size={17} className="text-accent-amber" />
+          <p className="mt-3 font-display text-h3 font-semibold text-text-primary">Test an opportunity</p>
+          <p className="mt-1 font-body text-[12px] text-text-secondary">Turn an open question into a falsifiable plan.</p>
+          <span className="mt-3 inline-flex items-center gap-1 font-body text-[12px] font-semibold text-accent-amber">Horizon <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" /></span>
+        </Link>
+        <div className="rounded-md border border-border bg-surface-subtle p-4">
+          <FolderKanban size={17} className="text-accent-teal" />
+          <p className="mt-3 font-display text-h3 font-semibold text-text-primary">Research continuity</p>
+          <p className="mt-1 font-body text-[12px] text-text-secondary">Projects preserve context when people, deadlines and evidence change.</p>
+        </div>
+      </div>
 
       <AnimatePresence>
         {error && (

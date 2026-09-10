@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
 import { useMutation } from "@tanstack/react-query";
-import { ArrowUpRight, Sparkles } from "lucide-react";
+import { ArrowUpRight, Sparkles, ShieldCheck, FlaskConical } from "lucide-react";
 import { getHorizonPrediction } from "@/lib/api/endpoints";
 import { cn } from "@/lib/utils";
 import { useMyProfile } from "@/lib/hooks/useMyProfile";
@@ -12,8 +13,9 @@ import { HorizonLoadingPanel, LOADING_STEPS } from "@/components/horizon/Horizon
 import { HorizonPredictionResult } from "@/components/horizon/HorizonPredictionResult";
 
 export default function HorizonPage() {
+  const searchParams = useSearchParams();
   const { author } = useMyProfile();
-  const [field, setField] = useState("");
+  const [field, setField] = useState(() => searchParams?.get?.("field") ?? "");
   const [focusArea, setFocusArea] = useState("");
   const [loadingStep, setLoadingStep] = useState(0);
 
@@ -77,14 +79,32 @@ export default function HorizonPage() {
 
       <AnimatePresence mode="wait">
         {!loading && !prediction && (
-          <HorizonInputForm
-            field={field}
-            error={error}
-            onFieldChange={setField}
-            onFocusChange={setFocusArea}
-            onSelectDomain={setField}
-            onSubmit={handlePredict}
-          />
+          <>
+            <HorizonInputForm
+              field={field}
+              error={error}
+              onFieldChange={setField}
+              onFocusChange={setFocusArea}
+              onSelectDomain={setField}
+              onSubmit={handlePredict}
+            />
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              <div className="flex items-start gap-3 rounded-md border border-accent-teal/20 bg-accent-teal/5 p-4">
+                <ShieldCheck size={17} className="mt-0.5 shrink-0 text-accent-teal" />
+                <div>
+                  <p className="font-display text-h3 font-semibold text-text-primary">Evidence before ambition</p>
+                  <p className="mt-1 font-body text-[12px] leading-relaxed text-text-secondary">Every result should name its supporting signal, uncertainty and the evidence that could disprove it.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 rounded-md border border-accent-amber/20 bg-accent-amber/5 p-4">
+                <FlaskConical size={17} className="mt-0.5 shrink-0 text-accent-amber" />
+                <div>
+                  <p className="font-display text-h3 font-semibold text-text-primary">End with an experiment</p>
+                  <p className="mt-1 font-body text-[12px] leading-relaxed text-text-secondary">Use the roadmap to define the smallest credible test, then track it in a CoLab project.</p>
+                </div>
+              </div>
+            </div>
+          </>
         )}
 
         {loading && <HorizonLoadingPanel loadingStep={loadingStep} />}

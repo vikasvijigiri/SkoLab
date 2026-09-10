@@ -10,6 +10,35 @@
 
 ---
 
+## 2026-09-10 — Connected Research OS MVP
+
+**Asked:** Implement the research-product roadmap across the remaining tabs as
+a production-grade MVP with connected workflows, live controls, resilient
+frontend/backend behavior, and verification.
+
+1. Added a Home Research Command Center with actionable, local completion state.
+2. Connected Discovery field briefs to Horizon and Horizon results to CoLab.
+3. Upgraded CoLab, Profile and Settings with research-control-room, identity,
+   and trust/data-control surfaces; hid Nexus from primary navigation while
+   preserving its direct route for the evidence-workspace rebuild.
+4. Kept the existing React Query timeout/retry, OpenAlex and Firestore contracts;
+   no parallel backend or unsafe data migration was introduced.
+5. Verified TypeScript, full lint, production build, and Vitest: 110/110 tests.
+6. Recorded the MVP boundaries: trust toggles are local UX preferences until
+   server-enforced policy/audit/export support is implemented.
+
+**Status:** Done — MVP implemented and verified; deployment remains a separate
+approved release action.
+
+**Verification follow-up (2026-09-10):** Added `apps/web/e2e/route-audit.spec.ts`
+to screenshot every known public, protected and nested route, assert protected
+redirects, fail on browser page errors, and keep 14 screenshot artifacts under
+`apps/web/e2e/__screens__/route-audit/`. Serial Chromium audit passed 14/14.
+The public visual/WCAG suite also passed 10/10. Backend visual verification was
+not possible in this environment because Docker and local backend ports were
+unavailable; frontend API-dependent pages were verified for safe rendering and
+auth boundaries, not live backend data correctness.
+
 ## 2026-07-21 17:20 — UI/UX tooling recommendation
 
 **Asked:** "Any more skills, hooks, MCPs needed for this project? ... world class UI and UX ... like google stitch?"

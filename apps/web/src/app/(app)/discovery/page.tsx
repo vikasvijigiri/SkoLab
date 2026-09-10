@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
-import { SearchX, Flame, Trophy, ChevronRight, Compass } from "lucide-react";
+import { SearchX, Flame, Trophy, ChevronRight, Compass, Download, Lightbulb } from "lucide-react";
 import { Chip } from "@/components/ui/Badge";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { RailShell } from "@/components/layout/RailShell";
@@ -23,6 +23,7 @@ import { AuthorResultCard } from "@/components/discovery/AuthorResultCard";
 import { PaperResultCard } from "@/components/discovery/PaperResultCard";
 import { LeaderboardRow } from "@/components/discovery/LeaderboardRow";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { Button } from "@/components/ui/Button";
 
 type Mode = "researchers" | "papers";
 
@@ -171,6 +172,29 @@ export function DiscoveryContent() {
 
   const resultCount = !active.isPending && !active.isError ? (active.data ?? []).length : null;
 
+  function downloadFieldBrief() {
+    const label = node?.label ?? "All research fields";
+    const lines = [
+      `SkoLab field brief: ${label}`,
+      `Generated: ${new Date().toISOString().slice(0, 10)}`,
+      "",
+      `Mode: ${mode}`,
+      `Visible results: ${resultCount ?? "loading"}`,
+      "",
+      "Next steps",
+      "- Review the leading researchers or papers.",
+      "- Save a useful signal to a CoLab project.",
+      "- Test an evidence-backed opportunity in Horizon.",
+    ];
+    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-field-brief.txt`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-5 px-4 py-6 md:px-8 lg:max-w-6xl">
       <motion.div
@@ -196,6 +220,30 @@ export function DiscoveryContent() {
 
       <RailShell rail={railContent} railWidth="260px" mobileRail="collapsible" stickyRail>
         <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 rounded-xl border border-accent-indigo/20 bg-accent-indigo/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent-indigo/15 text-accent-indigo">
+                <Lightbulb size={15} />
+              </span>
+              <div>
+                <p className="font-display text-h3 font-semibold text-text-primary">From browsing to a field decision</p>
+                <p className="mt-1 font-body text-[12px] leading-relaxed text-text-secondary">
+                  {node ? `You are exploring ${node.label}.` : "Choose a field to reveal its research signal."} Use the result as a starting point, then pressure-test it in Horizon.
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Button type="button" variant="outlined" fullWidth={false} onClick={downloadFieldBrief} className="h-9! px-3! text-[12px]!">
+                <Download size={13} /> Brief
+              </Button>
+              <a
+                href={node ? `/horizon?field=${encodeURIComponent(node.label)}` : "/horizon"}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 font-body text-[12px] font-semibold text-text-on-primary hover:bg-primary-dark"
+              >
+                Test in Horizon <ChevronRight size={13} />
+              </a>
+            </div>
+          </div>
           <div className="flex items-center gap-2 text-text-secondary">
             <span className={cn("flex h-7 w-7 items-center justify-center rounded-lg", mode === "researchers" ? "bg-accent-amber/15 text-accent-amber" : "bg-accent-orange/15 text-accent-orange")}>
               {mode === "researchers" ? <Trophy size={14} /> : <Flame size={14} />}
