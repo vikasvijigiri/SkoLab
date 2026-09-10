@@ -90,7 +90,7 @@ export default function WorkspaceListPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-4 px-4 py-6 md:px-8 lg:max-w-6xl">
+    <div className="mx-auto flex w-full max-w-[1128px] flex-col gap-4 px-4 py-6 md:px-6">
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}

@@ -117,8 +117,10 @@ export function DocumentsTab({
   return (
     <div className="flex h-full flex-col md:flex-row">
       {/* ── File panel (one rung down the surface ladder) ─────────────── */}
+      {/* The 204px file rail + the 56px project icon rail = the same 260px
+          side system used by Discovery and other research surfaces. */}
       {!focus && (
-        <aside className="flex shrink-0 flex-col border-b border-border bg-surface-subtle md:w-56 md:border-b-0 md:border-r">
+        <aside className="flex shrink-0 flex-col border-b border-border bg-surface-subtle md:w-[204px] md:border-b-0 md:border-r">
           <div className="flex items-center justify-between px-3 pb-2 pt-3">
             <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-text-muted">
               Files

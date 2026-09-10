@@ -109,7 +109,7 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
   const chromeHidden = docFocus && tab === "Documents";
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-page-bg">
+    <div className="mx-auto flex h-full w-full max-w-[1128px] flex-col overflow-hidden border-x border-border bg-page-bg">
       <ShareModal project={project} open={shareOpen} onClose={() => setShareOpen(false)} />
 
       {/* ── Toolbar ─────────────────────────────────────────────────────── */}
