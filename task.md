@@ -524,3 +524,21 @@ content width and border rhythm as the rest of the application.
    diff whitespace checks before release.
 
 **Status:** Ready to sync and deploy after remote smoke verification.
+
+---
+
+## 2026-09-10 — Discovery fit-first collaborator finder
+
+**Asked:** Rebuild the Discovery "Top researchers in <field>" surface: default to
+the user's known research area (no picker), rank by collaboration fit rather than
+raw citations, show per-researcher signals (activity/liveness colour, momentum,
+career stage, active decades, topical focus, field-normalised standing,
+ORCID-verified, deceased flag), and a click-only filter rail. Minimal
+"open to collaboration" seam now. No hardcoding. Verify with vitest + Playwright.
+
+**Plan:** `docs/plans/2026-09-10-discovery-fit-first.md` (11 tasks, 6 rounds).
+Approach settled in-conversation (Option B). Gate 1 approved via ExitPlanMode;
+two markers resolved — 4-stop SegmentedControl for topical focus, "shares your
+institution" toggle as the minimal connection-distance proxy.
+
+**Status:** Approved — implementation starting on branch `feat/discovery-fit-first`.
