@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import { http, HttpResponse } from "msw";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders, screen } from "@/test/render";
@@ -9,10 +9,36 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(""),
 }));
 
+// useMyProfile pulls in AuthProvider + Firestore; mock it and drive resolution.
+const profile = vi.hoisted(() => ({
+  current: {
+    author: null as null | { field_of_study?: string; expertise?: string[]; institution?: string },
+    firestoreProfile: null as null | { researchFocus?: string },
+    loading: false,
+    error: null,
+    unresolved: true,
+    refetch: vi.fn(),
+  },
+}));
+vi.mock("@/lib/hooks/useMyProfile", () => ({
+  useMyProfile: () => profile.current,
+}));
+
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
+beforeEach(() => {
+  profile.current = {
+    author: null,
+    firestoreProfile: null,
+    loading: false,
+    error: null,
+    unresolved: true,
+    refetch: vi.fn(),
+  };
+});
+
 describe("DiscoveryContent — click-only", () => {
-  it("has no text inputs and shows the leaderboard by default", async () => {
+  it("has no text inputs and shows the leaderboard for an unresolved viewer", async () => {
     server.use(
       http.get(`${API}/api/v1/leaderboard/:field`, () =>
         HttpResponse.json([
@@ -26,20 +52,55 @@ describe("DiscoveryContent — click-only", () => {
     expect(container.querySelector("input, textarea")).toBeNull();
   });
 
-  it("drills down field → sub-field by clicking chips and shows node results", async () => {
+  it("defaults a resolved viewer straight to the fit-first grid — no click", async () => {
+    profile.current = {
+      author: {
+        field_of_study: "Condensed Matter Physics",
+        expertise: ["superconductivity", "spin glasses"],
+        institution: "Analytical Engine Institute",
+      },
+      firestoreProfile: { researchFocus: "Condensed Matter Physics" },
+      loading: false,
+      error: null,
+      unresolved: false,
+      refetch: vi.fn(),
+    };
+    renderWithProviders(<DiscoveryContent />);
+    expect(
+      (await screen.findAllByText(/Researchers in Condensed Matter Physics/i)).length,
+    ).toBeGreaterThan(0);
+    expect(await screen.findByText("Ada Lovelace")).toBeInTheDocument();
+    // fit badge is rendered by ResearcherCard
+    expect(await screen.findByText(/^Fit \d+$/)).toBeInTheDocument();
+  });
+
+  it("still lets an unresolved viewer drill down to a subfield (explore another area)", async () => {
     const user = userEvent.setup();
     renderWithProviders(<DiscoveryContent />);
-
-    // Field chips come from the taxonomy handler.
     await user.click(await screen.findByRole("button", { name: "Physics and Astronomy" }));
-    // Sub-field chip appears; picking it switches results to the node view.
     await user.click(await screen.findByRole("button", { name: "Condensed Matter Physics" }));
-
     expect(
-      await screen.findByText(/Top researchers in Condensed Matter Physics/i),
-    ).toBeInTheDocument();
-    // The authors handler returns Ada Lovelace for any taxon query.
+      (await screen.findAllByText(/Researchers in Condensed Matter Physics/i)).length,
+    ).toBeGreaterThan(0);
     expect(await screen.findByText("Ada Lovelace")).toBeInTheDocument();
+  });
+
+  it("toggling a filter chip keeps the grid rendered (no crash, no text input)", async () => {
+    profile.current = {
+      author: { field_of_study: "Condensed Matter Physics", expertise: ["spin glasses"], institution: "X" },
+      firestoreProfile: { researchFocus: "Condensed Matter Physics" },
+      loading: false,
+      error: null,
+      unresolved: false,
+      refetch: vi.fn(),
+    };
+    const user = userEvent.setup();
+    const { container } = renderWithProviders(<DiscoveryContent />);
+    await screen.findByText("Ada Lovelace");
+    const emerging = await screen.findByRole("button", { name: "Emerging" });
+    await user.click(emerging);
+    expect(emerging).toHaveAttribute("aria-pressed", "true");
+    expect(container.querySelector("input, textarea")).toBeNull();
   });
 
   it("surfaces an ErrorBanner with Retry when the default fetch fails", async () => {

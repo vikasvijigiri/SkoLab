@@ -1,5 +1,12 @@
 import { apiRequest, ApiError } from "./client";
 import { shortOpenAlexId } from "@/lib/utils";
+import { attachStandingPercentiles, mapAuthorRow } from "@/lib/discovery/mapAuthor";
+import { DISCOVERY_CONFIG } from "@/lib/discovery/config";
+import type {
+  DiscoveryFilterState,
+  DiscoverySort,
+  ResearcherResult,
+} from "@/lib/types";
 import type {
   AuthorSuggestion,
   AuthorResponse,
@@ -234,4 +241,62 @@ export const openAlexWorksByTaxon = async (
   if (!res.ok) throw new ApiError(res.status, `Discovery request failed (HTTP ${res.status}).`);
   const data = await res.json();
   return Array.isArray(data) ? data : [];
+};
+
+// ---- Fit-first researcher grid (docs/plans/2026-09-10-discovery-fit-first.md) ---
+
+/** Server-affecting slice of the filter state — only these change the OpenAlex
+ *  call; the rest (career stage, activity, momentum, focus, shares-institution)
+ *  are client-side post-filters over the returned page. */
+export const serverFilterParams = (f: DiscoveryFilterState): Record<string, string> => {
+  const p: Record<string, string> = {};
+  if (f.hasOrcid) p.hasOrcid = "1";
+  if (f.countries.length > 0) p.country = f.countries.join("|");
+  if (f.instTypes.length > 0) p.instType = f.instTypes.join("|");
+  return p;
+};
+
+/** Top researchers for a subfield, one OpenAlex call, mapped + percentile-ranked.
+ *  `scopedSubfieldId` lets `deriveSignals` pick the right topic_share. */
+export const openAlexResearchers = async (args: {
+  subfieldId: string;
+  filters: DiscoveryFilterState;
+  sort: DiscoverySort;
+}): Promise<ResearcherResult[]> => {
+  const qs = new URLSearchParams({
+    subfield: args.subfieldId,
+    sort: args.sort,
+    ...serverFilterParams(args.filters),
+  });
+  const res = await fetch(`/api/openalex/authors?${qs.toString()}`);
+  if (!res.ok) throw new ApiError(res.status, `Discovery request failed (HTTP ${res.status}).`);
+  const data = await res.json();
+  if (!Array.isArray(data)) return [];
+  const now = new Date().getFullYear();
+  const rows = data.map((row) =>
+    mapAuthorRow(row, { scopedSubfieldId: args.subfieldId, now }),
+  );
+  return attachStandingPercentiles(rows);
+};
+
+/** ORCID → death year for the verifiably deceased among `orcids` (Wikidata P570). */
+export const fetchDeceasedFlags = async (
+  orcids: string[],
+): Promise<Record<string, number>> => {
+  const clean = orcids.filter(Boolean).slice(0, DISCOVERY_CONFIG.enrichPageSize);
+  if (clean.length === 0) return {};
+  const res = await fetch(`/api/enrich/deaths?orcids=${encodeURIComponent(clean.join(","))}`);
+  if (!res.ok) return {};
+  const data = await res.json();
+  return data && typeof data === "object" ? (data as Record<string, number>) : {};
+};
+
+/** id → `true` for researchers who self-declared "open to collaboration" (empty today). */
+export const fetchCollabFlags = async (ids: string[]): Promise<Record<string, boolean>> => {
+  const clean = ids.filter(Boolean).slice(0, DISCOVERY_CONFIG.enrichPageSize);
+  if (clean.length === 0) return {};
+  const res = await fetch(`/api/enrich/collab-flags?ids=${encodeURIComponent(clean.join(","))}`);
+  if (!res.ok) return {};
+  const data = await res.json();
+  return data && typeof data === "object" ? (data as Record<string, boolean>) : {};
 };
