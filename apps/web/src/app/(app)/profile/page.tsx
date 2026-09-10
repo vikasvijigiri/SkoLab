@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
-import { Pencil, TrendingUp, ShieldAlert, Check } from "lucide-react";
+import { Pencil, TrendingUp, ShieldAlert, Check, Network, ExternalLink } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge, Chip } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -173,6 +173,18 @@ export default function ProfilePage() {
       </motion.div>
 
       <div className="flex min-w-0 flex-col gap-4">
+      <Reveal>
+        <Card accentColor="var(--accent-indigo)">
+          <div className="flex items-start gap-3">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent-indigo/10 text-accent-indigo"><Network size={16} /></span>
+            <div>
+              <h2 className="font-display text-h3 font-semibold text-text-primary">Research identity & capability graph</h2>
+              <p className="mt-1 font-body text-[12px] leading-relaxed text-text-secondary">Your profile is more useful when it shows what you can contribute, what you are exploring and where collaboration is welcome.</p>
+              <a href="https://orcid.org" target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 font-body text-[12px] font-semibold text-primary hover:underline">Connect ORCID later <ExternalLink size={12} /></a>
+            </div>
+          </div>
+        </Card>
+      </Reveal>
       {editing ? (
         <Reveal>
           <Card>

@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
-import { ArrowLeft, Compass, BookOpen, Star } from "lucide-react";
+import { ArrowLeft, Compass, BookOpen, Star, FlaskConical, ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -55,6 +56,24 @@ export function HorizonPredictionResult({
           <MathText text={prediction.description} />
         </p>
       </Card>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <Card accentColor="var(--accent-teal)" accentSide="left" className="flex items-start gap-3">
+          <ShieldCheck size={17} className="mt-0.5 shrink-0 text-accent-teal" />
+          <div>
+            <h3 className="font-display text-h3 font-semibold text-text-primary">Evidence checkpoint</h3>
+            <p className="mt-1 font-body text-[12px] leading-relaxed text-text-secondary">Treat this as a hypothesis, not a conclusion. Review the cited papers and record which claim still needs proof.</p>
+          </div>
+        </Card>
+        <Card accentColor="var(--accent-amber)" accentSide="left" className="flex items-start gap-3">
+          <FlaskConical size={17} className="mt-0.5 shrink-0 text-accent-amber" />
+          <div>
+            <h3 className="font-display text-h3 font-semibold text-text-primary">Make it executable</h3>
+            <p className="mt-1 font-body text-[12px] leading-relaxed text-text-secondary">Create a CoLab project to turn one roadmap step into an owned experiment and preserve the reasoning trail.</p>
+            <Link href="/workspace" className="mt-2 inline-flex font-body text-[12px] font-semibold text-primary hover:underline">Open CoLab →</Link>
+          </div>
+        </Card>
+      </div>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <Card className="border-border/40 bg-surface/40 flex flex-col gap-3">
