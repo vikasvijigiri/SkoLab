@@ -58,7 +58,15 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v7
       with:
-        go-version: "1.25"
+        # go-version-file, not a hardcoded number: a Dependabot go.mod bump
+        # can raise the module's `go` directive on its own (go mod tidy
+        # follows a dependency's minimum), and a hardcoded version here goes
+        # stale silently -- exactly what broke every services/backend-go PR
+        # after go.mod moved to `go 1.26.0` while this stayed pinned at
+        # 1.25, failing with "go.mod requires go >= 1.26.0" on PRs that
+        # never even touched Go code (2026-09-12). checks.yml already uses
+        # this pattern; this brings ci.yml in line so it can't drift again.
+        go-version-file: services/backend-go/go.mod
 
     - name: Compile Design Tokens
       run: |
