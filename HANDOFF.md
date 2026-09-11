@@ -10,8 +10,9 @@
 
 `main` is at `65dcec8` (PR #176 merged — Firestore rules + Discovery→CoLab
 match bridge + Google sign-in loading UX). PR #177 closes out everything
-that was still pending after #176, plus two pre-existing `checks.yml` bugs
-found while watching its CI. Full detail in `LOG.md`'s 2026-09-11 entries.
+that was still pending after #176, plus three pre-existing `checks.yml` bugs
+found while watching its CI (all three actually root-caused and fixed, not
+worked around). Full detail in `LOG.md`'s 2026-09-11 entries.
 
 - **`checks.yml` fixed for real** — `pytest.ini` needed `pythonpath = .`
   (`tests/` has no `__init__.py`, so bare `pytest`'s rootdir sys.path
@@ -48,23 +49,25 @@ found while watching its CI. Full detail in `LOG.md`'s 2026-09-11 entries.
   firestore:rules` (or paste the file into Firebase Console → Firestore
   Database → Rules directly). Production is still running on whatever
   rules existed before PR #176 until this happens.
-- **A third pre-existing, unrelated flaky test, found while verifying
-  PR #177's own CI**: `tests/test_industry_academic.py::
-  test_get_tieups_cache_miss_success` fails on `checks.yml`'s Linux runner
-  but passes standalone and in a full local Windows run. It asserts on an
-  LLM-mocked title and gets back a *different*, real-sounding title
-  ("Industrialization of Quantum Computing") that doesn't appear anywhere
-  in its own mocks or the codebase — points at either the module-level
-  `LLM_LIMIT_EXCEEDED` global in `llm_service.py` or a cache/singleton in
-  `industry_academic_service.py` leaking state across tests in a way this
-  test's `@patch` decorators don't fully cover, likely order-dependent
-  (Linux vs. Windows test-collection order). Not touched this session —
-  `industry_academic_service.py` and its tests are unrelated to both #176
-  and #177's actual content, and this is a second, deeper investigation
-  into the same class of "was always broken, only started running once
-  the `pythonpath` fix let checks.yml's tests execute at all" issue.
-  Confirmed with the owner: merge PR #177 anyway rather than block on it;
-  this stays open as its own follow-up.
+- **The third `checks.yml` failure was root-caused, not left as a
+  follow-up.** `tests/test_industry_academic.py::
+  test_get_tieups_cache_miss_success` was first suspected to be an
+  order-dependent flake (passed standalone and in a full local Windows
+  run, failed on Linux CI); asked to dig deeper rather than accept that,
+  and found the real cause: neither of `checks.yml`'s Python test steps
+  ever set `GROQ_API`/`OPENROUTER_API_KEY` (unlike `ci.yml`, which does),
+  so `is_llm_working()` (`app/core/config.py`) returns `False`, and
+  `IndustryAcademicService.get_tieups` silently takes its non-LLM fallback
+  path — `get_fallback_tieups()` — instead of the one the test actually
+  mocks. That fallback literally returns a title of
+  `f"Industrialization of {domain}"`, which is exactly the unexplained
+  string the test kept failing on. Reproduced the exact CI failure locally
+  (moved the repo's own `services/backend/.env` — which has a real
+  `GROQ_API` key, explaining why it always passed here — aside and
+  unset both vars) and confirmed the fix removes it: full local suite
+  re-run with `.env` absent and the fix's placeholder values set, 216
+  passed / 4 skipped / 0 failed, same count as before, so nothing else
+  regressed now that `is_llm_working()` is reliably `True` in CI.
 - **The `ThemeToggle` fix and the LLM-grounding fix were originally lost to
   an accidental `git reset --hard`** mid-session (moving a stray commit off
   `main` onto a feature branch, done carelessly) and had to be rewritten
