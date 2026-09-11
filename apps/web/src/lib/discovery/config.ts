@@ -36,6 +36,16 @@ export const DISCOVERY_CONFIG = {
     wCollab: readEnv("DISCOVERY_FIT_W_COLLAB", 0.15),
     wField: readEnv("DISCOVERY_FIT_W_FIELD", 0.15),
   },
+  /** Trending topics: length (days) of the recent window and the equal-length
+   *  prior window it's compared against. OpenAlex's `/topics` entity has no
+   *  growth field (verified live) — trend is always this-window vs last-window,
+   *  never a cumulative count. See `decisions/0015`. */
+  trendingWindowDays: readEnv("DISCOVERY_TRENDING_WINDOW_DAYS", 90),
+  /** A topic below this many works in the PRIOR window is dropped rather than
+   *  ranked — 1→4 works reads as "300% growth" but is noise, not a trend. */
+  trendingMinPriorWorks: readEnv("DISCOVERY_TRENDING_MIN_PRIOR_WORKS", 15),
+  /** How many trending topics to show. */
+  trendingTopN: readEnv("DISCOVERY_TRENDING_TOP_N", 8),
 } as const;
 
 /** Topical-focus filter stops — a 4-stop segmented control, not a range input
