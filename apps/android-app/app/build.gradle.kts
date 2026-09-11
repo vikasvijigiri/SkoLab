@@ -159,7 +159,7 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.2.0")
     implementation("androidx.security:security-crypto:1.1.0")
     // Serialization
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 
     // OkHttp
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
