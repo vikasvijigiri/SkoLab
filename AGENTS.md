@@ -1,80 +1,61 @@
-# Universal agent operating contract
+# AGENTS.md
 
-This file is the harness-neutral entry point for any coding agent working in
-this repository. A harness may add its own adapter instructions, but it must
-preserve these invariants.
+Repository-level contract for any coding agent working in SkoLab.
 
-## Before acting
+## Skill pack
 
-1. Read this file and `TASK.md` when present.
-2. Read the relevant design, specification, plan, and acceptance evidence.
-3. Inspect the repository's existing conventions before inventing new ones.
-4. State assumptions when requirements are incomplete.
+This repo installs `addyosmani/agent-skills` under `.claude/`: 25 skills in
+`.claude/skills/`, 4 review personas in `.claude/agents/`, and 7 supporting
+checklists in `.claude/references/`. It replaced a larger, repo-specific
+capability layer on 2026-09-11 — see `decisions/` for the record — because
+that layer's own portability machinery (harness adapters, workflow state,
+cost-tracking hooks) had grown larger than the product it was meant to
+support.
+
+## Intent → skill mapping
+
+Map the request to the lifecycle phase and let the matching skill run before
+writing code:
+
+- Feature / new functionality → `spec-driven-development`, then
+  `planning-and-task-breakdown`, `incremental-implementation`,
+  `test-driven-development`
+- Bug / failure / unexpected behavior → `debugging-and-error-recovery`
+- API or interface design → `api-and-interface-design`
+- UI work → `frontend-ui-engineering` (grounded in `DESIGN.md` for
+  `apps/web`)
+- Code review before merge → `code-review-and-quality`
+- Refactoring / simplification → `code-simplification`
+- Security-sensitive change (auth, input handling, secrets, dependencies)
+  → `security-and-hardening`
+- Deploy / release → `ci-cd-and-automation`, then `shipping-and-launch`
+- Architecture decision or public-API change → `documentation-and-adrs`
+
+Skills also activate automatically from their own descriptions — invoke one
+directly by name when the mapping above is ambiguous.
+
+## Read first
+
+1. This file
+2. `HANDOFF.md` (current repo state)
+3. `README.md`
+4. `DESIGN.md` for any `apps/web` UI work
+5. The most relevant package-level guide (e.g. `apps/web/AGENTS.md`)
 
 ## SDLC contract
 
-Use the smallest applicable path:
+Do not skip verification for a completion claim. Do not push, merge,
+publish, deploy, or spend money without explicit approval. Keep changes
+within scope, preserve user changes, and report failures as failures.
 
-```text
-brief → design → plan → implement → verify → clean → review → deliver → release → record
-```
+## Boundaries
 
-Do not skip verification for a completion claim. Do not push, merge, publish,
-deploy, or spend money without explicit approval. Keep changes within scope,
-preserve user changes, and report failures as failures.
-
-## Capability adapters
-
-`.claude/` is the only repository-native source of truth for skills, agents,
-commands, workflow policy, rules, hooks, settings, output styles, memory, and
-workflow state. Every declared host must follow the complete path map in
-`harnesses.json`. Claude Code consumes `.claude/` natively; Codex and generic
-agents must read or project from `.claude/` without
-creating a second, untracked source of truth.
-
-No generated adapter directory is required. Hosts must consume or project the
-canonical `.claude/` content directly.
-
-Hosts that cannot auto-discover Claude lifecycle hooks must invoke the canonical
-checks under `.claude/hooks/` through their own lifecycle API. This repository
-ships a native Claude Code adapter plus canonical source paths for Codex and a
-generic agent; it does not claim native lifecycle registration for arbitrary
-IDE extensions. A null or absent native hook registration must not be
-interpreted as an absent hook contract. `docs/harness-hook-bridge.md` is the
-exact invocation contract for doing this — payload delivery, exit-code
-semantics, and ordering — so a bridging host does not have to reverse it from
-Claude Code's own behavior.
-
-`.claude/portability/capabilities.json` defines the host-neutral capabilities
-the workflow requires; `.claude/adapters/` binds each declared host to them.
-An adapter declaration is not runtime proof. A capability may be called native
-only after its named conformance check passes; bridge-required safety
-capabilities must refuse the dependent action until the bridge is verified.
-
-## Runtime model
-
-Execution is host-managed: Claude Code, Codex, or a generic agent host **is**
-the runner. It reads this contract directly and drives the session; no
-`ANTHROPIC_API_KEY` and no separate script are required for that path.
-
-There is no standalone repository runner today. An earlier draft of this file
-described one with `--host-managed`/`--dry-run`/`--sdk-live` flags before any
-such binary existed — the same failure `harnesses.json`'s manifest test
-already guards against for workflows (see the comment above its `workflows`
-omission): a contract that promises a path with nothing behind it. If a
-standalone automation path is ever built, it must satisfy this same contract
-rather than a parallel one, and its dry-run mode must write nothing, matching
-`.claude/install.py --dry-run`'s existing guarantee.
-
-## Evidence contract
-
-Every important claim needs evidence appropriate to the claim: test output for
-behavior, a diff for scope, rendered output for visual quality, and a smoke or
-log result for deployment. Record unresolved risks, deliberate exceptions,
-owner, and follow-up date.
-
-## Failure and safety
-
-Stop on secrets, destructive ambiguity, scope escape, failed required checks,
-or a missing approval. Use repository-native diagnosis and preserve recovery
-state. Never hide an error to make a gate green.
+- Never weaken a check (silence a lint rule, skip a test, lower a
+  threshold) to make a diff look green.
+- Never commit a secret. `docs/ops/security-resources.md` has the vetted
+  external checklists; `.claude/references/security-checklist.md` has the
+  in-pack one.
+- Personas in `.claude/agents/` do not invoke other personas — the user or
+  a skill is the orchestrator. The one endorsed multi-persona pattern is
+  parallel fan-out with a merge step (see
+  `.claude/references/orchestration-patterns.md`).
