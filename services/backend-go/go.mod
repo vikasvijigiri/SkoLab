@@ -1,6 +1,6 @@
 module github.com/skolab/backend-go
 
-go 1.25.0
+go 1.26.0
 
 require (
 	cloud.google.com/go/firestore v1.22.0
@@ -9,7 +9,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/redis/go-redis/v9 v9.22.0
-	golang.org/x/time v0.15.0
+	golang.org/x/time v0.16.0
 	google.golang.org/api v0.279.0
 	google.golang.org/grpc v1.81.1
 )
