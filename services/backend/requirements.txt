@@ -18,7 +18,7 @@ tenacity==9.1.4
 sqlalchemy[asyncio]==2.0.52
 asyncpg==0.31.0
 alembic==1.19.2
-openrouter==1.1.129
+openrouter==1.1.133
 defusedxml==0.7.1
 psutil==7.2.2
 redis==8.1.0
