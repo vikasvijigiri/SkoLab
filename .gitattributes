@@ -9,10 +9,8 @@ api-contracts/openapi.snapshot.json text eol=lf
 # it from the language bar makes the stats reflect the shipped app (the Go
 # gateway + Next.js web + the Python LLM service), not the tooling around it.
 .claude/**            linguist-vendored
-tools/**             linguist-vendored
 scripts/**           linguist-vendored
 infrastructure/**    linguist-vendored
-templates/**         linguist-documentation
 guide/**             linguist-documentation
 # Alembic migrations and generated OpenAPI artefacts are machine-shaped.
 services/backend/alembic/versions/**  linguist-generated

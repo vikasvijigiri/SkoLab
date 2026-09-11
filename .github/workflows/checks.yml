@@ -1,19 +1,13 @@
-# Runs the same checks the local commit gate runs, on a machine that is not yours.
+# Runs this repo's own lint, typecheck, test and build commands directly —
+# no repo-specific resolver layer in between, so what CI runs is exactly
+# what you can run locally from services/backend, services/backend-go, or
+# the repo root.
 #
-# The single property that matters here: this workflow does NOT list the checks.
-# It calls `.claude/hooks/_projectchecks.py`, the same resolver the auto-commit
-# and `/verify` call, so CI and local cannot disagree about what "the checks
-# pass" means. A workflow with its own copy of the command list is how a green
-# local run starts coexisting with a red pipeline.
-#
-# It calls the resolver as a library rather than through a CLI wrapper. A
-# `tools/run_checks.py` wrapper did that job until 2026-08-04 and was deleted with
-# the rest of the repo-root `tools/` directory -- the resolver was always the real
-# thing and the wrapper only parsed `--tier`. Inlining it keeps the property above
-# while leaving `.claude/` as the only directory the layer needs.
-#
-# Two jobs, matching the two tiers: `fast` on every push, `slow` only on pull
-# requests, because a production build and a browser suite cost minutes.
+# Two jobs, matching the two tiers: `fast` on every push (lint, unit tests —
+# backend tests run against pytest's SQLite fallback, no service container),
+# `slow` only on pull requests (build, e2e, backend tests against a real
+# Postgres service container via ci_bootstrap_db.py), because a production
+# build and a browser suite cost minutes.
 
 name: checks
 
@@ -34,81 +28,116 @@ concurrency:
 
 jobs:
   fast:
-    name: lint · typecheck · test
+    name: lint · typecheck · unit test
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
-          # The resolver reads `git log` and `git diff` against the base, which an
-          # unfetched shallow clone cannot answer.
-          fetch-depth: 0
+          node-version: '20'
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # Best-effort: a repo with no package.json simply skips this, and
-      # `tool_missing` skips any command whose executable is absent.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-go@v5
         with:
-          node-version: '20'
-        continue-on-error: true
+          go-version-file: services/backend-go/go.mod
 
-      - name: Install this repo's own tooling
-        # pyyaml is NOT optional here. `test_process_router.py` breaks out of its
-        # frontmatter loop on ImportError, so without it the skill and agent
-        # contract checks silently do not run and CI reports green on a layer
-        # nobody validated. Caught by the first real CI run, 2026-08-07.
-        run: python -m pip install --quiet ruff mypy pyyaml
+      - name: Install web dependencies
+        run: npm ci
 
-      - name: Run the fast tier
-        env:
-          PYTHONIOENCODING: utf-8
-        run: |
-          python - <<'PY'
-          import importlib.util as u, sys
-          spec = u.spec_from_file_location("pc", ".claude/hooks/_projectchecks.py")
-          pc = u.module_from_spec(spec); spec.loader.exec_module(pc)
-          ok, detail, ran_test = pc.run_checks(kinds=pc.FAST_KINDS)
-          print(("PASS" if ok else "FAIL"), detail, "| test ran:", ran_test)
-          sys.exit(0 if ok else 1)
-          PY
+      - name: Web lint
+        run: npm run lint --workspace apps/web
+
+      - name: Web unit tests
+        run: npm run test --workspace apps/web
+
+      - name: Contract check (backend ErrorResponse vs the shared JSON schema)
+        run: python scripts/verify_contracts.py
+
+      - name: Install backend dependencies
+        working-directory: services/backend
+        run: pip install --quiet -r requirements.txt -r requirements-dev.txt
+
+      - name: Backend lint
+        working-directory: services/backend
+        run: ruff check .
+
+      - name: Backend unit tests (SQLite fallback, no Postgres needed)
+        working-directory: services/backend
+        run: pytest -q
+
+      - name: Go vet
+        working-directory: services/backend-go
+        run: go vet ./...
+
+      - name: Go tests
+        working-directory: services/backend-go
+        run: go test ./...
 
   slow:
-    name: build · audit · e2e · smoke
+    name: build · e2e · backend (Postgres)
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Also on merge_group: the queue is the last point at which the slow tier can
-    # catch an integration break, and it is the only run that sees the actual
-    # merged result.
+    # The queue is the last point at which the slow tier can catch an
+    # integration break, and it is the only run that sees the actual merged
+    # result.
     if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: skolab
+          POSTGRES_PASSWORD: skolab
+          POSTGRES_DB: skolab
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
-          fetch-depth: 0
+          node-version: '20'
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-        continue-on-error: true
+      - name: Install web dependencies
+        run: npm ci
 
-      - name: Run the slow tier
+      - name: Web build (includes Next.js typecheck)
+        run: npm run build --workspace apps/web
+
+      - name: Install Playwright browsers
+        run: npx --prefix apps/web playwright install --with-deps
+
+      - name: Web e2e
+        run: npm run test:e2e --workspace apps/web
+
+      - name: Install backend dependencies
+        working-directory: services/backend
+        run: pip install --quiet -r requirements.txt -r requirements-dev.txt
+
+      - name: Bootstrap backend schema against CI Postgres
+        working-directory: services/backend
         env:
-          PYTHONIOENCODING: utf-8
-        run: |
-          python - <<'PY'
-          import importlib.util as u, sys
-          spec = u.spec_from_file_location("pc", ".claude/hooks/_projectchecks.py")
-          pc = u.module_from_spec(spec); spec.loader.exec_module(pc)
-          ok, detail, _ = pc.run_checks(kinds=pc.SLOW_KINDS)
-          print(("PASS" if ok else "FAIL"), detail)
-          sys.exit(0 if ok else 1)
-          PY
+          DATABASE_URL: postgresql+asyncpg://skolab:skolab@localhost:5432/skolab
+        run: python ci_bootstrap_db.py
+
+      - name: Backend tests against real Postgres
+        working-directory: services/backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://skolab:skolab@localhost:5432/skolab
+        run: pytest -q
 
   # The ONE required check. Branch protection names this job and nothing else, so
   # adding or renaming a tier never means editing repository settings -- the
@@ -116,7 +145,7 @@ jobs:
   #
   # `if: !cancelled()` is load-bearing: a skipped job counts as SUCCESS to
   # GitHub, so a plain `needs:` would report green when its dependencies were
-  # skipped. Shape taken from rust-lang/rust-analyzer's ci.yaml.
+  # skipped.
   #
   # EVERY JOB ABOVE MUST BE LISTED IN `needs:`.
   conclusion:
