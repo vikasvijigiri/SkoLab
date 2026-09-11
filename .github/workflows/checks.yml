@@ -40,7 +40,9 @@ jobs:
 
       - uses: actions/setup-python@v7
         with:
-          python-version: '3.11'
+          # 3.12: see the matching comment in ci.yml -- numpy >=2.5.0 and
+          # networkx >=3.5 need 3.12/3.11 respectively.
+          python-version: '3.12'
 
       - uses: actions/setup-go@v7
         with:
@@ -142,7 +144,9 @@ jobs:
 
       - uses: actions/setup-python@v7
         with:
-          python-version: '3.11'
+          # 3.12: see the matching comment in ci.yml -- numpy >=2.5.0 and
+          # networkx >=3.5 need 3.12/3.11 respectively.
+          python-version: '3.12'
 
       - name: Install web dependencies
         # See the matching step + comment in the `fast` job above.
