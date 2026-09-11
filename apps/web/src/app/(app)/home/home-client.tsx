@@ -87,12 +87,15 @@ function buildBriefItems(opts: {
 }
 
 /** Left-rail shortcut list of the user's actual workspaces — data, not nav. */
-function WorkspacesRailCard({ uid }: { uid?: string }) {
-  const { data: projects, loading } = useFirestoreCollection<CollabProject>(
-    uid ? (next, onErr) => subscribeProjects(uid, next, onErr) : null,
-    { deps: [uid] },
-  );
-
+function WorkspacesRailCard({
+  uid,
+  projects,
+  loading,
+}: {
+  uid?: string;
+  projects: CollabProject[];
+  loading: boolean;
+}) {
   if (!uid) return null;
 
   return (
@@ -145,6 +148,11 @@ export function HomeClient() {
   const authorId = author?.id;
   const ready = !profileLoading;
 
+  const { data: projects, loading: projectsLoading } = useFirestoreCollection<CollabProject>(
+    user?.uid ? (next, onErr) => subscribeProjects(user.uid, next, onErr) : null,
+    { deps: [user?.uid] },
+  );
+
   const feedQ = useQuery({ ...dailyFeedQuery(authorId, topic), enabled: ready });
   const grantsQ = useQuery({ ...matchGrantsQuery(authorId ?? ""), enabled: ready && !!authorId });
   const oppsQ = useQuery({ ...industryOpportunitiesQuery(topic || "AI", name), enabled: ready });
@@ -186,7 +194,7 @@ export function HomeClient() {
         loading={profileLoading}
         unresolved={profileUnresolved}
       />
-      <WorkspacesRailCard uid={user?.uid} />
+      <WorkspacesRailCard uid={user?.uid} projects={projects} loading={projectsLoading} />
       <div className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 font-display text-h3 font-semibold text-text-primary">
           <Users2 size={14} className="text-accent-teal" />
@@ -228,7 +236,7 @@ export function HomeClient() {
           <AIDailyBriefCard items={briefItems} loading={briefLoading} />
         </div>
 
-        <ResearchCommandCenter topic={topic} projectCount={0} />
+        <ResearchCommandCenter topic={topic} projectCount={projects.length} />
         <ResearchLoopNote />
 
         {/* One blended, self-labelling research feed — papers · news · network

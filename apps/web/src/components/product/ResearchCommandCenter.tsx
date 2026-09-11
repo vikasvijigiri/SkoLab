@@ -119,6 +119,7 @@ export function ResearchCommandCenter({
                 <button
                   type="button"
                   aria-label={`${isDone ? "Mark" : "Complete"} ${label}`}
+                  aria-pressed={isDone}
                   onClick={() => toggle(key)}
                   className={cn(
                     "flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border transition-colors",
