@@ -1,11 +1,52 @@
 import json
 import asyncio
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Literal, Optional
+from pydantic import BaseModel, field_validator
 from app.services.ai.llm_service import is_llm_working
 from app.prompts import PREDICTION_SYSTEM_PROMPT
 from app.prompts.horizon_prompts import HORIZON_SYSTEM_PROMPT, NEXUS_CHAT_SYSTEM_PROMPT
 from app.services.data.openalex_service import OpenAlexService
 from app.services.ai.user_context import build_user_context
+
+
+class _BreakthroughContent(BaseModel):
+    """Validates the LLM's raw Horizon JSON before it's trusted. Narrower
+    than the public `BreakthroughPrediction` response schema (app/schemas/
+    discovery.py), which stays lenient with defaults + `extra="allow"` so
+    the deterministic fallback dict below always validates against it too.
+    A response that fails this is caught by `predict_next_big_thing`'s
+    existing `except Exception` and treated exactly like a JSON parse
+    failure — falls through to the fallback rather than shipping blank or
+    off-contract fields (e.g. a `feasibility` outside High/Medium/Low, or an
+    empty `description`) to the user as if they were a real prediction."""
+
+    breakthrough_name: str
+    description: str
+    scientific_logic: str
+    business_application: str
+    time_horizon: str
+    feasibility: Literal["High", "Medium", "Low"]
+    roadmap_steps: list[str]
+
+    @field_validator(
+        "breakthrough_name",
+        "description",
+        "scientific_logic",
+        "business_application",
+        "time_horizon",
+    )
+    @classmethod
+    def _not_blank(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("must not be blank")
+        return v
+
+    @field_validator("roadmap_steps")
+    @classmethod
+    def _has_real_steps(cls, v: list[str]) -> list[str]:
+        if not v or not all(isinstance(s, str) and s.strip() for s in v):
+            raise ValueError("roadmap_steps must be a non-empty list of non-blank strings")
+        return v
 
 
 class PredictionService:
@@ -83,7 +124,19 @@ class PredictionService:
         if not response.content:
             raise Exception("LLM prediction failed to generate a response.")
 
-        return response.content.strip()
+        content = response.content.strip()
+        # PREDICTION_SYSTEM_PROMPT demands exactly these three sections;
+        # nothing downstream previously checked the model actually
+        # followed that contract, so a truncated or off-format response
+        # (e.g. missing **Toolkit**) shipped to the user looking complete.
+        required_sections = ("**Next Frontier**", "**Toolkit**", "**Logic**")
+        missing = [s for s in required_sections if s not in content]
+        if missing:
+            raise Exception(
+                f"LLM prediction did not follow the required format (missing {', '.join(missing)})."
+            )
+
+        return content
 
     async def predict_next_big_thing(
         self,
@@ -223,7 +276,12 @@ class PredictionService:
                 response_format={"type": "json_object"},
             )
 
-            result = json.loads(response.content)
+            raw = json.loads(response.content)
+            # Raises pydantic.ValidationError (caught below, same as a JSON
+            # parse failure) on a blank narrative field, an off-contract
+            # feasibility value, or missing/empty roadmap_steps -- see
+            # _BreakthroughContent's docstring.
+            result = _BreakthroughContent(**raw).model_dump()
             # Add sources to the result response for display on frontend
             result["pioneering_papers"] = [
                 {
