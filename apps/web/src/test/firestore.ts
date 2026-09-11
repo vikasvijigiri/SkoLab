@@ -86,7 +86,9 @@ export const firestoreMock = {
   getDoc: vi.fn(async () => ({ exists: () => false, data: () => null })),
   getDocs: vi.fn(async () => ({ docs: [] })),
   addDoc: vi.fn(async () => ({ id: "new-doc" })),
+  setDoc: vi.fn(async () => undefined),
   updateDoc: vi.fn(async () => undefined),
   deleteDoc: vi.fn(async () => undefined),
   serverTimestamp: () => ({ __ts: true }),
+  arrayUnion: (...values: unknown[]) => ({ __arrayUnion: values }),
 };
