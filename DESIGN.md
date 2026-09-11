@@ -19,8 +19,8 @@ deliberately flat surface and is out of scope here.
 (`docs/plans/2026-09-07-web-visual-identity-round1.md`). The direction-C token
 names and architecture are kept — the values, the default theme, and the density
 change.
-**Builds on:** `.claude/skills/architecture/references/design-contract.md`
-(procedure) and `.claude/skills/frontend-ui/` (build + audit against this file).
+**Builds on:** `docs/design/design-contract.md`
+(procedure) and the `frontend-ui-engineering` skill (build + audit against this file).
 
 ---
 
@@ -40,7 +40,7 @@ default because the data is the light: numbers, charts, and structure sit on a
 near-black ground and the eye goes straight to them, for hours, without strain.
 
 **Platform:** web (Next.js 16 App Router, Tailwind v4, framer-motion). See
-`.claude/skills/architecture/references/platform-guidance.md` (Web section) for
+`docs/design/platform-guidance.md` (Web section) for
 the conventions this contract draws on.
 
 **Grounding:** no Figma file is linked to this repository and the connected
@@ -48,7 +48,7 @@ Figma account is view-only, so there is nothing to ground tokens against via
 `mcp__figma__*`. Tokens below are derived from the direction-C system in
 `apps/web/src/app/globals.css` (kept: the token architecture, the 3-block theme
 sync, the WCAG luminance discipline) re-pitched for a dark base, plus the
-external references in `.claude/rules/ui-ux-resources.md`. Any linked Figma file
+external references in `docs/design/ui-ux-resources.md`. Any linked Figma file
 supersedes this.
 
 ---
@@ -397,7 +397,7 @@ the rule, the reason, the owner, and the expiry.
 ## Anti-patterns — never ship these
 
 Output is checked against this list and against
-`.claude/skills/frontend-ui/references/web-interface-guidelines.md`.
+`docs/design/web-interface-guidelines.md`.
 
 - [ ] Generic AI gradient-on-everything; glassmorphism; a purple-blue hero blob.
 - [ ] `scale()` hover/press on buttons or cards (colour + 1px lift instead).
@@ -436,7 +436,7 @@ the identity is proven before it spreads. Tracked in
    signup / onboarding) → core app (Home, `paper/[id]`, `author/[id]`) →
    Workspace / Nexus / Horizon.
 5. **Performance pass** — apply
-   `.claude/skills/engineering-standards/references/frontend-performance-rules.md`
+   `docs/design/frontend-performance-rules.md`
    (waterfalls, bundle, re-render, `content-visibility`, list virtualization).
 6. **Full gate** — `npm run test` / `tsc` / `lint` / `build` /
    `check:contrast` / `test:e2e` (axe WCAG AA on every public route, light and
@@ -448,7 +448,8 @@ the identity is proven before it spreads. Tracked in
 
 Check every generated or modified surface against the token tables, the type
 scale, the spacing scale, the accessibility floor, and the anti-pattern list.
-Build and audit UI through `.claude/skills/frontend-ui/`. If something this
-contract does not cover comes up, add a dated decision in `decisions/` and
-update this file — do not let the agent answer it silently. `refactoring` checks
-the implemented surface against this document after each rollout step.
+Build and audit UI through the `frontend-ui-engineering` skill. If something
+this contract does not cover comes up, add a dated decision in `decisions/`
+and update this file — do not let the agent answer it silently.
+`code-simplification` checks the implemented surface against this document
+after each rollout step.

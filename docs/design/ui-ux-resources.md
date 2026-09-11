@@ -1,9 +1,3 @@
----
-paths:
-  - "DESIGN.md"
-  - "docs/specs/**/*.md"
----
-
 # UI/UX design resources
 
 When work touches a user-facing surface — choosing layout, colour, type,
@@ -26,8 +20,8 @@ repo or installed as a skill, and each is MIT-licensed.
 - **Ground, don't copy wholesale.** Use these to pick a direction and to
   borrow concrete tokens or patterns; the surface's own contract still
   lives in `DESIGN.md`, and a linked Figma file still wins — see
-  `.claude/rules/design-mcp.md`.
+  `docs/design/design-mcp.md`.
 
 The owning procedure and platform-specific guidance are in
-`.claude/skills/architecture/references/design-contract.md` and
-`.claude/skills/architecture/references/platform-guidance.md`.
+`docs/design/design-contract.md` and
+`docs/design/platform-guidance.md`.
