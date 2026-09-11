@@ -37,7 +37,7 @@ SkoLab/
 │   └── backend-go/              # Gateway Routing & API Proxy (Go)
 ├── shared/
 │   └── skolab-design-system/    # Central design tokens and compiler
-├── infrastructure/              # Prometheus, Grafana, Alertmanager config
+├── render.yaml                  # Render Blueprint for the production services
 ├── api-contracts/               # Generated OpenAPI schema snapshot + docs (see /openapi.json, /docs)
 ├── tools/                       # Cache clearing and cleanup utilities
 ├── scripts/                     # Local build and environment scripts

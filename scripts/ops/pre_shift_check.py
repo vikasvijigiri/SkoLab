@@ -6,18 +6,14 @@ Automated pre-shift readiness gate for SkoLab on-call engineers.
 
 Checks:
   1. Backend /health endpoint is reachable.
-  2. Prometheus /metrics endpoint is reachable.
-  3. Alertmanager API is reachable and healthy.
-  4. All required environment variables are set (key scope audit).
-  5. PagerDuty routing keys are configured.
+  2. All required environment variables are set (key scope audit).
+  3. PagerDuty routing keys are configured.
 
 Usage:
     .\\venv\\Scripts\\python scripts/pre_shift_check.py [--host <backend-host>]
 
 Options:
     --host   Backend base URL. Default: http://127.0.0.1:8000
-    --prom   Prometheus base URL. Default: http://127.0.0.1:9090
-    --am     Alertmanager base URL. Default: http://127.0.0.1:9093
 
 Exit codes:
     0 = all checks passed — shift may begin
@@ -99,22 +95,6 @@ def check_backend_health(backend_url: str) -> tuple[bool, str]:
     )
 
 
-def check_prometheus(prom_url: str) -> tuple[bool, str]:
-    url = prom_url.rstrip("/") + "/-/healthy"
-    status, body = _http_get(url)
-    if status == 200:
-        return True, f"HTTP {status} — Prometheus healthy"
-    return False, f"HTTP {status} — Prometheus not healthy. Body: {body[:100]}"
-
-
-def check_alertmanager(am_url: str) -> tuple[bool, str]:
-    url = am_url.rstrip("/") + "/-/healthy"
-    status, body = _http_get(url)
-    if status == 200:
-        return True, f"HTTP {status} — Alertmanager healthy"
-    return False, f"HTTP {status} — Alertmanager not healthy. Body: {body[:100]}"
-
-
 def check_env_variables() -> tuple:
     """Verify critical on-call environment variables are set."""
     required = [
@@ -157,20 +137,18 @@ def check_pagerduty_keys() -> tuple[bool, str]:
 
 CHECKS = [
     ("Backend health endpoint reachable", check_backend_health, "backend"),
-    ("Prometheus metrics endpoint reachable", check_prometheus, "prom"),
-    ("Alertmanager status OK", check_alertmanager, "am"),
     ("All required environment variables are set", check_env_variables, None),
     ("PagerDuty routing keys configured", check_pagerduty_keys, None),
 ]
 
 
-def run_checks(backend_url: str, prom_url: str, am_url: str) -> bool:
+def run_checks(backend_url: str) -> bool:
     print("=" * 60)
     print(" SkoLab Pre-Shift Readiness Check")
     print("=" * 60)
     print()
 
-    url_map = {"backend": backend_url, "prom": prom_url, "am": am_url}
+    url_map = {"backend": backend_url}
     passed = 0
     failed = 0
 
@@ -204,15 +182,9 @@ def main() -> None:
     parser.add_argument(
         "--host", default="http://127.0.0.1:8000", help="Backend base URL"
     )
-    parser.add_argument(
-        "--prom", default="http://127.0.0.1:9090", help="Prometheus base URL"
-    )
-    parser.add_argument(
-        "--am", default="http://127.0.0.1:9093", help="Alertmanager base URL"
-    )
     args = parser.parse_args()
 
-    ok = run_checks(args.host, args.prom, args.am)
+    ok = run_checks(args.host)
     sys.exit(0 if ok else 1)
 
 
