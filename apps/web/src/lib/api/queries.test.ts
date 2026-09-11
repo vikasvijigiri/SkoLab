@@ -44,14 +44,15 @@ describe("query option factories", () => {
     expect(authorSuggestionsQuery("ada").enabled).toBe(true);
   });
 
-  it("openAlexWorksQuery keys on q+focus and disables when both empty", () => {
+  it("openAlexWorksQuery keys on q+focus+trend scope and disables when all empty", () => {
     expect(openAlexWorksQuery({ q: "turing", focus: "cs" }).queryKey).toEqual([
       "openalex-works",
-      { q: "turing", focus: "cs" },
+      { q: "turing", focus: "cs", trendSubfield: null, trendField: null },
     ]);
     expect(openAlexWorksQuery({}).enabled).toBe(false);
     expect(openAlexWorksQuery({ q: "  " }).enabled).toBe(false);
     expect(openAlexWorksQuery({ focus: "physics" }).enabled).toBe(true);
+    expect(openAlexWorksQuery({ trendSubfield: "3104" }).enabled).toBe(true);
   });
 
   it("paperAnalysisQuery keys on the identifiers and gates on at least one", () => {
