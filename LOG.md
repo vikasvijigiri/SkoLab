@@ -59,17 +59,31 @@ watching #176's CI, and finish anything else still pending. PR #177.
   of the key, not just spreading `undefined` over it), and
   `go vet && go build && go test ./...` were all clean for the Go gateway,
   for the first time this session.
-- **Found, not fixed — a third pre-existing, unrelated flaky test**,
-  surfaced only because the `pythonpath` fix let `checks.yml`'s tests run
-  at all for the first time: `test_industry_academic.py::
-  test_get_tieups_cache_miss_success` fails on Linux CI, passes standalone
-  and in a full local Windows run, and returns a title that appears
-  nowhere in its own mocks — points at global state (`LLM_LIMIT_EXCEEDED`
-  in `llm_service.py`, or a cache/singleton in
-  `industry_academic_service.py`) leaking across tests in a way this
-  test's `@patch`es don't fully cover. Confirmed with the owner to merge
-  #177 anyway rather than block on a second unrelated investigation;
-  tracked as an open follow-up in `HANDOFF.md`.
+- **A third pre-existing `checks.yml` bug, root-caused and fixed, not left
+  open.** First suspected as an order-dependent flake (`checks.yml`'s
+  `pythonpath` fix let its tests run for the first time this session,
+  surfacing it) — `test_industry_academic.py::
+  test_get_tieups_cache_miss_success` failed on Linux CI, passed
+  standalone and in a full local Windows run, returning a title
+  ("Industrialization of Quantum Computing") absent from its own mocks.
+  Asked to dig past the surface rather than file it as a follow-up: the
+  actual cause is that neither of `checks.yml`'s Python test steps ever
+  set `GROQ_API`/`OPENROUTER_API_KEY` (`ci.yml` does), so
+  `is_llm_working()` returns `False` and `IndustryAcademicService.
+  get_tieups` silently takes its non-LLM fallback path —
+  `get_fallback_tieups()`, which literally returns
+  `f"Industrialization of {domain}"` — instead of the LLM path the test
+  mocks. It passed locally purely because `services/backend/.env` has a
+  real `GROQ_API` key sitting in this checkout. Reproduced CI's exact
+  failure by moving that `.env` aside and unsetting both vars; fixed by
+  setting them to `ci.yml`'s existing safe placeholder values in both the
+  `fast` and `slow` jobs (the `slow` job happened to pass this particular
+  run despite the same gap, so it got the same fix for consistency, not
+  because it was currently failing). Full local suite re-run with `.env`
+  absent and the fix applied: 216 passed, 4 skipped, 0 failed — same count
+  as before, confirming nothing else regressed now that
+  `is_llm_working()` is reliably `True` in CI, as it always should have
+  been.
 - **Process note, for the record**: mid-session, a careless
   `git reset --hard` (done to move a commit that had landed directly on
   `main` by mistake onto the right branch) discarded the *uncommitted*
