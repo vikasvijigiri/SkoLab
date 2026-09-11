@@ -351,6 +351,10 @@ export interface BreakthroughPrediction {
   roadmap_steps: string[];
   pioneering_papers: PaperSource[];
   latest_papers: PaperSource[];
+  // True when the LLM call failed and the backend served its deterministic
+  // placeholder instead of a real prediction — show it as an estimate, not
+  // as genuine analysis.
+  is_fallback?: boolean;
 }
 
 // Nexus collection workspace (client-derived from OpenAlexWork) + chat
