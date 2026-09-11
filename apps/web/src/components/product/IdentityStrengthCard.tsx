@@ -11,13 +11,16 @@ import {
 import type { AuthorResponse, SkoLabUser } from "@/lib/types";
 
 /**
- * Home's "who you are on SkoLab" card — the LinkedIn profile-strength meter for
- * a research identity. Replaces the old "Research command center" question grid.
+ * Home's "who you are on SkoLab" card — one merged identity + profile-strength
+ * card at the top of the right rail. Was two separate cards (an identity card,
+ * and a profile-strength meter below it further down the rail); one card reads
+ * better as a single "this is you" unit.
  *
- * Every number here is real: the ring is the share of profile fields actually
- * filled in, and the reach row is the author's own OpenAlex totals. SkoLab does
- * not track profile views or search appearances, so this card does not invent
- * them.
+ * Every number here is real: Disruption/Skill/Works are SkoLab's own computed
+ * scores, the ring is the share of profile fields actually filled in, and the
+ * reach row is the author's own OpenAlex totals (Works is shown once, in the
+ * identity trio, not repeated in the reach row). SkoLab does not track profile
+ * views or search appearances, so this card does not invent them.
  */
 
 /** Presentational copy per step — the pure module owns label + weight. */
@@ -45,7 +48,7 @@ const STEP_META: Record<ProfileStrengthStep["key"], { detail: string; href: stri
   },
 };
 
-const RING_SIZE = 76;
+const RING_SIZE = 72;
 const RING_STROKE = 7;
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
@@ -53,14 +56,16 @@ const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 /** How many "Do next" rows to show before deferring the rest to /profile. */
 const MAX_ACTIONS = 3;
 
-export function ProfileStrengthCard({
+export function IdentityStrengthCard({
   name,
+  status,
   firestoreProfile,
   author,
   unresolved = false,
   loading = false,
 }: {
-  name?: string;
+  name: string;
+  status?: string;
   firestoreProfile: SkoLabUser | null;
   author: AuthorResponse | null;
   unresolved?: boolean;
@@ -69,7 +74,7 @@ export function ProfileStrengthCard({
   if (loading) {
     return (
       <Card accentColor="var(--primary)" className="animate-pulse">
-        <div className="h-40 rounded-md bg-surface-subtle" />
+        <div className="h-64 rounded-md bg-surface-subtle" />
       </Card>
     );
   }
@@ -92,7 +97,39 @@ export function ProfileStrengthCard({
 
   return (
     <Card accentColor="var(--primary)" className="flex flex-col gap-4">
-      <div className="flex items-center gap-4">
+      {/* ── Identity ──────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-3">
+        <span
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-display text-h3 font-bold text-text-on-primary shadow-card"
+          style={{ background: "var(--primary)" }}
+        >
+          {(name.trim()[0] ?? "?").toUpperCase()}
+        </span>
+        <div className="min-w-0">
+          <p className="truncate font-display text-body font-semibold text-text-primary">{name}</p>
+          {status && (
+            <p className="truncate font-body text-[11.5px] text-text-secondary">{status}</p>
+          )}
+        </div>
+      </div>
+
+      {author && !unresolved ? (
+        <div className="flex items-center gap-2 border-t border-border pt-3">
+          <Stat label="Disruption" value={Math.round(author.disruption_score)} accent="var(--accent-orange)" />
+          <Stat label="Skill" value={Math.round(author.average_skill_score)} accent="var(--primary)" />
+          <Stat label="Works" value={author.works_count} accent="var(--accent-teal)" />
+        </div>
+      ) : (
+        <p className="border-t border-border pt-3 font-body text-[11.5px] leading-relaxed text-text-secondary">
+          <Link href="/profile" className="font-medium text-primary">
+            Add your name or ORCID
+          </Link>{" "}
+          to unlock your impact metrics.
+        </p>
+      )}
+
+      {/* ── Profile strength ──────────────────────────────────────────── */}
+      <div className="flex items-center gap-4 border-t border-border/70 pt-4">
         <svg
           width={RING_SIZE}
           height={RING_SIZE}
@@ -128,7 +165,7 @@ export function ProfileStrengthCard({
             dominantBaseline="central"
             fill="var(--text-primary)"
             fontFamily="var(--font-mono)"
-            fontSize="16"
+            fontSize="15"
             fontWeight="600"
           >
             {percent}%
@@ -137,9 +174,7 @@ export function ProfileStrengthCard({
 
         <div className="min-w-0">
           <p className="eyebrow text-primary">Profile strength</p>
-          <h2 className="mt-1 font-display text-h3 font-semibold text-text-primary">
-            {tier}
-          </h2>
+          <h2 className="mt-1 font-display text-h3 font-semibold text-text-primary">{tier}</h2>
           <p className="mt-0.5 font-body text-[12px] leading-relaxed text-text-muted">
             {complete
               ? "Collaborators see the full picture of your work."
@@ -199,13 +234,14 @@ export function ProfileStrengthCard({
         </div>
       )}
 
+      {/* Works already appears in the identity trio above, so the reach row
+          only adds what isn't shown yet: citations and h-index. */}
       <div className="border-t border-border/70 pt-3">
         {resolved && author ? (
           <>
             <p className="eyebrow mb-2 text-text-muted">Your work on OpenAlex</p>
             <div className="flex items-center gap-2">
               <ReachStat label="Citations" value={author.cited_by_count} accent="var(--accent-teal)" />
-              <ReachStat label="Works" value={author.works_count} accent="var(--primary)" />
               <ReachStat label="h-index" value={author.h_index} accent="var(--accent-orange)" />
             </div>
           </>
@@ -219,6 +255,19 @@ export function ProfileStrengthCard({
         )}
       </div>
     </Card>
+  );
+}
+
+function Stat({ label, value, accent }: { label: string; value: number; accent: string }) {
+  return (
+    <div className="flex-1 text-center">
+      <p className="font-mono text-[15px] font-medium tabular-nums" style={{ color: accent }}>
+        <AnimatedCounter to={value} />
+      </p>
+      <p className="mt-1 font-body text-[11px] font-medium uppercase tracking-wide text-text-muted">
+        {label}
+      </p>
+    </div>
   );
 }
 
