@@ -398,6 +398,15 @@ export interface CollabProject {
   ownerName: string;
   members: CollabMember[];
   memberUids: string[];
+  /** Derived from `members` on every membership/role write — lets
+   *  firestore.rules express "owner or editor" without array-of-object
+   *  inspection (the rules language has no predicate search over
+   *  `members`). Absent on projects created before this field existed;
+   *  firestore.rules falls back to "any member" for those. */
+  editorUids?: string[];
+  /** Same derivation, for "owner, editor, or reviewer" (everyone but a
+   *  pure viewer may comment in chat). */
+  commenterUids?: string[];
   recentEquations: string;
   manuscriptProgress: number;
   manuscriptDraft: string;

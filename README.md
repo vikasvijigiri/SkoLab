@@ -140,7 +140,7 @@ The web client lives in [apps/web](file:///c:/Users/VikasVijigiri/Documents/SkoL
     cd apps/web
     cp .env.local.example .env.local
     ```
-    `NEXT_PUBLIC_API_BASE_URL` defaults to `http://localhost:8080` (the Go gateway) and needs no changes for local dev. **Firebase auth and Firestore-backed features (sign-in, Profile, CoLab Workspace) require a Firebase Web app**, which does not exist yet for the `skolab-vvi` project (only the Android app is registered). In the [Firebase console](https://console.firebase.google.com/) → Project settings → Add app → Web, register one and paste the resulting `apiKey`/`authDomain`/`appId` into `.env.local`. Until then, the app builds and runs, but auth/Firestore calls will show a clear "Firebase is not configured" error instead of working.
+    `NEXT_PUBLIC_API_BASE_URL` defaults to `http://localhost:8080` (the Go gateway) and needs no changes for local dev. **Firebase auth and Firestore-backed features (sign-in, Profile, CoLab Workspace) require a Firebase Web app** — one is registered for the `skolab-vvi` project (since 2026-09-02); if your own `.env.local` lacks `NEXT_PUBLIC_FIREBASE_API_KEY`/`NEXT_PUBLIC_FIREBASE_APP_ID`, get them from [Firebase console](https://console.firebase.google.com/) → Project settings → General → Your apps → Web app. Without them the app still builds and runs, but auth/Firestore calls show a clear "Firebase is not configured" error instead of working.
 
 2.  **Install dependencies and run** (from the repo root, since `apps/web` is an npm workspace):
     ```bash
@@ -149,7 +149,7 @@ The web client lives in [apps/web](file:///c:/Users/VikasVijigiri/Documents/SkoL
     ```
     Run the Go gateway (`npm run dev:go`) and Python backend (`npm run dev:backend`) alongside it — the web app calls the Go gateway directly, which proxies AI/enrichment routes to Python. CORS for `http://localhost:3000` is already configured on the Go gateway (`services/backend-go/internal/middleware/cors.go`).
 
-3.  **Architecture note:** CoLab Workspace (projects, chat, shared equations/manuscript, tasks, meetings) and Profile have no REST backend today — the Android app reads/writes them directly via Firestore, and the web app mirrors that so both platforms stay in sync on the same data. Papers search likewise calls OpenAlex directly (proxied server-side through a Next.js route handler instead of from the browser, unlike the Android app).
+3.  **Architecture note:** CoLab Workspace (projects, chat, shared equations/manuscript, tasks, meetings) and Profile have no REST backend by design (`decisions/0004`) — the Android app reads/writes them directly via Firestore, and the web app mirrors that so both platforms stay in sync on the same data. Access control is enforced by [`firestore.rules`](./firestore.rules) (`decisions/0018`) rather than a backend layer — deploy changes with `npx firebase login` then `npx firebase deploy --only firestore:rules`, and run `npm run test:rules` (needs Java + the Firestore emulator) before you do. Papers search likewise calls OpenAlex directly (proxied server-side through a Next.js route handler instead of from the browser, unlike the Android app).
 
 ---
 
