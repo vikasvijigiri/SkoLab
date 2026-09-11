@@ -1,15 +1,23 @@
 # HANDOFF
 
-> Current status (2026-09-10): `main` is at `cff6997` (PR #119 merged) with the
-> Discovery **fit-first collaborator finder** shipped — see `LOG.md`'s
-> 2026-09-10 entry and `decisions/0014`. Working tree clean apart from
-> `.claude/hooks/state/*` bookkeeping. No open feature branch.
+> Current status (2026-09-11): the repo-specific `.claude/` capability layer
+> was replaced wholesale with the vendored `addyosmani/agent-skills` pack —
+> see `decisions/0017`. `AGENTS.md` and `CLAUDE.md` now point at the new
+> pack; product knowledge that lived in the old layer's rules and skill
+> references moved to `docs/design/` and `docs/ops/`. `TASK.md`/`LOG.md`
+> history below this point predates the swap and still refers to the old
+> layer's skills, hooks, and `tools/` — read it as history, not as current
+> instructions for how this repo's agent tooling works.
+>
+> Product state as of 2026-09-10: `main` is at `cff6997` (PR #119 merged)
+> with the Discovery **fit-first collaborator finder** shipped — see
+> `LOG.md`'s 2026-09-10 entry and `decisions/0014`. No open feature branch.
 
 > Current-state snapshot, not history. Overwritten in place at the end of
 > every session. For history, see `LOG.md`; for why a decision was made, see
 > `decisions/`.
 
-**Last updated:** 2026-09-10
+**Last updated:** 2026-09-11
 
 > **Note:** the sections below "Where the repository is" predate several merges
 > (daily brief, research surfaces, discovery fit-first) and are stale — trust
