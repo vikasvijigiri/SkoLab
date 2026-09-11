@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
-import { Coins, Briefcase, BookOpen, Users2, FolderKanban } from "lucide-react";
+import { Users2, FolderKanban } from "lucide-react";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import { useMyProfile } from "@/lib/hooks/useMyProfile";
 import { useFirestoreCollection } from "@/lib/hooks/useFirestoreCollection";
@@ -18,7 +18,8 @@ import {
   activityFeedQuery,
   scienceNewsQuery,
 } from "@/lib/api/queries";
-import { AIDailyBriefCard, type BriefItem } from "@/components/feed/AIDailyBriefCard";
+import { AIDailyBriefCard } from "@/components/feed/AIDailyBriefCard";
+import { buildBriefItems as buildBriefItemsFromFeature, type HomeBriefItem } from "@/features/home/model";
 import { PeerSuggestionsCard } from "@/components/feed/PeerSuggestionsCard";
 import { UnifiedFeed } from "@/components/feed/UnifiedFeed";
 import { Card } from "@/components/ui/Card";
@@ -47,8 +48,10 @@ function buildBriefItems(opts: {
   topGrant?: GrantMatch;
   topOpportunity?: IndustryOpportunity;
   topJournal?: JournalRecommendation;
-}): BriefItem[] {
-  const items: BriefItem[] = [];
+}): HomeBriefItem[] {
+  return buildBriefItemsFromFeature(opts);
+  /* Legacy inline implementation retained temporarily during feature migration.
+  const items: HomeBriefItem[] = [];
   if (opts.topGrant) {
     items.push({
       key: "grant",
@@ -80,7 +83,7 @@ function buildBriefItems(opts: {
       text: `**${opts.topJournal.journal_name}** — ${opts.topJournal.match_score}% match`,
     });
   }
-  return items;
+  return items; */
 }
 
 /** Left-rail shortcut list of the user's actual workspaces — data, not nav. */
