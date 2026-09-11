@@ -52,25 +52,33 @@ const VIEWER = "viewer-uid";
 const OUTSIDER = "outsider-uid";
 
 async function seedProject(overrides: Record<string, unknown> = {}) {
+  // An override set to `undefined` means "omit this field" (simulating a
+  // legacy doc that never had it) -- Firestore's client SDK rejects an
+  // explicit `undefined` field value outright, so it must be deleted from
+  // the payload, not merely spread over the default.
+  const payload: Record<string, unknown> = {
+    name: "Quantum foam",
+    description: "",
+    ownerUid: OWNER,
+    ownerName: "Owner",
+    members: [
+      { uid: OWNER, name: "Owner", email: "o@x.edu", role: "owner" },
+      { uid: EDITOR, name: "Editor", email: "e@x.edu", role: "editor" },
+      { uid: VIEWER, name: "Viewer", email: "v@x.edu", role: "viewer" },
+    ],
+    memberUids: [OWNER, EDITOR, VIEWER],
+    editorUids: [OWNER, EDITOR],
+    commenterUids: [OWNER, EDITOR, VIEWER].filter((u) => u !== VIEWER),
+    recentEquations: "",
+    manuscriptProgress: 0,
+    manuscriptDraft: "",
+    ...overrides,
+  };
+  for (const key of Object.keys(payload)) {
+    if (payload[key] === undefined) delete payload[key];
+  }
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
-    await setDoc(doc(ctx.firestore(), "collabs_groups", "p1"), {
-      name: "Quantum foam",
-      description: "",
-      ownerUid: OWNER,
-      ownerName: "Owner",
-      members: [
-        { uid: OWNER, name: "Owner", email: "o@x.edu", role: "owner" },
-        { uid: EDITOR, name: "Editor", email: "e@x.edu", role: "editor" },
-        { uid: VIEWER, name: "Viewer", email: "v@x.edu", role: "viewer" },
-      ],
-      memberUids: [OWNER, EDITOR, VIEWER],
-      editorUids: [OWNER, EDITOR],
-      commenterUids: [OWNER, EDITOR, VIEWER].filter((u) => u !== VIEWER),
-      recentEquations: "",
-      manuscriptProgress: 0,
-      manuscriptDraft: "",
-      ...overrides,
-    });
+    await setDoc(doc(ctx.firestore(), "collabs_groups", "p1"), payload);
   });
 }
 

@@ -77,6 +77,19 @@ jobs:
 
       - name: Backend unit tests (SQLite fallback, no Postgres needed)
         working-directory: services/backend
+        # GROQ_API/OPENROUTER_API_KEY: `is_llm_working()` (app/core/config.py
+        # Settings.groq_api_key defaults to "" when unset) returns False with
+        # neither set, so IndustryAcademicService.get_tieups and anything
+        # else gated on it silently takes its non-LLM fallback path instead
+        # of the one tests actually mock -- confirmed by reproducing
+        # test_industry_academic.py::test_get_tieups_cache_miss_success's
+        # exact CI failure locally by unsetting these two vars, and fixing
+        # it the same way by setting them. Values match ci.yml's already-
+        # proven placeholders (never real keys, no live LLM calls happen in
+        # tests -- only is_llm_working()'s truthiness check reads them).
+        env:
+          GROQ_API: ci-test-groq-token-not-secret
+          OPENROUTER_API_KEY: ci-test-openrouter-token-not-secret
         run: pytest -q
 
       - name: Go vet
@@ -97,7 +110,18 @@ jobs:
     if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     services:
       postgres:
-        image: postgres:16
+        # pgvector/pgvector image = stock postgres + the `vector` extension
+        # available for `CREATE EXTENSION` (see the identical comment on
+        # ci.yml's postgres service, which already gets this right). Plain
+        # `postgres:16` errors on `CREATE EXTENSION IF NOT EXISTS vector`
+        # ("extension ... is not available") -- and since ci_bootstrap_db.py
+        # runs every DDL statement in one transaction, that one failure
+        # poisons the whole thing, silently no-opping every table it tries
+        # to create after it (including unrelated ones like `users`), while
+        # still printing "[ci] schema bootstrap ok" and exiting 0. That's
+        # what "relation ... does not exist" errors in the pytest run right
+        # after this step actually were.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: skolab
           POSTGRES_PASSWORD: skolab
@@ -148,8 +172,14 @@ jobs:
 
       - name: Backend tests against real Postgres
         working-directory: services/backend
+        # See the matching step + comment in the `fast` job above -- same
+        # fix, so this job can't pass or fail this test by accident
+        # depending on unrelated test-count/ordering differences between
+        # the SQLite and Postgres runs.
         env:
           DATABASE_URL: postgresql+asyncpg://skolab:skolab@localhost:5432/skolab
+          GROQ_API: ci-test-groq-token-not-secret
+          OPENROUTER_API_KEY: ci-test-openrouter-token-not-secret
         run: pytest -q
 
   # The ONE required check. Branch protection names this job and nothing else, so
