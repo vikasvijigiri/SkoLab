@@ -110,6 +110,11 @@ export const handlers = [
   ),
   http.get("*/api/enrich/deaths", () => HttpResponse.json({})),
   http.get("*/api/enrich/collab-flags", () => HttpResponse.json({})),
+  http.get("*/api/openalex/trending-topics", () =>
+    HttpResponse.json([
+      { id: "T1", displayName: "Spin Liquids", recentCount: 40, priorCount: 20, growth: 1.0 },
+    ]),
+  ),
 ];
 
 export const server = setupServer(...handlers);
