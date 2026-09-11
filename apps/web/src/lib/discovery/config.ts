@@ -46,6 +46,18 @@ export const DISCOVERY_CONFIG = {
   trendingMinPriorWorks: readEnv("DISCOVERY_TRENDING_MIN_PRIOR_WORKS", 15),
   /** How many trending topics to show. */
   trendingTopN: readEnv("DISCOVERY_TRENDING_TOP_N", 8),
+  /** How many rising researchers to show in the "trending researchers" strip. */
+  trendingResearchersTopN: readEnv("DISCOVERY_TRENDING_RESEARCHERS_TOP_N", 6),
+  /** Trending papers: same windowing idea as topics, applied to citation velocity. */
+  trendingPapersWindowDays: readEnv("DISCOVERY_TRENDING_PAPERS_WINDOW_DAYS", 120),
+  /** A paper below this many citations is dropped rather than ranked by velocity
+   *  — a single early citation on a day-old paper would otherwise look "hot". */
+  trendingPapersMinCitations: readEnv("DISCOVERY_TRENDING_PAPERS_MIN_CITATIONS", 3),
+  /** Candidate pool size fetched (by OpenAlex's own cited_by_count:desc prefilter)
+   *  before re-ranking by velocity. */
+  trendingPapersPoolSize: readEnv("DISCOVERY_TRENDING_PAPERS_POOL_SIZE", 40),
+  /** How many trending papers to show after velocity re-ranking. */
+  trendingPapersTopN: readEnv("DISCOVERY_TRENDING_PAPERS_TOP_N", 12),
 } as const;
 
 /** Topical-focus filter stops — a 4-stop segmented control, not a range input

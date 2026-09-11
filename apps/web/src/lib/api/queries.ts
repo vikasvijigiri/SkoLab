@@ -132,11 +132,21 @@ export const dailyConjectureQuery = (authorId?: string, name?: string) =>
 //   ["industry-opportunities", { focus, name }] | ["grants", authorId]
 // (Horizon predict and Nexus chat are POST-on-submit → useMutation, no factory.)
 
-export const openAlexWorksQuery = (opts: { q?: string; focus?: string } = {}) =>
+export const openAlexWorksQuery = (
+  opts: { q?: string; focus?: string; trendSubfield?: string; trendField?: string } = {},
+) =>
   queryOptions({
-    queryKey: ["openalex-works", { q: opts.q ?? null, focus: opts.focus ?? null }] as const,
+    queryKey: [
+      "openalex-works",
+      {
+        q: opts.q ?? null,
+        focus: opts.focus ?? null,
+        trendSubfield: opts.trendSubfield ?? null,
+        trendField: opts.trendField ?? null,
+      },
+    ] as const,
     queryFn: () => openAlexWorks(opts),
-    enabled: Boolean(opts.q?.trim() || opts.focus),
+    enabled: Boolean(opts.q?.trim() || opts.focus || opts.trendSubfield || opts.trendField),
     staleTime: 5 * MIN,
     gcTime: 30 * MIN,
   });

@@ -5,6 +5,7 @@ import type { ResearcherResult, ResearcherSignals } from "@/lib/types";
 const signals = (over: Partial<ResearcherSignals> = {}): ResearcherSignals => ({
   activity: "active",
   momentum: "steady",
+  momentumScore: 0,
   yearsActiveVisible: 10,
   careerStage: "established",
   activeDecades: [2010, 2020],
