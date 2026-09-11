@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 import path from "path";
-import { withSentryConfig } from "@sentry/nextjs";
+import { withSentryConfig } from "@sentry/nextjs/config";
 
 const nextConfig: NextConfig = {
   // apps/web is an npm workspace member of the SkoLab monorepo root — pin the
@@ -54,5 +54,4 @@ export default withSentryConfig(nextConfig, {
   // Route Sentry traffic through the app's own origin so ad-blockers don't
   // drop events.
   tunnelRoute: "/monitoring",
-  disableLogger: true,
 });
