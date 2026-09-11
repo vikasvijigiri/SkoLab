@@ -6,6 +6,22 @@
 
 ---
 
+## 2026-09-11 — Deploy firestore.rules to production
+
+The one item PR #176/#177 couldn't finish from inside the agent session:
+`firestore.rules` was written, tested (20/20 against the real emulator),
+and merged, but never pushed to the live `skolab-vvi` project — that needs
+the owner's own Google account. Walked the owner through it directly:
+`npx firebase-tools login` (browser OAuth), `npx firebase-tools
+projects:list` to confirm `skolab-vvi` was the active project, then `npx
+firebase-tools deploy --only firestore:rules`. Output confirmed a clean
+compile (`cloud.firestore: rules file firestore.rules compiled
+successfully`) and a successful release (`firestore: released rules
+firestore.rules to cloud.firestore`, `Deploy complete!`). Production is now
+running the same rules the emulator suite validated. `HANDOFF.md` updated
+to drop this from "needs a decision / attention" — nothing agent-blocking
+remains open on the CoLab gap-closure work from #176/#177.
+
 ## 2026-09-11 — Close out everything pending after PR #176
 
 Prompted directly: fix the two pre-existing `checks.yml` bugs found while

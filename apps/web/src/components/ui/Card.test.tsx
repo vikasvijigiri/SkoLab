@@ -3,9 +3,9 @@ import { render, screen } from "@/test/render";
 import { Card } from "./Card";
 
 describe("Card", () => {
-  it("uses the on-grid p-4 padding by default (direction B density)", () => {
+  it("uses spacious p-5 padding by default", () => {
     render(<Card>body</Card>);
-    expect(screen.getByText("body").className).toContain("p-4");
+    expect(screen.getByText("body").className).toContain("p-5");
   });
 
   it("draws the accent as a 2px top bar by default", () => {
