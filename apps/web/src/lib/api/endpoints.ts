@@ -181,10 +181,14 @@ export const nexusChat = (papers: NexusChatPaper[], messages: NexusMessage[]) =>
  * OpenAlex works via the same-origin Next route handler (`app/api/openalex/works`),
  * NOT the Go gateway — so it uses `fetch` directly, not `apiRequest`.
  */
-export const openAlexWorks = async (opts: { q?: string; focus?: string } = {}): Promise<OpenAlexWork[]> => {
+export const openAlexWorks = async (
+  opts: { q?: string; focus?: string; trendSubfield?: string; trendField?: string } = {},
+): Promise<OpenAlexWork[]> => {
   const params = new URLSearchParams();
   if (opts.q) params.set("q", opts.q);
   if (opts.focus) params.set("focus", opts.focus);
+  if (opts.trendSubfield) params.set("trendSubfield", opts.trendSubfield);
+  if (opts.trendField) params.set("trendField", opts.trendField);
   const qs = params.toString();
   const res = await fetch(`/api/openalex/works${qs ? `?${qs}` : ""}`);
   if (!res.ok) throw new ApiError(res.status, `OpenAlex works request failed with ${res.status}`);
