@@ -8,11 +8,18 @@
 
 ## Where the repository is
 
-`main` is at `65dcec8` (PR #176 merged — Firestore rules + Discovery→CoLab
-match bridge + Google sign-in loading UX). PR #177 closes out everything
-that was still pending after #176, plus three pre-existing `checks.yml` bugs
-found while watching its CI (all three actually root-caused and fixed, not
-worked around). Full detail in `LOG.md`'s 2026-09-11 entries.
+`main` is at `0c5f5ac` (PR #177 merged — closes out everything that was
+still pending after PR #176's Firestore rules + Discovery→CoLab match
+bridge + Google sign-in loading UX, plus three pre-existing `checks.yml`
+bugs found while watching its CI, all root-caused and fixed, not worked
+around). Full detail in `LOG.md`'s 2026-09-11 entries.
+
+`firestore.rules` is now **deployed to production** (`skolab-vvi`) — run by
+the repo owner via `npx firebase-tools login` + `npx firebase-tools deploy
+--only firestore:rules`, confirmed with `+  Deploy complete!` and a
+successful rules compile. This was the one item that could not be done from
+inside the agent session (needs the owner's own Google account); it is no
+longer outstanding.
 
 - **`checks.yml` fixed for real** — `pytest.ini` needed `pythonpath = .`
   (`tests/` has no `__init__.py`, so bare `pytest`'s rootdir sys.path
@@ -43,12 +50,13 @@ worked around). Full detail in `LOG.md`'s 2026-09-11 entries.
 
 ## What needs a decision / attention
 
-- **`firestore.rules` is still not deployed** — the one thing that
-  genuinely cannot be done from here. Needs `npx firebase login` with the
-  owner's own Google account, then `npx firebase deploy --only
-  firestore:rules` (or paste the file into Firebase Console → Firestore
-  Database → Rules directly). Production is still running on whatever
-  rules existed before PR #176 until this happens.
+- **Nothing agent-blocking remains open.** The only item that needed the
+  owner's own credentials — deploying `firestore.rules` — is done (see
+  above). Worth a manual spot-check in the Firebase Console (Firestore
+  Database → Rules tab) that the published rules match the repo file, and
+  a live smoke test (sign in, open a CoLab project as a member, confirm an
+  unrelated account is denied) to confirm production behaves like the
+  20/20 emulator suite predicts.
 - **The third `checks.yml` failure was root-caused, not left as a
   follow-up.** `tests/test_industry_academic.py::
   test_get_tieups_cache_miss_success` was first suspected to be an
