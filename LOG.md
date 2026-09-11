@@ -6,6 +6,65 @@
 
 ---
 
+## 2026-09-11 — Smooth Google sign-in transition (no more frozen-button wait)
+
+Prompted directly: after completing Google sign-in, the login/signup page
+showed its ordinary idle "Continue with Google" button — unchanged, not
+disabled, no spinner — for the several seconds `getRedirectResult()` plus
+`createResearcherProfile()` actually take, then jumped straight to
+`/home`/`/onboarding` with no transition. Root cause: `signInWithRedirect`
+is a full browser navigation away and back; the page that receives the
+redirect mounts completely fresh with no in-memory signal that a sign-in is
+mid-flight.
+
+- `markGoogleRedirectPending` / `hasGoogleRedirectPending` /
+  `clearGoogleRedirectPending` (`apps/web/src/lib/firebase/auth.ts`) — a
+  `sessionStorage` flag set right before `signInWithRedirect` fires, so the
+  page that receives the redirect back can know, before
+  `completeGoogleRedirectSignIn()` even starts, that it should show a
+  loading view instead of the ordinary form.
+- New `GoogleRedirectLoading` component (spinner + "Signing you in…"),
+  shown via `AnimatePresence` in place of the login/signup form while the
+  flag is set; falls back to the form (with an error, if any) once
+  `completeGoogleRedirectSignIn()` settles.
+- **Found and fixed a real hydration-mismatch bug while building this**: a
+  first draft read the flag straight from a `useState(() =>
+  hasGoogleRedirectPending())` lazy initializer — `sessionStorage` doesn't
+  exist during Next's static/server render, so the static HTML always
+  assumed "not pending" while the client's first render (where
+  `sessionStorage` does exist) could assume "pending", a mismatch caught
+  live by Playwright (`Error: Hydration failed...`) that a plain unit-test
+  render wouldn't have surfaced. Fixed with `useSyncExternalStore` (new
+  `apps/web/src/lib/hooks/useGoogleRedirectPending.ts`), which is the
+  React-documented way to read a client-only source of truth without a
+  server/client mismatch, and doesn't touch `useEffect` at all — sidesteps
+  this repo's `react-hooks/set-state-in-effect` hard-error rule, which a
+  second draft (setting state synchronously in the effect body) tripped
+  twice before landing here.
+- `GoogleSignInButton` now shows a real spinner (`Connecting to Google…`)
+  while loading instead of just dimming — extracted the spinner out of
+  `Button.tsx` into a shared `components/ui/Spinner.tsx` so both buttons
+  (and future ones) use the same one.
+- Found, while adding the first tests that ever exercised
+  `@/lib/firebase/errors.ts`, that `@sentry/nextjs` crashes on import under
+  this project's jsdom/Windows test environment (vendored
+  `@apm-js-collab/code-transformer-bundler-plugins` throws `The URL must be
+  of scheme file`) — a latent gap nothing had hit before since no test
+  previously imported that module. Fixed at the shared level:
+  `@sentry/nextjs` is now mocked (`captureException` only, which is all any
+  caller uses) in `apps/web/src/test/setup.ts`, not worked around locally.
+- Verified: `npx vitest run` 52 files / 235 tests, `tsc --noEmit` 0,
+  `eslint .` 0, `next build` 0 (`/login` and `/signup` still statically
+  prerendered). Live-verified in the real dev server with Playwright: set
+  the pending flag via `sessionStorage`, reloaded, confirmed zero console
+  errors (the hydration bug is what a first live check caught, before the
+  `useSyncExternalStore` fix — a plain `npm test` pass alone would have
+  shipped that bug, since Vitest/jsdom never triggers React's real
+  server/client reconciliation the way an actual `next build` + browser
+  load does).
+
+---
+
 ## 2026-09-11 — Firestore security rules + Discovery→CoLab match bridge
 
 Prompted by a market-research pass (competitive landscape for SkoLab's CoLab
