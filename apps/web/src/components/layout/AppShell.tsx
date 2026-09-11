@@ -30,7 +30,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <TopBar />
 
-      <main id="main-content" className="min-h-0 flex-1 overflow-y-auto bg-page-bg">
+      <main id="main-content" className="surface-atmosphere min-h-0 flex-1 overflow-y-auto bg-page-bg">
         {children}
       </main>
 
