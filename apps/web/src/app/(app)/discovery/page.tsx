@@ -46,34 +46,10 @@ import { Button } from "@/components/ui/Button";
 import { scoreFit } from "@/lib/discovery/fit";
 import { topRisingResearchers } from "@/lib/discovery/trendingResearchers";
 import { DISCOVERY_CONFIG } from "@/lib/discovery/config";
-
-type Mode = "researchers" | "papers" | "topics";
+import { bestTaxonMatch, MOMENTUM_RANK, type DiscoveryMode } from "@/features/discovery/model";
 
 const EMPTY_RESEARCHERS: ResearcherResult[] = [];
 const EMPTY_TOPICS: TrendingTopic[] = [];
-const MOMENTUM_RANK = { rising: 0, steady: 1, cooling: 2 } as const;
-
-/** Word tokens for fuzzy taxon matching. */
-const tokens = (s: string): string[] =>
-  s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(Boolean);
-
-/** Best display-name match for `query` among `taxa`, or null below a weak floor. */
-function bestTaxonMatch(query: string, taxa: OpenAlexTaxon[]): OpenAlexTaxon | null {
-  const q = new Set(tokens(query));
-  if (q.size === 0) return null;
-  let best: OpenAlexTaxon | null = null;
-  let bestScore = 0;
-  for (const t of taxa) {
-    const words = tokens(t.display_name);
-    const hits = words.filter((w) => q.has(w)).length;
-    const score = hits / Math.max(words.length, 1);
-    if (hits > 0 && score > bestScore) {
-      best = t;
-      bestScore = score;
-    }
-  }
-  return bestScore >= 0.3 ? best : null;
-}
 
 export default function DiscoveryPage() {
   return <DiscoveryContent />;
@@ -82,7 +58,7 @@ export default function DiscoveryPage() {
 /** Exported for unit tests — the default export is only the Suspense-free wrapper. */
 export function DiscoveryContent() {
   const searchParams = useSearchParams();
-  const [mode, setMode] = useState<Mode>(searchParams.get("tab") === "papers" ? "papers" : "researchers");
+  const [mode, setMode] = useState<DiscoveryMode>(searchParams.get("tab") === "papers" ? "papers" : "researchers");
 
   // Taxonomy drilldown — "explore another area". Nothing is typed.
   const [field, setField] = useState<OpenAlexTaxon | null>(null);
@@ -286,7 +262,7 @@ export function DiscoveryContent() {
         { value: "topics", label: "topics" },
       ]}
       value={mode}
-      onChange={(v) => setMode(v as Mode)}
+      onChange={(v) => setMode(v as DiscoveryMode)}
     />
   );
 
