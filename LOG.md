@@ -6,6 +6,136 @@
 
 ---
 
+## 2026-09-11 — Smooth Google sign-in transition (no more frozen-button wait)
+
+Prompted directly: after completing Google sign-in, the login/signup page
+showed its ordinary idle "Continue with Google" button — unchanged, not
+disabled, no spinner — for the several seconds `getRedirectResult()` plus
+`createResearcherProfile()` actually take, then jumped straight to
+`/home`/`/onboarding` with no transition. Root cause: `signInWithRedirect`
+is a full browser navigation away and back; the page that receives the
+redirect mounts completely fresh with no in-memory signal that a sign-in is
+mid-flight.
+
+- `markGoogleRedirectPending` / `hasGoogleRedirectPending` /
+  `clearGoogleRedirectPending` (`apps/web/src/lib/firebase/auth.ts`) — a
+  `sessionStorage` flag set right before `signInWithRedirect` fires, so the
+  page that receives the redirect back can know, before
+  `completeGoogleRedirectSignIn()` even starts, that it should show a
+  loading view instead of the ordinary form.
+- New `GoogleRedirectLoading` component (spinner + "Signing you in…"),
+  shown via `AnimatePresence` in place of the login/signup form while the
+  flag is set; falls back to the form (with an error, if any) once
+  `completeGoogleRedirectSignIn()` settles.
+- **Found and fixed a real hydration-mismatch bug while building this**: a
+  first draft read the flag straight from a `useState(() =>
+  hasGoogleRedirectPending())` lazy initializer — `sessionStorage` doesn't
+  exist during Next's static/server render, so the static HTML always
+  assumed "not pending" while the client's first render (where
+  `sessionStorage` does exist) could assume "pending", a mismatch caught
+  live by Playwright (`Error: Hydration failed...`) that a plain unit-test
+  render wouldn't have surfaced. Fixed with `useSyncExternalStore` (new
+  `apps/web/src/lib/hooks/useGoogleRedirectPending.ts`), which is the
+  React-documented way to read a client-only source of truth without a
+  server/client mismatch, and doesn't touch `useEffect` at all — sidesteps
+  this repo's `react-hooks/set-state-in-effect` hard-error rule, which a
+  second draft (setting state synchronously in the effect body) tripped
+  twice before landing here.
+- `GoogleSignInButton` now shows a real spinner (`Connecting to Google…`)
+  while loading instead of just dimming — extracted the spinner out of
+  `Button.tsx` into a shared `components/ui/Spinner.tsx` so both buttons
+  (and future ones) use the same one.
+- Found, while adding the first tests that ever exercised
+  `@/lib/firebase/errors.ts`, that `@sentry/nextjs` crashes on import under
+  this project's jsdom/Windows test environment (vendored
+  `@apm-js-collab/code-transformer-bundler-plugins` throws `The URL must be
+  of scheme file`) — a latent gap nothing had hit before since no test
+  previously imported that module. Fixed at the shared level:
+  `@sentry/nextjs` is now mocked (`captureException` only, which is all any
+  caller uses) in `apps/web/src/test/setup.ts`, not worked around locally.
+- Verified: `npx vitest run` 52 files / 235 tests, `tsc --noEmit` 0,
+  `eslint .` 0, `next build` 0 (`/login` and `/signup` still statically
+  prerendered). Live-verified in the real dev server with Playwright: set
+  the pending flag via `sessionStorage`, reloaded, confirmed zero console
+  errors (the hydration bug is what a first live check caught, before the
+  `useSyncExternalStore` fix — a plain `npm test` pass alone would have
+  shipped that bug, since Vitest/jsdom never triggers React's real
+  server/client reconciliation the way an actual `next build` + browser
+  load does).
+
+---
+
+## 2026-09-11 — Firestore security rules + Discovery→CoLab match bridge
+
+Prompted by a market-research pass (competitive landscape for SkoLab's CoLab
+bet) that flagged two things: no `firestore.rules` file anywhere in the repo
+(access control was whatever's in the Firebase console, unversioned), and
+that no discovery tool in the market lets a fit-based match become a working
+collaboration in one click — the exact gap CoLab is positioned to close, but
+wasn't wired end-to-end.
+
+- **`firestore.rules`** (repo root) — first version-controlled access
+  control for `researchers/{uid}` (self-write only) and
+  `collabs_groups/{projectId}` (owner/editor/reviewer/viewer, matching the
+  Overleaf-style role model already in `workspace.ts`). `deriveRoleArrays()`
+  in `apps/web/src/lib/firebase/workspace.ts` now persists `editorUids` /
+  `commenterUids` alongside `memberUids` so the rules language (no
+  array-of-object predicate search) can express role checks. Legacy
+  projects without the new fields fall back to "any member may edit" —
+  today's de facto behavior, not a new restriction. Decision `0018`.
+  **Not deployed** — needs `firebase login` (owner's credentials) then
+  `firebase deploy --only firestore:rules`; `npm run test:rules` needs Java
+  for the Firestore emulator, neither of which this environment had. The
+  owner explicitly chose this over building a REST layer (which
+  `decisions/0004` already rejected once) after being asked directly.
+- **"Start a project with this match"** — `ResearcherCard` (Discovery) now
+  has a click action that routes to `/workspace?withResearcher=<openAlexId>
+  &withResearcherName=<name>`; the CoLab list page pre-fills and auto-opens
+  the create form, and on creation resolves the match to a SkoLab account by
+  `openAlexId` (`findResearcherByOpenAlexId`, new) — invites them as editor
+  if found, or creates the project anyway with an honest "no SkoLab account
+  yet" status if not. New `apps/web/src/lib/firebase/workspace.test.ts`
+  (workspace.ts had zero tests before this); found and fixed a real gap in
+  the shared Firestore test double while writing it — `setDoc` was never
+  mocked, so `createProject`'s document-seeding call was silently
+  untestable.
+- **Verified live**, not just in tests: ran `npm run dev:web` against the
+  real `skolab-vvi` Firebase project (Go gateway not runnable in this
+  environment — no Go toolchain — so gateway-dependent surfaces degrade to
+  their documented empty/error states, confirmed working, not crashing),
+  signed up two real test accounts (`ada.verify.skolab@mailinator.com`,
+  `marie.verify.skolab@mailinator.com`), ran onboarding both ways (full
+  click-through and "Skip for now"), browsed Discovery's live OpenAlex
+  fit-grid, clicked "Start a project" on a real match (Rod Ellis,
+  `A5034271321`), created the project, confirmed the no-account message,
+  sent a chat message and added a task (both round-tripped through real
+  Firestore), then invited the second account by email, confirmed
+  "added as editor", changed their role to viewer, and reloaded to confirm
+  the role change persisted server-side. All of this ran against whatever
+  Firestore rules existed in production *before* this change — the new
+  `firestore.rules` has not been deployed, so this verifies the feature
+  logic, not yet the new access control. Left both test accounts and the
+  "Rod Ellis collaboration" project in production `skolab-vvi` for the owner
+  to inspect or delete.
+- Found, not fixed (flagged, out of scope for this pass): a pre-existing
+  hydration mismatch in `ThemeToggle` on the landing page (server renders a
+  different icon than the client) — unrelated to this work, first noticed
+  during live verification.
+- Verified: `npx vitest run` (49 files / 222 tests, up from 218), `tsc
+  --noEmit` 0, `eslint .` 0, `next build` 0 (`/workspace` still statically
+  prerendered — `useSearchParams` didn't force full dynamic rendering).
+  `react-hooks/set-state-in-effect` (hard error in this repo's eslint
+  config) caught a real anti-pattern in the first draft of the pre-fill
+  logic — fixed by deriving initial state from the URL via lazy `useState`
+  initializers instead of `useEffect` + `setState`.
+- Decision `0018`. README's stale "Firebase not registered" / "no REST
+  backend" framing corrected (the Firebase Web app has actually been
+  registered since 2026-09-02 — the README and `decisions/0004`'s "Known
+  gap" note were both out of date; `decisions/0004`'s note itself is left
+  alone per the append-only rule, corrected here instead).
+
+---
+
 ## 2026-09-10 — Discovery fit-first collaborator finder
 
 Shipped via PR #119 (merge commit `cff6997`), merged to `main` and synced;

@@ -26,11 +26,11 @@ def test_pre_shift_check_env_vars_success():
     mock_env = {
         "DATABASE_URL": "postgresql+asyncpg://postgres:pass@127.0.0.1:5432/skolab",
         "DATABASE_ENCRYPTION_KEY": "dGVzdF9kYXRhYmFzZV9lbmNyeXB0aW9uX2tleV8xMjM=",
-        "GROQ_API": "gsk_somekeyvaluelargerthan10chars",
-        "OPENROUTER_API_KEY": "sk-or-v1-somekeyvalue",
+        "GROQ_API": "ci-test-groq-token-not-secret",
+        "OPENROUTER_API_KEY": "ci-test-openrouter-token-not-secret",
         "GOOGLE_APPLICATION_CREDENTIALS": "service-account.json",
-        "PAGERDUTY_PRIMARY_ONCALL_KEY": "pd_key_primary_active",
-        "PAGERDUTY_DB_SRE_KEY": "pd_key_db_sre_active",
+        "PAGERDUTY_PRIMARY_ONCALL_KEY": "ci-test-pagerduty-primary",
+        "PAGERDUTY_DB_SRE_KEY": "ci-test-pagerduty-database",
     }
     with patch.dict(os.environ, mock_env, clear=True):
         ok, msg = pre_shift_check.check_env_variables()
@@ -54,11 +54,11 @@ def test_pre_shift_check_env_vars_weak_key():
     mock_env = {
         "DATABASE_URL": "postgresql+asyncpg://postgres:pass@127.0.0.1:5432/skolab",
         "DATABASE_ENCRYPTION_KEY": "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MTI=",  # weak default
-        "GROQ_API": "gsk_somekeyvaluelargerthan10chars",
-        "OPENROUTER_API_KEY": "sk-or-v1-somekeyvalue",
+        "GROQ_API": "ci-test-groq-token-not-secret",
+        "OPENROUTER_API_KEY": "ci-test-openrouter-token-not-secret",
         "GOOGLE_APPLICATION_CREDENTIALS": "service-account.json",
-        "PAGERDUTY_PRIMARY_ONCALL_KEY": "pd_key_primary_active",
-        "PAGERDUTY_DB_SRE_KEY": "pd_key_db_sre_active",
+        "PAGERDUTY_PRIMARY_ONCALL_KEY": "ci-test-pagerduty-primary",
+        "PAGERDUTY_DB_SRE_KEY": "ci-test-pagerduty-database",
     }
     with patch.dict(os.environ, mock_env, clear=True):
         ok, msg = pre_shift_check.check_env_variables()
@@ -69,8 +69,8 @@ def test_pre_shift_check_env_vars_weak_key():
 def test_pre_shift_check_pagerduty_keys_success():
     """Verify check_pagerduty_keys passes with valid keys."""
     mock_env = {
-        "PAGERDUTY_PRIMARY_ONCALL_KEY": "pd_key_primary_active",
-        "PAGERDUTY_DB_SRE_KEY": "pd_key_db_sre_active",
+        "PAGERDUTY_PRIMARY_ONCALL_KEY": "ci-test-pagerduty-primary",
+        "PAGERDUTY_DB_SRE_KEY": "ci-test-pagerduty-database",
     }
     with patch.dict(os.environ, mock_env, clear=True):
         ok, msg = pre_shift_check.check_pagerduty_keys()
@@ -81,7 +81,7 @@ def test_pre_shift_check_pagerduty_keys_placeholder():
     """Verify check_pagerduty_keys fails when values are placeholders."""
     mock_env = {
         "PAGERDUTY_PRIMARY_ONCALL_KEY": "${PAGERDUTY_PRIMARY_ONCALL_KEY}",
-        "PAGERDUTY_DB_SRE_KEY": "pd_key_db_sre_active",
+        "PAGERDUTY_DB_SRE_KEY": "ci-test-pagerduty-database",
     }
     with patch.dict(os.environ, mock_env, clear=True):
         ok, msg = pre_shift_check.check_pagerduty_keys()
@@ -91,7 +91,7 @@ def test_pre_shift_check_pagerduty_keys_placeholder():
 
 @patch("urllib.request.urlopen")
 def test_pre_shift_check_http_helpers_success(mock_urlopen):
-    """Verify backend, prometheus, and alertmanager HTTP checks pass on 200 OK."""
+    """Verify the Render backend health check passes on 200 OK."""
     # Set up mock response
     mock_resp = MagicMock()
     mock_resp.status = 200
@@ -102,13 +102,6 @@ def test_pre_shift_check_http_helpers_success(mock_urlopen):
     assert ok_be is True
     assert "backend /health OK" in msg_be
 
-    ok_prom, msg_prom = pre_shift_check.check_prometheus("http://localhost:9090")
-    assert ok_prom is True
-    assert "Prometheus healthy" in msg_prom
-
-    ok_am, msg_am = pre_shift_check.check_alertmanager("http://localhost:9093")
-    assert ok_am is True
-    assert "Alertmanager healthy" in msg_am
 
 
 @patch("urllib.request.urlopen")

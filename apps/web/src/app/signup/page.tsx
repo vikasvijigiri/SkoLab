@@ -3,16 +3,20 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AnimatePresence } from "framer-motion";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { FirebaseConfigBanner } from "@/components/auth/FirebaseConfigBanner";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { GoogleRedirectLoading } from "@/components/auth/GoogleRedirectLoading";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/lib/hooks/AuthProvider";
+import { useGoogleRedirectPending } from "@/lib/hooks/useGoogleRedirectPending";
 import {
   signUpWithEmail,
   signInWithGoogle,
   completeGoogleRedirectSignIn,
+  clearGoogleRedirectPending,
 } from "@/lib/firebase/auth";
 import { friendlyAuthError } from "@/lib/firebase/errors";
 
@@ -25,19 +29,40 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<"email" | "google" | null>(null);
   const [showEmail, setShowEmail] = useState(false);
+  // See the matching state in app/login/page.tsx: pendingRedirect is an
+  // SSR/hydration-safe read (useSyncExternalStore, not a raw sessionStorage
+  // read in a useState initializer, which would mismatch the static HTML);
+  // redirectResolved flips once the effect below settles it, avoiding a
+  // synchronous setState in the effect body.
+  const pendingRedirect = useGoogleRedirectPending();
+  const [redirectResolved, setRedirectResolved] = useState(false);
+  const completingGoogle = configured && pendingRedirect && !redirectResolved;
 
   // Picks up the result of signInWithGoogle's redirect round trip -- see the
   // matching effect in app/login/page.tsx for the full reasoning, including
   // why this is gated on `configured`.
   const redirectChecked = useRef(false);
   useEffect(() => {
-    if (!configured || redirectChecked.current) return;
+    if (redirectChecked.current) return;
     redirectChecked.current = true;
+    if (!configured) {
+      clearGoogleRedirectPending();
+      return;
+    }
     completeGoogleRedirectSignIn()
       .then((res) => {
-        if (res) router.push(res.isNewUser ? "/onboarding" : "/home");
+        clearGoogleRedirectPending();
+        if (res) {
+          router.push(res.isNewUser ? "/onboarding" : "/home");
+        } else {
+          setRedirectResolved(true);
+        }
       })
-      .catch((err) => setError(friendlyAuthError(err)));
+      .catch((err) => {
+        clearGoogleRedirectPending();
+        setRedirectResolved(true);
+        setError(friendlyAuthError(err));
+      });
   }, [configured, router]);
 
   async function handleSignup(e: React.FormEvent) {
@@ -63,9 +88,20 @@ export default function SignupPage() {
       // up by completeGoogleRedirectSignIn above, after the round trip back.
       await signInWithGoogle();
     } catch (err) {
+      clearGoogleRedirectPending();
       setError(friendlyAuthError(err));
       setLoading(null);
     }
+  }
+
+  if (completingGoogle) {
+    return (
+      <AuthCard>
+        <AnimatePresence mode="wait">
+          <GoogleRedirectLoading />
+        </AnimatePresence>
+      </AuthCard>
+    );
   }
 
   return (

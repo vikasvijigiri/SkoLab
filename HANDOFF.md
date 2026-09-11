@@ -1,78 +1,93 @@
 # HANDOFF
 
-> Current status (2026-09-11): the repo-specific `.claude/` capability layer
-> was replaced wholesale with the vendored `addyosmani/agent-skills` pack —
-> see `decisions/0017`. `AGENTS.md` and `CLAUDE.md` now point at the new
-> pack; product knowledge that lived in the old layer's rules and skill
-> references moved to `docs/design/` and `docs/ops/`. `TASK.md`/`LOG.md`
-> history below this point predates the swap and still refers to the old
-> layer's skills, hooks, and `tools/` — read it as history, not as current
-> instructions for how this repo's agent tooling works.
->
-> Product state as of 2026-09-10: `main` is at `cff6997` (PR #119 merged)
-> with the Discovery **fit-first collaborator finder** shipped — see
-> `LOG.md`'s 2026-09-10 entry and `decisions/0014`. No open feature branch.
-
 > Current-state snapshot, not history. Overwritten in place at the end of
 > every session. For history, see `LOG.md`; for why a decision was made, see
 > `decisions/`.
 
 **Last updated:** 2026-09-11
 
-> **Note:** the sections below "Where the repository is" predate several merges
-> (daily brief, research surfaces, discovery fit-first) and are stale — trust
-> `LOG.md` and `git log` over them until a full `documentation` pass refreshes
-> this file.
-
 ## Where the repository is
 
-`main` is at `cff6997` — merge of PR #119
-(`feat/discovery-fit-first`, base `206e845`), branch deleted local + remote.
+`main` is at `940df54` (`docs(deploy): remove stale local infrastructure
+references`). Working tree has an **unmerged, unbranched** set of changes on
+top of that — see `git status` — from a session that closed two gaps a
+market-research pass surfaced (no version-controlled Firestore access
+control, and no path from a Discovery match to an actual CoLab project) plus
+a follow-up UX fix (Google sign-in showed a frozen idle button for several
+seconds after the redirect back, instead of a loading state). Full detail in
+`LOG.md`'s two 2026-09-11 entries; decision `decisions/0018`.
 
-- Discovery's researcher surface is now fit-first: defaults to the viewer's
-  resolved subfield, ranks by a no-embeddings fit score, shows activity /
-  momentum / career-stage / decades / topical-focus / standing / ORCID /
-  deceased signals with a click-only filter rail.
-- New: `apps/web/src/lib/discovery/*`, `apps/web/src/components/discovery/*`,
-  `apps/web/src/app/api/enrich/{deaths,collab-flags}`. No Go/Python change.
-- Plan `docs/plans/2026-09-10-discovery-fit-first.md` (all 11 tasks ticked,
-  `## Approved`); decision `decisions/0014-discovery-fit-first-collaborator.md`.
-- Verified before merge: tsc 0, lint 0, vitest 39 files / 160 tests,
-  check:contrast pass, Playwright `discovery-researchers` + `rollout-visual`
-  10/10 (axe AA), `next build` 0.
+- **Google sign-in loading state** — `apps/web/src/app/login/page.tsx` and
+  `signup/page.tsx` now show a `GoogleRedirectLoading` view (not the
+  ordinary form) for the whole redirect round trip, via a `sessionStorage`
+  flag (`markGoogleRedirectPending` et al. in `lib/firebase/auth.ts`) read
+  hydration-safely through a new `useGoogleRedirectPending` hook
+  (`useSyncExternalStore`, not a raw `useState` initializer — the latter
+  caused a real hydration mismatch, caught live, not by the unit tests).
+  Also: `GoogleSignInButton` shows a real spinner while loading now (shared
+  `components/ui/Spinner.tsx`, extracted out of `Button.tsx`), and
+  `@sentry/nextjs` is now mocked in `test/setup.ts` (it crashed on import
+  under this project's jsdom/Windows test environment — nothing had hit
+  that before since no test previously touched `lib/firebase/errors.ts`).
+  Fully verified: tests/tsc/lint/build all green, plus a live Playwright
+  check against the real dev server (the only way the hydration bug ever
+  surfaced).
 
-### Earlier (stale) — instrument-frontend, 2026-09-08
-
-`main` was at `1ab8c31`; branch `feat/instrument-frontend`
-(`7844a28` `7616035` `8f6151e`) — dark-first "Instrument" identity,
-`decisions/0012`, plan `docs/plans/2026-09-08-instrument-frontend.md`. Status
-of that branch relative to current `main` is unverified here.
-
-## Verification behind the branch
-
-| Check | Result |
-|---|---|
-| `python tools/new_skill_check.py --all` | 16 skills, all required pass |
-| `python tools/test_process_router.py` | rc 0 |
-| `python tools/run_checks.py --tier all --require-test` | `PASS: 5 check(s) green` |
-| `apps/web`: `npm run test` | 110 passed (30 files) |
-| `apps/web`: `npx tsc --noEmit` · `npm run lint` · `npm run build` | green (lint: 1 pre-existing unrelated warning) |
-| `apps/web`: `npm run check:contrast` | all token pairs pass, both themes |
-| `apps/web`: `npm run test:e2e` | 18/19 — axe WCAG AA specs pass |
+- **New:** `firestore.rules`, `firebase.json`, `.firebaserc` (repo root),
+  `tests/firestore/rules.test.ts` + `tests/firestore/vitest.config.mts`,
+  `apps/web/src/lib/firebase/workspace.test.ts` (workspace.ts had zero tests
+  before this).
+- **Changed:** `apps/web/src/lib/firebase/workspace.ts` (role-array
+  derivation), `apps/web/src/lib/types.ts` (`editorUids`/`commenterUids` on
+  `CollabProject`), `apps/web/src/components/discovery/ResearcherCard.tsx`
+  (+ "Start a project" action), `apps/web/src/app/(app)/workspace/page.tsx`
+  (reads `withResearcher`/`withResearcherName`, invites or logs "no account
+  yet"), `apps/web/src/components/workspace/ShareModal.tsx` (call-site fix
+  for `inviteMember`'s new signature), plus matching test updates and one
+  shared-test-infra fix (`apps/web/src/test/firestore.ts` was missing a
+  `setDoc` mock).
+- README's stale Firebase/REST-backend framing corrected in place.
 
 ## What needs a decision / attention
 
-- **Branch is unmerged and has no remote.** Nothing pushed. `/publish` +
-  `release-git` when the owner wants it on `main`. Formal `testing` and
-  `code-review` skill passes were not run separately — every gate was run and
-  quoted during implementation.
-- **Pre-existing e2e failure `smoke.spec.ts:13`** ("Firebase isn't configured
-  yet" notice on `/login`). Verified to fail identically on the pre-change
-  tree — an env/config issue, not from this work. Untouched.
-- **`.env` still lacks** the keys listed in `.env.example` (`OPENALEX_API_KEY`,
-  `EMAIL_BLIND_INDEX_KEY`, etc.). Owner's own credentials; no agent fills them.
-- **Newly added skills do not hot-attach to an already-running Claude Code
-  session** — `/frontend-ui` becomes invocable after a restart. Its guidance
-  was applied directly this session regardless.
-- **`decisions/0012` supersedes** `docs/plans/2026-09-07-web-visual-identity-round1.md`
-  and the direction-C contract. Rollback path is in the decision record.
+- **Two things this session could not do, both flagged clearly rather than
+  worked around:**
+  1. **`firestore.rules` is not deployed.** Needs `npx firebase login`
+     (owner's own Google account — no CLI credentials were available) then
+     `npx firebase deploy --only firestore:rules`, or paste the file into
+     Firebase Console → Firestore Database → Rules. Production is still
+     running on whatever rules existed before this change until then.
+  2. **`npm run test:rules` has not passed anywhere.** It needs Java (the
+     Firestore emulator requires a JVM) and this environment had none —
+     confirmed the failure is specifically `Could not spawn "java -version"`,
+     not a rules-syntax or test-logic error, but the suite is unverified.
+- **Everything else was verified live**, not just in unit tests: two real
+  test accounts were created against the actual `skolab-vvi` Firebase
+  project (`ada.verify.skolab@mailinator.com`,
+  `marie.verify.skolab@mailinator.com`) and walked through sign-up,
+  onboarding, Discovery, "Start a project" end-to-end, chat, tasks, and a
+  member-role change that was confirmed to persist across a page reload.
+  Both accounts and the resulting "Rod Ellis collaboration" project are
+  still in production `skolab-vvi` — left for the owner to inspect or
+  delete, not cleaned up automatically.
+- **The Go gateway could not run in this environment** — no Go toolchain on
+  this machine (same class of limitation `decisions/0009` already recorded
+  for a prior session). Every gateway-dependent surface (activity feed, peer
+  suggestions, author search-by-name, profile sync) was confirmed to degrade
+  to its documented empty/error state rather than crash — not itself
+  verified working, since nothing here could start it.
+- **Found, not fixed:** a pre-existing hydration mismatch in `ThemeToggle`
+  on the landing page (server renders a different icon than the client) —
+  noticed during live verification, unrelated to this session's work.
+- **LLM-grounding follow-up, narrower than first suspected:** a static
+  read-only audit of Gap Finder / Horizon / Nexus (the three LLM features
+  the 2026-07-21 audit hadn't covered) found all three genuinely grounded in
+  real OpenAlex/client-supplied data — no bare-name fabrication path. The
+  actual gap is narrower: **none of the three validates LLM output
+  structurally** before returning it to the user (Gap Finder and Nexus trust
+  raw text outright; Horizon only confirms `json.loads` succeeds, and its
+  `extra="allow"` / default-filled schema would silently blank-out malformed
+  fields rather than error). Not fixed this session — Python/LLM-service
+  work, out of scope for what was otherwise a web-only change, and
+  unverifiable here without a `GROQ_API` key.
+- Branch pushed as a PR — see the repo's PR list for review/merge status.
