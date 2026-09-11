@@ -35,6 +35,7 @@ import { PaperResultCard } from "@/components/discovery/PaperResultCard";
 import { LeaderboardRow } from "@/components/discovery/LeaderboardRow";
 import { ResearcherCard } from "@/components/discovery/ResearcherCard";
 import { TrendingTopicCard } from "@/components/discovery/TrendingTopicCard";
+import { TrendingResearchersStrip } from "@/components/discovery/TrendingResearchersStrip";
 import {
   DiscoveryFilters,
   DEFAULT_FILTER_STATE,
@@ -43,6 +44,7 @@ import {
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Button } from "@/components/ui/Button";
 import { scoreFit } from "@/lib/discovery/fit";
+import { topRisingResearchers } from "@/lib/discovery/trendingResearchers";
 import { DISCOVERY_CONFIG } from "@/lib/discovery/config";
 
 type Mode = "researchers" | "papers" | "topics";
@@ -130,12 +132,27 @@ export function DiscoveryContent() {
   const gridSubfield = subfield ?? viewerSubfield;
   const fitGridActive = mode === "researchers" && !topic && Boolean(gridSubfield);
 
+  // Same scope for trending topics AND trending papers: a manual drilldown
+  // wins, else the viewer's own subfield; falls back to a bare field pick if
+  // no subfield is chosen yet, since both are meaningful at either level.
+  const topicsScope: { level: "subfield" | "field"; id: string } | null = gridSubfield
+    ? { level: "subfield", id: gridSubfield.id }
+    : field
+      ? { level: "field", id: field.id }
+      : null;
+
   const leaderboard = useQuery({
     ...leaderboardQuery("all"),
     enabled: mode === "researchers" && !node && !gridSubfield,
   });
   const trending = useQuery({
-    ...openAlexWorksQuery({}),
+    ...openAlexWorksQuery(
+      topicsScope?.level === "subfield"
+        ? { trendSubfield: topicsScope.id }
+        : topicsScope?.level === "field"
+          ? { trendField: topicsScope.id }
+          : {},
+    ),
     enabled: !node && mode === "papers",
   });
   const nodeAuthors = useQuery({
@@ -148,14 +165,6 @@ export function DiscoveryContent() {
   });
 
   // ── trending topics ──────────────────────────────────────────────────────
-  // Same scope as the fit-first grid (a manual drilldown wins, else the
-  // viewer's own subfield); falls back to a bare field pick if no subfield is
-  // chosen yet, since topic-growth is meaningful at either level.
-  const topicsScope: { level: "subfield" | "field"; id: string } | null = gridSubfield
-    ? { level: "subfield", id: gridSubfield.id }
-    : field
-      ? { level: "field", id: field.id }
-      : null;
   const trendingTopicsQ = useQuery({
     ...trendingTopicsQuery(topicsScope),
     enabled: mode === "topics",
@@ -221,6 +230,10 @@ export function DiscoveryContent() {
     // "standing" / "recent" arrive already ordered by the server.
     return rows;
   }, [rawRows, deceasedQ.data, collabQ.data, viewer, filters, sort]);
+
+  // Highlight strip above the grid — the momentum signal `signals.ts` already
+  // computes, promoted out of being just a sort option (decisions/0015).
+  const risingResearchers = useMemo(() => topRisingResearchers(researchers), [researchers]);
 
   const facets: DiscoveryFacets = useMemo(() => {
     const c = new Map<string, number>();
@@ -514,6 +527,10 @@ export function DiscoveryContent() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {fitGridActive && !researchersQ.isPending && !fitError && risingResearchers.length > 0 && (
+            <TrendingResearchersStrip researchers={risingResearchers} scopeLabel={scopeLabel} />
+          )}
 
           <div className={gridClass}>
             {(fitGridActive ? researchersQ.isPending : active.isPending) &&

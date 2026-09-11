@@ -50,6 +50,7 @@ describe("deriveSignals", () => {
     );
     expect(s.activity).toBe("active");
     expect(s.momentum).toBe("rising");
+    expect(s.momentumScore).toBeGreaterThan(0);
     expect(s.careerStage).toBe("emerging");
     expect(s.yearsActiveVisible).toBe(5);
     expect(s.activeDecades).toEqual([2020]);
@@ -88,11 +89,13 @@ describe("deriveSignals", () => {
     expect(s.activity).toBe("dormant");
     // citations decaying → cooling
     expect(s.momentum).toBe("cooling");
+    expect(s.momentumScore).toBeLessThan(0);
   });
 
   it("is total on sparse / empty counts_by_year", () => {
     const s = deriveSignals(author({ counts_by_year: [], affiliations: [], topics: [] }), { now: NOW });
     expect(s.momentum).toBe("steady");
+    expect(s.momentumScore).toBe(0);
     expect(s.activity).toBe("dormant");
     expect(s.sparkline).toEqual([]);
     expect(s.activeDecades).toEqual([]);

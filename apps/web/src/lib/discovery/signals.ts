@@ -27,23 +27,27 @@ export interface SignalContext {
 const clamp01 = (n: number): number => (n < 0 ? 0 : n > 1 ? 1 : n);
 
 /** OLS slope of `ys` over evenly-spaced x (0..n-1), normalised by mean(ys).
- *  `< 3` points or a zero mean → `steady` (not enough signal). */
-function classifyMomentum(ys: number[], epsilon: number): MomentumState {
-  if (ys.length < 3) return "steady";
+ *  `0` when there are fewer than 3 points or the mean is 0 — not enough
+ *  signal to say anything, not "no momentum". */
+function momentumSlope(ys: number[]): number {
+  if (ys.length < 3) return 0;
   const n = ys.length;
   const xMean = (n - 1) / 2;
   const yMean = ys.reduce((a, b) => a + b, 0) / n;
-  if (yMean === 0) return "steady";
+  if (yMean === 0) return 0;
   let num = 0;
   let den = 0;
   for (let i = 0; i < n; i++) {
     num += (i - xMean) * ((ys[i] ?? 0) - yMean);
     den += (i - xMean) ** 2;
   }
-  if (den === 0) return "steady";
-  const normalised = num / den / yMean;
-  if (normalised > epsilon) return "rising";
-  if (normalised < -epsilon) return "cooling";
+  if (den === 0) return 0;
+  return num / den / yMean;
+}
+
+function classifyMomentum(slope: number, epsilon: number): MomentumState {
+  if (slope > epsilon) return "rising";
+  if (slope < -epsilon) return "cooling";
   return "steady";
 }
 
@@ -67,7 +71,8 @@ export function deriveSignals(a: OpenAlexAuthorRaw, ctx: SignalContext = {}): Re
 
   // ── momentum ──────────────────────────────────────────────────────────────
   const sparkline = counts.map((c) => c.cited_by_count ?? 0);
-  const momentum = classifyMomentum(sparkline, DISCOVERY_CONFIG.momentumEpsilon);
+  const momentumScore = momentumSlope(sparkline);
+  const momentum = classifyMomentum(momentumScore, DISCOVERY_CONFIG.momentumEpsilon);
 
   // ── career stage ──────────────────────────────────────────────────────────
   const firstVisibleYear = allYears.length ? Math.min(...allYears) : now;
@@ -103,6 +108,7 @@ export function deriveSignals(a: OpenAlexAuthorRaw, ctx: SignalContext = {}): Re
   return {
     activity,
     momentum,
+    momentumScore,
     yearsActiveVisible,
     careerStage,
     activeDecades,

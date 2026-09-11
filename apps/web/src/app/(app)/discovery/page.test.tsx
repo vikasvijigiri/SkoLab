@@ -69,7 +69,10 @@ describe("DiscoveryContent — click-only", () => {
     expect(
       (await screen.findAllByText(/Researchers in Condensed Matter Physics/i)).length,
     ).toBeGreaterThan(0);
-    expect(await screen.findByText("Ada Lovelace")).toBeInTheDocument();
+    // Rendered once in the main grid, and again in the "rising" highlight
+    // strip (decisions/0015's trending-persons follow-up) — the fixture's
+    // counts_by_year climbs each year, so Ada classifies as rising.
+    expect((await screen.findAllByText("Ada Lovelace")).length).toBeGreaterThan(0);
     // fit badge is rendered by ResearcherCard
     expect(await screen.findByText(/^Fit \d+$/)).toBeInTheDocument();
   });
@@ -82,7 +85,7 @@ describe("DiscoveryContent — click-only", () => {
     expect(
       (await screen.findAllByText(/Researchers in Condensed Matter Physics/i)).length,
     ).toBeGreaterThan(0);
-    expect(await screen.findByText("Ada Lovelace")).toBeInTheDocument();
+    expect((await screen.findAllByText("Ada Lovelace")).length).toBeGreaterThan(0);
   });
 
   it("toggling a filter chip keeps the grid rendered (no crash, no text input)", async () => {
@@ -96,7 +99,7 @@ describe("DiscoveryContent — click-only", () => {
     };
     const user = userEvent.setup();
     const { container } = renderWithProviders(<DiscoveryContent />);
-    await screen.findByText("Ada Lovelace");
+    await screen.findAllByText("Ada Lovelace");
     const emerging = await screen.findByRole("button", { name: "Emerging" });
     await user.click(emerging);
     expect(emerging).toHaveAttribute("aria-pressed", "true");
@@ -114,7 +117,7 @@ describe("DiscoveryContent — click-only", () => {
     };
     const user = userEvent.setup();
     renderWithProviders(<DiscoveryContent />);
-    await screen.findByText("Ada Lovelace");
+    await screen.findAllByText("Ada Lovelace");
     await user.click(screen.getByRole("tab", { name: "topics" }));
     expect(await screen.findByText("Spin Liquids")).toBeInTheDocument();
     expect(screen.getByText("+100%")).toBeInTheDocument();
