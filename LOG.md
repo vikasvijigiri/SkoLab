@@ -6,6 +6,73 @@
 
 ---
 
+## 2026-09-12 — Dependabot PR sweep + stop the recurring breaks at the source
+
+Prompted directly: ~62 open Dependabot PRs across two waves (30, then ~20
+more once the queue refilled), asked to check carefully, merge what's
+safe, and make sure the same classes of failure don't keep costing time on
+every future cycle.
+
+- **26 PRs merged** (Go, Python, npm, GitHub Actions, and Android — the
+  last group only after the CI secrets fix below gave them real signal).
+  Sequential merges within the same ecosystem (go.mod/go.sum,
+  package.json/package-lock.json) hit expected conflicts; `@dependabot
+  rebase` comments resolved most on their own, two needed a manual
+  `git merge origin/main` + conflict resolution + `go mod tidy` (verified
+  build/vet/test clean before pushing each time). Full three-service
+  verification (Python pytest, Go build/vet/test, web tsc/eslint/vitest)
+  re-run clean after every batch landed — confirmed nothing from the
+  2026-09-11 backend-audit/live-feed session regressed underneath the
+  dependency churn.
+- **Root-caused, not merged: 15+ PRs with genuine breaking changes.**
+  okhttp 5.x needs `compileSdk >= 37`; Android Gradle Plugin 9.4.0 needs
+  Gradle `>= 9.6.0` (a *minor* AGP bump, not major — it can still raise
+  the Gradle floor); numpy `>=2.5.0` and networkx `>=3.5` both need Python
+  `>= 3.11/3.12`, CI runs 3.10; ESLint 10 breaks `eslint-plugin-react`'s
+  API; TypeScript 7.0 isn't supported by `typescript-eslint` yet; vitest 5
+  / jsdom 30 resolve against a `vite` version this repo doesn't pin
+  directly; `react`/`react-dom` bumped across three independent PRs broke
+  npm peer-dependency resolution the moment any one merged alone;
+  `actions/setup-node@7` resolves a broken native binding
+  (`@rolldown/binding-wasm32-wasi`) unrelated to this repo's known
+  Linux-lockfile workaround.
+- **Two systemic CI gaps fixed, not just the symptom:**
+  - `.github/workflows/verify.yml` — every Dependabot-triggered run failed
+    `Android Build & Lint Verification` identically, because GitHub
+    withholds repo secrets from Dependabot workflow runs (security
+    policy) and `GOOGLE_SERVICES_JSON` is one. Confirmed by reproducing
+    the exact failure locally and checking the job logs: a bare warning,
+    then a crash at `processDevDebugGoogleServices` before any Kotlin
+    compiled. Fixed with a well-formed, fully fake placeholder
+    `google-services.json` (matching `applicationId com.company.skolab`)
+    written only when the secret is empty — `assembleDevDebug` never
+    makes a live Firebase call, so this gives a real compile signal
+    without needing the secret. PR #181.
+  - `.github/workflows/ci.yml` hardcoded `go-version: "1.25"` while
+    `checks.yml` already used `go-version-file`. A legitimate merge
+    (`golang.org/x/time`, `go-redis`, `firebase.google.com/go/v4`) caused
+    `go mod tidy` to raise `go.mod`'s own `go` directive to `1.26.0`, and
+    the hardcoded `ci.yml` version went stale silently — breaking every
+    subsequent PR touching `services/backend-go`, including ones with
+    zero Go changes (caught via a plain `actions/checkout` version bump,
+    PR #127). Switched `ci.yml` to `go-version-file` too, matching
+    `checks.yml`, so the two workflows can't drift apart again. PR #182.
+- **`.github/dependabot.yml` updated so the *same* confirmed-broken bumps
+  stop reopening every week** and costing another investigation cycle:
+  `ignore` rules for the exact dependency + semver-tier combination that
+  broke (ESLint/TypeScript/vitest/jsdom majors on npm; okhttp major and
+  `com.android.application` major-or-minor on gradle — AGP needed
+  minor-blocking too, since 9.1→9.4 is a minor bump in its own scheme;
+  numpy/networkx major-or-minor on pip; `actions/setup-node` major on
+  github-actions), each with an inline comment naming the failure and
+  what unblocks it. Added an npm `groups: react` entry (root and
+  apps/web) so `react`/`react-dom`/`@types/react`/`@types/react-dom` land
+  in one PR instead of three independent ones that break in isolation.
+  This doesn't fix the underlying incompatibilities — it stops Dependabot
+  from re-proposing the same known-broken bump every week until someone
+  deliberately does the coordinated work (compileSdk bump, Gradle wrapper
+  bump, CI Python version bump, etc.) and removes the `ignore` entry.
+
 ## 2026-09-11 — Backend response audit + LinkedIn-style feed refresh
 
 Prompted directly: "every backend should return correct response, check
