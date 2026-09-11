@@ -6,6 +6,98 @@
 
 ---
 
+## 2026-09-11 — Close out everything pending after PR #176
+
+Prompted directly: fix the two pre-existing `checks.yml` bugs found while
+watching #176's CI, and finish anything else still pending. PR #177.
+
+- **`checks.yml` fully fixed.** `pytest.ini` gained `pythonpath = .` —
+  `tests/` has no `__init__.py`, so bare `pytest`'s default rootdir
+  sys.path insertion (prepend mode) only ever added `tests/` itself, never
+  `services/backend`, so `tests/conftest.py`'s `from app...` imports failed
+  with `ModuleNotFoundError: No module named 'app'`. Reproduced locally
+  with the bare `pytest` console-script entry point (`python -m pytest`
+  masks it — `-m` always adds cwd to sys.path, which is not what
+  `checks.yml`'s `pytest -q` does). Fixed with pytest's own built-in
+  `pythonpath` ini option. Separately, the `slow` job's Postgres service
+  was plain `postgres:16` — no pgvector extension, so `CREATE EXTENSION
+  vector` failed and poisoned the whole `ci_bootstrap_db.py` bootstrap
+  transaction, silently no-opping every later `CREATE TABLE` (even
+  unrelated ones like `users`) while the script still printed "[ci] schema
+  bootstrap ok" and exited 0. Switched to `pgvector/pgvector:pg16`.
+- **`ThemeToggle` hydration mismatch fixed** — same bug class and same fix
+  (`useSyncExternalStore`) as the Google-redirect flag in #176:
+  `useState(initialTheme)` read `localStorage` straight into the lazy
+  initializer, which SSR/the static shell can't see, causing exactly the
+  live-caught mismatch from #176's HANDOFF note. New tests (component had
+  none before): default rendering, a persisted theme on mount, and the
+  full click-cycle including the DOM attribute and localStorage writes.
+- **LLM output validation added for Horizon and Gap Finder** — the static
+  audit from #176 found both grounded in real data but with nothing
+  checking the LLM's output *structurally*. Horizon's parsed JSON now goes
+  through `_BreakthroughContent`, a stricter internal Pydantic model
+  (catches an off-contract `feasibility`, a blank narrative field, empty
+  `roadmap_steps`) that falls through to the existing deterministic
+  fallback on failure — no new failure path, just a stricter gate. Gap
+  Finder's response now has to contain all three sections
+  (`**Next Frontier**`/`**Toolkit**`/`**Logic**`) its own system prompt
+  demands, or it raises (already caught gracefully by
+  `researcher_worker.py`'s existing `except Exception`). 6 new tests
+  against `PredictionService` directly with a mocked `LLMService.query` —
+  no live LLM call or API key needed.
+- **Both "couldn't verify in this environment" items from #176 are now
+  actually verified.** Neither Chocolatey (`Access to the path
+  '...\lib-bad' is denied` — needs admin) nor winget (silently hung on
+  `msiexec` for 20+ minutes, 4s of CPU time total — almost certainly stuck
+  on an unanswerable elevation prompt) could install a JDK in this
+  environment; a portable Temurin 21 zip (extract, no installer) worked.
+  Same for Go: a portable 1.25 zip. With both on `PATH` for the session:
+  `npm run test:rules` passed 20/20 against the real Firestore emulator
+  (fixed a real bug in the test's own `seedProject` helper along the way —
+  it spread an explicit `editorUids: undefined` into a `setDoc` call,
+  which Firestore's client SDK rejects outright; needed an actual delete
+  of the key, not just spreading `undefined` over it), and
+  `go vet && go build && go test ./...` were all clean for the Go gateway,
+  for the first time this session.
+- **A third pre-existing `checks.yml` bug, root-caused and fixed, not left
+  open.** First suspected as an order-dependent flake (`checks.yml`'s
+  `pythonpath` fix let its tests run for the first time this session,
+  surfacing it) — `test_industry_academic.py::
+  test_get_tieups_cache_miss_success` failed on Linux CI, passed
+  standalone and in a full local Windows run, returning a title
+  ("Industrialization of Quantum Computing") absent from its own mocks.
+  Asked to dig past the surface rather than file it as a follow-up: the
+  actual cause is that neither of `checks.yml`'s Python test steps ever
+  set `GROQ_API`/`OPENROUTER_API_KEY` (`ci.yml` does), so
+  `is_llm_working()` returns `False` and `IndustryAcademicService.
+  get_tieups` silently takes its non-LLM fallback path —
+  `get_fallback_tieups()`, which literally returns
+  `f"Industrialization of {domain}"` — instead of the LLM path the test
+  mocks. It passed locally purely because `services/backend/.env` has a
+  real `GROQ_API` key sitting in this checkout. Reproduced CI's exact
+  failure by moving that `.env` aside and unsetting both vars; fixed by
+  setting them to `ci.yml`'s existing safe placeholder values in both the
+  `fast` and `slow` jobs (the `slow` job happened to pass this particular
+  run despite the same gap, so it got the same fix for consistency, not
+  because it was currently failing). Full local suite re-run with `.env`
+  absent and the fix applied: 216 passed, 4 skipped, 0 failed — same count
+  as before, confirming nothing else regressed now that
+  `is_llm_working()` is reliably `True` in CI, as it always should have
+  been.
+- **Process note, for the record**: mid-session, a careless
+  `git reset --hard` (done to move a commit that had landed directly on
+  `main` by mistake onto the right branch) discarded the *uncommitted*
+  portions of the ThemeToggle and LLM-validation fixes. Nothing was
+  actually lost — both were rewritten from this same conversation's own
+  prior tool output and re-verified identically — but the sequence should
+  have been commit-everything-first, then branch surgery, not the
+  reverse.
+- Verified: `npx vitest run` 53/238, `tsc --noEmit` 0, `eslint .` 0,
+  `pytest -q` (backend) 216 passed / 4 skipped, `ruff check .` clean,
+  `npm run test:rules` 20/20, `go vet && go build && go test ./...` clean.
+
+---
+
 ## 2026-09-11 — Smooth Google sign-in transition (no more frozen-button wait)
 
 Prompted directly: after completing Google sign-in, the login/signup page
