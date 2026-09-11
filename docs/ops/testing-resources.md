@@ -1,19 +1,10 @@
----
-paths:
-  - "docs/plans/**/*.md"
-  - "docs/specs/**/*.md"
-  - ".claude/skills/engineering-standards/references/backend-standards.md"
-  - ".claude/skills/engineering-standards/references/frontend-standards.md"
----
-
 # Testing resources
 
 When work defines a test strategy — what to test at which level, how to
 structure a suite, what to mock — consult the highly-rated external
 references below before deciding from the request text alone. They are
 references to read, not dependencies: nothing here is vendored into this
-repo or installed as a skill. Vetting (stars, last commit, license) is
-recorded in `docs/research/2026-09-03-tech-resources.md`.
+repo or installed as a skill.
 
 | Resource | Repo | What it gives you |
 |---|---|---|
@@ -26,9 +17,9 @@ recorded in `docs/research/2026-09-03-tech-resources.md`.
   re-check at the time of the work and prefer a fresher equivalent when one
   exists.
 - **Ground, don't copy wholesale.** Use these to pick proportions and
-  patterns; the per-domain testing guidance stays in
-  `.claude/skills/engineering-standards/references/backend-standards.md` and
-  `.claude/skills/engineering-standards/references/frontend-standards.md`.
+  patterns; the per-domain testing guidance stays in the
+  `test-driven-development` skill
+  (`.claude/skills/test-driven-development/SKILL.md`).
 
-Framework-specific runners (Jest, Vitest, Playwright, pytest) are a target-
-repo choice, detected by `engineering-standards`' SCAN, not fixed here.
+Framework-specific runners (Jest, Vitest, Playwright, pytest) are a
+target-repo choice, not fixed here.

@@ -1,19 +1,10 @@
----
-paths:
-  - "docs/plans/**/*.md"
-  - "docs/specs/**/*.md"
-  - ".claude/skills/engineering-standards/references/frontend-standards.md"
----
-
 # Frontend engineering resources
 
 When work touches frontend code — component architecture, project
 structure, rendering strategy, state, performance — consult the
 highly-rated external references below before deciding from the request
 text alone. They are references to read, not dependencies: nothing here is
-vendored into this repo or installed as a skill. Vetting (stars, last
-commit, license) is recorded in
-`docs/research/2026-09-03-tech-resources.md`.
+vendored into this repo or installed as a skill.
 
 | Resource | Repo | What it gives you |
 |---|---|---|
@@ -26,9 +17,9 @@ commit, license) is recorded in
   look for a more current or stronger frontend reference at the time of the
   work and prefer it when you find one.
 - **Ground, don't copy wholesale.** Use these to pick a direction or borrow
-  a concrete pattern; the procedure stays in
-  `.claude/skills/engineering-standards/references/frontend-standards.md`,
-  and visual/token/motion decisions stay in `.claude/rules/ui-ux-resources.md`.
+  a concrete pattern; the procedure stays in the `frontend-ui-engineering`
+  skill (`.claude/skills/frontend-ui-engineering/SKILL.md`), and
+  visual/token/motion decisions stay in `docs/design/ui-ux-resources.md`.
 
 Per-framework guides beyond React are deliberately out of scope here — this
 is the cross-cutting set.

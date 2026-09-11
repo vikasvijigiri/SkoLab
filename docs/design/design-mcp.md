@@ -1,9 +1,3 @@
----
-paths:
-  - "DESIGN.md"
-  - "docs/specs/**/*.md"
----
-
 # Design MCP grounding
 
 When a design surface — web, iOS, or Android — has a linked Figma file,
@@ -15,5 +9,5 @@ repository that covers design work on any of these three platforms, so
 there is no per-platform MCP to pick between.
 
 The full grounding procedure and the platform-specific guidance it feeds
-live in `.claude/skills/architecture/references/design-contract.md` and
-`.claude/skills/architecture/references/platform-guidance.md`.
+live in `docs/design/design-contract.md` and
+`docs/design/platform-guidance.md`.

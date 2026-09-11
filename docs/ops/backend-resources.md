@@ -1,18 +1,10 @@
----
-paths:
-  - "docs/plans/**/*.md"
-  - "docs/specs/**/*.md"
-  - ".claude/skills/engineering-standards/references/backend-standards.md"
----
-
 # Backend engineering resources
 
 When work touches backend design — API shape, data model, auth, scaling,
 service boundaries — consult the highly-rated external references below
 before deciding from the request text alone. They are references to read,
 not dependencies: nothing here is vendored into this repo or installed as a
-skill. Vetting (stars, last commit, license) is recorded in
-`docs/research/2026-09-03-tech-resources.md`.
+skill.
 
 | Resource | Repo | What it gives you |
 |---|---|---|
@@ -26,8 +18,8 @@ skill. Vetting (stars, last commit, license) is recorded in
   and prefer it when you find one.
 - **Ground, don't copy wholesale.** Use these to pick a direction or borrow
   a concrete pattern; the decision still lands in the plan or spec, and the
-  procedure stays in
-  `.claude/skills/engineering-standards/references/backend-standards.md`.
+  procedure stays in the `api-and-interface-design` skill
+  (`.claude/skills/api-and-interface-design/SKILL.md`).
 
 Per-language guides (Go, Rust, Python) are deliberately out of scope here —
 this is the cross-cutting set.
