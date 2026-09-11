@@ -415,6 +415,15 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* A quiet image-like atmosphere behind the white research surfaces. It keeps
+   the page spacious without adding decorative assets that compete with data. */
+.surface-atmosphere {
+  background-image:
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 28rem),
+    radial-gradient(circle at 88% 8%, color-mix(in srgb, var(--accent-teal) 5%, transparent), transparent 24rem);
+  background-attachment: fixed;
+}
+
 /* Tailwind v3.3+/v4 dropped the automatic pointer cursor on <button> — one
    base-layer rule covers every button (including framer-motion's motion.button)
    instead of chasing down each call site; @layer base keeps this below
