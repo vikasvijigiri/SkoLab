@@ -5,21 +5,91 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    groups:
+      # react and react-dom must stay version-matched -- three separate PRs
+      # bumping them independently (2026-09-11) broke npm's peer-dependency
+      # resolution the moment any one merged alone (`Found: react@19.2.4`
+      # vs a react-dom that wanted 19.2.8).
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+    ignore:
+      # Confirmed broken on 2026-09-11 (see LOG.md): ESLint 10 changed its
+      # plugin context API and eslint-plugin-react hasn't caught up yet
+      # (`contextOrFilename.getFilename is not a function`). Un-ignore once
+      # eslint-plugin-react ships a compatible release.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      # Confirmed broken: typescript-eslint does not support TS 7.0 yet.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # Confirmed broken: vitest 5 resolves against a `vite` version this
+      # repo doesn't have pinned as a direct dependency
+      # (`Cannot find package 'vite'`).
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
+      # Confirmed broken (root workspace): jsdom 30 + vitest 4 together
+      # hit the same `Cannot find package 'vite'` transitive mismatch.
+      - dependency-name: "jsdom"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: "/apps/web"
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    groups:
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+    ignore:
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: gradle
     directory: "/apps/android-app"
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    ignore:
+      # Confirmed broken: okhttp-android 5.x requires compileSdk >= 37,
+      # this project's is lower. Bump compileSdk deliberately first.
+      - dependency-name: "com.squareup.okhttp3:okhttp"
+        update-types: ["version-update:semver-major"]
+      # Confirmed broken -- and NOT just on a major bump: 9.1.0 -> 9.4.0 is
+      # a minor release in AGP's own numbering, but AGP can raise its
+      # embedded minimum-Gradle floor in a minor too ("Minimum supported
+      # Gradle version is 9.6.0. Current version is 9.4.1"). Block minor
+      # and major here; only patch releases are safe to auto-merge.
+      # Bump the Gradle wrapper deliberately, then lift this.
+      - dependency-name: "com.android.application"
+        update-types:
+          ["version-update:semver-major", "version-update:semver-minor"]
   - package-ecosystem: pip
     directory: "/services/backend"
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    ignore:
+      # Confirmed broken: numpy >=2.5.0 requires Python >=3.12; CI runs
+      # 3.10/3.11. The version jump that breaks it is a minor release in
+      # numpy's scheme, not major -- block both.
+      - dependency-name: "numpy"
+        update-types:
+          ["version-update:semver-major", "version-update:semver-minor"]
+      # Confirmed broken: networkx >=3.5 requires Python >=3.11; same CI
+      # constraint, same minor-release trigger.
+      - dependency-name: "networkx"
+        update-types:
+          ["version-update:semver-major", "version-update:semver-minor"]
   - package-ecosystem: gomod
     directory: "/services/backend-go"
     schedule:
@@ -30,3 +100,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    ignore:
+      # Confirmed broken: actions/setup-node v7's bundled Node resolves a
+      # different (broken) native binding for one of the web workspace's
+      # optional deps (`Cannot find module '@rolldown/binding-wasm32-wasi'`)
+      # -- unrelated to this repo's own known Linux-lockfile workaround.
+      - dependency-name: "actions/setup-node"
+        update-types: ["version-update:semver-major"]
