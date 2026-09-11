@@ -1,19 +1,10 @@
----
-paths:
-  - "docs/plans/**/*.md"
-  - "docs/specs/**/*.md"
-  - ".claude/skills/code-review/references/security-review.md"
-  - ".claude/skills/security/SKILL.md"
----
-
 # Security resources
 
 When work touches a trust boundary — authn, authz, input handling, secrets,
 crypto, dependency risk — consult the highly-rated external references
 below before deciding from the request text alone. They are references to
 read, not dependencies: nothing here is vendored into this repo or
-installed as a skill. Vetting (stars, last commit, license) is recorded in
-`docs/research/2026-09-03-tech-resources.md`.
+installed as a skill.
 
 | Resource | Repo | What it gives you |
 |---|---|---|
@@ -26,7 +17,6 @@ installed as a skill. Vetting (stars, last commit, license) is recorded in
 - **This list is a floor, not a ceiling.** Also look for a more current
   guide at the time of the work and prefer it when you find one.
 - **Ground, don't copy wholesale.** Use these to pick controls and tests;
-  the in-repo procedure stays in
-  `.claude/skills/code-review/references/security-review.md` and
-  `.claude/skills/code-review/references/supply-chain-audit.md`, and the
-  deterministic gate stays `security` / `tools/security_gate.py`.
+  the in-repo procedure stays in the `security-and-hardening` skill
+  (`.claude/skills/security-and-hardening/SKILL.md`), backed by the
+  `security-auditor` persona for a dedicated review pass.

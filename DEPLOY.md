@@ -25,7 +25,7 @@ redeploys automatically on push to `main`.
 > accept. `render.yaml` now defines all three services in one Blueprint.
 >
 > This chooses Render over the Cloudflare-first default in
-> `.claude/rules/edge-hosting.md` for the same reason as the Python backend:
+> `docs/ops/edge-hosting.md` for the same reason as the Python backend:
 > the rule's own escape hatch ("accept Render's free tier ... explicitly")
 > applies, now to all three services rather than just the two backends.
 

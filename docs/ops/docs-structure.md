@@ -16,8 +16,8 @@ constraint for contributors and automated scaffolding.
 - Use `docs/plans/` for active delivery plans and `docs/archive/` for retired
   content; prefer `decisions/` for design decisions rather than burying them
   inside deep docs paths.
-- Update `CLAUDE.md` and `.claude/rules/` when you add or remove a docs
-  category so the rule stays synchronized with the actual repo structure.
+- Update `CLAUDE.md` and this file when you add or remove a docs category
+  so the rule stays synchronized with the actual repo structure.
 ---
 
 # How to apply
