@@ -157,7 +157,7 @@ dependencies {
 
     // Preferences (onboarding)
     implementation("androidx.datastore:datastore-preferences:1.2.0")
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("androidx.security:security-crypto:1.1.0")
     // Serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
 
