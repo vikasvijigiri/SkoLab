@@ -476,6 +476,10 @@ export type CareerStage = "emerging" | "established" | "senior";
 export interface ResearcherSignals {
   activity: ActivityState;
   momentum: MomentumState;
+  /** The normalised OLS slope `momentum` was classified from (0 when fewer
+   *  than 3 data points) — lets a ranked list order *how much* someone is
+   *  rising, not just the rising/steady/cooling bucket. */
+  momentumScore: number;
   /** Years between the earliest visible activity and now (OpenAlex only exposes ~10y). */
   yearsActiveVisible: number;
   careerStage: CareerStage;
