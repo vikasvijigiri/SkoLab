@@ -6,6 +6,90 @@
 
 ---
 
+## 2026-09-11 — Backend response audit + LinkedIn-style feed refresh
+
+Prompted directly: "every backend should return correct response, check
+every response and then audit, also we should have dynamic feed, which
+refreshes like linkedin etc every time the user reloads the page/tab/logins
+etc." Two parallel research agents first surveyed (a) every Go gateway and
+Python endpoint's response correctness and test coverage, and (b) the
+feed's current data-fetch/caching/refresh behavior end-to-end. Findings
+went back to the user as three scoped questions (fallback handling, dead
+mock endpoints, missing test coverage) rather than guessing priority — all
+three were approved as the recommended option.
+
+- **Feed refresh.** `apps/web/src/lib/api/queries.ts` — added a
+  `LIVE_FEED` spread (`refetchOnWindowFocus: true`, `refetchOnMount:
+  "always"`) to `dailyFeedQuery`, `activityFeedQuery`, `scienceNewsQuery`,
+  `industryOpportunitiesQuery` only, not the app-wide default (`providers
+  .tsx` keeps `refetchOnWindowFocus: false` globally — most queries, e.g.
+  the author-profile page's `journalAdvisorQuery`/`similarResearchersQuery`,
+  shouldn't refetch on every tab focus). `apps/web/src/components/
+  providers.tsx` — new `InvalidateOnAuthChange` component, mounted inside
+  `QueryClientProvider` but reading `useAuth()` (reachable because
+  `layout.tsx` nests `<AuthProvider><Providers>`), calls `queryClient
+  .invalidateQueries()` on the first uid change after mount (skips the very
+  first render so it doesn't invalidate an empty cache on normal mount).
+  4 new tests in `providers.test.tsx`.
+- **Fallback responses now flag themselves.** The audit found three LLM
+  code paths that silently substitute placeholder content indistinguishable
+  from a real result: `PredictionService.predict_next_big_thing`'s
+  except-block (`"Next-Gen {field} Breakthrough"`), `IndustryAcademicService
+  .get_fallback_tieups()` (`"Industrialization of {domain}"`, already known
+  from the 2026-09-11 CI root-cause work), and `feed.py`'s
+  `generate_fallback_conjecture` (which additionally caches the fallback
+  for 24h as if it were real, and had zero test coverage at all — not even
+  the shape-only kind everything else in the audit had). All three response
+  schemas (`BreakthroughPrediction`, `IndustryAcademicTieupsResponse`,
+  `ConjectureResponse`) gained `is_fallback: bool = False`; the fallback
+  paths set it `True`, and `industry_academic_service.py` threads the flag
+  through to what gets cached so a later cache hit still reports it
+  honestly. `apps/web`: `BreakthroughPrediction` type gained `is_fallback?`,
+  and `HorizonPredictionResult.tsx` shows an "Estimated — AI unavailable"
+  badge when set — chosen because it's the only one of the three actually
+  rendered in the frontend today (grepped for consumers: `/industry_academic
+  _tieups` and `/daily_conjecture` are both currently dead API surfaces,
+  called by no page or component). OpenAPI snapshot regenerated
+  (`gen_openapi_snapshot.py`) to match the three schema additions. New/
+  updated tests: `test_prediction_service.py` (asserts `is_fallback` on
+  all 3 existing fallback-path tests + the happy path), `test_industry_
+  academic.py` (new `test_get_tieups_flags_fallback_when_llm_unavailable`),
+  `tests/api/test_feed.py` (new direct unit tests for
+  `generate_fallback_conjecture` across all 4 field-category branches, plus
+  an endpoint-level test proving the flag survives the 24h cache round-
+  trip), `horizon/page.test.tsx` (badge shown/not-shown).
+- **Two permanently-fake Go endpoints deleted.** `GET /api/v1/support/
+  metrics` (hardcoded CSAT/queue counters, never real) and the entire
+  `integrations/zotero/*` trio (`auth`/`callback`/`sync` — all documented
+  OAuth stubs with fake tokens) were reachable in production and had tests,
+  but those tests only asserted the mock's own shape and neither route was
+  ever called from `apps/web` (grepped, zero matches). Deleted the
+  handlers, the `main.go` route registrations, and the mock-shape tests;
+  left explanatory comments in `main.go`, `internal/feed/feed.go`'s package
+  doc, and `docs/backend-auth-posture.md` pointing at this entry.
+- **`internal/quest` and `internal/user` had zero test files** — confirmed
+  by the audit as the only two Go packages with none at all. Added
+  `quest_test.go` (6 tests: leaderboard/quest-completion input validation
+  and no-DB-guard paths, matching the established db.Pool==nil pattern from
+  `internal/feed/feed_test.go`) and `user_test.go` (13 tests). Writing the
+  user tests surfaced a real bug along the way: `SyncUserProfile` and
+  `DeleteUser` called `db.Pool.Exec`/`.Begin()` directly with no nil guard
+  — every other DB-backed handler in the codebase checks `db.Pool == nil`
+  first — so a DB outage would panic into `gin.Recovery`'s generic 500
+  instead of the same clean 503 every sibling route gives. Fixed both, with
+  regression tests (`TestSyncUserProfile_NoDBIs503`,
+  `TestDeleteUser_NoDBIs503`) proving the guard now fires instead of
+  panicking. Also added direct tests for `aggregateMemory` — pure,
+  previously fully-untested business logic that derives reading pace,
+  research style, and top topics from raw activity-log rows.
+- **Verification:** full suites re-run clean after every change —
+  Python `pytest -q` (222 passed / 4 skipped, up from 216/4 as the new
+  fallback + conjecture tests landed), `ruff check` + `ruff format --check`
+  (clean, modulo the same pre-existing Windows CRLF artifact noted in the
+  2026-09-11 CI entry below), web `vitest run` (245 passed, up from 243),
+  `tsc --noEmit` + `eslint src` (clean), Go `go vet && go build && go test
+  ./...` (all packages green, including the two new test files).
+
 ## 2026-09-11 — Deploy firestore.rules to production
 
 The one item PR #176/#177 couldn't finish from inside the agent session:

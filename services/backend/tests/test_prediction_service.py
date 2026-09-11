@@ -56,6 +56,8 @@ async def test_predict_next_big_thing_accepts_well_formed_json(_mock_is_llm_work
         "Validate coherence length under load",
         "Pilot a short transmission segment",
     ]
+    # A genuine result must not be flagged as a fallback placeholder.
+    assert result.get("is_fallback") is not True
 
 
 @pytest.mark.asyncio
@@ -71,6 +73,7 @@ async def test_predict_next_big_thing_falls_back_on_invalid_feasibility(_mock_is
     # Falls through to the deterministic fallback, not the malformed content.
     assert result["scientific_logic"] == "Failed to generate precise logic due to LLM error."
     assert result["feasibility"] == "Medium"
+    assert result["is_fallback"] is True
 
 
 @pytest.mark.asyncio
@@ -87,6 +90,7 @@ async def test_predict_next_big_thing_falls_back_on_blank_narrative_field(_mock_
     result = await service.predict_next_big_thing(field="Superconductivity")
 
     assert result["breakthrough_name"] == "Next-Gen Superconductivity Breakthrough"
+    assert result["is_fallback"] is True
 
 
 @pytest.mark.asyncio
@@ -97,6 +101,7 @@ async def test_predict_next_big_thing_falls_back_on_truncated_json(_mock_is_llm_
     result = await service.predict_next_big_thing(field="Superconductivity")
 
     assert result["scientific_logic"] == "Failed to generate precise logic due to LLM error."
+    assert result["is_fallback"] is True
 
 
 @pytest.mark.asyncio
