@@ -45,12 +45,12 @@ export default function HomeLoading() {
         ))}
       </div>
 
-      {/* right rail — identity, workspaces, people, profile strength */}
+      {/* right rail — identity+strength (merged, tall), workspaces, people */}
       <div className="hidden flex-col gap-5 lg:flex">
-        {[0, 1, 2].map((i) => (
+        <div className="h-[360px] animate-pulse rounded-md bg-surface-subtle" />
+        {[0, 1].map((i) => (
           <div key={i} className="h-28 animate-pulse rounded-md bg-surface-subtle" />
         ))}
-        <div className="h-[220px] animate-pulse rounded-md bg-surface-subtle" />
       </div>
     </div>
   );
