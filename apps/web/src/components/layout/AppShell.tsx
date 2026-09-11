@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn, focusRing } from "@/lib/utils";
 import { TopBar } from "./TopBar";
+import { ResearchCategoryRail } from "./ResearchCategoryRail";
 import { NAV_ITEMS } from "@/lib/nav";
 
 /**
@@ -29,6 +30,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </a>
 
       <TopBar />
+      <ResearchCategoryRail />
 
       <main id="main-content" className="surface-atmosphere min-h-0 flex-1 overflow-y-auto bg-page-bg">
         {children}
