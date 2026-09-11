@@ -20,6 +20,10 @@ from any one implementation language.
 - `error-response.schema.json` describes the error envelope emitted by the
   FastAPI handlers and mirrored by the Go gateway.
 
+Run `python scripts/verify_contracts.py` after changing this schema or its
+producer. The same check runs in the path-scoped Contract compatibility
+workflow.
+
 The OpenAPI snapshot and regeneration instructions remain in
 [`api-contracts/README.md`](../../api-contracts/README.md).
 
