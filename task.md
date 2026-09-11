@@ -542,3 +542,16 @@ two markers resolved — 4-stop SegmentedControl for topical focus, "shares your
 institution" toggle as the minimal connection-distance proxy.
 
 **Status:** Approved — implementation starting on branch `feat/discovery-fit-first`.
+
+---
+
+## 2026-09-11 — Home command-center live workspace signal
+
+**Asked:** Proceed to the next phase after establishing the Home feature boundary.
+
+1. Lifted the Firestore workspace subscription to the Home page boundary so the command center and workspace rail share one live source of truth.
+2. Replaced the hard-coded project indicator with the current CoLab project count.
+3. Added `aria-pressed` state to the six command-center completion controls.
+4. Verified TypeScript, targeted ESLint, focused Home Vitest (2/2), and diff whitespace checks.
+
+**Status:** Implemented locally; ready for the next approved sync/release action.
