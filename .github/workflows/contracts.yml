@@ -1,0 +1,32 @@
+name: Contract compatibility
+
+on:
+  push:
+    paths:
+      - "api-contracts/**"
+      - "packages/contracts/**"
+      - "services/backend/app/api/errors.py"
+      - "scripts/verify_contracts.py"
+      - ".github/workflows/contracts.yml"
+  pull_request:
+    paths:
+      - "api-contracts/**"
+      - "packages/contracts/**"
+      - "services/backend/app/api/errors.py"
+      - "scripts/verify_contracts.py"
+      - ".github/workflows/contracts.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    name: shared contract compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify shared schemas and Python producers
+        run: python scripts/verify_contracts.py
