@@ -6,6 +6,7 @@ import type {
   DiscoveryFilterState,
   DiscoverySort,
   ResearcherResult,
+  TrendingTopic,
 } from "@/lib/types";
 import type {
   AuthorSuggestion,
@@ -277,6 +278,19 @@ export const openAlexResearchers = async (args: {
     mapAuthorRow(row, { scopedSubfieldId: args.subfieldId, now }),
   );
   return attachStandingPercentiles(rows);
+};
+
+/** Topics growing fastest in a subfield/field, ranked by recent-vs-prior-window
+ *  growth (never a raw or cumulative count — see `decisions/0015`). */
+export const fetchTrendingTopics = async (node: {
+  level: "subfield" | "field";
+  id: string;
+}): Promise<TrendingTopic[]> => {
+  const qs = new URLSearchParams({ [node.level]: node.id });
+  const res = await fetch(`/api/openalex/trending-topics?${qs.toString()}`);
+  if (!res.ok) throw new ApiError(res.status, `Trending topics request failed (HTTP ${res.status}).`);
+  const data = await res.json();
+  return Array.isArray(data) ? (data as TrendingTopic[]) : [];
 };
 
 /** ORCID → death year for the verifiably deceased among `orcids` (Wikidata P570). */
