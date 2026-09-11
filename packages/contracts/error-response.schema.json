@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skolab.com/contracts/error-response.schema.json",
+  "title": "SkoLab API error response",
+  "description": "Stable error envelope shared by SkoLab clients and services.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["detail", "code", "request_id"],
+  "properties": {
+    "detail": {
+      "type": "string",
+      "description": "Safe, user-facing explanation of the failure."
+    },
+    "code": {
+      "type": "string",
+      "description": "Stable machine-readable error code."
+    },
+    "request_id": {
+      "type": "string",
+      "description": "Correlation identifier for support and server logs."
+    },
+    "errors": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "loc": {"type": "array"},
+          "msg": {"type": "string"},
+          "type": {"type": "string"}
+        }
+      }
+    }
+  }
+}

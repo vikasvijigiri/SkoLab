@@ -29,3 +29,11 @@ the change that caused it.
 
 The Go gateway (`services/backend-go`) has its own route surface. It is
 documented by its handlers and tests, not by this directory.
+
+## Cross-runtime envelopes
+
+Language-neutral envelopes shared by web, Android, Python and Go live in
+[`packages/contracts`](../packages/contracts/). The OpenAPI snapshot remains
+authoritative for route-specific request and response models; the shared JSON
+Schemas are for stable cross-runtime shapes such as errors and asynchronous
+job status.
