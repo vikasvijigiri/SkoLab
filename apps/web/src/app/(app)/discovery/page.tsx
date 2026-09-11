@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
-import { SearchX, Flame, Trophy, ChevronRight, Compass, Download, Lightbulb } from "lucide-react";
+import { SearchX, Flame, Trophy, TrendingUp, ChevronRight, Compass, Download, Lightbulb } from "lucide-react";
 import { Chip } from "@/components/ui/Badge";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { RailShell } from "@/components/layout/RailShell";
@@ -19,6 +19,7 @@ import {
   discoveryAuthorsQuery,
   discoveryWorksQuery,
   discoveryResearchersQuery,
+  trendingTopicsQuery,
   deceasedFlagsQuery,
   collabFlagsQuery,
 } from "@/lib/api/queries";
@@ -27,11 +28,13 @@ import type {
   DiscoveryFilterState,
   DiscoverySort,
   ResearcherResult,
+  TrendingTopic,
 } from "@/lib/types";
 import { AuthorResultCard } from "@/components/discovery/AuthorResultCard";
 import { PaperResultCard } from "@/components/discovery/PaperResultCard";
 import { LeaderboardRow } from "@/components/discovery/LeaderboardRow";
 import { ResearcherCard } from "@/components/discovery/ResearcherCard";
+import { TrendingTopicCard } from "@/components/discovery/TrendingTopicCard";
 import {
   DiscoveryFilters,
   DEFAULT_FILTER_STATE,
@@ -40,10 +43,12 @@ import {
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Button } from "@/components/ui/Button";
 import { scoreFit } from "@/lib/discovery/fit";
+import { DISCOVERY_CONFIG } from "@/lib/discovery/config";
 
-type Mode = "researchers" | "papers";
+type Mode = "researchers" | "papers" | "topics";
 
 const EMPTY_RESEARCHERS: ResearcherResult[] = [];
+const EMPTY_TOPICS: TrendingTopic[] = [];
 const MOMENTUM_RANK = { rising: 0, steady: 1, cooling: 2 } as const;
 
 /** Word tokens for fuzzy taxon matching. */
@@ -142,6 +147,30 @@ export function DiscoveryContent() {
     enabled: Boolean(node) && mode === "papers",
   });
 
+  // ── trending topics ──────────────────────────────────────────────────────
+  // Same scope as the fit-first grid (a manual drilldown wins, else the
+  // viewer's own subfield); falls back to a bare field pick if no subfield is
+  // chosen yet, since topic-growth is meaningful at either level.
+  const topicsScope: { level: "subfield" | "field"; id: string } | null = gridSubfield
+    ? { level: "subfield", id: gridSubfield.id }
+    : field
+      ? { level: "field", id: field.id }
+      : null;
+  const trendingTopicsQ = useQuery({
+    ...trendingTopicsQuery(topicsScope),
+    enabled: mode === "topics",
+  });
+
+  function selectTrendingTopic(t: TrendingTopic) {
+    // Keep the breadcrumb coherent: if the scope came from the viewer's
+    // auto-resolved area rather than a manual pick, promote it into the
+    // drilldown state so "Explore another area" reads correctly.
+    if (!subfield && viewerSubfield) setSubfield(viewerSubfield);
+    if (!field && viewerField) setField(viewerField);
+    setTopic({ id: t.id, display_name: t.displayName });
+    setMode("papers");
+  }
+
   // ── fit-first data ────────────────────────────────────────────────────────
   const researchersQ = useQuery({
     ...discoveryResearchersQuery(gridSubfield?.id, filters, sort),
@@ -213,9 +242,11 @@ export function DiscoveryContent() {
       ? node && !fitGridActive
         ? nodeAuthors
         : leaderboard
-      : node
-        ? nodeWorks
-        : trending;
+      : mode === "topics"
+        ? trendingTopicsQ
+        : node
+          ? nodeWorks
+          : trending;
 
   function reset(level: "root" | "field" | "subfield") {
     if (level === "root") setField(null);
@@ -234,11 +265,12 @@ export function DiscoveryContent() {
 
   const modeToggle = (
     <SegmentedControl
-      aria-label="Show researchers or papers"
+      aria-label="Show researchers, papers, or trending topics"
       layoutId="discovery-mode-pill"
       options={[
         { value: "researchers", label: "researchers" },
         { value: "papers", label: "papers" },
+        { value: "topics", label: "topics" },
       ]}
       value={mode}
       onChange={(v) => setMode(v as Mode)}
@@ -436,19 +468,29 @@ export function DiscoveryContent() {
                 "flex h-7 w-7 items-center justify-center rounded-lg",
                 mode === "researchers"
                   ? "bg-accent-amber/15 text-accent-amber"
-                  : "bg-accent-orange/15 text-accent-orange",
+                  : mode === "topics"
+                    ? "bg-accent-teal/15 text-accent-teal"
+                    : "bg-accent-orange/15 text-accent-orange",
               )}
             >
-              {mode === "researchers" ? <Trophy size={14} /> : <Flame size={14} />}
+              {mode === "researchers" ? (
+                <Trophy size={14} />
+              ) : mode === "topics" ? (
+                <TrendingUp size={14} />
+              ) : (
+                <Flame size={14} />
+              )}
             </span>
             <span className="eyebrow">
-              {fitGridActive
-                ? `Researchers in ${scopeLabel}`
-                : node
-                  ? `${mode === "researchers" ? "Top researchers" : "Top papers"} in ${node.label}`
-                  : mode === "researchers"
-                    ? "Top Researchers"
-                    : "Trending This Year"}
+              {mode === "topics"
+                ? `Trending in ${scopeLabel}`
+                : fitGridActive
+                  ? `Researchers in ${scopeLabel}`
+                  : node
+                    ? `${mode === "researchers" ? "Top researchers" : "Top papers"} in ${node.label}`
+                    : mode === "researchers"
+                      ? "Top Researchers"
+                      : "Trending This Year"}
             </span>
             {resultCount !== null && resultCount > 0 && (
               <span className="rounded-full bg-surface-subtle px-2 py-0.5 data text-[11px] text-text-muted">
@@ -518,6 +560,19 @@ export function DiscoveryContent() {
               ((node ? nodeWorks.data : trending.data) ?? []).map((w, i) => (
                 <PaperResultCard key={w.id} w={w} index={i} />
               ))}
+
+            {!active.isPending &&
+              !active.isError &&
+              mode === "topics" &&
+              (trendingTopicsQ.data ?? EMPTY_TOPICS).map((t, i) => (
+                <TrendingTopicCard
+                  key={t.id}
+                  t={t}
+                  index={i}
+                  windowDays={DISCOVERY_CONFIG.trendingWindowDays}
+                  onSelect={selectTrendingTopic}
+                />
+              ))}
           </div>
 
           {showEmpty && (
@@ -526,16 +581,24 @@ export function DiscoveryContent() {
               <p className="font-body text-body font-medium text-text-primary">
                 {fitGridActive
                   ? "No researchers match these filters"
-                  : node
-                    ? "Nothing here yet for this topic"
-                    : "Pick your area"}
+                  : mode === "topics"
+                    ? topicsScope
+                      ? "Nothing trending yet"
+                      : "Pick your area"
+                    : node
+                      ? "Nothing here yet for this topic"
+                      : "Pick your area"}
               </p>
               <p className="max-w-xs font-body text-body-s leading-relaxed text-text-muted">
                 {fitGridActive
                   ? "Loosen a filter in the panel, or switch the sort."
-                  : node
-                    ? "Try a broader level in the breadcrumb, or switch between researchers and papers."
-                    : "Choose a field in the panel to see its researchers, ranked by fit to your work."}
+                  : mode === "topics"
+                    ? topicsScope
+                      ? "No topic cleared the noise floor in this window — try a broader field in the breadcrumb."
+                      : "Choose a field in the panel to see which of its topics are growing fastest."
+                    : node
+                      ? "Try a broader level in the breadcrumb, or switch between researchers and papers."
+                      : "Choose a field in the panel to see its researchers, ranked by fit to your work."}
               </p>
             </div>
           )}
