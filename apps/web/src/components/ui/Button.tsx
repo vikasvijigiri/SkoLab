@@ -3,6 +3,7 @@
 import { ButtonHTMLAttributes, forwardRef } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { Spinner } from "./Spinner";
 
 // `signal` = the one primary action on a surface (warm --accent-signal fill).
 // `primary` stays for brand / navigation actions.
@@ -25,15 +26,6 @@ interface ButtonProps extends MotionSafeButtonAttributes {
   error?: boolean;
   fullWidth?: boolean;
 }
-
-const Spinner = ({ size = 18 }: { size?: number }) => (
-  <span
-    className="inline-block animate-spin rounded-full border-2 border-current border-t-transparent"
-    style={{ width: size, height: size }}
-    aria-hidden
-  />
-);
-
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   (
