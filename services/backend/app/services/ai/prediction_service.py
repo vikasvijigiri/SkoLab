@@ -322,6 +322,7 @@ class PredictionService:
                     "Establish baseline research parameters",
                     "Investigate cross-domain integration",
                 ],
+                "is_fallback": True,
                 "pioneering_papers": [
                     {
                         "id": p["id"],
