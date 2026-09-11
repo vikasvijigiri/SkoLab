@@ -14,7 +14,11 @@ const nextBin = require.resolve("next/dist/bin/next");
 const preload = fileURLToPath(new URL("./playwright-listener-preload.cjs", import.meta.url));
 const child = spawn(process.execPath, ["--require", preload, nextBin, "dev"], {
   cwd: process.cwd(),
-  env: process.env,
+  env: {
+    ...process.env,
+    // Only the test runner can opt into this deterministic local session.
+    ...(process.env.PLAYWRIGHT_AUTH === "1" ? { NEXT_PUBLIC_PLAYWRIGHT_AUTH: "1" } : {}),
+  },
   stdio: "inherit",
 });
 
