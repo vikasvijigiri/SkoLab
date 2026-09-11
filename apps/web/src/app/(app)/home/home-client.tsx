@@ -21,9 +21,8 @@ import {
 import { AIDailyBriefCard, type BriefItem } from "@/components/feed/AIDailyBriefCard";
 import { PeerSuggestionsCard } from "@/components/feed/PeerSuggestionsCard";
 import { UnifiedFeed } from "@/components/feed/UnifiedFeed";
-import { IdentityRailCard } from "@/components/feed/IdentityRailCard";
 import { Card } from "@/components/ui/Card";
-import { ProfileStrengthCard } from "@/components/product/ProfileStrengthCard";
+import { IdentityStrengthCard } from "@/components/product/IdentityStrengthCard";
 import { ResearchCommandCenter, ResearchLoopNote } from "@/components/product/ResearchCommandCenter";
 import type {
   ActivityItem,
@@ -176,9 +175,10 @@ export function HomeClient() {
 
   const rightRail = (
     <>
-      <IdentityRailCard
+      <IdentityStrengthCard
         name={name ?? "Researcher"}
         status={firestoreProfile?.academicStatus}
+        firestoreProfile={firestoreProfile}
         author={author}
         loading={profileLoading}
         unresolved={profileUnresolved}
@@ -195,13 +195,6 @@ export function HomeClient() {
           unresolved={profileUnresolved}
         />
       </div>
-      <ProfileStrengthCard
-        name={name}
-        firestoreProfile={firestoreProfile}
-        author={author}
-        unresolved={profileUnresolved}
-        loading={profileLoading}
-      />
     </>
   );
 
