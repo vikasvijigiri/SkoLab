@@ -238,6 +238,11 @@
             "title": "Feasibility",
             "type": "string"
           },
+          "is_fallback": {
+            "default": false,
+            "title": "Is Fallback",
+            "type": "boolean"
+          },
           "latest_papers": {
             "default": [],
             "items": {
@@ -395,6 +400,11 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "is_fallback": {
+            "default": false,
+            "title": "Is Fallback",
+            "type": "boolean"
           },
           "options": {
             "items": {
@@ -652,6 +662,11 @@
             },
             "title": "Futuristic",
             "type": "array"
+          },
+          "is_fallback": {
+            "default": false,
+            "title": "Is Fallback",
+            "type": "boolean"
           },
           "trending": {
             "default": [],

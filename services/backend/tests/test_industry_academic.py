@@ -125,8 +125,50 @@ async def test_get_tieups_cache_miss_success(
     assert result["trending"][0]["title"] == "Quantum Cryptography for Banking"
     assert len(result["trending"][0]["papers"]) == 1
     assert result["trending"][0]["papers"][0]["title"] == "Satellite QKD Experiment"
+    # A genuine LLM-generated result must not be flagged as a fallback.
+    assert result["is_fallback"] is False
 
     mock_cache.get.assert_called_once_with("user_123")
+    mock_cache.set.assert_called_once_with("user_123", result)
+
+
+@pytest.mark.asyncio
+@patch("app.services.industry.industry_academic_service.industry_academic_cache")
+@patch("app.services.industry.industry_academic_service.is_llm_working", return_value=False)
+@patch("app.services.industry.industry_academic_service.UserMemoryService")
+@patch("app.services.industry.industry_academic_service.LLMService")
+@patch("app.services.industry.industry_academic_service.OpenAlexService")
+async def test_get_tieups_flags_fallback_when_llm_unavailable(
+    MockOpenAlex, MockLLM, MockUserMemory, _mock_is_llm_working, mock_cache, mock_db
+):
+    """When the LLM is offline, get_fallback_tieups()'s generic placeholder
+    ideas are returned -- the response must say so via is_fallback, not
+    present them as if generated for this researcher (see the 2026-09-11
+    backend response audit)."""
+    mock_cache.get = AsyncMock(return_value=None)
+    mock_cache.set = AsyncMock()
+
+    mock_memory_profile = UserMemoryProfileResponse(
+        user_id="user_123",
+        top_topics=["Quantum Computing"],
+        last_active_topic="Quantum Computing",
+        researcher_bio="",
+    )
+    mock_user_memory_inst = AsyncMock()
+    mock_user_memory_inst.get_user_memory = AsyncMock(return_value=mock_memory_profile)
+    MockUserMemory.return_value = mock_user_memory_inst
+
+    mock_openalex_inst = AsyncMock()
+    mock_openalex_inst.search_works = AsyncMock(return_value=[])
+    MockOpenAlex.return_value = mock_openalex_inst
+
+    service = IndustryAcademicService(mock_db)
+    result = await service.get_tieups("user_123")
+
+    assert result["is_fallback"] is True
+    assert result["trending"][0]["title"] == "Industrialization of Quantum Computing"
+    # The flag must survive into what gets cached, so a later cache hit for
+    # this user still reports it honestly rather than looking genuine.
     mock_cache.set.assert_called_once_with("user_123", result)
 
 
