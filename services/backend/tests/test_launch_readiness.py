@@ -91,7 +91,7 @@ def test_pre_shift_check_pagerduty_keys_placeholder():
 
 @patch("urllib.request.urlopen")
 def test_pre_shift_check_http_helpers_success(mock_urlopen):
-    """Verify backend, prometheus, and alertmanager HTTP checks pass on 200 OK."""
+    """Verify the Render backend health check passes on 200 OK."""
     # Set up mock response
     mock_resp = MagicMock()
     mock_resp.status = 200
@@ -102,13 +102,6 @@ def test_pre_shift_check_http_helpers_success(mock_urlopen):
     assert ok_be is True
     assert "backend /health OK" in msg_be
 
-    ok_prom, msg_prom = pre_shift_check.check_prometheus("http://localhost:9090")
-    assert ok_prom is True
-    assert "Prometheus healthy" in msg_prom
-
-    ok_am, msg_am = pre_shift_check.check_alertmanager("http://localhost:9093")
-    assert ok_am is True
-    assert "Alertmanager healthy" in msg_am
 
 
 @patch("urllib.request.urlopen")
