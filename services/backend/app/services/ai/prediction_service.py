@@ -45,7 +45,9 @@ class _BreakthroughContent(BaseModel):
     @classmethod
     def _has_real_steps(cls, v: list[str]) -> list[str]:
         if not v or not all(isinstance(s, str) and s.strip() for s in v):
-            raise ValueError("roadmap_steps must be a non-empty list of non-blank strings")
+            raise ValueError(
+                "roadmap_steps must be a non-empty list of non-blank strings"
+            )
         return v
 
 
