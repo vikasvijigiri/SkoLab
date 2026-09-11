@@ -54,6 +54,17 @@ const HR = 60 * MIN;
 const HOURLY = { staleTime: 30 * MIN, gcTime: 2 * HR } as const;
 /** server TTL 2 h (journal advisor). */
 const BIHOURLY = { staleTime: 60 * MIN, gcTime: 3 * HR } as const;
+/**
+ * The home feed (daily feed, activity, science news, opportunities) should
+ * behave like a social feed: check for something new whenever the user comes
+ * back to it, not just once per staleTime window. `refetchOnMount: "always"`
+ * covers a reload or a fresh navigation to /home; `refetchOnWindowFocus: true`
+ * covers switching back to the tab. `providers.tsx` turns both off globally
+ * (most queries shouldn't re-hit the network on every tab-focus), so this
+ * opts the feed surfaces back in individually rather than flipping the app-
+ * wide default.
+ */
+const LIVE_FEED = { refetchOnMount: "always", refetchOnWindowFocus: true } as const;
 
 export const authorQuery = (name: string, id?: string, focus?: string) =>
   queryOptions({
@@ -106,6 +117,7 @@ export const dailyFeedQuery = (authorId?: string, queryFallback?: string) =>
     queryKey: ["daily-feed", { authorId: authorId ?? null, queryFallback: queryFallback ?? null }] as const,
     queryFn: () => getDailyFeed(authorId, queryFallback),
     ...HOURLY,
+    ...LIVE_FEED,
     // Uncached generation can take up to ~2m48s (see feed.py); rather than
     // hold one HTTP connection open that long, the backend responds
     // 202 + Retry-After roughly every 10s while it keeps computing in the
@@ -173,6 +185,7 @@ export const industryOpportunitiesQuery = (focus = "AI", name?: string) =>
     queryKey: ["industry-opportunities", { focus, name: name ?? null }] as const,
     queryFn: () => getIndustryOpportunities(focus, name),
     ...HOURLY,
+    ...LIVE_FEED,
   });
 
 export const matchGrantsQuery = (authorId: string) =>
@@ -220,6 +233,7 @@ export const activityFeedQuery = (authorId?: string, userId?: string) =>
     queryFn: () => getActivityFeed({ authorId, userId }),
     staleTime: 10 * MIN,
     gcTime: 1 * HR,
+    ...LIVE_FEED,
   });
 
 // Science-news strip — the gateway caches 45 min, so keep it fresh ~30 min here.
@@ -229,6 +243,7 @@ export const scienceNewsQuery = (field?: string) =>
     queryFn: () => getScienceNews(field),
     staleTime: 30 * MIN,
     gcTime: 2 * HR,
+    ...LIVE_FEED,
   });
 
 // ── OpenAlex taxonomy + author match (click-only onboarding/discovery) ────
