@@ -3,17 +3,21 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AnimatePresence } from "framer-motion";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { FirebaseConfigBanner } from "@/components/auth/FirebaseConfigBanner";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { GoogleRedirectLoading } from "@/components/auth/GoogleRedirectLoading";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/lib/hooks/AuthProvider";
+import { useGoogleRedirectPending } from "@/lib/hooks/useGoogleRedirectPending";
 import {
   signInWithEmail,
   signInWithGoogle,
   signInAsGuest,
   completeGoogleRedirectSignIn,
+  clearGoogleRedirectPending,
 } from "@/lib/firebase/auth";
 import { friendlyAuthError } from "@/lib/firebase/errors";
 
@@ -26,26 +30,58 @@ export default function LoginPage() {
   const [loading, setLoading] = useState<"email" | "google" | "guest" | null>(null);
   // Click-only by default: providers first, the typed email form is opt-in.
   const [showEmail, setShowEmail] = useState(false);
+  // Whether we're mid-way through the redirect round trip to Google and
+  // back. `pendingRedirect` is an SSR/hydration-safe read of the flag (see
+  // useGoogleRedirectPending); `redirectResolved` flips once the effect
+  // below has settled it one way or another. Combined, so this page never
+  // shows its ordinary idle form while a sign-in is actually mid-flight --
+  // without either of the two, that read either mismatches the static HTML
+  // (raw sessionStorage read) or needs a synchronous setState in the effect
+  // body to clear (this repo's `react-hooks/set-state-in-effect` forbids
+  // that; short-circuiting on `configured` before the effect fires instead
+  // needs no setState in that branch, so the disallowed pattern never comes up).
+  const pendingRedirect = useGoogleRedirectPending();
+  const [redirectResolved, setRedirectResolved] = useState(false);
+  const completingGoogle = configured && pendingRedirect && !redirectResolved;
 
   // Picks up the result of signInWithGoogle's redirect round trip -- Firebase
   // sends the browser back to this exact page. Runs once; the ref guards
   // React 19's dev-mode double-invoke from processing the same return twice.
-  // Gated on `configured`: requireAuth() throws "Firebase is not configured"
-  // when it isn't, which is already surfaced by <FirebaseConfigBanner />
-  // below -- without this guard, that same message rendered a second time,
-  // in the error paragraph, on every ordinary page load in that state, not
-  // just after a real failed sign-in attempt (confirmed live: CI's own a11y
-  // suite caught this exact regression by tripping on the notification
-  // color the first time this code path actually ran unconditionally).
   const redirectChecked = useRef(false);
   useEffect(() => {
-    if (!configured || redirectChecked.current) return;
+    if (redirectChecked.current) return;
     redirectChecked.current = true;
+    // requireAuth() throws "Firebase is not configured" when `configured` is
+    // false, which is already surfaced by <FirebaseConfigBanner /> below --
+    // calling completeGoogleRedirectSignIn() here would render that same
+    // message a second time, in the error paragraph, on every ordinary page
+    // load in that state, not just after a real failed sign-in attempt
+    // (confirmed live: CI's own a11y suite caught this exact regression by
+    // tripping on the notification color the first time this code path ran
+    // unconditionally). Still clear a stale pending flag so a later reload,
+    // once configured, doesn't inherit a leftover flag from this visit.
+    // completingGoogle is already false whenever !configured (short-circuited
+    // above), so no state needs to change here.
+    if (!configured) {
+      clearGoogleRedirectPending();
+      return;
+    }
     completeGoogleRedirectSignIn()
       .then((res) => {
-        if (res) router.push(res.isNewUser ? "/onboarding" : "/home");
+        clearGoogleRedirectPending();
+        if (res) {
+          router.push(res.isNewUser ? "/onboarding" : "/home");
+        } else {
+          // Not actually completing a redirect (e.g. a stale flag from an
+          // earlier attempt that never made it back) -- fall back to the form.
+          setRedirectResolved(true);
+        }
       })
-      .catch((err) => setError(friendlyAuthError(err)));
+      .catch((err) => {
+        clearGoogleRedirectPending();
+        setRedirectResolved(true);
+        setError(friendlyAuthError(err));
+      });
   }, [configured, router]);
 
   async function handleEmailLogin(e: React.FormEvent) {
@@ -71,6 +107,7 @@ export default function LoginPage() {
       // up by completeGoogleRedirectSignIn above, after the round trip back.
       await signInWithGoogle();
     } catch (err) {
+      clearGoogleRedirectPending();
       setError(friendlyAuthError(err));
       setLoading(null);
     }
@@ -87,6 +124,16 @@ export default function LoginPage() {
     } finally {
       setLoading(null);
     }
+  }
+
+  if (completingGoogle) {
+    return (
+      <AuthCard>
+        <AnimatePresence mode="wait">
+          <GoogleRedirectLoading />
+        </AnimatePresence>
+      </AuthCard>
+    );
   }
 
   return (

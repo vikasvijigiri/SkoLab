@@ -11,9 +11,27 @@
 `main` is at `940df54` (`docs(deploy): remove stale local infrastructure
 references`). Working tree has an **unmerged, unbranched** set of changes on
 top of that — see `git status` — from a session that closed two gaps a
-market-research pass surfaced: no version-controlled Firestore access
-control, and no path from a Discovery match to an actual CoLab project. Full
-detail in `LOG.md`'s 2026-09-11 entry; decision `decisions/0018`.
+market-research pass surfaced (no version-controlled Firestore access
+control, and no path from a Discovery match to an actual CoLab project) plus
+a follow-up UX fix (Google sign-in showed a frozen idle button for several
+seconds after the redirect back, instead of a loading state). Full detail in
+`LOG.md`'s two 2026-09-11 entries; decision `decisions/0018`.
+
+- **Google sign-in loading state** — `apps/web/src/app/login/page.tsx` and
+  `signup/page.tsx` now show a `GoogleRedirectLoading` view (not the
+  ordinary form) for the whole redirect round trip, via a `sessionStorage`
+  flag (`markGoogleRedirectPending` et al. in `lib/firebase/auth.ts`) read
+  hydration-safely through a new `useGoogleRedirectPending` hook
+  (`useSyncExternalStore`, not a raw `useState` initializer — the latter
+  caused a real hydration mismatch, caught live, not by the unit tests).
+  Also: `GoogleSignInButton` shows a real spinner while loading now (shared
+  `components/ui/Spinner.tsx`, extracted out of `Button.tsx`), and
+  `@sentry/nextjs` is now mocked in `test/setup.ts` (it crashed on import
+  under this project's jsdom/Windows test environment — nothing had hit
+  that before since no test previously touched `lib/firebase/errors.ts`).
+  Fully verified: tests/tsc/lint/build all green, plus a live Playwright
+  check against the real dev server (the only way the hydration bug ever
+  surfaced).
 
 - **New:** `firestore.rules`, `firebase.json`, `.firebaserc` (repo root),
   `tests/firestore/rules.test.ts` + `tests/firestore/vitest.config.mts`,
@@ -72,4 +90,4 @@ detail in `LOG.md`'s 2026-09-11 entry; decision `decisions/0018`.
   fields rather than error). Not fixed this session — Python/LLM-service
   work, out of scope for what was otherwise a web-only change, and
   unverifiable here without a `GROQ_API` key.
-- Branch is uncommitted and unpushed. Nothing merged to `main`.
+- Branch pushed as a PR — see the repo's PR list for review/merge status.
