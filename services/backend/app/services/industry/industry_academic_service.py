@@ -77,6 +77,7 @@ class IndustryAcademicService:
 
         # 3. Call LLM to generate tie-ups
         tieups_data = {"trending": [], "futuristic": []}
+        used_fallback = False
         if is_llm_working():
             prompt = (
                 f"You are an expert academic-industry bridge advisor. Brainstorm 2 trending industry-academic tie-up ideas "
@@ -130,8 +131,10 @@ class IndustryAcademicService:
             except Exception as e:
                 logger.error(f"LLM query for tie-ups failed: {e}")
                 tieups_data = get_fallback_tieups(focus_domain)
+                used_fallback = True
         else:
             tieups_data = get_fallback_tieups(focus_domain)
+            used_fallback = True
 
         # 4. Fetch associated papers from OpenAlex
         async def fetch_papers_for_idea(idea: Dict[str, Any]) -> Dict[str, Any]:
@@ -183,7 +186,11 @@ class IndustryAcademicService:
             asyncio.gather(*trending_tasks), asyncio.gather(*futuristic_tasks)
         )
 
-        final_response = {"trending": results[0], "futuristic": results[1]}
+        final_response = {
+            "trending": results[0],
+            "futuristic": results[1],
+            "is_fallback": used_fallback,
+        }
 
         # 5. Cache result
         try:

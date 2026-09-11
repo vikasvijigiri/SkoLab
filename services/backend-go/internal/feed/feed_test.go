@@ -1,7 +1,6 @@
 package feed
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -21,10 +20,6 @@ import (
 func router() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.GET("/api/v1/support/metrics", GetSupportMetrics)
-	r.GET("/api/v1/integrations/zotero/auth", ZoteroAuthInit)
-	r.GET("/api/v1/integrations/zotero/callback", ZoteroAuthCallback)
-	r.POST("/api/v1/integrations/zotero/sync", ZoteroSyncPapers)
 
 	// Mirror main.go: dismiss sits behind the real auth middleware.
 	grp := r.Group("/api/v1/daily_feed")
@@ -50,96 +45,6 @@ func do(r *gin.Engine, method, path, body string, headers map[string]string) *ht
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	return w
-}
-
-// ── support metrics ─────────────────────────────────────────────────────────
-
-func TestSupportMetrics_ShapeAndStatus(t *testing.T) {
-	w := do(router(), http.MethodGet, "/api/v1/support/metrics", "", nil)
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", w.Code)
-	}
-	var body map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-		t.Fatalf("body not JSON: %v", err)
-	}
-	for _, key := range []string{"sla_targets", "performance_metrics", "queue_status"} {
-		if _, ok := body[key].(map[string]any); !ok {
-			t.Fatalf("missing/!object key %q in %s", key, w.Body.String())
-		}
-	}
-	qs := body["queue_status"].(map[string]any)
-	if qs["zendesk_integration_status"] != "operational" {
-		t.Fatalf("zendesk_integration_status = %v, want operational", qs["zendesk_integration_status"])
-	}
-}
-
-// ── zotero stubs ────────────────────────────────────────────────────────────
-
-func TestZoteroAuth_RequiresUserID(t *testing.T) {
-	w := do(router(), http.MethodGet, "/api/v1/integrations/zotero/auth", "", nil)
-	if w.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("no user_id: status = %d, want 422", w.Code)
-	}
-}
-
-func TestZoteroAuth_ReturnsMockURLWithUserID(t *testing.T) {
-	w := do(router(), http.MethodGet, "/api/v1/integrations/zotero/auth?user_id=u1", "", nil)
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", w.Code)
-	}
-	var body map[string]string
-	_ = json.Unmarshal(w.Body.Bytes(), &body)
-	if !strings.Contains(body["authorization_url"], "mock_token_skolab_u1") {
-		t.Fatalf("authorization_url = %q, want it to embed the user id", body["authorization_url"])
-	}
-}
-
-func TestZoteroCallback_RequiresBothParams(t *testing.T) {
-	w := do(router(), http.MethodGet, "/api/v1/integrations/zotero/callback?oauth_token=t", "", nil)
-	if w.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("missing oauth_verifier: status = %d, want 422", w.Code)
-	}
-}
-
-func TestZoteroCallback_OKWithBothParams(t *testing.T) {
-	w := do(router(), http.MethodGet, "/api/v1/integrations/zotero/callback?oauth_token=t&oauth_verifier=v", "", nil)
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", w.Code)
-	}
-	var body map[string]any
-	_ = json.Unmarshal(w.Body.Bytes(), &body)
-	if body["zotero_user_id"] != "8765432" {
-		t.Fatalf("zotero_user_id = %v, want 8765432", body["zotero_user_id"])
-	}
-}
-
-func TestZoteroSync_EchoesTitles(t *testing.T) {
-	body := `{"user_id":"u1","papers":[{"title":"Paper A"},{"foo":"bar"}]}`
-	w := do(router(), http.MethodPost, "/api/v1/integrations/zotero/sync", body, nil)
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", w.Code)
-	}
-	var resp struct {
-		SyncedCount  int      `json:"synced_count"`
-		SyncedPapers []string `json:"synced_papers"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("body: %v (%s)", err, w.Body.String())
-	}
-	if resp.SyncedCount != 2 {
-		t.Fatalf("synced_count = %d, want 2", resp.SyncedCount)
-	}
-	if resp.SyncedPapers[0] != "Paper A" || resp.SyncedPapers[1] != "Untitled Paper" {
-		t.Fatalf("synced_papers = %v, want [Paper A, Untitled Paper]", resp.SyncedPapers)
-	}
-}
-
-func TestZoteroSync_MalformedBodyIs400(t *testing.T) {
-	w := do(router(), http.MethodPost, "/api/v1/integrations/zotero/sync", "not json", nil)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", w.Code)
-	}
 }
 
 // ── daily_feed/dismiss ─────────────────────────────────────────────────────

@@ -38,4 +38,29 @@ describe("HorizonPage — click-only", () => {
     expect(await screen.findByText(/Foresight engine timed out/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
   });
+
+  it("flags a fallback prediction as estimated instead of presenting it as genuine analysis", async () => {
+    server.use(
+      http.post(`${API}/api/v1/discovery/predict`, () =>
+        HttpResponse.json({ ...mockBreakthroughPrediction, is_fallback: true }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<HorizonPage />);
+    await user.click(await screen.findByRole("button", { name: "Physics and Astronomy" }));
+    await user.click(screen.getByRole("button", { name: /forge discovery/i }));
+    expect(await screen.findByText(/Estimated — AI unavailable/i)).toBeInTheDocument();
+  });
+
+  it("does not show the estimated badge for a genuine prediction", async () => {
+    server.use(
+      http.post(`${API}/api/v1/discovery/predict`, () => HttpResponse.json(mockBreakthroughPrediction)),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<HorizonPage />);
+    await user.click(await screen.findByRole("button", { name: "Physics and Astronomy" }));
+    await user.click(screen.getByRole("button", { name: /forge discovery/i }));
+    await screen.findByText(mockBreakthroughPrediction.breakthrough_name);
+    expect(screen.queryByText(/Estimated — AI unavailable/i)).not.toBeInTheDocument();
+  });
 });
