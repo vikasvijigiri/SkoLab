@@ -47,7 +47,16 @@ jobs:
           go-version-file: services/backend-go/go.mod
 
       - name: Install web dependencies
-        run: npm ci
+        # The committed lockfile is Windows-generated and `npm ci` on Linux
+        # can't resolve its platform-specific optional deps (@tailwindcss/
+        # oxide, lightningcss natives) reliably — see the identical
+        # workaround + full explanation in ci.yml's "Install workspace
+        # dependencies" step. Durable fix there too: a Linux-regenerated
+        # lockfile + `npm ci`.
+        run: |
+          rm -f package-lock.json
+          npm install --no-audit --no-fund --legacy-peer-deps \
+            || { rm -rf node_modules ~/.npm/_cacache; npm install --no-audit --no-fund --legacy-peer-deps; }
 
       - name: Web lint
         run: npm run lint --workspace apps/web
@@ -112,7 +121,11 @@ jobs:
           python-version: '3.11'
 
       - name: Install web dependencies
-        run: npm ci
+        # See the matching step + comment in the `fast` job above.
+        run: |
+          rm -f package-lock.json
+          npm install --no-audit --no-fund --legacy-peer-deps \
+            || { rm -rf node_modules ~/.npm/_cacache; npm install --no-audit --no-fund --legacy-peer-deps; }
 
       - name: Web build (includes Next.js typecheck)
         run: npm run build --workspace apps/web
