@@ -89,8 +89,8 @@ func main() {
 	})
 
 	// ── Observability ─────────────────────────────────────────────────────────
-	// infrastructure/prometheus.yml has scraped this exact path since the
-	// local observability stack was first stood up; the endpoint itself
+	// Render and external observability can scrape this exact path; the
+	// endpoint itself
 	// never existed until now. See internal/metrics's package doc for why
 	// this is hand-rolled against the standard library rather than
 	// github.com/prometheus/client_golang.

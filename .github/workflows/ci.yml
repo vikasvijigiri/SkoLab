@@ -69,11 +69,11 @@ jobs:
       env:
         DATABASE_URL: postgresql+asyncpg://postgres:ResQit2025!@127.0.0.1:5432/skolab
         DATABASE_ENCRYPTION_KEY: dGVzdF9kYXRhYmFzZV9lbmNyeXB0aW9uX2tleV8xMjM=
-        GROQ_API: gsk_fakekeyvaluelongerthan10chars
-        OPENROUTER_API_KEY: sk-or-v1-fakekeyvalue
+        GROQ_API: ci-test-groq-token-not-secret
+        OPENROUTER_API_KEY: ci-test-openrouter-token-not-secret
         GOOGLE_APPLICATION_CREDENTIALS: services/backend/service-account.json
-        PAGERDUTY_PRIMARY_ONCALL_KEY: pd_key_primary_active
-        PAGERDUTY_DB_SRE_KEY: pd_key_db_sre_active
+        PAGERDUTY_PRIMARY_ONCALL_KEY: ci-test-pagerduty-primary
+        PAGERDUTY_DB_SRE_KEY: ci-test-pagerduty-database
       run: |
         cd services/backend
         python -m venv venv

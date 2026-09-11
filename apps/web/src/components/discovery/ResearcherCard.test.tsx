@@ -1,7 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import userEvent from "@testing-library/user-event";
 import { renderWithProviders, screen } from "@/test/render";
 import { ResearcherCard } from "./ResearcherCard";
 import type { ResearcherResult, ResearcherSignals } from "@/lib/types";
+
+const push = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+}));
+
+const auth = vi.hoisted(() => ({ user: null as null | { uid: string } }));
+vi.mock("@/lib/hooks/AuthProvider", () => ({
+  useAuth: () => ({ user: auth.user }),
+}));
 
 const signals = (over: Partial<ResearcherSignals> = {}): ResearcherSignals => ({
   activity: "active",
@@ -35,6 +46,11 @@ const result = (over: Partial<ResearcherResult> = {}): ResearcherResult => ({
 });
 
 describe("ResearcherCard", () => {
+  beforeEach(() => {
+    auth.user = null;
+    push.mockClear();
+  });
+
   it("renders identity, fit score and the why line", () => {
     renderWithProviders(<ResearcherCard r={result()} index={0} />);
     expect(screen.getByText("Ada Lovelace")).toBeInTheDocument();
@@ -73,5 +89,24 @@ describe("ResearcherCard", () => {
   it("omits the ORCID badge when there is no ORCID", () => {
     renderWithProviders(<ResearcherCard r={result({ orcid: null })} index={0} />);
     expect(screen.queryByLabelText("ORCID-verified identity")).not.toBeInTheDocument();
+  });
+
+  it("hides the start-a-project action for a signed-out visitor", () => {
+    renderWithProviders(<ResearcherCard r={result()} index={0} />);
+    expect(screen.queryByText(/start a project with/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the start-a-project action for a signed-in researcher and routes to CoLab with the match", async () => {
+    auth.user = { uid: "me" };
+    renderWithProviders(<ResearcherCard r={result()} index={0} />);
+    const button = screen.getByText(/start a project with ada/i);
+    await userEvent.click(button);
+    expect(push).toHaveBeenCalledWith("/workspace?withResearcher=A100&withResearcherName=Ada+Lovelace");
+  });
+
+  it("never offers to start a project with a deceased researcher", () => {
+    auth.user = { uid: "me" };
+    renderWithProviders(<ResearcherCard r={result({ deceased: { year: 1852 } })} index={0} />);
+    expect(screen.queryByText(/start a project with/i)).not.toBeInTheDocument();
   });
 });

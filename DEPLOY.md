@@ -226,10 +226,6 @@ easily. It is disclosed, not silent, and it is a monitor, not a keep-alive.
 
 ## What this does not deploy
 
-- `infrastructure/` (Prometheus, Grafana, Loki, Alertmanager, uptime-kuma) —
-  self-hosted observability. On this split, Sentry covers errors, the Go
-  gateway's own `GET /metrics` covers RED metrics, and
-  `uptime-monitor.yml` covers availability. Run
-  `infrastructure/docker-compose.yml` locally or on a VM if you want the
-  full self-hosted stack instead.
 - `apps/android-app` — ships through Play Console / EAS, not a web host.
+- Local observability containers — Render's health checks/logs plus Sentry are
+  the supported production observability path for this deployment.

@@ -2,9 +2,8 @@
 // gateway, exposed at GET /metrics in Prometheus's text exposition format
 // (https://prometheus.io/docs/instrumenting/exposition_formats/).
 //
-// infrastructure/prometheus.yml has scraped this exact path
-// ("skolab-gateway", metrics_path: /metrics, port 8080) since the local
-// observability stack was first stood up — the endpoint itself never
+// Render and external observability scrape this exact path
+// ("skolab-gateway", metrics_path: /metrics, port 8080); the endpoint never
 // existed until now.
 //
 // Hand-rolled against the Go standard library only, not

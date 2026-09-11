@@ -15,6 +15,16 @@ vi.mock("@/lib/firebase/client", () => ({
   GOOGLE_WEB_CLIENT_ID: "test-client-id",
 }));
 
+// The real @sentry/nextjs package tries to install server-side bundler
+// instrumentation on import (vendored @apm-js-collab/code-transformer-
+// bundler-plugins) that crashes under jsdom on Windows ("The URL must be of
+// scheme file") — nothing about that instrumentation is wanted in tests
+// anyway (no DSN is configured, and we don't want real error reports sent).
+// Mocked at the module the app actually calls (`Sentry.captureException`).
+vi.mock("@sentry/nextjs", () => ({
+  captureException: vi.fn(),
+}));
+
 // jsdom implements neither observer API nor matchMedia; several UI primitives
 // (AnimatedCounter, Reveal, charts, useMediaQuery) touch them on mount.
 class NoopObserver {

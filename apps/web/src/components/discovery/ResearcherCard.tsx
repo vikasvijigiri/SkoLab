@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowDownRight, ArrowRight, ArrowUpRight, BadgeCheck } from "lucide-react";
+import { ArrowDownRight, ArrowRight, ArrowUpRight, BadgeCheck, FolderPlus } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { cn, focusRing, shortOpenAlexId } from "@/lib/utils";
 import { DURATION_NORMAL, EASE_STANDARD } from "@/lib/motion";
+import { useAuth } from "@/lib/hooks/AuthProvider";
 import type { CareerStage, MomentumState, ResearcherResult } from "@/lib/types";
 import { StatusDot } from "./StatusDot";
 import { MomentumSparkline } from "./MomentumSparkline";
@@ -41,6 +43,8 @@ function MetaRow({ label, children }: { label: string; children: React.ReactNode
 
 export function ResearcherCard({ r, index }: { r: ResearcherResult; index: number }) {
   const { signals } = r;
+  const { user } = useAuth();
+  const router = useRouter();
   const accent = r.deceased ? "var(--text-muted)" : ACCENT_BY_ACTIVITY[signals.activity];
   const mo = MOMENTUM[signals.momentum];
   const MoIcon = mo.icon;
@@ -51,17 +55,23 @@ export function ResearcherCard({ r, index }: { r: ResearcherResult; index: numbe
       : `H-${r.hIndex}`;
   const focusPct = Math.round(signals.topicalFocus * 100);
 
+  function startProject(e: React.MouseEvent) {
+    e.preventDefault();
+    const params = new URLSearchParams({ withResearcher: r.id, withResearcherName: r.display_name });
+    router.push(`/workspace?${params.toString()}`);
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: DURATION_NORMAL, delay: Math.min(index * 0.04, 0.24), ease: EASE_STANDARD }}
     >
-      <Link
-        href={`/author/${encodeURIComponent(shortOpenAlexId(r.id))}?name=${encodeURIComponent(r.display_name)}`}
-        className={cn("block rounded-md", focusRing)}
-      >
-        <Card glow interactive accentColor={accent} accentSide="left" className="flex h-full flex-col gap-2.5">
+      <Card glow accentColor={accent} accentSide="left" className="flex h-full flex-col gap-2.5">
+        <Link
+          href={`/author/${encodeURIComponent(shortOpenAlexId(r.id))}?name=${encodeURIComponent(r.display_name)}`}
+          className={cn("flex flex-1 flex-col gap-2.5 rounded-md", focusRing)}
+        >
           {/* identity */}
           <div className="flex items-start gap-2.5">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-subtle font-display text-[13px] font-bold text-text-secondary">
@@ -143,8 +153,22 @@ export function ResearcherCard({ r, index }: { r: ResearcherResult; index: numbe
               Open to collaboration
             </Badge>
           )}
-        </Card>
-      </Link>
+        </Link>
+
+        {user && !r.deceased && (
+          <button
+            type="button"
+            onClick={startProject}
+            className={cn(
+              "mt-1 flex items-center justify-center gap-1.5 rounded-md border border-border py-1.5 font-body text-[11.5px] font-medium text-text-secondary transition-colors hover:border-primary/40 hover:text-primary",
+              focusRing
+            )}
+          >
+            <FolderPlus size={13} />
+            Start a project with {r.display_name.split(" ")[0]}
+          </button>
+        )}
+      </Card>
     </motion.div>
   );
 }

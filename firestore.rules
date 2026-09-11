@@ -1,0 +1,127 @@
+rules_version = '2';
+
+// SkoLab Firestore security rules.
+//
+// Decision 0004 keeps CoLab/Profile on direct client<->Firestore access (no
+// REST layer) so the web and Android apps share realtime listeners. That
+// decision never shipped a rules file, so until now Firestore's own project
+// defaults (or whatever was pasted into the console ad hoc) were the entire
+// access-control story. This file makes that story explicit and enforced.
+//
+// Data model this mirrors: apps/web/src/lib/firebase/workspace.ts and
+// apps/android-app's CoLabWorkspaceScreen.kt (collabs_groups/{id} with
+// documents/messages/tasks/meetings/presence subcollections), and
+// apps/web/src/lib/firebase/auth.ts (researchers/{uid} profile doc).
+//
+// Deploy: `npx firebase deploy --only firestore:rules` (after `npx firebase
+// login`), or paste this file's contents into Firebase Console -> Firestore
+// Database -> Rules -> publish. Either way, do this from a human session —
+// it changes what every signed-in user can read and write in production.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── researchers/{uid} — profile directory ──────────────────────────
+    // Read: any signed-in user. Needed for viewing any researcher's public
+    // profile, Discovery/CoLab surfaces, and ShareModal's invite-by-email
+    // lookup (apps/web/src/lib/firebase/workspace.ts findResearcherByEmail).
+    // Write: only your own document, keyed by your own Firebase uid.
+    match /researchers/{uid} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid;
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // ── collabs_groups/{projectId} — CoLab Workspace ────────────────────
+    // Overleaf-style roles (owner > editor > reviewer > viewer), stored on
+    // `members` (the source of truth) and mirrored into three flat uid
+    // arrays — memberUids / editorUids / commenterUids — because this rules
+    // language has no way to search an array of objects for a nested `role`
+    // field. See deriveRoleArrays() in workspace.ts, which keeps them in
+    // sync on every membership or role write.
+    //
+    // Legacy fallback: projects created before editorUids/commenterUids
+    // existed fall back to "any member may edit/comment" — today's de facto
+    // behavior — rather than locking out collaborators on old projects.
+    match /collabs_groups/{projectId} {
+      function signedIn() { return request.auth != null; }
+      function isMember(data) { return signedIn() && request.auth.uid in data.memberUids; }
+      function isOwner(data) { return signedIn() && request.auth.uid == data.ownerUid; }
+      function isEditor(data) {
+        return isOwner(data) || (
+          'editorUids' in data ? request.auth.uid in data.editorUids : isMember(data)
+        );
+      }
+      function isCommenter(data) {
+        return isOwner(data) || (
+          'commenterUids' in data ? request.auth.uid in data.commenterUids : isMember(data)
+        );
+      }
+      // Only the owner may change who's on the project or what role they hold.
+      function membershipUnchanged() {
+        return !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['ownerUid', 'members', 'memberUids', 'editorUids', 'commenterUids']);
+      }
+      function project() {
+        return get(/databases/$(database)/documents/collabs_groups/$(projectId)).data;
+      }
+
+      allow read: if isMember(resource.data);
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.auth.uid in request.resource.data.memberUids;
+      allow update: if isMember(resource.data)
+        && (membershipUnchanged() ? isEditor(resource.data) : isOwner(resource.data));
+      allow delete: if isOwner(resource.data);
+
+      // Overleaf-style file list. Body/title edits are editor+ only.
+      match /documents/{docId} {
+        allow read: if isMember(project());
+        allow create, update: if isEditor(project())
+          && request.resource.data.updatedByUid == request.auth.uid;
+        allow delete: if isEditor(project());
+      }
+
+      // Append-only chat log — no edit or delete once sent.
+      match /messages/{msgId} {
+        allow read: if isMember(project());
+        allow create: if isCommenter(project()) && request.resource.data.senderUid == request.auth.uid;
+        allow update, delete: if false;
+      }
+
+      match /tasks/{taskId} {
+        allow read: if isMember(project());
+        allow write: if isEditor(project());
+      }
+
+      match /meetings/{meetingId} {
+        allow read: if isMember(project());
+        allow write: if isEditor(project());
+      }
+
+      // Presence heartbeat — any member may be seen, but only you can set
+      // your own doc (doc id is the viewer's own uid).
+      match /presence/{uid} {
+        allow read: if isMember(project());
+        allow write: if isMember(project())
+          && request.auth.uid == uid
+          && request.resource.data.uid == uid;
+      }
+
+      // No web write path exists for this today (see workspace.ts
+      // deleteProject, which only ever deletes from it). Read-only until a
+      // real writer shows up.
+      match /activity/{activityId} {
+        allow read: if isMember(project());
+        allow write: if false;
+      }
+    }
+
+    // Default deny — anything not explicitly allowed above is closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
