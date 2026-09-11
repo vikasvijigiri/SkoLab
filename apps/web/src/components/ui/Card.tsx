@@ -39,7 +39,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
         <motion.div
           whileHover={{ y: -1, boxShadow: "var(--shadow-elevated)" }}
           transition={TRANSITION_NORMAL}
-          className={cn("rounded-sm bg-surface p-4 shadow-card", className)}
+          className={cn("rounded-lg bg-surface p-5 shadow-card", className)}
           style={sharedStyle}
           {...(props as React.ComponentProps<typeof motion.div>)}
         >
@@ -52,7 +52,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       <div
         ref={ref}
         className={cn(
-          "rounded-sm bg-surface p-4 shadow-card transition-[transform,box-shadow] duration-[var(--motion-normal)]",
+          "rounded-lg bg-surface p-5 shadow-card transition-[transform,box-shadow] duration-[var(--motion-normal)]",
           interactive &&
             "cursor-pointer hover:-translate-y-px hover:shadow-card-hover active:translate-y-0",
           className
