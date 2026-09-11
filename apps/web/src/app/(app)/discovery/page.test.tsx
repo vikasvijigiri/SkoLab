@@ -103,6 +103,26 @@ describe("DiscoveryContent — click-only", () => {
     expect(container.querySelector("input, textarea")).toBeNull();
   });
 
+  it("shows trending topics scoped to the viewer's field, and drills into one on click", async () => {
+    profile.current = {
+      author: { field_of_study: "Condensed Matter Physics", expertise: ["spin glasses"], institution: "X" },
+      firestoreProfile: { researchFocus: "Condensed Matter Physics" },
+      loading: false,
+      error: null,
+      unresolved: false,
+      refetch: vi.fn(),
+    };
+    const user = userEvent.setup();
+    renderWithProviders(<DiscoveryContent />);
+    await screen.findByText("Ada Lovelace");
+    await user.click(screen.getByRole("tab", { name: "topics" }));
+    expect(await screen.findByText("Spin Liquids")).toBeInTheDocument();
+    expect(screen.getByText("+100%")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Spin Liquids/i }));
+    // Selecting a trending topic drills into its papers.
+    expect(await screen.findByText(/Top papers in Spin Liquids/i)).toBeInTheDocument();
+  });
+
   it("surfaces an ErrorBanner with Retry when the default fetch fails", async () => {
     server.use(
       http.get(`${API}/api/v1/leaderboard/:field`, () => new HttpResponse(null, { status: 500 })),

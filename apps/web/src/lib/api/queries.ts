@@ -24,11 +24,12 @@ import {
   openAlexWorksByTaxon,
   openAlexResearchers,
   serverFilterParams,
+  fetchTrendingTopics,
   fetchDeceasedFlags,
   fetchCollabFlags,
   type TaxonLevel,
 } from "./endpoints";
-import type { DiscoveryFilterState, DiscoverySort } from "@/lib/types";
+import type { DiscoveryFilterState, DiscoverySort, TrendingTopic } from "@/lib/types";
 
 /**
  * Typed `queryOptions` factories — the single place a query key and its fetcher
@@ -296,6 +297,20 @@ export const discoveryResearchersQuery = (
     queryFn: () => openAlexResearchers({ subfieldId: subfieldId ?? "", filters, sort }),
     ...HOURLY,
     enabled: Boolean(subfieldId),
+  });
+
+/** Topics growing fastest for a subfield/field — server caches 12h; the growth
+ *  ratio doesn't need to be fresher than that. */
+export const trendingTopicsQuery = (node: { level: "subfield" | "field"; id: string } | null) =>
+  queryOptions({
+    queryKey: ["discovery-trending-topics", node?.level ?? null, node?.id ?? null] as const,
+    // Null-safe regardless of how a caller sets `enabled` (a call site may
+    // override it, as Discovery's page does) — no scope resolves to an empty
+    // list, never a crash or a network call.
+    queryFn: () => (node ? fetchTrendingTopics(node) : Promise.resolve<TrendingTopic[]>([])),
+    staleTime: 6 * HR,
+    gcTime: 24 * HR,
+    enabled: Boolean(node),
   });
 
 export const deceasedFlagsQuery = (orcids: string[]) =>
