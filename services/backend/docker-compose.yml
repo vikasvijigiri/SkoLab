@@ -7,7 +7,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in services/backend/.env}
       POSTGRES_DB: skolab
     networks:
       - private-net
@@ -31,7 +31,7 @@ services:
       - public-net
       - private-net
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgrespassword@db:5432/skolab
+      - DATABASE_URL=${DATABASE_URL:?Set DATABASE_URL in services/backend/.env}
     depends_on:
       - db
     deploy:
@@ -54,7 +54,7 @@ services:
     environment:
       - PYTHON_BACKEND_URL=http://web:8000
       - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account.json
-      - DATABASE_URL=postgresql://postgres:postgrespassword@db:5432/skolab?sslmode=disable
+      - DATABASE_URL=${GATEWAY_DATABASE_URL:?Set GATEWAY_DATABASE_URL in services/backend/.env}
     volumes:
       - ./service-account.json:/app/service-account.json:ro
     depends_on:
