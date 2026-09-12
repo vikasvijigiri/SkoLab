@@ -400,12 +400,16 @@ private fun sendMessage(
         // Ticks animation
         delay(600)
         userMsg.status = MessageStatus.DELIVERED
-        // trigger list update by forcing state notification
-        onAddMessage(UiChatMessage("", "", "", MessageStatus.SENT)) // Dummy trigger
-        // remove dummy
-        // A cleaner way is using state fields, but mutableStateListOf detects item reference replacement.
-        // Let's just simulate the ticks and trigger recompositions:
-        
+        // userMsg.status mutations above don't trigger recomposition on their own
+        // (mutableStateListOf only reacts to item reference replacement, not a
+        // field mutated in place) -- this empty-content message forces one. The
+        // renderer drops it via its own `if (message.content.isEmpty()) return`
+        // guard, so it never actually renders. A dedicated state field per
+        // message would be cleaner, but this is a working, narrow hack, not a
+        // leftover to "remove" -- deleting it would silently stop the tick
+        // (sent/delivered/read) animation from ever updating on screen.
+        onAddMessage(UiChatMessage("", "", "", MessageStatus.SENT))
+
         delay(600)
         userMsg.status = MessageStatus.READ
         onUpdateTyping(true)

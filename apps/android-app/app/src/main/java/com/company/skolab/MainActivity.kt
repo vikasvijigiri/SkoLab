@@ -71,7 +71,6 @@ import com.company.skolab.ui.layout.screenSafeArea
 import com.company.skolab.ui.screens.ArticleReaderScreen
 import com.company.skolab.ui.screens.AuthScreen
 import com.company.skolab.ui.screens.AuthorDetailScreen
-import com.company.skolab.ui.screens.DiscoveryScreen
 import com.company.skolab.ui.screens.FeedScreen
 import com.company.skolab.ui.screens.ProfileScreen
 import com.company.skolab.ui.screens.EditProfileScreen
@@ -81,7 +80,6 @@ import com.company.skolab.ui.screens.OnboardingScreen
 import com.company.skolab.ui.screens.PaperDetailScreen
 import com.company.skolab.ui.screens.PapersScreen
 import com.company.skolab.ui.screens.SearchScreen
-import com.company.skolab.ui.screens.PaperCollabsScreen
 import com.company.skolab.ui.screens.SplashScreen
 import com.company.skolab.ui.screens.ChatRoomScreen
 import com.company.skolab.ui.screens.ChatListScreen
