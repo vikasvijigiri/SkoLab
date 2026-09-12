@@ -48,6 +48,7 @@
     "msw": "~2.15.0",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "~4.1.11"
+    "vite": "^8.0.0",
+    "vitest": "~5.0.0"
   }
 }
