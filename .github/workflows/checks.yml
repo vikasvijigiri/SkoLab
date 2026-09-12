@@ -36,7 +36,12 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # 22, not 20: jsdom >=30 (apps/web + root, 2026-09-12) declares
+          # engines.node "^22.22.2 || ^24.15.0 || >=26.0.0" and fails at
+          # runtime under 20 with "webidl.util.markAsUncloneable is not a
+          # function" -- ci.yml's web-verification job already uses 22 for
+          # the equivalent step, this brings checks.yml in line.
+          node-version: '22'
 
       - uses: actions/setup-python@v7
         with:
@@ -140,7 +145,12 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # 22, not 20: jsdom >=30 (apps/web + root, 2026-09-12) declares
+          # engines.node "^22.22.2 || ^24.15.0 || >=26.0.0" and fails at
+          # runtime under 20 with "webidl.util.markAsUncloneable is not a
+          # function" -- ci.yml's web-verification job already uses 22 for
+          # the equivalent step, this brings checks.yml in line.
+          node-version: '22'
 
       - uses: actions/setup-python@v7
         with:
