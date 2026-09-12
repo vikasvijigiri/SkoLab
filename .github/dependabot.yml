@@ -64,15 +64,12 @@ updates:
       # this project's is lower. Bump compileSdk deliberately first.
       - dependency-name: "com.squareup.okhttp3:okhttp"
         update-types: ["version-update:semver-major"]
-      # Confirmed broken -- and NOT just on a major bump: 9.1.0 -> 9.4.0 is
-      # a minor release in AGP's own numbering, but AGP can raise its
-      # embedded minimum-Gradle floor in a minor too ("Minimum supported
-      # Gradle version is 9.6.0. Current version is 9.4.1"). Block minor
-      # and major here; only patch releases are safe to auto-merge.
-      # Bump the Gradle wrapper deliberately, then lift this.
-      - dependency-name: "com.android.application"
-        update-types:
-          ["version-update:semver-major", "version-update:semver-minor"]
+      # (Previously ignored: 9.1.0 -> 9.4.0 needed Gradle >= 9.6.0 and this
+      # repo's wrapper was still on 9.4.1. Fixed 2026-09-12 -- wrapper
+      # bumped to 9.6.0, AGP bumped to 9.4.0 directly. Left un-ignored so
+      # future AGP releases get proposed normally; re-add a rule here,
+      # scoped to the specific version, if a future bump raises the
+      # Gradle floor again before the wrapper is ready.)
   - package-ecosystem: pip
     directory: "/services/backend"
     schedule:
