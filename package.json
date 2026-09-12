@@ -7,10 +7,11 @@
     "apps/web"
   ],
   "devDependencies": {
-    "jsdom": "~26.1.0",
+    "jsdom": "~30.0.1",
     "@firebase/rules-unit-testing": "^5.0.2",
     "firebase": "^12.15.0",
-    "vitest": "~4.1.11"
+    "vite": "^8.0.0",
+    "vitest": "~5.0.0"
   },
   "scripts": {
     "dev:backend": "cd services/backend && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
