@@ -68,6 +68,15 @@ services:
       # redis:// URL to share state across instances.
       - key: REDIS_URL
         sync: false
+      # Shared secret for internal/service-to-service calls in BOTH
+      # directions: sent as X-Internal-Token when this gateway calls Python's
+      # /internal/* routes (search.go, similar.go), and checked against the
+      # same header on this gateway's own /internal/compute_metrics (the one
+      # call Python makes back to Go). Must match skolab-backend-py's
+      # INTERNAL_API_TOKEN below -- same value, both services. Leave unset in
+      # dev; either side skips the check when it's empty.
+      - key: INTERNAL_API_TOKEN
+        sync: false
       # firebase.NewApp(ctx, nil) uses Application Default Credentials, i.e. a
       # service-account JSON file at this path. Upload that JSON in the Render
       # dashboard as a Secret File named service-account.json (mounted under
@@ -116,6 +125,18 @@ services:
       - key: SENTRY_DSN
         sync: false
       - key: APP_BASE_URL
+        sync: false
+      # Full https URL of the skolab-gateway service above, e.g.
+      # https://skolab-gateway.onrender.com — set it after that service is
+      # live, same reason the gateway's own PYTHON_BACKEND_URL (above) is set
+      # manually rather than via fromService (Render `fromService` can't
+      # supply the https scheme). Used only by researcher_worker.py's
+      # teleport worker to call the gateway's POST /internal/compute_metrics.
+      - key: GATEWAY_URL
+        sync: false
+      # Must match skolab-gateway's INTERNAL_API_TOKEN above — same value,
+      # both services. See that service's comment for what this protects.
+      - key: INTERNAL_API_TOKEN
         sync: false
       # Set to "1" for the FIRST deploy only — the app then runs
       # Base.metadata.create_all to build the schema (the Alembic migrations
