@@ -39,6 +39,12 @@ class CollaboratorSynergyResponse(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
+    # True when the joint-proposal/action-plan text is generated from
+    # concept overlap alone (LLM call failed) rather than model-written --
+    # plausible-looking either way, so this is the only signal a client has
+    # to tell them apart (2026-09-12 endpoint audit).
+    is_fallback: bool = False
+
 
 class CitationHeatmap(BaseModel):
     """``GET /citation_heatmap``."""

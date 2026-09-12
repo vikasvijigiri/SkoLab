@@ -48,3 +48,6 @@ class NexusChatResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     content: str | None = None
+    # True when `content` is an unavailability/error message rather than a
+    # model-generated reply (2026-09-12 endpoint audit).
+    is_fallback: bool = False

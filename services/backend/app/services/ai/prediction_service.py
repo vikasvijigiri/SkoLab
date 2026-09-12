@@ -349,12 +349,15 @@ class PredictionService:
 
     async def nexus_chat(
         self, papers: List[Dict[str, Any]], messages: List[Dict[str, str]]
-    ) -> str:
+    ) -> tuple[str, bool]:
         """
         Runs a chat query where the LLM answers questions using context from a collection of papers.
+
+        Returns (content, is_fallback) -- is_fallback is True when content is
+        an unavailability/error message rather than a model-generated reply.
         """
         if not is_llm_working():
-            return "The AI system is currently unavailable."
+            return "The AI system is currently unavailable.", True
 
         # Build context from papers
         context_lines = ["Here are the papers currently in the workspace collection:\n"]
@@ -381,6 +384,13 @@ class PredictionService:
                 temperature=0.3,
                 max_tokens=1024,
             )
-            return response.content or "No response received."
+            if response.content:
+                return response.content, False
+            return "No response received.", True
         except Exception as e:
-            return f"Error querying synthesis engine: {str(e)}"
+            # Not str(e): that leaked raw upstream/internal error text (e.g.
+            # provider request internals) straight into user-facing chat
+            # content with a 200 status (2026-09-12 endpoint audit). Log
+            # the real exception server-side instead.
+            print(f"[NexusChat] LLM query failed: {e}", flush=True)
+            return "The synthesis engine couldn't process that request. Please try again.", True
