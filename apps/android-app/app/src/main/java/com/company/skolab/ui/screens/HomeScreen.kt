@@ -1225,51 +1225,6 @@ private fun InvitePersonCard(
     }
 }
 
-// ── LEGACY stub kept for any remaining call-sites (currently unused) ──────────
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun NetworkPersonCard(
-    initials: String,
-    name: String,
-    subtitle: String,
-    isOnline: Boolean,
-    actionLabel: String,
-    actionFilled: Boolean,
-    onClick: () -> Unit,
-    onCardClick: () -> Unit = onClick
-) {
-    val accentColor = PRIMARY
-    Surface(
-        onClick = onCardClick,
-        modifier = Modifier.width(200.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = SURFACE,
-        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.22f)),
-        shadowElevation = 3.dp
-    ) {
-        Column {
-            Box(modifier = Modifier.fillMaxWidth().height(4.dp).background(Brush.horizontalGradient(listOf(accentColor, accentColor.copy(alpha = 0.4f)))))
-            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(contentAlignment = Alignment.BottomEnd) {
-                        Box(modifier = Modifier.size(44.dp).background(accentColor.copy(alpha = 0.18f), CircleShape).border(2.dp, accentColor.copy(alpha = 0.45f), CircleShape), contentAlignment = Alignment.Center) {
-                            Text(initials.ifEmpty { "?" }, color = accentColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        }
-                        if (isOnline) Box(modifier = Modifier.size(11.dp).background(Color(0xFF3DD68C), CircleShape).border(2.dp, SURFACE, CircleShape))
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(name, color = TEXT_PRIMARY, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 2, lineHeight = 16.sp, overflow = TextOverflow.Ellipsis)
-                        Text(subtitle, color = TEXT_SECONDARY, fontSize = 10.sp, maxLines = 2, lineHeight = 13.sp, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-                Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (actionFilled) accentColor else Color.Transparent).border(1.dp, accentColor, RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(vertical = 7.dp), contentAlignment = Alignment.Center) {
-                    Text(actionLabel, color = if (actionFilled) Color.White else accentColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-    }
-}
-
 // ── MAXIMIZED SPARK CONSOLE DASHBOARD CENTERPIECE ──
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
