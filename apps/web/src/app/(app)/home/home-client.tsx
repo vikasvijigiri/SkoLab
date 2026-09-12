@@ -19,7 +19,7 @@ import {
   scienceNewsQuery,
 } from "@/lib/api/queries";
 import { AIDailyBriefCard } from "@/components/feed/AIDailyBriefCard";
-import { buildBriefItems as buildBriefItemsFromFeature, type HomeBriefItem } from "@/features/home/model";
+import { buildBriefItems } from "@/features/home/model";
 import { PeerSuggestionsCard } from "@/components/feed/PeerSuggestionsCard";
 import { UnifiedFeed } from "@/components/feed/UnifiedFeed";
 import { Card } from "@/components/ui/Card";
@@ -30,8 +30,6 @@ import type {
   ScienceNewsItem,
   CollabProject,
   DailyFeedItem,
-  GrantMatch,
-  JournalRecommendation,
   IndustryOpportunity,
 } from "@/lib/types";
 
@@ -39,52 +37,6 @@ const EMPTY_FEED: DailyFeedItem[] = [];
 const EMPTY_ACTIVITY: ActivityItem[] = [];
 const EMPTY_NEWS: ScienceNewsItem[] = [];
 const EMPTY_JOBS: IndustryOpportunity[] = [];
-
-/** Each insight is a distinct fact from a distinct source — separate rows, not a
- * run-on paragraph. Papers are deliberately NOT here: they lead the unified
- * feed below, and duplicating feed[0] into the brief is the redundancy the
- * feed was meant to remove. */
-function buildBriefItems(opts: {
-  topGrant?: GrantMatch;
-  topOpportunity?: IndustryOpportunity;
-  topJournal?: JournalRecommendation;
-}): HomeBriefItem[] {
-  return buildBriefItemsFromFeature(opts);
-  /* Legacy inline implementation retained temporarily during feature migration.
-  const items: HomeBriefItem[] = [];
-  if (opts.topGrant) {
-    items.push({
-      key: "grant",
-      icon: Coins,
-      color: "var(--accent-emerald)",
-      label: "Grant match",
-      text: `**${opts.topGrant.title}** (${opts.topGrant.agency}) — ${opts.topGrant.match_score}% fit · ${opts.topGrant.amount}`,
-      href: opts.topGrant.url,
-    });
-  }
-  if (opts.topOpportunity) {
-    const deadlinePart = opts.topOpportunity.deadline ? ` · Deadline: ${opts.topOpportunity.deadline}` : "";
-    const amountPart = opts.topOpportunity.amount ? ` · ${opts.topOpportunity.amount}` : "";
-    items.push({
-      key: "opportunity",
-      icon: Briefcase,
-      color: "var(--accent-orange)",
-      label: opts.topOpportunity.type === "JOB" ? "Role opened" : "Opportunity",
-      text: `**${opts.topOpportunity.title}** at **${opts.topOpportunity.companyOrFunder}**${amountPart}${deadlinePart}`,
-      href: opts.topOpportunity.url,
-    });
-  }
-  if (opts.topJournal) {
-    items.push({
-      key: "journal",
-      icon: BookOpen,
-      color: "var(--accent-indigo)",
-      label: "Journal target",
-      text: `**${opts.topJournal.journal_name}** — ${opts.topJournal.match_score}% match`,
-    });
-  }
-  return items; */
-}
 
 /** Left-rail shortcut list of the user's actual workspaces — data, not nav. */
 function WorkspacesRailCard({
