@@ -1,104 +1,19 @@
+# Dependabot version updates are turned OFF (2026-09-12), by explicit
+# request: the automated PR volume (30+ open at once, across npm/pip/
+# gradle/gomod/github-actions, several needing coordinated fixes like a
+# Python/Node/Gradle/compileSdk version bump before they could even be
+# evaluated) was costing more investigation time than it saved. Dependency
+# updates are handled manually from here.
+#
+# To re-enable: restore an `updates:` list (git history has the full
+# config this replaced, including the per-ecosystem `ignore`/`groups`
+# rules worked out on 2026-09-12 — worth bringing back rather than
+# starting over, since those rules exist for confirmed, real breakages).
+#
+# This only stops *version* updates. GitHub's separate Dependabot security
+# updates (Settings -> Code security -> Dependabot security updates) are
+# unrelated to this file and keep working if enabled — those only fire for
+# actual CVEs, not routine version drift, so they weren't the source of
+# the volume this turns off.
 version: 2
-updates:
-  - package-ecosystem: npm
-    directory: "/"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 10
-    groups:
-      # react and react-dom must stay version-matched -- three separate PRs
-      # bumping them independently (2026-09-11) broke npm's peer-dependency
-      # resolution the moment any one merged alone (`Found: react@19.2.4`
-      # vs a react-dom that wanted 19.2.8).
-      react:
-        patterns:
-          - "react"
-          - "react-dom"
-          - "@types/react"
-          - "@types/react-dom"
-    ignore:
-      # Confirmed broken on 2026-09-11 (see LOG.md): ESLint 10 changed its
-      # plugin context API and eslint-plugin-react hasn't caught up yet
-      # (`contextOrFilename.getFilename is not a function`). Un-ignore once
-      # eslint-plugin-react ships a compatible release.
-      - dependency-name: "eslint"
-        update-types: ["version-update:semver-major"]
-      # Confirmed broken: typescript-eslint does not support TS 7.0 yet.
-      - dependency-name: "typescript"
-        update-types: ["version-update:semver-major"]
-      # Confirmed broken: vitest 5 resolves against a `vite` version this
-      # repo doesn't have pinned as a direct dependency
-      # (`Cannot find package 'vite'`).
-      - dependency-name: "vitest"
-        update-types: ["version-update:semver-major"]
-      # Confirmed broken (root workspace): jsdom 30 + vitest 4 together
-      # hit the same `Cannot find package 'vite'` transitive mismatch.
-      - dependency-name: "jsdom"
-        update-types: ["version-update:semver-major"]
-  - package-ecosystem: npm
-    directory: "/apps/web"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 10
-    groups:
-      react:
-        patterns:
-          - "react"
-          - "react-dom"
-          - "@types/react"
-          - "@types/react-dom"
-    ignore:
-      - dependency-name: "eslint"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "typescript"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "vitest"
-        update-types: ["version-update:semver-major"]
-  - package-ecosystem: gradle
-    directory: "/apps/android-app"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 10
-    ignore:
-      # Confirmed broken: okhttp-android 5.x requires compileSdk >= 37,
-      # this project's is lower. Bump compileSdk deliberately first.
-      - dependency-name: "com.squareup.okhttp3:okhttp"
-        update-types: ["version-update:semver-major"]
-      # (Previously ignored: 9.1.0 -> 9.4.0 needed Gradle >= 9.6.0 and this
-      # repo's wrapper was still on 9.4.1. Fixed 2026-09-12 -- wrapper
-      # bumped to 9.6.0, AGP bumped to 9.4.0 directly. Left un-ignored so
-      # future AGP releases get proposed normally; re-add a rule here,
-      # scoped to the specific version, if a future bump raises the
-      # Gradle floor again before the wrapper is ready.)
-  - package-ecosystem: pip
-    directory: "/services/backend"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 10
-    # (numpy >=2.5.0 / networkx >=3.5 were blocked here for needing Python
-    # >=3.12/3.11 while CI ran 3.10/3.11. Fixed 2026-09-12 -- ci.yml/
-    # verify.yml/checks.yml all bumped to 3.12 -- so both are bumped
-    # directly below instead of waiting for Dependabot's own PRs.)
-    ignore:
-      # Confirmed broken -- upstream, not this repo's CI: openrouter (every
-      # released version through 1.1.139, checked 2026-09-12) pins
-      # `pydantic<2.13,>=2.11.2`, so nothing here can install pydantic
-      # 2.13+ until openrouter itself relaxes that cap. Verified with a
-      # clean-room `pip install --dry-run` against the latest openrouter.
-      - dependency-name: "pydantic"
-        versions: [">=2.13.0"]
-  - package-ecosystem: gomod
-    directory: "/services/backend-go"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 10
-  - package-ecosystem: github-actions
-    directory: "/"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 10
-    # (actions/setup-node v7 was suspected broken -- a `Cannot find module
-    # '@rolldown/binding-wasm32-wasi'` failure looked adjacent to the
-    # version bump -- but a clean rebase + fresh CI run (2026-09-12)
-    # merged it without issue; the original failure was unrelated noise.
-    # No ignore rule needed.)
+updates: []
