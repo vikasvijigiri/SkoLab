@@ -136,6 +136,15 @@ func parseDate(s string) time.Time {
 func GetActivityFeed(c *gin.Context) {
 	ctx := c.Request.Context()
 	userID := strings.TrimSpace(c.Query("user_id"))
+	// The route allows anonymous callers (auth.VerifyUserOptional) so the
+	// public trending floor still works with no token, but a `user_id`
+	// pulls that user's connections/papers -- verify it actually belongs
+	// to whoever is asking rather than serving anyone's feed to anyone
+	// who supplies (or guesses) their id.
+	if userID != "" && userID != c.GetString("user_id") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: you may only view your own activity feed."})
+		return
+	}
 	authorID := cleanID(c.Query("author_id"))
 	limit := clampLimit(c.Query("limit"), 20, 40)
 

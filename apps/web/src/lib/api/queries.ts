@@ -227,10 +227,18 @@ export const similarResearchersQuery = (authorId: string, userId?: string) =>
 // Home activity feed — connected researchers' new work + connection events +
 // a field-trending floor. Runs as soon as auth resolves; author_id/user_id
 // sharpen it but are not required (the floor still returns).
-export const activityFeedQuery = (authorId?: string, userId?: string) =>
+export const activityFeedQuery = (
+  authorId?: string,
+  userId?: string,
+  getIdToken?: () => Promise<string | null>,
+) =>
   queryOptions({
     queryKey: ["activity-feed", { authorId: authorId ?? null, userId: userId ?? null }] as const,
-    queryFn: () => getActivityFeed({ authorId, userId }),
+    // The gateway now requires a token proving `userId` when it's provided
+    // (2026-09-12 fix for an unauthenticated cross-user feed leak) --
+    // resolve it right before the request rather than baking a stale one
+    // into the query key.
+    queryFn: async () => getActivityFeed({ authorId, userId, idToken: await getIdToken?.() ?? null }),
     staleTime: 10 * MIN,
     gcTime: 1 * HR,
     ...LIVE_FEED,
