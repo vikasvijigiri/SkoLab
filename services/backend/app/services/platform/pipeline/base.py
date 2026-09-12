@@ -234,23 +234,8 @@ class _PipelineBase:
             print(f"[DailyFeed] Database lookup fallback error: {e}", flush=True)
         return "Researcher", []
 
-    def _reconstruct_abstract(
-        self, abstract_index: Optional[Dict[str, List[int]]]
-    ) -> Optional[str]:
-        """Reconstructs the abstract from the OpenAlex abstract_inverted_index."""
-        if not abstract_index:
-            return None
-        try:
-            word_list = []
-            for word, pos_list in abstract_index.items():
-                for pos in pos_list:
-                    word_list.append((pos, word))
-            word_list.sort()
-            return " ".join([w[1] for w in word_list])
-        except Exception:
-            return None
-
     def _reconstruct_abstract(self, inv_idx: Optional[Dict[str, List[int]]]) -> str:
+        """Reconstructs the abstract from the OpenAlex abstract_inverted_index."""
         if not inv_idx or not isinstance(inv_idx, dict):
             return ""
         try:
