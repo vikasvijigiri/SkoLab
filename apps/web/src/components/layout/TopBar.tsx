@@ -18,8 +18,8 @@ export function TopBar() {
   const { toggle: toggleCommandPalette } = useCommandPalette();
 
   return (
-    <header className="h-16 shrink-0 border-b border-border bg-surface">
-      <div className="mx-auto flex h-full w-full max-w-[1128px] items-center gap-3 px-4 md:px-6">
+    <header className="h-[72px] shrink-0 border-b border-border bg-surface/95 backdrop-blur">
+      <div className="mx-auto flex h-full w-full max-w-[1240px] items-center gap-4 px-5 md:px-8">
         {/* logo — top-left */}
         <Link
           href="/home"
@@ -46,7 +46,7 @@ export function TopBar() {
           aria-label="Search"
           title="Search (⌘K)"
           className={cn(
-            "flex h-11 min-w-0 flex-1 items-center gap-2 rounded-full border border-border bg-surface-subtle px-4 font-body text-[14px] text-text-secondary transition-colors hover:border-primary hover:bg-surface md:max-w-[360px] lg:max-w-[380px]",
+            "flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border border-border-strong bg-surface-subtle px-4 font-body text-[14px] text-text-secondary transition-colors hover:border-primary hover:bg-surface md:max-w-[400px] lg:max-w-[440px]",
             focusRing,
           )}
           style={{ transitionTimingFunction: "var(--ease-standard)" }}
@@ -74,7 +74,7 @@ export function TopBar() {
                 aria-current={active ? "page" : undefined}
                 title={item.label}
                 className={cn(
-                  "relative flex h-14 w-[76px] flex-col items-center justify-center gap-1 font-body text-[12px] font-medium leading-none transition-colors",
+                  "relative flex h-16 w-[84px] flex-col items-center justify-center gap-1.5 rounded-lg font-body text-[12px] font-medium leading-none transition-colors",
                   active
                     ? "text-primary"
                     : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary",

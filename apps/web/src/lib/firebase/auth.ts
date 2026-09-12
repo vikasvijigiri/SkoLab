@@ -45,6 +45,7 @@ export async function signInWithEmail(email: string, password: string) {
  */
 export async function signInWithGoogle(): Promise<void> {
   const provider = new GoogleAuthProvider();
+  markGoogleRedirectPending();
   await signInWithRedirect(requireAuth(), provider);
 }
 
@@ -69,6 +70,44 @@ export async function completeGoogleRedirectSignIn(): Promise<{
     cred.user.displayName ?? "Researcher",
   );
   return { user: cred.user, isNewUser };
+}
+
+/**
+ * `signInWithRedirect` leaves the app entirely (full browser navigation to
+ * Google and back) — there's no in-memory state left to know, on the page
+ * that receives the redirect, whether a sign-in is mid-flight versus an
+ * ordinary cold visit to /login. Without this flag the returning page
+ * renders its normal idle form for however long `getRedirectResult` plus
+ * profile creation takes (seen live: ~3s), which reads as a frozen button
+ * rather than a loading state. Read synchronously (a lazy `useState`
+ * initializer) before first paint on that page so it can show a loading
+ * view immediately instead.
+ */
+const GOOGLE_REDIRECT_PENDING_KEY = "skolab:google-redirect-pending";
+
+export function markGoogleRedirectPending() {
+  try {
+    sessionStorage.setItem(GOOGLE_REDIRECT_PENDING_KEY, "1");
+  } catch {
+    /* sessionStorage unavailable (private mode, etc.) — worst case, the
+     * old unindicated-wait behavior; sign-in itself still works. */
+  }
+}
+
+export function hasGoogleRedirectPending(): boolean {
+  try {
+    return sessionStorage.getItem(GOOGLE_REDIRECT_PENDING_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function clearGoogleRedirectPending() {
+  try {
+    sessionStorage.removeItem(GOOGLE_REDIRECT_PENDING_KEY);
+  } catch {
+    /* nothing to clean up if storage never worked */
+  }
 }
 
 export async function signInAsGuest() {

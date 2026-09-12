@@ -102,6 +102,10 @@ class ConjectureResponse(BaseModel):
     options: List[str]
     correctOptionIndex: int
     explanation: str
+    # True when the LLM call failed and this is one of
+    # generate_fallback_conjecture's five canned puzzles rather than one
+    # actually generated from the researcher's own publications.
+    is_fallback: bool = False
 
 
 class AgentChatRequest(BaseModel):
@@ -169,3 +173,7 @@ class TieupIdea(BaseModel):
 class IndustryAcademicTieupsResponse(BaseModel):
     trending: List[TieupIdea] = []
     futuristic: List[TieupIdea] = []
+    # True when the LLM was unavailable/failed and these are
+    # IndustryAcademicService.get_fallback_tieups()'s generic placeholder
+    # ideas rather than ones generated for this researcher's actual profile.
+    is_fallback: bool = False

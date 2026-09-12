@@ -12,12 +12,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
-          python-version: '3.10'
+          # See the matching comment in ci.yml: numpy/networkx floors need
+          # >= 3.11/3.12, and this job was still pinned at 3.10.
+          python-version: '3.12'
 
       - name: Install Linting & Testing Tools
         run: |
@@ -49,16 +51,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: '17'
 
       - name: Cache Gradle packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.gradle/caches
@@ -70,12 +72,53 @@ jobs:
       - name: Decode Google Services Configuration from Secrets
         env:
           GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        # GitHub withholds repo secrets from a workflow run triggered by
+        # Dependabot (security policy: a compromised dependency bump can't
+        # exfiltrate them) -- so GOOGLE_SERVICES_JSON_BASE64 is always empty
+        # here for Dependabot PRs, which used to leave this step printing a
+        # warning and the actual build failing several tasks later at
+        # `processDevDebugGoogleServices` with "File is missing" -- before a
+        # single line of Kotlin ever got compiled. That meant every
+        # Dependabot PR touching apps/android-app (and every OTHER
+        # Dependabot PR too, since this job runs unconditionally) reported
+        # this check as failing with zero real build signal (2026-09-11
+        # backend response audit).
+        #
+        # Fall back to a well-formed but fully fake placeholder -- matching
+        # applicationId, syntactically valid, no real project/keys -- so a
+        # secretless run still exercises the actual Gradle/Kotlin compile.
+        # This is fine for `assembleDevDebug`: it never makes a live
+        # Firebase network call, it only needs the JSON shape the Google
+        # Services plugin generates resources from. A run WITH the real
+        # secret (ordinary pushes/PRs from a repo collaborator) still uses
+        # the genuine config, unchanged.
         run: |
           mkdir -p apps/android-app/app
           if [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
             echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > apps/android-app/app/google-services.json
           else
-            echo "WARNING: GOOGLE_SERVICES_JSON secret is empty or not set. Build may fail."
+            echo "GOOGLE_SERVICES_JSON secret unavailable in this run (expected for Dependabot) -- writing a CI-only placeholder so the build still compiles for real."
+            cat > apps/android-app/app/google-services.json <<'EOF'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "skolab-ci-placeholder",
+              "storage_bucket": "skolab-ci-placeholder.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+                  "android_client_info": { "package_name": "com.company.skolab" }
+                },
+                "oauth_client": [],
+                "api_key": [ { "current_key": "AIzaSyCIPlaceholderNotARealKey00000000000" } ],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          EOF
           fi
 
       - name: Make Gradlew Executable

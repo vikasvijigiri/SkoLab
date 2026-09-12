@@ -89,8 +89,8 @@ func main() {
 	})
 
 	// ── Observability ─────────────────────────────────────────────────────────
-	// infrastructure/prometheus.yml has scraped this exact path since the
-	// local observability stack was first stood up; the endpoint itself
+	// Render and external observability can scrape this exact path; the
+	// endpoint itself
 	// never existed until now. See internal/metrics's package doc for why
 	// this is hand-rolled against the standard library rather than
 	// github.com/prometheus/client_golang.
@@ -227,10 +227,13 @@ func main() {
 	// docs/plans/2026-09-04-phase2-feed-to-go.md). Feed *generation*
 	// (GET /api/v1/daily_feed and the daily_conjecture / roadmap / industry
 	// LLM routes) stays in Python and is still reached via NoRoute below.
-	r.GET("/api/v1/support/metrics", feed.GetSupportMetrics)
-	r.GET("/api/v1/integrations/zotero/auth", feed.ZoteroAuthInit)
-	r.GET("/api/v1/integrations/zotero/callback", feed.ZoteroAuthCallback)
-	r.POST("/api/v1/integrations/zotero/sync", feed.ZoteroSyncPapers)
+	//
+	// support/metrics and integrations/zotero/* were removed here (2026-09-11
+	// backend response audit): both were permanently-fake stub data — support
+	// metrics never reflected a real ticket queue, Zotero never made a real
+	// OAuth/API call — reachable by anyone hitting the URL directly, and
+	// apps/web never called either. Reintroduce as real integrations if
+	// they're ever actually built, not as standing mock endpoints.
 	// Owner-scoped write: VerifyUser() → 401 without a token; the handler then
 	// requires users.openalex_id (for the verified uid) == body author_id → 403.
 	feedAPI := r.Group("/api/v1/daily_feed")

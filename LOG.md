@@ -6,6 +6,395 @@
 
 ---
 
+## 2026-09-12 — Dependabot PR sweep + stop the recurring breaks at the source
+
+Prompted directly: ~62 open Dependabot PRs across two waves (30, then ~20
+more once the queue refilled), asked to check carefully, merge what's
+safe, and make sure the same classes of failure don't keep costing time on
+every future cycle.
+
+- **26 PRs merged** (Go, Python, npm, GitHub Actions, and Android — the
+  last group only after the CI secrets fix below gave them real signal).
+  Sequential merges within the same ecosystem (go.mod/go.sum,
+  package.json/package-lock.json) hit expected conflicts; `@dependabot
+  rebase` comments resolved most on their own, two needed a manual
+  `git merge origin/main` + conflict resolution + `go mod tidy` (verified
+  build/vet/test clean before pushing each time). Full three-service
+  verification (Python pytest, Go build/vet/test, web tsc/eslint/vitest)
+  re-run clean after every batch landed — confirmed nothing from the
+  2026-09-11 backend-audit/live-feed session regressed underneath the
+  dependency churn.
+- **Root-caused, not merged: 15+ PRs with genuine breaking changes.**
+  okhttp 5.x needs `compileSdk >= 37`; Android Gradle Plugin 9.4.0 needs
+  Gradle `>= 9.6.0` (a *minor* AGP bump, not major — it can still raise
+  the Gradle floor); numpy `>=2.5.0` and networkx `>=3.5` both need Python
+  `>= 3.11/3.12`, CI runs 3.10; ESLint 10 breaks `eslint-plugin-react`'s
+  API; TypeScript 7.0 isn't supported by `typescript-eslint` yet; vitest 5
+  / jsdom 30 resolve against a `vite` version this repo doesn't pin
+  directly; `react`/`react-dom` bumped across three independent PRs broke
+  npm peer-dependency resolution the moment any one merged alone;
+  `actions/setup-node@7` resolves a broken native binding
+  (`@rolldown/binding-wasm32-wasi`) unrelated to this repo's known
+  Linux-lockfile workaround.
+- **Two systemic CI gaps fixed, not just the symptom:**
+  - `.github/workflows/verify.yml` — every Dependabot-triggered run failed
+    `Android Build & Lint Verification` identically, because GitHub
+    withholds repo secrets from Dependabot workflow runs (security
+    policy) and `GOOGLE_SERVICES_JSON` is one. Confirmed by reproducing
+    the exact failure locally and checking the job logs: a bare warning,
+    then a crash at `processDevDebugGoogleServices` before any Kotlin
+    compiled. Fixed with a well-formed, fully fake placeholder
+    `google-services.json` (matching `applicationId com.company.skolab`)
+    written only when the secret is empty — `assembleDevDebug` never
+    makes a live Firebase call, so this gives a real compile signal
+    without needing the secret. PR #181.
+  - `.github/workflows/ci.yml` hardcoded `go-version: "1.25"` while
+    `checks.yml` already used `go-version-file`. A legitimate merge
+    (`golang.org/x/time`, `go-redis`, `firebase.google.com/go/v4`) caused
+    `go mod tidy` to raise `go.mod`'s own `go` directive to `1.26.0`, and
+    the hardcoded `ci.yml` version went stale silently — breaking every
+    subsequent PR touching `services/backend-go`, including ones with
+    zero Go changes (caught via a plain `actions/checkout` version bump,
+    PR #127). Switched `ci.yml` to `go-version-file` too, matching
+    `checks.yml`, so the two workflows can't drift apart again. PR #182.
+- **`.github/dependabot.yml` updated so the *same* confirmed-broken bumps
+  stop reopening every week** and costing another investigation cycle:
+  `ignore` rules for the exact dependency + semver-tier combination that
+  broke (ESLint/TypeScript/vitest/jsdom majors on npm; okhttp major and
+  `com.android.application` major-or-minor on gradle — AGP needed
+  minor-blocking too, since 9.1→9.4 is a minor bump in its own scheme;
+  numpy/networkx major-or-minor on pip; `actions/setup-node` major on
+  github-actions), each with an inline comment naming the failure and
+  what unblocks it. Added an npm `groups: react` entry (root and
+  apps/web) so `react`/`react-dom`/`@types/react`/`@types/react-dom` land
+  in one PR instead of three independent ones that break in isolation.
+  This doesn't fix the underlying incompatibilities — it stops Dependabot
+  from re-proposing the same known-broken bump every week until someone
+  deliberately does the coordinated work (compileSdk bump, Gradle wrapper
+  bump, CI Python version bump, etc.) and removes the `ignore` entry.
+
+## 2026-09-11 — Backend response audit + LinkedIn-style feed refresh
+
+Prompted directly: "every backend should return correct response, check
+every response and then audit, also we should have dynamic feed, which
+refreshes like linkedin etc every time the user reloads the page/tab/logins
+etc." Two parallel research agents first surveyed (a) every Go gateway and
+Python endpoint's response correctness and test coverage, and (b) the
+feed's current data-fetch/caching/refresh behavior end-to-end. Findings
+went back to the user as three scoped questions (fallback handling, dead
+mock endpoints, missing test coverage) rather than guessing priority — all
+three were approved as the recommended option.
+
+- **Feed refresh.** `apps/web/src/lib/api/queries.ts` — added a
+  `LIVE_FEED` spread (`refetchOnWindowFocus: true`, `refetchOnMount:
+  "always"`) to `dailyFeedQuery`, `activityFeedQuery`, `scienceNewsQuery`,
+  `industryOpportunitiesQuery` only, not the app-wide default (`providers
+  .tsx` keeps `refetchOnWindowFocus: false` globally — most queries, e.g.
+  the author-profile page's `journalAdvisorQuery`/`similarResearchersQuery`,
+  shouldn't refetch on every tab focus). `apps/web/src/components/
+  providers.tsx` — new `InvalidateOnAuthChange` component, mounted inside
+  `QueryClientProvider` but reading `useAuth()` (reachable because
+  `layout.tsx` nests `<AuthProvider><Providers>`), calls `queryClient
+  .invalidateQueries()` on the first uid change after mount (skips the very
+  first render so it doesn't invalidate an empty cache on normal mount).
+  4 new tests in `providers.test.tsx`.
+- **Fallback responses now flag themselves.** The audit found three LLM
+  code paths that silently substitute placeholder content indistinguishable
+  from a real result: `PredictionService.predict_next_big_thing`'s
+  except-block (`"Next-Gen {field} Breakthrough"`), `IndustryAcademicService
+  .get_fallback_tieups()` (`"Industrialization of {domain}"`, already known
+  from the 2026-09-11 CI root-cause work), and `feed.py`'s
+  `generate_fallback_conjecture` (which additionally caches the fallback
+  for 24h as if it were real, and had zero test coverage at all — not even
+  the shape-only kind everything else in the audit had). All three response
+  schemas (`BreakthroughPrediction`, `IndustryAcademicTieupsResponse`,
+  `ConjectureResponse`) gained `is_fallback: bool = False`; the fallback
+  paths set it `True`, and `industry_academic_service.py` threads the flag
+  through to what gets cached so a later cache hit still reports it
+  honestly. `apps/web`: `BreakthroughPrediction` type gained `is_fallback?`,
+  and `HorizonPredictionResult.tsx` shows an "Estimated — AI unavailable"
+  badge when set — chosen because it's the only one of the three actually
+  rendered in the frontend today (grepped for consumers: `/industry_academic
+  _tieups` and `/daily_conjecture` are both currently dead API surfaces,
+  called by no page or component). OpenAPI snapshot regenerated
+  (`gen_openapi_snapshot.py`) to match the three schema additions. New/
+  updated tests: `test_prediction_service.py` (asserts `is_fallback` on
+  all 3 existing fallback-path tests + the happy path), `test_industry_
+  academic.py` (new `test_get_tieups_flags_fallback_when_llm_unavailable`),
+  `tests/api/test_feed.py` (new direct unit tests for
+  `generate_fallback_conjecture` across all 4 field-category branches, plus
+  an endpoint-level test proving the flag survives the 24h cache round-
+  trip), `horizon/page.test.tsx` (badge shown/not-shown).
+- **Two permanently-fake Go endpoints deleted.** `GET /api/v1/support/
+  metrics` (hardcoded CSAT/queue counters, never real) and the entire
+  `integrations/zotero/*` trio (`auth`/`callback`/`sync` — all documented
+  OAuth stubs with fake tokens) were reachable in production and had tests,
+  but those tests only asserted the mock's own shape and neither route was
+  ever called from `apps/web` (grepped, zero matches). Deleted the
+  handlers, the `main.go` route registrations, and the mock-shape tests;
+  left explanatory comments in `main.go`, `internal/feed/feed.go`'s package
+  doc, and `docs/backend-auth-posture.md` pointing at this entry.
+- **`internal/quest` and `internal/user` had zero test files** — confirmed
+  by the audit as the only two Go packages with none at all. Added
+  `quest_test.go` (6 tests: leaderboard/quest-completion input validation
+  and no-DB-guard paths, matching the established db.Pool==nil pattern from
+  `internal/feed/feed_test.go`) and `user_test.go` (13 tests). Writing the
+  user tests surfaced a real bug along the way: `SyncUserProfile` and
+  `DeleteUser` called `db.Pool.Exec`/`.Begin()` directly with no nil guard
+  — every other DB-backed handler in the codebase checks `db.Pool == nil`
+  first — so a DB outage would panic into `gin.Recovery`'s generic 500
+  instead of the same clean 503 every sibling route gives. Fixed both, with
+  regression tests (`TestSyncUserProfile_NoDBIs503`,
+  `TestDeleteUser_NoDBIs503`) proving the guard now fires instead of
+  panicking. Also added direct tests for `aggregateMemory` — pure,
+  previously fully-untested business logic that derives reading pace,
+  research style, and top topics from raw activity-log rows.
+- **Verification:** full suites re-run clean after every change —
+  Python `pytest -q` (222 passed / 4 skipped, up from 216/4 as the new
+  fallback + conjecture tests landed), `ruff check` + `ruff format --check`
+  (clean, modulo the same pre-existing Windows CRLF artifact noted in the
+  2026-09-11 CI entry below), web `vitest run` (245 passed, up from 243),
+  `tsc --noEmit` + `eslint src` (clean), Go `go vet && go build && go test
+  ./...` (all packages green, including the two new test files).
+
+## 2026-09-11 — Deploy firestore.rules to production
+
+The one item PR #176/#177 couldn't finish from inside the agent session:
+`firestore.rules` was written, tested (20/20 against the real emulator),
+and merged, but never pushed to the live `skolab-vvi` project — that needs
+the owner's own Google account. Walked the owner through it directly:
+`npx firebase-tools login` (browser OAuth), `npx firebase-tools
+projects:list` to confirm `skolab-vvi` was the active project, then `npx
+firebase-tools deploy --only firestore:rules`. Output confirmed a clean
+compile (`cloud.firestore: rules file firestore.rules compiled
+successfully`) and a successful release (`firestore: released rules
+firestore.rules to cloud.firestore`, `Deploy complete!`). Production is now
+running the same rules the emulator suite validated. `HANDOFF.md` updated
+to drop this from "needs a decision / attention" — nothing agent-blocking
+remains open on the CoLab gap-closure work from #176/#177.
+
+## 2026-09-11 — Close out everything pending after PR #176
+
+Prompted directly: fix the two pre-existing `checks.yml` bugs found while
+watching #176's CI, and finish anything else still pending. PR #177.
+
+- **`checks.yml` fully fixed.** `pytest.ini` gained `pythonpath = .` —
+  `tests/` has no `__init__.py`, so bare `pytest`'s default rootdir
+  sys.path insertion (prepend mode) only ever added `tests/` itself, never
+  `services/backend`, so `tests/conftest.py`'s `from app...` imports failed
+  with `ModuleNotFoundError: No module named 'app'`. Reproduced locally
+  with the bare `pytest` console-script entry point (`python -m pytest`
+  masks it — `-m` always adds cwd to sys.path, which is not what
+  `checks.yml`'s `pytest -q` does). Fixed with pytest's own built-in
+  `pythonpath` ini option. Separately, the `slow` job's Postgres service
+  was plain `postgres:16` — no pgvector extension, so `CREATE EXTENSION
+  vector` failed and poisoned the whole `ci_bootstrap_db.py` bootstrap
+  transaction, silently no-opping every later `CREATE TABLE` (even
+  unrelated ones like `users`) while the script still printed "[ci] schema
+  bootstrap ok" and exited 0. Switched to `pgvector/pgvector:pg16`.
+- **`ThemeToggle` hydration mismatch fixed** — same bug class and same fix
+  (`useSyncExternalStore`) as the Google-redirect flag in #176:
+  `useState(initialTheme)` read `localStorage` straight into the lazy
+  initializer, which SSR/the static shell can't see, causing exactly the
+  live-caught mismatch from #176's HANDOFF note. New tests (component had
+  none before): default rendering, a persisted theme on mount, and the
+  full click-cycle including the DOM attribute and localStorage writes.
+- **LLM output validation added for Horizon and Gap Finder** — the static
+  audit from #176 found both grounded in real data but with nothing
+  checking the LLM's output *structurally*. Horizon's parsed JSON now goes
+  through `_BreakthroughContent`, a stricter internal Pydantic model
+  (catches an off-contract `feasibility`, a blank narrative field, empty
+  `roadmap_steps`) that falls through to the existing deterministic
+  fallback on failure — no new failure path, just a stricter gate. Gap
+  Finder's response now has to contain all three sections
+  (`**Next Frontier**`/`**Toolkit**`/`**Logic**`) its own system prompt
+  demands, or it raises (already caught gracefully by
+  `researcher_worker.py`'s existing `except Exception`). 6 new tests
+  against `PredictionService` directly with a mocked `LLMService.query` —
+  no live LLM call or API key needed.
+- **Both "couldn't verify in this environment" items from #176 are now
+  actually verified.** Neither Chocolatey (`Access to the path
+  '...\lib-bad' is denied` — needs admin) nor winget (silently hung on
+  `msiexec` for 20+ minutes, 4s of CPU time total — almost certainly stuck
+  on an unanswerable elevation prompt) could install a JDK in this
+  environment; a portable Temurin 21 zip (extract, no installer) worked.
+  Same for Go: a portable 1.25 zip. With both on `PATH` for the session:
+  `npm run test:rules` passed 20/20 against the real Firestore emulator
+  (fixed a real bug in the test's own `seedProject` helper along the way —
+  it spread an explicit `editorUids: undefined` into a `setDoc` call,
+  which Firestore's client SDK rejects outright; needed an actual delete
+  of the key, not just spreading `undefined` over it), and
+  `go vet && go build && go test ./...` were all clean for the Go gateway,
+  for the first time this session.
+- **A third pre-existing `checks.yml` bug, root-caused and fixed, not left
+  open.** First suspected as an order-dependent flake (`checks.yml`'s
+  `pythonpath` fix let its tests run for the first time this session,
+  surfacing it) — `test_industry_academic.py::
+  test_get_tieups_cache_miss_success` failed on Linux CI, passed
+  standalone and in a full local Windows run, returning a title
+  ("Industrialization of Quantum Computing") absent from its own mocks.
+  Asked to dig past the surface rather than file it as a follow-up: the
+  actual cause is that neither of `checks.yml`'s Python test steps ever
+  set `GROQ_API`/`OPENROUTER_API_KEY` (`ci.yml` does), so
+  `is_llm_working()` returns `False` and `IndustryAcademicService.
+  get_tieups` silently takes its non-LLM fallback path —
+  `get_fallback_tieups()`, which literally returns
+  `f"Industrialization of {domain}"` — instead of the LLM path the test
+  mocks. It passed locally purely because `services/backend/.env` has a
+  real `GROQ_API` key sitting in this checkout. Reproduced CI's exact
+  failure by moving that `.env` aside and unsetting both vars; fixed by
+  setting them to `ci.yml`'s existing safe placeholder values in both the
+  `fast` and `slow` jobs (the `slow` job happened to pass this particular
+  run despite the same gap, so it got the same fix for consistency, not
+  because it was currently failing). Full local suite re-run with `.env`
+  absent and the fix applied: 216 passed, 4 skipped, 0 failed — same count
+  as before, confirming nothing else regressed now that
+  `is_llm_working()` is reliably `True` in CI, as it always should have
+  been.
+- **Process note, for the record**: mid-session, a careless
+  `git reset --hard` (done to move a commit that had landed directly on
+  `main` by mistake onto the right branch) discarded the *uncommitted*
+  portions of the ThemeToggle and LLM-validation fixes. Nothing was
+  actually lost — both were rewritten from this same conversation's own
+  prior tool output and re-verified identically — but the sequence should
+  have been commit-everything-first, then branch surgery, not the
+  reverse.
+- Verified: `npx vitest run` 53/238, `tsc --noEmit` 0, `eslint .` 0,
+  `pytest -q` (backend) 216 passed / 4 skipped, `ruff check .` clean,
+  `npm run test:rules` 20/20, `go vet && go build && go test ./...` clean.
+
+---
+
+## 2026-09-11 — Smooth Google sign-in transition (no more frozen-button wait)
+
+Prompted directly: after completing Google sign-in, the login/signup page
+showed its ordinary idle "Continue with Google" button — unchanged, not
+disabled, no spinner — for the several seconds `getRedirectResult()` plus
+`createResearcherProfile()` actually take, then jumped straight to
+`/home`/`/onboarding` with no transition. Root cause: `signInWithRedirect`
+is a full browser navigation away and back; the page that receives the
+redirect mounts completely fresh with no in-memory signal that a sign-in is
+mid-flight.
+
+- `markGoogleRedirectPending` / `hasGoogleRedirectPending` /
+  `clearGoogleRedirectPending` (`apps/web/src/lib/firebase/auth.ts`) — a
+  `sessionStorage` flag set right before `signInWithRedirect` fires, so the
+  page that receives the redirect back can know, before
+  `completeGoogleRedirectSignIn()` even starts, that it should show a
+  loading view instead of the ordinary form.
+- New `GoogleRedirectLoading` component (spinner + "Signing you in…"),
+  shown via `AnimatePresence` in place of the login/signup form while the
+  flag is set; falls back to the form (with an error, if any) once
+  `completeGoogleRedirectSignIn()` settles.
+- **Found and fixed a real hydration-mismatch bug while building this**: a
+  first draft read the flag straight from a `useState(() =>
+  hasGoogleRedirectPending())` lazy initializer — `sessionStorage` doesn't
+  exist during Next's static/server render, so the static HTML always
+  assumed "not pending" while the client's first render (where
+  `sessionStorage` does exist) could assume "pending", a mismatch caught
+  live by Playwright (`Error: Hydration failed...`) that a plain unit-test
+  render wouldn't have surfaced. Fixed with `useSyncExternalStore` (new
+  `apps/web/src/lib/hooks/useGoogleRedirectPending.ts`), which is the
+  React-documented way to read a client-only source of truth without a
+  server/client mismatch, and doesn't touch `useEffect` at all — sidesteps
+  this repo's `react-hooks/set-state-in-effect` hard-error rule, which a
+  second draft (setting state synchronously in the effect body) tripped
+  twice before landing here.
+- `GoogleSignInButton` now shows a real spinner (`Connecting to Google…`)
+  while loading instead of just dimming — extracted the spinner out of
+  `Button.tsx` into a shared `components/ui/Spinner.tsx` so both buttons
+  (and future ones) use the same one.
+- Found, while adding the first tests that ever exercised
+  `@/lib/firebase/errors.ts`, that `@sentry/nextjs` crashes on import under
+  this project's jsdom/Windows test environment (vendored
+  `@apm-js-collab/code-transformer-bundler-plugins` throws `The URL must be
+  of scheme file`) — a latent gap nothing had hit before since no test
+  previously imported that module. Fixed at the shared level:
+  `@sentry/nextjs` is now mocked (`captureException` only, which is all any
+  caller uses) in `apps/web/src/test/setup.ts`, not worked around locally.
+- Verified: `npx vitest run` 52 files / 235 tests, `tsc --noEmit` 0,
+  `eslint .` 0, `next build` 0 (`/login` and `/signup` still statically
+  prerendered). Live-verified in the real dev server with Playwright: set
+  the pending flag via `sessionStorage`, reloaded, confirmed zero console
+  errors (the hydration bug is what a first live check caught, before the
+  `useSyncExternalStore` fix — a plain `npm test` pass alone would have
+  shipped that bug, since Vitest/jsdom never triggers React's real
+  server/client reconciliation the way an actual `next build` + browser
+  load does).
+
+---
+
+## 2026-09-11 — Firestore security rules + Discovery→CoLab match bridge
+
+Prompted by a market-research pass (competitive landscape for SkoLab's CoLab
+bet) that flagged two things: no `firestore.rules` file anywhere in the repo
+(access control was whatever's in the Firebase console, unversioned), and
+that no discovery tool in the market lets a fit-based match become a working
+collaboration in one click — the exact gap CoLab is positioned to close, but
+wasn't wired end-to-end.
+
+- **`firestore.rules`** (repo root) — first version-controlled access
+  control for `researchers/{uid}` (self-write only) and
+  `collabs_groups/{projectId}` (owner/editor/reviewer/viewer, matching the
+  Overleaf-style role model already in `workspace.ts`). `deriveRoleArrays()`
+  in `apps/web/src/lib/firebase/workspace.ts` now persists `editorUids` /
+  `commenterUids` alongside `memberUids` so the rules language (no
+  array-of-object predicate search) can express role checks. Legacy
+  projects without the new fields fall back to "any member may edit" —
+  today's de facto behavior, not a new restriction. Decision `0018`.
+  **Not deployed** — needs `firebase login` (owner's credentials) then
+  `firebase deploy --only firestore:rules`; `npm run test:rules` needs Java
+  for the Firestore emulator, neither of which this environment had. The
+  owner explicitly chose this over building a REST layer (which
+  `decisions/0004` already rejected once) after being asked directly.
+- **"Start a project with this match"** — `ResearcherCard` (Discovery) now
+  has a click action that routes to `/workspace?withResearcher=<openAlexId>
+  &withResearcherName=<name>`; the CoLab list page pre-fills and auto-opens
+  the create form, and on creation resolves the match to a SkoLab account by
+  `openAlexId` (`findResearcherByOpenAlexId`, new) — invites them as editor
+  if found, or creates the project anyway with an honest "no SkoLab account
+  yet" status if not. New `apps/web/src/lib/firebase/workspace.test.ts`
+  (workspace.ts had zero tests before this); found and fixed a real gap in
+  the shared Firestore test double while writing it — `setDoc` was never
+  mocked, so `createProject`'s document-seeding call was silently
+  untestable.
+- **Verified live**, not just in tests: ran `npm run dev:web` against the
+  real `skolab-vvi` Firebase project (Go gateway not runnable in this
+  environment — no Go toolchain — so gateway-dependent surfaces degrade to
+  their documented empty/error states, confirmed working, not crashing),
+  signed up two real test accounts (`ada.verify.skolab@mailinator.com`,
+  `marie.verify.skolab@mailinator.com`), ran onboarding both ways (full
+  click-through and "Skip for now"), browsed Discovery's live OpenAlex
+  fit-grid, clicked "Start a project" on a real match (Rod Ellis,
+  `A5034271321`), created the project, confirmed the no-account message,
+  sent a chat message and added a task (both round-tripped through real
+  Firestore), then invited the second account by email, confirmed
+  "added as editor", changed their role to viewer, and reloaded to confirm
+  the role change persisted server-side. All of this ran against whatever
+  Firestore rules existed in production *before* this change — the new
+  `firestore.rules` has not been deployed, so this verifies the feature
+  logic, not yet the new access control. Left both test accounts and the
+  "Rod Ellis collaboration" project in production `skolab-vvi` for the owner
+  to inspect or delete.
+- Found, not fixed (flagged, out of scope for this pass): a pre-existing
+  hydration mismatch in `ThemeToggle` on the landing page (server renders a
+  different icon than the client) — unrelated to this work, first noticed
+  during live verification.
+- Verified: `npx vitest run` (49 files / 222 tests, up from 218), `tsc
+  --noEmit` 0, `eslint .` 0, `next build` 0 (`/workspace` still statically
+  prerendered — `useSearchParams` didn't force full dynamic rendering).
+  `react-hooks/set-state-in-effect` (hard error in this repo's eslint
+  config) caught a real anti-pattern in the first draft of the pre-fill
+  logic — fixed by deriving initial state from the URL via lazy `useState`
+  initializers instead of `useEffect` + `setState`.
+- Decision `0018`. README's stale "Firebase not registered" / "no REST
+  backend" framing corrected (the Firebase Web app has actually been
+  registered since 2026-09-02 — the README and `decisions/0004`'s "Known
+  gap" note were both out of date; `decisions/0004`'s note itself is left
+  alone per the append-only rule, corrected here instead).
+
+---
+
 ## 2026-09-10 — Discovery fit-first collaborator finder
 
 Shipped via PR #119 (merge commit `cff6997`), merged to `main` and synced;

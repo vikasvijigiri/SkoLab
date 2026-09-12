@@ -2,15 +2,16 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, FolderKanban, Users2, ArrowRight, Compass, Lightbulb } from "lucide-react";
+import { Plus, FolderKanban, Users2, ArrowRight, Compass, Lightbulb, UserPlus } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ErrorBanner, friendlyFirestoreError } from "@/components/ui/ErrorBanner";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import { useFirestoreCollection } from "@/lib/hooks/useFirestoreCollection";
-import { subscribeProjects, createProject, roleFor } from "@/lib/firebase/workspace";
+import { subscribeProjects, createProject, inviteMember, findResearcherByOpenAlexId, roleFor } from "@/lib/firebase/workspace";
 import type { CollabProject, CollabRole } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { TRANSITION_FAST, DURATION_SLOW, EASE_STANDARD } from "@/lib/motion";
@@ -39,6 +40,8 @@ function relTime(ts?: number) {
 
 export default function WorkspaceListPage() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const {
     data: projects,
     loading,
@@ -48,12 +51,22 @@ export default function WorkspaceListPage() {
     { deps: [user?.uid] },
   );
   const [createError, setCreateError] = useState<string | null>(null);
+  const [createStatus, setCreateStatus] = useState<string | null>(null);
   const error = createError ?? subError;
-  const [creating, setCreating] = useState(false);
-  const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [scope, setScope] = useState<ScopeFilter>("all");
+
+  // "Start a project with this match" — a Discovery match card (ResearcherCard)
+  // links here with these params instead of dropping the researcher on the
+  // floor at the profile page. Read once at mount (lazy initializers, not an
+  // effect + setState — this page is only ever navigated to fresh for this
+  // flow, never re-parameterized while mounted) to pre-fill the create form;
+  // the invite itself happens after creation, in handleCreate below.
+  const withResearcherId = searchParams.get("withResearcher");
+  const withResearcherName = searchParams.get("withResearcherName");
+  const [creating, setCreating] = useState(() => Boolean(withResearcherId && withResearcherName));
+  const [name, setName] = useState(() => (withResearcherName ? `${withResearcherName} collaboration` : ""));
 
   const shownProjects = useMemo(() => {
     return projects
@@ -69,14 +82,34 @@ export default function WorkspaceListPage() {
     e.preventDefault();
     if (!user || !name.trim()) return;
     setSubmitting(true);
+    setCreateStatus(null);
     try {
-      await createProject({
+      const ownerName = user.displayName ?? "Researcher";
+      const projectId = await createProject({
         name,
         description,
         ownerUid: user.uid,
-        ownerName: user.displayName ?? "Researcher",
+        ownerName,
         ownerEmail: user.email ?? "",
       });
+
+      if (withResearcherId && withResearcherName) {
+        const match = await findResearcherByOpenAlexId(withResearcherId);
+        if (match) {
+          await inviteMember(
+            { id: projectId, members: [{ uid: user.uid, name: ownerName, email: user.email ?? "", role: "owner" }] },
+            { uid: match.uid, name: match.name, email: match.email, phone: match.phone },
+            "editor",
+          );
+          setCreateStatus(`${match.name} added as editor.`);
+        } else {
+          setCreateStatus(
+            `No SkoLab account yet for ${withResearcherName} — the project's ready; copy its link from Share once they join.`,
+          );
+        }
+        router.replace("/workspace");
+      }
+
       setName("");
       setDescription("");
       setCreating(false);
@@ -137,6 +170,20 @@ export default function WorkspaceListPage() {
       </AnimatePresence>
 
       <AnimatePresence>
+        {createStatus && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="flex items-center gap-2 rounded-md border border-accent-teal/30 bg-accent-teal/5 px-3 py-2 font-body text-body-s text-text-secondary"
+          >
+            <UserPlus size={14} className="shrink-0 text-accent-teal" />
+            {createStatus}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {creating && (
           <motion.div
             initial={{ opacity: 0, scale: 0.98 }}
@@ -145,6 +192,12 @@ export default function WorkspaceListPage() {
             transition={TRANSITION_FAST}
           >
             <Card accentColor="var(--accent-teal)">
+              {withResearcherId && withResearcherName && (
+                <p className="mb-3 flex items-center gap-1.5 font-body text-[12px] text-text-muted">
+                  <UserPlus size={13} className="text-accent-teal" />
+                  Starting a project with {withResearcherName} from Discovery.
+                </p>
+              )}
               <form onSubmit={handleCreate} className="flex flex-col gap-3">
                 <Input
                   placeholder="Project name"

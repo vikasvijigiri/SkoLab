@@ -59,7 +59,7 @@ export function ShareModal({
           setStatus(`${researcher.name} is already a collaborator.`);
         } else {
           await inviteMember(
-            project.id,
+            project,
             { uid: researcher.uid, name: researcher.name, email: researcher.email, phone: researcher.phone },
             inviteRole
           );

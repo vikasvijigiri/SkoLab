@@ -14,7 +14,7 @@ services/backend         FastAPI domain and enrichment API
 services/backend-go      Go gateway, realtime and low-latency services
 shared/                  Cross-client design tokens and generated assets
 api-contracts/           Generated HTTP contract snapshots
-infrastructure/          Runtime, monitoring and deployment configuration
+render.yaml              Render production blueprint (gateway, backend, web)
 tests/                   Cross-service and load tests
 decisions/               Architecture decision records
 ```
