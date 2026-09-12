@@ -481,6 +481,7 @@ Target Metrics:
     milestones = []
     checklist = []
     templates = []
+    is_fallback = False
 
     try:
         if not is_llm_working():
@@ -507,6 +508,7 @@ Target Metrics:
             f"[Roadmap] LLM query failed: {e}. Generating high-quality local fallback...",
             flush=True,
         )
+        is_fallback = True
         milestones = [
             {
                 "title": "Ph.D. Defense",
@@ -599,4 +601,5 @@ Target Metrics:
         "checklist": checklist,
         "peerCoauthors": coauthors,
         "templates": templates,
+        "is_fallback": is_fallback,
     }

@@ -111,6 +111,11 @@
         "additionalProperties": true,
         "description": "``POST /agent/chat`` \u2014 the research agent's reply.",
         "properties": {
+          "is_fallback": {
+            "default": false,
+            "title": "Is Fallback",
+            "type": "boolean"
+          },
           "reply": {
             "anyOf": [
               {
@@ -357,6 +362,11 @@
             ],
             "title": "Author Name"
           },
+          "is_fallback": {
+            "default": false,
+            "title": "Is Fallback",
+            "type": "boolean"
+          },
           "reply": {
             "anyOf": [
               {
@@ -375,7 +385,13 @@
       "CollaboratorSynergyResponse": {
         "additionalProperties": true,
         "description": "``GET /collaborator_synergy`` \u2014 pairwise synergy metrics (LLM/graph-shaped).",
-        "properties": {},
+        "properties": {
+          "is_fallback": {
+            "default": false,
+            "title": "Is Fallback",
+            "type": "boolean"
+          }
+        },
         "title": "CollaboratorSynergyResponse",
         "type": "object"
       },
@@ -985,6 +1001,11 @@
               }
             ],
             "title": "Content"
+          },
+          "is_fallback": {
+            "default": false,
+            "title": "Is Fallback",
+            "type": "boolean"
           }
         },
         "title": "NexusChatResponse",
@@ -1207,6 +1228,11 @@
             },
             "title": "Checklist",
             "type": "array"
+          },
+          "is_fallback": {
+            "default": false,
+            "title": "Is Fallback",
+            "type": "boolean"
           },
           "milestones": {
             "default": [],
