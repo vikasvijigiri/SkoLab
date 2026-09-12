@@ -89,10 +89,14 @@ export const getMatchGrants = (authorId: string) =>
 // Connected researchers' new papers + newly accepted connections + a
 // highly-cited-recent field floor. `degraded` when the network is unreadable.
 export const getActivityFeed = (
-  opts: { authorId?: string; userId?: string; limit?: number } = {},
+  opts: { authorId?: string; userId?: string; limit?: number; idToken?: string | null } = {},
 ) =>
   apiRequest<ActivityFeedResult>("/api/v1/activity_feed", {
     params: { author_id: opts.authorId, user_id: opts.userId, limit: opts.limit ?? 20 },
+    // The gateway now verifies user_id against the token (2026-09-12 fix for
+    // an unauthenticated cross-user feed leak) -- without it, passing userId
+    // here gets 403'd instead of personalizing the feed.
+    idToken: opts.idToken ?? undefined,
   });
 
 // Curated science-news headlines (Quanta, Phys.org, ScienceDaily, Nature) —
