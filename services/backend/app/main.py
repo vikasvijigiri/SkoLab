@@ -334,7 +334,15 @@ async def lifespan(app: FastAPI):
 
             _mdns_info = ServiceInfo(
                 type_=settings.mdns_service_type,
-                name=settings.mdns_service_name,
+                # zeroconf requires the full "{instance}.{type}" form here
+                # (e.g. "SkoLabBackend._http._tcp.local."), not the bare
+                # instance name -- settings.mdns_fqdn already computes this
+                # correctly but wasn't wired in here, so registration failed
+                # every single startup with BadTypeInNameException
+                # ("Type 'SkoLabBackend' must end with '.local.'") since the
+                # bare name doesn't end in the type's ".local." suffix
+                # (2026-09-12).
+                name=settings.mdns_fqdn,
                 addresses=addresses,
                 port=settings.mdns_port,
                 properties={"path": "/", "version": "1"},

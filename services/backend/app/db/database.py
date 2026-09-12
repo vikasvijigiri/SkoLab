@@ -41,8 +41,22 @@ _pg_connect_args: dict = {"command_timeout": 30.0}
 if _is_asyncpg:
     _pg_connect_args["statement_cache_size"] = 0
 
-if os.environ.get("TESTING") == "True":
-    connect_args = {} if DATABASE_URL.startswith("sqlite") else _pg_connect_args
+_is_sqlite = DATABASE_URL.startswith("sqlite")
+
+if os.environ.get("TESTING") == "True" or _is_sqlite:
+    # SQLite (the local dev default in DATABASE_URL.example, and the
+    # TESTING=True fast-tier fallback) supports neither asyncpg's
+    # connect_args (command_timeout, statement_cache_size — aiosqlite
+    # raises "unexpected keyword argument") nor QueuePool's pool_size /
+    # max_overflow / pool_pre_ping / pool_recycle. The TESTING branch
+    # already special-cased connect_args for it but the production
+    # (else) branch below didn't apply the same guard to EITHER set of
+    # kwargs, so a plain `uvicorn app.main:app` boot against the SQLite
+    # dev default (no DATABASE_URL override, TESTING unset) failed every
+    # DB call at startup with "Connection() got an unexpected keyword
+    # argument 'command_timeout'" (2026-09-12). NullPool + no
+    # Postgres-only kwargs works for both TESTING and plain local dev.
+    connect_args = {} if _is_sqlite else _pg_connect_args
     engine = create_async_engine(
         DATABASE_URL,
         echo=False,
@@ -200,12 +214,24 @@ async def init_db() -> None:
         await conn.run_sync(Base.metadata.create_all)
         from sqlalchemy import text
 
+        # `ADD COLUMN IF NOT EXISTS` is Postgres syntax (a drift-repair net
+        # for a live database that predates a column being added to the ORM
+        # model) -- SQLite's ALTER TABLE doesn't support IF NOT EXISTS at
+        # all, so every one of these unconditionally raised a syntax error
+        # against the local dev.db fallback (2026-09-12), even though
+        # create_all() just above already created the column fresh. Skip
+        # entirely for SQLite: a fresh create_all() already has the current
+        # schema, and an existing dev.db missing a column is cheaper to
+        # delete and let recreate than to hand-migrate.
+        _is_postgres = conn.dialect.name == "postgresql"
         for col_name, col_type in [
             ("username", "VARCHAR(100) UNIQUE"),
             ("author_name", "VARCHAR(255)"),
             ("phone", "VARCHAR(50)"),
             ("research_focus", "TEXT"),
         ]:
+            if not _is_postgres:
+                continue
             try:
                 await conn.execute(
                     text(
@@ -222,6 +248,8 @@ async def init_db() -> None:
             ("skills", "JSON"),
             ("tools", "JSON"),
         ]:
+            if not _is_postgres:
+                continue
             try:
                 await conn.execute(
                     text(
