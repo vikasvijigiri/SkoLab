@@ -85,7 +85,13 @@ func min2(a, b float64) float64 {
 // GetPeerRecommendations handles GET /api/v1/recommendations/peers.
 func GetPeerRecommendations(c *gin.Context) {
 	query := strings.TrimSpace(c.Query("query"))
-	userID := c.Query("user_id")
+	// The route is already behind auth.VerifyUser() -- use the verified
+	// identity for the ranking bias below, not a client-supplied
+	// `user_id` query param. Trusting the param let any authenticated
+	// caller bias/probe results using another user's research_focus and
+	// circle (2026-09-12 endpoint audit); the caller never legitimately
+	// needs to ask this for anyone but themselves.
+	userID := c.GetString("user_id")
 	ctx := c.Request.Context()
 
 	out := []PeerRecommendation{}
@@ -261,6 +267,14 @@ func LogPeerInvite(c *gin.Context) {
 	var req logPeerInviteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// req.UserID is client-controlled and names the row this write lands
+	// in (user_circles.user_id) -- without this check any authenticated
+	// caller could add/mutate rows in another user's circle by supplying
+	// their user_id (2026-09-12 endpoint audit).
+	if req.UserID != c.GetString("user_id") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: you may only log invites for your own circle."})
 		return
 	}
 	ctx := c.Request.Context()

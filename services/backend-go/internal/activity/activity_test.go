@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/skolab/backend-go/internal/auth"
 	"github.com/skolab/backend-go/internal/services/openalex"
 )
 
@@ -121,6 +122,87 @@ func TestGetActivityFeed_LimitParamAccepted(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+}
+
+// devAuth is a Bearer token that auth.VerifyUser()/VerifyUserOptional()
+// accept in dev/CI mode (no Firebase credentials configured), setting
+// user_id="dev_user" -- see internal/auth/firebase_test.go.
+var devAuth = map[string]string{"Authorization": "Bearer devtoken"}
+
+// optionalAuthRouter mirrors main.go's actual wiring for this route
+// (auth.VerifyUserOptional(), not a hard VerifyUser(), so an anonymous
+// caller still gets the public trending floor).
+func optionalAuthRouter() *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.GET("/activity_feed", auth.VerifyUserOptional(), GetActivityFeed)
+	return r
+}
+
+// fakeVerifiedUser stands in for a real Firebase token verification,
+// setting the same context key VerifyUser()/VerifyUserOptional() would once
+// a token actually checks out. Needed because VerifyUserOptional has no
+// dev/CI dev_user fallback the way VerifyUser does -- with no Firebase
+// client configured (true in CI) it just leaves user_id unset regardless of
+// what Authorization header is sent, so devAuth alone can't simulate "an
+// authenticated caller" through it the way it can through VerifyUser.
+func fakeVerifiedUser(uid string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Set("user_id", uid)
+		c.Next()
+	}
+}
+
+func verifiedUserRouter(uid string) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.GET("/activity_feed", fakeVerifiedUser(uid), GetActivityFeed)
+	return r
+}
+
+func TestGetActivityFeed_AnonymousNoUserIDStillOK(t *testing.T) {
+	// The public trending floor must keep working with zero auth.
+	req := httptest.NewRequest(http.MethodGet, "/activity_feed", nil)
+	w := httptest.NewRecorder()
+	optionalAuthRouter().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+}
+
+func TestGetActivityFeed_MismatchedUserIDIs403(t *testing.T) {
+	// Before this check, GetActivityFeed had no auth middleware at all and
+	// trusted ?user_id= outright -- any caller could read another user's
+	// connection-derived feed (who they're connected to, at what
+	// institution, recent activity) by supplying that user's id
+	// (2026-09-12 endpoint audit).
+	req := httptest.NewRequest(http.MethodGet, "/activity_feed?user_id=someone_else", nil)
+	req.Header.Set("Authorization", devAuth["Authorization"])
+	w := httptest.NewRecorder()
+	optionalAuthRouter().ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", w.Code)
+	}
+}
+
+func TestGetActivityFeed_UnauthenticatedWithUserIDIs403(t *testing.T) {
+	// A caller with no token at all supplying a user_id must also be
+	// rejected, not silently treated as anonymous-with-a-hint.
+	req := httptest.NewRequest(http.MethodGet, "/activity_feed?user_id=someone_else", nil)
+	w := httptest.NewRecorder()
+	optionalAuthRouter().ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", w.Code)
+	}
+}
+
+func TestGetActivityFeed_OwnUserIDIsAccepted(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/activity_feed?user_id=dev_user", nil)
+	w := httptest.NewRecorder()
+	verifiedUserRouter("dev_user").ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}
