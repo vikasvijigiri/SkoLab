@@ -1,5 +1,4 @@
 import numpy as np
-import networkx as nx
 from typing import List, Dict, Optional
 import math
 import json
@@ -10,7 +9,13 @@ from app.services.data.scraping_service import ScrapingService
 
 class MetricsService:
     """
-    Implements the 10 Modern Research Metrics for scientific evaluation.
+    Implements 9 of the 10 Modern Research Metrics for scientific evaluation.
+    (Network Centrality moved to the Go gateway's researcher-metrics compute
+    endpoint -- see app/services/data/researcher_worker.py -- and had zero
+    callers left here; the semantic_novelty/network_centrality actually
+    persisted for a researcher are that worker's own inline proxy formulas,
+    not calculate_semantic_novelty below, which this class's own
+    calculate_metrics() still uses for /analyze_paper's per-paper scoring.)
     """
 
     def __init__(self):
@@ -62,21 +67,11 @@ class MetricsService:
         return round(min(score, 100.0), 1)
 
     @staticmethod
-    def calculate_network_centrality(graph: nx.Graph, node_id: str) -> float:
-        """
-        4. Network Centrality (Betweenness)
-        """
-        if graph.number_of_nodes() < 2:
-            return 1.0
-        centrality = nx.betweenness_centrality(graph)
-        return round(centrality.get(node_id, 0.0) * 100, 1)
-
-    @staticmethod
     def calculate_semantic_novelty(
         embedding: np.ndarray, peer_embeddings: List[np.ndarray]
     ) -> float:
         """
-        5. Semantic Novelty Score
+        4. Semantic Novelty Score
         Novelty = 1 - max(cosine_similarity)
         """
         if not peer_embeddings:
@@ -95,7 +90,7 @@ class MetricsService:
 
     def calculate_interdisciplinary_index(self, topic_counts: Dict[str, int]) -> float:
         """
-        6. Interdisciplinary Index (Entropy)
+        5. Interdisciplinary Index (Entropy)
         H = - sum(p_i * log(p_i))
         Refined by checking cross-domain variety in ArXiv taxonomy.
         """
@@ -129,7 +124,7 @@ class MetricsService:
     @staticmethod
     def calculate_policy_patent_score(policy_cites: int, patent_cites: int) -> int:
         """
-        7. Policy & Patent Citation Score
+        6. Policy & Patent Citation Score
         """
         return (policy_cites * 5) + (patent_cites * 10)
 
@@ -138,7 +133,7 @@ class MetricsService:
         code: bool, data: bool, oa: bool, preprint: bool
     ) -> int:
         """
-        8. Open Science Score
+        7. Open Science Score
         (C + D + O + P) / 4
         """
         score = sum([code, data, oa, preprint])
@@ -147,7 +142,7 @@ class MetricsService:
     @staticmethod
     def calculate_collaboration_diversity(countries: List[str]) -> float:
         """
-        9. Collaboration Diversity Index
+        8. Collaboration Diversity Index
         Entropy over countries.
         """
         if not countries:
@@ -165,7 +160,7 @@ class MetricsService:
     @staticmethod
     def calculate_research_consistency(citations_per_year: List[int]) -> float:
         """
-        10. Research Consistency Score
+        9. Research Consistency Score
         Consistency = 1 / Variance
         """
         if len(citations_per_year) < 2:
@@ -179,9 +174,12 @@ class MetricsService:
 
     def calculate_metrics(self, data: Dict) -> Dict:
         """
-        Backwards compatibility and batch calculation.
+        Batch calculation for a single paper's intelligence report.
         """
-        # Legacy mapping for researcher_worker.py
+        # Used by app/services/ai/summarization_service.py's analyze_paper()
+        # for /analyze_paper's per-paper metrics -- not researcher_worker.py,
+        # which computes its own researcher-level metrics separately (8 of
+        # its 10 now via the Go gateway; see that file's own comments).
         creativity = self.calculate_semantic_novelty(
             data.get("embedding", np.random.rand(384)), data.get("peer_embeddings", [])
         )

@@ -137,6 +137,87 @@ async def _fetch_works_from_openalex(
     return []
 
 
+async def _compute_researcher_metrics_via_gateway(
+    *,
+    n1: int,
+    n2: int,
+    n3: int,
+    yearly_citations: List[int],
+    early_citations: int,
+    journal_score: float,
+    h_index: int,
+    topic_counts: Dict[str, int],
+    policy_cites: int,
+    patent_cites: int,
+    has_code: bool,
+    has_data: bool,
+    is_open_access: bool,
+    has_preprint: bool,
+    countries: List[str],
+) -> Dict[str, Any]:
+    """POST the Go gateway's /internal/compute_metrics for the 8 metrics this
+    worker used to compute with its own duplicate of that same math
+    (app/services/platform/metrics_service.py's MetricsService, retired from
+    this call site in the 2026-09-12 no-slop audit -- MetricsService itself
+    stays, since /analyze_paper's paper-level scoring still uses it).
+
+    Falls back to safe zero-value defaults on any failure (gateway down,
+    timeout, bad response) so a Go outage degrades this one enrichment pass
+    rather than crashing the whole teleport worker -- matching this worker's
+    existing degrade-and-log pattern for its other optional steps (LLM
+    prediction, skills/tools extraction).
+    """
+    import httpx
+
+    from app.core.config import settings
+
+    fallback = {
+        "disruption_score": 0.0,
+        "citation_acceleration": 0,
+        "future_impact_score": 0.0,
+        "interdisciplinary_index": 0.0,
+        "policy_patent_score": 0,
+        "open_science_score": 0,
+        "collaboration_diversity": 0.0,
+        "research_consistency": 0.0,
+    }
+    headers = {}
+    if settings.internal_api_token:
+        headers["X-Internal-Token"] = settings.internal_api_token
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{settings.gateway_url.rstrip('/')}/internal/compute_metrics",
+                json={
+                    "n1": n1,
+                    "n2": n2,
+                    "n3": n3,
+                    "yearly_citations": yearly_citations,
+                    "early_citations": early_citations,
+                    "journal_score": journal_score,
+                    "h_index": h_index,
+                    "topic_counts": topic_counts,
+                    "policy_cites": policy_cites,
+                    "patent_cites": patent_cites,
+                    "has_code": has_code,
+                    "has_data": has_data,
+                    "is_open_access": is_open_access,
+                    "has_preprint": has_preprint,
+                    "countries": countries,
+                },
+                headers=headers,
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as exc:
+        logger.warning(
+            "[teleport] Gateway metrics compute failed, using zero-value fallback: %s",
+            exc,
+        )
+        return fallback
+
+
 def _reconstruct_abstract(inv_idx: Optional[Dict[str, List[int]]]) -> str:
     if not inv_idx or not isinstance(inv_idx, dict):
         return ""
@@ -589,10 +670,12 @@ async def teleport_researcher(author_id: str) -> None:
         ]
 
         # ── 3. Compute the 10 Modern Research Metrics ─────────────────────────
-        from app.services.platform.metrics_service import MetricsService
-
-        ms = MetricsService()
-
+        # 8 of the 10 are pure math with no Python-only dependency (LLM, DB,
+        # OpenAlex client) -- computed by the Go gateway's own port of this
+        # same math instead of duplicating it here (2026-09-12 no-slop audit).
+        # semantic_novelty and network_centrality below are this worker's own
+        # inline proxy formulas, not MetricsService methods, so they're
+        # untouched by this change either way.
         all_topic_counts: Dict[str, int] = {}
         for w in works:
             for topic, cnt in w.get("topic_counts", {}).items():
@@ -605,27 +688,35 @@ async def teleport_researcher(author_id: str) -> None:
         n3 = max(int(total_citing * 0.25), 1)
         journal_score = float(stats.get("2yr_mean_citedness") or 2.0)
 
-        disruption_score = ms.calculate_disruption_score(n1, n2, n3)
-        citation_accel = ms.calculate_citation_acceleration(yearly_citations)
-        future_impact = ms.calculate_future_impact(
-            early_citations=works[0].get("citations", 0) if works else 0,
-            journal_score=journal_score,
-            h_index=h_index,
-        )
-        interdisciplinary = ms.calculate_interdisciplinary_index(all_topic_counts)
         # No policy/patent citation data source is integrated yet (would need e.g. Overton
         # or Lens.org) — this always evaluates to 0 for every researcher, not a real score.
         # Kept as a stub so the field exists for when that integration lands; the frontend
         # should not present this as a measured value in the meantime.
-        policy_patent = ms.calculate_policy_patent_score(policy_cites=0, patent_cites=0)
-        open_science = ms.calculate_open_science_score(
-            code=False,
-            data=False,
-            oa=bool(cited_by_count > 0),
-            preprint=any(w.get("preprint") for w in works),
+        gw_metrics = await _compute_researcher_metrics_via_gateway(
+            n1=n1,
+            n2=n2,
+            n3=n3,
+            yearly_citations=yearly_citations,
+            early_citations=works[0].get("citations", 0) if works else 0,
+            journal_score=journal_score,
+            h_index=h_index,
+            topic_counts=all_topic_counts,
+            policy_cites=0,
+            patent_cites=0,
+            has_code=False,
+            has_data=False,
+            is_open_access=bool(cited_by_count > 0),
+            has_preprint=any(w.get("preprint") for w in works),
+            countries=all_countries,
         )
-        collab_diversity = ms.calculate_collaboration_diversity(all_countries)
-        research_consist = ms.calculate_research_consistency(yearly_citations)
+        disruption_score = gw_metrics["disruption_score"]
+        citation_accel = gw_metrics["citation_acceleration"]
+        future_impact = gw_metrics["future_impact_score"]
+        interdisciplinary = gw_metrics["interdisciplinary_index"]
+        policy_patent = gw_metrics["policy_patent_score"]
+        open_science = gw_metrics["open_science_score"]
+        collab_diversity = gw_metrics["collaboration_diversity"]
+        research_consist = gw_metrics["research_consistency"]
         semantic_novelty = round(
             min(interdisciplinary * 0.9 + disruption_score * 10, 100.0), 1
         )

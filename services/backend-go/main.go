@@ -28,6 +28,7 @@ import (
 	"github.com/skolab/backend-go/internal/pulse"
 	"github.com/skolab/backend-go/internal/quest"
 	"github.com/skolab/backend-go/internal/recommendation"
+	researchmetrics "github.com/skolab/backend-go/internal/services/metrics"
 	"github.com/skolab/backend-go/internal/similarity"
 	"github.com/skolab/backend-go/internal/system"
 	"github.com/skolab/backend-go/internal/user"
@@ -201,6 +202,17 @@ func main() {
 	r.GET("/search_author", author.SearchAuthor)
 	r.GET("/api/v1/refresh_author", author.RefreshAuthor)
 	r.GET("/refresh_author", author.RefreshAuthor)
+
+	// ── Researcher metrics compute — Python → Go, the one reverse direction ──
+	// internal/services/metrics. Pure math (disruption score, citation
+	// acceleration, etc.) that researcher_worker.py's teleport worker used to
+	// duplicate in Python; that duplicate is retired in favor of this single
+	// implementation (2026-09-12 no-slop audit). Every other internal/*
+	// service-to-service call in this codebase goes Go -> Python (the gateway
+	// proxies to Python); this is the first call the other way, protected by
+	// the same shared-secret header + INTERNAL_API_TOKEN convention Python's
+	// own /internal/* routes already use (app/api/v1/endpoints/internal.py).
+	r.POST("/internal/compute_metrics", researchmetrics.ComputeHandler)
 
 	// ── Leaderboard — PG query only ───────────────────────────────────────────
 	r.GET("/api/v1/leaderboard/:field", quest.GetLeaderboard)
