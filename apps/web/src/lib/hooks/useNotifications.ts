@@ -3,6 +3,7 @@
 import { useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { activityFeedQuery } from "@/lib/api/queries";
+import { useAuth } from "./AuthProvider";
 import { useLocalStorage } from "./useLocalStorage";
 import type { ActivityItem } from "@/lib/types";
 
@@ -24,7 +25,11 @@ export interface Notification {
  * invites, @mentions) is a follow-up — this gives the bell real content now.
  */
 export function useNotifications(authorId?: string, userId?: string) {
-  const q = useQuery({ ...activityFeedQuery(authorId, userId), enabled: Boolean(userId || authorId) });
+  const { getIdToken } = useAuth();
+  const q = useQuery({
+    ...activityFeedQuery(authorId, userId, getIdToken),
+    enabled: Boolean(userId || authorId),
+  });
   const [seenAt, setSeenAt] = useLocalStorage<string>("notifications:seenAt", "");
 
   const items = useMemo<Notification[]>(() => {
