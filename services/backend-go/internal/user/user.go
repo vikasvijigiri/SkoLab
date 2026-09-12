@@ -81,6 +81,16 @@ func SyncUserProfile(c *gin.Context) {
 		return
 	}
 
+	// Every other DB-backed handler in this package (and internal/feed,
+	// internal/quest) checks this before touching db.Pool -- this one and
+	// DeleteUser didn't, so a nil pool (DB down) panicked into gin.Recovery's
+	// generic 500 instead of the same clean, documented 503 every sibling
+	// route gives (2026-09-11 backend response audit).
+	if db.Pool == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "database unavailable"})
+		return
+	}
+
 	// Upsert the user into PostgreSQL natively in Go
 	query := `
 		INSERT INTO users (id, display_name) 
@@ -106,6 +116,11 @@ func DeleteUser(c *gin.Context) {
 
 	if targetUserID != tokenUserID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: you may only delete your own account."})
+		return
+	}
+
+	if db.Pool == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "database unavailable"})
 		return
 	}
 

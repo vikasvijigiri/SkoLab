@@ -7,6 +7,13 @@ import { DiscoveryContent } from "./page";
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(""),
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
+// ResearcherCard's "start a project with this match" action reads auth
+// directly (not through useMyProfile) to decide whether to render.
+vi.mock("@/lib/hooks/AuthProvider", () => ({
+  useAuth: () => ({ user: null }),
 }));
 
 // useMyProfile pulls in AuthProvider + Firestore; mock it and drive resolution.

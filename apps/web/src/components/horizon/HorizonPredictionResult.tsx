@@ -41,7 +41,12 @@ export function HorizonPredictionResult({
           <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-text-muted">
             Innovation Blueprint
           </span>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {prediction.is_fallback && (
+              <Badge accentColor="var(--notification)" title="The AI service was unavailable — this is a generic placeholder, not a prediction generated from your research.">
+                Estimated — AI unavailable
+              </Badge>
+            )}
             <Badge accentColor="var(--primary)">Horizon: {prediction.time_horizon}</Badge>
             <Badge accentColor={feasibilityColor(prediction.feasibility)}>
               Feasibility: {prediction.feasibility}

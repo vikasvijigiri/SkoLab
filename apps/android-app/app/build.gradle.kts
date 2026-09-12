@@ -115,7 +115,7 @@ android {
 
 dependencies {
     implementation("androidx.core:core-ktx:1.18.0")
-    implementation("androidx.core:core-splashscreen:1.0.1")
+    implementation("androidx.core:core-splashscreen:1.2.0")
     // material provides XML Theme.Material3.* resources consumed by themes.xml at runtime
     // (Compose material3 artifact does NOT include these XML styles)
     implementation("com.google.android.material:material:1.12.0")
@@ -142,11 +142,11 @@ dependencies {
     // Credential Manager for Google Sign-In
     implementation("androidx.credentials:credentials:1.3.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
-    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.2.0")
 
 
     // Ktor
-    val ktorVersion = "3.4.2"
+    val ktorVersion = "3.5.2"
     implementation("io.ktor:ktor-client-core:$ktorVersion")
     implementation("io.ktor:ktor-client-android:$ktorVersion")
     implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
@@ -157,7 +157,7 @@ dependencies {
 
     // Preferences (onboarding)
     implementation("androidx.datastore:datastore-preferences:1.2.0")
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("androidx.security:security-crypto:1.1.0")
     // Serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
 
@@ -171,7 +171,7 @@ dependencies {
     implementation("io.noties.markwon:inline-parser:$markwonVersion")
 
     testImplementation("junit:junit:4.13.2")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
     testImplementation("io.mockk:mockk:1.13.13")
     testImplementation("app.cash.turbine:turbine:1.2.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")

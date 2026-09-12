@@ -715,5 +715,5 @@ async def health():
 # NOTE: GET /metrics was removed here (docs/plans/2026-09-04-retire-python-infra.md).
 # It served a Prometheus text exposition built from a per-process MetricsStore —
 # scraping one of N uvicorn workers gave a partial, misleading picture. Request
-# metrics belong at the Go gateway. infrastructure/prometheus.yml points there
-# now; the gateway's own /metrics endpoint is tracked as follow-up.
+# metrics belong at the Go gateway. Render health checks and external
+# observability scrape the gateway directly.

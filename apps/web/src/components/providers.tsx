@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { useAuth } from "@/lib/hooks/AuthProvider";
 
 /**
  * The single client-side data layer for the app. Every `useQuery` in the tree
@@ -43,6 +44,37 @@ export function makeQueryClient() {
   });
 }
 
+/**
+ * Sits inside both AuthProvider (for `useAuth`) and QueryClientProvider (for
+ * `useQueryClient`) — layout.tsx nests `<AuthProvider><Providers>`, so this
+ * is reachable from here even though it's declared in this file.
+ *
+ * A signed-in user switching accounts, or signing out, must not go on
+ * seeing the previous identity's cached feed/brief/grants data just because
+ * it's still within its staleTime window. Invalidate everything on the
+ * first uid change after mount so every mounted query refetches under the
+ * new identity; the very first resolution (anonymous → restored session) is
+ * intentionally included, since a page load that restores a session is a
+ * "login" for this purpose too, and the cache is empty then anyway.
+ */
+function InvalidateOnAuthChange({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const prevUid = useRef<string | null>(null);
+  const seenFirst = useRef(false);
+
+  useEffect(() => {
+    const uid = user?.uid ?? null;
+    if (seenFirst.current && prevUid.current !== uid) {
+      queryClient.invalidateQueries();
+    }
+    prevUid.current = uid;
+    seenFirst.current = true;
+  }, [user?.uid, queryClient]);
+
+  return <>{children}</>;
+}
+
 export function Providers({ children }: { children: React.ReactNode }) {
   // useState initializer, not a module-level singleton: a singleton would be
   // shared across requests in the server bundle. One client per browser session.
@@ -50,7 +82,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
+      <InvalidateOnAuthChange>{children}</InvalidateOnAuthChange>
       {process.env.NODE_ENV === "development" && (
         <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
       )}
