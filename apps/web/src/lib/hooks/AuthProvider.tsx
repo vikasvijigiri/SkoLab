@@ -17,18 +17,29 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+// Playwright uses a deterministic, local-only session so protected screens can
+// be rendered and audited without putting Firebase credentials in the repo.
+// This branch is enabled only by the test server and is never active in a
+// normal Next.js or Render process.
+const PLAYWRIGHT_USER = {
+  uid: "playwright-researcher",
+  displayName: "Playwright Researcher",
+  email: "playwright@skolab.local",
+} as User;
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(isFirebaseConfigured);
+  const playwrightAuth = process.env.NEXT_PUBLIC_PLAYWRIGHT_AUTH === "1";
+  const [user, setUser] = useState<User | null>(playwrightAuth ? PLAYWRIGHT_USER : null);
+  const [loading, setLoading] = useState(playwrightAuth ? false : isFirebaseConfigured);
 
   useEffect(() => {
-    if (!auth) return;
+    if (playwrightAuth || !auth) return;
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setLoading(false);
     });
     return unsub;
-  }, []);
+  }, [playwrightAuth]);
 
   const getIdToken = useCallback(async () => {
     if (!auth?.currentUser) return null;

@@ -1,13 +1,14 @@
-// Package feed serves the non-LLM feed-persistence and stub-integration
-// endpoints moved off the Python backend in Phase 2 of the "Python is LLM-only"
-// migration (decisions/0002; docs/plans/2026-09-04-phase2-feed-to-go.md).
+// Package feed serves the non-LLM feed-persistence endpoints moved off the
+// Python backend in Phase 2 of the "Python is LLM-only" migration
+// (decisions/0002; docs/plans/2026-09-04-phase2-feed-to-go.md).
 //
 // What lives here is pure data / static response — no LLM call, no embeddings:
 //   - POST /api/v1/daily_feed/dismiss         (owner-checked write to cache_entries)
-//   - GET  /api/v1/support/metrics            (constant dict)
-//   - GET  /api/v1/integrations/zotero/auth   (OAuth stub)
-//   - GET  /api/v1/integrations/zotero/callback (OAuth stub)
-//   - POST /api/v1/integrations/zotero/sync   (echo stub)
+//
+// (support/metrics and integrations/zotero/* were also ported here in Phase 2
+// as stub endpoints, then deleted in the 2026-09-11 backend response audit —
+// permanently-fake data, unreferenced by apps/web. See main.go's comment at
+// the removed route registrations.)
 //
 // Feed *generation* (GET /api/v1/daily_feed and the daily_conjecture / roadmap /
 // industry LLM routes) stays in services/backend and is reached through the
@@ -152,95 +153,6 @@ func DismissDailyFeedItem(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true})
-}
-
-// ── GET /api/v1/support/metrics ──────────────────────────────────────────────
-
-// GetSupportMetrics returns the static support-dashboard counters. Byte-for-byte
-// the dict from services/backend/app/api/v1/endpoints/support.py.
-func GetSupportMetrics(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"sla_targets": gin.H{
-			"vip_first_response_minutes":    15,
-			"standard_first_response_hours": 4,
-			"vip_resolution_hours":          2,
-			"standard_resolution_hours":     24,
-		},
-		"performance_metrics": gin.H{
-			"average_first_response_time_minutes":      0.0,
-			"average_resolution_time_hours":            0.0,
-			"customer_satisfaction_score_csat_percent": 98.4,
-		},
-		"queue_status": gin.H{
-			"total_open_tickets":         0,
-			"vip_escalation_queue_size":  0,
-			"standard_queue_size":        0,
-			"zendesk_integration_status": "operational",
-		},
-	})
-}
-
-// ── GET /api/v1/integrations/zotero/auth ─────────────────────────────────────
-
-// ZoteroAuthInit returns the mock Zotero OAuth authorization URL. Stub — no
-// state, no DB. `user_id` is a required query param (FastAPI Query(...)).
-func ZoteroAuthInit(c *gin.Context) {
-	userID := c.Query("user_id")
-	if userID == "" {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "user_id query parameter is required"})
-		return
-	}
-	oauthURL := "https://www.zotero.org/oauth/authorize?oauth_token=mock_token_skolab_" +
-		userID + "&client_id=skolab_client"
-	c.JSON(http.StatusOK, gin.H{"authorization_url": oauthURL})
-}
-
-// ── GET /api/v1/integrations/zotero/callback ─────────────────────────────────
-
-// ZoteroAuthCallback returns the fixed "linked" response. Stub. `oauth_token`
-// and `oauth_verifier` are required query params (FastAPI Query(...)).
-func ZoteroAuthCallback(c *gin.Context) {
-	if c.Query("oauth_token") == "" || c.Query("oauth_verifier") == "" {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "oauth_token and oauth_verifier query parameters are required"})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"status":          "success",
-		"message":         "Zotero account linked successfully!",
-		"zotero_user_id":  "8765432",
-		"zotero_username": "skolab_researcher",
-	})
-}
-
-// ── POST /api/v1/integrations/zotero/sync ────────────────────────────────────
-
-type zoteroSyncRequest struct {
-	UserID string           `json:"user_id"`
-	Papers []map[string]any `json:"papers"`
-}
-
-// ZoteroSyncPapers echoes the posted paper titles back. Stub — no DB, no Zotero
-// call. Mirrors zotero_sync_papers: title defaults to "Untitled Paper".
-func ZoteroSyncPapers(c *gin.Context) {
-	var req zoteroSyncRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	titles := make([]string, 0, len(req.Papers))
-	for _, p := range req.Papers {
-		title := "Untitled Paper"
-		if t, ok := p["title"].(string); ok && t != "" {
-			title = t
-		}
-		titles = append(titles, title)
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"status":        "success",
-		"synced_count":  len(titles),
-		"synced_papers": titles,
-		"message":       "Vault papers synced to desktop Zotero library successfully!",
-	})
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────

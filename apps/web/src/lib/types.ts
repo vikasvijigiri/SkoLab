@@ -351,6 +351,10 @@ export interface BreakthroughPrediction {
   roadmap_steps: string[];
   pioneering_papers: PaperSource[];
   latest_papers: PaperSource[];
+  // True when the LLM call failed and the backend served its deterministic
+  // placeholder instead of a real prediction — show it as an estimate, not
+  // as genuine analysis.
+  is_fallback?: boolean;
 }
 
 // Nexus collection workspace (client-derived from OpenAlexWork) + chat
@@ -398,6 +402,15 @@ export interface CollabProject {
   ownerName: string;
   members: CollabMember[];
   memberUids: string[];
+  /** Derived from `members` on every membership/role write — lets
+   *  firestore.rules express "owner or editor" without array-of-object
+   *  inspection (the rules language has no predicate search over
+   *  `members`). Absent on projects created before this field existed;
+   *  firestore.rules falls back to "any member" for those. */
+  editorUids?: string[];
+  /** Same derivation, for "owner, editor, or reviewer" (everyone but a
+   *  pure viewer may comment in chat). */
+  commenterUids?: string[];
   recentEquations: string;
   manuscriptProgress: number;
   manuscriptDraft: string;

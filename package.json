@@ -7,7 +7,10 @@
     "apps/web"
   ],
   "devDependencies": {
-    "jsdom": "~26.1.0"
+    "jsdom": "~26.1.0",
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "firebase": "^12.15.0",
+    "vitest": "~4.1.11"
   },
   "scripts": {
     "dev:backend": "cd services/backend && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
@@ -19,6 +22,7 @@
     "test:load:baseline": "k6 run tests/load/baseline.js",
     "test:load:rampup": "k6 run tests/load/ramp_up.js",
     "test:load:soak": "k6 run tests/load/soak.js",
-    "test:load:spike": "k6 run tests/load/spike.js"
+    "test:load:spike": "k6 run tests/load/spike.js",
+    "test:rules": "npx --yes firebase-tools emulators:exec --only firestore \"vitest run --config tests/firestore/vitest.config.mts\""
   }
 }

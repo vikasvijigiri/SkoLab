@@ -9,7 +9,6 @@ import {
   where,
   orderBy,
   onSnapshot,
-  arrayUnion,
   getDocs,
   serverTimestamp,
   type Unsubscribe,
@@ -19,6 +18,7 @@ import { requireDb } from "./client";
 import type {
   CollabProject,
   CollabRole,
+  CollabMember,
   CollabDocument,
   CollabPresence,
   CollabMessage,
@@ -44,6 +44,20 @@ export function roleFor(project: Pick<CollabProject, "ownerUid" | "members">, ui
 export const canEdit = (r: CollabRole | null) => r === "owner" || r === "editor";
 export const canManage = (r: CollabRole | null) => r === "owner";
 export const canComment = (r: CollabRole | null) => r === "owner" || r === "editor" || r === "reviewer";
+
+/** Recomputes the three flat uid arrays Firestore persists alongside
+ *  `members` — `memberUids` (everyone), `editorUids` (owner+editor),
+ *  `commenterUids` (everyone but viewer). `members` stays the single
+ *  source of truth; these are read by firestore.rules, which can't search
+ *  an array of objects for a nested `role` field. */
+function deriveRoleArrays(members: CollabMember[]) {
+  const roleOf = (m: CollabMember) => m.role ?? "editor"; // legacy rows had no role
+  return {
+    memberUids: members.map((m) => m.uid),
+    editorUids: members.filter((m) => roleOf(m) === "owner" || roleOf(m) === "editor").map((m) => m.uid),
+    commenterUids: members.filter((m) => roleOf(m) !== "viewer").map((m) => m.uid),
+  };
+}
 
 // Mirrors CoLabWorkspaceScreen.kt's Firestore model — `collabs_groups/{id}` with
 // messages/tasks/meetings subcollections. No REST backend exists for this (see
@@ -94,13 +108,14 @@ export async function createProject(opts: {
   ownerName: string;
   ownerEmail: string;
 }) {
+  const owner: CollabMember = { uid: opts.ownerUid, name: opts.ownerName, email: opts.ownerEmail, role: "owner" };
   const ref = await addDoc(collection(requireDb(), "collabs_groups"), {
     name: opts.name,
     description: opts.description,
     ownerUid: opts.ownerUid,
     ownerName: opts.ownerName,
-    members: [{ uid: opts.ownerUid, name: opts.ownerName, email: opts.ownerEmail, role: "owner" }],
-    memberUids: [opts.ownerUid],
+    members: [owner],
+    ...deriveRoleArrays([owner]),
     recentEquations: "",
     manuscriptProgress: 0,
     manuscriptDraft: "",
@@ -223,29 +238,44 @@ export async function findResearcherByEmail(email: string): Promise<SkoLabUser |
   return first.data() as SkoLabUser;
 }
 
+/** Resolves a Discovery match (an OpenAlex author id) to a SkoLab account, if
+ *  the researcher has signed up and linked their profile. Powers "start a
+ *  project with this match" — the bridge from a fit-based match to a real
+ *  collaboration, closing the "found a match, now what" gap most discovery
+ *  tools leave open. Returns null (never a fabricated match) until the
+ *  researcher exists and has linked `openAlexId` on their own profile. */
+export async function findResearcherByOpenAlexId(openAlexId: string): Promise<SkoLabUser | null> {
+  const q = query(collection(requireDb(), "researchers"), where("openAlexId", "==", openAlexId));
+  const snap = await getDocs(q);
+  const first = snap.docs[0];
+  if (!first) return null;
+  return first.data() as SkoLabUser;
+}
+
+/** Takes the full project (not just its id) so the invite can be folded into
+ *  the canonical `members` array and the derived role arrays recomputed from
+ *  it in one write — `arrayUnion` alone can't keep `editorUids`/
+ *  `commenterUids` in sync with an invited role. */
 export async function inviteMember(
-  projectId: string,
+  project: Pick<CollabProject, "id" | "members">,
   member: { uid: string; name: string; email: string; phone?: string },
   role: CollabRole = "editor"
 ) {
-  await updateDoc(doc(requireDb(), "collabs_groups", projectId), {
-    members: arrayUnion({ ...member, role }),
-    memberUids: arrayUnion(member.uid),
-  });
+  const members = [...project.members, { ...member, role }];
+  await updateDoc(doc(requireDb(), "collabs_groups", project.id), { members, ...deriveRoleArrays(members) });
 }
 
 /** Rewrites the whole members array — arrayRemove needs an exact object match,
  *  which the added `role` field and legacy rows without one make unreliable. */
 export async function updateMemberRole(project: CollabProject, uid: string, role: CollabRole) {
   const members = project.members.map((m) => (m.uid === uid ? { ...m, role } : m));
-  await updateDoc(doc(requireDb(), "collabs_groups", project.id), { members });
+  await updateDoc(doc(requireDb(), "collabs_groups", project.id), { members, ...deriveRoleArrays(members) });
 }
 
 export async function removeMemberByUid(project: CollabProject, uid: string) {
   if (uid === project.ownerUid) return; // never remove the owner
   const members = project.members.filter((m) => m.uid !== uid);
-  const memberUids = project.memberUids.filter((x) => x !== uid);
-  await updateDoc(doc(requireDb(), "collabs_groups", project.id), { members, memberUids });
+  await updateDoc(doc(requireDb(), "collabs_groups", project.id), { members, ...deriveRoleArrays(members) });
 }
 
 // ── Documents (Overleaf file list) ───────────────────────────────────────────

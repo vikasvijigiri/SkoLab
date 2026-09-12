@@ -1,17 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { motion } from "framer-motion";
-import { applyTheme, initialTheme, nextTheme } from "@/lib/theme";
+import { applyTheme, initialTheme, nextTheme, type Theme } from "@/lib/theme";
 import { TRANSITION_FAST, TRANSITION_NORMAL } from "@/lib/motion";
 
+// Nothing external notifies us when localStorage changes elsewhere -- this
+// component owns writes via `cycle`, so a subscribe-only-once stub is enough.
+function subscribeNever() {
+  return () => {};
+}
+const getServerSnapshot = (): Theme => "light";
+
 export function ThemeToggle() {
-  const [theme, setTheme] = useState(initialTheme);
+  // `useState(initialTheme)` used to read localStorage straight into the
+  // lazy initializer: SSR/the static shell always assumes "light" (no
+  // localStorage there), but the client's first render can see a real
+  // persisted "dark"/"system" choice -- a hydration mismatch caught live
+  // (React regenerating this whole subtree, `rect` vs `circle` in the
+  // console diff). useSyncExternalStore is the React-documented fix: it
+  // renders `getServerSnapshot` during hydration to match the static HTML,
+  // then reconciles to the real client value immediately after, with no
+  // mismatch warning and no visible flash -- same pattern already proven in
+  // useGoogleRedirectPending. `override` lets a click take effect
+  // immediately without waiting on a localStorage round trip.
+  const persisted = useSyncExternalStore(subscribeNever, initialTheme, getServerSnapshot);
+  const [override, setOverride] = useState<Theme | null>(null);
+  const theme = override ?? persisted;
   const [hovered, setHovered] = useState(false);
 
   const cycle = () => {
     const next = nextTheme(theme);
-    setTheme(next);
+    setOverride(next);
     applyTheme(next);
   };
 
@@ -22,7 +42,6 @@ export function ThemeToggle() {
       onHoverEnd={() => setHovered(false)}
       aria-label={`Theme: ${theme}`}
       title={`Theme: ${theme} (click to change)`}
-      suppressHydrationWarning
       transition={TRANSITION_FAST}
       className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-border bg-surface text-text-muted transition-[color,border-color,background-color] duration-[var(--motion-fast)] hover:border-primary/40 hover:bg-surface-subtle hover:text-primary"
       style={{ transitionTimingFunction: "var(--ease-standard)" }}

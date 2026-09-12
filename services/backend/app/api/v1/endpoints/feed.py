@@ -148,6 +148,7 @@ def generate_fallback_conjecture(author_data: dict) -> ConjectureResponse:
             "correctOptionIndex": 1,
             "explanation": "At an alpha level of 0.05, 5% of 10,000 tests (i.e., 500 tests) are expected to be false positives by chance alone. To control the family-wise error rate or false discovery rate, multicomparison corrections like Bonferroni or Benjamini-Hochberg must be applied.",
         }
+    conjecture_data["is_fallback"] = True
     return ConjectureResponse(**conjecture_data)
 
 

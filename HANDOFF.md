@@ -1,78 +1,71 @@
 # HANDOFF
 
-> Current status (2026-09-11): the repo-specific `.claude/` capability layer
-> was replaced wholesale with the vendored `addyosmani/agent-skills` pack —
-> see `decisions/0017`. `AGENTS.md` and `CLAUDE.md` now point at the new
-> pack; product knowledge that lived in the old layer's rules and skill
-> references moved to `docs/design/` and `docs/ops/`. `TASK.md`/`LOG.md`
-> history below this point predates the swap and still refers to the old
-> layer's skills, hooks, and `tools/` — read it as history, not as current
-> instructions for how this repo's agent tooling works.
->
-> Product state as of 2026-09-10: `main` is at `cff6997` (PR #119 merged)
-> with the Discovery **fit-first collaborator finder** shipped — see
-> `LOG.md`'s 2026-09-10 entry and `decisions/0014`. No open feature branch.
-
 > Current-state snapshot, not history. Overwritten in place at the end of
 > every session. For history, see `LOG.md`; for why a decision was made, see
 > `decisions/`.
 
-**Last updated:** 2026-09-11
-
-> **Note:** the sections below "Where the repository is" predate several merges
-> (daily brief, research surfaces, discovery fit-first) and are stale — trust
-> `LOG.md` and `git log` over them until a full `documentation` pass refreshes
-> this file.
+**Last updated:** 2026-09-12
 
 ## Where the repository is
 
-`main` is at `cff6997` — merge of PR #119
-(`feat/discovery-fit-first`, base `206e845`), branch deleted local + remote.
+`main` has absorbed the 2026-09-11 backend-audit/live-feed work (PR #180)
+plus a large Dependabot sweep (2026-09-12): 26 dependency PRs merged, two
+systemic CI gaps fixed at the root (not just worked around), and
+`dependabot.yml` updated so the confirmed-broken bumps below stop
+reopening every week. Full detail in `LOG.md`'s 2026-09-12 and 2026-09-11
+entries.
 
-- Discovery's researcher surface is now fit-first: defaults to the viewer's
-  resolved subfield, ranks by a no-embeddings fit score, shows activity /
-  momentum / career-stage / decades / topical-focus / standing / ORCID /
-  deceased signals with a click-only filter rail.
-- New: `apps/web/src/lib/discovery/*`, `apps/web/src/components/discovery/*`,
-  `apps/web/src/app/api/enrich/{deaths,collab-flags}`. No Go/Python change.
-- Plan `docs/plans/2026-09-10-discovery-fit-first.md` (all 11 tasks ticked,
-  `## Approved`); decision `decisions/0014-discovery-fit-first-collaborator.md`.
-- Verified before merge: tsc 0, lint 0, vitest 39 files / 160 tests,
-  check:contrast pass, Playwright `discovery-researchers` + `rollout-visual`
-  10/10 (axe AA), `next build` 0.
-
-### Earlier (stale) — instrument-frontend, 2026-09-08
-
-`main` was at `1ab8c31`; branch `feat/instrument-frontend`
-(`7844a28` `7616035` `8f6151e`) — dark-first "Instrument" identity,
-`decisions/0012`, plan `docs/plans/2026-09-08-instrument-frontend.md`. Status
-of that branch relative to current `main` is unverified here.
-
-## Verification behind the branch
-
-| Check | Result |
-|---|---|
-| `python tools/new_skill_check.py --all` | 16 skills, all required pass |
-| `python tools/test_process_router.py` | rc 0 |
-| `python tools/run_checks.py --tier all --require-test` | `PASS: 5 check(s) green` |
-| `apps/web`: `npm run test` | 110 passed (30 files) |
-| `apps/web`: `npx tsc --noEmit` · `npm run lint` · `npm run build` | green (lint: 1 pre-existing unrelated warning) |
-| `apps/web`: `npm run check:contrast` | all token pairs pass, both themes |
-| `apps/web`: `npm run test:e2e` | 18/19 — axe WCAG AA specs pass |
+- **CI no longer silently drifts.** Two gaps found and fixed for real:
+  - `verify.yml`'s Android job failed identically on every Dependabot PR
+    (GitHub withholds secrets from Dependabot-triggered runs, and
+    `GOOGLE_SERVICES_JSON` is one) — now falls back to a well-formed fake
+    placeholder when the secret is empty, so Dependabot PRs get a genuine
+    compile signal instead of a guaranteed unrelated failure. PR #181.
+  - `ci.yml` hardcoded `go-version: "1.25"` while `checks.yml` used
+    `go-version-file`; a legitimate Go dependency bump raised `go.mod`'s
+    own `go` directive to `1.26.0` and the hardcoded value went stale,
+    breaking every PR touching `services/backend-go` (even ones with zero
+    Go changes). Both workflows now read `go-version-file`. PR #182.
+- **`dependabot.yml` now blocks the exact bumps already proven broken**,
+  each with an inline comment naming the failure and what unblocks it —
+  see "What needs a decision" below for the full list. This is a
+  stop-gap against repeat investigation, not a fix for the underlying
+  incompatibilities.
+- Everything from the 2026-09-11 session (feed refresh-on-reload/focus/
+  login, `is_fallback` flagging on the three LLM fallback paths, the two
+  deleted fake Go endpoints, the `internal/quest`/`internal/user` test
+  coverage + nil-pointer fix) is confirmed intact — re-verified after the
+  dependency churn: Python `pytest -q` 222 passed/4 skipped, web
+  `vitest run` 245 passed, `tsc --noEmit` + `eslint src` clean, Go
+  `build && vet && test ./...` all green.
 
 ## What needs a decision / attention
 
-- **Branch is unmerged and has no remote.** Nothing pushed. `/publish` +
-  `release-git` when the owner wants it on `main`. Formal `testing` and
-  `code-review` skill passes were not run separately — every gate was run and
-  quoted during implementation.
-- **Pre-existing e2e failure `smoke.spec.ts:13`** ("Firebase isn't configured
-  yet" notice on `/login`). Verified to fail identically on the pre-change
-  tree — an env/config issue, not from this work. Untouched.
-- **`.env` still lacks** the keys listed in `.env.example` (`OPENALEX_API_KEY`,
-  `EMAIL_BLIND_INDEX_KEY`, etc.). Owner's own credentials; no agent fills them.
-- **Newly added skills do not hot-attach to an already-running Claude Code
-  session** — `/frontend-ui` becomes invocable after a restart. Its guidance
-  was applied directly this session regardless.
-- **`decisions/0012` supersedes** `docs/plans/2026-09-07-web-visual-identity-round1.md`
-  and the direction-C contract. Rollback path is in the decision record.
+- **Coordinated bumps deliberately deferred, each blocked in
+  `dependabot.yml` until someone does the paired work:**
+  - okhttp 5.x needs `compileSdk >= 37` bumped first (Android)
+  - Android Gradle Plugin 9.4.0 needs the Gradle wrapper bumped to
+    `>= 9.6.0` first
+  - numpy `>= 2.5.0` / networkx `>= 3.5` need CI's Python bumped to
+    `>= 3.11`/`3.12` first (currently 3.10 in `ci.yml`, 3.11 in
+    `checks.yml` — inconsistent, worth unifying)
+  - ESLint 10 needs a compatible `eslint-plugin-react` release
+  - TypeScript 7.0 needs `typescript-eslint` to support it
+  - vitest 5 / jsdom 30 need `vite` pinned as a direct dependency first
+    (currently only resolved transitively)
+  - `actions/setup-node@7` resolves a broken native binding
+    (`@rolldown/binding-wasm32-wasi`) for one of the web workspace's
+    optional deps — root cause not yet investigated past that point
+  - `react`/`react-dom` now grouped in `dependabot.yml` so future bumps
+    land together instead of splitting across independent PRs that break
+    npm's peer-dependency resolution in isolation
+- **`firestore.rules` is deployed to production** (confirmed via
+  `npx firebase-tools deploy --only firestore:rules`). Worth a manual
+  spot-check in the Firebase Console that published rules match the repo
+  file.
+- Industry-tieups and daily-conjecture endpoints correctly flag
+  `is_fallback` but have no frontend consumer today — wire the flag
+  through the same way Horizon's card does if either becomes user-facing.
+- `internal/quest`/`internal/user` Go tests only cover no-DB and
+  validation paths; DB-backed branches only run against CI's `slow` job
+  Postgres container, not as Go unit tests.
