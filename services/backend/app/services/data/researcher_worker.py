@@ -207,7 +207,7 @@ async def _pg_upsert_researcher_metrics(clean_id: str, payload: Dict[str, Any]) 
     Only searchable/filterable fields — NOT the large works array.
     Suitable for: author suggestion lookups, name search, field filtering.
     """
-    from app.db.database import AsyncSessionLocal
+    from app.db.database import AsyncSessionLocal, execute_with_row_retry
     from app.models.researcher_models import ResearcherMetrics
     from sqlalchemy.future import select
 
@@ -216,10 +216,11 @@ async def _pg_upsert_researcher_metrics(clean_id: str, payload: Dict[str, Any]) 
 
     async with AsyncSessionLocal() as session:
         try:
-            result = await session.execute(
+            result = await execute_with_row_retry(
+                session,
                 select(ResearcherMetrics).where(
                     ResearcherMetrics.openalex_id == clean_id
-                )
+                ),
             )
             row = result.scalars().first()
             fields = {k: v for k, v in payload.items()}
@@ -240,6 +241,7 @@ async def _pg_upsert_researcher_metrics(clean_id: str, payload: Dict[str, Any]) 
                 "[teleport] PG researcher_metrics write failed for %s: %s",
                 clean_id,
                 exc,
+                exc_info=True,
             )
             await session.rollback()
 
