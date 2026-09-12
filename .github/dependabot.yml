@@ -104,10 +104,8 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
-    ignore:
-      # Confirmed broken: actions/setup-node v7's bundled Node resolves a
-      # different (broken) native binding for one of the web workspace's
-      # optional deps (`Cannot find module '@rolldown/binding-wasm32-wasi'`)
-      # -- unrelated to this repo's own known Linux-lockfile workaround.
-      - dependency-name: "actions/setup-node"
-        update-types: ["version-update:semver-major"]
+    # (actions/setup-node v7 was suspected broken -- a `Cannot find module
+    # '@rolldown/binding-wasm32-wasi'` failure looked adjacent to the
+    # version bump -- but a clean rebase + fresh CI run (2026-09-12)
+    # merged it without issue; the original failure was unrelated noise.
+    # No ignore rule needed.)
