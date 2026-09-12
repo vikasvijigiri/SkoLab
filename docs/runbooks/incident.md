@@ -57,7 +57,7 @@ When transitioning shifts, the outgoing SRE must log:
 [ ] 2. Read the outgoing SRE's handover log for this shift.
 [ ] 3. Confirmed all Pending Alert Tickets have been handed over with context.
 [ ] 4. Run pre-shift check script and confirmed [PASS] on all items:
-        .\venv\Scripts\python scripts/pre_shift_check.py
+        .\venv\Scripts\python scripts/ops/pre_shift_check.py
 [ ] 5. Completed test page trigger and received page on mobile device.
 [ ] 6. Verified PagerDuty on-call schedule shows your name as primary.
 [ ] 7. Signed into the Slack war room channel: #incident-war-room.
@@ -190,7 +190,7 @@ SCAN 0 MATCH "suggestions:*" COUNT 100 | xargs redis-cli DEL
 
 6. **Monitor Recovery:** Once OpenAlex recovers, remove kill switch, restart service, verify live search.
 
-7. **Post-Incident:** `python scripts/create_postmortem.py --id inc-YYYY-NNN --title "OpenAlex Upstream Outage" --severity P1 --detected "..." --resolved "..."`
+7. **Post-Incident:** `python scripts/ops/create_postmortem.py --id inc-YYYY-NNN --title "OpenAlex Upstream Outage" --severity P1 --detected "..." --resolved "..."`
 
 ---
 
@@ -215,7 +215,7 @@ SCAN 0 MATCH "suggestions:*" COUNT 100 | xargs redis-cli DEL
    If < 0.20 — pause background enrichment jobs immediately (see Step 4).
 
 4. **Pause Background Enrichment Jobs:**
-   Background enrichment (`scripts/fetch_physics_profiles.py`) competes for the same Groq quota.
+   Background enrichment (`scripts/ops/fetch_physics_profiles.py`) competes for the same Groq quota.
    Kill any running enrichment processes before they exhaust the remaining quota.
 
 5. **Apply Kill Switch if Both Providers Fail:**
@@ -225,7 +225,7 @@ SCAN 0 MATCH "suggestions:*" COUNT 100 | xargs redis-cli DEL
 
 6. **Monitor Quota Reset:** Groq quotas reset at midnight PST (08:00 UTC). Remove kill switch when confirmed.
 
-7. **Post-Incident:** `python scripts/create_postmortem.py --id inc-YYYY-NNN --title "LLM Rate Limit Exhaustion" --severity P2 --detected "..." --resolved "..."`
+7. **Post-Incident:** `python scripts/ops/create_postmortem.py --id inc-YYYY-NNN --title "LLM Rate Limit Exhaustion" --severity P2 --detected "..." --resolved "..."`
 
 ---
 
