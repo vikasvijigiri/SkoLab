@@ -74,6 +74,29 @@ class Settings:
         default_factory=lambda: os.environ.get("APP_BASE_URL", "http://localhost:8000")
     )
 
+    # ── Go gateway URL (Python -> Go; the one reverse direction) ─────────────
+    # Every other internal/* call in this codebase goes Go -> Python. The
+    # teleport worker's researcher-metrics compute calls back to Go's
+    # POST /internal/compute_metrics instead of duplicating that math here
+    # (2026-09-12 no-slop audit) -- this is the one place Python needs the
+    # gateway's own URL. Same manual-set-after-first-deploy pattern as the
+    # gateway's own PYTHON_BACKEND_URL (render.yaml): Render's `fromService`
+    # can't supply the https scheme either service needs.
+    gateway_url: str = field(
+        default_factory=lambda: os.environ.get("GATEWAY_URL", "http://localhost:8080")
+    )
+
+    # ── Shared secret for internal/service-to-service calls ──────────────────
+    # Checked by this service's own /internal/* routes (see
+    # app/api/v1/endpoints/internal.py's _check_internal_token) and sent as
+    # the X-Internal-Token header when this service calls the Go gateway's
+    # /internal/compute_metrics. Unset in either direction ⇒ the check is
+    # skipped, matching this repo's "local dev needs no configuration"
+    # convention for internal auth.
+    internal_api_token: str = field(
+        default_factory=lambda: os.environ.get("INTERNAL_API_TOKEN", "")
+    )
+
     # ── Downloads directory (absolute path, portable across OSes) ────────────
     downloads_dir: Path = field(default_factory=_downloads_dir)
 
