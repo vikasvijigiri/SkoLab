@@ -55,6 +55,15 @@ _TRANSIENT_AI_MARKERS = (
     "429",
     "quota",
     "temporarily unavailable",
+    # Groq's own generation-side rejection (llm_service.py's per-attempt
+    # `f"Groq returned {status}: {text}"`, e.g. a 400 "Failed to validate
+    # JSON. Please adjust your prompt...") -- a provider-side content
+    # failure, not a bug here, but missing this left SKOLAB-BACKEND-E
+    # logging at ERROR with a full traceback and a real Sentry event while
+    # its 429/circuit-open siblings (covered by the markers above) were
+    # already correctly classified as expected degradation (2026-09-12
+    # endpoint audit).
+    "failed to validate json",
 )
 
 _SECRET_RE = re.compile(

@@ -29,7 +29,7 @@ class _FakePrediction:
         }
 
     async def nexus_chat(self, papers, messages):
-        return "synthesised answer"
+        return "synthesised answer", False
 
 
 @pytest.fixture(autouse=True)

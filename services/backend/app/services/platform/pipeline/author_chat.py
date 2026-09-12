@@ -153,6 +153,10 @@ class AuthorChatMixin:
         # Append current user message
         messages.append({"role": "user", "content": user_message})
         reply = f"Thank you for your question about my work. I believe the principles discussed in '{paper_title}' outline a strong foundation for this domain."
+        # Set only if the LLM call below actually produces content; stays
+        # True for the canned sentence above so a client can tell them
+        # apart (2026-09-12 endpoint audit).
+        is_fallback = True
         if (
             is_llm_working()
         ):  # Decoupled: LLM moved to background addon to unblock core app
@@ -165,6 +169,7 @@ class AuthorChatMixin:
                 )
                 if response.content:
                     reply = response.content.strip()
+                    is_fallback = False
             except Exception as e:
                 print(f"Author chat simulation failed: {e}", flush=True)
         if user_id:
@@ -191,4 +196,9 @@ class AuthorChatMixin:
                     )
                 except Exception as e:
                     print(f"[Postgres Chat Save Error] failed: {e}", flush=True)
-        return {"author_id": author_id, "author_name": author_name, "reply": reply}
+        return {
+            "author_id": author_id,
+            "author_name": author_name,
+            "reply": reply,
+            "is_fallback": is_fallback,
+        }
