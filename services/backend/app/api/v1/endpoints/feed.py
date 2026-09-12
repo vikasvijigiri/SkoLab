@@ -303,7 +303,7 @@ async def get_daily_conjecture(
         return fallback
 
 
-from app.db.database import get_db
+from app.db.database import get_db, AsyncSessionLocal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -312,11 +312,40 @@ async def get_industry_opportunities(
     focus: str = Query("AI"),
     name: Optional[str] = Query(None),
     openalex_service: OpenAlexService = Depends(get_openalex_service),
-    db: AsyncSession = Depends(get_db),
 ):
-    return await fetch_industry_opportunities(
-        focus, name=name, openalex_service=openalex_service, db=db
+    # A cache miss here scrapes six job portals plus a DDG search and runs
+    # them through the LLM (industry_service.py) -- measured at 35s+ against
+    # production, past the web client's own 30s fetch timeout. This used to
+    # `await` the whole pipeline inline, so every cold focus/name combo
+    # timed out client-side even though the backend eventually finished.
+    # Reusing the daily_feed 202/Retry-After pattern (same constants, this
+    # isn't feed-specific despite the name) fixes it the same way.
+    #
+    # Deliberately not `Depends(get_db)`: run_bounded's compute keeps running
+    # in the background past this request if a caller times out waiting on
+    # it (see pending_compute.py), but a request-scoped session from
+    # Depends(get_db) is closed the moment *this* request's response is
+    # sent -- the next db.execute() inside that still-running background
+    # task would hit a session FastAPI already tore down. Opening a fresh
+    # session inside the compute closure ties its lifetime to the task
+    # instead of the request that happened to kick it off.
+    async def _compute():
+        async with AsyncSessionLocal() as bg_db:
+            return await fetch_industry_opportunities(
+                focus, name=name, openalex_service=openalex_service, db=bg_db
+            )
+
+    key = f"industry_opportunities:{focus}:{name or ''}"
+    result = await run_bounded(
+        key, _compute, wait_timeout=DAILY_FEED_WAIT_TIMEOUT_SECONDS
     )
+    if result is PENDING:
+        return JSONResponse(
+            status_code=202,
+            content=[],
+            headers={"Retry-After": str(DAILY_FEED_RETRY_AFTER_SECONDS)},
+        )
+    return result
 
 
 @router.get("/assistant_professor_roadmap", response_model=RoadmapResponse)
