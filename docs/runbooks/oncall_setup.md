@@ -59,7 +59,7 @@ Before going on-call, confirm you have active access to all critical systems:
 ### Tooling Access Test
 Run this verification script immediately before shift start:
 ```bash
-.\\venv\\Scripts\\python scripts/pre_shift_check.py
+.\\venv\\Scripts\\python scripts/ops/pre_shift_check.py
 ```
 A successful pre-shift check prints:
 ```
