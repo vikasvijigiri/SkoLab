@@ -18,7 +18,7 @@
     "dev:go": "cd services/backend-go && go run main.go",
     "dev:web": "cd apps/web && npm run dev",
     "build:web": "cd apps/web && npm run build",
-    "build:android": "npm run compile:tokens && powershell -ExecutionPolicy Bypass -File scripts/build-and-install.ps1",
+    "build:android": "npm run compile:tokens && powershell -ExecutionPolicy Bypass -File scripts/build/build-and-install.ps1",
     "compile:tokens": "node shared/skolab-design-system/compile-tokens.js",
     "test:load:baseline": "k6 run tests/load/baseline.js",
     "test:load:rampup": "k6 run tests/load/ramp_up.js",

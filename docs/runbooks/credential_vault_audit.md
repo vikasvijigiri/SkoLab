@@ -50,7 +50,7 @@ Run this audit **before each rotation cycle** (every 2 weeks) to verify only aut
 
 ### Step 1: Run the Automated Key Scope Verifier
 ```bash
-.\\venv\\Scripts\\python scripts/audit_key_scopes.py
+.\\venv\\Scripts\\python scripts/security/audit_key_scopes.py
 ```
 This script checks that all required environment variables are configured and outputs a pass/fail report.
 
@@ -67,12 +67,12 @@ Per the security policy, rotate credentials that are:
 - Flagged by the automated `detect_secrets.py` scanner.
 
 ```bash
-.\\venv\\Scripts\\python scripts/detect_secrets.py
+.\\venv\\Scripts\\python scripts/security/detect_secrets.py
 ```
 
 ### Step 4: Verify No Leaked Keys in Git History
 ```bash
-.\\venv\\Scripts\\python scripts/scan_history_secrets.py
+.\\venv\\Scripts\\python scripts/security/scan_history_secrets.py
 ```
 If any secrets are detected in git history, immediately rotate all affected keys and force-push a cleaned history.
 
@@ -96,7 +96,7 @@ When a key must be rotated:
    ```
 4. **Verify the service is healthy** after restart:
    ```bash
-   .\\venv\\Scripts\\python scripts/synthetic_health_probe.py
+   .\\venv\\Scripts\\python scripts/ops/synthetic_health_probe.py
    ```
 5. **Revoke the old key** in the vault.
 6. **Log the rotation** in the shift handover log with the timestamp and reason.
