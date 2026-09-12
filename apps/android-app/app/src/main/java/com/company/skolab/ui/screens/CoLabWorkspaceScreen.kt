@@ -296,11 +296,7 @@ fun CoLabWorkspaceScreen(
                                 onClick = {
                                     val id = activeProjectDetails["id"] as? String ?: ""
                                     if (id.isNotEmpty()) {
-                                        if (id == "project_nexus_mock" || id == "Project Nexus") {
-                                            Toast.makeText(context, "Mock project doesn't support adding members", Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            onNavigateToInviteMember(id)
-                                        }
+                                        onNavigateToInviteMember(id)
                                     }
                                 },
                                 modifier = Modifier.size(32.dp).background(BgSubtle, CircleShape)
@@ -313,11 +309,7 @@ fun CoLabWorkspaceScreen(
                                 onClick = {
                                     val id = activeProjectDetails["id"] as? String ?: ""
                                     if (id.isNotEmpty()) {
-                                        if (id == "project_nexus_mock" || id == "Project Nexus") {
-                                            Toast.makeText(context, "Mock project doesn't support task creation", Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            onNavigateToCreateTask(id)
-                                        }
+                                        onNavigateToCreateTask(id)
                                     }
                                 },
                                 modifier = Modifier.size(32.dp).background(BgSubtle, CircleShape)
@@ -349,22 +341,14 @@ fun CoLabWorkspaceScreen(
                                     onDismissRequest = { showMenu = false },
                                     modifier = Modifier.background(BgCard)
                                 ) {
-                                    if (projectId != "Project Nexus" && projectId != "project_nexus_mock") {
-                                        DropdownMenuItem(
-                                            text = { Text("Delete Project", color = AccentRose, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) },
-                                            onClick = {
-                                                showMenu = false
-                                                showDeleteDialog = true
-                                            },
-                                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = AccentRose, modifier = Modifier.size(16.dp)) }
-                                        )
-                                    } else {
-                                        DropdownMenuItem(
-                                            text = { Text("Cannot Delete Mock", color = TextMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) },
-                                            onClick = { showMenu = false },
-                                            leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null, tint = TextMuted, modifier = Modifier.size(16.dp)) }
-                                        )
-                                    }
+                                    DropdownMenuItem(
+                                        text = { Text("Delete Project", color = AccentRose, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) },
+                                        onClick = {
+                                            showMenu = false
+                                            showDeleteDialog = true
+                                        },
+                                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = AccentRose, modifier = Modifier.size(16.dp)) }
+                                    )
                                 }
                             }
                         }
@@ -532,12 +516,7 @@ fun CoLabWorkspaceScreen(
                 confirmButton = {
                     Button(
                         onClick = {
-                            if (projectId == "Project Nexus" || projectId == "project_nexus_mock") {
-                                        Toast.makeText(context, "Mock project cannot be deleted.", Toast.LENGTH_SHORT).show()
-                                        showDeleteDialog = false
-                                        return@Button
-                                    }
-                                    if (projectId.isEmpty()) {
+                            if (projectId.isEmpty()) {
                                 Toast.makeText(context, "Project still loading. Please wait.", Toast.LENGTH_SHORT).show()
                                 return@Button
                             }
