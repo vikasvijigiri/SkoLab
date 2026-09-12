@@ -393,4 +393,7 @@ class PredictionService:
             # content with a 200 status (2026-09-12 endpoint audit). Log
             # the real exception server-side instead.
             print(f"[NexusChat] LLM query failed: {e}", flush=True)
-            return "The synthesis engine couldn't process that request. Please try again.", True
+            return (
+                "The synthesis engine couldn't process that request. Please try again.",
+                True,
+            )
