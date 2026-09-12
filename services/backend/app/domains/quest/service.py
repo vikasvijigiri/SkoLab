@@ -1,4 +1,5 @@
 import json
+import os
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -19,6 +20,37 @@ except ImportError:
 
 if FIRESTORE_AVAILABLE:
     from firebase_admin import firestore
+
+_TESTING = os.environ.get("TESTING") == "True"
+
+
+def _log_signature_check(
+    site: str,
+    user_id: str,
+    pref_row_id,
+    sig_row_id,
+    quests_data,
+    expected_sig,
+    stored_sig,
+    matched: bool,
+) -> None:
+    """Temporary diagnostic for the 2026-09-12 intermittent CI failure of
+    test_quest_database_tampering_check ("DID NOT RAISE ValueError" --
+    verification not catching tampered data -- reproduced 0/25 times
+    locally against a real Postgres, so this captures enough of the next
+    real CI failure to pin the actual cause instead of guessing further.
+    TESTING-gated: never prints outside pytest (tests/conftest.py sets
+    TESTING=True unconditionally; production never does). Remove once the
+    flake is root-caused or confirmed gone."""
+    if not _TESTING:
+        return
+    print(
+        f"[quest-sig-check:{site}] user_id={user_id} pref_row_id={pref_row_id} "
+        f"sig_row_id={sig_row_id} matched={matched} "
+        f"quests_data={json.dumps(quests_data, sort_keys=True)} "
+        f"expected_sig={expected_sig} stored_sig={stored_sig}",
+        flush=True,
+    )
 
 
 class QuestsService:
@@ -172,9 +204,20 @@ class QuestsService:
                 )
 
                 if sig_pref:
-                    if not verify_record_signature(
+                    matches = verify_record_signature(
                         user_id, quests_data, str(sig_pref.preference_value)
-                    ):
+                    )
+                    _log_signature_check(
+                        "get_user_quests",
+                        user_id,
+                        pref.id,
+                        sig_pref.id,
+                        quests_data,
+                        generate_record_signature(user_id, quests_data),
+                        str(sig_pref.preference_value),
+                        matches,
+                    )
+                    if not matches:
                         raise ValueError(
                             "Database integrity verification failed: Quests data has been tampered with!"
                         )
@@ -242,9 +285,20 @@ class QuestsService:
                 )
 
                 if sig_pref:
-                    if not verify_record_signature(
+                    matches = verify_record_signature(
                         user_id, quests_data, str(sig_pref.preference_value)
-                    ):
+                    )
+                    _log_signature_check(
+                        "complete_quest",
+                        user_id,
+                        pref.id,
+                        sig_pref.id,
+                        quests_data,
+                        generate_record_signature(user_id, quests_data),
+                        str(sig_pref.preference_value),
+                        matches,
+                    )
+                    if not matches:
                         raise ValueError(
                             "Database integrity verification failed: Quests data has been tampered with!"
                         )
