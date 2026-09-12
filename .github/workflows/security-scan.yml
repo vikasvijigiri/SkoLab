@@ -43,7 +43,7 @@ jobs:
 
       - name: Upload semgrep SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         continue-on-error: true
         with:
           sarif_file: semgrep.sarif
@@ -62,7 +62,7 @@ jobs:
 
       - name: Upload trivy SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         continue-on-error: true
         with:
           sarif_file: trivy.sarif
