@@ -307,7 +307,7 @@ fun ChatRoomScreen(
         if (isGranted) {
             Toast.makeText(context, "✅ Contacts access granted for smart suggestions!", Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(context, "⚠️ Contacts permission denied. Using simulated database.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "⚠️ Contacts permission denied. Searching registered users instead.", Toast.LENGTH_SHORT).show()
         }
     }
 
