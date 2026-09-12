@@ -186,6 +186,16 @@ export const industryOpportunitiesQuery = (focus = "AI", name?: string) =>
     queryFn: () => getIndustryOpportunities(focus, name),
     ...HOURLY,
     ...LIVE_FEED,
+    // Same 202/Retry-After polling as dailyFeedQuery above: an uncached
+    // focus/name combo scrapes several job portals + a DDG search + LLM
+    // synthesis (industry_service.py), which the backend now runs via
+    // run_bounded rather than blocking the request past the client's
+    // 30s timeout. Without this override ApiPending fell through to
+    // providers.tsx's global 1-retry default, which gave up almost
+    // immediately and surfaced a cold cache as a failed load.
+    retry: (failureCount, error) => error instanceof ApiPending && failureCount < 20,
+    retryDelay: (_failureCount, error) =>
+      error instanceof ApiPending ? error.retryAfterMs : 1000,
   });
 
 export const matchGrantsQuery = (authorId: string) =>
