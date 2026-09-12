@@ -148,13 +148,6 @@ export async function updateEquations(projectId: string, latex: string) {
   await updateDoc(doc(requireDb(), "collabs_groups", projectId), { recentEquations: latex });
 }
 
-export async function updateManuscript(projectId: string, draft: string, progress: number) {
-  await updateDoc(doc(requireDb(), "collabs_groups", projectId), {
-    manuscriptDraft: draft,
-    manuscriptProgress: progress,
-  });
-}
-
 export function subscribeMessages(
   projectId: string,
   cb: (messages: CollabMessage[]) => void,
