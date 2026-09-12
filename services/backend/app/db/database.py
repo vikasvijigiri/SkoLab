@@ -173,6 +173,38 @@ async def get_db() -> AsyncSession:
             raise
 
 
+async def execute_with_row_retry(db: AsyncSession, stmt):
+    """Execute `stmt`, retrying once (after a rollback) on NoSuchColumnError.
+
+    Leading theory for the SKOLAB-BACKEND-7/-8/-9 Sentry cluster (2026-09):
+    cross-referencing SKOLAB-BACKEND-9's last occurrence (2026-09-11
+    17:59:44.996Z) against Supabase's `supavisor_logs` showed the app's
+    Postgres backend connection was authenticated (`DbHandler: Backend
+    authenticated`, 17:59:44.964834) in the same second as the failing
+    query — i.e. it was the first query issued on a just-established
+    connection, which lines up with Render's free-tier container waking
+    from an idle sleep (the event's `server_name` tag carries a
+    "-hibernate-" segment, Render's free-tier sleep/wake marker) and
+    immediately serving a real request through Supabase's Supavisor
+    pooler (transaction mode) before that connection has fully settled --
+    the query's SQL is fine, but the row Postgres/asyncpg hands back for
+    it doesn't match the shape SQLAlchemy compiled. Sentry only has the
+    failures, not confirmation a same-request retry clears it, but a
+    rollback + one re-execute is the standard, low-risk mitigation for
+    this class of pooler cold-connection race and costs nothing when the
+    query would have succeeded anyway. Not a general-purpose retry helper
+    -- scoped to the first ORM SELECT of a request that can land right
+    after a cold start.
+    """
+    from sqlalchemy.exc import NoSuchColumnError
+
+    try:
+        return await db.execute(stmt)
+    except NoSuchColumnError:
+        await db.rollback()
+        return await db.execute(stmt)
+
+
 # ── Schema initialisation ─────────────────────────────────────────────────────
 async def init_db() -> None:
     """
