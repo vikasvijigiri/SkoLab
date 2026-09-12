@@ -189,9 +189,9 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
                   <ExternalLink size={10} aria-hidden="true" />
                 </a>
               )}
-              {author.expertise.length > 0 && (
+              {(author.expertise?.length ?? 0) > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {author.expertise.slice(0, 5).map((e) => (
+                  {author.expertise!.slice(0, 5).map((e) => (
                     <Badge key={e} accentColor="var(--accent-indigo)">
                       {e}
                     </Badge>
@@ -351,7 +351,7 @@ export function AuthorDetailContent({ authorId }: { authorId: string }) {
       )}
 
       {/* Publications */}
-      {author.works.length > 0 && (
+      {sortedWorks.length > 0 && (
         <Reveal>
           <Card>
             <SectionHeading icon={FileText} color="var(--accent-indigo)">
