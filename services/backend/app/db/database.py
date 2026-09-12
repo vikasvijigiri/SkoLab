@@ -223,40 +223,44 @@ async def init_db() -> None:
         # entirely for SQLite: a fresh create_all() already has the current
         # schema, and an existing dev.db missing a column is cheaper to
         # delete and let recreate than to hand-migrate.
-        if conn.dialect.name == "postgresql":
-            for col_name, col_type in [
-                ("username", "VARCHAR(100) UNIQUE"),
-                ("author_name", "VARCHAR(255)"),
-                ("phone", "VARCHAR(50)"),
-                ("research_focus", "TEXT"),
-            ]:
-                try:
-                    await conn.execute(
-                        text(
-                            f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col_name} {col_type};"
-                        )
+        _is_postgres = conn.dialect.name == "postgresql"
+        for col_name, col_type in [
+            ("username", "VARCHAR(100) UNIQUE"),
+            ("author_name", "VARCHAR(255)"),
+            ("phone", "VARCHAR(50)"),
+            ("research_focus", "TEXT"),
+        ]:
+            if not _is_postgres:
+                continue
+            try:
+                await conn.execute(
+                    text(
+                        f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col_name} {col_type};"
                     )
-                except Exception as e:
-                    print(
-                        f"[init_db] Note: could not alter table for column {col_name}: {e}",
-                        flush=True,
-                    )
+                )
+            except Exception as e:
+                print(
+                    f"[init_db] Note: could not alter table for column {col_name}: {e}",
+                    flush=True,
+                )
 
-            for col_name, col_type in [
-                ("skills", "JSON"),
-                ("tools", "JSON"),
-            ]:
-                try:
-                    await conn.execute(
-                        text(
-                            f"ALTER TABLE researcher_metrics ADD COLUMN IF NOT EXISTS {col_name} {col_type};"
-                        )
+        for col_name, col_type in [
+            ("skills", "JSON"),
+            ("tools", "JSON"),
+        ]:
+            if not _is_postgres:
+                continue
+            try:
+                await conn.execute(
+                    text(
+                        f"ALTER TABLE researcher_metrics ADD COLUMN IF NOT EXISTS {col_name} {col_type};"
                     )
-                except Exception as e:
-                    print(
-                        f"[init_db] Note: could not alter table for column {col_name}: {e}",
-                        flush=True,
-                    )
+                )
+            except Exception as e:
+                print(
+                    f"[init_db] Note: could not alter table for column {col_name}: {e}",
+                    flush=True,
+                )
 
         # ── pgvector similarity tables (Postgres only) ───────────────────────
         # SQLite (the offline-dev / fast-tier fallback) has no `vector` type,
