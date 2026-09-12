@@ -326,7 +326,8 @@ class AgentService:
                             flush=True,
                         )
                         return {
-                            "reply": "Agent failed to generate a response. All fallback models exhausted."
+                            "reply": "Agent failed to generate a response. All fallback models exhausted.",
+                            "is_fallback": True,
                         }
 
                     tool_calls = response_msg.get("tool_calls")
@@ -405,12 +406,14 @@ class AgentService:
                         return {"reply": reply}
             else:
                 return {
-                    "reply": "⚠️ The Groq API key is not configured on the backend. Please set GROQ_API in your backend/.env file."
+                    "reply": "⚠️ The Groq API key is not configured on the backend. Please set GROQ_API in your backend/.env file.",
+                    "is_fallback": True,
                 }
         except Exception as e:
             print(f"Agent chat failed: {e}")
             return {
-                "reply": "An error occurred while processing your query. Please try again."
+                "reply": "An error occurred while processing your query. Please try again.",
+                "is_fallback": True,
             }
 
     async def process_upload_document(

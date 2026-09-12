@@ -76,3 +76,8 @@ class RoadmapResponse(BaseModel):
     checklist: list[dict[str, Any]] = []
     peerCoauthors: list[dict[str, Any]] = []
     templates: list[dict[str, Any]] = []
+    # True when milestones/checklist/templates are the generic hardcoded
+    # set (LLM personalization failed) rather than tailored to the
+    # researcher's own metrics -- userMetrics/targetMetrics stay real
+    # either way (2026-09-12 endpoint audit).
+    is_fallback: bool = False

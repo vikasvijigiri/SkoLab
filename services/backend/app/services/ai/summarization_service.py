@@ -26,6 +26,7 @@ from app.prompts import (
 )
 from app.core.config import settings
 from app.services.ai.llm_service import is_llm_working
+from app.core.exceptions import AIUnavailable
 
 
 # ── LLM Context Budget ────────────────────────────────────────────────────────
@@ -116,7 +117,17 @@ class SummarizationService:
         try:
             return await self._run_intelligence_llm(context, title, meta, text_source)
         except Exception as exc:
-            raise Exception(f"Failed to query LLM to analyze paper: {str(exc)}")
+            # A call-time failure here (429, circuit-open, JSON parse) used
+            # to re-raise as a bare Exception, which the route had no
+            # handler for -- it leaked as an opaque 500 instead of this
+            # app's AIUnavailable/503 convention (the is_llm_working()==False
+            # branch above already gets this right with an honest degraded
+            # 200; this is the same failure mode, just discovered later).
+            # The exception text is logged, never returned to the caller.
+            print(f"[analyze_paper] LLM query failed: {exc}", flush=True)
+            raise AIUnavailable(
+                "Paper analysis is temporarily unavailable. Please retry shortly."
+            ) from exc
 
     # ══════════════════════════════════════════════════════════════════════════
     # PDF FETCHING & TEXT EXTRACTION
