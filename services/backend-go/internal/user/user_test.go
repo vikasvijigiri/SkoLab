@@ -79,10 +79,23 @@ func TestSyncUserProfile_NoDBIs503(t *testing.T) {
 	// Regression test: this handler used to call db.Pool.Exec with no nil
 	// check at all, which panics (into gin.Recovery's generic 500) instead
 	// of the clean 503 every sibling handler gives when the DB is down.
+	// uid must be "dev_user" (what auth.VerifyUser() sets in dev/CI mode)
+	// or the ownership check below would 403 first.
 	w := do(router(), http.MethodPost, "/api/v1/users/profile/sync",
-		`{"uid":"u1","name":"Ada Lovelace"}`, devAuth)
+		`{"uid":"dev_user","name":"Ada Lovelace"}`, devAuth)
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503 (db.Pool nil in unit test)", w.Code)
+	}
+}
+
+func TestSyncUserProfile_MismatchedUIDIs403(t *testing.T) {
+	// req.UID is client-controlled JSON, not derived from the verified
+	// token -- without this check any authenticated caller could overwrite
+	// another user's display_name (2026-09-12 endpoint audit).
+	w := do(router(), http.MethodPost, "/api/v1/users/profile/sync",
+		`{"uid":"someone_else","name":"Ada Lovelace"}`, devAuth)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", w.Code)
 	}
 }
 
@@ -118,28 +131,51 @@ func TestSyncUserMemoryEvents_MalformedBodyIs400(t *testing.T) {
 
 func TestSyncUserMemoryEvents_EmptyEventsIsNoOpSuccess(t *testing.T) {
 	// Explicitly short-circuits before ever touching db.Pool -- must succeed
-	// even with no database configured.
+	// even with no database configured. user_id must be "dev_user" (what
+	// auth.VerifyUser() sets in dev/CI mode) or the ownership check runs first.
 	w := do(router(), http.MethodPost, "/api/v1/user_memory/events",
-		`{"user_id":"u1","events":[]}`, devAuth)
+		`{"user_id":"dev_user","events":[]}`, devAuth)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}
 }
 
 func TestSyncUserMemoryEvents_NoDBIs503(t *testing.T) {
-	body := `{"user_id":"u1","events":[{"type":"PAPER_CLOSED","paperTitle":"On Computing"}]}`
+	body := `{"user_id":"dev_user","events":[{"type":"PAPER_CLOSED","paperTitle":"On Computing"}]}`
 	w := do(router(), http.MethodPost, "/api/v1/user_memory/events", body, devAuth)
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503 (db.Pool nil in unit test)", w.Code)
 	}
 }
 
+func TestSyncUserMemoryEvents_MismatchedUserIDIs403(t *testing.T) {
+	// req.UserID is client-controlled JSON -- without this check any
+	// authenticated caller could inject fabricated events into another
+	// user's memory log (2026-09-12 endpoint audit).
+	body := `{"user_id":"someone_else","events":[{"type":"PAPER_CLOSED","paperTitle":"On Computing"}]}`
+	w := do(router(), http.MethodPost, "/api/v1/user_memory/events", body, devAuth)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", w.Code)
+	}
+}
+
 // ── GetUserMemory ────────────────────────────────────────────────────────────
 
 func TestGetUserMemory_NoDBIs503(t *testing.T) {
-	w := do(router(), http.MethodGet, "/api/v1/user_memory/u1", "", devAuth)
+	// Path param must be "dev_user" (what auth.VerifyUser() sets in dev/CI
+	// mode) or the ownership check below would 403 first.
+	w := do(router(), http.MethodGet, "/api/v1/user_memory/dev_user", "", devAuth)
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503 (db.Pool nil in unit test, cache empty)", w.Code)
+	}
+}
+
+func TestGetUserMemory_MismatchedUserIs403(t *testing.T) {
+	// Without this check any authenticated caller could read any other
+	// user's aggregated behavioral profile (2026-09-12 endpoint audit).
+	w := do(router(), http.MethodGet, "/api/v1/user_memory/someone_else", "", devAuth)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", w.Code)
 	}
 }
 

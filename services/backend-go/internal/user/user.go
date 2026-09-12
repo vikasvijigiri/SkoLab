@@ -81,6 +81,18 @@ func SyncUserProfile(c *gin.Context) {
 		return
 	}
 
+	// auth.VerifyUser() only proves *a* valid Firebase account made this
+	// call, not that it owns the profile being written -- req.UID came
+	// from the client-controlled JSON body, so without this check any
+	// authenticated caller could overwrite any other user's display_name
+	// (2026-09-12 endpoint audit). DeleteUser below already gets this
+	// right by comparing against the path param; do the same here against
+	// the body field.
+	if req.UID != c.GetString("user_id") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: you may only sync your own profile."})
+		return
+	}
+
 	// Every other DB-backed handler in this package (and internal/feed,
 	// internal/quest) checks this before touching db.Pool -- this one and
 	// DeleteUser didn't, so a nil pool (DB down) panicked into gin.Recovery's
@@ -154,6 +166,14 @@ func SyncUserMemoryEvents(c *gin.Context) {
 	var req SyncEventsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// Same class of gap as SyncUserProfile above: req.UserID is client-
+	// controlled, and without this check any authenticated caller could
+	// inject fabricated activity events into another user's memory log
+	// (2026-09-12 endpoint audit).
+	if req.UserID != c.GetString("user_id") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: you may only sync your own activity events."})
 		return
 	}
 	if len(req.Events) == 0 {
@@ -250,6 +270,14 @@ func GetUserMemory(c *gin.Context) {
 	userID := c.Param("userId")
 	if userID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "userId is required"})
+		return
+	}
+	// Without this check, any authenticated caller could read any other
+	// user's aggregated behavioral profile (search terms, reading pace,
+	// papers read, collaborators) by supplying their userId -- a straight
+	// privacy leak (2026-09-12 endpoint audit).
+	if userID != c.GetString("user_id") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: you may only read your own memory profile."})
 		return
 	}
 

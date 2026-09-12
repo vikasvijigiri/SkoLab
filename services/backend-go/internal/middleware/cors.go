@@ -17,10 +17,12 @@ var defaultCORSOrigins = []string{
 	"http://127.0.0.1:3000",
 }
 
-// CORS builds a Gin handler that allows the configured origins to call this gateway
-// from a browser. Extra origins can be supplied via the CORS_ORIGINS env var
-// (comma-separated), matching the Python backend's convention.
-func CORS() gin.HandlerFunc {
+// allowedOrigins builds the same origin allow-list CORS() uses, from
+// defaultCORSOrigins plus the comma-separated CORS_ORIGINS env var. Exported
+// as IsAllowedOrigin below so non-HTTP callers (the websocket upgrader's
+// CheckOrigin, which has no CORS preflight of its own) can apply the exact
+// same policy instead of accepting every origin.
+func allowedOrigins() map[string]bool {
 	allowed := make(map[string]bool)
 	for _, o := range defaultCORSOrigins {
 		allowed[o] = true
@@ -32,6 +34,19 @@ func CORS() gin.HandlerFunc {
 			}
 		}
 	}
+	return allowed
+}
+
+// IsAllowedOrigin reports whether origin is in this gateway's CORS allow-list.
+func IsAllowedOrigin(origin string) bool {
+	return origin != "" && allowedOrigins()[origin]
+}
+
+// CORS builds a Gin handler that allows the configured origins to call this gateway
+// from a browser. Extra origins can be supplied via the CORS_ORIGINS env var
+// (comma-separated), matching the Python backend's convention.
+func CORS() gin.HandlerFunc {
+	allowed := allowedOrigins()
 
 	return func(c *gin.Context) {
 		origin := c.GetHeader("Origin")

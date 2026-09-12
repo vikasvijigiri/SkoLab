@@ -133,7 +133,7 @@ function WorkspacesRailCard({
 }
 
 export function HomeClient() {
-  const { user } = useAuth();
+  const { user, getIdToken } = useAuth();
   const {
     firestoreProfile,
     author,
@@ -161,7 +161,10 @@ export function HomeClient() {
     ...similarResearchersQuery(authorId ?? "", user?.uid),
     enabled: ready && !!authorId,
   });
-  const activityQ = useQuery({ ...activityFeedQuery(authorId, user?.uid), enabled: ready });
+  const activityQ = useQuery({
+    ...activityFeedQuery(authorId, user?.uid, getIdToken),
+    enabled: ready,
+  });
   const newsQ = useQuery({ ...scienceNewsQuery(topic), enabled: ready });
 
   const feed = feedQ.data ?? EMPTY_FEED;
