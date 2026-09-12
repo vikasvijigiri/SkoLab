@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.data.openalex_service import OpenAlexService
 from app.services.data.scraping_service import ScrapingService
 from app.core.observability import log_ai_degradation
+from app.db.database import execute_with_row_retry
 from app.models.content_models import ScrapedOpportunity
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,7 @@ async def fetch_industry_opportunities(
             stmt_metrics = select(ResearcherMetrics).where(
                 ResearcherMetrics.display_name.ilike(f"%{name}%")
             )
-            res_metrics = await db.execute(stmt_metrics)
+            res_metrics = await execute_with_row_retry(db, stmt_metrics)
             metrics = res_metrics.scalars().first()
             if metrics:
                 if metrics.field_of_study:
@@ -40,7 +41,7 @@ async def fetch_industry_opportunities(
                     f"Resolved research focus for {name} to: '{resolved_focus}' and expertise: {expertise_keywords}"
                 )
         except Exception as e:
-            logger.error(f"Error loading profile info for {name}: {e}")
+            logger.error(f"Error loading profile info for {name}: {e}", exc_info=True)
             # Clear the aborted transaction so the cache read below runs on a
             # clean session instead of also failing with "Could not locate
             # column in row" (the cascade behind SKOLAB-BACKEND-8/-9).
@@ -67,7 +68,7 @@ async def fetch_industry_opportunities(
             stmt = select(ScrapedOpportunity).where(
                 ScrapedOpportunity.focus_topic == resolved_focus
             )
-            res = await db.execute(stmt)
+            res = await execute_with_row_retry(db, stmt)
             db_items = res.scalars().all()
             for item in db_items:
                 cached_list.append(
@@ -98,7 +99,7 @@ async def fetch_industry_opportunities(
                 )
                 return cached_list
         except Exception as e:
-            logger.error(f"Error checking cache: {e}")
+            logger.error(f"Error checking cache: {e}", exc_info=True)
             try:
                 await db.rollback()
             except Exception:
