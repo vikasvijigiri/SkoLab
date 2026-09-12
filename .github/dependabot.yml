@@ -90,6 +90,13 @@ updates:
       - dependency-name: "networkx"
         update-types:
           ["version-update:semver-major", "version-update:semver-minor"]
+      # Confirmed broken -- upstream, not this repo's CI: openrouter (every
+      # released version through 1.1.139, checked 2026-09-12) pins
+      # `pydantic<2.13,>=2.11.2`, so nothing here can install pydantic
+      # 2.13+ until openrouter itself relaxes that cap. Verified with a
+      # clean-room `pip install --dry-run` against the latest openrouter.
+      - dependency-name: "pydantic"
+        versions: [">=2.13.0"]
   - package-ecosystem: gomod
     directory: "/services/backend-go"
     schedule:
