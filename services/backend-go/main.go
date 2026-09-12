@@ -165,8 +165,15 @@ func main() {
 	// internal/activity. Connected researchers' new papers (OpenAlex) + newly
 	// accepted connections (PG) + a highly-cited-recent field floor. Pure
 	// aggregation + sort, so Go edge not Python (decisions/0010).
-	r.GET("/api/v1/activity_feed", activity.GetActivityFeed)
-	r.GET("/activity_feed", activity.GetActivityFeed)
+	//
+	// VerifyUserOptional, not VerifyUser: an anonymous caller still gets the
+	// public trending floor (no user_id needed for that part), so this route
+	// isn't hard-gated. But GetActivityFeed's ?user_id= drives the personal
+	// half of the feed (peer publications, connection events) -- without a
+	// verified identity to check it against, any caller could read that for
+	// an arbitrary user_id with zero auth (2026-09-12 endpoint audit).
+	r.GET("/api/v1/activity_feed", auth.VerifyUserOptional(), activity.GetActivityFeed)
+	r.GET("/activity_feed", auth.VerifyUserOptional(), activity.GetActivityFeed)
 
 	// ── Science news — public RSS/Atom aggregation, no AI ───────────────────
 	// internal/pulse. Quanta / Phys.org / ScienceDaily / Nature, fetched +

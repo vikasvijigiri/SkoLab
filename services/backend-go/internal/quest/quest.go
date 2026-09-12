@@ -135,6 +135,14 @@ func GetUserQuests(proxyFallback gin.HandlerFunc) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "user_id is required"})
 			return
 		}
+		// auth.VerifyUser() proves a valid Firebase account made the call,
+		// not that it owns the quest state being read -- without this
+		// check any authenticated caller could read another user's quest
+		// progress by passing their user_id (2026-09-12 endpoint audit).
+		if userID != c.GetString("user_id") {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: you may only read your own quests."})
+			return
+		}
 
 		if db.Pool == nil {
 			// No DB — let Python handle everything.
@@ -171,6 +179,13 @@ func CompleteQuest(c *gin.Context) {
 
 	if userID == "" || questID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id and quest_id are required"})
+		return
+	}
+	// Without this check any authenticated caller could complete quests
+	// (and award themselves the resulting entropy) on behalf of an
+	// arbitrary other user_id (2026-09-12 endpoint audit).
+	if userID != c.GetString("user_id") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: you may only complete your own quests."})
 		return
 	}
 

@@ -8,7 +8,14 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/skolab/backend-go/internal/auth"
 )
+
+// devAuth is a Bearer token that auth.VerifyUser() accepts in dev/CI mode
+// (no Firebase credentials configured), setting user_id="dev_user" -- see
+// internal/auth/firebase_test.go and internal/user/user_test.go, which use
+// the identical pattern.
+var devAuth = map[string]string{"Authorization": "Bearer devtoken"}
 
 func TestEmailBlindIndex_MatchesPythonVector(t *testing.T) {
 	t.Setenv("EMAIL_BLIND_INDEX_KEY", "testkey")
@@ -41,9 +48,14 @@ func TestEmailBlindIndex_EmptyWhenKeyUnset(t *testing.T) {
 // missing identifier" contract. The SQL itself is covered by the CI Postgres
 // job's end-to-end curl checks in the plan.
 
+// router mirrors main.go's actual wiring: this whole group is behind
+// auth.VerifyUser() there (recAPI.Use(auth.VerifyUser(), recRL.Limit())),
+// which LogPeerInvite's ownership check depends on for a real verified
+// identity to compare against (2026-09-12 endpoint audit).
 func router() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
+	r.Use(auth.VerifyUser())
 	r.GET("/peers", GetPeerRecommendations)
 	r.POST("/peers/invite", LogPeerInvite)
 	r.POST("/peers/check-registered", CheckRegisteredPeers)
@@ -51,8 +63,15 @@ func router() *gin.Engine {
 }
 
 func post(r *gin.Engine, path, body string) *httptest.ResponseRecorder {
+	return postWithHeaders(r, path, body, devAuth)
+}
+
+func postWithHeaders(r *gin.Engine, path, body string, headers map[string]string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	return w
@@ -100,7 +119,9 @@ func TestCheckRegistered_MalformedBodyIs400(t *testing.T) {
 }
 
 func TestLogPeerInvite_NoPeerUIDReturnsSuccessFalse(t *testing.T) {
-	w := post(router(), "/peers/invite", `{"user_id":"u1","peer_email":"x@y.com"}`)
+	// user_id must be "dev_user" (what auth.VerifyUser() sets in dev/CI
+	// mode) or the ownership check below would 403 first.
+	w := post(router(), "/peers/invite", `{"user_id":"dev_user","peer_email":"x@y.com"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 	}
@@ -108,6 +129,16 @@ func TestLogPeerInvite_NoPeerUIDReturnsSuccessFalse(t *testing.T) {
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	if resp["success"] != false {
 		t.Fatalf(`success = %v, want false (no peer_uid, email cannot resolve)`, resp["success"])
+	}
+}
+
+func TestLogPeerInvite_MismatchedUserIDIs403(t *testing.T) {
+	// req.UserID names the row this write lands in (user_circles.user_id)
+	// -- without this check any authenticated caller could mutate another
+	// user's circle by supplying their user_id (2026-09-12 endpoint audit).
+	w := post(router(), "/peers/invite", `{"user_id":"someone_else","peer_uid":"p1"}`)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
 	}
 }
 
@@ -120,6 +151,7 @@ func TestLogPeerInvite_MalformedBodyIs400(t *testing.T) {
 
 func TestGetPeers_EmptyQueryReturnsEmptyArray(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/peers", nil)
+	req.Header.Set("Authorization", devAuth["Authorization"])
 	w := httptest.NewRecorder()
 	router().ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -131,7 +163,11 @@ func TestGetPeers_EmptyQueryReturnsEmptyArray(t *testing.T) {
 }
 
 func TestGetPeers_QueryWithoutDBReturnsEmptyArray(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/peers?query=ab&user_id=u1", nil)
+	// user_id on the query string is now ignored in favor of the verified
+	// identity (2026-09-12 endpoint audit) -- db.Pool is still nil either
+	// way, so the outcome here is unchanged.
+	req := httptest.NewRequest(http.MethodGet, "/peers?query=ab", nil)
+	req.Header.Set("Authorization", devAuth["Authorization"])
 	w := httptest.NewRecorder()
 	router().ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
