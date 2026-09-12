@@ -27,7 +27,7 @@ def mock_prediction_service():
             "latest_papers": [],
         }
     )
-    mock.nexus_chat = AsyncMock(return_value="Nexus AI synthesized response text")
+    mock.nexus_chat = AsyncMock(return_value=("Nexus AI synthesized response text", False))
 
     app.dependency_overrides[get_prediction_service] = lambda: mock
     yield mock

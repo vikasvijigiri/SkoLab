@@ -64,6 +64,13 @@ def test_disk_alerter_resets_when_usage_recovers_below_the_floor():
         "LLM query failed across all attempted models. Errors: ...",
         'Groq returned 429: {"error":{"message":"Rate limit reached ..."}}',
         "Circuit breaker 'groq' is OPEN. Retry after 12.0s.",
+        # SKOLAB-BACKEND-E (2026-09-12 endpoint audit): a provider-side
+        # generation rejection, same class of "not our bug" as the 429/
+        # circuit-open cases above, but previously unclassified -- it was
+        # still logging at ERROR with a full traceback and filing a real
+        # Sentry event while its siblings were already correctly dropped.
+        'Groq returned 400: {"error":{"message":"Failed to validate JSON. '
+        "Please adjust your prompt. See 'failed_generation' for more details.\"}}",
     ],
 )
 def test_transient_ai_errors_are_recognised(message):

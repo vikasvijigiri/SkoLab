@@ -157,6 +157,7 @@ class SynergyMixin:
         )  # max 92 from overlap alone
         synergy_score = min(max(synergy_score, 70), 99)
 
+        is_fallback = False
         try:
             if not is_llm_working():
                 raise Exception("LLM service is currently offline or rate-limited.")
@@ -192,6 +193,7 @@ class SynergyMixin:
                 f"[CollaboratorSynergy] LLM query failed: {e}. Generating high-quality local fallback...",
                 flush=True,
             )
+            is_fallback = True
             joint_proposal_title = f"Synergistic Research Framework in {overlap_concepts[0] if overlap_concepts else 'Cross-Disciplinary Studies'}"
             co_authorship_direction = f"A collaborative study between {name1} and {name2} focusing on integrating their respective expertise in {', '.join(concepts1[:2])} and {', '.join(concepts2[:2])}."
             strategic_action_plan = [
@@ -205,6 +207,7 @@ class SynergyMixin:
             "joint_proposal_title": joint_proposal_title,
             "co_authorship_direction": co_authorship_direction,
             "strategic_action_plan": strategic_action_plan,
+            "is_fallback": is_fallback,
         }
         try:
             await self._save_to_postgres(cache_key, result, ttl_seconds=7200)
