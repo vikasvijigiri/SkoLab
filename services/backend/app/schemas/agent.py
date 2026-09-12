@@ -16,6 +16,11 @@ class AgentChatResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     reply: str | None = None
+    # True when `reply` is a hand-written apology/unavailability sentence
+    # (LLM not configured, all turns exhausted, or a genuine error) rather
+    # than a model-generated answer -- without this a client can't tell
+    # the two apart (2026-09-12 endpoint audit).
+    is_fallback: bool = False
 
 
 class UploadDocumentResponse(BaseModel):
@@ -36,3 +41,7 @@ class ChatWithAuthorResponse(BaseModel):
     author_id: str | None = None
     author_name: str | None = None
     reply: str | None = None
+    # True when `reply` is the canned "thank you for your question" stand-in
+    # (LLM unavailable/failed) rather than a model-generated answer
+    # (2026-09-12 endpoint audit).
+    is_fallback: bool = False

@@ -44,7 +44,7 @@ async def nexus_chat(
     prediction_service: PredictionService = Depends(get_prediction_service),
     _user: Optional[dict] = Depends(get_optional_user),
 ):
-    response_text = await prediction_service.nexus_chat(
+    response_text, is_fallback = await prediction_service.nexus_chat(
         papers=req.papers, messages=req.messages
     )
-    return {"content": response_text}
+    return {"content": response_text, "is_fallback": is_fallback}
