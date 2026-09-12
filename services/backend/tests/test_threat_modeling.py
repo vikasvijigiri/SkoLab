@@ -1,11 +1,10 @@
-import asyncio
 import pytest
 import httpx
 from pydantic import ValidationError
 from sqlalchemy import select
 
 from app.main import app
-from app.db.database import AsyncSessionLocal, engine, generate_record_signature
+from app.db.database import AsyncSessionLocal, generate_record_signature
 from app.models.user_models import User, UserPreference
 from app.schemas.core import AgentChatRequest
 from app.domains.quest.service import QuestsService
@@ -17,12 +16,21 @@ try:
 except AttributeError:
     client_args = {"app": app}
 
-
-@pytest.fixture(autouse=True)
-def cleanup_test_context():
-    """Dispose the engine after each test."""
-    yield
-    asyncio.run(engine.dispose())
+# `cleanup_test_context` (an autouse fixture calling
+# `asyncio.run(engine.dispose())` after every test in this file) was removed
+# 2026-09-12: it was the only place in this ~200-test suite that manually
+# disposed the shared, module-level AsyncEngine, and it did so via
+# `asyncio.run()` -- a brand-new event loop -- from inside a
+# pytest-asyncio-managed test's own teardown, on every single test in this
+# file. That's a known anti-pattern (mixing event loops against a shared
+# async resource) and the leading suspect for an intermittent CI-only
+# failure of test_quest_database_tampering_check ("DID NOT RAISE
+# ValueError") that never reproduced locally in 25+ attempts against a
+# real Postgres. No other test in the suite disposes the engine per-test
+# (poolclass=NullPool already means no persistent connections to leak;
+# conftest.py's session-scoped cleanup handles final teardown), so removing
+# this should be safe. Left as a note here rather than silently -- watch
+# CI for whether the flake recurs.
 
 
 async def force_cleanup_user(db, user_id):
@@ -177,6 +185,24 @@ async def test_quest_database_tampering_check():
 
         flag_modified(pref_obj, "preference_value")
         await db.commit()
+
+    # Diagnostic for the 2026-09-12 intermittent CI failure of this test
+    # ("DID NOT RAISE ValueError") -- independent of QuestsService, using
+    # its own fresh session/connection, so a CI failure's log shows
+    # whether the tamper write was actually visible at this point or not.
+    # See _log_signature_check in app/domains/quest/service.py for the
+    # service-layer side of this. Remove once root-caused or confirmed gone.
+    async with AsyncSessionLocal() as db:
+        raw_stmt = select(UserPreference).where(
+            UserPreference.user_id == user_id, UserPreference.preference_key == "quests"
+        )
+        raw_res = await db.execute(raw_stmt)
+        raw_pref = raw_res.scalars().first()
+        print(
+            f"[tamper-test-diagnostic] independent raw read of preference_value: "
+            f"{raw_pref.preference_value if raw_pref else None!r}",
+            flush=True,
+        )
 
     # Reading should now throw ValueError due to signature mismatch
     async with AsyncSessionLocal() as db:
