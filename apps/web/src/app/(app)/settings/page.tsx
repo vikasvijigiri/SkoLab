@@ -105,10 +105,12 @@ export default function SettingsPage() {
             className="h-4 w-4 accent-[var(--primary)]"
           />
         </label>
-        <p className="mt-2 font-body text-[11.5px] leading-relaxed text-text-muted">
-          Granular per-type controls (connection requests, workspace invites, mentions) arrive with
-          the dedicated notifications service.
-        </p>
+        <Link
+          href="/notifications/manage"
+          className="mt-2 inline-block font-body text-[12.5px] font-medium text-primary hover:underline"
+        >
+          Manage alerts →
+        </Link>
       </Section>
 
       <Section
