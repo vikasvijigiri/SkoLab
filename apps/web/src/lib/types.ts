@@ -157,6 +157,24 @@ export interface ActivityFeedResult {
   degraded: boolean;
 }
 
+// ── CV sharing (Profile — decisions/0023) ────────────────────────────────────
+// A lightweight, client-written Firestore record under the recipient's own
+// `researchers/{uid}/cvShares` subcollection (see firebase/cvShare.ts and
+// firestore.rules). Deliberately its own type rather than a new ActivityType
+// variant: ActivityItem above models the backend-computed
+// `/api/v1/activity_feed` stream (paper_published, connection_made, trending),
+// which has no client write path — folding a client-only "cv_shared" kind
+// into that union would claim backend integration this feature doesn't have.
+export interface CvShare {
+  id: string;
+  fromUid: string;
+  fromName: string;
+  toUid: string;
+  /** Path to the shared CV, e.g. "/profile/cv/{fromUid}". */
+  cvHref: string;
+  read: boolean;
+}
+
 // ── Science news (Go gateway /api/v1/science_news — public RSS, no LLM) ─────
 
 export interface ScienceNewsItem {

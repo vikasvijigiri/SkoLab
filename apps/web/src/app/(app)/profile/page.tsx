@@ -2,15 +2,17 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
-import { Pencil, TrendingUp, ShieldAlert, Check, Network, ExternalLink } from "lucide-react";
+import { Pencil, TrendingUp, ShieldAlert, Check, Network, FileText, Quote } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge, Chip } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 import { ErrorBanner, friendlyFirestoreError } from "@/components/ui/ErrorBanner";
 import { Reveal } from "@/components/ui/Reveal";
+import { CoAuthorGraph } from "@/components/profile/CoAuthorGraph";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import { useMyProfile } from "@/lib/hooks/useMyProfile";
 import { updateResearcherProfile, deleteResearcherProfile } from "@/lib/firebase/auth";
@@ -163,25 +165,61 @@ export default function ProfilePage() {
               </Badge>
             </div>
           </div>
-          {!editing && (
-            <Button variant="outlined" fullWidth={false} onClick={startEditing} className="mt-4 gap-2 lg:w-full">
-              <Pencil size={14} />
-              Edit
-            </Button>
-          )}
+          <div className="mt-4 flex flex-col gap-2">
+            {!editing && (
+              <Button variant="outlined" fullWidth={false} onClick={startEditing} className="gap-2 lg:w-full">
+                <Pencil size={14} />
+                Edit
+              </Button>
+            )}
+            {/* Visible in both view and edit modes (a prior audit flagged this
+                as accidentally missing from the edit-mode sidebar). */}
+            {user && (
+              <Button
+                variant="outlined"
+                fullWidth={false}
+                onClick={() => router.push(`/profile/cv/${user.uid}`)}
+                className="gap-2 border-primary/30 bg-primary/5 text-primary lg:w-full"
+              >
+                <FileText size={14} />
+                Create CV
+              </Button>
+            )}
+            {author && (
+              <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
+                <span className="flex items-center gap-1.5 font-body text-[12px] text-text-secondary">
+                  <Quote size={13} className="shrink-0 text-accent-live" />
+                  {author.cited_by_count} citations
+                </span>
+                <Link
+                  href="/notifications"
+                  className="shrink-0 font-body text-[11.5px] font-semibold text-primary hover:underline"
+                >
+                  View in Notifications
+                </Link>
+              </div>
+            )}
+          </div>
         </Card>
       </motion.div>
 
       <div className="flex min-w-0 flex-col gap-4">
       <Reveal>
         <Card accentColor="var(--accent-indigo)">
-          <div className="flex items-start gap-3">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent-indigo/10 text-accent-indigo"><Network size={16} /></span>
-            <div>
-              <h2 className="font-display text-h3 font-semibold text-text-primary">Research identity & capability graph</h2>
-              <p className="mt-1 font-body text-[12px] leading-relaxed text-text-secondary">Your profile is more useful when it shows what you can contribute, what you are exploring and where collaboration is welcome.</p>
-              <a href="https://orcid.org" target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 font-body text-[12px] font-semibold text-primary hover:underline">Connect ORCID later <ExternalLink size={12} /></a>
-            </div>
+          <div className="flex items-center gap-3">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent-indigo/10 text-accent-indigo">
+              <Network size={16} />
+            </span>
+            <h2 className="font-display text-h3 font-semibold text-text-primary">Your research network</h2>
+          </div>
+          <div className="mt-3">
+            {author ? (
+              <CoAuthorGraph centerName={author.display_name} works={author.works} />
+            ) : (
+              <p className="font-body text-[12px] leading-relaxed text-text-secondary">
+                Link your OpenAlex profile in Edit to see your co-author network here.
+              </p>
+            )}
           </div>
         </Card>
       </Reveal>
