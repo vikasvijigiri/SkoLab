@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Palette, ShieldCheck, Bell, Sun, Moon, MonitorSmartphone, ChevronRight, Database, LockKeyhole, Settings2 } from "lucide-react";
+import { Palette, ShieldCheck, Bell, Sun, Moon, MonitorSmartphone, ChevronRight, Database, LockKeyhole } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import { useLocalStorage } from "@/lib/hooks/useLocalStorage";
@@ -107,10 +107,9 @@ export default function SettingsPage() {
         </label>
         <Link
           href="/notifications/manage"
-          className="mt-3 flex items-center gap-1.5 font-body text-[12px] font-semibold text-primary hover:underline"
+          className="mt-2 inline-block font-body text-[12.5px] font-medium text-primary hover:underline"
         >
-          <Settings2 size={13} />
-          Manage per-kind alert cadence (citations, tracked researchers, CoLab, connections)
+          Manage per-kind alert cadence (citations, tracked researchers, CoLab, connections) →
         </Link>
       </Section>
 
