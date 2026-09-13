@@ -32,6 +32,26 @@ service cloud.firestore {
         && request.auth.uid == uid
         && request.resource.data.uid == uid;
       allow delete: if request.auth != null && request.auth.uid == uid;
+
+      // ── researchers/{uid}/cvShares/{shareId} — Profile's CV share flow ──
+      // "Send to a connection" (decisions/0023) writes a lightweight "I sent
+      // you my CV" record here, under the *recipient's* own uid. Read: the
+      // recipient (it's their subcollection) or the sender (so the sender's
+      // own UI can confirm delivery). Create: only as yourself, only into the
+      // recipient named in the doc itself — you can't forge a share from
+      // someone else, and you can only add rows to the actual `uid` you're
+      // writing to. See apps/web/src/lib/firebase/cvShare.ts.
+      match /cvShares/{shareId} {
+        allow read: if request.auth != null
+          && (request.auth.uid == uid || request.auth.uid == resource.data.fromUid);
+        allow create: if request.auth != null
+          && request.resource.data.fromUid == request.auth.uid
+          && request.resource.data.toUid == uid;
+        // Recipient may mark their own copy read; sender may retract it.
+        allow update: if request.auth != null && request.auth.uid == uid;
+        allow delete: if request.auth != null
+          && (request.auth.uid == uid || request.auth.uid == resource.data.fromUid);
+      }
     }
 
     // ── collabs_groups/{projectId} — CoLab Workspace ────────────────────
