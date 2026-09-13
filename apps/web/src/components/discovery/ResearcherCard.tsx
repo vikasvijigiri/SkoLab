@@ -3,16 +3,18 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowDownRight, ArrowRight, ArrowUpRight, BadgeCheck, FolderPlus } from "lucide-react";
+import { ArrowDownRight, ArrowRight, ArrowUpRight, BadgeCheck, Check, FolderPlus } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { cn, focusRing, shortOpenAlexId } from "@/lib/utils";
 import { DURATION_NORMAL, EASE_STANDARD } from "@/lib/motion";
 import { useAuth } from "@/lib/hooks/AuthProvider";
+import { fieldStandingLabel } from "@/lib/discovery/format";
 import type { CareerStage, MomentumState, ResearcherResult } from "@/lib/types";
 import { StatusDot } from "./StatusDot";
 import { MomentumSparkline } from "./MomentumSparkline";
 import { ActiveDecadesStrip } from "./ActiveDecadesStrip";
+import { TrackButton } from "./TrackButton";
 
 const ACCENT_BY_ACTIVITY = {
   active: "var(--accent-live)",
@@ -41,7 +43,21 @@ function MetaRow({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-export function ResearcherCard({ r, index }: { r: ResearcherResult; index: number }) {
+export function ResearcherCard({
+  r,
+  index,
+  compareSelected = false,
+  compareDisabled = false,
+  onToggleCompare,
+}: {
+  r: ResearcherResult;
+  index: number;
+  /** Compare (decision 0021) — omit `onToggleCompare` on any call site that
+   *  doesn't want the checkbox at all (e.g. a future non-Discovery reuse). */
+  compareSelected?: boolean;
+  compareDisabled?: boolean;
+  onToggleCompare?: (r: ResearcherResult) => void;
+}) {
   const { signals } = r;
   const { user } = useAuth();
   const router = useRouter();
@@ -49,10 +65,7 @@ export function ResearcherCard({ r, index }: { r: ResearcherResult; index: numbe
   const mo = MOMENTUM[signals.momentum];
   const MoIcon = mo.icon;
 
-  const standing =
-    signals.standingPercentile != null
-      ? `top ${Math.max(1, 100 - signals.standingPercentile)}%`
-      : `H-${r.hIndex}`;
+  const standing = fieldStandingLabel(r.hIndex, signals.standingPercentile);
   const focusPct = Math.round(signals.topicalFocus * 100);
 
   function startProject(e: React.MouseEvent) {
@@ -68,6 +81,33 @@ export function ResearcherCard({ r, index }: { r: ResearcherResult; index: numbe
       transition={{ duration: DURATION_NORMAL, delay: Math.min(index * 0.04, 0.24), ease: EASE_STANDARD }}
     >
       <Card glow accentColor={accent} accentSide="left" className="flex h-full flex-col gap-2.5">
+        {onToggleCompare && (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={compareSelected}
+              aria-label={compareSelected ? `Remove ${r.display_name} from compare` : `Add ${r.display_name} to compare`}
+              title={compareDisabled ? "Compare is limited to 2 researchers at a time" : "Select to compare"}
+              disabled={compareDisabled}
+              onClick={(e) => {
+                e.preventDefault();
+                onToggleCompare(r);
+              }}
+              className={cn(
+                "flex h-6 items-center gap-1 rounded-full border px-2 font-body text-[10.5px] font-medium transition-colors",
+                compareSelected
+                  ? "border-primary bg-primary text-text-on-primary"
+                  : "border-border text-text-muted hover:border-primary/40 hover:text-primary",
+                compareDisabled && !compareSelected && "cursor-not-allowed opacity-40",
+                focusRing,
+              )}
+            >
+              {compareSelected && <Check size={10} />}
+              Compare
+            </button>
+          </div>
+        )}
         <Link
           href={`/author/${encodeURIComponent(shortOpenAlexId(r.id))}?name=${encodeURIComponent(r.display_name)}`}
           className={cn("flex flex-1 flex-col gap-2.5 rounded-md", focusRing)}
@@ -156,17 +196,20 @@ export function ResearcherCard({ r, index }: { r: ResearcherResult; index: numbe
         </Link>
 
         {user && !r.deceased && (
-          <button
-            type="button"
-            onClick={startProject}
-            className={cn(
-              "mt-1 flex items-center justify-center gap-1.5 rounded-md border border-border py-1.5 font-body text-[11.5px] font-medium text-text-secondary transition-colors hover:border-primary/40 hover:text-primary",
-              focusRing
-            )}
-          >
-            <FolderPlus size={13} />
-            Start a project with {r.display_name.split(" ")[0]}
-          </button>
+          <div className="mt-1 flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={startProject}
+              className={cn(
+                "flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border py-1.5 font-body text-[11.5px] font-medium text-text-secondary transition-colors hover:border-primary/40 hover:text-primary",
+                focusRing
+              )}
+            >
+              <FolderPlus size={13} />
+              Start a project with {r.display_name.split(" ")[0]}
+            </button>
+            <TrackButton authorId={r.id} name={r.display_name} iconOnly className="py-1.5" />
+          </div>
         )}
       </Card>
     </motion.div>

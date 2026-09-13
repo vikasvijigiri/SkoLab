@@ -241,14 +241,18 @@ export const activityFeedQuery = (
   authorId?: string,
   userId?: string,
   getIdToken?: () => Promise<string | null>,
+  limit?: number,
 ) =>
   queryOptions({
-    queryKey: ["activity-feed", { authorId: authorId ?? null, userId: userId ?? null }] as const,
+    queryKey: [
+      "activity-feed",
+      { authorId: authorId ?? null, userId: userId ?? null, limit: limit ?? null },
+    ] as const,
     // The gateway now requires a token proving `userId` when it's provided
     // (2026-09-12 fix for an unauthenticated cross-user feed leak) --
     // resolve it right before the request rather than baking a stale one
     // into the query key.
-    queryFn: async () => getActivityFeed({ authorId, userId, idToken: await getIdToken?.() ?? null }),
+    queryFn: async () => getActivityFeed({ authorId, userId, limit, idToken: await getIdToken?.() ?? null }),
     staleTime: 10 * MIN,
     gcTime: 1 * HR,
     ...LIVE_FEED,

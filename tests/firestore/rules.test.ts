@@ -264,6 +264,80 @@ describe("collabs_groups/{projectId}/messages", () => {
   });
 });
 
+describe("users/{uid} (decisions/0022 Signals + decisions/0021 Track)", () => {
+  it("lets the owner read and write their own notification settings", async () => {
+    const asOwner = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(
+      setDoc(doc(asOwner, "users", OWNER, "settings", "notifications"), { citations: "off" })
+    );
+    await assertSucceeds(getDoc(doc(asOwner, "users", OWNER, "settings", "notifications")));
+  });
+
+  it("lets an anonymous (guest) uid write their own notification settings — no account required", async () => {
+    // authenticatedContext simulates any signed-in uid, anonymous auth included
+    // (the app treats an anonymous Firebase user as "signed in" — see
+    // useAuth's isAnonymous usage) — the rule must not distinguish the two.
+    const asGuest = testEnv.authenticatedContext("guest-uid").firestore();
+    await assertSucceeds(
+      setDoc(doc(asGuest, "users", "guest-uid", "settings", "notifications"), { citations: "realtime" })
+    );
+  });
+
+  it("blocks reading or writing someone else's notification settings", async () => {
+    const asOutsider = testEnv.authenticatedContext(OUTSIDER).firestore();
+    await assertFails(getDoc(doc(asOutsider, "users", OWNER, "settings", "notifications")));
+    await assertFails(setDoc(doc(asOutsider, "users", OWNER, "settings", "notifications"), { citations: "off" }));
+  });
+
+  it("lets the owner track a researcher naming themself honestly", async () => {
+    const asOwner = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(
+      setDoc(doc(asOwner, "users", OWNER, "tracked_researchers", "A123"), {
+        authorId: "A123",
+        name: "Ada Lovelace",
+        trackedAt: Date.now(),
+      })
+    );
+  });
+
+  it("blocks writing a tracked_researchers doc whose authorId doesn't match its id", async () => {
+    const asOwner = testEnv.authenticatedContext(OWNER).firestore();
+    await assertFails(
+      setDoc(doc(asOwner, "users", OWNER, "tracked_researchers", "A123"), {
+        authorId: "A999",
+        name: "Spoofed",
+        trackedAt: Date.now(),
+      })
+    );
+  });
+
+  it("blocks tracking a researcher into someone else's list", async () => {
+    const asOutsider = testEnv.authenticatedContext(OUTSIDER).firestore();
+    await assertFails(
+      setDoc(doc(asOutsider, "users", OWNER, "tracked_researchers", "A123"), {
+        authorId: "A123",
+        name: "Ada Lovelace",
+        trackedAt: Date.now(),
+      })
+    );
+  });
+
+  it("blocks any client write to notification_state (server-only watermark)", async () => {
+    const asOwner = testEnv.authenticatedContext(OWNER).firestore();
+    await assertFails(setDoc(doc(asOwner, "users", OWNER, "notification_state", "state"), { lastSeenCitationCount: 5 }));
+  });
+
+  it("lets the owner read notification_state but blocks an outsider", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "users", OWNER, "notification_state", "state"), { lastSeenCitationCount: 5 });
+    });
+    const asOwner = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(getDoc(doc(asOwner, "users", OWNER, "notification_state", "state")));
+    const asOutsider = testEnv.authenticatedContext(OUTSIDER).firestore();
+    await assertFails(getDoc(doc(asOutsider, "users", OWNER, "notification_state", "state")));
+  });
+});
+
 describe("collabs_groups/{projectId}/presence", () => {
   it("lets a member set their own presence", async () => {
     await seedProject();

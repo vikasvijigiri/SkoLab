@@ -52,6 +52,7 @@ backend/ideas.json
 
 # Scratch / AI workspace / temporary artefacts
 scratch/
+.scratch-*/
 brain/
 services/backend/scratch/
 services/backend/downloads/exports/

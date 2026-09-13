@@ -18,7 +18,7 @@ export function TopBar() {
   const { toggle: toggleCommandPalette } = useCommandPalette();
 
   return (
-    <header className="h-[72px] shrink-0 border-b border-border bg-surface/95 backdrop-blur">
+    <header className="h-12 shrink-0" style={{ background: "var(--primary)" }}>
       <div className="mx-auto flex h-full w-full max-w-[1240px] items-center gap-4 px-5 md:px-8">
         {/* logo — top-left */}
         <Link
@@ -30,12 +30,12 @@ export function TopBar() {
           aria-label="SkoLab home"
         >
           <span
-            className="flex h-9 w-9 items-center justify-center rounded-[4px] font-display text-[22px] font-bold leading-none text-text-on-primary"
-            style={{ background: "var(--primary)" }}
+            className="flex h-7 w-7 items-center justify-center rounded-[4px] bg-white font-display text-[15px] font-bold leading-none"
+            style={{ color: "var(--primary)" }}
           >
             S
           </span>
-          <span className="hidden font-display text-[18px] font-semibold tracking-[-0.02em] text-text-primary sm:inline">
+          <span className="hidden font-display text-[15px] font-semibold tracking-[-0.02em] text-white sm:inline">
             SkoLab
           </span>
         </Link>
@@ -46,16 +46,19 @@ export function TopBar() {
           aria-label="Search"
           title="Search (⌘K)"
           className={cn(
-            "flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border border-border-strong bg-surface-subtle px-4 font-body text-[14px] text-text-secondary transition-colors hover:border-primary hover:bg-surface md:max-w-[400px] lg:max-w-[440px]",
+            "flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg px-3.5 font-body text-[13px] text-white/85 transition-colors hover:text-white md:max-w-[360px] lg:max-w-[400px]",
             focusRing,
           )}
-          style={{ transitionTimingFunction: "var(--ease-standard)" }}
+          style={{
+            background: "color-mix(in srgb, white 18%, var(--primary))",
+            transitionTimingFunction: "var(--ease-standard)",
+          }}
         >
-          <SearchIcon size={15} className="shrink-0" />
+          <SearchIcon size={13} className="shrink-0" />
           <span className="flex-1 truncate text-left">
             Search papers, people, topics…
           </span>
-          <kbd className="hidden rounded border border-border px-1 py-0.5 font-mono text-[10px] sm:inline">
+          <kbd className="hidden rounded border border-white/35 px-1 py-0.5 font-mono text-[9px] text-white/80 sm:inline">
             ⌘K
           </kbd>
         </button>
@@ -63,7 +66,7 @@ export function TopBar() {
         {/* primary nav — right-aligned, evenly spaced icon+label tabs */}
         <nav
           aria-label="Primary"
-          className="ml-auto hidden shrink-0 items-center gap-1 md:flex lg:gap-2"
+          className="ml-auto hidden shrink-0 items-center gap-1 md:flex"
         >
           {BAR_NAV.map((item) => {
             const active = pathname?.startsWith(item.href);
@@ -74,26 +77,26 @@ export function TopBar() {
                 aria-current={active ? "page" : undefined}
                 title={item.label}
                 className={cn(
-                  "relative flex h-16 w-[84px] flex-col items-center justify-center gap-1.5 rounded-lg font-body text-[12px] font-medium leading-none transition-colors",
-                  active
-                    ? "text-primary"
-                    : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary",
+                  "relative flex h-10 w-[66px] flex-col items-center justify-center gap-[3px] rounded-md font-body text-[10px] font-medium leading-none transition-colors",
                   focusRing,
                 )}
               >
                 <item.Icon
-                  size={19}
+                  size={18}
                   strokeWidth={active ? 2 : 1.8}
-                  className={cn(
-                    "transition-colors duration-[var(--motion-fast)]",
-                    active ? "text-primary" : item.iconTone,
-                  )}
+                  className="transition-colors duration-[var(--motion-fast)]"
+                  style={{ color: active ? "#ffffff" : "rgba(255,255,255,0.72)" }}
                 />
-                <span className="whitespace-nowrap">{item.label}</span>
+                <span
+                  className="whitespace-nowrap"
+                  style={{ color: active ? "#ffffff" : "rgba(255,255,255,0.72)" }}
+                >
+                  {item.label}
+                </span>
                 {active && (
                   <motion.span
                     layoutId="topnav-active"
-                    className="absolute -bottom-[1px] h-[2px] w-full bg-primary"
+                    className="absolute -bottom-[1px] left-[14px] right-[14px] h-[2px] rounded-full bg-white"
                     transition={{ type: "spring", stiffness: 400, damping: 32 }}
                   />
                 )}
@@ -103,7 +106,7 @@ export function TopBar() {
         </nav>
 
         {/* bell + account — kept apart from the nav by a hairline divider */}
-        <div className="flex shrink-0 items-center gap-2 md:ml-3 md:border-l md:border-border md:pl-3">
+        <div className="flex shrink-0 items-center gap-2 md:ml-3 md:border-l md:border-white/25 md:pl-3">
           <NotificationsBell />
           <ProfileMenu />
         </div>
