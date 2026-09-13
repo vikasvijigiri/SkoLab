@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Palette, ShieldCheck, Bell, Sun, Moon, MonitorSmartphone, ChevronRight, Database, LockKeyhole } from "lucide-react";
+import { Palette, ShieldCheck, Bell, Sun, Moon, MonitorSmartphone, ChevronRight, Database, LockKeyhole, Settings2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import { useLocalStorage } from "@/lib/hooks/useLocalStorage";
@@ -105,10 +105,13 @@ export default function SettingsPage() {
             className="h-4 w-4 accent-[var(--primary)]"
           />
         </label>
-        <p className="mt-2 font-body text-[11.5px] leading-relaxed text-text-muted">
-          Granular per-type controls (connection requests, workspace invites, mentions) arrive with
-          the dedicated notifications service.
-        </p>
+        <Link
+          href="/notifications/manage"
+          className="mt-3 flex items-center gap-1.5 font-body text-[12px] font-semibold text-primary hover:underline"
+        >
+          <Settings2 size={13} />
+          Manage per-kind alert cadence (citations, tracked researchers, CoLab, connections)
+        </Link>
       </Section>
 
       <Section

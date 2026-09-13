@@ -1,14 +1,27 @@
 // Package activity assembles the Home activity feed: a merged, recency-sorted
 // stream of things that happened around the requesting researcher —
 //
-//   - paper_published : a connected researcher put out a new paper
-//   - connection_made : a new accepted connection
-//   - trending        : highly-cited recent work in the user's field, a floor
-//     so a user with no connections yet still sees a live feed
+//   - paper_published        : a connected researcher put out a new paper
+//   - connection_made        : a new accepted connection
+//   - trending               : highly-cited recent work in the user's field, a
+//     floor so a user with no connections yet still sees a live feed
+//   - tracked_researcher_paper : a researcher this user tracks (decisions/0021,
+//     Firestore users/{uid}/tracked_researchers) published something new
+//   - citation_received      : this user's own OpenAlex cited_by_count went up
+//     since the last time the feed was fetched (decisions/0022)
 //
-// Pure Postgres reads plus the pooled OpenAlex client. No LLM, no embedding —
-// this is aggregation and sorting, so it lives on the Go edge exactly like
-// internal/similarity and internal/author (decisions/0002, 0010, 0011).
+// tracked_topic_activity, mention and invite are NOT produced here — Discovery
+// has no topic-follow feature and CoLab has no @mention parser to source them
+// from yet (see decisions/0022's Consequences). The frontend renders those
+// kinds so the UI is ready, but nothing on this backend emits them today.
+//
+// Pure Postgres + Firestore reads plus the pooled OpenAlex client. No LLM, no
+// embedding — this is aggregation and sorting, so it lives on the Go edge
+// exactly like internal/similarity and internal/author (decisions/0002, 0010,
+// 0011). The Firestore reads/writes below reuse the same nil-safe wrapper
+// (internal/firestore) author/search.go already uses for global_researchers —
+// they degrade to a clean no-op when no Firestore client is wired (e.g. CI),
+// exactly like every Postgres-gated source here degrades when db.Pool is nil.
 package activity
 
 import (
@@ -23,10 +36,20 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/skolab/backend-go/internal/db"
+	"github.com/skolab/backend-go/internal/firestore"
 	"github.com/skolab/backend-go/internal/services/openalex"
 )
 
 var oaClient = openalex.New()
+
+// Seams for tests, same pattern as author/search.go's firestoreQueryEqHook.
+// Production points them at the real implementations.
+var (
+	firestoreListDocsHook = firestore.ListDocs
+	firestoreGetDocHook   = firestore.GetDoc
+	firestoreSetDocHook   = firestore.SetDoc
+	fetchAuthorHook       = oaClient.FetchAuthorByID
+)
 
 // ── response shapes ───────────────────────────────────────────────────────────
 
@@ -51,13 +74,17 @@ type Object struct {
 // Item is one row in the feed.
 type Item struct {
 	ID     string  `json:"id"`   // stable de-dupe key
-	Type   string  `json:"type"` // paper_published | connection_made | trending
+	Type   string  `json:"type"` // paper_published | connection_made | trending | citation_received | tracked_researcher_paper
 	Verb   string  `json:"verb"` // human phrase for the card headline
 	TS     string  `json:"ts"`   // RFC3339 / ISO date, drives ordering
 	Actor  *Actor  `json:"actor,omitempty"`
 	Object *Object `json:"object,omitempty"`
 	Href   string  `json:"href"`
 	Why    string  `json:"why,omitempty"`
+	// Count is a real, backend-computed quantity the frontend's copy names
+	// honestly — new citations since the watermark check (citation_received).
+	// Never a guess: absent unless there's an actual number to report.
+	Count int `json:"count,omitempty"`
 }
 
 // FeedResponse mirrors similarity.SimilarResearchersResponse's shape:
@@ -151,12 +178,16 @@ func GetActivityFeed(c *gin.Context) {
 	peerWindow := time.Duration(envInt("ACTIVITY_PAPER_WINDOW_DAYS", 75)) * 24 * time.Hour
 	connWindow := time.Duration(envInt("ACTIVITY_CONNECTION_WINDOW_DAYS", 30)) * 24 * time.Hour
 
+	trackedWindow := time.Duration(envInt("ACTIVITY_TRACKED_WINDOW_DAYS", 75)) * 24 * time.Hour
+
 	var (
-		mu       sync.Mutex
-		papers   []Item
-		conns    []Item
-		trending []Item
-		wg       sync.WaitGroup
+		mu        sync.Mutex
+		papers    []Item
+		conns     []Item
+		trending  []Item
+		tracked   []Item
+		citations []Item
+		wg        sync.WaitGroup
 	)
 
 	if userID != "" && db.Pool != nil {
@@ -177,6 +208,30 @@ func GetActivityFeed(c *gin.Context) {
 		}()
 	}
 
+	// Firestore-backed sources — independent of db.Pool (they read
+	// users/{uid}/... directly, not Postgres), so they still run for a user
+	// whose Postgres row doesn't exist or whose pool is unavailable.
+	if userID != "" {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got := trackedResearcherPapers(ctx, userID, trackedWindow)
+			mu.Lock()
+			tracked = got
+			mu.Unlock()
+		}()
+	}
+	if userID != "" && authorID != "" {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got := citationAlert(ctx, userID, authorID)
+			mu.Lock()
+			citations = got
+			mu.Unlock()
+		}()
+	}
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -189,9 +244,13 @@ func GetActivityFeed(c *gin.Context) {
 	wg.Wait()
 
 	// De-dupe by object work id; a real "peer published" beats the same paper
-	// showing up as "trending".
+	// showing up as "trending". `tracked` is added first so a paper from
+	// someone the user both tracks and is connected to shows once, as the
+	// more specific tracked_researcher_paper kind (decisions/0022's second
+	// addendum: the plain paper_published-from-a-connection kind is folded
+	// into the tracked one, not kept as a separate duplicate).
 	seen := map[string]bool{}
-	merged := make([]Item, 0, len(papers)+len(conns)+len(trending))
+	merged := make([]Item, 0, len(papers)+len(conns)+len(trending)+len(tracked)+len(citations))
 	add := func(items []Item) {
 		for _, it := range items {
 			key := it.ID
@@ -205,6 +264,8 @@ func GetActivityFeed(c *gin.Context) {
 			merged = append(merged, it)
 		}
 	}
+	add(citations)
+	add(tracked)
 	add(papers)
 	add(conns)
 	add(trending)
@@ -490,4 +551,184 @@ func fieldTrending(ctx context.Context, userID, authorID string) []Item {
 		}
 	}
 	return items
+}
+
+// ── Track feeds notifications (decisions/0021 + decisions/0022) ─────────────
+
+func stringField(d map[string]any, key string) string {
+	s, _ := d[key].(string)
+	return s
+}
+
+// trackedResearcherIDs reads the caller's Track list — a parallel workstream
+// writes users/{uid}/tracked_researchers/{authorId} with authorId/name/
+// trackedAt fields (decisions/0021); this only ever reads it. Degrades to no
+// items (not an error) when Firestore is unavailable or the collection is
+// empty/doesn't exist yet, exactly like every other Firestore-backed read in
+// this codebase (internal/firestore's own no-op contract).
+func trackedResearcherIDs(ctx context.Context, userID string) map[string]string {
+	docs, err := firestoreListDocsHook(ctx, "users/"+userID+"/tracked_researchers", envInt("ACTIVITY_MAX_TRACKED", 25))
+	if err != nil || len(docs) == 0 {
+		return nil
+	}
+	out := map[string]string{}
+	for _, d := range docs {
+		id := cleanID(stringField(d, "authorId"))
+		if id == "" {
+			continue
+		}
+		out[id] = stringField(d, "name")
+	}
+	return out
+}
+
+// trackedResearcherPapers surfaces new work from researchers the user tracks
+// in Discovery — the "hear about it when they publish" half of Track,
+// completing the bookmark-then-notify loop decisions/0022 calls out as the
+// gap SkoLab's competitors don't close in one place.
+func trackedResearcherPapers(ctx context.Context, userID string, window time.Duration) []Item {
+	byID := trackedResearcherIDs(ctx, userID)
+	if len(byID) == 0 {
+		return nil
+	}
+	cutoff := time.Now().Add(-window)
+
+	var (
+		mu    sync.Mutex
+		items []Item
+		wg    sync.WaitGroup
+		sem   = make(chan struct{}, envInt("ACTIVITY_TRACKED_CONCURRENCY", 6))
+	)
+	for authorID, name := range byID {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(authorID, name string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			works, err := oaClient.FetchAuthorWorks(ctx, authorID, "", 4, "publication_date:desc")
+			if err != nil {
+				return
+			}
+			for _, w := range works {
+				pub := parseDate(w.PublicationDate)
+				if pub.IsZero() || pub.Before(cutoff) {
+					continue
+				}
+				wid := cleanID(w.ID)
+				if wid == "" || strings.TrimSpace(w.Title) == "" {
+					continue
+				}
+				label := name
+				if label == "" {
+					for _, a := range w.Authorships {
+						if cleanID(a.Author.ID) == authorID {
+							label = a.Author.DisplayName
+							break
+						}
+					}
+				}
+				if label == "" {
+					label = "A researcher you track"
+				}
+				mu.Lock()
+				items = append(items, Item{
+					ID:   "tracked:" + wid,
+					Type: "tracked_researcher_paper",
+					Verb: "published a new paper",
+					TS:   pub.Format(time.RFC3339),
+					Actor: &Actor{
+						ID:          authorID,
+						DisplayName: label,
+					},
+					Object: &Object{
+						Kind:      "work",
+						ID:        wid,
+						Title:     w.Title,
+						Authors:   authorNames(w.Authorships, 3),
+						Year:      w.PublicationYear,
+						Venue:     w.PrimaryLocation.Source.DisplayName,
+						Citations: w.CitedByCount,
+					},
+					Href: "/paper/" + wid,
+					Why:  "Tracked researcher",
+				})
+				mu.Unlock()
+			}
+		}(authorID, name)
+	}
+	wg.Wait()
+	return items
+}
+
+// ── Citation watermark (decisions/0022) ──────────────────────────────────────
+
+// notificationStateCollection is the per-user watermark doc's parent
+// collection: users/{uid}/notification_state, with a single fixed doc id
+// ("state") since there is exactly one watermark per user today.
+func notificationStateCollection(userID string) string {
+	return "users/" + userID + "/notification_state"
+}
+
+func intField(d map[string]any, key string) int {
+	switch n := d[key].(type) {
+	case int64:
+		return int(n)
+	case int:
+		return n
+	case float64:
+		return int(n)
+	}
+	return 0
+}
+
+// citationAlert compares the user's current OpenAlex cited_by_count — the
+// same value already computed for GET /search_author / the web's
+// /author/[id] page — against a stored watermark, and emits exactly one
+// citation_received item when it has gone up since the last check, then
+// advances the watermark.
+//
+// Deliberately coarse (decisions/0022: "a coarse signal is honest and
+// sufficient"): this reports *that* new citations arrived and *how many*,
+// never which specific paper is responsible, since OpenAlex has no cheap way
+// to answer that. On the very first check for a user (no watermark yet) this
+// only seeds the watermark and emits nothing — otherwise every pre-existing
+// citation would be misreported as "new since you last checked."
+func citationAlert(ctx context.Context, userID, authorID string) []Item {
+	author, err := fetchAuthorHook(ctx, authorID)
+	if err != nil || author == nil {
+		return nil
+	}
+	current := author.CitedByCount
+
+	collection := notificationStateCollection(userID)
+	doc, found, err := firestoreGetDocHook(ctx, collection, "state")
+	if err != nil {
+		return nil
+	}
+	if !found {
+		_ = firestoreSetDocHook(ctx, collection, "state", map[string]any{"lastSeenCitationCount": current})
+		return nil
+	}
+
+	last := intField(doc, "lastSeenCitationCount")
+	if current <= last {
+		return nil
+	}
+	delta := current - last
+	_ = firestoreSetDocHook(ctx, collection, "state", map[string]any{"lastSeenCitationCount": current})
+
+	verb := "received a new citation"
+	if delta > 1 {
+		verb = "received new citations"
+	}
+	return []Item{{
+		ID:    "citation:" + authorID + ":" + strconv.Itoa(current),
+		Type:  "citation_received",
+		Verb:  verb,
+		TS:    time.Now().Format(time.RFC3339),
+		Href:  "/author/" + authorID,
+		Why:   strconv.Itoa(delta) + " new citation(s) since last checked",
+		Count: delta,
+	}}
 }
