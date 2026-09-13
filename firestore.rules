@@ -119,14 +119,41 @@ service cloud.firestore {
       }
     }
 
-    // ── users/{uid}/tracked_researchers/{authorId} — "Track" (decision 0021) ──
-    // A per-user bookmark on a researcher, distinct from CoLab's "Start a
-    // project with X". Only the owning uid may read or write their own
-    // subtree — no cross-user read, since a Signals workstream that reads
-    // this collection does so per-viewer through their own client, same as
-    // this one.
-    match /users/{uid}/tracked_researchers/{authorId} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+    // ── users/{uid} — decisions/0022 Signals + decisions/0021 Track ─────
+    // A second per-uid root, distinct from `researchers/{uid}` (the public
+    // profile directory): this one holds private, self-only state that must
+    // never be readable by anyone else — alert preferences, the citation
+    // watermark, and who this user is tracking. Every subcollection is
+    // owner-only for both read and write, and write requests must keep the
+    // stored `uid`/`authorId` fields honest.
+    match /users/{uid} {
+      function isOwner() { return request.auth != null && request.auth.uid == uid; }
+
+      // settings/notifications — per-kind alert cadence (decisions/0022).
+      // Direct client write (decisions/0004's pattern), so this must be
+      // usable by an anonymous Firebase session too, not just a "real"
+      // account — no dark-pattern account gate on turning an alert off.
+      match /settings/{settingId} {
+        allow read, write: if isOwner();
+      }
+
+      // tracked_researchers/{authorId} — Discovery's Track feature
+      // (decisions/0021). Doc id is the OpenAlex author id being tracked.
+      match /tracked_researchers/{authorId} {
+        allow read: if isOwner();
+        allow create, update: if isOwner() && request.resource.data.authorId == authorId;
+        allow delete: if isOwner();
+      }
+
+      // notification_state/{stateId} — the citation-count watermark the Go
+      // gateway reads/writes on the user's behalf (internal/activity). Kept
+      // owner-readable so the client can show "as of" context if needed, but
+      // writes happen server-side with an admin credential; there is no
+      // client write path to this collection today.
+      match /notification_state/{stateId} {
+        allow read: if isOwner();
+        allow write: if false;
+      }
     }
 
     // Default deny — anything not explicitly allowed above is closed.

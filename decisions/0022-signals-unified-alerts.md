@@ -132,17 +132,53 @@ the real live decision-0013 values — corrected here too (see
 contrast numbers). Mentions/invites sharing one settings row remains open,
 lower-priority.
 
-## Consequences
+## Addendum (2026-09-13): implemented in `apps/web` and the Go gateway
 
-Not yet implemented in `apps/web`. Reference mockup (4 screens: enriched
-bell dropdown, full Notifications page, Manage alerts settings, empty
-inbox with the track-researchers nudge) is a Claude
-Design canvas linked from `HANDOFF.md`. Implementation touches
-`lib/types.ts` (`ActivityType`), the activity-feed backend that populates
-it, `useNotifications.ts`, `NotificationsBell.tsx`, and needs a new route
-for the full Notifications page and alert-cadence preferences (likely a
-Firestore doc per user, consistent with `decisions/0004`'s Firestore-direct
-pattern for CoLab/Profile-adjacent data). Citation detection requires
-knowing when a new citing work appears for the viewer's own OpenAlex ID —
-an existing data path, since author citation counts are already computed
-for `/author/[id]`.
+Implemented on `feature/frontend-redesign-2026-09` (merged from a dedicated
+worktree branch). `ActivityType` gained all five new kinds; `useNotifications.ts`
+and `NotificationsBell.tsx` render each with real, specific copy (never a
+generic placeholder); `/notifications` (grouped by day, the five filter
+chips, mark-all-read, empty/loading/error states) and `/notifications/
+manage` (per-kind cadence, `users/{uid}/settings/notifications`, direct
+client write per decision 0004, no account required to change) both ship.
+
+End-to-end, not just UI-ready:
+
+- **`citation_received`** — `internal/activity/activity.go`'s
+  `citationAlert` reuses the same OpenAlex `cited_by_count` already computed
+  for `/author/[id]`, compares it against a watermark at
+  `users/{uid}/notification_state/state`, and emits one coarse "N new
+  citations since you last checked" item when it rises — never claiming to
+  know which specific paper is responsible, per this decision's own honesty
+  rule. The very first check for a user seeds the watermark without emitting
+  anything, so pre-existing citations are never misreported as new.
+- **`tracked_researcher_paper`** — `trackedResearcherPapers` reads
+  `users/{uid}/tracked_researchers` (Firestore) and surfaces each tracked
+  author's recent OpenAlex works. Discovery's Track feature (decisions/0021,
+  same merge) now writes that exact collection, so this closes the full
+  bookmark-then-notify loop end to end, not just half of it.
+
+Deliberately deferred, UI-ready only (see the code comments in
+`useNotifications.ts` and `internal/activity/activity.go` for the exact
+reasoning):
+
+- **`tracked_topic_activity`** — no topic-follow feature exists anywhere in
+  Discovery to source it from.
+- **`mention`** / **`invite`** — CoLab has no `@mention` parser and no
+  workspace-invite event stream to source them from.
+
+Both render correctly if an `ActivityItem` of that type ever arrives, but no
+backend path produces one today. Building either is real, separate work
+(a topic-follow feature; a mention-parser + invite-event emitter) and out of
+this decision's scope to fabricate just to make the screen "work."
+
+**Verified**: `go build ./...`, `go vet ./...`, and `go test ./...` for
+`services/backend-go` all pass cleanly, including 13 new/existing tests in
+`internal/activity` (`TestTrackedResearcherIDs_*`, `TestCitationAlert_*`,
+`TestGetActivityFeed_*`) and `internal/firestore`.
+
+## Consequences (superseded by the addendum above once merged)
+
+Reference mockup (4 screens: enriched bell dropdown, full Notifications
+page, Manage alerts settings, empty inbox with the track-researchers
+nudge) is a Claude Design canvas linked from `HANDOFF.md`.

@@ -93,6 +93,35 @@ func SetDoc(ctx context.Context, collection, docID string, data map[string]any) 
 	return err
 }
 
+// ListDocs returns every document in collection, capped at limit — for
+// collections with no useful equality filter to query by (e.g. a per-user
+// subcollection like `users/{uid}/tracked_researchers`, where the caller just
+// wants "all of them").
+//   - client unavailable → (nil, nil) — same no-op degradation as GetDoc/QueryEq
+//   - empty collection    → ([]map[string]any{}, nil)
+//   - other error         → (nil, err)
+func ListDocs(ctx context.Context, collection string, limit int) ([]map[string]any, error) {
+	c := get()
+	if c == nil {
+		return nil, nil
+	}
+	iter := c.Collection(collection).Limit(limit).Documents(ctx)
+	defer iter.Stop()
+
+	out := make([]map[string]any, 0, limit)
+	for {
+		snap, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, snap.Data())
+	}
+	return out, nil
+}
+
 // QueryEq runs an equality query (`field == value`) against collection,
 // capped at limit results, and returns each matching document's data map.
 //   - client unavailable → (nil, nil) — same no-op degradation as GetDoc

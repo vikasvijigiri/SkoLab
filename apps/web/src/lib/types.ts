@@ -20,14 +20,31 @@ export interface SkoLabUser {
 }
 
 // Firestore `users/{uid}/tracked_researchers/{authorId}` — decision 0021's
-// "Track" bookmark. Exact shape a separate Signals workstream also reads,
-// so don't rename these fields without checking there first.
+// "Track" bookmark, written by Discovery's Track feature. Exact shape a
+// separate Signals workstream also reads (to feed `tracked_researcher_paper`
+// notifications and a live "N tracked" count on Manage Alerts) — don't
+// rename these fields without checking there first.
 export interface TrackedResearcher {
   authorId: string;
   name: string;
   /** `serverTimestamp()` on write; a Firestore `Timestamp` once read back
-   *  (or briefly `null` in the instant before the server assigns it). */
+   *  (or briefly `null` in the instant before the server assigns it). Never
+   *  a plain epoch number — don't treat it as one. */
   trackedAt: unknown;
+}
+
+// Firestore `users/{uid}/settings/notifications` — per-kind alert cadence
+// (decisions/0022, decisions/0004's direct-client-write pattern). Every
+// control is readable/writable by a signed-in user (anonymous auth included)
+// with no separate "account" required.
+export type AlertCadence = "realtime" | "daily" | "weekly" | "off";
+
+export interface NotificationSettings {
+  citations: AlertCadence;
+  trackedResearchers: AlertCadence;
+  trackedTopics: AlertCadence;
+  colabMentionsInvites: AlertCadence;
+  connections: AlertCadence;
 }
 
 // GET /api/v1/leaderboard/:field (Go gateway)
@@ -81,7 +98,21 @@ export interface SimilarResult<T> {
 
 // ── Home activity feed (Go gateway /api/v1/activity_feed — no LLM) ──────────
 
-export type ActivityType = "paper_published" | "connection_made" | "trending";
+// decisions/0022 extends the feed beyond the original three kinds: a
+// citation-count watermark, Discovery Track (decisions/0021) feeding
+// notifications, and the CoLab mention/invite kinds the hook's own comment
+// already flagged as a follow-up. `tracked_topic_activity`, `mention` and
+// `invite` are rendered on the frontend but have no backend producer yet —
+// see the code comments in useNotifications.ts and internal/activity/activity.go.
+export type ActivityType =
+  | "paper_published"
+  | "connection_made"
+  | "trending"
+  | "citation_received"
+  | "tracked_researcher_paper"
+  | "tracked_topic_activity"
+  | "mention"
+  | "invite";
 
 export interface ActivityActor {
   id: string;
@@ -90,7 +121,9 @@ export interface ActivityActor {
 }
 
 export interface ActivityObject {
-  kind: "work";
+  /** "topic" backs `tracked_topic_activity` — `id`/`title` are the OpenAlex
+   *  topic id and display name rather than a work. */
+  kind: "work" | "topic";
   id: string;
   title: string;
   authors?: string[];
@@ -110,6 +143,12 @@ export interface ActivityItem {
   object?: ActivityObject;
   href: string;
   why?: string;
+  /** A real, backend-computed quantity the card's copy names honestly — new
+   *  citations since the last watermark check (`citation_received`) or new
+   *  papers in a followed topic (`tracked_topic_activity`). Never fabricated:
+   *  absent when there's no real count, and never used to imply a specific
+   *  citing paper is known when it isn't (decisions/0022). */
+  count?: number;
 }
 
 /** `degraded` = the user's network could not be read; feed is the trending floor only. */
