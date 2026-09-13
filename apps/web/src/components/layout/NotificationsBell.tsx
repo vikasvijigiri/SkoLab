@@ -70,12 +70,12 @@ export function NotificationsBell() {
         aria-haspopup="menu"
         aria-expanded={open}
         className={cn(
-          "relative flex h-9 w-9 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-subtle hover:text-text-primary",
-          open && "bg-surface-subtle text-text-primary",
+          "relative flex h-8 w-8 items-center justify-center rounded-full transition-colors",
+          open ? "bg-white/20 text-white" : "text-white/85 hover:bg-white/15 hover:text-white",
           focusRing,
         )}
       >
-        <Bell size={18} strokeWidth={1.8} />
+        <Bell size={17} strokeWidth={1.8} />
         {unreadCount > 0 && (
           <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-notification px-1 font-mono text-[9px] font-bold text-white">
             {unreadCount > 9 ? "9+" : unreadCount}
