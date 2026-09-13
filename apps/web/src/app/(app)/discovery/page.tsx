@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
-import { SearchX, Flame, Trophy, TrendingUp, ChevronRight, Compass, Download, Lightbulb } from "lucide-react";
+import { SearchX, Flame, Trophy, TrendingUp, ChevronRight, Compass, Download, Lightbulb, Columns2, X } from "lucide-react";
 import { Chip } from "@/components/ui/Badge";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { RailShell } from "@/components/layout/RailShell";
@@ -34,6 +34,7 @@ import { AuthorResultCard } from "@/components/discovery/AuthorResultCard";
 import { PaperResultCard } from "@/components/discovery/PaperResultCard";
 import { LeaderboardRow } from "@/components/discovery/LeaderboardRow";
 import { ResearcherCard } from "@/components/discovery/ResearcherCard";
+import { CompareModal } from "@/components/discovery/CompareModal";
 import { TrendingTopicCard } from "@/components/discovery/TrendingTopicCard";
 import { TrendingResearchersStrip } from "@/components/discovery/TrendingResearchersStrip";
 import {
@@ -68,6 +69,20 @@ export function DiscoveryContent() {
   // Fit-first controls.
   const [filters, setFilters] = useState<DiscoveryFilterState>(DEFAULT_FILTER_STATE);
   const [sort, setSort] = useState<DiscoverySort>("fit");
+
+  // Compare (decision 0021) — select up to 2 researchers from the grid, then
+  // open a casual side-by-side. Ids only; the full rows are looked up from
+  // `researchers` below once both are picked.
+  const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [compareOpen, setCompareOpen] = useState(false);
+
+  function toggleCompare(r: ResearcherResult) {
+    setCompareIds((prev) => {
+      if (prev.includes(r.id)) return prev.filter((id) => id !== r.id);
+      if (prev.length >= 2) return prev;
+      return [...prev, r.id];
+    });
+  }
 
   const { author, firestoreProfile } = useMyProfile();
   const viewerFocus = firestoreProfile?.researchFocus || author?.field_of_study || "";
@@ -210,6 +225,22 @@ export function DiscoveryContent() {
   // Highlight strip above the grid — the momentum signal `signals.ts` already
   // computes, promoted out of being just a sort option (decisions/0015).
   const risingResearchers = useMemo(() => topRisingResearchers(researchers), [researchers]);
+
+  // Papers mode (decision 0021) — "lower-relevance shown quieter, not
+  // hidden": the median is computed from this same rendered list, so it's
+  // always a real, explainable cutoff rather than an invented threshold.
+  // Plain consts, not useMemo — `node` is rebuilt every render (see above),
+  // and neither derivation is expensive enough to need memoising.
+  const paperResults = (node ? nodeWorks.data : trending.data) ?? [];
+  const paperCitationCounts = paperResults.map((w) => w.cited_by_count ?? 0).sort((a, b) => a - b);
+  const medianPaperCitations =
+    paperCitationCounts.length === 0
+      ? 0
+      : paperCitationCounts.length % 2 === 0
+        ? ((paperCitationCounts[paperCitationCounts.length / 2 - 1] ?? 0) +
+            (paperCitationCounts[paperCitationCounts.length / 2] ?? 0)) /
+          2
+        : (paperCitationCounts[Math.floor(paperCitationCounts.length / 2)] ?? 0);
 
   const facets: DiscoveryFacets = useMemo(() => {
     const c = new Map<string, number>();
@@ -517,7 +548,16 @@ export function DiscoveryContent() {
             {fitGridActive &&
               !researchersQ.isPending &&
               !fitError &&
-              researchers.map((r, i) => <ResearcherCard key={r.id} r={r} index={i} />)}
+              researchers.map((r, i) => (
+                <ResearcherCard
+                  key={r.id}
+                  r={r}
+                  index={i}
+                  compareSelected={compareIds.includes(r.id)}
+                  compareDisabled={compareIds.length >= 2 && !compareIds.includes(r.id)}
+                  onToggleCompare={toggleCompare}
+                />
+              ))}
 
             {!fitGridActive &&
               !active.isPending &&
@@ -550,8 +590,14 @@ export function DiscoveryContent() {
             {!active.isPending &&
               !active.isError &&
               mode === "papers" &&
-              ((node ? nodeWorks.data : trending.data) ?? []).map((w, i) => (
-                <PaperResultCard key={w.id} w={w} index={i} />
+              paperResults.map((w, i) => (
+                <PaperResultCard
+                  key={w.id}
+                  w={w}
+                  index={i}
+                  viewerExpertise={viewer.expertise}
+                  quieter={(w.cited_by_count ?? 0) < medianPaperCitations}
+                />
               ))}
 
             {!active.isPending &&
@@ -597,6 +643,41 @@ export function DiscoveryContent() {
           )}
         </div>
       </RailShell>
+
+      {compareIds.length > 0 && (
+        <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
+          <div className="flex items-center gap-3 rounded-full border border-border-strong bg-surface px-4 py-2.5 shadow-elevated">
+            <span className="font-body text-[12.5px] font-medium text-text-secondary">
+              {compareIds.length} of 2 selected to compare
+            </span>
+            <button
+              type="button"
+              disabled={compareIds.length < 2}
+              onClick={() => setCompareOpen(true)}
+              className="flex h-8 items-center gap-1.5 rounded-full bg-primary px-3.5 font-body text-[12.5px] font-semibold text-text-on-primary disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Columns2 size={13} />
+              Compare
+            </button>
+            <button
+              type="button"
+              aria-label="Clear compare selection"
+              onClick={() => setCompareIds([])}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-text-muted hover:bg-surface-subtle hover:text-text-primary"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {compareIds.length === 2 &&
+        (() => {
+          const a = researchers.find((r) => r.id === compareIds[0]);
+          const b = researchers.find((r) => r.id === compareIds[1]);
+          if (!a || !b) return null;
+          return <CompareModal a={a} b={b} open={compareOpen} onClose={() => setCompareOpen(false)} />;
+        })()}
     </div>
   );
 }

@@ -19,6 +19,17 @@ export interface SkoLabUser {
   lastActive: number;
 }
 
+// Firestore `users/{uid}/tracked_researchers/{authorId}` — decision 0021's
+// "Track" bookmark. Exact shape a separate Signals workstream also reads,
+// so don't rename these fields without checking there first.
+export interface TrackedResearcher {
+  authorId: string;
+  name: string;
+  /** `serverTimestamp()` on write; a Firestore `Timestamp` once read back
+   *  (or briefly `null` in the instant before the server assigns it). */
+  trackedAt: unknown;
+}
+
 // GET /api/v1/leaderboard/:field (Go gateway)
 export interface LeaderboardEntry {
   rank: number;
