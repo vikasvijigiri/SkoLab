@@ -57,3 +57,9 @@ the old one's Status as `Superseded by NNNN`.
 | [0009](0009-phase1-authors-assessment.md) | Phase 1 (`authors.py` → Go) assessment: nothing moves yet |
 | [0010](0010-llm-python-rest-go-boundary.md) | The bright line: LLM/embedding work is Python, everything else is Go |
 | [0018](0018-firestore-security-rules-over-rest.md) | Firestore security rules, not a REST layer, close the CoLab/Profile access-control gap |
+| [0019](0019-colab-workspace-consolidated-writing.md) | CoLab Workspace: Chat/Equations fold into the Documents tab's dock, Share stays a modal, journal-template picker added |
+| [0020](0020-global-topbar-solid-brand-blue.md) | Global top bar: compact 48px solid brand-blue bar, applied to every screen |
+| [0021](0021-discovery-horizon-fused-highlights.md) | Discovery + Horizon: fused researcher Highlights, Track/Compare, TL;DR-first Papers mode |
+| [0022](0022-signals-unified-alerts.md) | Signals: unified citation/tracked-people/topic/CoLab alerts, extending the real `NotificationsBell` |
+| [0023](0023-profile-redesign-and-cv-export.md) | Profile redesign (closes the original CoLab+Profile scope) + CV export/share, click-first |
+| [0024](0024-route-verification-home-paper-settings.md) | Route-level verification: Home feed, Paper detail, and Settings redesigned to close three previously-untouched routes |
