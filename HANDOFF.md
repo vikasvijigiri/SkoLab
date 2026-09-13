@@ -8,7 +8,20 @@
 
 ## Where the repository is
 
-`main` has absorbed the 2026-09-11 backend-audit/live-feed work (PR #180)
+`main` has absorbed the full frontend redesign (PR #219, merged
+2026-09-13): CoLab Workspace, Discovery+Horizon+Track, Signals, Profile+CV
+export, Home feed, Paper detail, and Settings — decisions 0019-0024, all
+now marked implemented. Full detail on what shipped, what was merged from
+where, and what was simplified/deferred is in the "What needs a decision"
+section below. Both post-merge action items are done: the Firestore
+security rules test suite was run for real (28/28 passed, via a portable
+JDK 21 already on this machine at `tools/jdk-21.0.5+11` — `firebase-tools`
+needs Java 21+, not just any JDK), and the updated `firestore.rules` (new
+`users/{uid}` subtree for Signals/Track, `researchers/{uid}/cvShares` for
+CV sharing) is deployed to production (`skolab-vvi`), confirmed via
+`firebase deploy --only firestore:rules`'s own "released rules" output.
+
+`main` also carries the 2026-09-11 backend-audit/live-feed work (PR #180)
 plus a large Dependabot sweep (2026-09-12): 26 dependency PRs merged, two
 systemic CI gaps fixed at the root (not just worked around), and
 `dependabot.yml` updated so the confirmed-broken bumps below stop
@@ -94,22 +107,20 @@ entries.
   `notification_state`); `apps/web/src/app/(app)/settings/page.tsx`'s
   Manage Alerts link (merged both agents' copy).
 
-  **Full verification, run after all merges landed:** `tsc --noEmit`
-  clean; `eslint src` clean; `vitest run` 267/267 passed (59 files); Go
-  `build && vet && test ./...` all green (`services/backend-go`); Python
-  `pytest -q` 230 passed/4 skipped (unchanged — no Python touched). **One
-  gap, honestly flagged:** `npm run test:rules` (the Firestore security
-  rules test suite) needs the Firebase emulator, which needs Java — not
-  available in the environment this was built in. Run it in CI before
-  merging to `main`.
+  **Full verification:** `tsc --noEmit` clean; `eslint src` clean;
+  `vitest run` 267/267 passed (59 files); Go `build && vet && test ./...`
+  all green (`services/backend-go`); Python `pytest -q` 230 passed/4
+  skipped (unchanged — no Python touched); `npm run test:rules` (Firestore
+  security rules suite) 28/28 passed against the real emulator (needs
+  Java 21+ specifically — `firebase-tools` refuses older JDKs).
 
-  **`firestore.rules` was modified** (new `users/{uid}` subtree for
-  Signals/Track, new `researchers/{uid}/cvShares` subcollection for CV
-  sharing) **but the deployed production rules have not been updated** —
-  Track, notification settings, and CV sharing will fail against
-  production Firestore until someone runs `npx firebase-tools deploy
-  --only firestore:rules` from a human session. Don't deploy this without
-  explicit approval — it changes production access control.
+  **`firestore.rules` was modified and is deployed** (new `users/{uid}`
+  subtree for Signals/Track, new `researchers/{uid}/cvShares`
+  subcollection for CV sharing) — released to production (`skolab-vvi`)
+  2026-09-13 via `npx firebase-tools deploy --only firestore:rules`, with
+  explicit product-owner confirmation before running it (deploys are
+  approval-gated, not run on general go-ahead alone). Track, notification
+  settings, and CV sharing are live against real Firestore now.
 
   Design references (all seven Claude Design canvases, now implementation
   history rather than a forward spec): CoLab —
