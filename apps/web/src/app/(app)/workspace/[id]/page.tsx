@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Trash2,
-  MessageSquare,
-  Sigma,
   FileText,
   ListChecks,
   Users2,
@@ -17,8 +15,6 @@ import { useFirestoreDoc } from "@/lib/hooks/useFirestoreDoc";
 import { deleteProject, roleFor, canEdit as roleCanEdit } from "@/lib/firebase/workspace";
 import { cn } from "@/lib/utils";
 import { ErrorBanner, friendlyFirestoreError } from "@/components/ui/ErrorBanner";
-import { ChatTab } from "@/components/workspace/ChatTab";
-import { EquationsTab } from "@/components/workspace/EquationsTab";
 import { DocumentsTab } from "@/components/workspace/DocumentsTab";
 import { TasksMeetingsTab } from "@/components/workspace/TasksMeetingsTab";
 import { MembersTab } from "@/components/workspace/MembersTab";
@@ -27,10 +23,11 @@ import { PresenceStack } from "@/components/workspace/PresenceStack";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import type { CollabProject, CollabRole } from "@/lib/types";
 
+// Chat and Equations are no longer separate destinations here — they moved
+// into the Documents tab itself, as panels in its dockable right-side panel
+// (decisions/0019). The rail drops from 5 destinations to 3.
 const TABS = [
   { name: "Documents", Icon: FileText },
-  { name: "Chat", Icon: MessageSquare },
-  { name: "Equations", Icon: Sigma },
   { name: "Tasks & Meetings", Icon: ListChecks },
   { name: "Members", Icon: Users2 },
 ] as const;
@@ -44,9 +41,12 @@ const ROLE_LABEL: Record<CollabRole, string> = {
 };
 
 /** Auxiliary tabs get a centred, scrollable column so their content is
- *  readable rather than stretched across a wide editor viewport. */
+ *  readable rather than stretched across a wide editor viewport — this is
+ *  about content readability, separate from the outer shell's boxed-column
+ *  fix below (decisions/0019 item 7): the page background and chrome now
+ *  run full width, but a roster or task list still reads better with a
+ *  sane max width than stretched edge-to-edge on an ultrawide screen. */
 const CENTERED: Partial<Record<Tab, string>> = {
-  Equations: "max-w-3xl",
   "Tasks & Meetings": "max-w-3xl",
   Members: "max-w-2xl",
 };
@@ -109,7 +109,11 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
   const chromeHidden = docFocus && tab === "Documents";
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-[1128px] flex-col overflow-hidden border-x border-border bg-page-bg">
+    // Full viewport width (decisions/0019 item 7) — Documents, Members and
+    // Tasks & Meetings all dropped the boxed 1128px column with empty
+    // gutters on wider screens, so switching tabs no longer resizes the
+    // screen.
+    <div className="flex h-full w-full flex-col overflow-hidden bg-page-bg">
       <ShareModal project={project} open={shareOpen} onClose={() => setShareOpen(false)} />
 
       {/* ── Toolbar ─────────────────────────────────────────────────────── */}
@@ -253,9 +257,8 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
                   canEdit={canEdit}
                   onActiveDocChange={setActiveDocId}
                   onFocusChange={setDocFocus}
+                  onOpenShare={() => setShareOpen(true)}
                 />
-              ) : tab === "Chat" ? (
-                <ChatTab projectId={project.id} />
               ) : (
                 <div
                   className={cn(
@@ -263,12 +266,6 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
                     centeredClass,
                   )}
                 >
-                  {tab === "Equations" && (
-                    <EquationsTab
-                      projectId={project.id}
-                      initialLatex={project.recentEquations}
-                    />
-                  )}
                   {tab === "Tasks & Meetings" && <TasksMeetingsTab projectId={project.id} />}
                   {tab === "Members" && (
                     <MembersTab project={project} onManageSharing={() => setShareOpen(true)} />

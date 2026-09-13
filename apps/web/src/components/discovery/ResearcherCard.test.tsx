@@ -109,4 +109,39 @@ describe("ResearcherCard", () => {
     renderWithProviders(<ResearcherCard r={result({ deceased: { year: 1852 } })} index={0} />);
     expect(screen.queryByText(/start a project with/i)).not.toBeInTheDocument();
   });
+
+  it("shows the Track button alongside — not instead of — start-a-project", async () => {
+    auth.user = { uid: "me" };
+    renderWithProviders(<ResearcherCard r={result()} index={0} />);
+    expect(screen.getByText(/start a project with ada/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /track ada lovelace/i })).toBeInTheDocument();
+  });
+
+  it("hides Track for a signed-out visitor, same as start-a-project", () => {
+    renderWithProviders(<ResearcherCard r={result()} index={0} />);
+    expect(screen.queryByRole("button", { name: /track ada lovelace/i })).not.toBeInTheDocument();
+  });
+
+  it("omits the Compare checkbox unless a call site opts in", () => {
+    renderWithProviders(<ResearcherCard r={result()} index={0} />);
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+  });
+
+  it("toggles Compare selection via a checkbox, not a literal <input> (click-only UX)", async () => {
+    const onToggleCompare = vi.fn();
+    const { container } = renderWithProviders(
+      <ResearcherCard r={result()} index={0} onToggleCompare={onToggleCompare} />,
+    );
+    const checkbox = screen.getByRole("checkbox", { name: /add ada lovelace to compare/i });
+    expect(container.querySelector("input")).toBeNull();
+    await userEvent.click(checkbox);
+    expect(onToggleCompare).toHaveBeenCalledWith(result());
+  });
+
+  it("disables an unselected Compare checkbox once 2 are already selected", () => {
+    renderWithProviders(
+      <ResearcherCard r={result()} index={0} compareDisabled onToggleCompare={vi.fn()} />,
+    );
+    expect(screen.getByRole("checkbox")).toBeDisabled();
+  });
 });

@@ -4,7 +4,7 @@
 > every session. For history, see `LOG.md`; for why a decision was made, see
 > `decisions/`.
 
-**Last updated:** 2026-09-12
+**Last updated:** 2026-09-13
 
 ## Where the repository is
 
@@ -41,6 +41,129 @@ entries.
 
 ## What needs a decision / attention
 
+- **All eight redesigned areas are now implemented, merged, and verified**
+  on `feature/frontend-redesign-2026-09` (2026-09-13), off `main`, per
+  explicit product-owner direction — **not yet merged to `main`, needs PR
+  review first.** Six work packages were built in parallel (isolated git
+  worktrees, one per area) and integrated back with `git merge` (four
+  clean/fast-forward, two needed manual conflict resolution — see below):
+
+  - **Global top bar + category rail** (`decisions/0020`, `0019`'s
+    addendum): `TopBar.tsx` is now a 48px solid-blue bar; `AppShell.tsx`
+    conditionally hides `ResearchCategoryRail` on Workspace/Profile/Settings.
+  - **CoLab Workspace** (`decisions/0019`): Chat/Equations consolidated into
+    a dockable panel (`DocumentDock.tsx`) with collapse-to-rail; journal-
+    specific templates (PRL/PRB/NJP/EPL) in `ResearchTools.tsx`; a live
+    `QuickReferencePanel.tsx`; a `/`-triggered `SlashMenu.tsx`.
+  - **Discovery + Horizon + Track** (`decisions/0021`): a Highlights layer
+    on `/author/[id]` above the existing dashboard; `RelationshipGraph.tsx`
+    (generic, reused by Profile too); Track (`lib/firebase/tracking.ts`,
+    real Firestore writes to `users/{uid}/tracked_researchers/{authorId}`);
+    `CompareModal.tsx`; TL;DR-first `PaperResultCard.tsx`, now linking to
+    `/paper/[id]`.
+  - **Signals** (`decisions/0022`): `ActivityType` extended with 5 new
+    kinds; `/notifications` and `/notifications/manage` routes; citation-
+    delta detection and tracked-researcher-paper surfacing implemented in
+    the Go gateway (`internal/activity/activity.go`) — both genuinely
+    end-to-end, not stubs. `tracked_topic_activity`/`mention`/`invite` are
+    frontend-ready only (no topic-follow feature or CoLab @mention parser
+    exists yet to produce them).
+  - **Profile + CV export** (`decisions/0023`): the old capability-graph
+    card replaced with a real `CoAuthorGraph.tsx`; a new `/profile/cv/[uid]`
+    route; click-first sharing (`CvSharePanel.tsx`, `lib/firebase/cvShare.ts`)
+    to real CoLab connections, with an `mailto:`/`sms:` fallback. The share
+    copy was corrected from the mockup's "no account needed" claim to
+    "signed in to SkoLab" — the route sits under the auth-gated `(app)`
+    group, so the original claim would have been false.
+  - **Home feed + Settings** (`decisions/0024`): verified `home-client.tsx`
+    and `IdentityStrengthCard.tsx` already met the honesty bar (a real,
+    explainable profile-strength percentage, not a fabricated score) — no
+    rebuild needed. Settings' Notifications section now links to
+    `/notifications/manage` instead of a vague placeholder.
+  - **Paper detail** (`decisions/0024`): verified already faithful to the
+    design (honest confidence badge, "Honest Limitations" section, correct
+    loading/partial-failure handling) — no changes needed.
+
+  **Merge conflicts resolved by hand** (both from two workstreams
+  independently touching the same shared surface): `apps/web/src/lib/
+  types.ts`'s `TrackedResearcher.trackedAt` type (kept `unknown` — the
+  field is a Firestore `serverTimestamp()`, never a plain number, which
+  the Go consumer confirmed it never reads directly); `firestore.rules`'
+  `users/{uid}` block (kept the more complete version with `settings`,
+  `tracked_researchers` with an authorId-honesty check, and a server-only
+  `notification_state`); `apps/web/src/app/(app)/settings/page.tsx`'s
+  Manage Alerts link (merged both agents' copy).
+
+  **Full verification, run after all merges landed:** `tsc --noEmit`
+  clean; `eslint src` clean; `vitest run` 267/267 passed (59 files); Go
+  `build && vet && test ./...` all green (`services/backend-go`); Python
+  `pytest -q` 230 passed/4 skipped (unchanged — no Python touched). **One
+  gap, honestly flagged:** `npm run test:rules` (the Firestore security
+  rules test suite) needs the Firebase emulator, which needs Java — not
+  available in the environment this was built in. Run it in CI before
+  merging to `main`.
+
+  **`firestore.rules` was modified** (new `users/{uid}` subtree for
+  Signals/Track, new `researchers/{uid}/cvShares` subcollection for CV
+  sharing) **but the deployed production rules have not been updated** —
+  Track, notification settings, and CV sharing will fail against
+  production Firestore until someone runs `npx firebase-tools deploy
+  --only firestore:rules` from a human session. Don't deploy this without
+  explicit approval — it changes production access control.
+
+  Design references (all seven Claude Design canvases, now implementation
+  history rather than a forward spec): CoLab —
+  https://claude.ai/code/artifact/b0629b28-fc26-45d1-a3fe-204eb7270e67;
+  Discovery+Horizon —
+  https://claude.ai/code/artifact/3638613e-3a06-4f18-a8bc-4012d8e72d04;
+  Signals — https://claude.ai/code/artifact/918c193e-b166-4269-b629-f67a1f476929;
+  Profile — https://claude.ai/code/artifact/04619c80-3a0b-45ef-aba4-cf2be07b49ca;
+  Home feed — https://claude.ai/code/artifact/25456c65-ecb2-4c3d-b033-76277b72c96b;
+  Paper detail — https://claude.ai/code/artifact/07cbf4cc-3ef0-4dab-af58-c8c7ad1b62bf;
+  Settings — https://claude.ai/code/artifact/43da870e-a872-46d4-a35b-94ad671bcffb.
+
+- **A full self-audit was run across all four canvases above** (2026-09-12,
+  prompted by asking "see if anything is missing" before assuming the
+  redesign work was done) — every finding was fixed the same session and
+  is recorded as an addendum in the decision file it affects (0019, 0021,
+  0022). Worth repeating this kind of pass before treating any future
+  slice of this redesign as complete.
+- **A second, independent audit pass** (2026-09-12, same day, prompted by
+  "reverify again") ran a dedicated read-only audit agent per canvas —
+  checking every button/link resolves somewhere, chrome consistency, and
+  fidelity against both the decision text and the real app code — then a
+  separate fix pass applied every must-fix finding and republished all
+  four canvases at the same URLs. Recorded as a second addendum in each
+  decision file (0019, 0021, 0022, 0023).
+- **A third pass (2026-09-13) closed every item that second audit had left
+  as open backlog**, recorded as a third addendum in each decision file:
+  CoLab gained 3 mobile artboards (Home, Documents, Documents-with-dock-
+  open-as-bottom-sheet) plus Home-loading and Documents-error states (18
+  screens total); Discovery+Horizon gained a Discovery loading state and a
+  genuine Horizon failure state distinct from `is_fallback` (9 screens);
+  Signals gained an exact unread-count badge (replacing a plain dot),
+  plus loading and failed-to-load states (6 screens); Profile gained a
+  loading state and a save-error banner (4 screens). This pass also found
+  and fixed a real bug in all four canvases: every accent color
+  (`--accent-amber/indigo/emerald/rose/violet/orange`) had been pulled
+  from a superseded design direction instead of the values actually live
+  in `globals.css` today (decision 0013's theme) — corrected everywhere,
+  and the real WCAG contrast for the correct values was hand-verified
+  against `apps/web/scripts/check-contrast.mjs`'s exact formula (all six
+  clear both the 3.0:1 and 4.5:1 thresholds, 5.5:1–6.7:1 in practice) —
+  closing that contrast-recheck item with a verified answer instead of
+  leaving it outstanding. Remaining known gaps, all explicitly deferred as
+  lower-priority: no empty/zero-result states or pagination on Discovery,
+  no empty-state for the CV share panel's connections list, mentions/
+  invites sharing one Signals settings row. None of these block reading
+  the canvases as implementation references.
+- **A route-level verification (2026-09-13, `decisions/0024`) found three
+  real routes with zero design coverage** and closed them: Home feed (2
+  screens) — https://claude.ai/code/artifact/25456c65-ecb2-4c3d-b033-76277b72c96b;
+  Paper detail (3 screens) — https://claude.ai/code/artifact/07cbf4cc-3ef0-4dab-af58-c8c7ad1b62bf;
+  Settings (1 screen) — https://claude.ai/code/artifact/43da870e-a872-46d4-a35b-94ad671bcffb.
+  Read 0024 before touching `apps/web/src/app/(app)/home/`, `.../paper/`,
+  or `.../settings/`.
 - **Coordinated bumps deliberately deferred, each blocked in
   `dependabot.yml` until someone does the paired work:**
   - okhttp 5.x needs `compileSdk >= 37` bumped first (Android)

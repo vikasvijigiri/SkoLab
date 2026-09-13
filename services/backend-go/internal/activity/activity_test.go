@@ -1,7 +1,9 @@
 package activity
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -205,5 +207,164 @@ func TestGetActivityFeed_OwnUserIDIsAccepted(t *testing.T) {
 	verifiedUserRouter("dev_user").ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", w.Code)
+	}
+}
+
+// With no Firestore client configured (true in CI, same as the nil-pool
+// case), a user_id + author_id request must still answer 200 rather than
+// blocking on or erroring from the new tracked/citation sources — they
+// degrade to "no items" exactly like peerPublications/connectionEvents do
+// with a nil db.Pool. This also guarantees no live network call is made:
+// citationAlert is gated on author_id being non-empty, so an empty author_id
+// (as here) must never reach fetchAuthorHook.
+func TestGetActivityFeed_TrackedAndCitationSourcesDegradeCleanly(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/activity_feed?user_id=dev_user&author_id=", nil)
+	w := httptest.NewRecorder()
+	verifiedUserRouter("dev_user").ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	var body FeedResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("body not JSON: %v — %s", err, w.Body.String())
+	}
+}
+
+// ── trackedResearcherIDs (decisions/0021 Track feeds decisions/0022 Signals) ─
+
+func TestTrackedResearcherIDs_BuildsMapFromFirestoreDocs(t *testing.T) {
+	orig := firestoreListDocsHook
+	defer func() { firestoreListDocsHook = orig }()
+
+	var gotCollection string
+	firestoreListDocsHook = func(_ context.Context, collection string, limit int) ([]map[string]any, error) {
+		gotCollection = collection
+		return []map[string]any{
+			{"authorId": "https://openalex.org/A111", "name": "Ada Lovelace", "trackedAt": int64(1)},
+			{"authorId": "", "name": "Should be skipped"},
+			{"authorId": "a222", "name": "Grace Hopper"},
+		}, nil
+	}
+
+	got := trackedResearcherIDs(context.Background(), "u1")
+	if gotCollection != "users/u1/tracked_researchers" {
+		t.Errorf("collection = %q, want users/u1/tracked_researchers", gotCollection)
+	}
+	want := map[string]string{"A111": "Ada Lovelace", "A222": "Grace Hopper"}
+	if len(got) != len(want) || got["A111"] != want["A111"] || got["A222"] != want["A222"] {
+		t.Fatalf("trackedResearcherIDs = %+v, want %+v", got, want)
+	}
+}
+
+func TestTrackedResearcherIDs_EmptyOrErrorIsCleanMiss(t *testing.T) {
+	orig := firestoreListDocsHook
+	defer func() { firestoreListDocsHook = orig }()
+
+	firestoreListDocsHook = func(context.Context, string, int) ([]map[string]any, error) { return nil, nil }
+	if got := trackedResearcherIDs(context.Background(), "u1"); got != nil {
+		t.Errorf("empty collection → %+v, want nil", got)
+	}
+
+	firestoreListDocsHook = func(context.Context, string, int) ([]map[string]any, error) {
+		return nil, fmt.Errorf("boom")
+	}
+	if got := trackedResearcherIDs(context.Background(), "u1"); got != nil {
+		t.Errorf("firestore error → %+v, want nil", got)
+	}
+}
+
+// ── citationAlert (decisions/0022 citation watermark) ────────────────────────
+
+func TestCitationAlert_FirstCheckSeedsWatermarkAndEmitsNothing(t *testing.T) {
+	origFetch, origGet, origSet := fetchAuthorHook, firestoreGetDocHook, firestoreSetDocHook
+	defer func() { fetchAuthorHook, firestoreGetDocHook, firestoreSetDocHook = origFetch, origGet, origSet }()
+
+	fetchAuthorHook = func(context.Context, string) (*openalex.Author, error) {
+		return &openalex.Author{CitedByCount: 42}, nil
+	}
+	firestoreGetDocHook = func(context.Context, string, string) (map[string]any, bool, error) {
+		return nil, false, nil // no watermark yet
+	}
+	var setData map[string]any
+	firestoreSetDocHook = func(_ context.Context, _, _ string, data map[string]any) error {
+		setData = data
+		return nil
+	}
+
+	items := citationAlert(context.Background(), "u1", "A1")
+	if items != nil {
+		t.Fatalf("first-ever check should emit nothing (would misreport pre-existing citations), got %+v", items)
+	}
+	if setData["lastSeenCitationCount"] != 42 {
+		t.Fatalf("watermark not seeded to current count: %+v", setData)
+	}
+}
+
+func TestCitationAlert_IncreaseEmitsCoarseCountAndAdvancesWatermark(t *testing.T) {
+	origFetch, origGet, origSet := fetchAuthorHook, firestoreGetDocHook, firestoreSetDocHook
+	defer func() { fetchAuthorHook, firestoreGetDocHook, firestoreSetDocHook = origFetch, origGet, origSet }()
+
+	fetchAuthorHook = func(context.Context, string) (*openalex.Author, error) {
+		return &openalex.Author{CitedByCount: 50}, nil
+	}
+	firestoreGetDocHook = func(context.Context, string, string) (map[string]any, bool, error) {
+		return map[string]any{"lastSeenCitationCount": int64(47)}, true, nil
+	}
+	var setData map[string]any
+	firestoreSetDocHook = func(_ context.Context, _, _ string, data map[string]any) error {
+		setData = data
+		return nil
+	}
+
+	items := citationAlert(context.Background(), "u1", "A1")
+	if len(items) != 1 {
+		t.Fatalf("want exactly one citation_received item, got %d", len(items))
+	}
+	it := items[0]
+	if it.Type != "citation_received" || it.Count != 3 {
+		t.Fatalf("item = %+v, want type citation_received, count 3", it)
+	}
+	// Never claims to know which paper — no Object naming a specific work.
+	if it.Object != nil {
+		t.Fatalf("citation_received must stay coarse (no specific paper), got Object=%+v", it.Object)
+	}
+	if setData["lastSeenCitationCount"] != 50 {
+		t.Fatalf("watermark not advanced to current count: %+v", setData)
+	}
+}
+
+func TestCitationAlert_NoIncreaseEmitsNothing(t *testing.T) {
+	origFetch, origGet, origSet := fetchAuthorHook, firestoreGetDocHook, firestoreSetDocHook
+	defer func() { fetchAuthorHook, firestoreGetDocHook, firestoreSetDocHook = origFetch, origGet, origSet }()
+
+	fetchAuthorHook = func(context.Context, string) (*openalex.Author, error) {
+		return &openalex.Author{CitedByCount: 50}, nil
+	}
+	firestoreGetDocHook = func(context.Context, string, string) (map[string]any, bool, error) {
+		return map[string]any{"lastSeenCitationCount": int64(50)}, true, nil
+	}
+	setCalled := false
+	firestoreSetDocHook = func(context.Context, string, string, map[string]any) error {
+		setCalled = true
+		return nil
+	}
+
+	if items := citationAlert(context.Background(), "u1", "A1"); items != nil {
+		t.Fatalf("no increase should emit nothing, got %+v", items)
+	}
+	if setCalled {
+		t.Fatal("watermark should not be rewritten when the count hasn't moved")
+	}
+}
+
+func TestCitationAlert_FetchErrorIsCleanMiss(t *testing.T) {
+	origFetch := fetchAuthorHook
+	defer func() { fetchAuthorHook = origFetch }()
+
+	fetchAuthorHook = func(context.Context, string) (*openalex.Author, error) {
+		return nil, fmt.Errorf("openalex down")
+	}
+	if items := citationAlert(context.Background(), "u1", "A1"); items != nil {
+		t.Fatalf("fetch error should emit nothing, got %+v", items)
 	}
 }

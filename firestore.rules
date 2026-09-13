@@ -32,6 +32,26 @@ service cloud.firestore {
         && request.auth.uid == uid
         && request.resource.data.uid == uid;
       allow delete: if request.auth != null && request.auth.uid == uid;
+
+      // ── researchers/{uid}/cvShares/{shareId} — Profile's CV share flow ──
+      // "Send to a connection" (decisions/0023) writes a lightweight "I sent
+      // you my CV" record here, under the *recipient's* own uid. Read: the
+      // recipient (it's their subcollection) or the sender (so the sender's
+      // own UI can confirm delivery). Create: only as yourself, only into the
+      // recipient named in the doc itself — you can't forge a share from
+      // someone else, and you can only add rows to the actual `uid` you're
+      // writing to. See apps/web/src/lib/firebase/cvShare.ts.
+      match /cvShares/{shareId} {
+        allow read: if request.auth != null
+          && (request.auth.uid == uid || request.auth.uid == resource.data.fromUid);
+        allow create: if request.auth != null
+          && request.resource.data.fromUid == request.auth.uid
+          && request.resource.data.toUid == uid;
+        // Recipient may mark their own copy read; sender may retract it.
+        allow update: if request.auth != null && request.auth.uid == uid;
+        allow delete: if request.auth != null
+          && (request.auth.uid == uid || request.auth.uid == resource.data.fromUid);
+      }
     }
 
     // ── collabs_groups/{projectId} — CoLab Workspace ────────────────────
@@ -115,6 +135,43 @@ service cloud.firestore {
       // real writer shows up.
       match /activity/{activityId} {
         allow read: if isMember(project());
+        allow write: if false;
+      }
+    }
+
+    // ── users/{uid} — decisions/0022 Signals + decisions/0021 Track ─────
+    // A second per-uid root, distinct from `researchers/{uid}` (the public
+    // profile directory): this one holds private, self-only state that must
+    // never be readable by anyone else — alert preferences, the citation
+    // watermark, and who this user is tracking. Every subcollection is
+    // owner-only for both read and write, and write requests must keep the
+    // stored `uid`/`authorId` fields honest.
+    match /users/{uid} {
+      function isOwner() { return request.auth != null && request.auth.uid == uid; }
+
+      // settings/notifications — per-kind alert cadence (decisions/0022).
+      // Direct client write (decisions/0004's pattern), so this must be
+      // usable by an anonymous Firebase session too, not just a "real"
+      // account — no dark-pattern account gate on turning an alert off.
+      match /settings/{settingId} {
+        allow read, write: if isOwner();
+      }
+
+      // tracked_researchers/{authorId} — Discovery's Track feature
+      // (decisions/0021). Doc id is the OpenAlex author id being tracked.
+      match /tracked_researchers/{authorId} {
+        allow read: if isOwner();
+        allow create, update: if isOwner() && request.resource.data.authorId == authorId;
+        allow delete: if isOwner();
+      }
+
+      // notification_state/{stateId} — the citation-count watermark the Go
+      // gateway reads/writes on the user's behalf (internal/activity). Kept
+      // owner-readable so the client can show "as of" context if needed, but
+      // writes happen server-side with an admin credential; there is no
+      // client write path to this collection today.
+      match /notification_state/{stateId} {
+        allow read: if isOwner();
         allow write: if false;
       }
     }
