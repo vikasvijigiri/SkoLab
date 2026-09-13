@@ -28,8 +28,11 @@ const clamp01 = (n: number): number => (n < 0 ? 0 : n > 1 ? 1 : n);
 
 /** OLS slope of `ys` over evenly-spaced x (0..n-1), normalised by mean(ys).
  *  `0` when there are fewer than 3 points or the mean is 0 — not enough
- *  signal to say anything, not "no momentum". */
-function momentumSlope(ys: number[]): number {
+ *  signal to say anything, not "no momentum". Exported so any other surface
+ *  needing the same rising/steady/cooling read on a different series (e.g.
+ *  the author page's Highlights layer, from its own citation heatmap) reuses
+ *  this exact derivation rather than re-implementing it. */
+export function momentumSlope(ys: number[]): number {
   if (ys.length < 3) return 0;
   const n = ys.length;
   const xMean = (n - 1) / 2;
@@ -45,7 +48,7 @@ function momentumSlope(ys: number[]): number {
   return num / den / yMean;
 }
 
-function classifyMomentum(slope: number, epsilon: number): MomentumState {
+export function classifyMomentum(slope: number, epsilon: number): MomentumState {
   if (slope > epsilon) return "rising";
   if (slope < -epsilon) return "cooling";
   return "steady";

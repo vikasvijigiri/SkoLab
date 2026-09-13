@@ -119,6 +119,16 @@ service cloud.firestore {
       }
     }
 
+    // ── users/{uid}/tracked_researchers/{authorId} — "Track" (decision 0021) ──
+    // A per-user bookmark on a researcher, distinct from CoLab's "Start a
+    // project with X". Only the owning uid may read or write their own
+    // subtree — no cross-user read, since a Signals workstream that reads
+    // this collection does so per-viewer through their own client, same as
+    // this one.
+    match /users/{uid}/tracked_researchers/{authorId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
     // Default deny — anything not explicitly allowed above is closed.
     match /{document=**} {
       allow read, write: if false;
