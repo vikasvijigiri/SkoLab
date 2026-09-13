@@ -60,15 +60,26 @@ entries.
   `decisions/0020-global-topbar-solid-brand-blue.md`): 48px solid
   brand-blue bar, applies to every screen in both canvases above. Read
   0020 before touching `TopBar.tsx`.
-- **Signals (unified alerts) redesign approved, not yet implemented**
-  (2026-09-12, `decisions/0022-signals-unified-alerts.md`) — extends the
-  real `NotificationsBell.tsx`/`useNotifications.ts` with citation alerts
-  (currently entirely absent from `ActivityType`), Track/follow alerts, and
-  a cadence-controlled "Manage alerts" screen. Reference mockup (3 screens)
-  is a Claude Design canvas at
-  https://claude.ai/code/artifact/918c193e-b166-4269-b629-f67a1f476929 —
-  read 0022 and the canvas before touching `lib/types.ts`'s `ActivityType`
-  or the notification components.
+- **Signals (unified alerts) redesign implemented** (2026-09-13, on this
+  worktree branch, not yet merged to `feature/frontend-redesign-2026-09` or
+  `main`) — `decisions/0022-signals-unified-alerts.md`. `ActivityType` gained
+  `citation_received`, `tracked_researcher_paper`, `tracked_topic_activity`,
+  `mention`, `invite`; `useNotifications.ts`/`NotificationsBell.tsx` render
+  all of them with real, specific copy; new `/notifications` (grouped by
+  day, 5 filter chips, mark-all-read, empty/loading/error states) and
+  `/notifications/manage` (per-kind cadence, `users/{uid}/settings/
+  notifications`, direct client write per decision 0004) routes.
+  End-to-end: citations (Go gateway watermark at `users/{uid}/
+  notification_state`, reusing the same `cited_by_count` `/author/[id]`
+  already computes) and tracked-researcher papers (Go gateway reads
+  `users/{uid}/tracked_researchers`, written by Discovery's Track feature —
+  itself still unimplemented, so this consumer has nothing to read from yet
+  in practice). `tracked_topic_activity`/`mention`/`invite` are frontend-
+  ready only — no topic-follow feature or CoLab @mention parser exists yet
+  to produce them; see the code comments in `useNotifications.ts` and
+  `internal/activity/activity.go`. Reference mockup (6 screens) is a Claude
+  Design canvas at
+  https://claude.ai/code/artifact/918c193e-b166-4269-b629-f67a1f476929.
 - **Profile redesign + CV export approved, not yet implemented**
   (2026-09-12, `decisions/0023-profile-redesign-and-cv-export.md`) — this
   closes the original session scope ("CoLab + Profile"), which had gone
