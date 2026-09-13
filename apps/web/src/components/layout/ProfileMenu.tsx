@@ -59,18 +59,18 @@ export function ProfileMenu() {
         aria-expanded={open}
         aria-label="Account menu"
         className={cn(
-          "flex items-center gap-1 rounded-full py-0.5 pl-0.5 pr-1 transition-colors hover:bg-surface-subtle",
-          open && "bg-surface-subtle",
+          "flex items-center gap-1 rounded-full py-0.5 pl-0.5 pr-1 transition-colors hover:bg-white/15",
+          open && "bg-white/20",
           focusRing,
         )}
       >
         <span
-          className="flex h-8 w-8 items-center justify-center rounded-full font-display text-[12px] font-bold text-text-on-primary shadow-card"
-          style={{ background: "var(--primary)" }}
+          className="flex h-7 w-7 items-center justify-center rounded-full bg-white font-display text-[12px] font-bold"
+          style={{ color: "var(--primary)" }}
         >
           {initial}
         </span>
-        <ChevronDown size={14} className={cn("text-text-muted transition-transform", open && "rotate-180")} />
+        <ChevronDown size={14} className={cn("text-white/85 transition-transform", open && "rotate-180")} />
       </button>
 
       <AnimatePresence>
