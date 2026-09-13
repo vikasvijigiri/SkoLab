@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileText, Plus, Eye, EyeOff, Maximize2, Minimize2 } from "lucide-react";
+import { FileText, Plus, Eye, EyeOff, Maximize2, Minimize2, PanelRight } from "lucide-react";
 import { useFirestoreCollection } from "@/lib/hooks/useFirestoreCollection";
 import { MarkdownDoc } from "@/components/workspace/MarkdownDoc";
 import { ErrorBanner, friendlyFirestoreError } from "@/components/ui/ErrorBanner";
@@ -16,7 +16,9 @@ import {
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import { cn } from "@/lib/utils";
 import type { CollabProject, CollabDocument } from "@/lib/types";
-import { WorkspaceResearchActions } from "@/components/workspace/ResearchTools";
+import { WorkspaceResearchActions, JOURNAL_TEMPLATES } from "@/components/workspace/ResearchTools";
+import { DocumentDock } from "@/components/workspace/DocumentDock";
+import { SlashMenu } from "@/components/workspace/SlashMenu";
 
 function relTime(ts: number) {
   const s = Math.round((Date.now() - ts) / 1000);
@@ -33,6 +35,7 @@ export function DocumentsTab({
   canEdit,
   onActiveDocChange,
   onFocusChange,
+  onOpenShare,
 }: {
   project: CollabProject;
   canEdit: boolean;
@@ -40,6 +43,9 @@ export function DocumentsTab({
   onActiveDocChange?: (docId: string | null) => void;
   /** Reports focus (distraction-free) mode so the page can hide its rail. */
   onFocusChange?: (focus: boolean) => void;
+  /** Opens the project's Share modal — the dock's Share icon needs this,
+   *  same as the page toolbar's own Share button (decisions/0019). */
+  onOpenShare: () => void;
 }) {
   const { user } = useAuth();
   const by = useMemo<Author>(
@@ -226,6 +232,7 @@ export function DocumentsTab({
             key={active.id}
             projectId={project.id}
             projectName={project.name}
+            initialLatex={project.recentEquations}
             doc={active}
             documents={documents}
             canEdit={canEdit}
@@ -233,6 +240,7 @@ export function DocumentsTab({
             focus={focus}
             onToggleFocus={toggleFocus}
             onError={setError}
+            onOpenShare={onOpenShare}
           />
         ) : (
           <div className="flex h-full items-center justify-center font-body text-body-s text-text-muted">
@@ -249,6 +257,7 @@ export function DocumentsTab({
 function DocEditorPane({
   projectId,
   projectName,
+  initialLatex,
   doc,
   documents,
   canEdit,
@@ -256,9 +265,11 @@ function DocEditorPane({
   focus,
   onToggleFocus,
   onError,
+  onOpenShare,
 }: {
   projectId: string;
   projectName: string;
+  initialLatex: string;
   doc: CollabDocument;
   documents: CollabDocument[];
   canEdit: boolean;
@@ -266,13 +277,21 @@ function DocEditorPane({
   focus: boolean;
   onToggleFocus: () => void;
   onError: (msg: string) => void;
+  onOpenShare: () => void;
 }) {
   const [draft, setDraft] = useState(doc.body);
   const [savedAt, setSavedAt] = useState<number>(doc.updatedAt);
   const [saving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const [preview, setPreview] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
+  const [slashTriggerPos, setSlashTriggerPos] = useState<number | null>(null);
+  const [mobileDockOpen, setMobileDockOpen] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectedTemplate = JOURNAL_TEMPLATES.find((t) => t.id === selectedTemplateId);
 
   useEffect(
     () => () => {
@@ -319,6 +338,57 @@ function DocEditorPane({
     }
   }
 
+  /** `/` slash-command insert menu (decisions/0019): fires when the last two
+   *  characters typed are a newline-or-start followed by "/", same trigger
+   *  convention as Notion/Slack-style editors. */
+  function handleTextareaChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const value = e.target.value;
+    const pos = e.target.selectionStart ?? value.length;
+    scheduleSave(value);
+    const beforeCaret = value.slice(0, pos);
+    if (/(^|\n)\/$/.test(beforeCaret)) {
+      setSlashTriggerPos(pos);
+      setSlashMenuOpen(true);
+    } else if (slashMenuOpen) {
+      setSlashMenuOpen(false);
+      setSlashTriggerPos(null);
+    }
+  }
+
+  /** Replaces the triggering "/" with `text` and restores the caret after it. */
+  function insertAtSlash(text: string) {
+    if (slashTriggerPos == null) return;
+    const before = draft.slice(0, slashTriggerPos - 1);
+    const after = draft.slice(slashTriggerPos);
+    const next = `${before}${text}${after}`;
+    scheduleSave(next);
+    setSlashMenuOpen(false);
+    setSlashTriggerPos(null);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      const caret = before.length + text.length;
+      el.setSelectionRange(caret, caret);
+    });
+  }
+
+  function openTemplatesFromDock() {
+    setSlashMenuOpen(false);
+    setTemplatesOpen(true);
+  }
+
+  const dock = (
+    <DocumentDock
+      projectId={projectId}
+      documentBody={draft}
+      initialLatex={initialLatex}
+      template={selectedTemplate}
+      onOpenTemplates={openTemplatesFromDock}
+      onOpenShare={onOpenShare}
+    />
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* Meta strip */}
@@ -343,6 +413,10 @@ function DocEditorPane({
             documents={documents}
             canEdit={canEdit}
             onApplyTemplate={applyTemplate}
+            selectedTemplateId={selectedTemplateId}
+            onSelectTemplate={setSelectedTemplateId}
+            templatesOpen={templatesOpen}
+            onTemplatesOpenChange={setTemplatesOpen}
           />
           <button
             type="button"
@@ -361,24 +435,45 @@ function DocEditorPane({
             {focus ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
             {focus ? "Exit focus" : "Focus"}
           </button>
+          {!focus && (
+            <button
+              type="button"
+              onClick={() => setMobileDockOpen(true)}
+              className="flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-surface-subtle hover:text-text-primary md:hidden"
+            >
+              <PanelRight size={12} />
+              Panel
+            </button>
+          )}
         </span>
       </div>
 
-      {/* Sheet(s) */}
+      {/* Sheet(s) + dock */}
       <div className={cn("flex min-h-0 flex-1", preview && "lg:divide-x lg:divide-border")}>
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="relative min-h-0 flex-1 overflow-y-auto">
           <textarea
+            ref={textareaRef}
             value={draft}
-            onChange={(e) => scheduleSave(e.target.value)}
+            onChange={handleTextareaChange}
             readOnly={!canEdit}
             spellCheck
             placeholder={
               canEdit
-                ? "Start writing. Markdown for structure, $…$ / $$…$$ for math."
+                ? "Start writing. Markdown for structure, $…$ / $$…$$ for math. Type / for equations, figures, citations and section templates…"
                 : "You have read-only access to this document."
             }
             className="mx-auto block min-h-full w-full max-w-[68ch] resize-none border-0 bg-transparent px-6 py-8 font-mono text-[15px] leading-[1.75] text-text-primary outline-none placeholder:text-text-muted/60 read-only:opacity-80 md:px-10"
           />
+          {slashMenuOpen && canEdit && (
+            <SlashMenu
+              onInsertText={insertAtSlash}
+              onOpenTemplates={openTemplatesFromDock}
+              onClose={() => {
+                setSlashMenuOpen(false);
+                setSlashTriggerPos(null);
+              }}
+            />
+          )}
         </div>
         {preview && (
           <div className="hidden min-h-0 flex-1 overflow-y-auto lg:block">
@@ -387,7 +482,39 @@ function DocEditorPane({
             </div>
           </div>
         )}
+        {/* Desktop: the dock sits inline, beside the editor. Collapsible to a
+            40px rail (see DocumentDock) rather than disappearing outright. */}
+        {!focus && <div className="hidden md:flex">{dock}</div>}
       </div>
+
+      {/* Mobile: the dock has no room inline, so it's a bottom-sheet trigger
+          (the "Panel" button above) instead — a real layout-state change,
+          same treatment as the desktop collapse/expand. */}
+      {!focus && mobileDockOpen && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <div
+            className="absolute inset-0 bg-[rgba(15,12,8,0.4)]"
+            onClick={() => setMobileDockOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="absolute inset-x-0 bottom-0 flex max-h-[70vh] flex-col overflow-hidden rounded-t-2xl bg-surface-subtle shadow-elevated">
+            <div className="flex shrink-0 justify-center pb-1 pt-2">
+              <span className="h-1 w-9 rounded-full bg-border" />
+            </div>
+            <DocumentDock
+              projectId={projectId}
+              documentBody={draft}
+              initialLatex={initialLatex}
+              template={selectedTemplate}
+              onOpenTemplates={openTemplatesFromDock}
+              onOpenShare={onOpenShare}
+              hideCollapse
+              onRequestClose={() => setMobileDockOpen(false)}
+              className="min-h-0 flex-1 border-l-0"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -11,13 +11,31 @@ import { ErrorBanner, friendlyFirestoreError } from "@/components/ui/ErrorBanner
 import { cn } from "@/lib/utils";
 import type { CollabMessage } from "@/lib/types";
 
-export function ChatTab({ projectId }: { projectId: string }) {
+export function ChatTab({
+  projectId,
+  active = true,
+  onUnreadChange,
+}: {
+  projectId: string;
+  /** Whether this panel is the dock's currently-visible tab. When mounted
+   *  inactive (a background dock tab), new messages from someone else are
+   *  reported via `onUnreadChange` instead of just auto-scrolling in. */
+  active?: boolean;
+  onUnreadChange?: (unread: boolean) => void;
+}) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<CollabMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // 0 (not Date.now()) so the ref's initial value is pure — real "now" is
+  // stamped by the mount effect below, before any message can be compared.
+  const lastReadAt = useRef(0);
+
+  useEffect(() => {
+    lastReadAt.current = Date.now();
+  }, []);
 
   useEffect(() => {
     const unsub = subscribeMessages(
@@ -34,6 +52,22 @@ export function ChatTab({ projectId }: { projectId: string }) {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
+
+  // Active tab reads everything up to now; clears any pending unread dot.
+  useEffect(() => {
+    if (!active) return;
+    lastReadAt.current = Date.now();
+    onUnreadChange?.(false);
+  }, [active, onUnreadChange]);
+
+  // While backgrounded, a new message from someone else lights the dot.
+  useEffect(() => {
+    if (active || messages.length === 0) return;
+    const last = messages[messages.length - 1];
+    if (last && last.senderUid !== user?.uid && last.timestamp > lastReadAt.current) {
+      onUnreadChange?.(true);
+    }
+  }, [messages, active, user?.uid, onUnreadChange]);
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
@@ -52,8 +86,8 @@ export function ChatTab({ projectId }: { projectId: string }) {
   if (error) return <ErrorBanner message={error} />;
 
   return (
-    <div className="flex h-[420px] flex-col">
-      <div className="flex-1 overflow-y-auto rounded-md bg-surface-subtle p-3">
+    <div className="flex h-full min-h-[280px] flex-col">
+      <div className="min-h-0 flex-1 overflow-y-auto rounded-md bg-surface-subtle p-3">
         {messages.length === 0 && (
           <p className="text-center font-body text-body-s text-text-muted">No messages yet — say hello.</p>
         )}
