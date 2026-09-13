@@ -1,8 +1,7 @@
 # 0024 - Route-Level Verification: Home Feed, Paper Detail, Settings
 
 **Date:** 2026-09-13
-**Status:** Accepted (design approved; implementation in progress on
-`feature/frontend-redesign-2026-09`)
+**Status:** Accepted — implemented on `feature/frontend-redesign-2026-09` (2026-09-13), pending PR review and merge to `main`
 
 ## Context
 

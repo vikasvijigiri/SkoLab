@@ -1,7 +1,7 @@
 # 0020 - Global Top Bar: Compact Solid Brand-Blue
 
 **Date:** 2026-09-12
-**Status:** Accepted (design approved; implementation not yet started)
+**Status:** Accepted — implemented on `feature/frontend-redesign-2026-09` (2026-09-13), pending PR review and merge to `main`
 
 ## Context
 
