@@ -43,6 +43,24 @@ VALID_BREAKTHROUGH_JSON = """
 
 
 @pytest.mark.asyncio
+@patch("app.services.ai.prediction_service.is_llm_working", return_value=False)
+async def test_predict_next_big_thing_flags_is_fallback_when_llm_offline(
+    _mock_is_llm_working,
+):
+    """When `is_llm_working()` is False this returns a canned "Service
+    Unavailable" response with a 200 status -- previously it omitted
+    `is_fallback`, unlike the *other* fallback branch further down in the
+    same function (LLM call raised), so a client checking only HTTP status
+    saw this as a real, successful prediction (2026-09 audit)."""
+    service = PredictionService()
+
+    result = await service.predict_next_big_thing(field="Superconductivity")
+
+    assert result["breakthrough_name"] == "Service Unavailable"
+    assert result["is_fallback"] is True
+
+
+@pytest.mark.asyncio
 @patch("app.services.ai.prediction_service.is_llm_working", return_value=True)
 async def test_predict_next_big_thing_accepts_well_formed_json(_mock_is_llm_working):
     service = _service_with_mocked_llm(VALID_BREAKTHROUGH_JSON)
@@ -71,7 +89,10 @@ async def test_predict_next_big_thing_falls_back_on_invalid_feasibility(_mock_is
     result = await service.predict_next_big_thing(field="Superconductivity")
 
     # Falls through to the deterministic fallback, not the malformed content.
-    assert result["scientific_logic"] == "Failed to generate precise logic due to LLM error."
+    assert (
+        result["scientific_logic"]
+        == "Detailed scientific reasoning is temporarily unavailable for this fallback prediction."
+    )
     assert result["feasibility"] == "Medium"
     assert result["is_fallback"] is True
 
@@ -100,7 +121,10 @@ async def test_predict_next_big_thing_falls_back_on_truncated_json(_mock_is_llm_
 
     result = await service.predict_next_big_thing(field="Superconductivity")
 
-    assert result["scientific_logic"] == "Failed to generate precise logic due to LLM error."
+    assert (
+        result["scientific_logic"]
+        == "Detailed scientific reasoning is temporarily unavailable for this fallback prediction."
+    )
     assert result["is_fallback"] is True
 
 

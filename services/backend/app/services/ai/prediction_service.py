@@ -166,6 +166,12 @@ class PredictionService:
                 "roadmap_steps": [],
                 "pioneering_papers": [],
                 "latest_papers": [],
+                # Matches the other fallback branch below (LLM call raised) --
+                # both are canned, non-generated responses with a 200 status,
+                # so both must carry the same signal or a client that only
+                # checks HTTP status sees this one as a real prediction
+                # (2026-09 audit).
+                "is_fallback": True,
             }
 
         search_query = field
@@ -314,7 +320,14 @@ class PredictionService:
             return {
                 "breakthrough_name": f"Next-Gen {field} Breakthrough",
                 "description": f"An emerging trend synthesis in {field} indicates a transition towards cross-domain hybrid structures.",
-                "scientific_logic": "Failed to generate precise logic due to LLM error.",
+                # Honest-degradation phrasing, not the raw upstream/internal
+                # error string this used to leak verbatim into a user-facing
+                # field (2026-09 audit) -- matches this codebase's convention
+                # for LLM-degradation messages (see NexusChat's fallback just
+                # below, and summarization_service.py) of saying what's
+                # missing without exposing internals or fabricating
+                # confidence.
+                "scientific_logic": "Detailed scientific reasoning is temporarily unavailable for this fallback prediction.",
                 "business_application": "Failed to generate business applications.",
                 "time_horizon": "5-10 years",
                 "feasibility": "Medium",
