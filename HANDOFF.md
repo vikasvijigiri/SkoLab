@@ -68,33 +68,28 @@ CV sharing) is deployed to production (`skolab-vvi`), confirmed via
   `internal/compute_metrics` (200; response values look plausible for a
   minimal test payload, worth a follow-up check against a realistic
   digest) all genuinely work now, not just auth-reject correctly.
-- **One item genuinely still open, and confirmed NOT code-fixable from
-  here**: `GET /observability` (renamed from `/metrics`) and
-  `GET /api/v1/author_stats` (renamed from `/api/v1/author_metrics`, old
-  aliases kept registered) both 502 with `x-render-routing: no-deploy`
-  at Render's edge — but this is now proven to be a Render platform
-  issue, not an app bug, not a path-naming issue: a live test on
-  2026-09-14 hit `/observability` and, in the **exact same second**, the
-  app's own structured log recorded `"path":"/observability","status":200`
-  — the origin genuinely served the request — while the external curl
-  client received Render's own branded 502 HTML page (not a mangled/
-  truncated real response) with `x-render-routing: no-deploy`. A brand-new,
-  never-before-requested query string on the same path changes nothing.
-  Renaming the route (full rename, verified deployed live via the Render
-  API) changed nothing either. Every other route on the same instance, at
-  the same moment, returns 200 normally. This means Render's edge is
-  making an independent "does this route have a live deploy" decision —
-  wrong, and seemingly pinned per logical endpoint — before it even
-  dispatches to the origin, or is discarding a real successful origin
-  response after the fact. Not something a code change, redeploy, or env
-  var can fix from this side. Next step: file a Render support ticket
-  with this exact evidence (service `srv-dacpm7bl550s73d6pmm0`, the
-  matching `rndr-id`s and timestamps above), or as a fallback, recreate
-  just this one service from the Blueprint. Recommend testing the same
-  URL from a different network/client first — the failure may be scoped
-  to the specific client IP/session this investigation has hammered these
-  two endpoints from all day, in which case real end users may be
-  unaffected.
+- **`/observability` and `/api/v1/author_stats` — actually fixed
+  (2026-09-14), root cause found in `internal/middleware/gzip.go`.** The
+  earlier working theory (a Render edge routing rule tied to the literal
+  route path) was wrong — proven wrong by renaming the routes and seeing
+  identical failures. The real signal: the app's own structured log
+  recorded a clean `200` for `/observability` in the *exact same second*
+  Render's edge returned a synthetic `502 no-deploy` to the client, and a
+  *small* response on the same handler family (an invalid-`author_id`
+  422) succeeded every time while a *large* one (a real author bundle, or
+  `/observability`'s full metrics dump) failed every time. That's
+  response-size-dependent corruption, and this codebase already has one
+  exact precedent for it: `main.go`'s `reverseProxy`/`ModifyResponse`
+  buffers proxied responses for the identical reason (a multi-chunk write
+  through gzip got mangled at Render's Cloudflare-fronted edge). The
+  native-route `Gzip()` middleware never got the same treatment — it
+  flushed compressed bytes to the connection on every `Flush()` call,
+  producing chunked, multi-write output for anything past one
+  `gzip.Writer` buffer. Fixed by buffering the whole compressed body and
+  writing it once with a correct `Content-Length` instead of chunked
+  transfer (`f3e5dc1`) — verified live, 5/5 clean `200`s on
+  `/observability`, plus `/api/v1/author_stats` and the old
+  `/api/v1/author_metrics` alias both `200` with a real author bundle.
 
 `main` also carries the 2026-09-11 backend-audit/live-feed work (PR #180)
 plus a large Dependabot sweep (2026-09-12): 26 dependency PRs merged, two
