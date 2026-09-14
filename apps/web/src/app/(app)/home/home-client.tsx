@@ -8,17 +8,17 @@ import { Users2, FolderKanban } from "lucide-react";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import { useMyProfile } from "@/lib/hooks/useMyProfile";
 import { useFirestoreCollection } from "@/lib/hooks/useFirestoreCollection";
+import { useTrackedResearchers } from "@/lib/hooks/useTrackedResearchers";
 import { subscribeProjects } from "@/lib/firebase/workspace";
 import {
   dailyFeedQuery,
   industryOpportunitiesQuery,
   matchGrantsQuery,
-  journalAdvisorQuery,
   similarResearchersQuery,
   activityFeedQuery,
+  coachPulseQuery,
 } from "@/lib/api/queries";
-import { AIDailyBriefCard } from "@/components/feed/AIDailyBriefCard";
-import { buildBriefItems } from "@/features/home/model";
+import { CoachPulseCard } from "@/components/feed/CoachPulseCard";
 import { PeerSuggestionsCard } from "@/components/feed/PeerSuggestionsCard";
 import { UnifiedFeed } from "@/components/feed/UnifiedFeed";
 import { Card } from "@/components/ui/Card";
@@ -100,11 +100,12 @@ export function HomeClient() {
     user?.uid ? (next, onErr) => subscribeProjects(user.uid, next, onErr) : null,
     { deps: [user?.uid] },
   );
+  const { trackedIds, track } = useTrackedResearchers(user?.uid);
+  const trackedAuthorIds = useMemo(() => [...trackedIds], [trackedIds]);
 
   const feedQ = useQuery({ ...dailyFeedQuery(authorId, topic), enabled: ready });
   const grantsQ = useQuery({ ...matchGrantsQuery(authorId ?? ""), enabled: ready && !!authorId });
   const oppsQ = useQuery({ ...industryOpportunitiesQuery(topic || "AI", name), enabled: ready });
-  const journalQ = useQuery({ ...journalAdvisorQuery(authorId ?? ""), enabled: ready && !!authorId });
   const peersQ = useQuery({
     ...similarResearchersQuery(authorId ?? "", user?.uid),
     enabled: ready && !!authorId,
@@ -113,21 +114,18 @@ export function HomeClient() {
     ...activityFeedQuery(authorId, user?.uid, getIdToken),
     enabled: ready,
   });
+  const pulseQ = useQuery({
+    ...coachPulseQuery(authorId, topic, trackedAuthorIds),
+    enabled: ready && (!!authorId || trackedAuthorIds.length > 0),
+  });
 
   const feed = feedQ.data ?? EMPTY_FEED;
   const activity = activityQ.data?.items ?? EMPTY_ACTIVITY;
   const jobs = oppsQ.data ?? EMPTY_JOBS;
 
   const topGrant = grantsQ.data?.[0];
-  const topOpportunity = oppsQ.data?.[0];
-  const topJournal = journalQ.data?.[0];
-  const briefLoading = !(feedQ.isFetched || grantsQ.isFetched || oppsQ.isFetched || journalQ.isFetched);
+  const pulseLoading = !(pulseQ.isFetched || grantsQ.isFetched);
   const feedLoading = feedQ.isPending || activityQ.isPending || oppsQ.isPending;
-
-  const briefItems = useMemo(
-    () => buildBriefItems({ topGrant, topOpportunity, topJournal }),
-    [topGrant, topOpportunity, topJournal],
-  );
 
   const greetName =
     firestoreProfile?.name?.split(" ")[0] || user?.displayName?.split(" ")[0] || "there";
@@ -159,12 +157,19 @@ export function HomeClient() {
 
   return (
     <div className="mx-auto w-full max-w-[1320px] px-4 py-8 md:px-6 lg:grid lg:grid-cols-[minmax(0,20fr)_minmax(0,53fr)_minmax(0,27fr)] lg:gap-[2.5%]">
-      {/* ── Left column (≈20%) — the Daily Brief, its own scrollbar ──────── */}
-      <aside aria-label="Your daily brief" className="hidden lg:block">
+      {/* ── Left column (≈20%) — Since You Were Here, its own scrollbar ──── */}
+      <aside aria-label="Since you were here" className="hidden lg:block">
         {/* Independent of the page scroll: pinned 24px below the top bar, its
-            own overflow when the brief outgrows the viewport. */}
+            own overflow when the panel outgrows the viewport. */}
         <div className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto pr-1 [scrollbar-width:thin]">
-          <AIDailyBriefCard items={briefItems} loading={briefLoading} layout="stack" />
+          <CoachPulseCard
+            impact={pulseQ.data?.impact}
+            trackedActivity={pulseQ.data?.tracked_activity}
+            worthTracking={pulseQ.data?.worth_tracking}
+            topGrant={topGrant}
+            loading={pulseLoading}
+            onTrack={track}
+          />
         </div>
       </aside>
 
@@ -179,9 +184,16 @@ export function HomeClient() {
           </p>
         </motion.div>
 
-        {/* The brief has no column of its own below lg — it stacks here. */}
+        {/* The panel has no column of its own below lg — it stacks here. */}
         <div className="lg:hidden">
-          <AIDailyBriefCard items={briefItems} loading={briefLoading} />
+          <CoachPulseCard
+            impact={pulseQ.data?.impact}
+            trackedActivity={pulseQ.data?.tracked_activity}
+            worthTracking={pulseQ.data?.worth_tracking}
+            topGrant={topGrant}
+            loading={pulseLoading}
+            onTrack={track}
+          />
         </div>
 
         {/* One blended, self-labelling research feed — papers · network ·

@@ -135,6 +135,10 @@ func main() {
 
 	// ── Author endpoints — Go PG + OpenAlex, no AI ───────────────────────────
 	r.GET("/api/v1/author_suggestions", author.GetAuthorSuggestions)
+	// Home page "Since You Were Here" panel — see internal/author/pulse.go
+	// for why this replaced the old static Daily Brief and what each of its
+	// three signals is (and isn't) grounded in.
+	r.GET("/api/v1/coach_pulse", author.GetCoachPulse)
 	r.GET("/api/v1/orbit_metrics", author.GetOrbitMetrics)
 	r.GET("/orbit_metrics", author.GetOrbitMetrics)
 	r.GET("/api/v1/authors/orbit_metrics", author.GetOrbitMetrics)

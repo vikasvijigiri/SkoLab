@@ -6,6 +6,7 @@ import {
   getCitationHeatmap,
   getJournalAdvisor,
   getAuthorSuggestions,
+  getCoachPulse,
   getDailyFeed,
   getDailyConjecture,
   getIndustryOpportunities,
@@ -103,6 +104,17 @@ export const authorSuggestionsQuery = (query: string) =>
     enabled: query.trim().length >= 2,
     staleTime: 10 * MIN,
     gcTime: 30 * MIN,
+  });
+
+/** Home page "Since You Were Here" panel — see endpoints.ts for why
+ *  `trackedAuthorIds` is a param, not a server-side read. */
+export const coachPulseQuery = (authorId?: string, field?: string, trackedAuthorIds?: string[]) =>
+  queryOptions({
+    queryKey: ["coach-pulse", authorId ?? null, field ?? null, [...(trackedAuthorIds ?? [])].sort()] as const,
+    queryFn: () => getCoachPulse({ authorId, field, trackedAuthorIds }),
+    enabled: Boolean(authorId) || Boolean(trackedAuthorIds?.length),
+    staleTime: 10 * MIN,
+    gcTime: 1 * HR,
   });
 
 export const dailyFeedQuery = (authorId?: string, queryFallback?: string) =>

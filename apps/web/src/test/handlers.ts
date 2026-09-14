@@ -60,6 +60,9 @@ export const handlers = [
   http.get(`${API}/api/v1/activity_feed`, () =>
     HttpResponse.json({ items: mockActivityFeed, degraded: false }),
   ),
+  http.get(`${API}/api/v1/coach_pulse`, () =>
+    HttpResponse.json({ impact: null, tracked_activity: null, worth_tracking: null }),
+  ),
   http.post(`${API}/api/v1/discovery/predict`, () => HttpResponse.json(mockBreakthroughPrediction)),
   http.post(`${API}/api/v1/discovery/nexus-chat`, () =>
     HttpResponse.json({ content: "Synthesized answer." }),

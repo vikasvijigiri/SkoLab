@@ -290,6 +290,41 @@ export interface GrantMatch {
   rationale: string;
 }
 
+// GET /api/v1/coach_pulse — Home page's "Since You Were Here" panel. Each
+// field is independently nullable: a signal that couldn't be computed (no
+// OpenAlex author match, nothing tracked yet, no similar-researcher
+// candidate left after excluding who's already tracked) is just absent, not
+// an error. `impact` is deliberately just a count + which paper — no
+// citation *stance* (building on / contesting) field exists here, because
+// the backend has no honest way to compute one without reading full text.
+export interface CoachPulseImpact {
+  new_citations: number;
+  paper_title: string;
+  paper_id: string;
+}
+
+export interface CoachPulseTrackedActivity {
+  author_id: string;
+  author_name: string;
+  work_title: string;
+  work_id: string;
+  /** ISO date (OpenAlex `publication_date`), e.g. "2026-09-02". */
+  published_at: string;
+}
+
+export interface CoachPulseWorthTracking {
+  author_id: string;
+  author_name: string;
+  institution: string;
+  works_count: number;
+}
+
+export interface CoachPulse {
+  impact: CoachPulseImpact | null;
+  tracked_activity: CoachPulseTrackedActivity | null;
+  worth_tracking: CoachPulseWorthTracking | null;
+}
+
 // GET /daily_feed
 export interface DailyFeedItem {
   id: string;
