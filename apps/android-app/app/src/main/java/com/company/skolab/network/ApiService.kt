@@ -1663,7 +1663,11 @@ class ApiService {
     suspend fun getAuthorMetrics(authorId: String): AuthorMetrics {
         val baseUrl = ServerLocator.baseUrl.value
             ?: throw Exception("Backend server not discovered. Make sure the SkoLab server is running and the device is on the same network.")
-        val response: io.ktor.client.statement.HttpResponse = httpClient.get("$baseUrl/author_metrics") {
+        // Renamed off "author_metrics" 2026-09-14 — Render's edge 502s any
+        // path ending in "metrics" before it reaches the gateway, confirmed
+        // unrelated to app code. /author_stats is the real, working path
+        // (Go gateway serves it bare, same convention as author_suggestions).
+        val response: io.ktor.client.statement.HttpResponse = httpClient.get("$baseUrl/author_stats") {
             parameter("author_id", authorId)
         }
         if (response.status == HttpStatusCode.OK) {

@@ -90,12 +90,17 @@ func main() {
 	})
 
 	// ── Observability ─────────────────────────────────────────────────────────
-	// Render and external observability can scrape this exact path; the
-	// endpoint itself
-	// never existed until now. See internal/metrics's package doc for why
-	// this is hand-rolled against the standard library rather than
-	// github.com/prometheus/client_golang.
-	r.GET("/metrics", metrics.Handler())
+	// Not named /metrics: confirmed live (2026-09-14) that Render's edge
+	// blocks ANY path ending in "metrics" with a 502 before it ever reaches
+	// this app — reproduced on fake, never-registered paths too
+	// (/api/v1/fake_metrics, /api/v1/totally-fake/metrics both 502
+	// identically), so this is a platform-level suffix rule, not
+	// app-specific and not something the Render dashboard's Observability
+	// settings control (checked — that's an unrelated, unconfigured
+	// OpenTelemetry-push feature). External observability/Prometheus
+	// scrapers should be pointed at this path instead of the conventional
+	// /metrics.
+	r.GET("/observability", metrics.Handler())
 
 	// ── WebSockets ────────────────────────────────────────────────────────────
 	// auth.VerifyQueryToken(): a WebSocket upgrade fired by a browser's own
@@ -156,6 +161,18 @@ func main() {
 	// one model-bound step; degrades to an empty bundle if that is unavailable.
 	// Ported from authors.py::get_author_metrics — decisions/0010. Was public,
 	// stays public. Android calls the bare path on :8080.
+	//
+	// Renamed off "author_metrics" 2026-09-14: confirmed live that Render's
+	// edge 502s ANY path ending in "metrics" before it reaches this app —
+	// reproduced on fake, never-registered paths too, so this wasn't an
+	// app bug. /author_stats is the real, working path now; the old
+	// "metrics"-suffixed aliases are kept registered (so a caller hitting
+	// them gets *some* response if the platform-level block is ever lifted)
+	// but do not rely on them — they 502 at Render's edge today regardless
+	// of anything this app does.
+	r.GET("/api/v1/author_stats", author.GetAuthorMetrics)
+	r.GET("/author_stats", author.GetAuthorMetrics)
+	r.GET("/api/v1/authors/author_stats", author.GetAuthorMetrics)
 	r.GET("/api/v1/author_metrics", author.GetAuthorMetrics)
 	r.GET("/author_metrics", author.GetAuthorMetrics)
 	r.GET("/api/v1/authors/author_metrics", author.GetAuthorMetrics)
