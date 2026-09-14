@@ -4,7 +4,7 @@
 > every session. For history, see `LOG.md`; for why a decision was made, see
 > `decisions/`.
 
-**Last updated:** 2026-09-13
+**Last updated:** 2026-09-14
 
 ## Where the repository is
 
@@ -20,6 +20,51 @@ needs Java 21+, not just any JDK), and the updated `firestore.rules` (new
 `users/{uid}` subtree for Signals/Track, `researchers/{uid}/cvShares` for
 CV sharing) is deployed to production (`skolab-vvi`), confirmed via
 `firebase deploy --only firestore:rules`'s own "released rules" output.
+
+- **A full production audit (2026-09-14)** — every Go gateway route and
+  every Python service route curl-tested against live `*.onrender.com`,
+  every frontend button/link code-reviewed app-wide, Sentry checked for
+  real production errors — found and (mostly) fixed real bugs. PR #221
+  fixed 6 confirmed issues (an unauthenticated internal LLM endpoint, a
+  dishonest missing `is_fallback` field, a silently-broken cache
+  write-back, an unbounded slow endpoint, dead download links, and a
+  content-quality OpenAlex query bug), plus 2 small frontend findings.
+  **The real headline finding, discovered via direct Render API access
+  (build logs + deploy history — a Render API key is needed for this,
+  not just the app's own `*.onrender.com` endpoints):**
+  `skolab-backend-py` had **failed to build on every single deploy since
+  2026-09-11** — `26497f8` bumped `numpy`/`networkx` in
+  `requirements.txt` to versions requiring Python ≥3.11/3.12 "now that CI
+  runs Python 3.12," but never touched `services/backend/Dockerfile`,
+  which was still pinned to `python:3.10-slim`. Every build since silently
+  failed at `pip install`, so Render kept serving a pre-2026-09-11 image
+  the entire time this session's frontend and backend work was happening
+  — explaining every "production doesn't reflect current `main`" symptom
+  the audit found. Fixed directly on `main` (`52fc589`, bumped both
+  Dockerfile stages to `python:3.12-slim`) — **first successful Python
+  deploy since 2026-09-11**, confirmed live via the Render API.
+- **A second real bug found only after that first deploy actually landed**:
+  PR #221's own `network_collaborators` cache-write-back fix gave the
+  write a fresh, non-expired context but still called it *synchronously*
+  — production logs showed every request now blocking on the write
+  instead of returning fast, confirmed via live Render logs. Fixed
+  (`284d44d`, wrapped in a goroutine, matching the existing `fireTeleport`
+  fire-and-forget convention) and reverified live.
+- **Full final verification, all curl-tested against production after
+  both fixes landed**: `/downloads/*` 200 (was 404), `/match_grants` 200
+  in 2.2s (was 34.9s/timeout), `/discovery/predict` now carries
+  `is_fallback` correctly, `/api/v1/network_collaborators` 200 in ~31s
+  (matches the original, pre-regression baseline — see "What needs a
+  decision" for why the cache itself still doesn't populate, a separate,
+  deeper perf issue).
+- **Two items genuinely still open, not code-fixable from here** — see
+  "What needs a decision" below for full detail: `INTERNAL_API_TOKEN` is
+  still unset in production (confirmed via a live Render secrets check —
+  it's absent from the reference `render-env-vars.env` file too), and
+  `GET /metrics` / `GET /api/v1/author_metrics` both 502 with zero
+  app-level log entry for either request — strong evidence Render is
+  blocking these two specific paths at the edge, before the app ever
+  sees them, not an application bug.
 
 `main` also carries the 2026-09-11 backend-audit/live-feed work (PR #180)
 plus a large Dependabot sweep (2026-09-12): 26 dependency PRs merged, two
@@ -203,3 +248,30 @@ entries.
 - `internal/quest`/`internal/user` Go tests only cover no-DB and
   validation paths; DB-backed branches only run against CI's `slow` job
   Postgres container, not as Go unit tests.
+- **`network_collaborators`'s cache write-back genuinely completes but
+  genuinely fails** — confirmed live: ~194 individual `researcher_profiles`
+  row upserts, all timing out with `context deadline exceeded` even on a
+  fresh 15s budget. Root cause is almost certainly Supabase Postgres
+  living in `ap-southeast-1` while every Render service is in `oregon` —
+  `DEPLOY.md` already names this exact cross-Pacific latency risk. Real
+  fix is batching the upserts into one multi-row statement instead of
+  ~194 individual ones (would cut round-trips by ~194x, likely enough on
+  its own); moving Supabase to a US region is the other lever. Not fixed
+  here — it's no longer a live-blocking bug (the response returns
+  correctly around 30s either way, matching the pre-regression baseline),
+  just a caching layer that's permanently a no-op today.
+- **`INTERNAL_API_TOKEN` still unset in production on both `skolab-gateway`
+  and `skolab-backend-py`** — confirmed via the Render API (not just app
+  endpoints): it's absent from the reference secrets file on this machine
+  too, so it appears to have never been generated. PR #221's auth fixes on
+  the internal-only routes are correct in source but inert until this
+  secret is generated once and set identically on both services in the
+  Render dashboard.
+- **`GET /metrics` and `GET /api/v1/author_metrics` both 502 in production**
+  with zero app-level log entry for either request (every other request in
+  the same window, including ones fired seconds apart, does log) — strong
+  evidence these two specific paths are being intercepted at Render's edge
+  before the Go app ever sees them, not an application bug. Both handlers
+  were read in full and run correctly locally. Needs a look in the Render
+  dashboard for a reserved-path conflict or an edge/WAF rule matching
+  these paths specifically.
