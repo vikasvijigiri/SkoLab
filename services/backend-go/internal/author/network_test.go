@@ -1,11 +1,13 @@
 package author
 
 import (
+	"context"
 	"encoding/json"
 	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/skolab/backend-go/internal/services/openalex"
@@ -158,6 +160,64 @@ func TestDBReaders_NilPoolAreSafe(t *testing.T) {
 	writeConnections(t.Context(), "A1", []NetworkCollaborator{{ID: "A2", Depth: 1}})
 	writePipelineBlob(t.Context(), "A1", "", []NetworkCollaborator{{ID: "A2"}})
 	fillStatsFromDB(t.Context(), []string{"A2"}, map[string]authorStats{})
+}
+
+// ── cache write-back: fresh context, not the request's exhausted one ───────
+//
+// Regression test for a confirmed-live production bug: computeNetworkCollaborators
+// used to pass its own request ctx (a single 30s budget already spent on the
+// depth-1/depth-2 OpenAlex fan-out + batch stats) straight into
+// writeConnections/writePipelineBlob. By the time execution reached the
+// write-back, that ctx was routinely already past its deadline, so every
+// write failed instantly on context.DeadlineExceeded -- silently, via
+// slog.Warn -- meaning the researcher_connections/pipeline-blob caches this
+// endpoint depends on were never actually populated. Confirmed live: two
+// back-to-back identical GET /api/v1/network_collaborators calls both took
+// ~30s, when the second should have hit one of those caches.
+//
+// detachedWriteContext is the fix: a context rooted at context.Background()
+// with its own fresh timeout, decoupled entirely from the request's
+// remaining budget. This test proves that property directly, without a live
+// Postgres connection: even when the "caller" context is already expired,
+// the context handed to the write-back functions must still have a full,
+// fresh deadline ahead of it.
+func TestDetachedWriteContext_HasFreshDeadlineRegardlessOfExhaustedCaller(t *testing.T) {
+	// Simulate the exact production shape: a request context whose deadline
+	// has already passed by the time the OpenAlex computation finishes.
+	exhausted, exhaustedCancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
+	defer exhaustedCancel()
+	if exhausted.Err() == nil {
+		t.Fatal("test setup broken: the simulated caller context should already be done")
+	}
+
+	writeCtx, writeCancel := detachedWriteContext()
+	defer writeCancel()
+
+	if err := writeCtx.Err(); err != nil {
+		t.Fatalf("detachedWriteContext() ctx is already done (%v) -- "+
+			"the write-back would fail immediately, reproducing the original bug", err)
+	}
+	deadline, ok := writeCtx.Deadline()
+	if !ok {
+		t.Fatal("detachedWriteContext() ctx has no deadline at all")
+	}
+	if remaining := time.Until(deadline); remaining < networkWriteBackTimeout/2 {
+		t.Fatalf("detachedWriteContext() deadline is only %v out, want close to the full %v budget -- "+
+			"it looks derived from an exhausted parent instead of context.Background()",
+			remaining, networkWriteBackTimeout)
+	}
+}
+
+// writeConnections/writePipelineBlob must not even look at ctx.Err() before
+// doing their (no-op, nil-pool) work here, but this also locks in that
+// passing an already-expired context to either function -- the exact shape
+// the production bug produced -- still can't panic or hang.
+func TestWriteBack_SurvivesAlreadyExpiredContext(t *testing.T) {
+	expired, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
+	defer cancel()
+
+	writeConnections(expired, "A1", []NetworkCollaborator{{ID: "A2", Depth: 1}})
+	writePipelineBlob(expired, "A1", "", []NetworkCollaborator{{ID: "A2"}})
 }
 
 // ── handler: request-shape guard ──────────────────────────────────────────

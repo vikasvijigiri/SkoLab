@@ -50,6 +50,32 @@ type NetworkCollaborator struct {
 	Depth              int    `json:"depth"`
 }
 
+// networkWriteBackTimeout bounds the cache write-back (researcher_connections
+// + the legacy pipeline:: blob) that runs after a full OpenAlex computation.
+// It is deliberately its own fresh budget, NOT a continuation of the
+// request's ctx (see the call site in computeNetworkCollaborators): that
+// request ctx is a single 30s budget covering the depth-1/depth-2 OpenAlex
+// fan-out AND the batch stats fetch, so by the time execution reaches the
+// write-back the deadline is routinely already exhausted or has only
+// milliseconds left -- confirmed live via two back-to-back identical
+// requests both taking ~30s, when the second should have hit the 24h
+// researcher_connections fast-path or the 1h pipeline blob. Every write below
+// was failing immediately on `context deadline exceeded`, silently, via
+// slog.Warn, which is why the cache this endpoint depends on was never
+// actually getting populated. Detaching from the request context also means
+// a client that hangs up early no longer aborts a write-back that every
+// future caller benefits from.
+const networkWriteBackTimeout = 15 * time.Second
+
+// detachedWriteContext returns a context bounded by networkWriteBackTimeout
+// and rooted at context.Background(), NOT derived from any request context --
+// its deadline is always a fresh full budget, regardless of how much of a
+// caller's own timeout has already elapsed. Extracted as its own function so
+// the fix is directly unit-testable without a live Postgres connection.
+func detachedWriteContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), networkWriteBackTimeout)
+}
+
 type netParams struct {
 	authorID   string
 	excludeIDs []string
@@ -416,8 +442,13 @@ func computeNetworkCollaborators(ctx context.Context, p netParams) ([]NetworkCol
 	sort.SliceStable(pool, func(i, j int) bool { return pool[i].RelevanceScore > pool[j].RelevanceScore })
 
 	if len(pool) > 0 {
-		writeConnections(ctx, cleanID, pool)
-		writePipelineBlob(ctx, cleanID, p.field, pool)
+		// Fresh, detached budget -- see networkWriteBackTimeout's doc comment
+		// for why this must not be the request's own (likely near-exhausted)
+		// ctx.
+		writeCtx, writeCancel := detachedWriteContext()
+		writeConnections(writeCtx, cleanID, pool)
+		writePipelineBlob(writeCtx, cleanID, p.field, pool)
+		writeCancel()
 	}
 
 	final := make([]NetworkCollaborator, 0, len(pool))
@@ -705,7 +736,14 @@ func upsertResearcherProfile(ctx context.Context, a *openalex.Author, ttlDays in
 }
 
 // writeConnections replaces this author's researcher_connections rows in one
-// transaction (Python: delete-all then per-row insert, 24h TTL). Best-effort.
+// transaction (Python: delete-all then per-row insert, 24h TTL). Best-effort:
+// a write failure must never fail the request (the caller already has its
+// rows), but it also must not go unnoticed -- this cache tier existing at all
+// is what makes the *next* request to this author cheap, so a silent failure
+// here means every request recomputes the full OpenAlex fan-out. Logged at
+// Error, not Warn: this codebase has no Sentry for the Go service, so Error
+// plus enough context (author_id, tier, the exact driver error) to find it in
+// Render's log search is the whole safety net.
 func writeConnections(ctx context.Context, cleanID string, pool []NetworkCollaborator) {
 	if db.Pool == nil {
 		return
@@ -714,14 +752,14 @@ func writeConnections(ctx context.Context, cleanID string, pool []NetworkCollabo
 	expires := now.Add(24 * time.Hour)
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
-		slog.Warn("network: connections tx begin failed", "id", cleanID, "err", err)
+		slog.Error("network: cache write-back failed", "tier", "researcher_connections", "stage", "tx_begin", "author_id", cleanID, "err", err)
 		return
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx,
 		`DELETE FROM researcher_connections WHERE author_openalex_id = $1`, cleanID); err != nil {
-		slog.Warn("network: connections delete failed", "id", cleanID, "err", err)
+		slog.Error("network: cache write-back failed", "tier", "researcher_connections", "stage", "delete", "author_id", cleanID, "err", err)
 		return
 	}
 	for _, r := range pool {
@@ -734,12 +772,12 @@ func writeConnections(ctx context.Context, cleanID string, pool []NetworkCollabo
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
 		`, cleanID, r.ID, r.Name, r.Institution, r.Field, r.Depth, r.ConnectionPath,
 			r.RelevanceScore, r.PapersCollaborated, r.TotalPublications, r.HIndex, now, expires); err != nil {
-			slog.Warn("network: connection insert failed", "id", cleanID, "err", err)
+			slog.Error("network: cache write-back failed", "tier", "researcher_connections", "stage", "insert", "author_id", cleanID, "connection_id", r.ID, "err", err)
 			return
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
-		slog.Warn("network: connections commit failed", "id", cleanID, "err", err)
+		slog.Error("network: cache write-back failed", "tier", "researcher_connections", "stage", "commit", "author_id", cleanID, "err", err)
 	}
 }
 
@@ -764,7 +802,7 @@ func writePipelineBlob(ctx context.Context, cleanID, field string, pool []Networ
 			last_synced = EXCLUDED.last_synced,
 			expires_at = EXCLUDED.expires_at
 	`, key, string(data), now, expires); err != nil {
-		slog.Warn("network: pipeline blob write failed", "key", key, "err", err)
+		slog.Error("network: cache write-back failed", "tier", "pipeline_blob", "author_id", cleanID, "key", key, "err", err)
 	}
 }
 
