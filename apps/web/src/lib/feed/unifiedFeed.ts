@@ -1,12 +1,7 @@
 import { shortOpenAlexId } from "@/lib/utils";
-import type {
-  ActivityItem,
-  DailyFeedItem,
-  IndustryOpportunity,
-  ScienceNewsItem,
-} from "@/lib/types";
+import type { ActivityItem, DailyFeedItem, IndustryOpportunity } from "@/lib/types";
 
-export type FeedKind = "paper" | "news" | "activity" | "job";
+export type FeedKind = "paper" | "activity" | "job";
 
 export interface UnifiedItem {
   /** Stable, unique across kinds (kind-prefixed). */
@@ -39,12 +34,11 @@ const EMPTY_PREFS: FeedPrefs = {
   dismissedIds: new Set(),
 };
 
-/** Base weight per kind — papers lead, then activity, jobs, news. */
+/** Base weight per kind — papers lead, then activity, jobs. */
 const KIND_WEIGHT: Record<FeedKind, number> = {
   paper: 1.0,
   activity: 0.9,
   job: 0.85,
-  news: 0.7,
 };
 
 /** 0..0.5, decays to ~0 over 14 days. ts=0 (unknown date) gets a neutral 0.2. */
@@ -86,21 +80,6 @@ function fromPapers(items: DailyFeedItem[]): UnifiedItem[] {
       _match: typeof p.relevance_score === "number" ? p.relevance_score / 100 : 0.5,
     };
   }) as (UnifiedItem & { _match: number })[];
-}
-
-function fromNews(items: ScienceNewsItem[]): UnifiedItem[] {
-  return items.map((n) => ({
-    id: `news:${n.url}`,
-    kind: "news" as const,
-    title: n.title,
-    why: n.source ? `science news from ${n.source}` : "science news",
-    href: n.url,
-    external: true,
-    ts: toMs(n.published),
-    source: n.source,
-    meta: n.summary,
-    score: 0,
-  }));
 }
 
 function fromActivity(items: ActivityItem[]): UnifiedItem[] {
@@ -166,7 +145,6 @@ function fromJobs(items: IndustryOpportunity[]): UnifiedItem[] {
 export function buildUnifiedFeed(
   sources: {
     papers?: DailyFeedItem[];
-    news?: ScienceNewsItem[];
     activity?: ActivityItem[];
     jobs?: IndustryOpportunity[];
   },
@@ -178,7 +156,6 @@ export function buildUnifiedFeed(
     ...fromPapers(sources.papers ?? []),
     ...fromActivity(sources.activity ?? []),
     ...fromJobs(sources.jobs ?? []),
-    ...fromNews(sources.news ?? []),
   ];
 
   const scored = raw

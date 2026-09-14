@@ -9,39 +9,31 @@ import { buildUnifiedFeed, type FeedKind } from "@/lib/feed/unifiedFeed";
 import { useFeedPrefs } from "@/lib/hooks/useFeedPrefs";
 import { cn, focusRing } from "@/lib/utils";
 import { DURATION_SLOW, EASE_STANDARD } from "@/lib/motion";
-import type {
-  ActivityItem,
-  DailyFeedItem,
-  IndustryOpportunity,
-  ScienceNewsItem,
-} from "@/lib/types";
+import type { ActivityItem, DailyFeedItem, IndustryOpportunity } from "@/lib/types";
 
 const LENSES: { key: "all" | FeedKind; label: string }[] = [
   { key: "all", label: "For you" },
   { key: "paper", label: "Papers" },
-  { key: "news", label: "News" },
   { key: "job", label: "Roles" },
   { key: "activity", label: "Network" },
 ];
 
 /**
- * One blended, self-labelling research feed — papers, science news, network
- * activity and roles ranked together (recency + relevance + your Save /
- * Not-relevant feedback). An optional lens filters by kind; "For you" is the
- * default and hides nothing.
+ * One blended, self-labelling research feed — papers, network activity and
+ * roles ranked together (recency + relevance + your Save / Not-relevant
+ * feedback). An optional lens filters by kind; "For you" is the default and
+ * hides nothing.
  *
  * Marked up per the ARIA APG Feed pattern: a labelled `role="feed"` region,
  * `aria-busy` while loading, one `<article>` per item.
  */
 export function UnifiedFeed({
   papers,
-  news,
   activity,
   jobs,
   loading,
 }: {
   papers: DailyFeedItem[];
-  news: ScienceNewsItem[];
   activity: ActivityItem[];
   jobs: IndustryOpportunity[];
   loading: boolean;
@@ -51,8 +43,8 @@ export function UnifiedFeed({
   const headingId = useId();
 
   const items = useMemo(
-    () => buildUnifiedFeed({ papers, news, activity, jobs }, prefs),
-    [papers, news, activity, jobs, prefs],
+    () => buildUnifiedFeed({ papers, activity, jobs }, prefs),
+    [papers, activity, jobs, prefs],
   );
   const shown = lens === "all" ? items : items.filter((i) => i.kind === lens);
   const busy = loading && items.length === 0;
@@ -114,7 +106,7 @@ export function UnifiedFeed({
             </p>
             <p className="mt-1 font-body text-[12px] leading-relaxed text-text-muted">
               {lens === "all"
-                ? "Add a research focus and connect with a few researchers — papers, news and roles in your field land here."
+                ? "Add a research focus and connect with a few researchers — papers and roles in your field land here."
                 : "Try “For you”, or check back soon."}
             </p>
           </Card>

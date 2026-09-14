@@ -25,7 +25,6 @@ import (
 	"github.com/skolab/backend-go/internal/firestore"
 	"github.com/skolab/backend-go/internal/metrics"
 	"github.com/skolab/backend-go/internal/middleware"
-	"github.com/skolab/backend-go/internal/pulse"
 	"github.com/skolab/backend-go/internal/quest"
 	"github.com/skolab/backend-go/internal/recommendation"
 	researchmetrics "github.com/skolab/backend-go/internal/services/metrics"
@@ -200,13 +199,6 @@ func main() {
 	// an arbitrary user_id with zero auth (2026-09-12 endpoint audit).
 	r.GET("/api/v1/activity_feed", auth.VerifyUserOptional(), activity.GetActivityFeed)
 	r.GET("/activity_feed", auth.VerifyUserOptional(), activity.GetActivityFeed)
-
-	// ── Science news — public RSS/Atom aggregation, no AI ───────────────────
-	// internal/pulse. Quanta / Phys.org / ScienceDaily / Nature, fetched +
-	// parsed + 45-min in-memory cache. Headline + link + short summary only,
-	// always links out.
-	r.GET("/api/v1/science_news", pulse.GetScienceNews)
-	r.GET("/science_news", pulse.GetScienceNews)
 
 	// ── System metadata — non-LLM, ported from endpoints/system.py ──────────
 	// GET /api/v1/ (API-router root) and GET /api/v1/status (public status

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   FileText,
-  Newspaper,
   Users2,
   Briefcase,
   Bookmark,
@@ -21,7 +20,6 @@ import type { FeedKind, UnifiedItem } from "@/lib/feed/unifiedFeed";
 
 const KIND: Record<FeedKind, { Icon: typeof FileText; tint: string; label: string }> = {
   paper: { Icon: FileText, tint: "var(--primary)", label: "Paper" },
-  news: { Icon: Newspaper, tint: "var(--accent-teal)", label: "News" },
   activity: { Icon: Users2, tint: "var(--accent-violet)", label: "Network" },
   job: { Icon: Briefcase, tint: "var(--accent-orange)", label: "Role" },
 };

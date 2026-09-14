@@ -16,7 +16,6 @@ import {
   journalAdvisorQuery,
   similarResearchersQuery,
   activityFeedQuery,
-  scienceNewsQuery,
 } from "@/lib/api/queries";
 import { AIDailyBriefCard } from "@/components/feed/AIDailyBriefCard";
 import { buildBriefItems } from "@/features/home/model";
@@ -26,7 +25,6 @@ import { Card } from "@/components/ui/Card";
 import { IdentityStrengthCard } from "@/components/product/IdentityStrengthCard";
 import type {
   ActivityItem,
-  ScienceNewsItem,
   CollabProject,
   DailyFeedItem,
   IndustryOpportunity,
@@ -34,7 +32,6 @@ import type {
 
 const EMPTY_FEED: DailyFeedItem[] = [];
 const EMPTY_ACTIVITY: ActivityItem[] = [];
-const EMPTY_NEWS: ScienceNewsItem[] = [];
 const EMPTY_JOBS: IndustryOpportunity[] = [];
 
 /** Left-rail shortcut list of the user's actual workspaces — data, not nav. */
@@ -116,19 +113,16 @@ export function HomeClient() {
     ...activityFeedQuery(authorId, user?.uid, getIdToken),
     enabled: ready,
   });
-  const newsQ = useQuery({ ...scienceNewsQuery(topic), enabled: ready });
 
   const feed = feedQ.data ?? EMPTY_FEED;
   const activity = activityQ.data?.items ?? EMPTY_ACTIVITY;
-  const news = newsQ.data?.items ?? EMPTY_NEWS;
   const jobs = oppsQ.data ?? EMPTY_JOBS;
 
   const topGrant = grantsQ.data?.[0];
   const topOpportunity = oppsQ.data?.[0];
   const topJournal = journalQ.data?.[0];
   const briefLoading = !(feedQ.isFetched || grantsQ.isFetched || oppsQ.isFetched || journalQ.isFetched);
-  const feedLoading =
-    feedQ.isPending || activityQ.isPending || newsQ.isPending || oppsQ.isPending;
+  const feedLoading = feedQ.isPending || activityQ.isPending || oppsQ.isPending;
 
   const briefItems = useMemo(
     () => buildBriefItems({ topGrant, topOpportunity, topJournal }),
@@ -190,11 +184,10 @@ export function HomeClient() {
           <AIDailyBriefCard items={briefItems} loading={briefLoading} />
         </div>
 
-        {/* One blended, self-labelling research feed — papers · news · network
-            · roles, ranked together, with a lens filter and Save / Not-relevant. */}
+        {/* One blended, self-labelling research feed — papers · network ·
+            roles, ranked together, with a lens filter and Save / Not-relevant. */}
         <UnifiedFeed
           papers={feed}
-          news={news}
           activity={activity}
           jobs={jobs}
           loading={feedLoading}
