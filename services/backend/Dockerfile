@@ -7,9 +7,17 @@
 # model backend, add `sentence-transformers` to requirements.txt and a
 # `pip install --index-url https://download.pytorch.org/whl/cpu torch` line
 # plus a build-time model pre-download.
+#
+# Python 3.12, matching CI (.github/workflows/checks.yml, ci.yml, verify.yml)
+# and requirements.txt's numpy==2.5.3/networkx pins, which need >=3.11/3.12.
+# This image was still on 3.10 when 26497f8 (2026-09-11) bumped those two
+# packages "now that CI runs Python 3.12" — CI moved, this file didn't, and
+# every Render build since has failed at `pip install` with no matching
+# numpy wheel for 3.10, silently serving whatever image last built
+# successfully (pre-2026-09-11) instead of anything more recent.
 
 # Stage 1: Build dependencies
-FROM python:3.10-slim AS builder
+FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
@@ -21,7 +29,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
 # Stage 2: Final minimal image
-FROM python:3.10-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
