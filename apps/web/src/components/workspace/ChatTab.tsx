@@ -4,19 +4,31 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Send } from "lucide-react";
 import { subscribeMessages, sendMessage } from "@/lib/firebase/workspace";
+import { writeInboxEvent } from "@/lib/firebase/inbox";
+import { parseMentionedMembers } from "@/lib/workspace/mentions";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorBanner, friendlyFirestoreError } from "@/components/ui/ErrorBanner";
 import { cn } from "@/lib/utils";
-import type { CollabMessage } from "@/lib/types";
+import type { CollabMessage, CollabMember } from "@/lib/types";
+
+/** Trims a sent message down to a short, honest excerpt for a mention
+ *  notification's `why` — never the full message body. */
+function excerpt(text: string, max = 80): string {
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+}
 
 export function ChatTab({
   projectId,
+  members,
   active = true,
   onUnreadChange,
 }: {
   projectId: string;
+  /** The project's real member list — matched against `@Name` tokens in a
+   *  sent message to queue mention inbox events (decisions/0022). */
+  members: CollabMember[];
   /** Whether this panel is the dock's currently-visible tab. When mounted
    *  inactive (a background dock tab), new messages from someone else are
    *  reported via `onUnreadChange` instead of just auto-scrolling in. */
@@ -72,10 +84,23 @@ export function ChatTab({
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     if (!user || !text.trim()) return;
+    const sent = text.trim();
     setSending(true);
     try {
-      await sendMessage(projectId, user.uid, user.displayName ?? "Researcher", text.trim());
+      await sendMessage(projectId, user.uid, user.displayName ?? "Researcher", sent);
       setText("");
+      // Best-effort — a failure to queue a mention notification shouldn't
+      // undo or block a message that already sent.
+      const senderName = user.displayName ?? "Researcher";
+      for (const m of parseMentionedMembers(sent, members, user.uid)) {
+        void writeInboxEvent({
+          toUid: m.uid,
+          type: "mention",
+          actor: { id: user.uid, display_name: senderName },
+          why: excerpt(sent),
+          href: `/workspace/${projectId}`,
+        }).catch(() => {});
+      }
     } catch (err) {
       setError(friendlyFirestoreError(err as { code?: string; message?: string }));
     } finally {

@@ -7,6 +7,7 @@ import { ChatTab } from "@/components/workspace/ChatTab";
 import { EquationsTab } from "@/components/workspace/EquationsTab";
 import { QuickReferencePanel, computeQuickReferenceStatus } from "@/components/workspace/QuickReferencePanel";
 import type { JournalTemplate } from "@/components/workspace/ResearchTools";
+import type { CollabMember } from "@/lib/types";
 
 type DockTab = "quickref" | "chat" | "equations";
 
@@ -24,6 +25,7 @@ const DOCK_TABS: { id: DockTab; label: string; Icon: typeof ClipboardList }[] = 
  */
 export function DocumentDock({
   projectId,
+  members,
   documentBody,
   initialLatex,
   template,
@@ -34,6 +36,9 @@ export function DocumentDock({
   onRequestClose,
 }: {
   projectId: string;
+  /** The project's real member list — forwarded to ChatTab for @mention
+   *  parsing (decisions/0022). */
+  members: CollabMember[];
   documentBody: string;
   initialLatex: string;
   template: JournalTemplate | undefined;
@@ -65,7 +70,12 @@ export function DocumentDock({
   // currently showing.
   const chatPanel = (
     <div className={cn("h-full p-3", !collapsed && activeTab === "chat" ? "" : "hidden")}>
-      <ChatTab projectId={projectId} active={!collapsed && activeTab === "chat"} onUnreadChange={setChatUnread} />
+      <ChatTab
+        projectId={projectId}
+        members={members}
+        active={!collapsed && activeTab === "chat"}
+        onUnreadChange={setChatUnread}
+      />
     </div>
   );
 

@@ -1,8 +1,15 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders, screen } from "@/test/render";
 import { TrendingTopicCard } from "./TrendingTopicCard";
 import type { TrendingTopic } from "@/lib/types";
+
+// TrendingTopicCard now renders TrackTopicButton (decision 0021's topic
+// half), which calls useAuth() — same mocking pattern as ResearcherCard.test.
+const auth = vi.hoisted(() => ({ user: null as null | { uid: string } }));
+vi.mock("@/lib/hooks/AuthProvider", () => ({
+  useAuth: () => ({ user: auth.user }),
+}));
 
 const topic: TrendingTopic = {
   id: "T1",
@@ -13,6 +20,10 @@ const topic: TrendingTopic = {
 };
 
 describe("TrendingTopicCard", () => {
+  beforeEach(() => {
+    auth.user = null;
+  });
+
   it("shows a growth percentage, not a raw count", () => {
     renderWithProviders(
       <TrendingTopicCard t={topic} index={0} windowDays={90} onSelect={vi.fn()} />,
@@ -44,5 +55,20 @@ describe("TrendingTopicCard", () => {
       <TrendingTopicCard t={topic} index={0} windowDays={90} onSelect={vi.fn()} />,
     );
     expect(container.querySelector("input, textarea")).toBeNull();
+  });
+
+  it("shows the Track button for a signed-in viewer", () => {
+    auth.user = { uid: "me" };
+    renderWithProviders(
+      <TrendingTopicCard t={topic} index={0} windowDays={90} onSelect={vi.fn()} />,
+    );
+    expect(screen.getByRole("button", { name: /track spin liquids/i })).toBeInTheDocument();
+  });
+
+  it("hides Track for a signed-out visitor", () => {
+    renderWithProviders(
+      <TrendingTopicCard t={topic} index={0} windowDays={90} onSelect={vi.fn()} />,
+    );
+    expect(screen.queryByRole("button", { name: /track spin liquids/i })).not.toBeInTheDocument();
   });
 });
