@@ -442,13 +442,21 @@ func computeNetworkCollaborators(ctx context.Context, p netParams) ([]NetworkCol
 	sort.SliceStable(pool, func(i, j int) bool { return pool[i].RelevanceScore > pool[j].RelevanceScore })
 
 	if len(pool) > 0 {
-		// Fresh, detached budget -- see networkWriteBackTimeout's doc comment
-		// for why this must not be the request's own (likely near-exhausted)
-		// ctx.
-		writeCtx, writeCancel := detachedWriteContext()
-		writeConnections(writeCtx, cleanID, pool)
-		writePipelineBlob(writeCtx, cleanID, p.field, pool)
-		writeCancel()
+		// Fire-and-forget, same convention as fireTeleport (search.go): the
+		// caller must not block the response on this. A prior version of
+		// this fix gave the write-back a fresh, non-expired context but
+		// still called it synchronously -- which only made things worse,
+		// since writes that used to fail instantly (on an already-dead
+		// parent ctx) now actually ran for up to networkWriteBackTimeout,
+		// so every request paid that cost even though nothing in the
+		// response depends on the write having finished.
+		poolCopy := pool
+		go func(authorID, field string, snapshot []NetworkCollaborator) {
+			writeCtx, writeCancel := detachedWriteContext()
+			defer writeCancel()
+			writeConnections(writeCtx, authorID, snapshot)
+			writePipelineBlob(writeCtx, authorID, field, snapshot)
+		}(cleanID, p.field, poolCopy)
 	}
 
 	final := make([]NetworkCollaborator, 0, len(pool))
