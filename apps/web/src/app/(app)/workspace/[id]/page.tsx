@@ -6,7 +6,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Trash2,
   FileText,
-  ListChecks,
   Users2,
   Share2,
   ArrowLeft,
@@ -16,19 +15,18 @@ import { deleteProject, roleFor, canEdit as roleCanEdit } from "@/lib/firebase/w
 import { cn } from "@/lib/utils";
 import { ErrorBanner, friendlyFirestoreError } from "@/components/ui/ErrorBanner";
 import { DocumentsTab } from "@/components/workspace/DocumentsTab";
-import { TasksMeetingsTab } from "@/components/workspace/TasksMeetingsTab";
 import { MembersTab } from "@/components/workspace/MembersTab";
 import { ShareModal } from "@/components/workspace/ShareModal";
 import { PresenceStack } from "@/components/workspace/PresenceStack";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import type { CollabProject, CollabRole } from "@/lib/types";
 
-// Chat and Equations are no longer separate destinations here — they moved
-// into the Documents tab itself, as panels in its dockable right-side panel
-// (decisions/0019). The rail drops from 5 destinations to 3.
+// Chat, Equations and Tasks & Meetings are no longer separate destinations
+// here — they all moved into the Documents tab itself, as panels in its
+// dockable right-side panel (decisions/0019; Tasks & Meetings joined later,
+// same reasoning). The rail drops to 2 destinations.
 const TABS = [
   { name: "Documents", Icon: FileText },
-  { name: "Tasks & Meetings", Icon: ListChecks },
   { name: "Members", Icon: Users2 },
 ] as const;
 type Tab = (typeof TABS)[number]["name"];
@@ -44,10 +42,9 @@ const ROLE_LABEL: Record<CollabRole, string> = {
  *  readable rather than stretched across a wide editor viewport — this is
  *  about content readability, separate from the outer shell's boxed-column
  *  fix below (decisions/0019 item 7): the page background and chrome now
- *  run full width, but a roster or task list still reads better with a
- *  sane max width than stretched edge-to-edge on an ultrawide screen. */
+ *  run full width, but a roster still reads better with a sane max width
+ *  than stretched edge-to-edge on an ultrawide screen. */
 const CENTERED: Partial<Record<Tab, string>> = {
-  "Tasks & Meetings": "max-w-3xl",
   Members: "max-w-2xl",
 };
 
@@ -109,10 +106,9 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
   const chromeHidden = docFocus && tab === "Documents";
 
   return (
-    // Full viewport width (decisions/0019 item 7) — Documents, Members and
-    // Tasks & Meetings all dropped the boxed 1128px column with empty
-    // gutters on wider screens, so switching tabs no longer resizes the
-    // screen.
+    // Full viewport width (decisions/0019 item 7) — Documents and Members
+    // both dropped the boxed 1128px column with empty gutters on wider
+    // screens, so switching tabs no longer resizes the screen.
     <div className="flex h-full w-full flex-col overflow-hidden bg-page-bg">
       <ShareModal project={project} open={shareOpen} onClose={() => setShareOpen(false)} />
 
@@ -120,8 +116,8 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
           Documents folds this identity/actions strip into its own editor
           meta row instead (DocEditorPane's meta strip) — a dedicated project
           ribbon above it was redundant screen space the writing surface can
-          use instead. Tasks & Meetings and Members have no equivalent row of
-          their own, so they keep this header. */}
+          use instead. Members has no equivalent row of its own, so it keeps
+          this header. */}
       {tab !== "Documents" && (
         <header className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border bg-surface px-3 md:px-4">
           <button
@@ -281,7 +277,6 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
                     centeredClass,
                   )}
                 >
-                  {tab === "Tasks & Meetings" && <TasksMeetingsTab projectId={project.id} />}
                   {tab === "Members" && (
                     <MembersTab project={project} onManageSharing={() => setShareOpen(true)} />
                   )}
