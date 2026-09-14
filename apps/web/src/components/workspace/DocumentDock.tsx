@@ -1,25 +1,39 @@
 "use client";
 
 import { useState } from "react";
-import { ClipboardList, MessageSquare, Sigma, Share2, PanelRightClose, PanelRightOpen, X } from "lucide-react";
+import {
+  ClipboardList,
+  MessageSquare,
+  Sigma,
+  ListChecks,
+  Share2,
+  PanelRightClose,
+  PanelRightOpen,
+  X,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ChatTab } from "@/components/workspace/ChatTab";
 import { EquationsTab } from "@/components/workspace/EquationsTab";
+import { TasksMeetingsTab } from "@/components/workspace/TasksMeetingsTab";
 import { QuickReferencePanel, computeQuickReferenceStatus } from "@/components/workspace/QuickReferencePanel";
 import type { JournalTemplate } from "@/components/workspace/ResearchTools";
 import type { CollabMember } from "@/lib/types";
 
-type DockTab = "quickref" | "chat" | "equations";
+type DockTab = "quickref" | "chat" | "equations" | "tasks";
 
 const DOCK_TABS: { id: DockTab; label: string; Icon: typeof ClipboardList }[] = [
   { id: "quickref", label: "Quick reference", Icon: ClipboardList },
   { id: "chat", label: "Chat", Icon: MessageSquare },
   { id: "equations", label: "Equations", Icon: Sigma },
+  { id: "tasks", label: "Tasks", Icon: ListChecks },
 ];
 
 /**
- * The unified dock: Quick reference / Chat / Equations share one panel next
- * to the editor (decisions/0019). Collapsible to a 40px rail with status
+ * The unified dock: Quick reference / Chat / Equations / Tasks share one
+ * panel next to the editor (decisions/0019 moved Chat and Equations here off
+ * their own destinations; Tasks & Meetings joined the same pattern later —
+ * a project's tasks/meetings don't need a whole separate screen any more
+ * than its chat or equations did). Collapsible to a 40px rail with status
  * dots rather than disappearing outright, so a live signal and one click to
  * reopen are always available.
  */
@@ -180,6 +194,11 @@ export function DocumentDock({
         {activeTab === "equations" && (
           <div className="p-3">
             <EquationsTab projectId={projectId} initialLatex={initialLatex} />
+          </div>
+        )}
+        {activeTab === "tasks" && (
+          <div className="p-3">
+            <TasksMeetingsTab projectId={projectId} />
           </div>
         )}
       </div>
