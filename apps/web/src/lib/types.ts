@@ -33,6 +33,18 @@ export interface TrackedResearcher {
   trackedAt: unknown;
 }
 
+// Firestore `users/{uid}/tracked_topics/{topicId}` — the topic half of
+// decision 0021's "Track" bookmark, mirroring `TrackedResearcher`'s shape
+// exactly. Also read by the Go gateway's tracked_topic_activity source
+// (internal/activity/activity.go) — don't rename these fields without
+// checking there first.
+export interface TrackedTopic {
+  topicId: string;
+  name: string;
+  /** Same convention as `TrackedResearcher.trackedAt`. */
+  trackedAt: unknown;
+}
+
 // Firestore `users/{uid}/settings/notifications` — per-kind alert cadence
 // (decisions/0022, decisions/0004's direct-client-write pattern). Every
 // control is readable/writable by a signed-in user (anonymous auth included)
@@ -99,11 +111,13 @@ export interface SimilarResult<T> {
 // ── Home activity feed (Go gateway /api/v1/activity_feed — no LLM) ──────────
 
 // decisions/0022 extends the feed beyond the original three kinds: a
-// citation-count watermark, Discovery Track (decisions/0021) feeding
-// notifications, and the CoLab mention/invite kinds the hook's own comment
-// already flagged as a follow-up. `tracked_topic_activity`, `mention` and
-// `invite` are rendered on the frontend but have no backend producer yet —
-// see the code comments in useNotifications.ts and internal/activity/activity.go.
+// citation-count watermark, Discovery Track (decisions/0021, both the
+// researcher and topic halves) feeding notifications, and the CoLab
+// mention/invite kinds the hook's own comment originally flagged as a
+// follow-up. `mention`/`invite` are produced client-side (ShareModal's real
+// invite, ChatTab's @mention parser) into a `users/{uid}/inbox` queue the Go
+// gateway drains into this same feed — see internal/activity/activity.go's
+// inboxItems and apps/web/src/lib/firebase/inbox.ts.
 export type ActivityType =
   | "paper_published"
   | "connection_made"

@@ -1,7 +1,7 @@
 import { collection, doc, setDoc, deleteDoc, onSnapshot, serverTimestamp, type Unsubscribe } from "firebase/firestore";
 import { requireDb } from "./client";
 import type { SubscribeErrorHandler } from "./workspace";
-import type { TrackedResearcher } from "@/lib/types";
+import type { TrackedResearcher, TrackedTopic } from "@/lib/types";
 
 /**
  * "Track" (decision 0021) — a per-user bookmark on a researcher, distinct
@@ -50,4 +50,39 @@ export async function trackResearcher(uid: string, authorId: string, name: strin
 
 export async function untrackResearcher(uid: string, authorId: string): Promise<void> {
   await deleteDoc(doc(requireDb(), "users", uid, "tracked_researchers", authorId));
+}
+
+/**
+ * "Track" for a Discovery topic — the topic half of decision 0021, mirroring
+ * `trackResearcher`/`untrackResearcher`/`subscribeTrackedResearchers` exactly
+ * but on `users/{uid}/tracked_topics/{topicId}` with `{ topicId, name,
+ * trackedAt }`. Also read by the Go gateway's tracked_topic_activity source
+ * (internal/activity/activity.go) — keep the field shape in sync with that.
+ */
+export function subscribeTrackedTopics(
+  uid: string,
+  cb: (rows: TrackedTopic[]) => void,
+  onError?: SubscribeErrorHandler,
+): Unsubscribe {
+  return safeSubscribe(
+    () =>
+      onSnapshot(
+        collection(requireDb(), "users", uid, "tracked_topics"),
+        (snap) => cb(snap.docs.map((d) => d.data() as TrackedTopic)),
+        onError,
+      ),
+    onError,
+  );
+}
+
+export async function trackTopic(uid: string, topicId: string, name: string): Promise<void> {
+  await setDoc(doc(requireDb(), "users", uid, "tracked_topics", topicId), {
+    topicId,
+    name,
+    trackedAt: serverTimestamp(),
+  });
+}
+
+export async function untrackTopic(uid: string, topicId: string): Promise<void> {
+  await deleteDoc(doc(requireDb(), "users", uid, "tracked_topics", topicId));
 }

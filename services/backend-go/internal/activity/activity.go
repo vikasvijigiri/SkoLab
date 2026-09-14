@@ -9,11 +9,19 @@
 //     Firestore users/{uid}/tracked_researchers) published something new
 //   - citation_received      : this user's own OpenAlex cited_by_count went up
 //     since the last time the feed was fetched (decisions/0022)
+//   - tracked_topic_activity : new OpenAlex work tagged with a topic this user
+//     tracks in Discovery (Firestore users/{uid}/tracked_topics) since the
+//     tracked-window cutoff — see trackedTopicActivity.
+//   - mention / invite       : client-originated CoLab events (an @mention in
+//     ChatTab, a real invite in ShareModal) queued in Firestore
+//     users/{uid}/inbox and drained here — see inboxItems.
 //
-// tracked_topic_activity, mention and invite are NOT produced here — Discovery
-// has no topic-follow feature and CoLab has no @mention parser to source them
-// from yet (see decisions/0022's Consequences). The frontend renders those
-// kinds so the UI is ready, but nothing on this backend emits them today.
+// mention/invite deliberately reuse this same ActivityItem pipeline instead
+// of getting their own type (unlike CvShare in lib/types.ts, which predates
+// this feed and had no client write path to begin with): the frontend's
+// useNotifications.ts already ships real, specific copy for both kinds from a
+// previous session, so this is the smaller change and it costs nothing to
+// share the sort/merge/limit logic every other source here already gets.
 //
 // Pure Postgres + Firestore reads plus the pooled OpenAlex client. No LLM, no
 // embedding — this is aggregation and sorting, so it lives on the Go edge
@@ -45,10 +53,13 @@ var oaClient = openalex.New()
 // Seams for tests, same pattern as author/search.go's firestoreQueryEqHook.
 // Production points them at the real implementations.
 var (
-	firestoreListDocsHook = firestore.ListDocs
-	firestoreGetDocHook   = firestore.GetDoc
-	firestoreSetDocHook   = firestore.SetDoc
-	fetchAuthorHook       = oaClient.FetchAuthorByID
+	firestoreListDocsHook        = firestore.ListDocs
+	firestoreListDocsWithIDsHook = firestore.ListDocsWithIDs
+	firestoreGetDocHook          = firestore.GetDoc
+	firestoreSetDocHook          = firestore.SetDoc
+	firestoreDeleteDocHook       = firestore.DeleteDoc
+	fetchAuthorHook              = oaClient.FetchAuthorByID
+	fetchWorksByConceptHook      = oaClient.FetchWorksByConcept
 )
 
 // ── response shapes ───────────────────────────────────────────────────────────
@@ -74,7 +85,7 @@ type Object struct {
 // Item is one row in the feed.
 type Item struct {
 	ID     string  `json:"id"`   // stable de-dupe key
-	Type   string  `json:"type"` // paper_published | connection_made | trending | citation_received | tracked_researcher_paper
+	Type   string  `json:"type"` // paper_published | connection_made | trending | citation_received | tracked_researcher_paper | tracked_topic_activity | mention | invite
 	Verb   string  `json:"verb"` // human phrase for the card headline
 	TS     string  `json:"ts"`   // RFC3339 / ISO date, drives ordering
 	Actor  *Actor  `json:"actor,omitempty"`
@@ -82,8 +93,10 @@ type Item struct {
 	Href   string  `json:"href"`
 	Why    string  `json:"why,omitempty"`
 	// Count is a real, backend-computed quantity the frontend's copy names
-	// honestly — new citations since the watermark check (citation_received).
-	// Never a guess: absent unless there's an actual number to report.
+	// honestly — new citations since the watermark check (citation_received)
+	// or new works in a tracked topic since the window cutoff
+	// (tracked_topic_activity). Never a guess: absent unless there's an
+	// actual number to report.
 	Count int `json:"count,omitempty"`
 }
 
@@ -181,13 +194,15 @@ func GetActivityFeed(c *gin.Context) {
 	trackedWindow := time.Duration(envInt("ACTIVITY_TRACKED_WINDOW_DAYS", 75)) * 24 * time.Hour
 
 	var (
-		mu        sync.Mutex
-		papers    []Item
-		conns     []Item
-		trending  []Item
-		tracked   []Item
-		citations []Item
-		wg        sync.WaitGroup
+		mu           sync.Mutex
+		papers       []Item
+		conns        []Item
+		trending     []Item
+		tracked      []Item
+		trackedTopic []Item
+		citations    []Item
+		inbox        []Item
+		wg           sync.WaitGroup
 	)
 
 	if userID != "" && db.Pool != nil {
@@ -220,6 +235,22 @@ func GetActivityFeed(c *gin.Context) {
 			tracked = got
 			mu.Unlock()
 		}()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got := trackedTopicActivity(ctx, userID, trackedWindow)
+			mu.Lock()
+			trackedTopic = got
+			mu.Unlock()
+		}()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got := inboxItems(ctx, userID)
+			mu.Lock()
+			inbox = got
+			mu.Unlock()
+		}()
 	}
 	if userID != "" && authorID != "" {
 		wg.Add(1)
@@ -250,7 +281,7 @@ func GetActivityFeed(c *gin.Context) {
 	// addendum: the plain paper_published-from-a-connection kind is folded
 	// into the tracked one, not kept as a separate duplicate).
 	seen := map[string]bool{}
-	merged := make([]Item, 0, len(papers)+len(conns)+len(trending)+len(tracked)+len(citations))
+	merged := make([]Item, 0, len(papers)+len(conns)+len(trending)+len(tracked)+len(trackedTopic)+len(citations)+len(inbox))
 	add := func(items []Item) {
 		for _, it := range items {
 			key := it.ID
@@ -266,6 +297,8 @@ func GetActivityFeed(c *gin.Context) {
 	}
 	add(citations)
 	add(tracked)
+	add(trackedTopic)
+	add(inbox)
 	add(papers)
 	add(conns)
 	add(trending)
@@ -658,6 +691,175 @@ func trackedResearcherPapers(ctx context.Context, userID string, window time.Dur
 		}(authorID, name)
 	}
 	wg.Wait()
+	return items
+}
+
+// ── Tracked topics (decisions/0022's topic-follow gap) ──────────────────────
+
+// trackedTopicIDs reads the caller's topic-Track list — a parallel
+// workstream writes users/{uid}/tracked_topics/{topicId} with
+// topicId/name/trackedAt fields, mirroring trackedResearcherIDs's researcher
+// version exactly (see apps/web/src/lib/firebase/tracking.ts). Degrades to no
+// items (not an error) when Firestore is unavailable or the collection is
+// empty/doesn't exist yet.
+func trackedTopicIDs(ctx context.Context, userID string) map[string]string {
+	docs, err := firestoreListDocsHook(ctx, "users/"+userID+"/tracked_topics", envInt("ACTIVITY_MAX_TRACKED", 25))
+	if err != nil || len(docs) == 0 {
+		return nil
+	}
+	out := map[string]string{}
+	for _, d := range docs {
+		id := cleanID(stringField(d, "topicId"))
+		if id == "" {
+			continue
+		}
+		out[id] = stringField(d, "name")
+	}
+	return out
+}
+
+// trackedTopicActivity surfaces new OpenAlex work tagged with a topic the
+// user tracks in Discovery's Topics mode — the topic-follow half of Track,
+// alongside trackedResearcherPapers's researcher half. Reuses
+// FetchWorksByConcept, the OpenAlex topic-filtered works query already
+// defined for this exact shape of lookup (topics.id filter, falling back to
+// the legacy concepts.id filter).
+//
+// Deliberately coarse, same honesty rule as citationAlert: reports a real
+// count of new works in the window and the topic's name, never invents which
+// specific paper is "the" one driving the count — OpenAlex gives us the list,
+// but naming one work as *the* notable one would be an editorial claim this
+// backend has no basis for.
+func trackedTopicActivity(ctx context.Context, userID string, window time.Duration) []Item {
+	byID := trackedTopicIDs(ctx, userID)
+	if len(byID) == 0 {
+		return nil
+	}
+	cutoff := time.Now().Add(-window)
+	nowYear := time.Now().Year()
+
+	var (
+		mu    sync.Mutex
+		items []Item
+		wg    sync.WaitGroup
+		sem   = make(chan struct{}, envInt("ACTIVITY_TRACKED_CONCURRENCY", 6))
+	)
+	for topicID, name := range byID {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(topicID, name string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			works, err := fetchWorksByConceptHook(ctx, topicID, cutoff.Year(), nowYear, 25)
+			if err != nil {
+				return
+			}
+			label := name
+			if label == "" {
+				label = "a topic you follow"
+			}
+			count := 0
+			var latest time.Time
+			for _, w := range works {
+				pub := parseDate(w.PublicationDate)
+				if pub.IsZero() || pub.Before(cutoff) {
+					continue
+				}
+				count++
+				if pub.After(latest) {
+					latest = pub
+				}
+			}
+			if count == 0 {
+				return
+			}
+			ts := latest
+			if ts.IsZero() {
+				ts = time.Now()
+			}
+			mu.Lock()
+			items = append(items, Item{
+				ID:   "topic:" + topicID + ":" + ts.Format("20060102"),
+				Type: "tracked_topic_activity",
+				Verb: "new papers in a topic you follow",
+				TS:   ts.Format(time.RFC3339),
+				Object: &Object{
+					Kind:  "topic",
+					ID:    topicID,
+					Title: label,
+				},
+				Href:  "/discovery?tab=topics",
+				Why:   "Tracked topic",
+				Count: count,
+			})
+			mu.Unlock()
+		}(topicID, name)
+	}
+	wg.Wait()
+	return items
+}
+
+// ── Inbox (client-originated mention/invite events) ──────────────────────────
+
+// inboxItems reads and drains the caller's users/{uid}/inbox — a lightweight,
+// client-writable queue ShareModal (a real invite) and ChatTab (an @mention
+// against the project's real member list) append to directly, matching
+// decisions/0004's direct-client-write convention (no REST/Go write endpoint
+// for these, same as tracking.ts/cvShare.ts).
+//
+// Unlike every other source in this file, this is a consume-on-read queue,
+// not a re-derivable signal: an inbox doc is deleted immediately after being
+// read into a response, so a second fetch never redelivers the same
+// mention/invite. That trades a small chance of losing an item if the client
+// crashes between the read and the delete for avoiding real complexity (an
+// ack/delivery-receipt protocol) a best-effort notification queue doesn't
+// warrant — this is not a guaranteed-delivery system, and it doesn't claim to
+// be one.
+func inboxItems(ctx context.Context, userID string) []Item {
+	docs, err := firestoreListDocsWithIDsHook(ctx, "users/"+userID+"/inbox", envInt("ACTIVITY_MAX_INBOX", 40))
+	if err != nil || len(docs) == 0 {
+		return nil
+	}
+	var items []Item
+	for _, d := range docs {
+		typ := stringField(d.Data, "type")
+		if typ != "mention" && typ != "invite" {
+			continue // unknown/malformed doc — skip rather than misreport its kind
+		}
+		verb := stringField(d.Data, "verb")
+		if verb == "" {
+			if typ == "invite" {
+				verb = "invited you"
+			} else {
+				verb = "mentioned you"
+			}
+		}
+		ts := stringField(d.Data, "ts")
+		if ts == "" {
+			ts = time.Now().Format(time.RFC3339)
+		}
+		var actor *Actor
+		if a, ok := d.Data["actor"].(map[string]any); ok {
+			id := stringField(a, "id")
+			name := stringField(a, "display_name")
+			if id != "" || name != "" {
+				actor = &Actor{ID: id, DisplayName: name}
+			}
+		}
+		items = append(items, Item{
+			ID:    "inbox:" + d.ID,
+			Type:  typ,
+			Verb:  verb,
+			TS:    ts,
+			Actor: actor,
+			Href:  stringField(d.Data, "href"),
+			Why:   stringField(d.Data, "why"),
+		})
+		// Best-effort delete: an error here just means the item may be
+		// redelivered on the next fetch, not a request failure.
+		_ = firestoreDeleteDocHook(ctx, "users/"+userID+"/inbox", d.ID)
+	}
 	return items
 }
 
