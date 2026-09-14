@@ -612,39 +612,3 @@ export interface ResearcherResult {
 }
 
 export type DiscoverySort = "fit" | "momentum" | "standing" | "recent";
-
-export interface DiscoveryFilterState {
-  careerStage: CareerStage[];
-  activity: ActivityState[];
-  momentum: MomentumState[];
-  /** One of `TOPICAL_FOCUS_STOPS` (0, .25, .5, .75). */
-  topicalFocusMin: number;
-  hasOrcid: boolean;
-  /** Minimal connection-distance proxy — same last-known institution as the viewer. */
-  sharesInstitution: boolean;
-  countries: string[];
-  instTypes: string[];
-}
-
-// ── Discovery: trending topics (decisions/0015) ──
-
-/** A topic's activity in one time window, from OpenAlex `/works`
- *  `group_by=topics.id` — `id` is the bare id (`bareId()`), matching
- *  `OpenAlexTaxon.id`. */
-export interface TopicActivityBucket {
-  id: string;
-  displayName: string;
-  count: number;
-}
-
-/** A topic ranked by growth: recent window vs. the equal-length prior window.
- *  Never a cumulative count — OpenAlex's `/topics` entity has no growth field. */
-export interface TrendingTopic {
-  id: string;
-  displayName: string;
-  recentCount: number;
-  priorCount: number;
-  /** (recentCount - priorCount) / priorCount. Only present when priorCount
-   *  clears `DISCOVERY_CONFIG.trendingMinPriorWorks` — see `trendingTopics.ts`. */
-  growth: number;
-}

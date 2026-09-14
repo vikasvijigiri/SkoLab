@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn, focusRing } from "@/lib/utils";
 import { TopBar } from "./TopBar";
-import { ResearchCategoryRail } from "./ResearchCategoryRail";
 import { NAV_ITEMS } from "@/lib/nav";
 
 /**
@@ -12,19 +11,8 @@ import { NAV_ITEMS } from "@/lib/nav";
  * account menu) with the page below it. Below `md` the primary nav drops to a
  * bottom tab bar; the top bar keeps logo · search · bell · avatar.
  */
-/**
- * The category rail's pills (For you/Papers/People/…) are Discovery filters
- * — they never highlight outside Home/Discovery, so showing them elsewhere
- * was permanently-inert clutter (decision 0019's addendum). Hidden on any
- * route under these prefixes; shown everywhere else, including /paper/[id]
- * (reached from Discovery, no pill lights up there, matching how the rail
- * already behaves with no matching href).
- */
-const RAIL_HIDDEN_PREFIXES = ["/workspace", "/profile", "/settings"];
-
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const showRail = !RAIL_HIDDEN_PREFIXES.some((p) => pathname?.startsWith(p));
 
   return (
     <div className="flex h-dvh w-full flex-col overflow-hidden">
@@ -41,7 +29,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </a>
 
       <TopBar />
-      {showRail && <ResearchCategoryRail />}
 
       <main id="main-content" className="surface-atmosphere min-h-0 flex-1 overflow-y-auto bg-page-bg">
         {children}
