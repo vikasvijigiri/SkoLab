@@ -167,7 +167,13 @@ export function ShareModal({
                 <>
                   <select
                     value={role}
-                    onChange={(e) => updateMemberRole(project, m.uid, e.target.value as CollabRole)}
+                    onChange={(e) => {
+                      const nextRole = e.target.value as CollabRole;
+                      setError(null);
+                      updateMemberRole(project, m.uid, nextRole).catch((err) =>
+                        setError(friendlyFirestoreError(err as { code?: string; message?: string })),
+                      );
+                    }}
                     className="rounded-md border border-border-input bg-surface-input px-2 py-1 font-body text-[12px] text-text-primary outline-none focus:border-primary"
                   >
                     {ASSIGNABLE.map((r) => (
@@ -178,7 +184,12 @@ export function ShareModal({
                   </select>
                   <button
                     type="button"
-                    onClick={() => removeMemberByUid(project, m.uid)}
+                    onClick={() => {
+                      setError(null);
+                      removeMemberByUid(project, m.uid).catch((err) =>
+                        setError(friendlyFirestoreError(err as { code?: string; message?: string })),
+                      );
+                    }}
                     className="font-body text-[12px] font-medium text-text-muted transition-colors hover:text-notification"
                   >
                     Remove
