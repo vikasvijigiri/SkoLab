@@ -63,3 +63,4 @@ the old one's Status as `Superseded by NNNN`.
 | [0022](0022-signals-unified-alerts.md) | Signals: unified citation/tracked-people/topic/CoLab alerts, extending the real `NotificationsBell` |
 | [0023](0023-profile-redesign-and-cv-export.md) | Profile redesign (closes the original CoLab+Profile scope) + CV export/share, click-first |
 | [0024](0024-route-verification-home-paper-settings.md) | Route-level verification: Home feed, Paper detail, and Settings redesigned to close three previously-untouched routes |
+| [0025](0025-backend-skill-pack-wshobson-agents.md) | Add a scoped backend slice of `wshobson/agents` alongside (not replacing) `addyosmani/agent-skills` |
