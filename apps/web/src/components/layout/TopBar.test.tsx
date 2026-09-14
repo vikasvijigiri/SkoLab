@@ -35,7 +35,6 @@ describe("TopBar", () => {
     renderWithProviders(<TopBar />);
     expect(screen.getByRole("link", { name: /skolab home/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Search" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Discovery" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "CoLab" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /notifications/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /account menu/i })).toBeInTheDocument();

@@ -24,7 +24,6 @@ import { PeerSuggestionsCard } from "@/components/feed/PeerSuggestionsCard";
 import { UnifiedFeed } from "@/components/feed/UnifiedFeed";
 import { Card } from "@/components/ui/Card";
 import { IdentityStrengthCard } from "@/components/product/IdentityStrengthCard";
-import { ResearchCommandCenter, ResearchLoopNote } from "@/components/product/ResearchCommandCenter";
 import type {
   ActivityItem,
   ScienceNewsItem,
@@ -190,9 +189,6 @@ export function HomeClient() {
         <div className="lg:hidden">
           <AIDailyBriefCard items={briefItems} loading={briefLoading} />
         </div>
-
-        <ResearchCommandCenter topic={topic} projectCount={projects.length} />
-        <ResearchLoopNote />
 
         {/* One blended, self-labelling research feed — papers · news · network
             · roles, ranked together, with a lens filter and Save / Not-relevant. */}
