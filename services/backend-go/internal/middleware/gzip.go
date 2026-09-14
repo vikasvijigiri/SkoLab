@@ -1,37 +1,38 @@
 package middleware
 
 import (
+	"bytes"
 	"compress/gzip"
-	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
-// gzipResponseWriter overrides Write/WriteString to go through a gzip.Writer
-// instead of the underlying connection, and overrides Flush to match --
-// every other method (Status, Header, Hijack, ...) is promoted unchanged
-// from the embedded gin.ResponseWriter, the standard shape for this kind of
-// wrapper.
+// gzipResponseWriter overrides Write/WriteString/Flush to send every byte
+// into an in-memory buffer via gzip.Writer instead of the underlying
+// connection -- every other method (Status, Header, Hijack, ...) is
+// promoted unchanged from the embedded gin.ResponseWriter, the standard
+// shape for this kind of wrapper.
 //
-// The Flush override is not optional. httputil.ReverseProxy flushes its
-// destination writer after every chunk read from an upstream response with
-// no Content-Length (Go's http.Response reports ContentLength == -1 for a
-// chunked, streaming-shaped response -- every LLM route here, since their
-// response size isn't known up front) -- confirmed live: a real
-// /discovery/predict response, proxied from Python, came back as
-// undecodable binary garbage on every attempt, while the same route hit
-// directly against skolab-backend-py (no gateway, no gzip wrapping) came
-// back as clean JSON every time, and a native (non-proxied) Go gzip route
-// (citation_heatmap) decompressed correctly every time too -- isolating the
-// break to exactly this proxied-and-chunked combination. Without this
-// override, ReverseProxy's Flush() call reaches the embedded
-// gin.ResponseWriter directly, bypassing gz's own internal buffer entirely
-// -- gzip.Writer decides when to release compressed bytes to its
-// underlying writer on its own schedule, unrelated to when something else
-// flushes that writer, so a flush arriving between two of gzip's internal
-// writes ships a gzip stream cut at a boundary that has nothing to do with
-// a valid frame boundary. Flushing gz itself first keeps the two in sync.
+// Flush is deliberately a no-op. An earlier version of this type flushed
+// gz and the real connection together on every Flush() call, matching how
+// httputil.ReverseProxy flushes after each upstream chunk -- correct for
+// that proxied path (see main.go's reverseProxy/ModifyResponse comment for
+// the chunked-response corruption that fix addresses), but this type wraps
+// *native* Gin routes, and confirmed live (2026-09-14) the same class of
+// bug reaches them too: /observability (metrics.Handler, pure in-memory
+// text) and /api/v1/author_stats with a real author_id (a genuinely large
+// JSON bundle) both 502'd at Render's edge with x-render-routing:
+// no-deploy on every attempt -- while the exact same request in the app's
+// own structured log showed a clean 200, and a small response on the same
+// route (author_stats with an invalid id, a one-line JSON error) succeeded
+// every time. That is response-size-dependent corruption isolated to
+// multi-flush gzip output, the same signature as the already-fixed proxy
+// bug, just on the writer side that streams straight to the connection
+// instead of through ReverseProxy. Buffering the whole compressed body and
+// writing it once, with a correct Content-Length instead of chunked
+// transfer, removes the multiple flushes entirely.
 type gzipResponseWriter struct {
 	gin.ResponseWriter
 	gz *gzip.Writer
@@ -45,12 +46,7 @@ func (w *gzipResponseWriter) WriteString(s string) (int, error) {
 	return w.gz.Write([]byte(s))
 }
 
-func (w *gzipResponseWriter) Flush() {
-	_ = w.gz.Flush()
-	if f, ok := w.ResponseWriter.(http.Flusher); ok {
-		f.Flush()
-	}
-}
+func (w *gzipResponseWriter) Flush() {}
 
 // Gzip compresses response bodies for any client that sends
 // Accept-Encoding: gzip -- every JSON response this gateway serves or
@@ -71,17 +67,28 @@ func Gzip() gin.HandlerFunc {
 			return
 		}
 
-		gz := gzip.NewWriter(c.Writer)
-		defer gz.Close()
+		real := c.Writer
+		buf := &bytes.Buffer{}
+		gz := gzip.NewWriter(buf)
 
-		c.Header("Content-Encoding", "gzip")
-		c.Header("Vary", "Accept-Encoding")
-		// The compressed length isn't known up front, and an incorrect
-		// Content-Length (the original, uncompressed size) would make a
-		// client stop reading early or flag a truncated response.
-		c.Writer.Header().Del("Content-Length")
-
-		c.Writer = &gzipResponseWriter{ResponseWriter: c.Writer, gz: gz}
+		c.Writer = &gzipResponseWriter{ResponseWriter: real, gz: gz}
 		c.Next()
+		_ = gz.Close()
+
+		if buf.Len() == 0 {
+			// Nothing was ever written (e.g. a bare WriteHeader(204)) --
+			// leave real's already-recorded status for Gin's own
+			// end-of-request WriteHeaderNow() to flush, untouched by
+			// gzip headers that would be meaningless on an empty body.
+			return
+		}
+
+		real.Header().Set("Content-Encoding", "gzip")
+		real.Header().Set("Vary", "Accept-Encoding")
+		// Known up front now that the whole compressed body is buffered --
+		// a correct Content-Length (not chunked transfer) is exactly what
+		// stopped triggering the edge-side corruption described above.
+		real.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+		_, _ = real.Write(buf.Bytes())
 	}
 }
