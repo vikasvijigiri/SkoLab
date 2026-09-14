@@ -7,6 +7,7 @@ import type {
   CitationHeatmap,
   JournalRecommendation,
   GrantMatch,
+  CoachPulse,
   DailyFeedItem,
   Conjecture,
   IndustryOpportunity,
@@ -28,6 +29,25 @@ import type {
 
 export const getAuthorSuggestions = (query: string) =>
   apiRequest<AuthorSuggestion[]>("/api/v1/author_suggestions", { params: { query } });
+
+// Home page "Since You Were Here" panel. `trackedAuthorIds` travels as a
+// query param rather than a server-side lookup because the tracked-
+// researchers list lives in Firestore under the signed-in user
+// (`users/{uid}/tracked_researchers`, decisions/0004's direct-client-write
+// pattern) — this Go route has no reason to read it independently when the
+// caller already has it live via `useTrackedResearchers`.
+export const getCoachPulse = (opts: {
+  authorId?: string;
+  field?: string;
+  trackedAuthorIds?: string[];
+}) =>
+  apiRequest<CoachPulse>("/api/v1/coach_pulse", {
+    params: {
+      author_id: opts.authorId,
+      field: opts.field,
+      tracked_author_ids: opts.trackedAuthorIds?.length ? opts.trackedAuthorIds.join(",") : undefined,
+    },
+  });
 
 export const getLeaderboard = (field = "all") =>
   apiRequest<LeaderboardEntry[]>(`/api/v1/leaderboard/${encodeURIComponent(field)}`);

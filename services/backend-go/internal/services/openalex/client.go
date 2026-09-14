@@ -322,6 +322,65 @@ func (c *Client) FetchRelatedWorks(ctx context.Context, workID string, perPage i
 	return out.Results, nil
 }
 
+// FetchCitingWorks returns works published since sinceISODate that cite any of
+// workIDs — one batched OR'd filter rather than one call per work. Used by the
+// coach pulse's impact signal (internal/author/pulse.go) to find recent
+// citations on the caller's own papers; ReferencedWorks on each result is how
+// the caller correlates a hit back to which of workIDs it actually cites.
+func (c *Client) FetchCitingWorks(ctx context.Context, workIDs []string, sinceISODate string, perPage int) ([]Work, error) {
+	if len(workIDs) == 0 {
+		return nil, nil
+	}
+	cleaned := make([]string, len(workIDs))
+	for i, id := range workIDs {
+		cleaned[i] = cleanID(id)
+	}
+	filter := "cites:" + strings.Join(cleaned, "|")
+	if sinceISODate != "" {
+		filter += ",from_publication_date:" + sinceISODate
+	}
+	p := url.Values{"filter": {filter}, "per_page": {fmt.Sprint(perPage)}, "sort": {"publication_date:desc"}}
+	body, err := c.get(ctx, baseURL+"/works", p)
+	if err != nil {
+		slog.Warn("openalex FetchCitingWorks failed", "work_ids", cleaned, "err", err)
+		return nil, err
+	}
+	var out listResponse[Work]
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return out.Results, nil
+}
+
+// FetchWorksByAuthorIDs returns works published since sinceISODate by any of
+// authorIDs — one batched OR'd filter. Used by the coach pulse's tracked-
+// network signal to find what the caller's explicitly-tracked researchers
+// have published recently, without one OpenAlex call per tracked author.
+func (c *Client) FetchWorksByAuthorIDs(ctx context.Context, authorIDs []string, sinceISODate string, perPage int) ([]Work, error) {
+	if len(authorIDs) == 0 {
+		return nil, nil
+	}
+	cleaned := make([]string, len(authorIDs))
+	for i, id := range authorIDs {
+		cleaned[i] = cleanID(id)
+	}
+	filter := "authorships.author.id:" + strings.Join(cleaned, "|")
+	if sinceISODate != "" {
+		filter += ",from_publication_date:" + sinceISODate
+	}
+	p := url.Values{"filter": {filter}, "per_page": {fmt.Sprint(perPage)}, "sort": {"publication_date:desc"}}
+	body, err := c.get(ctx, baseURL+"/works", p)
+	if err != nil {
+		slog.Warn("openalex FetchWorksByAuthorIDs failed", "author_ids", cleaned, "err", err)
+		return nil, err
+	}
+	var out listResponse[Work]
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return out.Results, nil
+}
+
 // SearchFunders searches OpenAlex funders by query/focus area.
 func (c *Client) SearchFunders(ctx context.Context, query string, perPage int) ([]Funder, error) {
 	if err := c.breaker.Allow(); err != nil {
