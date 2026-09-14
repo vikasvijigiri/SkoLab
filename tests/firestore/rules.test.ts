@@ -336,6 +336,116 @@ describe("users/{uid} (decisions/0022 Signals + decisions/0021 Track)", () => {
     const asOutsider = testEnv.authenticatedContext(OUTSIDER).firestore();
     await assertFails(getDoc(doc(asOutsider, "users", OWNER, "notification_state", "state")));
   });
+
+  it("lets the owner track a topic naming themself honestly", async () => {
+    const asOwner = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(
+      setDoc(doc(asOwner, "users", OWNER, "tracked_topics", "T123"), {
+        topicId: "T123",
+        name: "Quantum computing",
+        trackedAt: Date.now(),
+      })
+    );
+  });
+
+  it("blocks writing a tracked_topics doc whose topicId doesn't match its id", async () => {
+    const asOwner = testEnv.authenticatedContext(OWNER).firestore();
+    await assertFails(
+      setDoc(doc(asOwner, "users", OWNER, "tracked_topics", "T123"), {
+        topicId: "T999",
+        name: "Spoofed",
+        trackedAt: Date.now(),
+      })
+    );
+  });
+
+  it("blocks tracking a topic into someone else's list", async () => {
+    const asOutsider = testEnv.authenticatedContext(OUTSIDER).firestore();
+    await assertFails(
+      setDoc(doc(asOutsider, "users", OWNER, "tracked_topics", "T123"), {
+        topicId: "T123",
+        name: "Quantum computing",
+        trackedAt: Date.now(),
+      })
+    );
+  });
+
+  it("lets the owner read and delete their own tracked_topics doc", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "users", OWNER, "tracked_topics", "T123"), {
+        topicId: "T123",
+        name: "Quantum computing",
+        trackedAt: Date.now(),
+      });
+    });
+    const asOwner = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(getDoc(doc(asOwner, "users", OWNER, "tracked_topics", "T123")));
+    await assertSucceeds(deleteDoc(doc(asOwner, "users", OWNER, "tracked_topics", "T123")));
+  });
+});
+
+describe("users/{uid}/inbox (mention/invite queue)", () => {
+  it("lets a sender write a mention/invite naming themself as actor into someone else's inbox", async () => {
+    const asSender = testEnv.authenticatedContext(EDITOR).firestore();
+    await assertSucceeds(
+      addDoc(collection(asSender, "users", OWNER, "inbox"), {
+        type: "mention",
+        verb: "mentioned you",
+        actor: { id: EDITOR, display_name: "Editor" },
+        why: "check this out",
+        href: "/workspace/p1",
+        ts: new Date().toISOString(),
+      })
+    );
+  });
+
+  it("blocks writing an inbox entry naming someone else as the actor (forged mention)", async () => {
+    const asSender = testEnv.authenticatedContext(EDITOR).firestore();
+    await assertFails(
+      addDoc(collection(asSender, "users", OWNER, "inbox"), {
+        type: "mention",
+        actor: { id: OUTSIDER, display_name: "Spoofed" },
+        why: "forged",
+        href: "/workspace/p1",
+        ts: new Date().toISOString(),
+      })
+    );
+  });
+
+  it("blocks writing an inbox entry into your own inbox", async () => {
+    const asOwner = testEnv.authenticatedContext(OWNER).firestore();
+    await assertFails(
+      addDoc(collection(asOwner, "users", OWNER, "inbox"), {
+        type: "mention",
+        actor: { id: OWNER, display_name: "Owner" },
+        why: "self mention",
+        href: "/workspace/p1",
+        ts: new Date().toISOString(),
+      })
+    );
+  });
+
+  it("lets the recipient read and delete their own inbox, but blocks an outsider", async () => {
+    let itemId = "";
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const ref = await addDoc(collection(ctx.firestore(), "users", OWNER, "inbox"), {
+        type: "invite",
+        actor: { id: EDITOR, display_name: "Editor" },
+        why: "Quantum foam",
+        href: "/workspace/p1",
+        ts: new Date().toISOString(),
+      });
+      itemId = ref.id;
+    });
+    const asOwner = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(getDoc(doc(asOwner, "users", OWNER, "inbox", itemId)));
+
+    const asOutsider = testEnv.authenticatedContext(OUTSIDER).firestore();
+    await assertFails(getDoc(doc(asOutsider, "users", OWNER, "inbox", itemId)));
+    await assertFails(deleteDoc(doc(asOutsider, "users", OWNER, "inbox", itemId)));
+
+    await assertSucceeds(deleteDoc(doc(asOwner, "users", OWNER, "inbox", itemId)));
+  });
 });
 
 describe("collabs_groups/{projectId}/presence", () => {

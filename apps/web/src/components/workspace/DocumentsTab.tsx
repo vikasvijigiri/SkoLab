@@ -15,7 +15,7 @@ import {
 } from "@/lib/firebase/workspace";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import { cn } from "@/lib/utils";
-import type { CollabProject, CollabDocument } from "@/lib/types";
+import type { CollabProject, CollabDocument, CollabMember } from "@/lib/types";
 import { WorkspaceResearchActions, JOURNAL_TEMPLATES } from "@/components/workspace/ResearchTools";
 import { DocumentDock } from "@/components/workspace/DocumentDock";
 import { SlashMenu } from "@/components/workspace/SlashMenu";
@@ -232,6 +232,7 @@ export function DocumentsTab({
             key={active.id}
             projectId={project.id}
             projectName={project.name}
+            members={project.members}
             initialLatex={project.recentEquations}
             doc={active}
             documents={documents}
@@ -257,6 +258,7 @@ export function DocumentsTab({
 function DocEditorPane({
   projectId,
   projectName,
+  members,
   initialLatex,
   doc,
   documents,
@@ -269,6 +271,8 @@ function DocEditorPane({
 }: {
   projectId: string;
   projectName: string;
+  /** Forwarded to the dock's ChatTab for @mention parsing (decisions/0022). */
+  members: CollabMember[];
   initialLatex: string;
   doc: CollabDocument;
   documents: CollabDocument[];
@@ -381,6 +385,7 @@ function DocEditorPane({
   const dock = (
     <DocumentDock
       projectId={projectId}
+      members={members}
       documentBody={draft}
       initialLatex={initialLatex}
       template={selectedTemplate}
@@ -503,6 +508,7 @@ function DocEditorPane({
             </div>
             <DocumentDock
               projectId={projectId}
+              members={members}
               documentBody={draft}
               initialLatex={initialLatex}
               template={selectedTemplate}
