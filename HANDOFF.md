@@ -57,14 +57,44 @@ CV sharing) is deployed to production (`skolab-vvi`), confirmed via
   (matches the original, pre-regression baseline — see "What needs a
   decision" for why the cache itself still doesn't populate, a separate,
   deeper perf issue).
-- **Two items genuinely still open, not code-fixable from here** — see
-  "What needs a decision" below for full detail: `INTERNAL_API_TOKEN` is
-  still unset in production (confirmed via a live Render secrets check —
-  it's absent from the reference `render-env-vars.env` file too), and
-  `GET /metrics` / `GET /api/v1/author_metrics` both 502 with zero
-  app-level log entry for either request — strong evidence Render is
-  blocking these two specific paths at the edge, before the app ever
-  sees them, not an application bug.
+- **`INTERNAL_API_TOKEN` is resolved.** It was never set in production
+  (absent from `render-env-vars.env` too). Generated a real secret, set it
+  via the Render API's single-key env-var endpoint on both
+  `skolab-gateway` and `skolab-backend-py`, and — critically — learned
+  that Render's `/restart` endpoint does **not** pick up a new env var; only
+  a fresh `POST /deploys` (with `clearCache: "clear"`) does. Verified live,
+  end to end, with real payloads and the correct token: `embed_work`
+  (real OpenAlex embed), `author_metrics_enrich` (real LLM analysis), and
+  `internal/compute_metrics` (200; response values look plausible for a
+  minimal test payload, worth a follow-up check against a realistic
+  digest) all genuinely work now, not just auth-reject correctly.
+- **One item genuinely still open, and confirmed NOT code-fixable from
+  here**: `GET /observability` (renamed from `/metrics`) and
+  `GET /api/v1/author_stats` (renamed from `/api/v1/author_metrics`, old
+  aliases kept registered) both 502 with `x-render-routing: no-deploy`
+  at Render's edge — but this is now proven to be a Render platform
+  issue, not an app bug, not a path-naming issue: a live test on
+  2026-09-14 hit `/observability` and, in the **exact same second**, the
+  app's own structured log recorded `"path":"/observability","status":200`
+  — the origin genuinely served the request — while the external curl
+  client received Render's own branded 502 HTML page (not a mangled/
+  truncated real response) with `x-render-routing: no-deploy`. A brand-new,
+  never-before-requested query string on the same path changes nothing.
+  Renaming the route (full rename, verified deployed live via the Render
+  API) changed nothing either. Every other route on the same instance, at
+  the same moment, returns 200 normally. This means Render's edge is
+  making an independent "does this route have a live deploy" decision —
+  wrong, and seemingly pinned per logical endpoint — before it even
+  dispatches to the origin, or is discarding a real successful origin
+  response after the fact. Not something a code change, redeploy, or env
+  var can fix from this side. Next step: file a Render support ticket
+  with this exact evidence (service `srv-dacpm7bl550s73d6pmm0`, the
+  matching `rndr-id`s and timestamps above), or as a fallback, recreate
+  just this one service from the Blueprint. Recommend testing the same
+  URL from a different network/client first — the failure may be scoped
+  to the specific client IP/session this investigation has hammered these
+  two endpoints from all day, in which case real end users may be
+  unaffected.
 
 `main` also carries the 2026-09-11 backend-audit/live-feed work (PR #180)
 plus a large Dependabot sweep (2026-09-12): 26 dependency PRs merged, two
