@@ -91,6 +91,45 @@ CV sharing) is deployed to production (`skolab-vvi`), confirmed via
   `/observability`, plus `/api/v1/author_stats` and the old
   `/api/v1/author_metrics` alias both `200` with a real author bundle.
 
+- **Product-scope changes (2026-09-14, explicit product-owner direction, all
+  on `main`):**
+  - **Discovery and Horizon removed** — the standalone `/discovery` and
+    `/horizon` tabs, their nav entries, and every file that existed only to
+    serve them (~50 files: routes, components, lib, three Next.js API route
+    handlers backing Discovery's own grid). The global `ResearchCategoryRail`
+    ribbon (For you/Papers/People/.../Jobs) went too — every link pointed at
+    `/discovery`. Kept, per explicit direction: `/author/[id]`'s
+    Highlights/Track/Compare layer from the same redesign
+    (`decisions/0021`) — RelationshipGraph, MomentumSparkline, TrackButton,
+    AuthorInline, the on-demand Horizon-predict button — plus everything
+    that turned out to be genuinely shared (`openAlexWorks` for CoLab's
+    SlashMenu, `openAlexAuthorsByTaxon`/`openAlexWorksByTaxon` for the
+    landing demo and Nexus, `openAlexAuthorMatchQuery` for Profile/
+    onboarding). No backend code was removed — every route the deleted
+    pages called is also load-bearing for something kept. See
+    [[discovery-horizon-redesign-2026-09]] for the full before/after.
+  - **CoLab Workspace: the project ribbon folded into the Documents editor's
+    own toolbar row.** The page used to stack a project-identity header
+    (back/name/role/share/delete) directly above the document editor's own
+    meta strip (save status/words/Call/Share paper/Templates/Originality/
+    Preview/Focus) — two ~50px rows for chrome the writing surface could use
+    instead. Merged into one row for the Documents tab specifically; Tasks &
+    Meetings and Members (no equivalent row of their own) keep the page-level
+    header.
+  - **Tasks & Meetings is no longer a separate destination.** It's a fourth
+    tab in the Documents editor's existing dock (`DocumentDock`), alongside
+    Quick reference/Chat/Equations — the same "no separate screen" treatment
+    those two already got under `decisions/0019`. The workspace rail drops
+    to 2 destinations (Documents, Members).
+  - **Science news removed entirely, frontend and backend** — the Go
+    gateway's `internal/pulse` package (RSS/Atom aggregation from Quanta/
+    Phys.org/ScienceDaily/Nature) and both its routes are gone, along with
+    the "News" lens on the Home unified feed and every piece of
+    `ScienceNewsItem`/`getScienceNews`/`scienceNewsQuery` plumbing.
+    `FeedKind` narrows to `paper | activity | job`.
+  - All four verified: Go build/vet/test clean, `next build` clean, tsc/
+    eslint clean, vitest 216/216 passing, deployed and spot-checked live.
+
 `main` also carries the 2026-09-11 backend-audit/live-feed work (PR #180)
 plus a large Dependabot sweep (2026-09-12): 26 dependency PRs merged, two
 systemic CI gaps fixed at the root (not just worked around), and
