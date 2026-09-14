@@ -98,7 +98,15 @@ func main() {
 	r.GET("/metrics", metrics.Handler())
 
 	// ── WebSockets ────────────────────────────────────────────────────────────
-	r.GET("/ws/colab/:workspace_id", func(c *gin.Context) {
+	// auth.VerifyQueryToken(): a WebSocket upgrade fired by a browser's own
+	// WebSocket API cannot attach a custom Authorization header, so the
+	// Firebase ID token travels as ?token= instead and is verified with the
+	// same underlying check VerifyUser uses for every other protected route
+	// (2026-09-14 endpoint audit — this route had no auth at all, and hub.go
+	// broadcast every message to every connected client regardless of
+	// :workspace_id; both closed together, see hub.go for the per-workspace
+	// scoping half of the fix). No product code calls this endpoint yet.
+	r.GET("/ws/colab/:workspace_id", auth.VerifyQueryToken(), func(c *gin.Context) {
 		websocket.ServeWs(hub, c)
 	})
 	r.GET("/ws/system/health", func(c *gin.Context) {

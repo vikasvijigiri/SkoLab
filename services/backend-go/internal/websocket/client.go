@@ -3,6 +3,7 @@ package websocket
 import (
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -27,15 +28,10 @@ var upgrader = websocket.Upgrader{
 	// callers -- Origin is a browser-enforced header, so its absence isn't
 	// itself suspicious.
 	//
-	// This does not make the endpoint safe to use: it is currently
-	// unauthenticated and Hub broadcasts to every connected client
-	// regardless of :workspace_id (see hub.go), so any origin-allowed
-	// caller can still read/inject into every "workspace" at once. No
-	// product code calls this endpoint yet (see main.go); real
-	// authentication and per-workspace rooms are needed before it is,
-	// and are being tracked as a follow-up rather than rushed in here
-	// blind (no local Go toolchain to test concurrent hub changes
-	// against, and no real caller yet to validate the fix against).
+	// The route also now requires a verified Firebase token (?token=, see
+	// auth.VerifyQueryToken in main.go) and the Hub only broadcasts a message
+	// to other clients registered for the same :workspace_id (see hub.go) --
+	// 2026-09-14 endpoint audit closed both gaps together.
 	CheckOrigin: func(r *http.Request) bool {
 		origin := r.Header.Get("Origin")
 		return origin == "" || middleware.IsAllowedOrigin(origin)
@@ -44,9 +40,10 @@ var upgrader = websocket.Upgrader{
 
 // Client is a middleman between the websocket connection and the hub.
 type Client struct {
-	hub  *Hub
-	conn *websocket.Conn
-	send chan []byte
+	hub         *Hub
+	conn        *websocket.Conn
+	send        chan []byte
+	workspaceID string
 }
 
 func (c *Client) readPump() {
@@ -65,7 +62,7 @@ func (c *Client) readPump() {
 			}
 			break
 		}
-		c.hub.Publish(message)
+		c.hub.Publish(c.workspaceID, message)
 	}
 }
 
@@ -109,14 +106,23 @@ func (c *Client) writePump() {
 	}
 }
 
-// ServeWs handles websocket requests from the peer.
+// ServeWs handles websocket requests from the peer. The caller must already
+// be authenticated (see auth.VerifyQueryToken, wired in main.go) -- this only
+// validates that a non-empty :workspace_id was supplied, since that's what
+// scopes broadcast delivery in the Hub.
 func ServeWs(hub *Hub, c *gin.Context) {
+	workspaceID := strings.TrimSpace(c.Param("workspace_id"))
+	if workspaceID == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "workspace_id is required"})
+		return
+	}
+
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
+	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256), workspaceID: workspaceID}
 	client.hub.Register <- client
 
 	// Allow collection of memory referenced by the caller by doing all work in new goroutines.

@@ -48,7 +48,46 @@ func InitFirebase() {
 	log.Println("Firebase Auth initialized successfully.")
 }
 
+// verifyTokenAndSetUser validates idToken against Firebase and, on success,
+// stores the verified UID in the Gin context before calling c.Next(). Every
+// failure mode -- missing client in release, missing client in dev/CI, an
+// invalid/expired token -- is handled here so VerifyUser (header) and
+// VerifyQueryToken (query string, for routes like a WebSocket upgrade that
+// cannot send a custom header) share the exact same verification and
+// fail-open/fail-closed behavior; only where the raw token string comes from
+// differs between the two callers.
+func verifyTokenAndSetUser(c *gin.Context, idToken string) {
+	if authClient == nil {
+		// Fail closed in release. The dev_user fallback exists for dev and
+		// CI, but nothing used to gate it, so a Firebase misconfiguration
+		// in a deployed gateway silently served every protected route as
+		// one shared identity -- and because the header check above only
+		// requires the string "Bearer " to be present, any garbage token
+		// reached this branch.
+		if releaseMode() {
+			log.Println("ERROR: Firebase auth is unavailable and GIN_MODE=release — refusing the request instead of falling back to dev_user")
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Authentication is temporarily unavailable"})
+			return
+		}
+		log.Println("WARNING: authClient is nil, bypassing auth for development.")
+		c.Set("user_id", "dev_user")
+		c.Next()
+		return
+	}
+
+	token, err := authClient.VerifyIDToken(context.Background(), idToken)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired Firebase token"})
+		return
+	}
+
+	// Set the verified user ID in the Gin context
+	c.Set("user_id", token.UID)
+	c.Next()
+}
+
 // VerifyUser is a Gin middleware that extracts and validates the Firebase JWT
+// from the Authorization header.
 func VerifyUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -56,36 +95,26 @@ func VerifyUser() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid Authorization header"})
 			return
 		}
-
 		idToken := strings.TrimPrefix(authHeader, "Bearer ")
+		verifyTokenAndSetUser(c, idToken)
+	}
+}
 
-		if authClient == nil {
-			// Fail closed in release. The dev_user fallback exists for dev and
-			// CI, but nothing used to gate it, so a Firebase misconfiguration
-			// in a deployed gateway silently served every protected route as
-			// one shared identity -- and because the header check above only
-			// requires the string "Bearer " to be present, any garbage token
-			// reached this branch.
-			if releaseMode() {
-				log.Println("ERROR: Firebase auth is unavailable and GIN_MODE=release — refusing the request instead of falling back to dev_user")
-				c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Authentication is temporarily unavailable"})
-				return
-			}
-			log.Println("WARNING: authClient is nil, bypassing auth for development.")
-			c.Set("user_id", "dev_user")
-			c.Next()
+// VerifyQueryToken is VerifyUser's counterpart for routes a browser cannot
+// attach a custom Authorization header to -- the WebSocket upgrade request
+// fired by the browser's own WebSocket API. The token instead travels as a
+// query parameter (?token=<firebase-id-token>); verification itself is the
+// same underlying Firebase call VerifyUser uses (verifyTokenAndSetUser). Used
+// by GET /ws/colab/:workspace_id (main.go) -- any route whose client can
+// control real headers should use VerifyUser instead.
+func VerifyQueryToken() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		idToken := strings.TrimSpace(c.Query("token"))
+		if idToken == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing token query parameter"})
 			return
 		}
-
-		token, err := authClient.VerifyIDToken(context.Background(), idToken)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired Firebase token"})
-			return
-		}
-
-		// Set the verified user ID in the Gin context
-		c.Set("user_id", token.UID)
-		c.Next()
+		verifyTokenAndSetUser(c, idToken)
 	}
 }
 
