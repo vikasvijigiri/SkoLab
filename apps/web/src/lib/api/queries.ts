@@ -17,7 +17,6 @@ import {
   getSimilarPapers,
   getSimilarResearchers,
   getActivityFeed,
-  getScienceNews,
   openAlexTaxonomy,
   openAlexAuthorsByName,
   openAlexAuthorsByTaxon,
@@ -249,16 +248,6 @@ export const activityFeedQuery = (
     queryFn: async () => getActivityFeed({ authorId, userId, limit, idToken: await getIdToken?.() ?? null }),
     staleTime: 10 * MIN,
     gcTime: 1 * HR,
-    ...LIVE_FEED,
-  });
-
-// Science-news strip — the gateway caches 45 min, so keep it fresh ~30 min here.
-export const scienceNewsQuery = (field?: string) =>
-  queryOptions({
-    queryKey: ["science-news", field ?? null] as const,
-    queryFn: () => getScienceNews(field),
-    staleTime: 30 * MIN,
-    gcTime: 2 * HR,
     ...LIVE_FEED,
   });
 

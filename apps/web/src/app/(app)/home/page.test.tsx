@@ -51,15 +51,11 @@ describe("HomePage", () => {
     expect((await screen.findAllByText("A very relevant paper")).length).toBeGreaterThan(0);
   });
 
-  it("blends network activity and science news into the same feed", async () => {
+  it("blends network activity into the feed", async () => {
     renderWithProviders(<HomePage />);
     // activity paper_published title is wrapped: `X published "…"`.
     expect(await screen.findByText(/Compilers for the analytical engine/)).toBeInTheDocument();
     expect(screen.getByText(/is now connected with you/i)).toBeInTheDocument();
-    // science news headline appears as a feed card.
-    expect(
-      await screen.findByText("A new state of matter observed in a spin liquid"),
-    ).toBeInTheDocument();
   });
 
   it("exposes the lens filter with a default 'For you'", async () => {

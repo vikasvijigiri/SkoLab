@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders, screen, within } from "@/test/render";
-import { mockActivityFeed, mockScienceNews } from "@/test/fixtures";
+import { mockActivityFeed } from "@/test/fixtures";
 import { UnifiedFeed } from "./UnifiedFeed";
 import type { DailyFeedItem } from "@/lib/types";
 
@@ -30,7 +30,6 @@ describe("UnifiedFeed accessibility", () => {
     renderWithProviders(
       <UnifiedFeed
         papers={papers}
-        news={mockScienceNews}
         activity={mockActivityFeed}
         jobs={[]}
         loading={false}
@@ -44,7 +43,7 @@ describe("UnifiedFeed accessibility", () => {
   it("marks the active lens with aria-pressed", async () => {
     const user = userEvent.setup();
     renderWithProviders(
-      <UnifiedFeed papers={papers} news={[]} activity={[]} jobs={[]} loading={false} />,
+      <UnifiedFeed papers={papers} activity={[]} jobs={[]} loading={false} />,
     );
     const forYou = screen.getByRole("button", { name: "For you" });
     const papersBtn = screen.getByRole("button", { name: "Papers" });
@@ -58,7 +57,7 @@ describe("UnifiedFeed accessibility", () => {
 
   it("sets aria-busy while loading with no items yet", () => {
     const { container } = renderWithProviders(
-      <UnifiedFeed papers={[]} news={[]} activity={[]} jobs={[]} loading />,
+      <UnifiedFeed papers={[]} activity={[]} jobs={[]} loading />,
     );
     expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
   });

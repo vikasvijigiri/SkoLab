@@ -20,7 +20,6 @@ import type {
   SimilarResearcher,
   SimilarResult,
   ActivityFeedResult,
-  ScienceNewsItem,
   OpenAlexTaxon,
   OpenAlexAuthorHit,
 } from "@/lib/types";
@@ -89,14 +88,6 @@ export const getActivityFeed = (
     // an unauthenticated cross-user feed leak) -- without it, passing userId
     // here gets 403'd instead of personalizing the feed.
     idToken: opts.idToken ?? undefined,
-  });
-
-// Curated science-news headlines (Quanta, Phys.org, ScienceDaily, Nature) —
-// RSS aggregation on the gateway, cached 45 min. `field` biases toward the
-// user's area. Always link out.
-export const getScienceNews = (field?: string, limit = 6) =>
-  apiRequest<{ items: ScienceNewsItem[] }>("/api/v1/science_news", {
-    params: { field, limit },
   });
 
 // ---- Home / Feed ------------------------------------------------------------

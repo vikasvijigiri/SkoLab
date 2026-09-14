@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildUnifiedFeed, type FeedPrefs } from "./unifiedFeed";
-import type { ActivityItem, DailyFeedItem, IndustryOpportunity, ScienceNewsItem } from "@/lib/types";
+import type { ActivityItem, DailyFeedItem, IndustryOpportunity } from "@/lib/types";
 
 const paper = (id: string, rel = 80): DailyFeedItem => ({
   id,
@@ -10,14 +10,6 @@ const paper = (id: string, rel = 80): DailyFeedItem => ({
   year: 2026,
   relevance_score: rel,
   recommendation_reason: "",
-});
-
-const news = (url: string): ScienceNewsItem => ({
-  title: `News ${url}`,
-  url,
-  source: "Quanta Magazine",
-  published: "2026-09-06T00:00:00Z",
-  summary: "s",
 });
 
 const act = (id: string): ActivityItem => ({
@@ -45,10 +37,10 @@ const noPrefs: FeedPrefs = { savedIds: new Set(), dismissedKinds: {}, dismissedI
 describe("buildUnifiedFeed", () => {
   it("merges every source into one list with kind-prefixed ids", () => {
     const out = buildUnifiedFeed(
-      { papers: [paper("W1")], news: [news("u1")], activity: [act("a1")], jobs: [job("j1")] },
+      { papers: [paper("W1")], activity: [act("a1")], jobs: [job("j1")] },
       noPrefs,
     );
-    expect(out.map((i) => i.kind).sort()).toEqual(["activity", "job", "news", "paper"]);
+    expect(out.map((i) => i.kind).sort()).toEqual(["activity", "job", "paper"]);
     expect(out.find((i) => i.kind === "paper")!.id).toBe("paper:W1");
     expect(out.every((i) => i.why.length > 0)).toBe(true);
   });
@@ -56,26 +48,26 @@ describe("buildUnifiedFeed", () => {
   it("removes dismissed ids and damps a repeatedly-dismissed kind", () => {
     const prefs: FeedPrefs = {
       savedIds: new Set(),
-      dismissedIds: new Set(["news:u1"]),
-      dismissedKinds: { news: 3 },
+      dismissedIds: new Set(["job:j1"]),
+      dismissedKinds: { job: 3 },
     };
     const out = buildUnifiedFeed(
-      { papers: [paper("W1", 50)], news: [news("u1"), news("u2")] },
+      { papers: [paper("W1", 50)], jobs: [job("j1"), job("j2")] },
       prefs,
     );
-    expect(out.find((i) => i.id === "news:u1")).toBeUndefined();
-    // paper outranks the damped news item
+    expect(out.find((i) => i.id === "job:j1")).toBeUndefined();
+    // paper outranks the damped job item
     expect(out[0]!.kind).toBe("paper");
   });
 
   it("lifts a saved item to the top", () => {
     const prefs: FeedPrefs = {
-      savedIds: new Set(["news:u1"]),
+      savedIds: new Set(["job:j1"]),
       dismissedIds: new Set(),
       dismissedKinds: {},
     };
-    const out = buildUnifiedFeed({ papers: [paper("W1", 99)], news: [news("u1")] }, prefs);
-    expect(out[0]!.id).toBe("news:u1");
+    const out = buildUnifiedFeed({ papers: [paper("W1", 99)], jobs: [job("j1")] }, prefs);
+    expect(out[0]!.id).toBe("job:j1");
   });
 
   it("normalises a canonical OpenAlex URL id to a bare /paper/ route and cache key", () => {
@@ -92,7 +84,8 @@ describe("buildUnifiedFeed", () => {
     const out = buildUnifiedFeed(
       {
         papers: [paper("W1"), paper("W2"), paper("W3"), paper("W4")],
-        news: [news("u1"), news("u2")],
+        activity: [act("a1"), act("a2")],
+        jobs: [job("j1"), job("j2")],
       },
       noPrefs,
     );

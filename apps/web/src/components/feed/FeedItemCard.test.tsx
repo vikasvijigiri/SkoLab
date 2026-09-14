@@ -4,15 +4,17 @@ import { renderWithProviders, screen } from "@/test/render";
 import { FeedItemCard } from "./FeedItemCard";
 import type { UnifiedItem } from "@/lib/feed/unifiedFeed";
 
-const newsItem: UnifiedItem = {
-  id: "news:https://x/1",
-  kind: "news",
+// Exercises the external-link rendering path (target="_blank") — a job with
+// its own posting URL is the remaining external kind now that news is gone.
+const externalJobItem: UnifiedItem = {
+  id: "job:x1",
+  kind: "job",
   title: "A quantum result",
-  why: "science news from Quanta Magazine",
+  why: "role in your area",
   href: "https://x/1",
   external: true,
   ts: Date.now() - 3_600_000,
-  source: "Quanta Magazine",
+  source: "Quanta Labs",
   meta: "short summary",
   score: 1,
 };
@@ -32,10 +34,10 @@ const paperItem: UnifiedItem = {
 describe("FeedItemCard", () => {
   it("renders the kind chip, a why line, and the headline as the single primary target (external)", () => {
     renderWithProviders(
-      <FeedItemCard item={newsItem} saved={false} onToggleSave={vi.fn()} onDismiss={vi.fn()} />,
+      <FeedItemCard item={externalJobItem} saved={false} onToggleSave={vi.fn()} onDismiss={vi.fn()} />,
     );
-    expect(screen.getByText("News")).toBeInTheDocument();
-    expect(screen.getByText(/science news from Quanta Magazine/i)).toBeInTheDocument();
+    expect(screen.getByText("Role")).toBeInTheDocument();
+    expect(screen.getByText(/role in your area/i)).toBeInTheDocument();
     const link = screen.getByRole("link", { name: /A quantum result/i });
     expect(link).toHaveAttribute("href", "https://x/1");
     expect(link).toHaveAttribute("target", "_blank");
@@ -45,7 +47,7 @@ describe("FeedItemCard", () => {
 
   it("renders a real <time> element for the timestamp", () => {
     const { container } = renderWithProviders(
-      <FeedItemCard item={newsItem} saved={false} onToggleSave={vi.fn()} onDismiss={vi.fn()} />,
+      <FeedItemCard item={externalJobItem} saved={false} onToggleSave={vi.fn()} onDismiss={vi.fn()} />,
     );
     const t = container.querySelector("time");
     expect(t).not.toBeNull();
