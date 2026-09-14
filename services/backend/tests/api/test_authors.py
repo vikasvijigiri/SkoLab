@@ -6,9 +6,13 @@ longer exist here. The teleport *enrichment* worker is an LLM job and stays
 Python, now reached via ``POST /api/v1/internal/teleport/{author_id}``.
 """
 
+import asyncio
+
 import pytest
 
 from app.api.dependencies import get_pipeline_services
+from app.api.v1.endpoints import authors as authors_module
+from app.core import pending_compute
 from app.schemas.authors_extra import GrantMatch, JournalRecommendation
 
 
@@ -23,11 +27,21 @@ class _FakePipeline:
         return [{"journal_name": "Nature", "match_score": 0.8}]
 
 
+class _SlowGrantsPipeline:
+    """Never finishes within a test-scale wait_timeout — exercises the
+    202/Retry-After path in app/core/pending_compute.py's docstring."""
+
+    async def match_grants(self, *a, **k):
+        await asyncio.sleep(1.0)
+        return []  # pragma: no cover - the test asserts before this returns
+
+
 @pytest.fixture(autouse=True)
 def _overrides(app):
     app.dependency_overrides[get_pipeline_services] = lambda: _FakePipeline()
     yield
     app.dependency_overrides.clear()
+    pending_compute._inflight.clear()
 
 
 # ── the lookup routes are gone ──────────────────────────────────────────────
@@ -52,6 +66,27 @@ async def test_match_grants_and_journal_advisor_are_typed_arrays(client):
     j = await client.get("/api/v1/journal_advisor", params={"author_id": "A1"})
     assert j.status_code == 200, j.text
     [JournalRecommendation(**row) for row in j.json()]
+
+
+# Regression test (2026-09 audit): this route measured 34.9s live with no
+# bounded-wait protection, unlike its LLM-pipeline siblings (`daily_feed`,
+# `industry_opportunities`) which use the same run_bounded 202/Retry-After
+# pattern (app/core/pending_compute.py). Mirrors
+# tests/api/test_feed.py::test_daily_feed_returns_202_retry_after_when_compute_is_slow.
+async def test_match_grants_returns_202_retry_after_when_compute_is_slow(
+    app, client, monkeypatch
+):
+    app.dependency_overrides[get_pipeline_services] = lambda: _SlowGrantsPipeline()
+    monkeypatch.setattr(authors_module, "DAILY_FEED_WAIT_TIMEOUT_SECONDS", 0.02)
+
+    r = await client.get("/api/v1/match_grants", params={"author_id": "A_SLOW"})
+
+    assert r.status_code == 202
+    assert r.headers["Retry-After"] == str(authors_module.DAILY_FEED_RETRY_AFTER_SECONDS)
+    assert r.json() == []
+    # The background task is still registered -- a retry will join it rather
+    # than starting the expensive scrape/match pipeline over again.
+    assert any(k.startswith("match_grants:A_SLOW") for k in pending_compute._inflight)
 
 
 # GET /author_metrics moved to the Go gateway (internal/author/metrics.go); the
@@ -84,6 +119,27 @@ async def test_author_metrics_enrich_returns_scored_bundle(client, monkeypatch):
     assert body["overall_score"] == 62  # int((71 + 53) / 2)
     assert body["skills"] == ["Quantum optics"]
     assert body["tools"] == ["QuTiP"]
+
+
+# Regression test (2026-09 audit): this route ran a real, billable LLM call
+# with zero auth check -- any caller with no headers at all got a 200. Same
+# shared-secret check as its /internal/* siblings (internal.py's
+# _check_internal_token), reused directly rather than reimplemented.
+async def test_author_metrics_enrich_rejects_bad_token(client, monkeypatch):
+    monkeypatch.setenv("INTERNAL_API_TOKEN", "s3cr3t")
+
+    bad = await client.post(
+        "/api/v1/internal/author_metrics_enrich",
+        json={"context": "Title: A. Concepts: X, Y"},
+        headers={"X-Internal-Token": "wrong"},
+    )
+    assert bad.status_code == 401, bad.text
+
+    missing = await client.post(
+        "/api/v1/internal/author_metrics_enrich",
+        json={"context": "Title: A. Concepts: X, Y"},
+    )
+    assert missing.status_code == 401, missing.text
 
 
 # ── internal teleport handoff (Go gateway → Python worker) ──────────────────

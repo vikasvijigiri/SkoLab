@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
+from starlette.responses import JSONResponse
 
 from app.schemas.authors_extra import (
     AuthorMetricsEnrichRequest,
@@ -10,6 +11,12 @@ from app.schemas.authors_extra import (
 from app.services.platform.pipeline_services import PipelineServices
 from app.services.platform.metrics_service import analyze_author_metrics_context
 from app.api.dependencies import get_pipeline_services
+from app.api.v1.endpoints.internal import _check_internal_token
+from app.core.pending_compute import PENDING, run_bounded
+from app.api.v1.endpoints.feed import (
+    DAILY_FEED_WAIT_TIMEOUT_SECONDS,
+    DAILY_FEED_RETRY_AFTER_SECONDS,
+)
 
 import logging
 
@@ -31,13 +38,22 @@ router = APIRouter()
 
 
 @router.post("/internal/author_metrics_enrich", response_model=AuthorMetricsResponse)
-async def author_metrics_enrich(req: AuthorMetricsEnrichRequest):
+async def author_metrics_enrich(
+    req: AuthorMetricsEnrichRequest,
+    x_internal_token: str | None = Header(default=None),
+):
     """LLM enrichment for ``GET /author_metrics`` (served by the Go gateway).
 
     Takes the title/concepts digest the gateway built and returns the scored
     bundle. Raises 503 (``AIUnavailable``) if the LLM step fails — the gateway
     degrades that to an empty bundle on its side.
+
+    Auth: same shared-secret ``X-Internal-Token`` check as this route's
+    siblings in ``endpoints/internal.py`` — this route runs a real, billable
+    LLM call and was found completely unauthenticated in production (2026-09
+    audit): any caller with no headers at all could trigger it.
     """
+    _check_internal_token(x_internal_token)
     return await analyze_author_metrics_context(req.context)
 
 
@@ -63,7 +79,28 @@ async def match_grants(
     author_id: str = Query(...),
     pipeline_services: PipelineServices = Depends(get_pipeline_services),
 ):
-    return await pipeline_services.match_grants(author_id)
+    # match_grants scrapes live funding portals and runs the results through
+    # the embedding-grounded match-scoring pipeline (see grants.py) -- 34.9s
+    # measured against production on a cache miss, unlike this route's
+    # LLM-pipeline siblings (`daily_feed`, `industry_opportunities`) it had no
+    # bounded-wait protection, so a cold request just blocked the client past
+    # every upstream timeout. Same 202/Retry-After single-flight pattern as
+    # those two (app/core/pending_compute.py) -- a request that catches the
+    # result within the wait window gets it inline; a slower one gets a
+    # prompt 202 while the pipeline keeps running and populates the cache.
+    key = f"match_grants:{author_id}"
+    result = await run_bounded(
+        key,
+        lambda: pipeline_services.match_grants(author_id),
+        wait_timeout=DAILY_FEED_WAIT_TIMEOUT_SECONDS,
+    )
+    if result is PENDING:
+        return JSONResponse(
+            status_code=202,
+            content=[],
+            headers={"Retry-After": str(DAILY_FEED_RETRY_AFTER_SECONDS)},
+        )
+    return result
 
 
 @router.get("/journal_advisor", response_model=list[JournalRecommendation])

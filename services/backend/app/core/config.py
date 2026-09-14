@@ -12,7 +12,17 @@ from dataclasses import dataclass, field
 
 # Absolute path to the backend/ root — resolved from this file's location so it
 # works regardless of the current working directory when uvicorn is launched.
-_BACKEND_ROOT = Path(__file__).resolve().parents[1]
+# This file lives at <backend_root>/app/core/config.py, so climbing to
+# <backend_root> needs parents[2] (parents[0]=app/core, parents[1]=app) --
+# `parents[1]` (previously here) resolved to <backend_root>/app instead,
+# silently pointing `downloads_dir` at a nonexistent `app/downloads/` that
+# main.py's mkdir(parents=True) then auto-created empty. The `/downloads`
+# static mount itself worked; every file under it 404'd because it was
+# serving the wrong, always-empty directory -- the actual root cause behind
+# the dead `downloadUrl`s a 2026-09 production audit found on
+# `/assistant_professor_roadmap` (the committed *_template.md files live in
+# the real <backend_root>/downloads/, never reachable through this path).
+_BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _lan_ip() -> str:
