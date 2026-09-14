@@ -116,67 +116,74 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
     <div className="flex h-full w-full flex-col overflow-hidden bg-page-bg">
       <ShareModal project={project} open={shareOpen} onClose={() => setShareOpen(false)} />
 
-      {/* ── Toolbar ─────────────────────────────────────────────────────── */}
-      <header className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border bg-surface px-3 md:px-4">
-        <button
-          type="button"
-          onClick={() => router.push("/workspace")}
-          aria-label="Back to workspaces"
-          className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-subtle hover:text-text-primary"
-        >
-          <ArrowLeft size={16} />
-        </button>
-        <h1 className="truncate font-display text-h3 font-semibold text-text-primary">
-          {project.name}
-        </h1>
-        {myRole && (
-          <span className="hidden shrink-0 rounded-full bg-surface-subtle px-2 py-0.5 data text-[10px] uppercase tracking-wide text-text-muted sm:inline">
-            {ROLE_LABEL[myRole]}
-          </span>
-        )}
-
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          <PresenceStack projectId={project.id} activeDocId={activeDocId} />
+      {/* ── Toolbar ─────────────────────────────────────────────────────────
+          Documents folds this identity/actions strip into its own editor
+          meta row instead (DocEditorPane's meta strip) — a dedicated project
+          ribbon above it was redundant screen space the writing surface can
+          use instead. Tasks & Meetings and Members have no equivalent row of
+          their own, so they keep this header. */}
+      {tab !== "Documents" && (
+        <header className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border bg-surface px-3 md:px-4">
           <button
             type="button"
-            onClick={() => setShareOpen(true)}
-            className="flex items-center gap-2 rounded-md border border-border px-3 py-2 font-body text-body-s font-medium text-text-secondary transition-colors hover:border-primary/40 hover:text-text-primary"
+            onClick={() => router.push("/workspace")}
+            aria-label="Back to workspaces"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-subtle hover:text-text-primary"
           >
-            <Share2 size={14} />
-            <span className="hidden sm:inline">Share</span>
+            <ArrowLeft size={16} />
           </button>
-          {isOwner &&
-            (confirmDelete ? (
-              <div className="flex items-center gap-2">
+          <h1 className="truncate font-display text-h3 font-semibold text-text-primary">
+            {project.name}
+          </h1>
+          {myRole && (
+            <span className="hidden shrink-0 rounded-full bg-surface-subtle px-2 py-0.5 data text-[10px] uppercase tracking-wide text-text-muted sm:inline">
+              {ROLE_LABEL[myRole]}
+            </span>
+          )}
+
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <PresenceStack projectId={project.id} activeDocId={activeDocId} />
+            <button
+              type="button"
+              onClick={() => setShareOpen(true)}
+              className="flex items-center gap-2 rounded-md border border-border px-3 py-2 font-body text-body-s font-medium text-text-secondary transition-colors hover:border-primary/40 hover:text-text-primary"
+            >
+              <Share2 size={14} />
+              <span className="hidden sm:inline">Share</span>
+            </button>
+            {isOwner &&
+              (confirmDelete ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="rounded-md px-2 py-2 font-body text-[12px] font-semibold text-notification transition-colors hover:bg-notification/10 disabled:opacity-50"
+                  >
+                    {deleting ? "Deleting…" : "Delete for everyone"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(false)}
+                    disabled={deleting}
+                    className="rounded-md px-2 py-2 font-body text-[12px] text-text-muted transition-colors hover:text-text-primary disabled:opacity-50"
+                  >
+                    Keep
+                  </button>
+                </div>
+              ) : (
                 <button
                   type="button"
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  className="rounded-md px-2 py-2 font-body text-[12px] font-semibold text-notification transition-colors hover:bg-notification/10 disabled:opacity-50"
+                  onClick={() => setConfirmDelete(true)}
+                  aria-label="Delete project"
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-notification/10 hover:text-notification"
                 >
-                  {deleting ? "Deleting…" : "Delete for everyone"}
+                  <Trash2 size={15} />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmDelete(false)}
-                  disabled={deleting}
-                  className="rounded-md px-2 py-2 font-body text-[12px] text-text-muted transition-colors hover:text-text-primary disabled:opacity-50"
-                >
-                  Keep
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setConfirmDelete(true)}
-                aria-label="Delete project"
-                className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-notification/10 hover:text-notification"
-              >
-                <Trash2 size={15} />
-              </button>
-            ))}
-        </div>
-      </header>
+              ))}
+          </div>
+        </header>
+      )}
 
       {error && (
         <div className="shrink-0 border-b border-border px-4 py-2">
@@ -258,6 +265,14 @@ export function WorkspaceDetailContent({ id }: { id: string }) {
                   onActiveDocChange={setActiveDocId}
                   onFocusChange={setDocFocus}
                   onOpenShare={() => setShareOpen(true)}
+                  onBack={() => router.push("/workspace")}
+                  roleLabel={myRole ? ROLE_LABEL[myRole] : undefined}
+                  isOwner={isOwner}
+                  confirmDelete={confirmDelete}
+                  onRequestDelete={() => setConfirmDelete(true)}
+                  onCancelDelete={() => setConfirmDelete(false)}
+                  onConfirmDelete={handleDelete}
+                  deleting={deleting}
                 />
               ) : (
                 <div

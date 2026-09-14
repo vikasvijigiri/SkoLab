@@ -1,7 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileText, Plus, Eye, EyeOff, Maximize2, Minimize2, PanelRight } from "lucide-react";
+import {
+  FileText,
+  Plus,
+  Eye,
+  EyeOff,
+  Maximize2,
+  Minimize2,
+  PanelRight,
+  ArrowLeft,
+  Share2,
+  Trash2,
+} from "lucide-react";
 import { useFirestoreCollection } from "@/lib/hooks/useFirestoreCollection";
 import { MarkdownDoc } from "@/components/workspace/MarkdownDoc";
 import { ErrorBanner, friendlyFirestoreError } from "@/components/ui/ErrorBanner";
@@ -19,6 +30,7 @@ import type { CollabProject, CollabDocument, CollabMember } from "@/lib/types";
 import { WorkspaceResearchActions, JOURNAL_TEMPLATES } from "@/components/workspace/ResearchTools";
 import { DocumentDock } from "@/components/workspace/DocumentDock";
 import { SlashMenu } from "@/components/workspace/SlashMenu";
+import { PresenceStack } from "@/components/workspace/PresenceStack";
 
 function relTime(ts: number) {
   const s = Math.round((Date.now() - ts) / 1000);
@@ -36,6 +48,14 @@ export function DocumentsTab({
   onActiveDocChange,
   onFocusChange,
   onOpenShare,
+  onBack,
+  roleLabel,
+  isOwner,
+  confirmDelete,
+  onRequestDelete,
+  onCancelDelete,
+  onConfirmDelete,
+  deleting,
 }: {
   project: CollabProject;
   canEdit: boolean;
@@ -44,8 +64,20 @@ export function DocumentsTab({
   /** Reports focus (distraction-free) mode so the page can hide its rail. */
   onFocusChange?: (focus: boolean) => void;
   /** Opens the project's Share modal — the dock's Share icon needs this,
-   *  same as the page toolbar's own Share button (decisions/0019). */
+   *  same as the editor meta strip's own Share button (decisions/0019). */
   onOpenShare: () => void;
+  /** The page's project-identity strip (back/name/role/share/delete) folds
+   *  into the editor's own meta strip here instead of a separate ribbon
+   *  above it — these five props are exactly that strip's state, owned by
+   *  the page (it also handles the post-delete navigation). */
+  onBack: () => void;
+  roleLabel?: string;
+  isOwner: boolean;
+  confirmDelete: boolean;
+  onRequestDelete: () => void;
+  onCancelDelete: () => void;
+  onConfirmDelete: () => void;
+  deleting: boolean;
 }) {
   const { user } = useAuth();
   const by = useMemo<Author>(
@@ -242,10 +274,33 @@ export function DocumentsTab({
             onToggleFocus={toggleFocus}
             onError={setError}
             onOpenShare={onOpenShare}
+            onBack={onBack}
+            roleLabel={roleLabel}
+            isOwner={isOwner}
+            confirmDelete={confirmDelete}
+            onRequestDelete={onRequestDelete}
+            onCancelDelete={onCancelDelete}
+            onConfirmDelete={onConfirmDelete}
+            deleting={deleting}
           />
         ) : (
-          <div className="flex h-full items-center justify-center font-body text-body-s text-text-muted">
-            No documents yet.
+          <div className="flex h-full flex-col">
+            <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3">
+              <button
+                type="button"
+                onClick={onBack}
+                aria-label="Back to workspaces"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-subtle hover:text-text-primary"
+              >
+                <ArrowLeft size={14} />
+              </button>
+              <span className="truncate font-display text-body-s font-semibold text-text-primary">
+                {project.name}
+              </span>
+            </div>
+            <div className="flex flex-1 items-center justify-center font-body text-body-s text-text-muted">
+              No documents yet.
+            </div>
           </div>
         )}
       </div>
@@ -268,6 +323,14 @@ function DocEditorPane({
   onToggleFocus,
   onError,
   onOpenShare,
+  onBack,
+  roleLabel,
+  isOwner,
+  confirmDelete,
+  onRequestDelete,
+  onCancelDelete,
+  onConfirmDelete,
+  deleting,
 }: {
   projectId: string;
   projectName: string;
@@ -282,6 +345,14 @@ function DocEditorPane({
   onToggleFocus: () => void;
   onError: (msg: string) => void;
   onOpenShare: () => void;
+  onBack: () => void;
+  roleLabel?: string;
+  isOwner: boolean;
+  confirmDelete: boolean;
+  onRequestDelete: () => void;
+  onCancelDelete: () => void;
+  onConfirmDelete: () => void;
+  deleting: boolean;
 }) {
   const [draft, setDraft] = useState(doc.body);
   const [savedAt, setSavedAt] = useState<number>(doc.updatedAt);
@@ -396,20 +467,43 @@ function DocEditorPane({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* Meta strip */}
-      <div className="flex min-h-9 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-1.5 font-body text-[11.5px] text-text-muted">
-        <span className="flex items-center gap-2 tabular-nums">
-          <span
-            className={cn(
-              "inline-block h-1.5 w-1.5 rounded-full transition-colors",
-              saving ? "bg-accent-amber" : justSaved ? "bg-accent-emerald" : "bg-border",
-            )}
-          />
-          {saving ? "Saving…" : `Saved ${relTime(savedAt)} · ${doc.updatedByName}`}
-          {words > 0 && <span className="text-border">·</span>}
-          {words > 0 && <span>{words} words · ~{readMin} min</span>}
+      {/* Meta strip — carries the project identity/actions that used to be a
+          separate ribbon above this whole tab (see WorkspaceDetailContent's
+          header, now hidden for Documents) as well as this document's own
+          save-status and tools, all in one row to give the writing surface
+          the space back. */}
+      <div className="flex min-h-9 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-1.5 font-body text-[11.5px] text-text-muted md:px-4">
+        <span className="flex min-w-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Back to workspaces"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-subtle hover:text-text-primary"
+          >
+            <ArrowLeft size={13} />
+          </button>
+          <span className="truncate font-display text-body-s font-semibold text-text-primary">
+            {projectName}
+          </span>
+          {roleLabel && (
+            <span className="hidden shrink-0 rounded-full bg-surface-subtle px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-text-muted sm:inline">
+              {roleLabel}
+            </span>
+          )}
+          <span className="hidden shrink-0 text-border sm:inline">·</span>
+          <span className="hidden shrink-0 items-center gap-2 tabular-nums sm:flex">
+            <span
+              className={cn(
+                "inline-block h-1.5 w-1.5 rounded-full transition-colors",
+                saving ? "bg-accent-amber" : justSaved ? "bg-accent-emerald" : "bg-border",
+              )}
+            />
+            {saving ? "Saving…" : `Saved ${relTime(savedAt)} · ${doc.updatedByName}`}
+            {words > 0 && <span className="text-border">·</span>}
+            {words > 0 && <span>{words} words · ~{readMin} min</span>}
+          </span>
         </span>
-        <span className="flex items-center gap-1">
+        <span className="flex shrink-0 items-center gap-1">
           <WorkspaceResearchActions
             projectId={projectId}
             projectName={projectName}
@@ -450,6 +544,46 @@ function DocEditorPane({
               Panel
             </button>
           )}
+          <span className="mx-1 hidden h-4 w-px shrink-0 bg-border sm:inline-block" />
+          <PresenceStack projectId={projectId} activeDocId={doc.id} />
+          <button
+            type="button"
+            onClick={onOpenShare}
+            className="flex items-center gap-2 rounded-md border border-border px-2.5 py-1.5 font-body text-[11.5px] font-medium text-text-secondary transition-colors hover:border-primary/40 hover:text-text-primary"
+          >
+            <Share2 size={12} />
+            <span className="hidden sm:inline">Share</span>
+          </button>
+          {isOwner &&
+            (confirmDelete ? (
+              <span className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  onClick={onConfirmDelete}
+                  disabled={deleting}
+                  className="rounded-md px-2 py-1.5 font-body text-[11.5px] font-semibold text-notification transition-colors hover:bg-notification/10 disabled:opacity-50"
+                >
+                  {deleting ? "Deleting…" : "Delete for everyone"}
+                </button>
+                <button
+                  type="button"
+                  onClick={onCancelDelete}
+                  disabled={deleting}
+                  className="rounded-md px-2 py-1.5 font-body text-[11.5px] text-text-muted transition-colors hover:text-text-primary disabled:opacity-50"
+                >
+                  Keep
+                </button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={onRequestDelete}
+                aria-label="Delete project"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-notification/10 hover:text-notification"
+              >
+                <Trash2 size={13} />
+              </button>
+            ))}
         </span>
       </div>
 
