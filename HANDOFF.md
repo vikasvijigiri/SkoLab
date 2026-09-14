@@ -260,13 +260,21 @@ entries.
   here — it's no longer a live-blocking bug (the response returns
   correctly around 30s either way, matching the pre-regression baseline),
   just a caching layer that's permanently a no-op today.
-- **`INTERNAL_API_TOKEN` still unset in production on both `skolab-gateway`
-  and `skolab-backend-py`** — confirmed via the Render API (not just app
-  endpoints): it's absent from the reference secrets file on this machine
-  too, so it appears to have never been generated. PR #221's auth fixes on
-  the internal-only routes are correct in source but inert until this
-  secret is generated once and set identically on both services in the
-  Render dashboard.
+- ~~`INTERNAL_API_TOKEN` unset in production~~ **Resolved 2026-09-14.**
+  Generated a real random secret and set it identically on both services
+  via the Render API's single-key env-var endpoint (not a bulk replace —
+  both services had fewer keys listed than they clearly use, so a bulk
+  write risked wiping working config not shown by that call). One real
+  gotcha: Render's `/restart` endpoint did **not** pick up the new env var
+  — `teleport`/`embed_work`/`author_metrics_enrich` all kept accepting
+  requests with a deliberately wrong token even after a restart and a
+  3+ minute wait. A full `/deploys` trigger with `clearCache: "clear"`
+  did pick it up. Verified end-to-end on all four internal routes
+  (`teleport`, `embed_work`, `author_metrics_enrich`,
+  `compute_metrics`): no token → 401, wrong token → 401, correct token →
+  succeeds. **Lesson for next time: an env-var change on this Render
+  account needs a real `/deploys` trigger, not `/restart`, to actually
+  take effect on the running process.**
 - **`GET /metrics` and `GET /api/v1/author_metrics` both 502 in production**
   with zero app-level log entry for either request (every other request in
   the same window, including ones fired seconds apart, does log) — strong
