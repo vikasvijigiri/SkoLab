@@ -110,6 +110,75 @@ func TestVerifyUser_RejectsMissingOrMalformedHeader(t *testing.T) {
 	}
 }
 
+// ── VerifyQueryToken: the WebSocket-upgrade counterpart to VerifyUser ──────
+//
+// Same coverage shape as VerifyUser above, for the query-string extraction
+// path used by GET /ws/colab/:workspace_id (main.go) -- a browser's
+// WebSocket API cannot attach a custom Authorization header, so the token
+// travels as ?token= instead. The failure-mode logic itself (fail closed in
+// release, dev_user fallback otherwise, reject an invalid token) is shared
+// with VerifyUser via verifyTokenAndSetUser, so these tests exist to prove
+// that sharing actually holds -- not to re-derive the logic from scratch.
+
+func newQueryTokenTestRouter() *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.GET("/ws/colab/:workspace_id", VerifyQueryToken(), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"user_id": c.GetString("user_id")})
+	})
+	return r
+}
+
+func doQueryToken(t *testing.T, r *gin.Engine, token string) *httptest.ResponseRecorder {
+	t.Helper()
+	path := "/ws/colab/w1"
+	if token != "" {
+		path += "?token=" + token
+	}
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return w
+}
+
+func TestVerifyQueryToken_RejectsMissingToken(t *testing.T) {
+	for _, mode := range []string{"release", ""} {
+		withNilClient(t)
+		t.Setenv("GIN_MODE", mode)
+		if w := doQueryToken(t, newQueryTokenTestRouter(), ""); w.Code != http.StatusUnauthorized {
+			t.Errorf("GIN_MODE=%q: status = %d, want %d for a missing token", mode, w.Code, http.StatusUnauthorized)
+		}
+	}
+}
+
+func TestVerifyQueryToken_ReleaseRefusesWhenFirebaseUnavailable(t *testing.T) {
+	withNilClient(t)
+	t.Setenv("GIN_MODE", "release")
+
+	w := doQueryToken(t, newQueryTokenTestRouter(), "anything")
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+	if body := w.Body.String(); contains(body, "dev_user") {
+		t.Fatalf("response leaked the dev_user identity in release mode: %s", body)
+	}
+}
+
+func TestVerifyQueryToken_DevFallsBackToDevUser(t *testing.T) {
+	withNilClient(t)
+	t.Setenv("GIN_MODE", "")
+
+	w := doQueryToken(t, newQueryTokenTestRouter(), "anything")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d -- the dev/CI fallback must survive", w.Code, http.StatusOK)
+	}
+	if body := w.Body.String(); !contains(body, "dev_user") {
+		t.Fatalf("dev/CI fallback did not set dev_user: %s", body)
+	}
+}
+
 func contains(haystack, needle string) bool {
 	return len(haystack) >= len(needle) &&
 		(haystack == needle || indexOf(haystack, needle) >= 0)
