@@ -380,13 +380,24 @@ class OpenAlexService:
         """
         Fetches works filtered by concept/topic ID published since prev_year.
         Tries topics.id first (new OpenAlex format), then concepts.id (legacy).
+
+        ``type:article`` is filtered server-side AND re-checked client-side.
+        OpenAlex's ``/works`` endpoint can return non-article container
+        entries -- e.g. a journal-issue ``paratext`` record whose ``title``
+        is the journal's own name ("Fundamenta Mathematicae", "Proceedings
+        of the American Mathematical Society"), sometimes with citation
+        counts attributed to the issue rather than an article (2026-09
+        `/semantic_trending` audit; the same class of bug already documented
+        for trending papers in decisions/0016). The server-side filter is an
+        optimization (never fetched); the client-side check is the actual
+        guarantee for any caller of this method, present or future.
         """
         url = f"{self.base_url}/works"
         date_filter = f"from_publication_date:{prev_year}-01-01"
         # OpenAlex migrated from /concepts to /topics — try both filters
         filters_to_try = [
-            f"topics.id:{concept_id},{date_filter}",
-            f"concepts.id:{concept_id},{date_filter}",
+            f"topics.id:{concept_id},{date_filter},type:article",
+            f"concepts.id:{concept_id},{date_filter},type:article",
         ]
         try:
             async with _client() as client:
@@ -400,6 +411,13 @@ class OpenAlexService:
                     res = await client.get(url, params=params, headers=self.headers)
                     if res.status_code == 200:
                         results = res.json().get("results", [])
+                        # Belt-and-suspenders: drop anything the server-side
+                        # filter let through that isn't actually type:article
+                        # (a missing `type` is kept, not dropped -- some
+                        # legitimate responses omit the field).
+                        results = [
+                            w for w in results if w.get("type", "article") == "article"
+                        ]
                         if results:
                             return results
         except Exception as e:

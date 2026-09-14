@@ -50,6 +50,27 @@ async def test_assistant_professor_roadmap_mocked():
             )
 
 
+# 2026-09 audit: all three `downloadUrl`s in the roadmap's fallback template
+# list resolved to a live 404 -- the `/downloads` static mount worked, but the
+# files themselves didn't exist in the served directory. Asserts the actual
+# files are there and are served with real content, not just that the URL
+# string is well-formed.
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "research_statement_template.md",
+        "teaching_statement_template.md",
+        "curriculum_vitae_template.md",
+    ],
+)
+async def test_roadmap_template_download_links_are_not_dead(filename):
+    async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
+        response = await ac.get(f"/downloads/{filename}")
+        assert response.status_code == 200, response.text
+        assert len(response.text.strip()) > 200
+
+
 @pytest.mark.anyio
 async def test_daily_conjecture_mocked():
     """Verify that daily conjecture falls back gracefully or queries correctly."""

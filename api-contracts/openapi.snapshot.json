@@ -2317,8 +2317,26 @@
     },
     "/api/v1/internal/author_metrics_enrich": {
       "post": {
-        "description": "LLM enrichment for ``GET /author_metrics`` (served by the Go gateway).\n\nTakes the title/concepts digest the gateway built and returns the scored\nbundle. Raises 503 (``AIUnavailable``) if the LLM step fails \u2014 the gateway\ndegrades that to an empty bundle on its side.",
+        "description": "LLM enrichment for ``GET /author_metrics`` (served by the Go gateway).\n\nTakes the title/concepts digest the gateway built and returns the scored\nbundle. Raises 503 (``AIUnavailable``) if the LLM step fails \u2014 the gateway\ndegrades that to an empty bundle on its side.\n\nAuth: same shared-secret ``X-Internal-Token`` check as this route's\nsiblings in ``endpoints/internal.py`` \u2014 this route runs a real, billable\nLLM call and was found completely unauthenticated in production (2026-09\naudit): any caller with no headers at all could trigger it.",
         "operationId": "author_metrics_enrich_api_v1_internal_author_metrics_enrich_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-internal-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Token"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
