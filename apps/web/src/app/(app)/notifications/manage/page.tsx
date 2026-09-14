@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChevronLeft, ShieldCheck, Quote, Bookmark, TrendingUp, MessageSquare, UserPlus, type LucideIcon } from "lucide-react";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import { useNotificationSettings, useTrackedResearchers } from "@/lib/hooks/useNotificationSettings";
+import { useTrackedTopics } from "@/lib/hooks/useTrackedTopics";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { Card } from "@/components/ui/Card";
 import type { AlertCadence, NotificationSettings } from "@/lib/types";
@@ -70,6 +71,7 @@ export default function ManageAlertsPage() {
   const { user } = useAuth();
   const { settings, loading, error, setCadence } = useNotificationSettings(user?.uid);
   const { data: tracked } = useTrackedResearchers(user?.uid);
+  const { tracked: trackedTopics } = useTrackedTopics(user?.uid);
 
   const rows: RowSpec[] = [
     {
@@ -91,10 +93,7 @@ export default function ManageAlertsPage() {
       Icon: TrendingUp,
       tint: "var(--accent-orange)",
       title: "Activity in topics you follow",
-      // Honest about the gap: Discovery has no topic-follow feature yet, so
-      // this control has nothing to drive it. It's still safe to set — the
-      // preference is saved and will take effect once that feature ships.
-      subtitle: "Topic-following isn't available yet — this is ready for when it ships",
+      subtitle: `${trackedTopics.length} topic${trackedTopics.length === 1 ? "" : "s"} tracked right now`,
     },
     {
       key: "colabMentionsInvites",

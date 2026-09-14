@@ -133,6 +133,12 @@ func enrichAuthorMetrics(ctx context.Context, digest string) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	// author_metrics_enrich now requires the shared internal secret (fixed
+	// alongside a real unauthenticated-LLM-endpoint bug on the Python side)
+	// — same convention as fireTeleport/postSimilarEmbed.
+	if token := os.Getenv("INTERNAL_API_TOKEN"); token != "" {
+		req.Header.Set("X-Internal-Token", token)
+	}
 
 	resp, err := metricsHTTPClient.Do(req)
 	if err != nil {
