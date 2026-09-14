@@ -63,6 +63,21 @@ func TestListDocsNoClientIsCleanMiss(t *testing.T) {
 	}
 }
 
+func TestListDocsWithIDsNoClientIsCleanMiss(t *testing.T) {
+	withNilClient(t)
+	docs, err := ListDocsWithIDs(context.Background(), "users/u1/inbox", 40)
+	if docs != nil || err != nil {
+		t.Fatalf("ListDocsWithIDs(nil client) = (%v, %v), want (nil, nil)", docs, err)
+	}
+}
+
+func TestDeleteDocNoClientIsNoOp(t *testing.T) {
+	withNilClient(t)
+	if err := DeleteDoc(context.Background(), "users/u1/inbox", "item1"); err != nil {
+		t.Fatalf("DeleteDoc(nil client) = %v, want nil", err)
+	}
+}
+
 func TestServerTimestampIsUsableInADocMap(t *testing.T) {
 	// Compile-time guarantee that callers can build the Firestore mirror payload
 	// (as heatmap.go does) without importing the Firestore SDK directly.

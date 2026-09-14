@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { TrendingUp } from "lucide-react";
 import { Card } from "@/components/ui/Card";
+import { TrackTopicButton } from "@/components/discovery/TrackTopicButton";
 import { cn, focusRing } from "@/lib/utils";
 import type { TrendingTopic } from "@/lib/types";
 
@@ -12,6 +13,11 @@ import type { TrendingTopic } from "@/lib/types";
  * real counts behind the percentage so the number is checkable, not just
  * asserted. Click-only: a `<button>`, not a text control — selecting it drills
  * into that topic's papers, mirroring `ResearcherCard`'s shell/stagger.
+ *
+ * The Track button (decision 0021's topic half) sits absolutely positioned
+ * over the card rather than beside the select button — a `<button>` can't
+ * nest another `<button>`, and this card (unlike `ResearcherCard`, which
+ * wraps its clickable area in a `<Link>`) uses a real `<button>` for select.
  */
 export function TrendingTopicCard({
   t,
@@ -29,6 +35,7 @@ export function TrendingTopicCard({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: Math.min(index * 0.05, 0.3) }}
+      className="relative h-full"
     >
       <button
         type="button"
@@ -57,6 +64,12 @@ export function TrendingTopicCard({
           </p>
         </Card>
       </button>
+      <TrackTopicButton
+        topicId={t.id}
+        name={t.displayName}
+        iconOnly
+        className="absolute right-4 top-4 bg-surface"
+      />
     </motion.div>
   );
 }

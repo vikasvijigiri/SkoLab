@@ -122,6 +122,51 @@ func ListDocs(ctx context.Context, collection string, limit int) ([]map[string]a
 	return out, nil
 }
 
+// Doc pairs a document's Firestore-assigned id with its data — for callers
+// that need the id back afterward (e.g. deleting a doc once it's been read,
+// like the activity feed's inbox drain).
+type Doc struct {
+	ID   string
+	Data map[string]any
+}
+
+// ListDocsWithIDs is ListDocs but also returns each document's id.
+//   - client unavailable → (nil, nil) — same no-op degradation as ListDocs
+//   - empty collection    → ([]Doc{}, nil)
+//   - other error         → (nil, err)
+func ListDocsWithIDs(ctx context.Context, collection string, limit int) ([]Doc, error) {
+	c := get()
+	if c == nil {
+		return nil, nil
+	}
+	iter := c.Collection(collection).Limit(limit).Documents(ctx)
+	defer iter.Stop()
+
+	out := make([]Doc, 0, limit)
+	for {
+		snap, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, Doc{ID: snap.Ref.ID, Data: snap.Data()})
+	}
+	return out, nil
+}
+
+// DeleteDoc removes a document. Client unavailable → nil no-op, matching
+// every other write in this package's degrade-safe contract.
+func DeleteDoc(ctx context.Context, collection, docID string) error {
+	c := get()
+	if c == nil {
+		return nil
+	}
+	_, err := c.Collection(collection).Doc(docID).Delete(ctx)
+	return err
+}
+
 // QueryEq runs an equality query (`field == value`) against collection,
 // capped at limit results, and returns each matching document's data map.
 //   - client unavailable → (nil, nil) — same no-op degradation as GetDoc

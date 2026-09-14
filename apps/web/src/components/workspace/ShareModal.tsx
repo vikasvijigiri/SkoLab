@@ -13,6 +13,7 @@ import {
   removeMemberByUid,
   roleFor,
 } from "@/lib/firebase/workspace";
+import { writeInboxEvent } from "@/lib/firebase/inbox";
 import { logPeerInvite } from "@/lib/api/endpoints";
 import { useAuth } from "@/lib/hooks/AuthProvider";
 import type { CollabProject, CollabRole } from "@/lib/types";
@@ -63,6 +64,18 @@ export function ShareModal({
             { uid: researcher.uid, name: researcher.name, email: researcher.email, phone: researcher.phone },
             inviteRole
           );
+          // Best-effort notification — a failure here shouldn't undo or block
+          // an invite that already succeeded (same "log and move on" stance
+          // as logPeerInvite below).
+          if (user) {
+            void writeInboxEvent({
+              toUid: researcher.uid,
+              type: "invite",
+              actor: { id: user.uid, display_name: user.displayName ?? "A researcher" },
+              why: project.name,
+              href: `/workspace/${project.id}`,
+            }).catch(() => {});
+          }
           setStatus(`${researcher.name} added as ${inviteRole}.`);
         }
         setEmail("");

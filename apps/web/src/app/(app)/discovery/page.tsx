@@ -59,7 +59,10 @@ export default function DiscoveryPage() {
 /** Exported for unit tests — the default export is only the Suspense-free wrapper. */
 export function DiscoveryContent() {
   const searchParams = useSearchParams();
-  const [mode, setMode] = useState<DiscoveryMode>(searchParams.get("tab") === "papers" ? "papers" : "researchers");
+  const initialTab = searchParams.get("tab");
+  const [mode, setMode] = useState<DiscoveryMode>(
+    initialTab === "papers" ? "papers" : initialTab === "topics" ? "topics" : "researchers",
+  );
 
   // Taxonomy drilldown — "explore another area". Nothing is typed.
   const [field, setField] = useState<OpenAlexTaxon | null>(null);

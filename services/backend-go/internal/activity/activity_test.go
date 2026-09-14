@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/skolab/backend-go/internal/auth"
+	"github.com/skolab/backend-go/internal/firestore"
 	"github.com/skolab/backend-go/internal/services/openalex"
 )
 
@@ -269,6 +270,196 @@ func TestTrackedResearcherIDs_EmptyOrErrorIsCleanMiss(t *testing.T) {
 		return nil, fmt.Errorf("boom")
 	}
 	if got := trackedResearcherIDs(context.Background(), "u1"); got != nil {
+		t.Errorf("firestore error → %+v, want nil", got)
+	}
+}
+
+// ── trackedTopicIDs / trackedTopicActivity (decisions/0022 topic-follow gap) ─
+
+func TestTrackedTopicIDs_BuildsMapFromFirestoreDocs(t *testing.T) {
+	orig := firestoreListDocsHook
+	defer func() { firestoreListDocsHook = orig }()
+
+	var gotCollection string
+	firestoreListDocsHook = func(_ context.Context, collection string, limit int) ([]map[string]any, error) {
+		gotCollection = collection
+		return []map[string]any{
+			{"topicId": "https://openalex.org/T111", "name": "Quantum computing", "trackedAt": int64(1)},
+			{"topicId": "", "name": "Should be skipped"},
+			{"topicId": "t222", "name": "Neural coding"},
+		}, nil
+	}
+
+	got := trackedTopicIDs(context.Background(), "u1")
+	if gotCollection != "users/u1/tracked_topics" {
+		t.Errorf("collection = %q, want users/u1/tracked_topics", gotCollection)
+	}
+	want := map[string]string{"T111": "Quantum computing", "T222": "Neural coding"}
+	if len(got) != len(want) || got["T111"] != want["T111"] || got["T222"] != want["T222"] {
+		t.Fatalf("trackedTopicIDs = %+v, want %+v", got, want)
+	}
+}
+
+func TestTrackedTopicIDs_EmptyOrErrorIsCleanMiss(t *testing.T) {
+	orig := firestoreListDocsHook
+	defer func() { firestoreListDocsHook = orig }()
+
+	firestoreListDocsHook = func(context.Context, string, int) ([]map[string]any, error) { return nil, nil }
+	if got := trackedTopicIDs(context.Background(), "u1"); got != nil {
+		t.Errorf("empty collection → %+v, want nil", got)
+	}
+
+	firestoreListDocsHook = func(context.Context, string, int) ([]map[string]any, error) {
+		return nil, fmt.Errorf("boom")
+	}
+	if got := trackedTopicIDs(context.Background(), "u1"); got != nil {
+		t.Errorf("firestore error → %+v, want nil", got)
+	}
+}
+
+func TestTrackedTopicActivity_NoTrackedTopicsReturnsNil(t *testing.T) {
+	origList := firestoreListDocsHook
+	defer func() { firestoreListDocsHook = origList }()
+	firestoreListDocsHook = func(context.Context, string, int) ([]map[string]any, error) { return nil, nil }
+
+	if got := trackedTopicActivity(context.Background(), "u1", 75*24*time.Hour); got != nil {
+		t.Fatalf("no tracked topics → %+v, want nil", got)
+	}
+}
+
+func TestTrackedTopicActivity_EmitsHonestCountAndFiltersOutsideWindow(t *testing.T) {
+	origList, origFetch := firestoreListDocsHook, fetchWorksByConceptHook
+	defer func() { firestoreListDocsHook, fetchWorksByConceptHook = origList, origFetch }()
+
+	firestoreListDocsHook = func(context.Context, string, int) ([]map[string]any, error) {
+		return []map[string]any{{"topicId": "T111", "name": "Quantum computing"}}, nil
+	}
+
+	now := time.Now()
+	inWindow1 := now.AddDate(0, 0, -5).Format("2006-01-02")
+	inWindow2 := now.AddDate(0, 0, -10).Format("2006-01-02")
+	outOfWindow := now.AddDate(0, 0, -400).Format("2006-01-02")
+
+	fetchWorksByConceptHook = func(_ context.Context, conceptID string, _, _, _ int) ([]openalex.Work, error) {
+		if conceptID != "T111" {
+			t.Errorf("conceptID = %q, want T111", conceptID)
+		}
+		return []openalex.Work{
+			{ID: "W1", Title: "Recent work one", PublicationDate: inWindow1, CitedByCount: 2},
+			{ID: "W2", Title: "Recent work two", PublicationDate: inWindow2, CitedByCount: 1},
+			{ID: "W3", Title: "Old work", PublicationDate: outOfWindow, CitedByCount: 9},
+		}, nil
+	}
+
+	items := trackedTopicActivity(context.Background(), "u1", 75*24*time.Hour)
+	if len(items) != 1 {
+		t.Fatalf("want exactly one tracked_topic_activity item, got %d: %+v", len(items), items)
+	}
+	it := items[0]
+	if it.Type != "tracked_topic_activity" {
+		t.Errorf("type = %q, want tracked_topic_activity", it.Type)
+	}
+	if it.Count != 2 {
+		t.Errorf("count = %d, want 2 (the old work must not be counted)", it.Count)
+	}
+	if it.Object == nil || it.Object.Kind != "topic" || it.Object.ID != "T111" || it.Object.Title != "Quantum computing" {
+		t.Fatalf("object = %+v, want topic T111/Quantum computing", it.Object)
+	}
+}
+
+func TestTrackedTopicActivity_FetchErrorIsCleanMiss(t *testing.T) {
+	origList, origFetch := firestoreListDocsHook, fetchWorksByConceptHook
+	defer func() { firestoreListDocsHook, fetchWorksByConceptHook = origList, origFetch }()
+
+	firestoreListDocsHook = func(context.Context, string, int) ([]map[string]any, error) {
+		return []map[string]any{{"topicId": "T111", "name": "Quantum computing"}}, nil
+	}
+	fetchWorksByConceptHook = func(context.Context, string, int, int, int) ([]openalex.Work, error) {
+		return nil, fmt.Errorf("openalex down")
+	}
+
+	if items := trackedTopicActivity(context.Background(), "u1", 75*24*time.Hour); items != nil {
+		t.Fatalf("fetch error should emit nothing, got %+v", items)
+	}
+}
+
+// ── inboxItems (client-originated mention/invite events) ────────────────────
+
+func TestInboxItems_MapsMentionAndInviteDocsAndDeletesEach(t *testing.T) {
+	origList, origDelete := firestoreListDocsWithIDsHook, firestoreDeleteDocHook
+	defer func() { firestoreListDocsWithIDsHook, firestoreDeleteDocHook = origList, origDelete }()
+
+	var gotCollection string
+	firestoreListDocsWithIDsHook = func(_ context.Context, collection string, limit int) ([]firestore.Doc, error) {
+		gotCollection = collection
+		return []firestore.Doc{
+			{ID: "item1", Data: map[string]any{
+				"type":  "mention",
+				"actor": map[string]any{"id": "u2", "display_name": "Ada Lovelace"},
+				"why":   "hey @You check this out",
+				"href":  "/workspace/p1",
+				"ts":    "2026-09-10T00:00:00Z",
+			}},
+			{ID: "item2", Data: map[string]any{
+				"type":  "invite",
+				"actor": map[string]any{"id": "u3", "display_name": "Grace Hopper"},
+				"why":   "Quantum foam",
+				"href":  "/workspace/p2",
+				"ts":    "2026-09-11T00:00:00Z",
+			}},
+		}, nil
+	}
+	var deleted []string
+	firestoreDeleteDocHook = func(_ context.Context, _ string, docID string) error {
+		deleted = append(deleted, docID)
+		return nil
+	}
+
+	items := inboxItems(context.Background(), "u1")
+	if gotCollection != "users/u1/inbox" {
+		t.Errorf("collection = %q, want users/u1/inbox", gotCollection)
+	}
+	if len(items) != 2 {
+		t.Fatalf("want 2 items, got %d: %+v", len(items), items)
+	}
+	if items[0].Type != "mention" || items[0].Actor == nil || items[0].Actor.DisplayName != "Ada Lovelace" {
+		t.Fatalf("item[0] = %+v, want mention from Ada Lovelace", items[0])
+	}
+	if items[1].Type != "invite" || items[1].Actor == nil || items[1].Actor.DisplayName != "Grace Hopper" {
+		t.Fatalf("item[1] = %+v, want invite from Grace Hopper", items[1])
+	}
+	if len(deleted) != 2 || deleted[0] != "item1" || deleted[1] != "item2" {
+		t.Fatalf("deleted = %+v, want both docs drained after being read", deleted)
+	}
+}
+
+func TestInboxItems_SkipsUnknownType(t *testing.T) {
+	origList, origDelete := firestoreListDocsWithIDsHook, firestoreDeleteDocHook
+	defer func() { firestoreListDocsWithIDsHook, firestoreDeleteDocHook = origList, origDelete }()
+
+	firestoreListDocsWithIDsHook = func(context.Context, string, int) ([]firestore.Doc, error) {
+		return []firestore.Doc{{ID: "item1", Data: map[string]any{"type": "something_else"}}}, nil
+	}
+	firestoreDeleteDocHook = func(context.Context, string, string) error { return nil }
+
+	if items := inboxItems(context.Background(), "u1"); items != nil {
+		t.Fatalf("unknown type should be skipped, got %+v", items)
+	}
+}
+
+func TestInboxItems_EmptyOrErrorIsCleanMiss(t *testing.T) {
+	orig := firestoreListDocsWithIDsHook
+	defer func() { firestoreListDocsWithIDsHook = orig }()
+
+	firestoreListDocsWithIDsHook = func(context.Context, string, int) ([]firestore.Doc, error) { return nil, nil }
+	if got := inboxItems(context.Background(), "u1"); got != nil {
+		t.Errorf("empty collection → %+v, want nil", got)
+	}
+
+	firestoreListDocsWithIDsHook = func(context.Context, string, int) ([]firestore.Doc, error) {
+		return nil, fmt.Errorf("boom")
+	}
+	if got := inboxItems(context.Background(), "u1"); got != nil {
 		t.Errorf("firestore error → %+v, want nil", got)
 	}
 }
