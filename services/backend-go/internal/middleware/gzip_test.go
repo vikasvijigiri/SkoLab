@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -37,8 +38,14 @@ func TestGzip_CompressesWhenClientAcceptsIt(t *testing.T) {
 	if w.Header().Get("Content-Encoding") != "gzip" {
 		t.Fatalf("Content-Encoding = %q, want %q", w.Header().Get("Content-Encoding"), "gzip")
 	}
-	if w.Header().Get("Content-Length") != "" {
-		t.Errorf("Content-Length should be stripped once the body is re-encoded, got %q", w.Header().Get("Content-Length"))
+	// The whole compressed body is buffered before anything is written to
+	// the connection (see gzip.go's package comment for why: a chunked,
+	// multi-flush gzip response corrupted at Render's edge in production),
+	// so the real, correct compressed length is known up front and must be
+	// set -- not stripped in favor of chunked transfer.
+	wantLen := strconv.Itoa(w.Body.Len())
+	if got := w.Header().Get("Content-Length"); got != wantLen {
+		t.Errorf("Content-Length = %q, want %q (the buffered compressed body's real length)", got, wantLen)
 	}
 
 	gz, err := gzip.NewReader(w.Body)
