@@ -61,6 +61,30 @@ function Row({ children }: { children: React.ReactNode }) {
   return <div className="flex items-start gap-3 border-t border-border px-4 py-4 first:border-t-0">{children}</div>;
 }
 
+type RowKey = "impact" | "tracked" | "worth" | "grant";
+
+// Career-stage weighting (onboarding's fixed STATUS_OPTIONS list, click-only —
+// see app/onboarding/page.tsx). A PhD student's sharpest need is peer/
+// collaborator awareness (no lab of their own yet); a postdoc's is the
+// opportunity radar (grants/jobs, the fork every postdoc faces); faculty
+// already have a network and funding rhythm, so their own body of work's
+// impact leads instead. Unlisted/empty status keeps the original order.
+const PEER_FOCUSED = new Set(["PhD Student", "Independent Researcher"]);
+const OPPORTUNITY_FOCUSED = new Set(["Postdoc", "Research Scientist", "Industry Researcher"]);
+const IMPACT_FOCUSED = new Set(["Assistant Professor", "Professor", "Lecturer"]);
+
+const DEFAULT_ORDER: RowKey[] = ["impact", "tracked", "worth", "grant"];
+const PEER_ORDER: RowKey[] = ["worth", "tracked", "impact", "grant"];
+const OPPORTUNITY_ORDER: RowKey[] = ["grant", "impact", "tracked", "worth"];
+const IMPACT_ORDER: RowKey[] = ["impact", "tracked", "grant", "worth"];
+
+function rowOrderFor(careerStage: string | undefined): RowKey[] {
+  if (careerStage && PEER_FOCUSED.has(careerStage)) return PEER_ORDER;
+  if (careerStage && OPPORTUNITY_FOCUSED.has(careerStage)) return OPPORTUNITY_ORDER;
+  if (careerStage && IMPACT_FOCUSED.has(careerStage)) return IMPACT_ORDER;
+  return DEFAULT_ORDER;
+}
+
 function ActionLink({
   href,
   external,
@@ -101,6 +125,7 @@ export function CoachPulseCard({
   trackedActivity,
   worthTracking,
   topGrant,
+  careerStage,
   loading,
   onTrack,
 }: {
@@ -108,6 +133,8 @@ export function CoachPulseCard({
   trackedActivity: CoachPulseTrackedActivity | null | undefined;
   worthTracking: CoachPulseWorthTracking | null | undefined;
   topGrant: GrantMatch | undefined;
+  /** The user's onboarding `academicStatus` — weights which signal leads. */
+  careerStage: string | undefined;
   loading: boolean;
   /** Fires the existing Track mutation (decisions/0021) — this card never
    *  owns tracked-state itself. */
@@ -151,116 +178,124 @@ export function CoachPulseCard({
         </div>
       ) : (
         <>
-          {impact && (
-            <Row>
-              <div className="flex w-[46px] shrink-0 flex-col items-center pt-px">
-                <span className="data text-[28px] font-semibold leading-none text-accent-emerald">
-                  {impact.new_citations}
-                </span>
-                <span className="mt-1 text-center font-mono text-[8.5px] font-semibold uppercase tracking-wide text-text-muted">
-                  new {impact.new_citations === 1 ? "cite" : "cites"}
-                </span>
-              </div>
-              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                <p className="font-display text-[13.5px] font-semibold leading-snug text-text-primary">
-                  New citations on your paper
-                </p>
-                <p className="line-clamp-1 font-body text-[11.5px] leading-relaxed text-text-secondary">
-                  &ldquo;{impact.paper_title}&rdquo;
-                </p>
-                <div className="mt-0.5 flex justify-end">
-                  <ActionLink
-                    href={`/paper/${encodeURIComponent(shortOpenAlexId(impact.paper_id))}`}
-                    icon={<ArrowUpRight size={11} />}
-                    label="Open"
-                  />
-                </div>
-              </div>
-            </Row>
-          )}
-
-          {trackedActivity && (
-            <Row>
-              <span
-                aria-hidden="true"
-                className="data flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-accent-violet text-[11px] font-semibold text-white"
-              >
-                {initials(trackedActivity.author_name)}
-              </span>
-              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                <p className="font-display text-[13.5px] font-semibold leading-snug text-text-primary">
-                  {trackedActivity.author_name} published new work
-                </p>
-                <p className="line-clamp-1 font-body text-[11.5px] italic leading-relaxed text-text-secondary">
-                  &ldquo;{trackedActivity.work_title}&rdquo;
-                </p>
-                <div className="mt-0.5 flex items-center justify-between">
-                  <span className="font-mono text-[10px] uppercase tracking-wide text-text-muted">
-                    tracked · {relTime(trackedActivity.published_at)}
-                  </span>
-                  <ActionLink
-                    href={`/paper/${encodeURIComponent(shortOpenAlexId(trackedActivity.work_id))}`}
-                    icon={<ArrowUpRight size={11} />}
-                    label="Open"
-                  />
-                </div>
-              </div>
-            </Row>
-          )}
-
-          {worthTracking && (
-            <Row>
-              <span
-                aria-hidden="true"
-                className="data flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-dashed border-border-strong text-[11px] font-semibold text-text-secondary"
-              >
-                {initials(worthTracking.author_name)}
-              </span>
-              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                <p className="font-display text-[13.5px] font-semibold leading-snug text-text-primary">
-                  {worthTracking.author_name}
-                </p>
-                <p className="line-clamp-1 font-body text-[11.5px] leading-relaxed text-text-secondary">
-                  {worthTracking.institution || "Close to your field"}
-                  {worthTracking.works_count > 0 && ` · ${worthTracking.works_count} works`}
-                </p>
-                <div className="mt-0.5 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => onTrack(worthTracking.author_id, worthTracking.author_name)}
-                    className={cn(
-                      "inline-flex shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 font-body text-[11px] font-semibold text-text-on-primary transition-colors hover:bg-primary-dark",
-                      focusRing,
-                    )}
+          {rowOrderFor(careerStage).map((key) => {
+            if (key === "impact" && impact) {
+              return (
+                <Row key={key}>
+                  <div className="flex w-[46px] shrink-0 flex-col items-center pt-px">
+                    <span className="data text-[28px] font-semibold leading-none text-accent-emerald">
+                      {impact.new_citations}
+                    </span>
+                    <span className="mt-1 text-center font-mono text-[8.5px] font-semibold uppercase tracking-wide text-text-muted">
+                      new {impact.new_citations === 1 ? "cite" : "cites"}
+                    </span>
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                    <p className="font-display text-[13.5px] font-semibold leading-snug text-text-primary">
+                      New citations on your paper
+                    </p>
+                    <p className="line-clamp-1 font-body text-[11.5px] leading-relaxed text-text-secondary">
+                      &ldquo;{impact.paper_title}&rdquo;
+                    </p>
+                    <div className="mt-0.5 flex justify-end">
+                      <ActionLink
+                        href={`/paper/${encodeURIComponent(shortOpenAlexId(impact.paper_id))}`}
+                        icon={<ArrowUpRight size={11} />}
+                        label="Open"
+                      />
+                    </div>
+                  </div>
+                </Row>
+              );
+            }
+            if (key === "tracked" && trackedActivity) {
+              return (
+                <Row key={key}>
+                  <span
+                    aria-hidden="true"
+                    className="data flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-accent-violet text-[11px] font-semibold text-white"
                   >
-                    <UserPlus size={11} />
-                    Track
-                  </button>
-                </div>
-              </div>
-            </Row>
-          )}
-
-          {topGrant && (
-            <Row>
-              <FitRing pct={topGrant.match_score} color="var(--accent-orange)" />
-              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                <p className="font-display text-[13.5px] font-semibold leading-snug text-text-primary">
-                  {topGrant.title}
-                </p>
-                <p className="line-clamp-1 font-body text-[11.5px] leading-relaxed text-text-secondary">
-                  {topGrant.agency}
-                  {topGrant.amount && ` · ${topGrant.amount}`}
-                </p>
-                <div className="mt-0.5 flex items-center justify-between">
-                  <span className="font-mono text-[10px] font-semibold uppercase tracking-wide text-accent-orange">
-                    {topGrant.days_left != null ? `closes in ${topGrant.days_left}d` : "rolling"}
+                    {initials(trackedActivity.author_name)}
                   </span>
-                  <ActionLink href={topGrant.url} external icon={<Bookmark size={11} />} label="Save" />
-                </div>
-              </div>
-            </Row>
-          )}
+                  <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                    <p className="font-display text-[13.5px] font-semibold leading-snug text-text-primary">
+                      {trackedActivity.author_name} published new work
+                    </p>
+                    <p className="line-clamp-1 font-body text-[11.5px] italic leading-relaxed text-text-secondary">
+                      &ldquo;{trackedActivity.work_title}&rdquo;
+                    </p>
+                    <div className="mt-0.5 flex items-center justify-between">
+                      <span className="font-mono text-[10px] uppercase tracking-wide text-text-muted">
+                        tracked · {relTime(trackedActivity.published_at)}
+                      </span>
+                      <ActionLink
+                        href={`/paper/${encodeURIComponent(shortOpenAlexId(trackedActivity.work_id))}`}
+                        icon={<ArrowUpRight size={11} />}
+                        label="Open"
+                      />
+                    </div>
+                  </div>
+                </Row>
+              );
+            }
+            if (key === "worth" && worthTracking) {
+              return (
+                <Row key={key}>
+                  <span
+                    aria-hidden="true"
+                    className="data flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-dashed border-border-strong text-[11px] font-semibold text-text-secondary"
+                  >
+                    {initials(worthTracking.author_name)}
+                  </span>
+                  <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                    <p className="font-display text-[13.5px] font-semibold leading-snug text-text-primary">
+                      {worthTracking.author_name}
+                    </p>
+                    <p className="line-clamp-1 font-body text-[11.5px] leading-relaxed text-text-secondary">
+                      {worthTracking.institution || "Close to your field"}
+                      {worthTracking.works_count > 0 && ` · ${worthTracking.works_count} works`}
+                    </p>
+                    <div className="mt-0.5 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => onTrack(worthTracking.author_id, worthTracking.author_name)}
+                        className={cn(
+                          "inline-flex shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 font-body text-[11px] font-semibold text-text-on-primary transition-colors hover:bg-primary-dark",
+                          focusRing,
+                        )}
+                      >
+                        <UserPlus size={11} />
+                        Track
+                      </button>
+                    </div>
+                  </div>
+                </Row>
+              );
+            }
+            if (key === "grant" && topGrant) {
+              return (
+                <Row key={key}>
+                  <FitRing pct={topGrant.match_score} color="var(--accent-orange)" />
+                  <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                    <p className="font-display text-[13.5px] font-semibold leading-snug text-text-primary">
+                      {topGrant.title}
+                    </p>
+                    <p className="line-clamp-1 font-body text-[11.5px] leading-relaxed text-text-secondary">
+                      {topGrant.agency}
+                      {topGrant.amount && ` · ${topGrant.amount}`}
+                    </p>
+                    <div className="mt-0.5 flex items-center justify-between">
+                      <span className="font-mono text-[10px] font-semibold uppercase tracking-wide text-accent-orange">
+                        {topGrant.days_left != null ? `closes in ${topGrant.days_left}d` : "rolling"}
+                      </span>
+                      <ActionLink href={topGrant.url} external icon={<Bookmark size={11} />} label="Save" />
+                    </div>
+                  </div>
+                </Row>
+              );
+            }
+            return null;
+          })}
 
           <div className="border-t border-border px-4 py-2.5 text-center">
             <span className="font-mono text-[10px] text-text-muted">That&rsquo;s everything since your last visit</span>

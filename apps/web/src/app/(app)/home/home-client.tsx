@@ -167,6 +167,7 @@ export function HomeClient() {
             trackedActivity={pulseQ.data?.tracked_activity}
             worthTracking={pulseQ.data?.worth_tracking}
             topGrant={topGrant}
+            careerStage={firestoreProfile?.academicStatus}
             loading={pulseLoading}
             onTrack={track}
           />
@@ -191,6 +192,7 @@ export function HomeClient() {
             trackedActivity={pulseQ.data?.tracked_activity}
             worthTracking={pulseQ.data?.worth_tracking}
             topGrant={topGrant}
+            careerStage={firestoreProfile?.academicStatus}
             loading={pulseLoading}
             onTrack={track}
           />
