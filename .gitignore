@@ -24,6 +24,23 @@ captures/
 !.secrets.baseline
 !apps/web/.env.local.example
 
+# Optional local skill bundles and generated executables. Dependencies and
+# build outputs must be recreated by setup/build steps, not committed.
+vendor/
+services/backend-go/main
+services/backend-go/backend-go.exe
+*.exe
+*.dll
+*.so
+
+# Local workflow history; durable decisions belong in docs/decisions/.
+/ERROR.md
+/HANDOFF.md
+/ISSUES.md
+/LOG.md
+/MEMORY.md
+/task.md
+
 # Node / JS (apps/web, shared/skolab-design-system) — matches at any depth
 node_modules/
 .next/
