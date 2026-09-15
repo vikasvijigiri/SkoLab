@@ -1,5 +1,6 @@
 # IDE / VS Code / IntelliJ / Android Studio
 .idea/
+.claude/
 .vscode/
 *.iml
 .gradle/
@@ -7,6 +8,21 @@
 /build/
 captures/
 .DS_Store
+
+# Local dotfiles and agent state. Keep repository-critical dotfiles explicitly
+# allow-listed below; these are required to build, test, deploy, or secure the
+# project and are not personal machine state.
+.*
+!.gitignore
+!.gitattributes
+!.github/
+!.github/**
+!.dockerignore
+!.env.example
+!.firebaserc
+!.pre-commit-config.yaml
+!.secrets.baseline
+!apps/web/.env.local.example
 
 # Node / JS (apps/web, shared/skolab-design-system) — matches at any depth
 node_modules/
