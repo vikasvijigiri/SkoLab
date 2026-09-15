@@ -45,6 +45,7 @@ describe("CoachPulseCard", () => {
         trackedActivity={null}
         worthTracking={null}
         topGrant={undefined}
+        careerStage={undefined}
         loading={false}
         onTrack={vi.fn()}
       />,
@@ -60,6 +61,7 @@ describe("CoachPulseCard", () => {
         trackedActivity={trackedActivity}
         worthTracking={worthTracking}
         topGrant={topGrant}
+        careerStage={undefined}
         loading={false}
         onTrack={vi.fn()}
       />,
@@ -83,12 +85,43 @@ describe("CoachPulseCard", () => {
         trackedActivity={null}
         worthTracking={worthTracking}
         topGrant={undefined}
+        careerStage={undefined}
         loading={false}
         onTrack={onTrack}
       />,
     );
     await user.click(screen.getByRole("button", { name: /track/i }));
     expect(onTrack).toHaveBeenCalledWith("A3", "Priya Nathan");
+  });
+
+  it("leads with the grant for a Postdoc", () => {
+    const { container } = renderWithProviders(
+      <CoachPulseCard
+        impact={impact}
+        trackedActivity={trackedActivity}
+        worthTracking={worthTracking}
+        topGrant={topGrant}
+        careerStage="Postdoc"
+        loading={false}
+        onTrack={vi.fn()}
+      />,
+    );
+    expect(container.querySelector("section > *:nth-child(2)")?.textContent).toContain("NSF CAREER Award");
+  });
+
+  it("leads with the peer suggestion for a PhD Student", () => {
+    const { container } = renderWithProviders(
+      <CoachPulseCard
+        impact={impact}
+        trackedActivity={trackedActivity}
+        worthTracking={worthTracking}
+        topGrant={topGrant}
+        careerStage="PhD Student"
+        loading={false}
+        onTrack={vi.fn()}
+      />,
+    );
+    expect(container.querySelector("section > *:nth-child(2)")?.textContent).toContain("Priya Nathan");
   });
 
   it("shows loading skeletons, not the empty state, while loading", () => {
@@ -98,6 +131,7 @@ describe("CoachPulseCard", () => {
         trackedActivity={null}
         worthTracking={null}
         topGrant={undefined}
+        careerStage={undefined}
         loading
         onTrack={vi.fn()}
       />,
