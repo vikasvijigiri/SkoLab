@@ -142,6 +142,33 @@
   box-shadow: var(--shadow-elevated);
 }
 
+.colab-redesign .colab-dock {
+  background: var(--surface);
+}
+
+.colab-redesign .colab-dock-tabs {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.colab-redesign .colab-dock-tabs [role="tab"] {
+  color: var(--text-muted);
+}
+
+.colab-redesign .colab-dock-tabs [role="tab"][aria-selected="true"] {
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  box-shadow: inset 0 -2px 0 var(--accent-signal);
+}
+
+.colab-redesign .colab-dock-heading {
+  background: var(--surface);
+}
+
+.colab-redesign .colab-dock [role="tabpanel"] > * {
+  max-width: 100%;
+}
+
 .colab-redesign--focus .colab-editor-pane > div:nth-child(2) {
   min-height: 44px;
 }
