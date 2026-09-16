@@ -358,7 +358,9 @@ function DocEditorPane({
   const [savedAt, setSavedAt] = useState<number>(doc.updatedAt);
   const [saving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
-  const [preview, setPreview] = useState(false);
+  // The writing surface opens in the researcher's primary mode: source and
+  // compiled output together. Users can still hide the preview for focus mode.
+  const [preview, setPreview] = useState(true);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
@@ -523,7 +525,7 @@ function DocEditorPane({
             className="flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-surface-subtle hover:text-text-primary"
           >
             {preview ? <EyeOff size={12} /> : <Eye size={12} />}
-            {preview ? "Hide preview" : "Preview"}
+            {preview ? "Hide compiled view" : "Show compiled view"}
           </button>
           <button
             type="button"
@@ -590,11 +592,16 @@ function DocEditorPane({
       {/* Sheet(s) + dock */}
       <div className={cn("flex min-h-0 flex-1", preview && "lg:divide-x lg:divide-border")}>
         <div className="relative min-h-0 flex-1 overflow-y-auto">
+          <div className="sticky top-0 z-10 flex h-8 items-center justify-between border-b border-border bg-surface px-6 font-mono text-[10px] uppercase tracking-[0.09em] text-text-muted md:px-10">
+            <span>Source · Markdown + LaTeX</span>
+            <span className="text-accent-live">Live draft</span>
+          </div>
           <textarea
             ref={textareaRef}
             value={draft}
             onChange={handleTextareaChange}
             readOnly={!canEdit}
+            aria-label="Manuscript source editor"
             spellCheck
             placeholder={
               canEdit
@@ -616,6 +623,9 @@ function DocEditorPane({
         </div>
         {preview && (
           <div className="hidden min-h-0 flex-1 overflow-y-auto lg:block">
+            <div className="sticky top-0 z-10 flex h-8 items-center border-b border-border bg-surface px-6 font-mono text-[10px] uppercase tracking-[0.09em] text-text-muted md:px-10">
+              Compiled preview
+            </div>
             <div className="mx-auto max-w-[68ch] px-6 py-8 md:px-10">
               <MarkdownDoc source={draft} />
             </div>
