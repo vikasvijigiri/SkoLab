@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.api.dependencies import get_verified_user
+from app.api.colab_auth import require_firebase_user
 from app.schemas.colab import CompileRequest, CompileResponse
 
 router = APIRouter()
@@ -28,7 +28,7 @@ def _compile_source(source: str) -> CompileResponse:
         source_path.write_text(source, encoding="utf-8")
         try:
             completed = subprocess.run(
-                [engine, "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", "-output-directory", str(work_dir), str(source_path)],
+                [engine, "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", "main.tex"],
                 cwd=work_dir,
                 capture_output=True,
                 text=True,
@@ -57,7 +57,7 @@ def _compile_source(source: str) -> CompileResponse:
 
 
 @router.post("/colab/compile", response_model=CompileResponse)
-async def compile_latex(req: CompileRequest, _user: dict = Depends(get_verified_user)) -> CompileResponse:
+async def compile_latex(req: CompileRequest, _user: dict = Depends(require_firebase_user)) -> CompileResponse:
     """Compile an authenticated researcher's source in an isolated temp dir.
 
     The subprocess is moved off the event loop and is bounded by both source

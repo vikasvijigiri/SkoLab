@@ -17,8 +17,8 @@ def test_compile_reports_missing_worker(monkeypatch):
 def test_compile_returns_bounded_pdf(monkeypatch):
     monkeypatch.setattr(colab.shutil, "which", lambda _: "pdflatex")
 
-    def fake_run(command, **_kwargs):
-        output_dir = Path(command[command.index("-output-directory") + 1])
+    def fake_run(command, **kwargs):
+        output_dir = Path(kwargs["cwd"])
         (output_dir / "main.pdf").write_bytes(b"%PDF-1.7 test")
         return type("Completed", (), {"returncode": 0, "stdout": "Output written", "stderr": ""})()
 
