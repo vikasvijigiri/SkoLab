@@ -8,6 +8,7 @@ from app.api.v1.endpoints import (
     industry_academic,
     discovery_engine,
     internal,
+    colab,
 )
 from app.domains.quest.router import router as quest_router
 
@@ -21,6 +22,7 @@ api_router.include_router(feed.router, tags=["Feed"])
 api_router.include_router(authors.router, tags=["Authors"])
 api_router.include_router(discovery_engine.router, tags=["Discovery Engine"])
 api_router.include_router(internal.router, tags=["Internal"])
+api_router.include_router(colab.router, tags=["CoLab"])
 # Migrated to the Go gateway (Python is LLM-only, see decisions/0002, 0008):
 #   - user_memory endpoints        → internal/user/user.go
 #   - /recommendations/peers* (CoLab peer autocomplete) → internal/recommendation/
