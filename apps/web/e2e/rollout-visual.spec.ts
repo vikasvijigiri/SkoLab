@@ -18,8 +18,9 @@ for (const route of ROUTES) {
   for (const theme of ["light", "dark"] as const) {
     test(`${route.name} ${theme} — renders, WCAG AA`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: theme });
-      await page.goto(route.path);
-      await page.waitForLoadState("networkidle");
+      await page.goto(route.path, { waitUntil: "domcontentloaded" });
+      await page.addStyleTag({ content: '[style*="opacity: 0"] { opacity: 1 !important; transform: none !important; }' });
+      await expect(page.locator("body")).not.toBeEmpty();
       await page.evaluate(async () => {
         for (let y = 0; y < document.body.scrollHeight; y += window.innerHeight) {
           window.scrollTo(0, y);
