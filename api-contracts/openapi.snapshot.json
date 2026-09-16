@@ -395,6 +395,64 @@
         "title": "CollaboratorSynergyResponse",
         "type": "object"
       },
+      "CompileRequest": {
+        "description": "Bounded source payload for a CoLab LaTeX compilation request.",
+        "properties": {
+          "engine": {
+            "default": "pdflatex",
+            "pattern": "^pdflatex$",
+            "title": "Engine",
+            "type": "string"
+          },
+          "latex_source": {
+            "maxLength": 100000,
+            "minLength": 1,
+            "title": "Latex Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "latex_source"
+        ],
+        "title": "CompileRequest",
+        "type": "object"
+      },
+      "CompileResponse": {
+        "properties": {
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "log": {
+            "default": "",
+            "title": "Log",
+            "type": "string"
+          },
+          "pdf_base64": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdf Base64"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "CompileResponse",
+        "type": "object"
+      },
       "ConjectureResponse": {
         "properties": {
           "category": {
@@ -1922,6 +1980,53 @@
         "summary": "Chat With Author",
         "tags": [
           "Agent"
+        ]
+      }
+    },
+    "/api/v1/colab/compile": {
+      "post": {
+        "description": "Compile an authenticated researcher's source in an isolated temp dir.\n\nThe subprocess is moved off the event loop and is bounded by both source\nsize and wall-clock limits. A future queue worker can preserve this exact\nresponse contract while making compilation asynchronous.",
+        "operationId": "compile_latex_api_v1_colab_compile_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompileResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Compile Latex",
+        "tags": [
+          "CoLab"
         ]
       }
     },
