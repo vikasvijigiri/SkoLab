@@ -28,7 +28,7 @@ def _compile_source(source: str) -> CompileResponse:
         source_path.write_text(source, encoding="utf-8")
         try:
             completed = subprocess.run(
-                [engine, "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", "main.tex"],
+                [engine, "-no-shell-escape", "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", "main.tex"],
                 cwd=work_dir,
                 capture_output=True,
                 text=True,

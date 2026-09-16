@@ -18,6 +18,7 @@ def test_compile_returns_bounded_pdf(monkeypatch):
     monkeypatch.setattr(colab.shutil, "which", lambda _: "pdflatex")
 
     def fake_run(command, **kwargs):
+        assert "-no-shell-escape" in command
         output_dir = Path(kwargs["cwd"])
         (output_dir / "main.pdf").write_bytes(b"%PDF-1.7 test")
         return type("Completed", (), {"returncode": 0, "stdout": "Output written", "stderr": ""})()
