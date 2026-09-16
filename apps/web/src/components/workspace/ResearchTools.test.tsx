@@ -36,6 +36,10 @@ describe("WorkspaceResearchActions", () => {
     await user.click(screen.getByRole("button", { name: /IMRaD/i }));
     expect(applyTemplate).toHaveBeenCalledWith(expect.stringContaining("## 1. Introduction"));
 
+    await user.click(screen.getByRole("button", { name: /templates/i }));
+    await user.click(screen.getByRole("button", { name: /LaTeX article starter/i }));
+    expect(applyTemplate).toHaveBeenCalledWith(expect.stringContaining("\\documentclass"));
+
     await user.click(screen.getByRole("button", { name: /originality/i }));
     expect(screen.getByText(/Originality preflight/i)).toBeVisible();
     expect(screen.getByText(/not an internet plagiarism score/i)).toBeVisible();
