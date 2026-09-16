@@ -11,6 +11,7 @@ import {
   PanelRightOpen,
   X,
   BookOpen,
+  FileCheck2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ChatTab } from "@/components/workspace/ChatTab";
@@ -20,12 +21,14 @@ import { QuickReferencePanel, computeQuickReferenceStatus } from "@/components/w
 import type { JournalTemplate } from "@/components/workspace/ResearchTools";
 import type { CollabMember } from "@/lib/types";
 import { EvidenceTab } from "@/components/workspace/EvidenceTab";
+import { ReviewTab } from "@/components/workspace/ReviewTab";
 
-type DockTab = "quickref" | "evidence" | "chat" | "equations" | "tasks";
+type DockTab = "quickref" | "evidence" | "review" | "chat" | "equations" | "tasks";
 
 const DOCK_TABS: { id: DockTab; label: string; Icon: typeof ClipboardList }[] = [
   { id: "quickref", label: "Quick reference", Icon: ClipboardList },
   { id: "evidence", label: "Evidence", Icon: BookOpen },
+  { id: "review", label: "Review", Icon: FileCheck2 },
   { id: "chat", label: "Chat", Icon: MessageSquare },
   { id: "equations", label: "Equations", Icon: Sigma },
   { id: "tasks", label: "Tasks", Icon: ListChecks },
@@ -196,6 +199,7 @@ export function DocumentDock({
           <QuickReferencePanel documentBody={documentBody} template={template} onOpenTemplates={onOpenTemplates} />
         )}
         {activeTab === "evidence" && <EvidenceTab onInsertCitation={onInsertCitation} />}
+        {activeTab === "review" && <ReviewTab documentBody={documentBody} />}
         {chatPanel}
         {activeTab === "equations" && (
           <div className="p-3">
