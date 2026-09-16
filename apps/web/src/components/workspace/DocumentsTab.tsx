@@ -12,6 +12,8 @@ import {
   ArrowLeft,
   Share2,
   Trash2,
+  RefreshCw,
+  CheckCircle2,
 } from "lucide-react";
 import { useFirestoreCollection } from "@/lib/hooks/useFirestoreCollection";
 import { MarkdownDoc } from "@/components/workspace/MarkdownDoc";
@@ -361,6 +363,8 @@ function DocEditorPane({
   // The writing surface opens in the researcher's primary mode: source and
   // compiled output together. Users can still hide the preview for focus mode.
   const [preview, setPreview] = useState(true);
+  const [compileState, setCompileState] = useState<"compiling" | "compiled">("compiled");
+  const [compileVersion, setCompileVersion] = useState(0);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
@@ -455,20 +459,55 @@ function DocEditorPane({
     setTemplatesOpen(true);
   }
 
+  function compileDraft() {
+    setCompileState("compiling");
+    window.setTimeout(() => {
+      setCompileVersion((version) => version + 1);
+      setCompileState("compiled");
+    }, 220);
+  }
+
   const dock = (
     <DocumentDock
       projectId={projectId}
+      documentId={doc.id}
       members={members}
       documentBody={draft}
       initialLatex={initialLatex}
       template={selectedTemplate}
       onOpenTemplates={openTemplatesFromDock}
       onOpenShare={onOpenShare}
+      onInsertCitation={(citation) => scheduleSave(`${draft}\n${citation}`)}
     />
   );
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      <div className="flex min-h-10 shrink-0 items-center justify-between border-b border-border bg-surface-subtle px-3 md:px-4">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="hidden font-mono text-[10px] uppercase tracking-[0.09em] text-text-muted sm:inline">
+            CoLab / Manuscript
+          </span>
+          <span className="h-3 w-px bg-border" aria-hidden="true" />
+          <span className="truncate font-body text-[12px] font-medium text-text-primary">{doc.title}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="hidden items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-text-muted lg:flex">
+            <CheckCircle2 size={11} className={compileState === "compiled" ? "text-accent-emerald" : "animate-spin text-accent-amber"} aria-hidden="true" />
+            {compileState === "compiled" ? "Compiled" : "Compiling"}
+          </span>
+          <button
+            type="button"
+            onClick={compileDraft}
+            disabled={compileState === "compiling"}
+            className="inline-flex items-center gap-1.5 rounded-xs bg-accent-signal px-3 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-text-on-primary transition-colors hover:bg-accent-signal-hover disabled:cursor-wait disabled:opacity-70"
+          >
+            <RefreshCw size={11} className={compileState === "compiling" ? "animate-spin" : ""} aria-hidden="true" />
+            {compileState === "compiling" ? "Compiling…" : "Compile"}
+          </button>
+        </div>
+      </div>
+
       {/* Meta strip — carries the project identity/actions that used to be a
           separate ribbon above this whole tab (see WorkspaceDetailContent's
           header, now hidden for Documents) as well as this document's own
@@ -627,7 +666,7 @@ function DocEditorPane({
               Compiled preview
             </div>
             <div className="mx-auto max-w-[68ch] px-6 py-8 md:px-10">
-              <MarkdownDoc source={draft} />
+              <MarkdownDoc key={compileVersion} source={draft} />
             </div>
           </div>
         )}
@@ -652,12 +691,14 @@ function DocEditorPane({
             </div>
             <DocumentDock
               projectId={projectId}
+              documentId={doc.id}
               members={members}
               documentBody={draft}
               initialLatex={initialLatex}
               template={selectedTemplate}
               onOpenTemplates={openTemplatesFromDock}
               onOpenShare={onOpenShare}
+              onInsertCitation={(citation) => scheduleSave(`${draft}\n${citation}`)}
               hideCollapse
               onRequestClose={() => setMobileDockOpen(false)}
               className="min-h-0 flex-1 border-l-0"

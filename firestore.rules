@@ -111,6 +111,27 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // Review comments are separate from source edits. A commenter may add
+      // comments and resolve them; the author identity is immutable.
+      match /comments/{commentId} {
+        allow read: if isMember(project());
+        allow create: if isCommenter(project())
+          && request.resource.data.authorUid == request.auth.uid;
+        allow update: if isCommenter(project())
+          && request.resource.data.authorUid == resource.data.authorUid
+          && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['resolved', 'resolvedAt', 'resolvedByUid']);
+        allow delete: if false;
+      }
+
+      // Revision snapshots are append-only and visible to project members.
+      match /history/{historyId} {
+        allow read: if isMember(project());
+        allow create: if isEditor(project())
+          && request.resource.data.savedByUid == request.auth.uid;
+        allow update, delete: if false;
+      }
+
       match /tasks/{taskId} {
         allow read: if isMember(project());
         allow write: if isEditor(project());
