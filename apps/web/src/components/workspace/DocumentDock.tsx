@@ -88,6 +88,8 @@ export function DocumentDock({
   const [collapsed, setCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<DockTab>("quickref");
   const [chatUnread, setChatUnread] = useState(false);
+  const activeDockTab = DOCK_TABS.find((tab) => tab.id === activeTab) ?? DOCK_TABS[0]!;
+  const ActiveDockIcon = activeDockTab.Icon;
 
   const abstractStatus = computeQuickReferenceStatus(documentBody, template);
   const abstractDotColor = abstractStatus.abstractOverLimit
@@ -146,18 +148,21 @@ export function DocumentDock({
   return (
     <aside
       className={cn(
-        "flex w-full shrink-0 flex-col border-l border-border bg-surface-subtle md:w-[320px]",
+        "colab-dock flex w-full shrink-0 flex-col border-l border-border bg-surface-subtle md:w-[320px]",
         className,
       )}
     >
-      <div className="flex shrink-0 items-center gap-0.5 px-2 pt-2">
+      <div className="colab-dock-tabs flex shrink-0 items-center gap-0.5 overflow-x-auto px-2 pt-2" role="tablist" aria-label="CoLab nested screens">
         {DOCK_TABS.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setActiveTab(t.id)}
+            role="tab"
+            aria-selected={activeTab === t.id}
+            aria-controls={`colab-panel-${t.id}`}
             className={cn(
-              "relative flex items-center gap-1.5 rounded-md px-2.5 py-2 font-body text-[12px] font-medium transition-colors",
+              "relative flex min-h-9 shrink-0 items-center gap-1.5 rounded-md px-2.5 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.04em] transition-colors",
               activeTab === t.id
                 ? "bg-surface text-text-primary"
                 : "text-text-secondary hover:text-text-primary",
@@ -205,7 +210,15 @@ export function DocumentDock({
       </div>
       <div className="mt-2 h-px shrink-0 bg-border" />
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="colab-dock-heading flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
+        <div className="min-w-0">
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.09em] text-text-muted">Research cockpit</p>
+          <h2 className="mt-1 truncate font-display text-[14px] font-semibold text-text-primary">{activeDockTab.label}</h2>
+        </div>
+        <ActiveDockIcon size={16} className="shrink-0 text-primary" aria-hidden="true" />
+      </div>
+
+      <div id={`colab-panel-${activeTab}`} role="tabpanel" aria-label={activeDockTab.label} className="min-h-0 flex-1 overflow-y-auto">
         {activeTab === "quickref" && (
           <QuickReferencePanel documentBody={documentBody} template={template} onOpenTemplates={onOpenTemplates} />
         )}
