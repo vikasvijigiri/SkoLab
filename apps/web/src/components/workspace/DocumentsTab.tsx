@@ -470,6 +470,7 @@ function DocEditorPane({
   const dock = (
     <DocumentDock
       projectId={projectId}
+      documentId={doc.id}
       members={members}
       documentBody={draft}
       initialLatex={initialLatex}
@@ -690,6 +691,7 @@ function DocEditorPane({
             </div>
             <DocumentDock
               projectId={projectId}
+              documentId={doc.id}
               members={members}
               documentBody={draft}
               initialLatex={initialLatex}
