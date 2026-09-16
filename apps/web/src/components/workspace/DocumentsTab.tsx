@@ -390,6 +390,10 @@ function DocEditorPane({
 
   function scheduleSave(next: string) {
     setDraft(next);
+    // A successful PDF belongs to the previous source revision. Never keep
+    // showing stale compiled output after the researcher edits the draft.
+    setCompiledPdf(null);
+    setCompileState("compiled");
     if (!canEdit) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     setSaving(true);

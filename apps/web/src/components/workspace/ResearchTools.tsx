@@ -54,6 +54,12 @@ export interface JournalTemplate {
 
 export const JOURNAL_TEMPLATES: JournalTemplate[] = [
   {
+    id: "latex-article",
+    domain: "General",
+    label: "LaTeX article starter",
+    body: "\\documentclass[11pt]{article}\n\\usepackage[margin=1in]{geometry}\n\\usepackage{amsmath,amssymb}\n\\usepackage{graphicx}\n\\usepackage{hyperref}\n\n\\title{Your research title}\n\\author{Author Name \\\\ Institution}\n\\date{\\today}\n\n\\begin{document}\n\\maketitle\n\n\\begin{abstract}\nState the question, method, main result and significance.\n\\end{abstract}\n\n\\section{Introduction}\nState the problem, gap and contribution.\n\n\\section{Methods}\nDescribe the protocol so another researcher can reproduce it.\n\n\\section{Results}\nReport findings with uncertainty. For example, $E = mc^2$.\n\n\\section{Discussion}\nInterpret the result and its limitations.\n\n\\section{Conclusion}\nState the answer and the next experiment.\n\n\\bibliographystyle{plain}\n\\begin{thebibliography}{9}\n\\bibitem{example} Add a DOI-backed reference.\n\\end{thebibliography}\n\\end{document}\n",
+  },
+  {
     id: "imrad",
     domain: "General",
     label: "IMRaD · General research",
