@@ -23,8 +23,11 @@ for (const vp of VIEWPORTS) {
       // @media block synced) — no localStorage, so ThemeToggle's SSR state
       // stays consistent and there is no hydration mismatch.
       await page.emulateMedia({ colorScheme: theme });
-      await page.goto("/");
-      await page.waitForLoadState("networkidle");
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+      // Framer Motion leaves some above-the-fold Reveal nodes at inline
+      // opacity:0 when a fast test scroll begins. Force the settled visual
+      // state before screenshot/axe; this mirrors the final user-visible DOM.
+      await page.addStyleTag({ content: '[style*="opacity: 0"] { opacity: 1 !important; transform: none !important; }' });
       await expect(page.getByRole("heading", { name: /real standing/i })).toBeVisible();
 
       // The mid-page sections animate in via framer-motion `whileInView`
