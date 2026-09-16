@@ -10,6 +10,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   X,
+  BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ChatTab } from "@/components/workspace/ChatTab";
@@ -18,11 +19,13 @@ import { TasksMeetingsTab } from "@/components/workspace/TasksMeetingsTab";
 import { QuickReferencePanel, computeQuickReferenceStatus } from "@/components/workspace/QuickReferencePanel";
 import type { JournalTemplate } from "@/components/workspace/ResearchTools";
 import type { CollabMember } from "@/lib/types";
+import { EvidenceTab } from "@/components/workspace/EvidenceTab";
 
-type DockTab = "quickref" | "chat" | "equations" | "tasks";
+type DockTab = "quickref" | "evidence" | "chat" | "equations" | "tasks";
 
 const DOCK_TABS: { id: DockTab; label: string; Icon: typeof ClipboardList }[] = [
   { id: "quickref", label: "Quick reference", Icon: ClipboardList },
+  { id: "evidence", label: "Evidence", Icon: BookOpen },
   { id: "chat", label: "Chat", Icon: MessageSquare },
   { id: "equations", label: "Equations", Icon: Sigma },
   { id: "tasks", label: "Tasks", Icon: ListChecks },
@@ -45,6 +48,7 @@ export function DocumentDock({
   template,
   onOpenTemplates,
   onOpenShare,
+  onInsertCitation,
   className,
   hideCollapse = false,
   onRequestClose,
@@ -58,6 +62,7 @@ export function DocumentDock({
   template: JournalTemplate | undefined;
   onOpenTemplates: () => void;
   onOpenShare: () => void;
+  onInsertCitation: (citation: string) => void;
   /** Merged onto the panel's root — lets the mobile bottom sheet drop the
    *  left border and stretch to fill its container. */
   className?: string;
@@ -190,6 +195,7 @@ export function DocumentDock({
         {activeTab === "quickref" && (
           <QuickReferencePanel documentBody={documentBody} template={template} onOpenTemplates={onOpenTemplates} />
         )}
+        {activeTab === "evidence" && <EvidenceTab onInsertCitation={onInsertCitation} />}
         {chatPanel}
         {activeTab === "equations" && (
           <div className="p-3">
