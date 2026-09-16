@@ -14,6 +14,7 @@ import {
   FileCheck2,
   Lightbulb,
   MessageCircleMore,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ChatTab } from "@/components/workspace/ChatTab";
@@ -26,8 +27,9 @@ import { EvidenceTab } from "@/components/workspace/EvidenceTab";
 import { ReviewTab } from "@/components/workspace/ReviewTab";
 import { IdeasTab } from "@/components/workspace/IdeasTab";
 import { CommentsTab } from "@/components/workspace/CommentsTab";
+import { HistoryTab } from "@/components/workspace/HistoryTab";
 
-type DockTab = "quickref" | "evidence" | "review" | "ideas" | "comments" | "chat" | "equations" | "tasks";
+type DockTab = "quickref" | "evidence" | "review" | "ideas" | "comments" | "history" | "chat" | "equations" | "tasks";
 
 const DOCK_TABS: { id: DockTab; label: string; Icon: typeof ClipboardList }[] = [
   { id: "quickref", label: "Quick reference", Icon: ClipboardList },
@@ -35,6 +37,7 @@ const DOCK_TABS: { id: DockTab; label: string; Icon: typeof ClipboardList }[] = 
   { id: "review", label: "Review", Icon: FileCheck2 },
   { id: "ideas", label: "Ideas", Icon: Lightbulb },
   { id: "comments", label: "Comments", Icon: MessageCircleMore },
+  { id: "history", label: "History", Icon: History },
   { id: "chat", label: "Chat", Icon: MessageSquare },
   { id: "equations", label: "Equations", Icon: Sigma },
   { id: "tasks", label: "Tasks", Icon: ListChecks },
@@ -210,6 +213,7 @@ export function DocumentDock({
         {activeTab === "review" && <ReviewTab documentBody={documentBody} />}
         {activeTab === "ideas" && <IdeasTab onInsertIdea={onInsertCitation} />}
         {activeTab === "comments" && <CommentsTab projectId={projectId} docId={documentId} />}
+        {activeTab === "history" && <HistoryTab projectId={projectId} docId={documentId} />}
         {chatPanel}
         {activeTab === "equations" && (
           <div className="p-3">
