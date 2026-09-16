@@ -18,7 +18,10 @@ export function TopBar() {
   const { toggle: toggleCommandPalette } = useCommandPalette();
 
   return (
-    <header className="h-12 shrink-0" style={{ background: "var(--primary)" }}>
+    <header
+      className={cn("h-12 shrink-0", pathname?.startsWith("/workspace") && "workspace-topbar")}
+      style={{ background: "var(--primary)" }}
+    >
       <div className="mx-auto flex h-full w-full max-w-[1240px] items-center gap-4 px-5 md:px-8">
         {/* logo — top-left */}
         <Link

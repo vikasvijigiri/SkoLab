@@ -493,3 +493,49 @@ body {
     color: #555;
   }
 }
+
+/* CoLab Instrument surface. The workspace is a long-session writing tool, so
+   its canvas intentionally uses the adopted dark terminal direction even
+   when the surrounding marketing/app surfaces are in light mode. Keeping the
+   tokens scoped here preserves the user's theme preference everywhere else. */
+.workspace-shell {
+  --page-bg: #0b0d10;
+  --surface: #14171b;
+  --surface-subtle: #1c2026;
+  --surface-raised: #20242b;
+  --border-color: #282d35;
+  --border-strong: #3a414c;
+  --text-primary: #e6e9ee;
+  --text-secondary: #aab1bd;
+  --text-muted: #8b93a0;
+  --primary: #8f88ff;
+  --primary-hover: #a49dff;
+  --primary-dark: #a49dff;
+  --accent-signal: #ff6b4a;
+  --accent-signal-hover: #ff8163;
+  --accent-live: #37dd87;
+  --success: #37dd87;
+  --warning: #f5b544;
+  --danger: #ff6470;
+  --notification: #ff6470;
+  --surface-input: #1c2026;
+  --border-input: #39414d;
+  --ring: color-mix(in srgb, var(--accent-signal) 55%, transparent);
+  --text-on-primary: #0b0d10;
+  color-scheme: dark;
+}
+
+.workspace-topbar {
+  background: #0b0d10 !important;
+  border-bottom: 1px solid #282d35;
+}
+
+.workspace-topbar a span:first-child {
+  background: var(--primary) !important;
+  color: #0b0d10 !important;
+}
+
+.workspace-topbar button[aria-label="Search"] {
+  background: #1c2026 !important;
+  border: 1px solid #39414d;
+}
