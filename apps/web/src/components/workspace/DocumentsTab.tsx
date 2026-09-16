@@ -476,6 +476,7 @@ function DocEditorPane({
       template={selectedTemplate}
       onOpenTemplates={openTemplatesFromDock}
       onOpenShare={onOpenShare}
+      onInsertCitation={(citation) => scheduleSave(`${draft}\n${citation}`)}
     />
   );
 
@@ -695,6 +696,7 @@ function DocEditorPane({
               template={selectedTemplate}
               onOpenTemplates={openTemplatesFromDock}
               onOpenShare={onOpenShare}
+              onInsertCitation={(citation) => scheduleSave(`${draft}\n${citation}`)}
               hideCollapse
               onRequestClose={() => setMobileDockOpen(false)}
               className="min-h-0 flex-1 border-l-0"
