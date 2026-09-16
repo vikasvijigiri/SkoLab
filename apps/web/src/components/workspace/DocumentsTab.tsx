@@ -156,12 +156,12 @@ export function DocumentsTab({
   }
 
   return (
-    <div className="flex h-full flex-col md:flex-row">
+    <div className={cn("colab-redesign flex h-full flex-col md:flex-row", focus && "colab-redesign--focus")}>
       {/* ── File panel (one rung down the surface ladder) ─────────────── */}
       {/* The 204px file rail + the 56px project icon rail = the same 260px
           side system used by Discovery and other research surfaces. */}
       {!focus && (
-        <aside className="flex shrink-0 flex-col border-b border-border bg-surface-subtle md:w-[204px] md:border-b-0 md:border-r">
+        <aside className="colab-files flex shrink-0 flex-col border-b border-border bg-surface-subtle md:w-[204px] md:border-b-0 md:border-r">
           <div className="flex items-center justify-between px-3 pb-2 pt-3">
             <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-text-muted">
               Files
@@ -256,7 +256,7 @@ export function DocumentsTab({
       )}
 
       {/* ── Editor canvas (the protagonist) ──────────────────────────── */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-surface">
+      <div className="colab-editor flex min-w-0 flex-1 flex-col overflow-hidden bg-surface">
         {(error || subError) && (
           <div className="shrink-0 p-3">
             <ErrorBanner message={error ?? subError!} />
@@ -512,7 +512,7 @@ function DocEditorPane({
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="colab-editor-pane flex h-full min-h-0 flex-col">
       <div className="flex min-h-10 shrink-0 items-center justify-between border-b border-border bg-surface-subtle px-3 md:px-4">
         <div className="flex min-w-0 items-center gap-2">
           <span className="hidden font-mono text-[10px] uppercase tracking-[0.09em] text-text-muted sm:inline">
