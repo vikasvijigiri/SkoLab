@@ -33,6 +33,7 @@ import { WorkspaceResearchActions, JOURNAL_TEMPLATES } from "@/components/worksp
 import { DocumentDock } from "@/components/workspace/DocumentDock";
 import { SlashMenu } from "@/components/workspace/SlashMenu";
 import { PresenceStack } from "@/components/workspace/PresenceStack";
+import { apiRequest, ApiError } from "@/lib/api/client";
 
 function relTime(ts: number) {
   const s = Math.round((Date.now() - ts) / 1000);
@@ -356,6 +357,7 @@ function DocEditorPane({
   onConfirmDelete: () => void;
   deleting: boolean;
 }) {
+  const { getIdToken } = useAuth();
   const [draft, setDraft] = useState(doc.body);
   const [savedAt, setSavedAt] = useState<number>(doc.updatedAt);
   const [saving, setSaving] = useState(false);
@@ -363,8 +365,10 @@ function DocEditorPane({
   // The writing surface opens in the researcher's primary mode: source and
   // compiled output together. Users can still hide the preview for focus mode.
   const [preview, setPreview] = useState(true);
-  const [compileState, setCompileState] = useState<"compiling" | "compiled">("compiled");
+  const [compileState, setCompileState] = useState<"compiling" | "compiled" | "error">("compiled");
   const [compileVersion, setCompileVersion] = useState(0);
+  const [compiledPdf, setCompiledPdf] = useState<string | null>(null);
+  const [compileError, setCompileError] = useState<string | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
@@ -459,12 +463,34 @@ function DocEditorPane({
     setTemplatesOpen(true);
   }
 
-  function compileDraft() {
+  async function compileDraft() {
     setCompileState("compiling");
-    window.setTimeout(() => {
-      setCompileVersion((version) => version + 1);
+    setCompileError(null);
+    setCompiledPdf(null);
+    // Markdown drafts use the instant client renderer. Full LaTeX documents
+    // use the authenticated worker contract and show the returned PDF inline.
+    if (!draft.includes("\\documentclass")) {
+      window.setTimeout(() => {
+        setCompileVersion((version) => version + 1);
+        setCompileState("compiled");
+      }, 220);
+      return;
+    }
+    try {
+      const idToken = await getIdToken();
+      if (!idToken) throw new ApiError(401, "Sign in to compile LaTeX documents.");
+      const result = await apiRequest<{ status: string; pdf_base64?: string; errors?: string[] }>("/api/v1/colab/compile", {
+        method: "POST",
+        idToken,
+        body: { latex_source: draft },
+      });
+      if (result.status !== "compiled" || !result.pdf_base64) throw new ApiError(422, result.errors?.[0] ?? "LaTeX compilation failed.");
+      setCompiledPdf(`data:application/pdf;base64,${result.pdf_base64}`);
       setCompileState("compiled");
-    }, 220);
+    } catch (err) {
+      setCompileError(err instanceof ApiError ? err.message : "Compilation failed. Try again.");
+      setCompileState("error");
+    }
   }
 
   const dock = (
@@ -494,7 +520,7 @@ function DocEditorPane({
         <div className="flex items-center gap-2">
           <span className="hidden items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-text-muted lg:flex">
             <CheckCircle2 size={11} className={compileState === "compiled" ? "text-accent-emerald" : "animate-spin text-accent-amber"} aria-hidden="true" />
-            {compileState === "compiled" ? "Compiled" : "Compiling"}
+            {compileState === "compiled" ? "Compiled" : compileState === "error" ? "Compile error" : "Compiling"}
           </span>
           <button
             type="button"
@@ -665,9 +691,8 @@ function DocEditorPane({
             <div className="sticky top-0 z-10 flex h-8 items-center border-b border-border bg-surface px-6 font-mono text-[10px] uppercase tracking-[0.09em] text-text-muted md:px-10">
               Compiled preview
             </div>
-            <div className="mx-auto max-w-[68ch] px-6 py-8 md:px-10">
-              <MarkdownDoc key={compileVersion} source={draft} />
-            </div>
+            {compileError && <div role="alert" className="m-4 rounded-md border border-notification/40 bg-notification/10 px-3 py-2 font-body text-[12px] text-notification">{compileError}</div>}
+            {compiledPdf ? <iframe title="Compiled LaTeX PDF" src={compiledPdf} className="h-[calc(100%-2rem)] w-full border-0" /> : <div className="mx-auto max-w-[68ch] px-6 py-8 md:px-10"><MarkdownDoc key={compileVersion} source={draft} /></div>}
           </div>
         )}
         {/* Desktop: the dock sits inline, beside the editor. Collapsible to a

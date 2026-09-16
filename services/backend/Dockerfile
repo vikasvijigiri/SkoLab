@@ -33,8 +33,14 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Create a non-root group and user
-RUN groupadd -g 10001 schoolab && \
+# TeX is deliberately installed in the runtime image: CoLab compilation is
+# an authenticated, bounded subprocess and must work after deployment, not
+# only on a developer machine. Keep the package set minimal; pdflatex and the
+# base LaTeX classes cover the templates currently shipped by the web client.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    texlive-latex-base \
+    && rm -rf /var/lib/apt/lists/* && \
+    groupadd -g 10001 schoolab && \
     useradd -u 10001 -g schoolab -s /bin/bash -m schoolab
 
 # Copy installed packages from builder
