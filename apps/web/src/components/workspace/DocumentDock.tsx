@@ -10,6 +10,10 @@ import {
   PanelRightClose,
   PanelRightOpen,
   X,
+  BookOpen,
+  FileCheck2,
+  Lightbulb,
+  MessageCircleMore,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ChatTab } from "@/components/workspace/ChatTab";
@@ -18,11 +22,19 @@ import { TasksMeetingsTab } from "@/components/workspace/TasksMeetingsTab";
 import { QuickReferencePanel, computeQuickReferenceStatus } from "@/components/workspace/QuickReferencePanel";
 import type { JournalTemplate } from "@/components/workspace/ResearchTools";
 import type { CollabMember } from "@/lib/types";
+import { EvidenceTab } from "@/components/workspace/EvidenceTab";
+import { ReviewTab } from "@/components/workspace/ReviewTab";
+import { IdeasTab } from "@/components/workspace/IdeasTab";
+import { CommentsTab } from "@/components/workspace/CommentsTab";
 
-type DockTab = "quickref" | "chat" | "equations" | "tasks";
+type DockTab = "quickref" | "evidence" | "review" | "ideas" | "comments" | "chat" | "equations" | "tasks";
 
 const DOCK_TABS: { id: DockTab; label: string; Icon: typeof ClipboardList }[] = [
   { id: "quickref", label: "Quick reference", Icon: ClipboardList },
+  { id: "evidence", label: "Evidence", Icon: BookOpen },
+  { id: "review", label: "Review", Icon: FileCheck2 },
+  { id: "ideas", label: "Ideas", Icon: Lightbulb },
+  { id: "comments", label: "Comments", Icon: MessageCircleMore },
   { id: "chat", label: "Chat", Icon: MessageSquare },
   { id: "equations", label: "Equations", Icon: Sigma },
   { id: "tasks", label: "Tasks", Icon: ListChecks },
@@ -39,17 +51,20 @@ const DOCK_TABS: { id: DockTab; label: string; Icon: typeof ClipboardList }[] = 
  */
 export function DocumentDock({
   projectId,
+  documentId,
   members,
   documentBody,
   initialLatex,
   template,
   onOpenTemplates,
   onOpenShare,
+  onInsertCitation,
   className,
   hideCollapse = false,
   onRequestClose,
 }: {
   projectId: string;
+  documentId: string;
   /** The project's real member list — forwarded to ChatTab for @mention
    *  parsing (decisions/0022). */
   members: CollabMember[];
@@ -58,6 +73,7 @@ export function DocumentDock({
   template: JournalTemplate | undefined;
   onOpenTemplates: () => void;
   onOpenShare: () => void;
+  onInsertCitation: (citation: string) => void;
   /** Merged onto the panel's root — lets the mobile bottom sheet drop the
    *  left border and stretch to fill its container. */
   className?: string;
@@ -190,6 +206,10 @@ export function DocumentDock({
         {activeTab === "quickref" && (
           <QuickReferencePanel documentBody={documentBody} template={template} onOpenTemplates={onOpenTemplates} />
         )}
+        {activeTab === "evidence" && <EvidenceTab onInsertCitation={onInsertCitation} />}
+        {activeTab === "review" && <ReviewTab documentBody={documentBody} />}
+        {activeTab === "ideas" && <IdeasTab onInsertIdea={onInsertCitation} />}
+        {activeTab === "comments" && <CommentsTab projectId={projectId} docId={documentId} />}
         {chatPanel}
         {activeTab === "equations" && (
           <div className="p-3">

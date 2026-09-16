@@ -22,10 +22,14 @@ import type {
   CollabDocument,
   CollabPresence,
   CollabMessage,
+  CollabComment,
+  CollabHistoryEntry,
   CollabTask,
   CollabMeeting,
   SkoLabUser,
 } from "@/lib/types";
+
+const lastHistorySnapshot = new Map<string, number>();
 
 // ── Roles (Overleaf model) ───────────────────────────────────────────────────
 // owner: everything + manage members + delete project
@@ -170,6 +174,55 @@ export async function sendMessage(projectId: string, senderUid: string, senderNa
     text,
     timestamp: Date.now(),
   });
+}
+
+export function subscribeComments(
+  projectId: string,
+  docId: string,
+  cb: (comments: CollabComment[]) => void,
+  onError?: SubscribeErrorHandler,
+): Unsubscribe {
+  return safeSubscribe(() => {
+    const q = query(collection(requireDb(), "collabs_groups", projectId, "comments"), orderBy("createdAt", "asc"));
+    return onSnapshot(q, (snap) => cb(snap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as CollabComment))
+      .filter((comment) => comment.docId === docId)), onError);
+  }, onError);
+}
+
+export async function addComment(
+  projectId: string,
+  comment: Omit<CollabComment, "id" | "createdAt" | "resolved" | "resolvedAt" | "resolvedByUid">,
+) {
+  await addDoc(collection(requireDb(), "collabs_groups", projectId, "comments"), {
+    ...comment,
+    resolved: false,
+    resolvedAt: null,
+    resolvedByUid: null,
+    createdAt: Date.now(),
+  });
+}
+
+export async function resolveComment(projectId: string, commentId: string, uid: string, resolved: boolean) {
+  await updateDoc(doc(requireDb(), "collabs_groups", projectId, "comments", commentId), {
+    resolved,
+    resolvedAt: resolved ? Date.now() : null,
+    resolvedByUid: resolved ? uid : null,
+  });
+}
+
+export function subscribeHistory(
+  projectId: string,
+  docId: string,
+  cb: (entries: CollabHistoryEntry[]) => void,
+  onError?: SubscribeErrorHandler,
+): Unsubscribe {
+  return safeSubscribe(() => {
+    const q = query(collection(requireDb(), "collabs_groups", projectId, "history"), orderBy("savedAt", "desc"));
+    return onSnapshot(q, (snap) => cb(snap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as CollabHistoryEntry))
+      .filter((entry) => entry.docId === docId)), onError);
+  }, onError);
 }
 
 export function subscribeTasks(
@@ -318,6 +371,20 @@ export async function updateDocument(
     updatedByUid: by.uid,
     updatedByName: by.name,
   });
+  // Autosave is frequent; keep durable history useful and bounded by taking
+  // at most one snapshot per document every 30 seconds.
+  const historyKey = `${projectId}/${docId}`;
+  if (fields.body !== undefined && now - (lastHistorySnapshot.get(historyKey) ?? 0) >= 30_000) {
+    await addDoc(collection(requireDb(), "collabs_groups", projectId, "history"), {
+      docId,
+      title: fields.title ?? "",
+      body: fields.body,
+      savedAt: now,
+      savedByUid: by.uid,
+      savedByName: by.name,
+    });
+    lastHistorySnapshot.set(historyKey, now);
+  }
   // Bump the project so the dashboard "updated" sort/label reflects the edit.
   await updateDoc(doc(requireDb(), "collabs_groups", projectId), {
     updatedAt: now,

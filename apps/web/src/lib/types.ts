@@ -554,6 +554,33 @@ export interface CollabMessage {
   timestamp: number;
 }
 
+// Firestore collabs_groups/{id}/comments/{commentId}. Comments are attached
+// to a document (and optionally a source line) so review can stay separate
+// from the manuscript body.
+export interface CollabComment {
+  id: string;
+  docId: string;
+  authorUid: string;
+  authorName: string;
+  body: string;
+  line?: number | null;
+  resolved: boolean;
+  createdAt: number;
+  resolvedAt?: number | null;
+  resolvedByUid?: string | null;
+}
+
+// Immutable manuscript snapshots used by the revision/history surface.
+export interface CollabHistoryEntry {
+  id: string;
+  docId: string;
+  title: string;
+  body: string;
+  savedAt: number;
+  savedByUid: string;
+  savedByName: string;
+}
+
 export interface CollabTask {
   id: string;
   title: string;
