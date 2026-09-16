@@ -13,6 +13,8 @@ captures/
 # allow-listed below; these are required to build, test, deploy, or secure the
 # project and are not personal machine state.
 .*
+!.storybook/
+!.storybook/**
 !.gitignore
 !.gitattributes
 !.github/
@@ -23,6 +25,7 @@ captures/
 !.pre-commit-config.yaml
 !.secrets.baseline
 !apps/web/.env.local.example
+!.mcp.json.example
 
 # Optional local skill bundles and generated executables. Dependencies and
 # build outputs must be recreated by setup/build steps, not committed.
