@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "playwright": { "command": "npx", "args": ["-y", "@playwright/mcp@0.0.81"] },
+    "mobile-mcp": { "command": "npx", "args": ["-y", "@mobilenext/mobile-mcp@1.0.4"] },
+    "postgres": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-postgres@0.6.2", "${env:DATABASE_URL}"] },
+    "sentry": { "type": "http", "url": "https://mcp.sentry.dev/mcp" },
+    "context7": { "command": "npx", "args": ["-y", "@upstash/context7-mcp@4.1.1"] },
+    "duckduckgo": { "command": "npx", "args": ["-y", "@oevortex/ddg_search@1.4.0"] },
+    "tavily": { "command": "npx", "args": ["-y", "tavily-mcp@0.2.22"], "env": { "TAVILY_API_KEY": "${env:TAVILY_API_KEY}" } },
+    "shadcn-ui": { "command": "npx", "args": ["-y", "@jpisnice/shadcn-ui-mcp-server@2.0.0"] },
+    "firebase": { "command": "firebase", "args": ["mcp"] },
+    "github": { "type": "http", "url": "https://api.githubcopilot.com/mcp/" },
+    "figma": { "type": "http", "url": "https://mcp.figma.com/mcp" },
+    "penpot": { "command": "npx", "args": ["-y", "@penpot/mcp@stable"] }
+  }
+}

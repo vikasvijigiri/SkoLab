@@ -14,6 +14,8 @@
 /coverage
 /test-results
 /playwright-report
+/storybook-static
+/src/stories/assets
 /e2e/__screens__
 
 # next.js
