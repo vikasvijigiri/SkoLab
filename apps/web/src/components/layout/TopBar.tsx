@@ -19,7 +19,7 @@ export function TopBar() {
 
   // CoLab owns its own Penpot-defined command chrome. Keeping the global bar
   // here would duplicate navigation and consume the writing viewport.
-  if (pathname?.startsWith("/workspace")) return null;
+  if (pathname?.startsWith("/workspace/")) return null;
 
   return (
     <header
