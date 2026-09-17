@@ -755,6 +755,29 @@ body {
    a calm editorial canvas, a compact navy tool rail, and research context that
    stays visible without stealing the writing surface. */
 .colab-luminous {
+  --page-bg: #f4f7fb;
+  --surface: #ffffff;
+  --surface-subtle: #f7f9fc;
+  --surface-raised: #edf3ff;
+  --border-color: #dce4ee;
+  --border-strong: #b8c7d9;
+  --text-primary: #18253b;
+  --text-secondary: #42536d;
+  --text-muted: #65738a;
+  --primary: #2f6df6;
+  --primary-hover: #245bd8;
+  --primary-dark: #234fae;
+  --accent-signal: #ef7d32;
+  --accent-signal-hover: #d86620;
+  --accent-live: #0c9b98;
+  --success: #0c9b98;
+  --warning: #b66b00;
+  --danger: #c83b4b;
+  --notification: #c83b4b;
+  --surface-input: #ffffff;
+  --border-input: #b8c7d9;
+  --text-on-primary: #ffffff;
+  --ring: rgb(47 109 246 / 28%);
   --luminous-ink: #18253b;
   --luminous-muted: #65738a;
   --luminous-line: #dce4ee;
