@@ -22,6 +22,22 @@
   border-color: var(--border-color);
 }
 
+.workspace-topbar {
+  height: 40px;
+}
+
+.workspace-topbar > div {
+  height: 40px;
+}
+
+.colab-redesign .colab-files {
+  width: 184px;
+}
+
+.colab-redesign .colab-dock {
+  width: 296px;
+}
+
 .colab-redesign .colab-files > div:first-child {
   min-height: 54px;
   border-bottom: 1px solid var(--border-color);
@@ -169,6 +185,10 @@
   max-width: 100%;
 }
 
+.colab-template-popover {
+  max-width: calc(100vw - 32px);
+}
+
 .colab-redesign--focus .colab-editor-pane > div:nth-child(2) {
   min-height: 44px;
 }
@@ -180,6 +200,7 @@
 
   .colab-redesign .colab-files {
     max-height: 180px;
+    width: auto;
   }
 
   .colab-redesign textarea {
