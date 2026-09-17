@@ -314,7 +314,10 @@ export function DocumentsTab({
           deleting={deleting}
         />
       ) : (
-        <div className="flex h-full items-center justify-center text-sm text-text-muted">No documents yet.</div>
+        <div className="flex h-full items-center justify-center text-sm text-text-muted">
+          <span>No documents yet.</span>
+          <span className="sr-only">{project.name}</span>
+        </div>
       )}
     </div>
   );

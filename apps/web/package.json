@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:colab": "playwright test e2e/colab-live.spec.ts",
     "check:contrast": "node scripts/check-contrast.mjs",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
