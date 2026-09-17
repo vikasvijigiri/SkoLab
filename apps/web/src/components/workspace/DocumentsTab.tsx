@@ -22,6 +22,7 @@ import {
   ChevronDown,
   Command,
   Sparkles,
+  ArrowUpRight,
 } from "lucide-react";
 import { useFirestoreCollection } from "@/lib/hooks/useFirestoreCollection";
 import { MarkdownDoc } from "@/components/workspace/MarkdownDoc";
@@ -49,6 +50,126 @@ function relTime(ts: number) {
   if (s < 3600) return `${Math.round(s / 60)}m ago`;
   if (s < 86400) return `${Math.round(s / 3600)}h ago`;
   return `${Math.round(s / 86400)}d ago`;
+}
+
+function PenpotManuscriptSurface({
+  projectName,
+  draft,
+  canEdit,
+  focus,
+  compileState,
+  words,
+  compileError,
+  onDraftChange,
+  textareaRef,
+  onCompile,
+  onTogglePreview,
+  onToggleFocus,
+  onOpenTemplates,
+  onOpenShare,
+}: {
+  projectName: string;
+  draft: string;
+  canEdit: boolean;
+  focus: boolean;
+  compileState: "compiling" | "compiled" | "error";
+  words: number;
+  compileError: string | null;
+  onDraftChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  onCompile: () => void;
+  onTogglePreview: () => void;
+  onToggleFocus: () => void;
+  onOpenTemplates: () => void;
+  onOpenShare: () => void;
+}) {
+  const sections = ["Abstract", "Introduction", "Methods", "Results", "Discussion", "References"];
+  return (
+    <div className="colab-penpot-surface">
+      <header className="colab-skolab-ribbon" aria-label="SkoLab navigation">
+        <button type="button" className="colab-skolab-brand" aria-label="Go to SkoLab home"><span>S</span> SkoLab</button>
+        <nav><button type="button" className="is-active">CoLab</button><button type="button">Research</button><button type="button">People</button></nav>
+        <div className="colab-skolab-ribbon-spacer" />
+        <button type="button" aria-label="Open notifications">◌</button><button type="button" className="colab-skolab-user">VV</button>
+      </header>
+      <div className="colab-penpot-workspace-grid">
+      {!focus && (
+        <aside className="colab-penpot-sidebar" aria-label="Manuscript outline">
+          <div className="colab-penpot-sidebar-head">
+            <span className="colab-penpot-eyebrow">Manuscript</span>
+            <h1>{projectName}</h1>
+            <p>Draft · Revision 07</p>
+          </div>
+          <button type="button" className="colab-penpot-add" onClick={onOpenTemplates}><Plus size={16} /> Add block</button>
+          <div className="colab-penpot-section-list">
+            <span className="colab-penpot-eyebrow">Structure</span>
+            {sections.map((section, index) => (
+              <button type="button" key={section} className={cn("colab-penpot-section", index === 0 && "is-current")}>
+                <span>{String(index + 1).padStart(2, "0")}</span><strong>{section}</strong>
+              </button>
+            ))}
+          </div>
+          <div className="colab-penpot-workflow">
+            <span className="colab-penpot-eyebrow">Workflow</span>
+            <button type="button" onClick={onOpenTemplates}><Plus size={13} /> Insert citation</button>
+            <button type="button"><ListTodo size={13} /> Review queue</button>
+            <button type="button" onClick={onOpenShare}><ArrowUpRight size={13} /> Share with lab</button>
+          </div>
+        </aside>
+      )}
+      <main className="colab-penpot-main">
+        <div className="colab-penpot-modebar" role="toolbar" aria-label="Manuscript modes">
+          <div className="colab-penpot-modes">
+            <button type="button" className="is-active">Write</button>
+            <button type="button" onClick={onTogglePreview}>Preview</button>
+            <button type="button" onClick={onToggleFocus}>Focus</button>
+          </div>
+          <button type="button" className="colab-penpot-compile" onClick={onCompile} disabled={compileState === "compiling"}>
+            {compileState === "compiling" ? "Compiling…" : "Compile PDF"} <ArrowUpRight size={14} />
+          </button>
+        </div>
+        <div className="colab-penpot-paper-wrap">
+          <article className="colab-penpot-paper">
+            <div className="colab-penpot-paper-kicker">Abstract <span>/</span> 600 character target</div>
+            <h2>{projectName}</h2>
+            <p className="colab-penpot-paper-subtitle">A live manuscript with evidence attached to every claim.</p>
+            <div className="colab-penpot-rule" />
+            <div className="colab-penpot-editor-copy">
+              <div className="colab-penpot-rendered-copy">
+                <h3>Abstract</h3>
+                <p>We investigate emergent behavior in frustrated two-dimensional systems and outline a reproducible route from numerical evidence to a concise physical interpretation.</p>
+                <h3><span>01</span> Introduction</h3>
+                <p>The central question is how local constraints produce long-range signatures without conventional order.</p>
+              </div>
+              <textarea ref={textareaRef} value={draft} onChange={onDraftChange} readOnly={!canEdit} aria-label="Manuscript editor" />
+            </div>
+            <div className="colab-penpot-evidence-note"><span>◆</span> 3 supporting sources <b>·</b> 1 unresolved gap <b>·</b> Review ready</div>
+            <div className="colab-penpot-insert-hint"><i /> Type / to insert a section, citation, or equation</div>
+          </article>
+        </div>
+        <footer className="colab-penpot-statusbar">
+          <span><i /> Manuscript ready</span><span>{words || 53} words　·　1 citation　·　1 open decision</span><span>⌘ Enter　 Compile</span>
+        </footer>
+      </main>
+      {!focus && (
+        <aside className="colab-penpot-lens" aria-label="Research lens">
+          <span className="colab-penpot-eyebrow">Research lens</span>
+          <h2>Evidence &amp; decisions</h2>
+          <p>Stay oriented without leaving the page.</p>
+          <div className="colab-penpot-lens-tabs"><button type="button" className="is-active">Evidence</button><button type="button">Decisions</button><button type="button">Tasks</button></div>
+          <div className="colab-penpot-lens-rule" />
+          <span className="colab-penpot-eyebrow">Claim map</span>
+          <div className="colab-penpot-claim"><strong>Local constraints produce long-range signatures</strong><span>Confidence 82%　·　3 sources</span><div><i /></div></div>
+          <span className="colab-penpot-eyebrow">Next decision</span>
+          <div className="colab-penpot-decision"><strong>Resolve finite-size effects</strong><p>Compare the two cited simulations before drafting Results.</p><button type="button">Open decision</button></div>
+          <span className="colab-penpot-eyebrow">Co-Lab assistant</span>
+          <button type="button" className="colab-penpot-assistant">Ask about this claim… <ArrowUpRight size={14} /></button>
+        </aside>
+      )}
+      {compileError && <div role="alert" className="colab-penpot-error">{compileError}</div>}
+      </div>
+    </div>
+  );
 }
 
 type Author = { uid: string; name: string };
@@ -162,6 +283,41 @@ export function DocumentsTab({
     await deleteDocument(project.id, d.id).catch(() => {});
     if (activeId === d.id) setActiveId(documents.find((x) => x.id !== d.id)?.id ?? null);
   }
+
+  // The Penpot manuscript surface is the complete CoLab screen. Keep the
+  // legacy multi-panel shell below as dead fallback code during this rollout;
+  // this return makes the redesigned surface the only rendered composition.
+  return (
+    <div className={cn("colab-redesign colab-luminous h-full", focus && "colab-redesign--focus")}>
+      {active ? (
+        <DocEditorPane
+          key={active.id}
+          projectId={project.id}
+          projectName={project.name}
+          members={project.members}
+          initialLatex={project.recentEquations}
+          doc={active}
+          documents={documents}
+          canEdit={canEdit}
+          by={by}
+          focus={focus}
+          onToggleFocus={toggleFocus}
+          onError={setError}
+          onOpenShare={onOpenShare}
+          onBack={onBack}
+          roleLabel={roleLabel}
+          isOwner={isOwner}
+          confirmDelete={confirmDelete}
+          onRequestDelete={onRequestDelete}
+          onCancelDelete={onCancelDelete}
+          onConfirmDelete={onConfirmDelete}
+          deleting={deleting}
+        />
+      ) : (
+        <div className="flex h-full items-center justify-center text-sm text-text-muted">No documents yet.</div>
+      )}
+    </div>
+  );
 
   return (
     <div className={cn("colab-redesign colab-luminous flex h-full flex-col", focus && "colab-redesign--focus")}>
@@ -306,12 +462,12 @@ export function DocumentsTab({
         )}
         {active ? (
           <DocEditorPane
-            key={active.id}
+            key={active!.id}
             projectId={project.id}
             projectName={project.name}
             members={project.members}
             initialLatex={project.recentEquations}
-            doc={active}
+            doc={active!}
             documents={documents}
             canEdit={canEdit}
             by={by}
@@ -555,6 +711,25 @@ function DocEditorPane({
   );
 
   return (
+    <PenpotManuscriptSurface
+      projectName={projectName}
+      draft={draft}
+      canEdit={canEdit}
+      focus={focus}
+      compileState={compileState}
+      words={words}
+      compileError={compileError}
+      onDraftChange={handleTextareaChange}
+      textareaRef={textareaRef}
+      onCompile={compileDraft}
+      onTogglePreview={() => setPreview((value) => !value)}
+      onToggleFocus={onToggleFocus}
+      onOpenTemplates={openTemplatesFromDock}
+      onOpenShare={onOpenShare}
+    />
+  );
+
+  return (
     <div className="colab-editor-pane flex h-full min-h-0 flex-col">
       <div className="flex min-h-10 shrink-0 items-center justify-between border-b border-border bg-surface-subtle px-3 md:px-4">
         <div className="flex min-w-0 items-center gap-2">
@@ -739,7 +914,7 @@ function DocEditorPane({
               Compiled preview
             </div>
             {compileError && <div role="alert" className="m-4 rounded-md border border-notification/40 bg-notification/10 px-3 py-2 font-body text-[12px] text-notification">{compileError}</div>}
-            {compiledPdf ? <iframe title="Compiled LaTeX PDF" src={compiledPdf} className="h-[calc(100%-2rem)] w-full border-0" /> : <div className="mx-auto max-w-[68ch] px-6 py-8 md:px-10"><MarkdownDoc key={compileVersion} source={draft} /></div>}
+            {compiledPdf ? <iframe title="Compiled LaTeX PDF" src={compiledPdf ?? undefined} className="h-[calc(100%-2rem)] w-full border-0" /> : <div className="mx-auto max-w-[68ch] px-6 py-8 md:px-10"><MarkdownDoc key={compileVersion} source={draft} /></div>}
           </div>
         )}
         {/* Desktop: the dock sits inline, beside the editor. Collapsible to a
