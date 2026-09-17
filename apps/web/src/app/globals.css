@@ -22,6 +22,22 @@
   border-color: var(--border-color);
 }
 
+.workspace-topbar {
+  height: 40px;
+}
+
+.workspace-topbar > div {
+  height: 40px;
+}
+
+.colab-redesign .colab-files {
+  width: 184px;
+}
+
+.colab-redesign .colab-dock {
+  width: 296px;
+}
+
 .colab-redesign .colab-files > div:first-child {
   min-height: 54px;
   border-bottom: 1px solid var(--border-color);
@@ -169,6 +185,10 @@
   max-width: 100%;
 }
 
+.colab-template-popover {
+  max-width: calc(100vw - 32px);
+}
+
 .colab-redesign--focus .colab-editor-pane > div:nth-child(2) {
   min-height: 44px;
 }
@@ -180,6 +200,7 @@
 
   .colab-redesign .colab-files {
     max-height: 180px;
+    width: auto;
   }
 
   .colab-redesign textarea {
@@ -727,4 +748,85 @@ body {
 .workspace-topbar button[aria-label="Search"] {
   background: #1c2026 !important;
   border: 1px solid #39414d;
+}
+
+/* Penpot source: CoLab / Luminous OS / Desktop (d8ac01df-6646-81d2-8008-a621f5b60861).
+   This is a deliberately separate visual system from the legacy dark cockpit:
+   a calm editorial canvas, a compact navy tool rail, and research context that
+   stays visible without stealing the writing surface. */
+.colab-luminous {
+  --luminous-ink: #18253b;
+  --luminous-muted: #65738a;
+  --luminous-line: #dce4ee;
+  --luminous-ground: #f4f7fb;
+  --luminous-paper: #ffffff;
+  --luminous-navy: #17263f;
+  --luminous-blue: #2f6df6;
+  --luminous-teal: #0c9b98;
+  --luminous-orange: #ef7d32;
+  background: var(--luminous-ground) !important;
+  color: var(--luminous-ink) !important;
+}
+
+.colab-luminous-chrome {
+  height: 56px;
+  border-bottom: 1px solid var(--luminous-line);
+  background: var(--luminous-paper);
+  color: var(--luminous-ink);
+}
+.colab-luminous-logo,
+.colab-luminous-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-weight: 750;
+}
+.colab-luminous-logo { width: 30px; height: 30px; background: var(--luminous-navy); color: #fff; }
+.colab-luminous-avatar { width: 30px; height: 30px; border-radius: 50%; background: #e4efff; color: var(--luminous-blue); font-size: 10px; }
+.colab-luminous-switcher,
+.colab-luminous-command,
+.colab-luminous-icon-button {
+  min-height: 34px;
+  border: 1px solid var(--luminous-line);
+  border-radius: 7px;
+  background: var(--luminous-paper);
+  color: var(--luminous-ink);
+}
+.colab-luminous-switcher { display: inline-flex; align-items: center; gap: 8px; padding: 0 10px; font-size: 12px; }
+.colab-luminous-command { display: flex; min-width: min(360px, 36vw); align-items: center; gap: 8px; padding: 0 10px; color: var(--luminous-muted); font-size: 12px; }
+.colab-luminous-command kbd { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--luminous-line); border-radius: 4px; padding: 2px 5px; font-family: var(--font-mono); font-size: 10px; }
+.colab-luminous-save { display: inline-flex; align-items: center; gap: 5px; color: var(--luminous-teal); font-size: 11px; }
+.colab-luminous-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 34px; padding: 0; }
+.colab-luminous-rail { width: 56px; background: var(--luminous-navy); color: #b8c7e0; }
+.colab-luminous-rail-button { display: inline-flex; width: 36px; height: 36px; align-items: center; justify-content: center; border-radius: 8px; color: inherit; }
+.colab-luminous-rail-button:hover { background: #263a5b; color: #fff; }
+.colab-luminous-rail-button.is-active { background: #fff; color: var(--luminous-blue); box-shadow: 0 3px 10px rgb(7 18 38 / 18%); }
+.colab-luminous-outline { width: 232px !important; border-color: var(--luminous-line) !important; background: var(--luminous-paper) !important; color: var(--luminous-ink); }
+.colab-luminous-outline .colab-luminous-add-block { display: flex; min-height: 36px; align-items: center; gap: 7px; margin: 0 12px 14px; border: 1px solid #bfd1f6; border-radius: 7px; padding: 0 10px; color: var(--luminous-blue); font-size: 12px; font-weight: 650; }
+.colab-luminous-outline .colab-luminous-outline-heading { display: flex; justify-content: space-between; margin: 0 14px 7px; color: var(--luminous-muted); font-family: var(--font-mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+.colab-luminous-outline > div:nth-child(4) { padding: 6px 10px !important; }
+.colab-luminous-outline > div:nth-child(4) > div { border-radius: 7px; }
+.colab-luminous-outline > div:nth-child(4) > div:has(button[aria-label^="Rename"]) { background: #edf3ff; box-shadow: inset 3px 0 0 var(--luminous-blue); }
+.colab-luminous-outline-tools { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--luminous-line); margin-top: auto; padding: 14px; }
+.colab-luminous-outline-tools button { display: flex; align-items: center; gap: 8px; color: var(--luminous-muted); font-size: 12px; text-align: left; }
+.colab-luminous-outline-tools button:hover { color: var(--luminous-blue); }
+.colab-luminous .colab-editor { background: var(--luminous-ground) !important; }
+.colab-luminous .colab-editor-pane > div:first-child,
+.colab-luminous .colab-editor-pane > div:nth-child(2) { background: var(--luminous-paper) !important; border-color: var(--luminous-line) !important; color: var(--luminous-ink); }
+.colab-luminous .colab-editor-pane > div:first-child { height: 48px; }
+.colab-luminous .colab-editor-pane > div:first-child button:last-child { background: var(--luminous-orange); color: #fff; }
+.colab-luminous .colab-editor-pane > div:nth-child(3) { background: var(--luminous-ground) !important; }
+.colab-luminous textarea { border: 1px solid var(--luminous-line); border-radius: 8px 8px 0 0; background: var(--luminous-paper) !important; color: var(--luminous-ink) !important; font-family: var(--font-body); font-size: 15px; line-height: 1.8; padding-top: 48px; }
+.colab-luminous textarea:focus-visible { box-shadow: 0 0 0 2px rgb(47 109 246 / 28%); }
+.colab-luminous .colab-editor-pane > div:nth-child(3) > div:first-child,
+.colab-luminous .colab-editor-pane > div:nth-child(3) > div:nth-child(2) > div:first-child { background: var(--luminous-paper); border-color: var(--luminous-line); color: var(--luminous-muted); }
+.colab-luminous .colab-dock { width: 320px; background: var(--luminous-paper); border-color: var(--luminous-line); color: var(--luminous-ink); }
+.colab-luminous .colab-dock-tabs [role="tab"] { color: var(--luminous-muted); }
+.colab-luminous .colab-dock-tabs [role="tab"][aria-selected="true"] { background: #edf3ff; color: var(--luminous-blue); box-shadow: inset 0 -2px 0 var(--luminous-blue); }
+.colab-luminous .colab-dock-heading { background: var(--luminous-paper); border-color: var(--luminous-line); }
+
+@media (max-width: 900px) {
+  .colab-luminous-command { min-width: 34px; width: 34px; padding: 0; justify-content: center; }
+  .colab-luminous-command span, .colab-luminous-command kbd, .colab-luminous-save { display: none; }
 }

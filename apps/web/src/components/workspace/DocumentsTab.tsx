@@ -14,6 +14,14 @@ import {
   Trash2,
   RefreshCw,
   CheckCircle2,
+  BookOpen,
+  Network,
+  ListTodo,
+  Settings,
+  Search,
+  ChevronDown,
+  Command,
+  Sparkles,
 } from "lucide-react";
 import { useFirestoreCollection } from "@/lib/hooks/useFirestoreCollection";
 import { MarkdownDoc } from "@/components/workspace/MarkdownDoc";
@@ -156,18 +164,46 @@ export function DocumentsTab({
   }
 
   return (
-    <div className={cn("colab-redesign flex h-full flex-col md:flex-row", focus && "colab-redesign--focus")}>
+    <div className={cn("colab-redesign colab-luminous flex h-full flex-col", focus && "colab-redesign--focus")}>
+      <header className="colab-luminous-chrome flex shrink-0 items-center gap-4 px-4 md:px-6" aria-label="CoLab workspace controls">
+        <div className="flex shrink-0 items-center gap-2" aria-label="SkoLab CoLab">
+          <span className="colab-luminous-logo">S</span>
+          <span className="hidden font-display text-[14px] font-semibold tracking-[-0.02em] sm:inline">SkoLab</span>
+        </div>
+        <button type="button" className="colab-luminous-switcher" aria-label="Switch workspace">
+          <span>CoLab / Quantum Spin Liquids</span><ChevronDown size={14} aria-hidden="true" />
+        </button>
+        <button type="button" className="colab-luminous-command" aria-label="Open command search">
+          <Search size={15} aria-hidden="true" /><span>Search papers, people, or actions</span><kbd><Command size={11} aria-hidden="true" /> K</kbd>
+        </button>
+        <div className="ml-auto flex items-center gap-3 text-[12px]">
+          <span className="colab-luminous-save"><CheckCircle2 size={13} aria-hidden="true" /> All changes saved</span>
+          <button type="button" className="colab-luminous-icon-button" aria-label="Open help"><Sparkles size={16} /></button>
+          <span className="colab-luminous-avatar" aria-label="Vikas Vijigiri">VV</span>
+        </div>
+      </header>
+      <div className="flex min-h-0 flex-1">
+      {!focus && <nav className="colab-luminous-rail hidden shrink-0 flex-col items-center gap-3 py-4 md:flex" aria-label="CoLab tools">
+        <button type="button" className="colab-luminous-rail-button is-active" aria-label="Manuscript"><BookOpen size={18} /></button>
+        <button type="button" className="colab-luminous-rail-button" aria-label="Evidence map"><Network size={18} /></button>
+        <button type="button" className="colab-luminous-rail-button" aria-label="Tasks"><ListTodo size={18} /></button>
+        <div className="mt-auto"><button type="button" className="colab-luminous-rail-button" aria-label="CoLab settings"><Settings size={18} /></button></div>
+      </nav>}
       {/* ── File panel (one rung down the surface ladder) ─────────────── */}
       {/* The 204px file rail + the 56px project icon rail = the same 260px
           side system used by Discovery and other research surfaces. */}
       {!focus && (
-        <aside className="colab-files flex shrink-0 flex-col border-b border-border bg-surface-subtle md:w-[204px] md:border-b-0 md:border-r">
+        <aside className="colab-files colab-luminous-outline flex shrink-0 flex-col border-b border-border bg-surface-subtle md:w-[232px] md:border-b-0 md:border-r">
           <div className="flex items-center justify-between px-3 pb-2 pt-3">
             <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-text-muted">
-              Files
+              Manuscript outline
             </span>
             <span className="font-mono text-[10px] text-text-muted">{documents.length}</span>
           </div>
+
+          <button type="button" className="colab-luminous-add-block"><Plus size={14} /> Add block</button>
+
+          <div className="colab-luminous-outline-heading"><span>Document</span><span>Updated</span></div>
 
           <div className="flex-1 overflow-y-auto px-1.5">
             {documents.map((d) => (
@@ -240,6 +276,12 @@ export function DocumentsTab({
             ))}
           </div>
 
+          <div className="colab-luminous-outline-tools" aria-label="Research tools">
+            <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-text-muted">Research tools</span>
+            <button type="button"><Network size={14} /> Evidence map</button>
+            <button type="button"><ListTodo size={14} /> Review queue</button>
+          </div>
+
           {canEdit && (
             <div className="p-1.5">
               <button
@@ -306,6 +348,7 @@ export function DocumentsTab({
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

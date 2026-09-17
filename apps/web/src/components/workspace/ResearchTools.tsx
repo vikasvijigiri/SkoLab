@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ExternalLink,
   FileStack,
@@ -183,6 +184,8 @@ export function WorkspaceResearchActions({
   const [domain, setDomain] = useState<TemplateDomain>("General");
   const [originalityOpen, setOriginalityOpen] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const templateButtonRef = useRef<HTMLButtonElement>(null);
+  const [templatePosition, setTemplatePosition] = useState({ top: 0, left: 0 });
 
   const selectedTemplate = JOURNAL_TEMPLATES.find((t) => t.id === currentSelectedId);
 
@@ -234,6 +237,28 @@ export function WorkspaceResearchActions({
 
   const domainTemplates = JOURNAL_TEMPLATES.filter((t) => t.domain === domain);
 
+  function updateTemplatePosition() {
+    const button = templateButtonRef.current;
+    if (!button) return;
+    const rect = button.getBoundingClientRect();
+    const width = Math.min(420, window.innerWidth - 32);
+    setTemplatePosition({
+      top: rect.bottom + 8,
+      left: Math.max(16, Math.min(rect.right - width, window.innerWidth - width - 16)),
+    });
+  }
+
+  useEffect(() => {
+    if (!templateOpen) return;
+    updateTemplatePosition();
+    window.addEventListener("resize", updateTemplatePosition);
+    window.addEventListener("scroll", updateTemplatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updateTemplatePosition);
+      window.removeEventListener("scroll", updateTemplatePosition, true);
+    };
+  }, [templateOpen]);
+
   return (
     <div className="relative flex flex-wrap items-center gap-1.5">
       <Button type="button" variant="outlined" fullWidth={false} onClick={startCall} className="h-8! gap-1.5 px-2.5! text-[11px]!">
@@ -242,13 +267,19 @@ export function WorkspaceResearchActions({
       <Button type="button" variant="outlined" fullWidth={false} onClick={sharePaper} className="h-8! gap-1.5 px-2.5! text-[11px]!">
         <Share2 size={12} /> Share paper
       </Button>
-      <div className="relative">
+      <div className="colab-template-trigger relative">
         <Button
+          ref={templateButtonRef}
           type="button"
           variant="outlined"
           fullWidth={false}
           disabled={!canEdit}
-          onClick={() => setTemplateOpen(!templateOpen)}
+          onClick={() => {
+            if (!templateOpen) updateTemplatePosition();
+            setTemplateOpen(!templateOpen);
+          }}
+          aria-expanded={templateOpen}
+          aria-haspopup="dialog"
           className="h-8! gap-1.5 px-2.5! text-[11px]!"
         >
           <FileStack size={12} /> Templates
@@ -259,9 +290,9 @@ export function WorkspaceResearchActions({
           )}
           <ChevronDown size={10} className={cn("transition-transform", templateOpen && "rotate-180")} />
         </Button>
-        {templateOpen && (
-          <div className="absolute right-0 top-10 z-30 w-[340px] rounded-md border border-border bg-surface shadow-elevated">
-            <div className="flex flex-wrap gap-1 border-b border-border p-2">
+        {templateOpen && typeof document !== "undefined" && createPortal(
+          <div id="colab-template-picker" className="colab-template-popover fixed z-50 w-[min(420px,calc(100vw-2rem))] overflow-hidden rounded-md border border-border bg-surface shadow-elevated" style={{ top: templatePosition.top, left: templatePosition.left }} role="dialog" aria-label="Choose a research template">
+            <div className="flex max-h-24 flex-wrap gap-1 overflow-y-auto border-b border-border p-2">
               {TEMPLATE_DOMAINS.map((d) => (
                 <button
                   key={d}
@@ -286,23 +317,23 @@ export function WorkspaceResearchActions({
                 No journal-specific template for {domain} yet — use a General structure instead.
               </p>
             ) : (
-              <div className="max-h-72 overflow-y-auto pb-1.5">
+              <div className="max-h-[min(420px,60vh)] overflow-y-auto pb-1.5">
                 {domainTemplates.map((template) => (
                   <button
                     key={template.id}
                     type="button"
                     onClick={() => applyTemplate(template.id)}
-                    className="flex w-full items-center gap-2.5 border-b border-border px-3 py-2.5 text-left transition-colors last:border-b-0 hover:bg-surface-subtle"
+                    className="flex w-full items-start gap-2.5 border-b border-border px-3 py-3 text-left transition-colors last:border-b-0 hover:bg-surface-subtle"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-body text-[13px] font-semibold text-text-primary">
+                      <p className="whitespace-normal break-words font-body text-[13px] font-semibold leading-snug text-text-primary">
                         {template.label}
                         {template.specs && (
                           <span className="font-normal text-text-muted"> · {template.specs.publisher}</span>
                         )}
                       </p>
                       {template.specs && (
-                        <p className="mt-0.5 truncate font-body text-[11px] text-text-muted">
+                        <p className="mt-1 whitespace-normal break-words font-body text-[11px] leading-relaxed text-text-muted">
                           {template.specs.summary}
                         </p>
                       )}
@@ -314,7 +345,8 @@ export function WorkspaceResearchActions({
                 ))}
               </div>
             )}
-          </div>
+          </div>,
+          document.body,
         )}
       </div>
       <Button type="button" variant="outlined" fullWidth={false} onClick={() => setOriginalityOpen((open) => !open)} className="h-8! gap-1.5 px-2.5! text-[11px]!">
