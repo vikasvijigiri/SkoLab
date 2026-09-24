@@ -52,11 +52,12 @@ function relTime(ts: number) {
   return `${Math.round(s / 86400)}d ago`;
 }
 
-function PenpotManuscriptSurface({
+export function PenpotManuscriptSurface({
   projectName,
   draft,
   canEdit,
   focus,
+  preview,
   compileState,
   words,
   compileError,
@@ -72,6 +73,7 @@ function PenpotManuscriptSurface({
   draft: string;
   canEdit: boolean;
   focus: boolean;
+  preview: boolean;
   compileState: "compiling" | "compiled" | "error";
   words: number;
   compileError: string | null;
@@ -120,8 +122,8 @@ function PenpotManuscriptSurface({
       <main className="colab-penpot-main">
         <div className="colab-penpot-modebar" role="toolbar" aria-label="Manuscript modes">
           <div className="colab-penpot-modes">
-            <button type="button" className="is-active">Write</button>
-            <button type="button" onClick={onTogglePreview}>Preview</button>
+            <button type="button" className={cn(!preview && "is-active")} onClick={() => preview && onTogglePreview()} aria-pressed={!preview}>Write</button>
+            <button type="button" className={cn(preview && "is-active")} onClick={() => !preview && onTogglePreview()} aria-pressed={preview}>Preview</button>
             <button type="button" onClick={onToggleFocus}>Focus</button>
           </div>
           <button type="button" className="colab-penpot-compile" onClick={onCompile} disabled={compileState === "compiling"}>
@@ -135,13 +137,13 @@ function PenpotManuscriptSurface({
             <p className="colab-penpot-paper-subtitle">A live manuscript with evidence attached to every claim.</p>
             <div className="colab-penpot-rule" />
             <div className="colab-penpot-editor-copy">
-              <div className="colab-penpot-rendered-copy">
-                <h3>Abstract</h3>
-                <p>We investigate emergent behavior in frustrated two-dimensional systems and outline a reproducible route from numerical evidence to a concise physical interpretation.</p>
-                <h3><span>01</span> Introduction</h3>
-                <p>The central question is how local constraints produce long-range signatures without conventional order.</p>
-              </div>
-              <textarea ref={textareaRef} value={draft} onChange={onDraftChange} readOnly={!canEdit} aria-label="Manuscript editor" />
+              {preview ? (
+                <div className="colab-penpot-preview" aria-label="Manuscript preview">
+                  <MarkdownDoc source={draft} />
+                </div>
+              ) : (
+                <textarea ref={textareaRef} value={draft} onChange={onDraftChange} readOnly={!canEdit} aria-label="Manuscript editor" />
+              )}
             </div>
             <div className="colab-penpot-evidence-note"><span>◆</span> 3 supporting sources <b>·</b> 1 unresolved gap <b>·</b> Review ready</div>
             <div className="colab-penpot-insert-hint"><i /> Type / to insert a section, citation, or equation</div>
@@ -564,9 +566,9 @@ function DocEditorPane({
   const [savedAt, setSavedAt] = useState<number>(doc.updatedAt);
   const [saving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
-  // The writing surface opens in the researcher's primary mode: source and
-  // compiled output together. Users can still hide the preview for focus mode.
-  const [preview, setPreview] = useState(true);
+  // Writing is the primary task. Preview remains a deliberate, adjacent mode
+  // instead of consuming half the workspace on first open.
+  const [preview, setPreview] = useState(false);
   const [compileState, setCompileState] = useState<"compiling" | "compiled" | "error">("compiled");
   const [compileVersion, setCompileVersion] = useState(0);
   const [compiledPdf, setCompiledPdf] = useState<string | null>(null);
@@ -719,6 +721,7 @@ function DocEditorPane({
       draft={draft}
       canEdit={canEdit}
       focus={focus}
+      preview={preview}
       compileState={compileState}
       words={words}
       compileError={compileError}

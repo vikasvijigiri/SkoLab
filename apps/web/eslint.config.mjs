@@ -25,6 +25,7 @@ globalIgnores([
   ".next/**",
   "out/**",
   "build/**",
+  "storybook-static/**",
   "next-env.d.ts",
 ]), {
   // Phase 2 of the apps/web world-class plan migrated every fetch-in-effect to

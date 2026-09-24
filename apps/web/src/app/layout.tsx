@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/lib/hooks/AuthProvider";
 import { MotionProvider } from "@/components/MotionProvider";
 import { Providers } from "@/components/providers";
@@ -10,15 +10,15 @@ import "./globals.css";
 // Space Grotesk display face was dropped for a "LinkedIn-style" humanist stack
 // where hierarchy comes from weight + scale. `adjustFontFallback` (default)
 // emits a size-adjusted system fallback so the swap doesn't reflow.
-const inter = Inter({
-  variable: "--font-inter",
+const geist = Geist({
+  variable: "--font-geist",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   display: "swap",
 });
 
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-jetbrains-mono",
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
   subsets: ["latin"],
   weight: ["500"],
   display: "swap",
@@ -49,8 +49,8 @@ export const metadata: Metadata = {
 // user preference. `theme-color` tracks each palette's page ground.
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f3f2ef" },
-    { media: "(prefers-color-scheme: dark)", color: "#0b0d10" },
+    { media: "(prefers-color-scheme: light)", color: "#F6F7F5" },
+    { media: "(prefers-color-scheme: dark)", color: "#19243A" },
   ],
 };
 
@@ -63,7 +63,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${geist.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
         <script

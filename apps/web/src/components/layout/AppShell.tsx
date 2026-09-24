@@ -13,9 +13,13 @@ import { NAV_ITEMS } from "@/lib/nav";
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  // A document workspace has its own SkoLab ribbon and a deliberately scoped
+  // manuscript scroll region. Keeping the global shell chrome here would
+  // duplicate navigation and introduce a second vertical scroll container.
+  const isWorkspaceDetail = /^\/workspace\/[^/]+$/.test(pathname ?? "");
 
   return (
-    <div className="flex h-dvh w-full flex-col overflow-hidden">
+    <div className="flex h-dvh w-full flex-col overflow-hidden bg-page-bg">
       {/* WCAG 2.4.1 — skip the ~8 top-bar tab stops. Visible only on focus. */}
       <a
         href="#main-content"
@@ -28,19 +32,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         Skip to content
       </a>
 
-      <TopBar />
-
       <main
         id="main-content"
         className={cn(
-          "surface-atmosphere min-h-0 flex-1 overflow-y-auto bg-page-bg",
-          pathname?.startsWith("/workspace") && "workspace-shell",
+          "surface-atmosphere min-h-0 flex-1 bg-page-bg p-3 sm:p-4 lg:p-6",
+          "flex",
+          isWorkspaceDetail ? "overflow-hidden" : "overflow-y-auto",
         )}
       >
-        {children}
+        <div className="hasamex-page-frame mx-auto flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          {!isWorkspaceDetail && <TopBar />}
+          <div className={cn("min-h-0 flex-1", isWorkspaceDetail ? "overflow-hidden" : "overflow-y-auto")}>
+            {children}
+          </div>
+        </div>
       </main>
 
-      <nav
+      {!isWorkspaceDetail && <nav
         aria-label="Primary"
         className="flex h-16 shrink-0 items-center justify-around border-t border-border bg-surface md:hidden"
       >
@@ -67,7 +75,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           );
         })}
-      </nav>
+      </nav>}
     </div>
   );
 }

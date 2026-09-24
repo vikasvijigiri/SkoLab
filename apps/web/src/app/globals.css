@@ -502,6 +502,8 @@
 
 @theme inline {
   --color-page-bg: var(--page-bg);
+  --color-workspace-bg: var(--workspace-bg);
+  --color-brand-navy: var(--brand-navy);
   --color-surface: var(--surface);
   --color-surface-subtle: var(--surface-subtle);
   --color-surface-raised: var(--surface-raised);
@@ -550,9 +552,9 @@
   /* Two-family stack (DESIGN.md): Inter carries display + body; JetBrains Mono
      is a structural role for data, labels, and interface chrome. `--font-display`
      is kept as a name so existing `font-display` call sites need no churn. */
-  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-body: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+  --font-display: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
   /* Elevation utilities: shadow-xs, shadow-card, shadow-card-hover, shadow-elevated, shadow-glow-primary, shadow-signal */
   --shadow-xs: var(--shadow-xs);
@@ -566,11 +568,11 @@
 /* Static (mode-independent) overrides. Radius is crisper than direction C —
    "instrument", not "friendly" (DESIGN.md Layout). */
 @theme {
-  --radius-xs: 4px;
+  --radius-xs: 6px;
   --radius-sm: 8px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 20px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 28px;
 
   /* Type scale (DESIGN.md direction B) — one notch denser than round 1.
      Tailwind v4 turns each --text-* into a `text-*` utility that also sets
@@ -616,11 +618,14 @@
 }
 
 body {
-  background: var(--page-bg);
+  background:
+    radial-gradient(circle at 8% -5%, rgb(67 130 122 / 16%), transparent 28rem),
+    radial-gradient(circle at 92% 5%, rgb(220 166 91 / 13%), transparent 24rem),
+    var(--page-bg);
   color: var(--text-primary);
   font-family: var(--font-body);
   /* Inter tuning — disambiguated 1/l/i, an open 4, and contextual alternates. */
-  font-feature-settings: "cv05", "cv08", "cv11", "calt";
+  font-feature-settings: "calt";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -930,3 +935,196 @@ body {
 .colab-penpot-error { position: fixed; right: 24px; bottom: 84px; z-index: 20; border: 1px solid #e9a0a7; border-radius: 8px; background: #fff3f4; padding: 12px 16px; color: #a82f3d; }
 @media (max-width: 1200px) { .colab-penpot-workspace-grid { grid-template-columns: 260px minmax(500px, 1fr) 360px; } .colab-penpot-sidebar { padding-inline: 24px; } .colab-penpot-paper { padding-inline: 38px; } }
 @media (max-width: 900px) { .colab-penpot-workspace-grid { display: block; overflow: auto; } .colab-penpot-sidebar, .colab-penpot-lens { display: none; } .colab-penpot-main { min-height: calc(100vh - 56px); } .colab-penpot-paper-wrap { padding: 18px; } .colab-penpot-paper { padding: 28px 24px; } .colab-penpot-paper h2 { font-size: 30px; } .colab-penpot-modebar { padding-inline: 18px; } .colab-penpot-statusbar { padding-inline: 18px; } .colab-penpot-statusbar span:nth-child(2) { display: none; } .colab-skolab-ribbon { gap: 16px; padding-inline: 18px; } .colab-skolab-ribbon nav { gap: 12px; } }
+
+/* Light evidence workspace — the current DESIGN.md contract. These rules are
+   intentionally scoped to CoLab while legacy routes are migrated in their
+   own slices. They also restore the actual editable draft as the central
+   writing surface; the former invisible textarea was not usable. */
+.colab-penpot-surface {
+  --colab-page: #F3F6F4;
+  --colab-workspace: #FCFDFC;
+  --colab-surface: #FFFFFF;
+  --colab-subtle: #F4F7F8;
+  --colab-evidence: #EDF8F5;
+  --colab-selected: #EAF0FA;
+  --colab-border: #DCE5E8;
+  --colab-border-strong: #C7D4D9;
+  --colab-ink: #17233A;
+  --colab-secondary: #586B86;
+  --colab-muted: #8090A7;
+  --colab-navy: #17233A;
+  --colab-teal: #2E6A68;
+  --colab-teal-muted: #E5F3F1;
+  --colab-coral: #F06B4C;
+  --colab-success: #16866A;
+  background: var(--colab-page);
+  color: var(--colab-ink);
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+/* Shared application frame, adopted from the Hasamex evidence workspace.
+   Every authenticated view is a calm, bounded desk; each route owns its
+   internal scroll region so the browser never acquires a competing scrollbar. */
+.hasamex-page-frame {
+  box-sizing: border-box;
+  inline-size: min(100%, 1536px);
+  max-inline-size: 100%;
+  min-inline-size: 0;
+  border: 1px solid rgb(255 255 255 / 80%);
+  border-radius: 28px;
+  background: color-mix(in srgb, var(--workspace-bg) 92%, transparent);
+  box-shadow: 0 20px 70px -36px rgb(25 36 58 / 45%);
+  backdrop-filter: blur(12px);
+}
+.colab-penpot-workspace-grid {
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  border: 0;
+  border-top: 1px solid var(--colab-border);
+  border-radius: 0;
+  background: var(--colab-workspace);
+  box-shadow: 0 1px 2px rgb(23 35 58 / 5%), 0 2px 6px rgb(23 35 58 / 4%);
+  grid-template-columns: minmax(224px, 256px) minmax(0, 1fr) minmax(300px, 340px);
+}
+.colab-skolab-ribbon {
+  height: 64px;
+  margin: 0;
+  border-radius: 0;
+  background: var(--colab-navy);
+  padding-inline: 28px;
+}
+.colab-skolab-ribbon button { color: #C9D5E4; }
+.colab-skolab-brand { color: #FFFFFF !important; }
+.colab-skolab-brand span { background: #FFFFFF; color: var(--colab-navy); border-radius: 8px; }
+.colab-skolab-ribbon nav button.is-active { color: #8EE0D0; }
+.colab-skolab-user { background: #E5F3F1; color: var(--colab-teal) !important; }
+.colab-penpot-sidebar, .colab-penpot-lens { background: var(--colab-surface); }
+.colab-penpot-sidebar { border-color: var(--colab-border); padding: 28px 24px 24px; }
+.colab-penpot-sidebar-head h1, .colab-penpot-paper h2, .colab-penpot-lens h2,
+.colab-penpot-rendered-copy, .colab-penpot-rendered-copy h3,
+.colab-penpot-claim strong, .colab-penpot-decision strong { color: var(--colab-ink); }
+.colab-penpot-sidebar-head p, .colab-penpot-lens > p, .colab-penpot-rendered-copy p,
+.colab-penpot-claim span, .colab-penpot-decision p, .colab-penpot-assistant,
+.colab-penpot-insert-hint { color: var(--colab-secondary); }
+.colab-penpot-eyebrow, .colab-penpot-paper-kicker { color: var(--colab-teal); }
+.colab-penpot-add { min-height: 44px; margin: 24px 0 36px; border-radius: 8px; background: var(--colab-teal); }
+.colab-penpot-section-list { gap: 16px; }
+.colab-penpot-section { gap: 16px; font-size: 14px; color: var(--colab-secondary); }
+.colab-penpot-section span { color: var(--colab-muted); }
+.colab-penpot-section.is-current, .colab-penpot-section.is-current span { color: var(--colab-teal); }
+.colab-penpot-workflow { border-color: var(--colab-border); padding-top: 24px; }
+.colab-penpot-workflow button { color: var(--colab-secondary); }
+.colab-penpot-modebar { border-color: var(--colab-border); background: var(--colab-surface); padding-inline: 28px; }
+.colab-penpot-modes { gap: 32px; }
+.colab-penpot-modes button { color: var(--colab-secondary); }
+.colab-penpot-modes button.is-active { color: var(--colab-teal); }
+.colab-penpot-modes button.is-active::after { background: var(--colab-teal); }
+.colab-penpot-compile { min-height: 44px; border-radius: 8px; background: var(--colab-coral); padding-inline: 18px; }
+.colab-penpot-paper-wrap { background: var(--colab-page); padding: 24px; }
+.colab-penpot-paper { border-color: var(--colab-border); border-radius: 12px; padding: 40px 48px 48px; box-shadow: 0 1px 2px rgb(23 35 58 / 5%), 0 2px 6px rgb(23 35 58 / 4%); }
+.colab-penpot-paper-kicker span { color: var(--colab-muted); }
+.colab-penpot-paper h2 { font-size: clamp(30px, 3vw, 40px); }
+.colab-penpot-rule, .colab-penpot-lens-rule { background: var(--colab-border); }
+.colab-penpot-editor-copy { min-height: 420px; }
+.colab-penpot-rendered-copy { display: none; }
+.colab-penpot-preview { min-height: 420px; color: var(--colab-ink); font-family: var(--font-geist), ui-sans-serif, sans-serif; font-size: 16px; line-height: 1.7; }
+.colab-penpot-preview h1, .colab-penpot-preview h2, .colab-penpot-preview h3 { color: var(--colab-ink); }
+.colab-penpot-preview p { margin: 0 0 1.1rem; }
+.colab-penpot-editor-copy textarea {
+  position: static;
+  min-height: 420px;
+  color: var(--colab-ink);
+  caret-color: var(--colab-coral);
+  font-family: var(--font-geist), ui-sans-serif, sans-serif;
+  font-size: 16px;
+  line-height: 1.7;
+  opacity: 1;
+}
+.colab-penpot-editor-copy textarea:focus-visible { outline: 2px solid #3A8580; outline-offset: 8px; }
+.colab-penpot-evidence-note { border-color: #A9E0D3; border-radius: 8px; background: var(--colab-evidence); color: var(--colab-success); }
+.colab-penpot-evidence-note b { color: #4A9D8D; }
+.colab-penpot-insert-hint i { background: var(--colab-coral); }
+.colab-penpot-lens { border-color: var(--colab-border); padding: 30px 24px; }
+.colab-penpot-lens-tabs { border-radius: 8px; background: var(--colab-subtle); padding: 4px; }
+.colab-penpot-lens-tabs button { min-height: 38px; color: var(--colab-secondary); }
+.colab-penpot-lens-tabs button.is-active { color: var(--colab-ink); box-shadow: 0 1px 2px rgb(23 35 58 / 8%); }
+.colab-penpot-claim, .colab-penpot-decision { border-color: var(--colab-border); border-radius: 10px; padding: 18px; }
+.colab-penpot-claim { background: var(--colab-subtle); }
+.colab-penpot-claim div { background: #D7E1E8; }
+.colab-penpot-claim i { background: #1AAE92; }
+.colab-penpot-decision { border-color: #B8D8D2; background: var(--colab-teal-muted); }
+.colab-penpot-decision button { border-radius: 7px; background: var(--colab-teal); }
+.colab-penpot-assistant { border-color: var(--colab-border); border-radius: 8px; }
+.colab-penpot-assistant svg { color: var(--colab-teal); }
+.colab-penpot-statusbar { background: var(--colab-navy); color: #C9D5E4; }
+.colab-penpot-statusbar span:first-child { color: #9FE1D4; }
+.colab-penpot-statusbar i { background: #69D3C0; }
+/* A research lens is useful only when it has enough room to be legible. On
+   laptop-width canvases the editor becomes the priority and owns the single
+   vertical scroll region; the lens returns on wide desktop workspaces. */
+@media (max-width: 1440px), (max-height: 960px) {
+  .colab-penpot-workspace-grid { grid-template-columns: minmax(224px, 260px) minmax(0, 1fr); }
+  .colab-penpot-lens { display: none; }
+  .colab-penpot-paper { padding-inline: 36px; }
+}
+@media (max-width: 900px) {
+  .colab-penpot-paper-wrap { padding: 12px; }
+  .colab-penpot-paper { padding: 28px 24px; }
+  .colab-penpot-editor-copy textarea { min-height: 50vh; font-size: 15px; }
+}
+
+/* Product-wide foundation. New and migrated pages share these semantic values;
+   a user-pinned legacy dark choice remains explicit until dark receives its
+   own dated contrast audit. */
+:root:not([data-theme="dark"]),
+:root[data-theme="light"] {
+  color-scheme: light;
+  --page-bg: #F6F7F5;
+  --workspace-bg: #FBFCFA;
+  --surface: #FFFFFF;
+  --surface-subtle: #F2F5F4;
+  --surface-raised: #FFFFFF;
+  --surface-evidence: #EDF7F4;
+  --surface-selected: #EAF3F1;
+  --border-color: #DFE6E3;
+  --border-strong: #C9D7D3;
+  --text-primary: #19243A;
+  --text-secondary: #52637D;
+  --text-muted: #71819A;
+  --text-on-primary: #FFFFFF;
+  --brand-navy: #19243A;
+  --primary: #19243A;
+  --primary-dark: #111A2B;
+  --primary-deeper: #0D1422;
+  --primary-muted: #EAF3F1;
+  --accent-signal: #43827A;
+  --accent-signal-dark: #326B64;
+  --accent-live: #43827A;
+  --success: #43827A;
+  --warning: #9A641E;
+  --danger: #B94B4B;
+  --notification: #B94B4B;
+  --surface-input: #FFFFFF;
+  --border-input: #C9D7D3;
+  --ring: #43827A;
+  --accent-teal: #43827A;
+  --accent-teal-dark: #326B64;
+  --accent-amber: #9A641E;
+  --accent-indigo: #405D8E;
+  --accent-emerald: #43827A;
+  --accent-rose: #B94B4B;
+  --accent-violet: #6956B3;
+  --accent-orange: #B87333;
+  --accent-cyan: #317B8F;
+  --accent-pink: #A45177;
+  --shadow-card: 0 1px 2px rgb(25 36 58 / 5%), 0 2px 6px rgb(25 36 58 / 4%);
+  --shadow-card-hover: 0 4px 12px rgb(25 36 58 / 8%), 0 10px 22px rgb(25 36 58 / 7%);
+  --shadow-elevated: 0 8px 20px rgb(25 36 58 / 10%), 0 20px 44px rgb(25 36 58 / 12%);
+  --shadow-signal: 0 6px 20px rgb(67 130 122 / 24%);
+}
