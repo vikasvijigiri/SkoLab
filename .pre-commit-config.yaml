@@ -3,17 +3,14 @@ repos:
     rev: v1.5.0
     hooks:
       - id: detect-secrets
-        args: ['--baseline', '.secrets.baseline']
-        exclude: 'package-lock.json|tests/|scripts/'
+        exclude: 'package-lock.json|tests/'
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.3
     hooks:
       - id: ruff
         args: [ --fix ]
-        exclude: '^scripts/'
       - id: ruff-format
-        exclude: '^scripts/'
 
   - repo: local
     hooks:

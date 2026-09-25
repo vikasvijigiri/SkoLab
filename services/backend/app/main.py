@@ -423,8 +423,6 @@ app = FastAPI(
     # Interactive docs and the raw schema are developer tools, not a public
     # surface — expose them everywhere except production (OWASP API8: reduce the
     # attack surface / avoid information disclosure). Regenerate the committed
-    # snapshot with scripts/gen_openapi_snapshot.py, which builds the app
-    # directly rather than fetching /openapi.json.
     docs_url=None if settings.environment == "production" else "/docs",
     redoc_url=None if settings.environment == "production" else "/redoc",
     openapi_url=None if settings.environment == "production" else "/openapi.json",

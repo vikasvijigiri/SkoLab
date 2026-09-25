@@ -9,8 +9,7 @@ Routes are enumerated with ``_route_walk.iter_api_routes`` because FastAPI 0.141
 includes sub-routers lazily — ``app.routes`` alone shows only ``/`` and the
 infra probes (``/health``, ``/livez``, ``/readyz``).
 
-See ``docs/backend-auth-posture.md`` for the model and the "adding a route"
-checklist.
+The pinned route sets are the checklist for adding or changing a route.
 """
 
 from __future__ import annotations
@@ -146,7 +145,7 @@ def test_optional_set_is_locked(app):
     classes = _classify(app)
     assert classes["optional"] == EXPECTED_OPTIONAL, (
         f"optional-auth routes changed: got {sorted(classes['optional'])}, "
-        f"expected {sorted(EXPECTED_OPTIONAL)}. See docs/backend-auth-posture.md."
+        f"expected {sorted(EXPECTED_OPTIONAL)}."
         f"{_dump(classes)}"
     )
 

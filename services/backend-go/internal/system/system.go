@@ -8,8 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -140,31 +138,11 @@ func llmActive(ctx context.Context) bool {
 	return body.LLMActive
 }
 
-// readIncidents walks up from the working directory for docs/incidents.json,
-// mirroring Python's _find_repo_root. In the deployed container (docker context
+// readIncidents keeps the public response shape stable while incident tracking
+// is intentionally not stored in this repository.
 // is services/backend-go/) the file is absent and this returns an empty slice —
 // which is exactly what the Python service also returns there, since its own
 // docker context is services/backend/. A never-nil slice keeps the JSON `[]`.
 func readIncidents() []map[string]any {
-	out := []map[string]any{}
-	dir, err := os.Getwd()
-	if err != nil {
-		return out
-	}
-	for i := 0; i < 8; i++ {
-		p := filepath.Join(dir, "docs", "incidents.json")
-		if raw, err := os.ReadFile(p); err == nil {
-			var parsed []map[string]any
-			if json.Unmarshal(raw, &parsed) == nil && parsed != nil {
-				return parsed
-			}
-			return out
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-	return out
+	return []map[string]any{}
 }

@@ -1,54 +1,15 @@
-import datetime
-import pytest
-import re
-import sys
-import os
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import select
 
-# Configure path to import from scripts outside backend
-backend_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-project_root = os.path.abspath(os.path.join(backend_root, "..", ".."))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+import pytest
 
 from app.db.database import AsyncSessionLocal
 from app.models.user_models import (
     User,
     UserPreference,
     Connection,
-    CacheEntry,
-    AgentChatHistory,
 )
 from app.models.researcher_models import ResearcherWork, ResearcherMetrics
-from app.models.content_models import DailyFeedItem, ScrapedOpportunity
-from app.models.analytics_models import UserSettings
 from app.services.data.researcher_worker import teleport_researcher
-
-# Dynamically import hyphenated scripts
-import importlib.util
-
-
-def import_hyphenated_module(module_name, filepath):
-    spec = importlib.util.spec_from_file_location(module_name, filepath)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-consistency_path = os.path.join(
-    project_root, "scripts", "database", "data-consistency-check.py"
-)
-data_consistency_check = import_hyphenated_module(
-    "data_consistency_check", consistency_path
-)
-run_checks = data_consistency_check.run_checks
-
-cleanup_path = os.path.join(
-    project_root, "scripts", "database", "db-cleanup-retention.py"
-)
-db_cleanup_retention = import_hyphenated_module("db_cleanup_retention", cleanup_path)
-offload_and_prune = db_cleanup_retention.offload_and_prune
 
 
 @pytest.mark.anyio
@@ -219,34 +180,3 @@ async def test_data_ingest_filters_researcher_worker(monkeypatch):
     dropped_logs.clear()
     await teleport_researcher("https://api.openalex.org/authors/bad_inst")
     assert any("institution" in log for log in dropped_logs)
-
-
-@pytest.mark.anyio
-async def test_data_consistency_check_runs():
-    """Verify that the data consistency checking script runs successfully without error."""
-    await run_checks()
-
-
-@pytest.mark.anyio
-async def test_db_cleanup_retention_runs():
-    """Verify that the db pruning and cleanup retention script runs successfully."""
-    async with AsyncSessionLocal() as db:
-        # Expired cache entry
-        past = datetime.datetime.now(datetime.timezone.utc).replace(
-            tzinfo=None
-        ) - datetime.timedelta(days=1)
-        expired_cache = CacheEntry(
-            cache_key="profile::expired_test", data={"v": {}}, expires_at=past
-        )
-        db.add(expired_cache)
-        await db.commit()
-
-    # Call the cleanup routine
-    await offload_and_prune()
-
-    # Assert cache entry was deleted
-    async with AsyncSessionLocal() as db:
-        res = await db.execute(
-            select(CacheEntry).where(CacheEntry.cache_key == "profile::expired_test")
-        )
-        assert res.scalar_one_or_none() is None

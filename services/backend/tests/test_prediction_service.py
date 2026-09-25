@@ -80,10 +80,14 @@ async def test_predict_next_big_thing_accepts_well_formed_json(_mock_is_llm_work
 
 @pytest.mark.asyncio
 @patch("app.services.ai.prediction_service.is_llm_working", return_value=True)
-async def test_predict_next_big_thing_falls_back_on_invalid_feasibility(_mock_is_llm_working):
+async def test_predict_next_big_thing_falls_back_on_invalid_feasibility(
+    _mock_is_llm_working,
+):
     """`feasibility` outside High/Medium/Low used to pass straight through --
     the field is a plain `str` on the public schema, so nothing caught it."""
-    malformed = VALID_BREAKTHROUGH_JSON.replace('"feasibility": "Medium"', '"feasibility": "Very likely"')
+    malformed = VALID_BREAKTHROUGH_JSON.replace(
+        '"feasibility": "Medium"', '"feasibility": "Very likely"'
+    )
     service = _service_with_mocked_llm(malformed)
 
     result = await service.predict_next_big_thing(field="Superconductivity")
@@ -99,7 +103,9 @@ async def test_predict_next_big_thing_falls_back_on_invalid_feasibility(_mock_is
 
 @pytest.mark.asyncio
 @patch("app.services.ai.prediction_service.is_llm_working", return_value=True)
-async def test_predict_next_big_thing_falls_back_on_blank_narrative_field(_mock_is_llm_working):
+async def test_predict_next_big_thing_falls_back_on_blank_narrative_field(
+    _mock_is_llm_working,
+):
     """An empty `description` used to render as a prediction with a blank
     paragraph -- looks broken, not explicitly a failure."""
     malformed = VALID_BREAKTHROUGH_JSON.replace(
@@ -116,7 +122,9 @@ async def test_predict_next_big_thing_falls_back_on_blank_narrative_field(_mock_
 
 @pytest.mark.asyncio
 @patch("app.services.ai.prediction_service.is_llm_working", return_value=True)
-async def test_predict_next_big_thing_falls_back_on_truncated_json(_mock_is_llm_working):
+async def test_predict_next_big_thing_falls_back_on_truncated_json(
+    _mock_is_llm_working,
+):
     service = _service_with_mocked_llm('{"breakthrough_name": "Truncated')
 
     result = await service.predict_next_big_thing(field="Superconductivity")
@@ -149,15 +157,21 @@ async def test_predict_next_problem_accepts_well_formed_response(_mock_is_llm_wo
 
 @pytest.mark.asyncio
 @patch("app.services.ai.prediction_service.is_llm_working", return_value=True)
-async def test_predict_next_problem_raises_on_missing_required_section(_mock_is_llm_working):
+async def test_predict_next_problem_raises_on_missing_required_section(
+    _mock_is_llm_working,
+):
     """Previously: a response missing **Toolkit** (truncation, model drift)
     shipped to the caller looking like a complete prediction."""
-    content = "**Next Frontier**: A working title.\n\n**Logic**: Sentence one. Sentence two."
+    content = (
+        "**Next Frontier**: A working title.\n\n**Logic**: Sentence one. Sentence two."
+    )
     service = _service_with_mocked_llm(content)
 
     with pytest.raises(Exception, match="Toolkit"):
         await service.predict_next_problem(
             author_name="Ada Lovelace",
             expertise=["Computing"],
-            works=[{"title": "On the Analytical Engine", "year": 1843, "abstract": "..."}],
+            works=[
+                {"title": "On the Analytical Engine", "year": 1843, "abstract": "..."}
+            ],
         )

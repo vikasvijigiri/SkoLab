@@ -82,7 +82,9 @@ async def test_match_grants_returns_202_retry_after_when_compute_is_slow(
     r = await client.get("/api/v1/match_grants", params={"author_id": "A_SLOW"})
 
     assert r.status_code == 202
-    assert r.headers["Retry-After"] == str(authors_module.DAILY_FEED_RETRY_AFTER_SECONDS)
+    assert r.headers["Retry-After"] == str(
+        authors_module.DAILY_FEED_RETRY_AFTER_SECONDS
+    )
     assert r.json() == []
     # The background task is still registered -- a retry will join it rather
     # than starting the expensive scrape/match pipeline over again.

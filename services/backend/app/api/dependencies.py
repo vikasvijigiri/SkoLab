@@ -86,8 +86,7 @@ def require_owner(*id_params: str) -> Callable[..., Awaitable[dict]]:
     Pass the parameter name(s) to check, most-specific first; defaults to
     ``("user_id", "author_id")``. Only use this where the identifier is the
     caller's own Firebase uid — a route that merely looks up *another*
-    researcher's public OpenAlex profile stays public. See
-    ``docs/backend-auth-posture.md``.
+    researcher's public OpenAlex profile stays public.
     """
     names: tuple[str, ...] = id_params or ("user_id", "author_id")
 

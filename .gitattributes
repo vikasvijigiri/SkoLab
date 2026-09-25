@@ -1,7 +1,2 @@
-# The OpenAPI snapshot is byte-compared by services/backend/tests/test_openapi.py.
-# Keep it LF regardless of the checkout platform's autocrlf setting.
-contracts/openapi/openapi.snapshot.json text eol=lf
-
 # Generated artifacts should not dominate GitHub language statistics.
 services/backend/alembic/versions/** linguist-generated
-contracts/openapi/** linguist-generated

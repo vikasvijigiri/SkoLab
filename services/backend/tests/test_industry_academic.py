@@ -134,7 +134,9 @@ async def test_get_tieups_cache_miss_success(
 
 @pytest.mark.asyncio
 @patch("app.services.industry.industry_academic_service.industry_academic_cache")
-@patch("app.services.industry.industry_academic_service.is_llm_working", return_value=False)
+@patch(
+    "app.services.industry.industry_academic_service.is_llm_working", return_value=False
+)
 @patch("app.services.industry.industry_academic_service.UserMemoryService")
 @patch("app.services.industry.industry_academic_service.LLMService")
 @patch("app.services.industry.industry_academic_service.OpenAlexService")

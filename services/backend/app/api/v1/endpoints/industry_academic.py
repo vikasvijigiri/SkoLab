@@ -24,8 +24,7 @@ async def get_industry_academic_tieups(
     based on the user's semantic memory profile and recent active topics.
     Each idea is enriched with real academic papers searched on OpenAlex.
 
-    Owner-scoped: reads the caller's private semantic-memory profile, so the
-    verified Firebase uid must equal ``user_id`` (see docs/backend-auth-posture).
+    Owner-scoped: the verified Firebase uid must equal ``user_id``.
     """
     try:
         service = IndustryAcademicService(db)

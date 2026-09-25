@@ -1,10 +1,7 @@
-import logging
 from fastapi import APIRouter
 from app.core.config import settings
 from app.services.ai.summarization_service import is_llm_working
 from app.schemas.system import AiStatusResponse
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -30,8 +27,7 @@ async def ai_status():
         # 2026-09-04 dead-model incident (see config.py's
         # llm_primary_model docstring) because it never reflected reality.
         "model": settings.llm_primary_model,
-        # Not the real key bytes: this route is unauthenticated (the admin gate
-        # was retired with the metrics store, see docs/plans/2026-09-04-retire-
-        # python-infra.md). Only report presence, never a prefix of the secret.
+        # This unauthenticated route reports key presence only, never key bytes
+        # or a secret prefix.
         "key_prefix": "***" if has_key else "None",
     }

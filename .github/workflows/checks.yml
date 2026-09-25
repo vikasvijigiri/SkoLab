@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   fast:
-    name: backend lint, contracts, and unit tests
+    name: backend lint and unit tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -22,8 +22,6 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: services/backend-go/go.mod
-      - name: Contract check
-        run: python scripts/verify_contracts.py
       - name: Install backend dependencies
         working-directory: services/backend
         run: pip install --quiet -r requirements.txt -r requirements-dev.txt

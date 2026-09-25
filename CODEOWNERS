@@ -21,9 +21,6 @@
 # Weakening a check is indistinguishable from fixing one, in a diff.
 /.github/workflows/             @vikasvijigiri
 
-# --- the rules themselves ------------------------------------------------------
-/docs/                          @vikasvijigiri
-
 # --- least reversible ----------------------------------------------------------
 # The pattern is listed so the answer is already written down on the day a
 # migration first appears, rather than decided in the PR that adds it.
@@ -31,9 +28,6 @@
 **/migrations/                  @vikasvijigiri
 
 # --- product ownership --------------------------------------------------------
-/apps/android-app/              @vikasvijigiri
 /services/backend/              @vikasvijigiri
 /services/backend-go/           @vikasvijigiri
-/contracts/                     @vikasvijigiri
-/packages/design-system/        @vikasvijigiri
 /infrastructure/                @vikasvijigiri

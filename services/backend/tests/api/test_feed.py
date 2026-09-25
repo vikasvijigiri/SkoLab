@@ -24,13 +24,28 @@ class _FakeOpenAlexForConjecture:
     author and its works without a network call."""
 
     async def fetch_author_by_id(self, author_id):
-        return {"id": f"https://openalex.org/{author_id}", "display_name": "Ada Lovelace", "field_of_study": "Physics"}
+        return {
+            "id": f"https://openalex.org/{author_id}",
+            "display_name": "Ada Lovelace",
+            "field_of_study": "Physics",
+        }
 
     async def search_authors(self, name, per_page=1):
-        return [{"id": "https://openalex.org/A1", "display_name": name, "field_of_study": "Physics"}]
+        return [
+            {
+                "id": "https://openalex.org/A1",
+                "display_name": name,
+                "field_of_study": "Physics",
+            }
+        ]
 
     async def fetch_author_works(self, author_id, per_page=5):
-        return [{"title": "On quantum decoherence", "abstract": "A study of qubit coherence."}]
+        return [
+            {
+                "title": "On quantum decoherence",
+                "abstract": "A study of qubit coherence.",
+            }
+        ]
 
 
 class _FakePipeline:
@@ -119,19 +134,25 @@ async def test_daily_feed_returns_202_retry_after_when_compute_is_slow(
         ("History", "fallback_conjecture_gen"),
     ],
 )
-def test_generate_fallback_conjecture_is_flagged_and_field_matched(field_of_study, expected_id):
+def test_generate_fallback_conjecture_is_flagged_and_field_matched(
+    field_of_study, expected_id
+):
     """The one path in this file with no prior coverage at all (2026-09-11
     backend response audit): a canned puzzle keyed off the author's field,
     served with a normal 200 and, before this, no signal it wasn't actually
     generated from the author's own publications."""
-    conjecture = feed_module.generate_fallback_conjecture({"field_of_study": field_of_study})
+    conjecture = feed_module.generate_fallback_conjecture(
+        {"field_of_study": field_of_study}
+    )
 
     assert conjecture.id == expected_id
     assert conjecture.is_fallback is True
 
 
 async def test_daily_conjecture_flags_fallback_and_caches_it(app, client, monkeypatch):
-    app.dependency_overrides[get_openalex_service] = lambda: _FakeOpenAlexForConjecture()
+    app.dependency_overrides[get_openalex_service] = lambda: (
+        _FakeOpenAlexForConjecture()
+    )
     # Forces the except-block fallback path deterministically, without
     # needing to fake an actual LLM failure.
     monkeypatch.setattr(feed_module, "is_llm_working", lambda: False)
@@ -145,6 +166,8 @@ async def test_daily_conjecture_flags_fallback_and_caches_it(app, client, monkey
     # Cached under the same key -- a second request must not need OpenAlex
     # again, and must still honestly report the flag from the cached copy.
     app.dependency_overrides[get_openalex_service] = lambda: object()
-    r2 = await client.get("/api/v1/daily_conjecture", params={"author_id": "A_FALLBACK"})
+    r2 = await client.get(
+        "/api/v1/daily_conjecture", params={"author_id": "A_FALLBACK"}
+    )
     assert r2.status_code == 200, r2.text
     assert r2.json()["is_fallback"] is True

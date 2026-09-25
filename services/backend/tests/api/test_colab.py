@@ -12,7 +12,9 @@ from app.schemas.colab import CompileResponse
 def test_compile_reports_missing_worker(monkeypatch):
     monkeypatch.setattr(colab.shutil, "which", lambda _: None)
     with pytest.raises(HTTPException) as exc:
-        colab._compile_source("\\documentclass{article}\\begin{document}Hi\\end{document}")
+        colab._compile_source(
+            "\\documentclass{article}\\begin{document}Hi\\end{document}"
+        )
     assert getattr(exc.value, "status_code", None) == 503
 
 
@@ -23,10 +25,14 @@ def test_compile_returns_bounded_pdf(monkeypatch):
         assert "-no-shell-escape" in command
         output_dir = Path(kwargs["cwd"])
         (output_dir / "main.pdf").write_bytes(b"%PDF-1.7 test")
-        return type("Completed", (), {"returncode": 0, "stdout": "Output written", "stderr": ""})()
+        return type(
+            "Completed", (), {"returncode": 0, "stdout": "Output written", "stderr": ""}
+        )()
 
     monkeypatch.setattr(colab.subprocess, "run", fake_run)
-    result = colab._compile_source("\\documentclass{article}\\begin{document}Hi\\end{document}")
+    result = colab._compile_source(
+        "\\documentclass{article}\\begin{document}Hi\\end{document}"
+    )
     assert result.status == "compiled"
     assert base64.b64decode(result.pdf_base64 or "") == b"%PDF-1.7 test"
 
