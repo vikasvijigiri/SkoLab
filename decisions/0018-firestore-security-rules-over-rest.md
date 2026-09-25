@@ -5,8 +5,7 @@
 
 ## Context
 
-A market-research pass (see the report cited in `LOG.md`'s 2026-09-11 entry)
-flagged that CoLab Workspace and Profile — direct-Firestore by design
+A security review flagged that CoLab Workspace and Profile — direct-Firestore by design
 (`decisions/0004`) — had **no `firestore.rules` file anywhere in the repo**.
 Access control, if any, lived only in whatever was pasted into the Firebase
 console ad hoc, unversioned and unreviewed. The owner's first framing of the

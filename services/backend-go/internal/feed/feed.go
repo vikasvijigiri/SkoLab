@@ -7,7 +7,7 @@
 //
 // (support/metrics and integrations/zotero/* were also ported here in Phase 2
 // as stub endpoints, then deleted in the 2026-09-11 backend response audit —
-// permanently-fake data, unreferenced by apps/web. See main.go's comment at
+// permanently-fake data, unreferenced by supported clients. See main.go's comment at
 // the removed route registrations.)
 //
 // Feed *generation* (GET /api/v1/daily_feed and the daily_conjecture / roadmap /

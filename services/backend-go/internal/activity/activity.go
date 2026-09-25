@@ -699,7 +699,7 @@ func trackedResearcherPapers(ctx context.Context, userID string, window time.Dur
 // trackedTopicIDs reads the caller's topic-Track list — a parallel
 // workstream writes users/{uid}/tracked_topics/{topicId} with
 // topicId/name/trackedAt fields, mirroring trackedResearcherIDs's researcher
-// version exactly (see apps/web/src/lib/firebase/tracking.ts). Degrades to no
+// version exactly. Degrades to no
 // items (not an error) when Firestore is unavailable or the collection is
 // empty/doesn't exist yet.
 func trackedTopicIDs(ctx context.Context, userID string) map[string]string {

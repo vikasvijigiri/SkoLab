@@ -1,4 +1,4 @@
-"""Generate ``api-contracts/openapi.snapshot.json`` from the live app.
+"""Generate ``contracts/openapi/openapi.snapshot.json`` from the live app.
 
 Run once (and after any change that alters a route, parameter, or
 ``response_model``) in an environment with the backend deps installed, then
@@ -7,7 +7,7 @@ commit the file:
     cd services/backend
     pip install -r requirements-dev.txt
     python scripts/gen_openapi_snapshot.py
-    git add ../../api-contracts/openapi.snapshot.json
+    git add ../../contracts/openapi/openapi.snapshot.json
 
 ``tests/test_openapi.py::test_schema_matches_committed_snapshot`` skips while the
 file is absent and enforces byte-equality once it exists. This script and that
@@ -26,9 +26,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.main import app  # noqa: E402
 
-# scripts/ -> backend -> services -> repo root (which holds api-contracts/).
+# scripts/ -> backend -> services -> repo root (which holds contracts/openapi/).
 _SNAPSHOT = (
-    Path(__file__).resolve().parents[3] / "api-contracts" / "openapi.snapshot.json"
+    Path(__file__).resolve().parents[3] / "contracts" / "openapi" / "openapi.snapshot.json"
 )
 
 

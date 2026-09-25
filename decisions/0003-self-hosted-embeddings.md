@@ -45,7 +45,7 @@ The Docker image grew meaningfully (CPU torch + model weights baked in at
 build time) and image builds take longer. In exchange: genuinely better
 similarity judgments, no per-call external cost or rate limit, and no new
 API key to provision. This decision directly required a second, harder-won
-fix — see the embedding-latency root-cause noted in `HANDOFF.md` (batch
-padding to the longest text in a batch was inflating latency 10-40x; fixed
+fix: batch padding to the longest text in a batch was inflating latency 10-40x;
+it was fixed
 by truncating candidate text before embedding and running the CPU-bound
 encode call via `asyncio.to_thread`).

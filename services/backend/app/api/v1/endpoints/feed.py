@@ -33,13 +33,11 @@ router = APIRouter()
 # embedding / LLM work.
 
 
-# NOTE: /daily_feed and /industry_opportunities return a bare JSON array (the web
-# client types them as `DailyFeedItem[]` / `IndustryOpportunity[]`). A `Page[T]`
-# envelope would be a response-shape change and break those clients, so they stay
-# `list[T]`; a paginated variant is a coordinated web+backend follow-up.
+# NOTE: /daily_feed and /industry_opportunities return bare JSON arrays. A
+# `Page[T]` envelope would be a response-shape change, so they stay `list[T]`
+# until a versioned pagination contract is introduced.
 #
-# Kept comfortably under the web client's default 15s fetch timeout
-# (apps/web/src/lib/api/client.ts DEFAULT_TIMEOUT_MS) and the Go gateway's
+# Kept comfortably under supported-client fetch timeouts and the Go gateway's
 # 120s proxy budget, so a single poll always gets a prompt response —
 # either the real result or a 202 telling the client to retry. See
 # app/core/pending_compute.py for why this exists and how it behaves.
@@ -315,7 +313,7 @@ async def get_industry_opportunities(
 ):
     # A cache miss here scrapes six job portals plus a DDG search and runs
     # them through the LLM (industry_service.py) -- measured at 35s+ against
-    # production, past the web client's own 30s fetch timeout. This used to
+    # production, past a supported client's normal fetch timeout. This used to
     # `await` the whole pipeline inline, so every cold focus/name combo
     # timed out client-side even though the backend eventually finished.
     # Reusing the daily_feed 202/Retry-After pattern (same constants, this

@@ -16,7 +16,5 @@ installed as a skill.
 
 - **This list is a floor, not a ceiling.** Also look for a more current
   guide at the time of the work and prefer it when you find one.
-- **Ground, don't copy wholesale.** Use these to pick controls and tests;
-  the in-repo procedure stays in the `security-and-hardening` skill
-  (`.claude/skills/security-and-hardening/SKILL.md`), backed by the
-  `security-auditor` persona for a dedicated review pass.
+- **Ground, don't copy wholesale.** Use these to pick controls and tests; add
+  enforceable checks to CI and document residual risk in the threat model.

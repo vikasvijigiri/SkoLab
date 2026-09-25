@@ -1,4 +1,4 @@
-"""Task 10 — discovery-engine routes typed against the web client shapes."""
+"""Discovery-engine routes typed against the published response contracts."""
 
 import pytest
 

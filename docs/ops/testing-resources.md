@@ -17,9 +17,7 @@ repo or installed as a skill.
   re-check at the time of the work and prefer a fresher equivalent when one
   exists.
 - **Ground, don't copy wholesale.** Use these to pick proportions and
-  patterns; the per-domain testing guidance stays in the
-  `test-driven-development` skill
-  (`.claude/skills/test-driven-development/SKILL.md`).
+  patterns; encode the resulting checks in the relevant package and CI job.
 
 Framework-specific runners (Jest, Vitest, Playwright, pytest) are a
 target-repo choice, not fixed here.

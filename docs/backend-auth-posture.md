@@ -70,7 +70,7 @@ the question in review — do not guess it into `authed`.
 | Route(s) | Note |
 | :--- | :--- |
 | `GET /`, `GET /ai_status`, `GET /status` | System metadata. `/` is served by `main.py`'s own `AppInfoResponse` handler (see "single mount" below). |
-| `GET /health`, `GET /livez`, `GET /readyz` | Infra probes. Liveness/readiness carry no token by design. `GET /metrics` and the local-subnet / SRE-token admin gate in `security_guard_middleware` were removed — the Go gateway owns request metrics (`docs/plans/2026-09-04-retire-python-infra.md`). `GET /ai_status` is now plain public system metadata (row above). |
+| `GET /health`, `GET /livez`, `GET /readyz` | Infra probes. Liveness/readiness carry no token by design. `GET /metrics` and the local-subnet / SRE-token admin gate in `security_guard_middleware` were removed; the Go gateway owns request metrics. `GET /ai_status` is public system metadata (row above). |
 | `GET /search_author`, `GET /refresh_author` | Resolve **any** researcher's public OpenAlex profile. |
 | `GET /author_metrics`, `GET /network_collaborators`, `GET /collaborator_synergy`, `GET /citation_heatmap` | Metrics computed from **any** researcher's public publication record; `author_id` is an OpenAlex id. |
 | `GET /match_grants`, `GET /journal_advisor` | Recommendations derived from a researcher's public works; used when viewing arbitrary profiles, not just one's own. |
@@ -90,9 +90,8 @@ the question in review — do not guess it into `authed`.
   owner-scoped in Go (`auth.VerifyUser()` + a uid check).
 
 > `POST /daily_feed/dismiss` was in this list; it is now owner-scoped and, as of
-> Phase 2, served by the Go gateway (`internal/feed`). The web client
-> (`dismissDailyFeedItem`) already sends the Firebase token and targets the same
-> gateway path, so it needed no change. A signed-in user who has not linked an
+> Phase 2, served by the Go gateway (`internal/feed`). Supported clients send a
+> Firebase token and target the same gateway path. A signed-in user who has not linked an
 > OpenAlex profile gets 403 on dismiss until they link — acceptable, the feed
 > still renders.
 
@@ -100,14 +99,14 @@ the question in review — do not guess it into `authed`.
 
 | Routes | Now served by | Auth |
 | :--- | :--- | :--- |
-| `GET/POST /api/v1/recommendations/peers`, `/peers/invite`, `/peers/check-registered` | Go gateway — `internal/recommendation` | **Hard `auth.VerifyUser()`** — 401 without a valid Firebase token. The Android client attaches one as of #27 (`network/AuthInterceptor.kt`); the web client via `apiRequest({ idToken })`. A per-IP rate limit (5 rps) + a 200-identifier cap on `check-registered` still bound abuse from an authenticated caller. `decisions/0008`. |
-| `POST /api/v1/daily_feed/dismiss` | Go gateway — `internal/feed` | `auth.VerifyUser()` (**401** without a token) **and** the handler requires `users.openalex_id` for the verified uid to equal the body `author_id` — **403** on mismatch or an unlinked account. Same check as the old Python route, ported verbatim (Phase 2, `docs/plans/2026-09-04-phase2-feed-to-go.md`). |
+| `GET/POST /api/v1/recommendations/peers`, `/peers/invite`, `/peers/check-registered` | Go gateway — `internal/recommendation` | **Hard `auth.VerifyUser()`** — 401 without a valid Firebase token. The Android client attaches one through `network/AuthInterceptor.kt`. A per-IP rate limit (5 rps) + a 200-identifier cap on `check-registered` still bound abuse from an authenticated caller. `decisions/0008`. |
+| `POST /api/v1/daily_feed/dismiss` | Go gateway — `internal/feed` | `auth.VerifyUser()` (**401** without a token) **and** the handler requires `users.openalex_id` for the verified uid to equal the body `author_id` — **403** on mismatch or an unlinked account. |
 
 > `GET /support/metrics` and the `GET/POST /zotero/*` stubs (ported to the Go
 > gateway in Phase 2, see the note above) were **deleted** in the 2026-09-11
 > backend response audit: both returned permanently-fake data, were never
-> called by `apps/web`, and were reachable by anyone hitting the URL
-> directly. See `LOG.md`'s 2026-09-11 entry.
+> called by a retired client, and were reachable by anyone hitting the URL
+> directly.
 
 Email matching in `peers` / `check-registered` uses the `users.email_bidx`
 blind-index column (`users.email` is Fernet-encrypted, so equality/`ILIKE` never
@@ -123,8 +122,8 @@ live author routes (`/refresh_author`, `/search_author`, `/author_metrics`,
 embedding service, depends on a Firestore cache tier the gateway lacks, or is a
 large multi-source port. No route changed auth class — all remain `public`
 (public OpenAlex-derived data keyed by an OpenAlex id). See
-`decisions/0009-phase1-authors-assessment.md` and
-`docs/plans/2026-09-04-phase1-authors-to-go.md`.
+`decisions/0009-phase1-authors-assessment.md` and the current
+[`service-boundaries`](architecture/service-boundaries.md) guidance.
 
 ## Single router mount
 

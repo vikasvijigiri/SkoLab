@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA_PATH = ROOT / "packages" / "contracts" / "error-response.schema.json"
+SCHEMA_PATH = ROOT / "contracts" / "schemas" / "error-response.schema.json"
 PYTHON_ERRORS_PATH = ROOT / "services" / "backend" / "app" / "api" / "errors.py"
 
 

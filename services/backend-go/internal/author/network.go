@@ -35,7 +35,7 @@ import (
 // NetworkCollaborator is one row of the bare JSON array returned by
 // GET /network_collaborators. Field set matches the Python live-compute row
 // (app/schemas/authors_extra.py NetworkCollaborator, extra="allow"; TS
-// apps/web/src/lib/types.ts). `depth` is present on Python live rows and
+// the prior client response contract). `depth` is present on Python live rows and
 // tolerated by both the Pydantic model and the (looser) TS type.
 type NetworkCollaborator struct {
 	ID                 string `json:"id"`

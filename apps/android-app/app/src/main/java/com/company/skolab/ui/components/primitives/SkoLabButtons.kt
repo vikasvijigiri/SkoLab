@@ -188,7 +188,7 @@ fun GoogleSignInButton(
  *   - Replace `LegacySkoLabButton(text, onClick)` with `SkoLabPrimaryButton(text, onClick)`.
  *   - For secondary actions use `SkoLabOutlinedButton(text, onClick)`.
  *
- * Tracked in: DESIGN_SYSTEM_CHANGELOG.md §v2.1
+ * Migration status is verified by searching for remaining call sites.
  */
 @Deprecated(
     message = "Use SkoLabPrimaryButton or SkoLabOutlinedButton from the Design System v2 palette. " +

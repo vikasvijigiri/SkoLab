@@ -1,6 +1,6 @@
 """Response models for the feed routes.
 
-Fields mirror ``apps/web/src/lib/types.ts`` (``DailyFeedItem``,
+Fields mirror the published response contracts (``DailyFeedItem``,
 ``IndustryOpportunity``) — those are the live web/Android consumers. Every model
 allows extras through so a backend field the clients don't read is never the
 reason a response fails validation, and no field they *do* read is dropped.

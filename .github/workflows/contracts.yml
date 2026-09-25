@@ -3,15 +3,13 @@ name: Contract compatibility
 on:
   push:
     paths:
-      - "api-contracts/**"
-      - "packages/contracts/**"
+      - "contracts/**"
       - "services/backend/app/api/errors.py"
       - "scripts/verify_contracts.py"
       - ".github/workflows/contracts.yml"
   pull_request:
     paths:
-      - "api-contracts/**"
-      - "packages/contracts/**"
+      - "contracts/**"
       - "services/backend/app/api/errors.py"
       - "scripts/verify_contracts.py"
       - ".github/workflows/contracts.yml"

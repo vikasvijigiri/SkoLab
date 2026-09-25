@@ -1,6 +1,6 @@
 """OpenAPI schema: builds, is well-formed, and does not drift from the snapshot.
 
-The snapshot at ``api-contracts/openapi.snapshot.json`` is the committed copy of
+The snapshot at ``contracts/openapi/openapi.snapshot.json`` is the committed copy of
 ``app.openapi()``. A contract change is meant to show up as a reviewable diff to
 that file. If the snapshot is absent it is written and the diff assertion skips
 with an instruction to generate it via ``scripts/gen_openapi_snapshot.py`` and
@@ -14,9 +14,9 @@ import pytest
 
 from app.main import app
 
-# tests/ -> backend -> services -> repo root (which holds api-contracts/).
+# tests/ -> backend -> services -> repo root (which holds contracts/openapi/).
 _SNAPSHOT = (
-    Path(__file__).resolve().parents[3] / "api-contracts" / "openapi.snapshot.json"
+    Path(__file__).resolve().parents[3] / "contracts" / "openapi" / "openapi.snapshot.json"
 )
 
 
@@ -65,11 +65,11 @@ def test_schema_matches_committed_snapshot():
         pytest.skip(
             "openapi.snapshot.json bootstrapped — run "
             "`python scripts/gen_openapi_snapshot.py` and commit "
-            "api-contracts/openapi.snapshot.json to arm this guard"
+            "contracts/openapi/openapi.snapshot.json to arm this guard"
         )
     current = _SNAPSHOT.read_text(encoding="utf-8")
     assert current == serialised, (
-        "Generated OpenAPI schema differs from api-contracts/openapi.snapshot.json. "
+        "Generated OpenAPI schema differs from contracts/openapi/openapi.snapshot.json. "
         "If the change is intended, regenerate: "
         "`cd services/backend && python scripts/gen_openapi_snapshot.py` and commit "
         "the updated snapshot."

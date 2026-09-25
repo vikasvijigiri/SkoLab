@@ -46,7 +46,7 @@ graph TD
 | Threat Actor | Motivation | Attack Vector | Mitigation |
 |---|---|---|---|
 | **Data Scraper** | Steal copyrighted/licensed academic data from OpenAlex. | High-frequency queries to search endpoints. | Per-IP rate limiting at the Go API gateway (`internal/middleware`). The Python per-process token bucket and User-Agent blocking were removed as redundant/counterproductive. |
-| **Script Kiddie / Attacker** | Disrupt service / Access other user accounts. | Session spoofing, SQL injection, API abuse. | Firebase ID-token verification (`auth.VerifyUser` / `get_verified_user`) + parameterised ORM queries. The `X-Device-Signature` HMAC check and the `/metrics` admin-IP gate were removed (`docs/plans/2026-09-04-retire-python-infra.md`) — the signature was keyed by a server-only secret and protected no real route. |
+| **Script Kiddie / Attacker** | Disrupt service / Access other user accounts. | Session spoofing, SQL injection, API abuse. | Firebase ID-token verification (`auth.VerifyUser` / `get_verified_user`) + parameterised ORM queries. The retired `X-Device-Signature` HMAC check and `/metrics` admin-IP gate protected no real route. |
 | **Prompt Injector** | Hijack LLM credits / Extract system prompts. | Prompt stuffing in search/chat fields. | XML tagging isolation + Max character constraints. |
 | **Direct DB Tamperer** | Modify database values (e.g., complete quests/get credits). | Modifying SQLite on device or executing SQL directly on compromised DB. | Record integrity HMAC-SHA256 signatures validated on read. |
 

@@ -36,7 +36,7 @@ WORKDIR /app
 # TeX is deliberately installed in the runtime image: CoLab compilation is
 # an authenticated, bounded subprocess and must work after deployment, not
 # only on a developer machine. Keep the package set minimal; pdflatex and the
-# base LaTeX classes cover the templates currently shipped by the web client.
+# base LaTeX classes cover the templates available to supported clients.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     texlive-latex-base \
     && rm -rf /var/lib/apt/lists/* && \

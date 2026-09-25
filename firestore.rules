@@ -8,10 +8,10 @@ rules_version = '2';
 // defaults (or whatever was pasted into the console ad hoc) were the entire
 // access-control story. This file makes that story explicit and enforced.
 //
-// Data model this mirrors: apps/web/src/lib/firebase/workspace.ts and
+// Data model mirrored by the supported client applications and
 // apps/android-app's CoLabWorkspaceScreen.kt (collabs_groups/{id} with
 // documents/messages/tasks/meetings/presence subcollections), and
-// apps/web/src/lib/firebase/auth.ts (researchers/{uid} profile doc).
+// their authenticated researcher profile documents.
 //
 // Deploy: `npx firebase deploy --only firestore:rules` (after `npx firebase
 // login`), or paste this file's contents into Firebase Console -> Firestore
@@ -24,7 +24,7 @@ service cloud.firestore {
     // ── researchers/{uid} — profile directory ──────────────────────────
     // Read: any signed-in user. Needed for viewing any researcher's public
     // profile, Discovery/CoLab surfaces, and ShareModal's invite-by-email
-    // lookup (apps/web/src/lib/firebase/workspace.ts findResearcherByEmail).
+    // lookup by a verified researcher email.
     // Write: only your own document, keyed by your own Firebase uid.
     match /researchers/{uid} {
       allow read: if request.auth != null;
@@ -40,7 +40,7 @@ service cloud.firestore {
       // own UI can confirm delivery). Create: only as yourself, only into the
       // recipient named in the doc itself — you can't forge a share from
       // someone else, and you can only add rows to the actual `uid` you're
-      // writing to. See apps/web/src/lib/firebase/cvShare.ts.
+      // writing to.
       match /cvShares/{shareId} {
         allow read: if request.auth != null
           && (request.auth.uid == uid || request.auth.uid == resource.data.fromUid);

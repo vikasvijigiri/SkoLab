@@ -181,4 +181,4 @@ this decision's scope to fabricate just to make the screen "work."
 
 Reference mockup (4 screens: enriched bell dropdown, full Notifications
 page, Manage alerts settings, empty inbox with the track-researchers
-nudge) is a Claude Design canvas linked from `HANDOFF.md`.
+nudge) was captured in the original implementation design.

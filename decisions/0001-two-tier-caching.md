@@ -46,7 +46,7 @@ re-read the same (potentially year-old) Firestore doc forever.
 ## Consequences
 
 Two systems to reason about instead of one, and two places a "why is this
-stale" bug can hide (this bit us directly during recommendation-engine work —
-see `HANDOFF.md` gotchas). In exchange: cheap relational queries stay cheap,
+stale" bug can hide (this bit us directly during recommendation-engine work).
+In exchange: cheap relational queries stay cheap,
 large documents don't bloat the transactional database, and CoLab/Profile
 get realtime sync without a bespoke websocket layer.

@@ -1,6 +1,6 @@
 """Response models for the discovery-engine routes.
 
-Mirrors ``apps/web/src/lib/types.ts`` ``BreakthroughPrediction`` / ``PaperSource``
+Mirrors the published ``BreakthroughPrediction`` / ``PaperSource``
 field-for-field — the Horizon page (`getHorizonPrediction`) and Nexus chat
 (`nexusChat`) consume these directly.
 """

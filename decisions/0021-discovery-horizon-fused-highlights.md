@@ -133,7 +133,7 @@ Not yet implemented in `apps/web`. Reference mockup (7 screens: Discovery
 Researchers/Papers/Topics modes, Compare, one researcher profile screen —
 Highlights with the full dashboard shown open beneath it, not a separate
 duplicate page — Horizon input, Horizon result) is a Claude Design canvas
-linked from `HANDOFF.md`. An earlier pass in this canvas showed the
+recorded with the original implementation. An earlier pass in this canvas showed the
 collapsed-dashboard and expanded-dashboard states as two full duplicate
 pages; corrected same-day to one page (expanded, since it's a strict
 superset) once noticed — the dashboard's collapse/expand is a same-page

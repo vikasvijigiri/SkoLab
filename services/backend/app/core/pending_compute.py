@@ -12,7 +12,7 @@ embedding + LLM-ranking pipeline documented at ~40-80s uncached, up to
 ~2m48s for the widest search. Left as a plain `await`, that blocks the
 HTTP request the entire time — which three independent layers then
 truncate at three different, uncoordinated points: the browser's default
-15s fetch timeout (`apps/web/src/lib/api/client.ts`), the Go gateway's
+15s client fetch timeout, the Go gateway's
 proxy timeout, and Render's own edge timeout. The result in production
 was a request that failed at whichever layer's clock ran out first,
 while the backend kept working — and, worse, a second concurrent request
@@ -32,7 +32,7 @@ already finished or joins the same in-flight task instead of starting a
 duplicate. The route handler turns `PENDING` into a `202 Accepted` with
 a `Retry-After` header (RFC 9110 §15.3.3 / §10.2.3) — a real, standard
 HTTP mechanism for "accepted, not ready yet, ask again in N seconds" —
-and the client polls, per `apps/web/src/lib/api/client.ts`.
+and the client polls for completion.
 
 This is process-local: it does not coordinate across multiple backend
 instances (`WEB_CONCURRENCY` > 1, or a future horizontal scale-out). A

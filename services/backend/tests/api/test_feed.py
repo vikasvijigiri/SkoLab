@@ -1,4 +1,4 @@
-"""Task 7 — feed routes typed against the web client shapes.
+"""Feed routes typed against the published response contracts.
 
 `GET /daily_feed` returns a bare typed array. `POST /daily_feed/dismiss` moved to
 the Go gateway in Phase 2 (docs/plans/2026-09-04-phase2-feed-to-go.md), so its

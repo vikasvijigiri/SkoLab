@@ -1,11 +1,12 @@
 {
-  "name": "skolab-monorepo",
+  "name": "skolab-platform",
+  "description": "SkoLab backend, Android client, contracts, and operational tooling",
   "version": "1.0.0",
   "private": true,
-  "workspaces": [
-    "shared/skolab-design-system",
-    "apps/web"
-  ],
+  "engines": {
+    "node": ">=22.22.2"
+  },
+  "workspaces": ["packages/design-system"],
   "devDependencies": {
     "jsdom": "~30.0.1",
     "@firebase/rules-unit-testing": "^5.0.2",
@@ -16,10 +17,8 @@
   "scripts": {
     "dev:backend": "cd services/backend && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
     "dev:go": "cd services/backend-go && go run main.go",
-    "dev:web": "cd apps/web && npm run dev",
-    "build:web": "cd apps/web && npm run build",
     "build:android": "npm run compile:tokens && powershell -ExecutionPolicy Bypass -File scripts/build/build-and-install.ps1",
-    "compile:tokens": "node shared/skolab-design-system/compile-tokens.js",
+    "compile:tokens": "node packages/design-system/compile-tokens.js",
     "test:load:baseline": "k6 run tests/load/baseline.js",
     "test:load:rampup": "k6 run tests/load/ramp_up.js",
     "test:load:soak": "k6 run tests/load/soak.js",

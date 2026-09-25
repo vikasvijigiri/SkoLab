@@ -16,10 +16,8 @@ skill.
 - **This list is a floor, not a ceiling.** A couple of entries update
   slowly; re-check at the time of the work and prefer a fresher equivalent
   when one exists.
-- **Ground, don't copy wholesale.** Use these to pick signals and
-  thresholds; the in-repo readiness sequence stays in the
-  `observability-and-instrumentation` skill
-  (`.claude/skills/observability-and-instrumentation/SKILL.md`).
+- **Ground, don't copy wholesale.** Use these to pick signals and thresholds;
+  record the resulting SLOs, alerts, and runbooks in this repository.
 
 The metrics/dashboard tool pairing (Prometheus + Grafana, OpenTelemetry for
 traces) is named in `docs/ops/backend-resources.md`, not here.

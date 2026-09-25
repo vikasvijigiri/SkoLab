@@ -33,6 +33,5 @@ Run from this directory:
 ./gradlew test
 ```
 
-The Android app consumes the same product API and design-token decisions as the
-web client, but Gradle remains the authority for Android dependencies and
-packaging.
+The Android app consumes the shared product APIs and design tokens, while
+Gradle remains the authority for Android dependencies and packaging.

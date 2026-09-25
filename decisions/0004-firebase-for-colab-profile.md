@@ -38,8 +38,3 @@ working on either area needs to know which pattern applies before assuming
 "add an endpoint" is the right move. In exchange, Android and web stay in
 sync on CoLab/Profile data automatically, with no custom sync logic to
 maintain.
-
-**Known gap (see `HANDOFF.md`):** the web app's Firebase Web app is not yet
-registered in the `skolab-vvi` Firebase project, so this whole feature set is
-currently non-functional on web until that's done — it fails with an
-explicit "not configured" error rather than silently.

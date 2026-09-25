@@ -17,9 +17,8 @@ skill.
   for a more current or stronger backend reference at the time of the work
   and prefer it when you find one.
 - **Ground, don't copy wholesale.** Use these to pick a direction or borrow
-  a concrete pattern; the decision still lands in the plan or spec, and the
-  procedure stays in the `api-and-interface-design` skill
-  (`.claude/skills/api-and-interface-design/SKILL.md`).
+  a concrete pattern; record the resulting durable choice in `decisions/` and
+  update the affected contract or runbook.
 
 Per-language guides (Go, Rust, Python) are deliberately out of scope here —
 this is the cross-cutting set.

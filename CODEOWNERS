@@ -22,8 +22,7 @@
 /.github/workflows/             @vikasvijigiri
 
 # --- the rules themselves ------------------------------------------------------
-/CLAUDE.md                      @vikasvijigiri
-/AGENTS.md                      @vikasvijigiri
+/docs/                          @vikasvijigiri
 
 # --- least reversible ----------------------------------------------------------
 # The pattern is listed so the answer is already written down on the day a
@@ -32,9 +31,9 @@
 **/migrations/                  @vikasvijigiri
 
 # --- product ownership --------------------------------------------------------
-/apps/web/                      @vikasvijigiri
 /apps/android-app/              @vikasvijigiri
 /services/backend/              @vikasvijigiri
 /services/backend-go/           @vikasvijigiri
-/api-contracts/                 @vikasvijigiri
+/contracts/                     @vikasvijigiri
+/packages/design-system/        @vikasvijigiri
 /infrastructure/                @vikasvijigiri

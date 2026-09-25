@@ -5,7 +5,7 @@ These wrap routes that were untyped until now and whose live payloads vary
 declare no required fields and allow extras through (``extra="allow"``) — their
 job is "typed route, no leaked internals, no dropped field", not to reject a
 real response. The authoritative field lists for the web/Android clients live
-in ``apps/web/src/lib/types.ts`` (``NetworkCollaborator``, ``CitationHeatmap``,
+in the published API response contract (``NetworkCollaborator``, ``CitationHeatmap``,
 ``JournalRecommendation``, ``GrantMatch``).
 """
 
