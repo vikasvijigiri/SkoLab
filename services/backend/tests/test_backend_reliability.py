@@ -3,6 +3,7 @@ import pytest
 import httpx
 from unittest.mock import patch, MagicMock
 from app.main import app
+from app.api.dependencies import get_agent_service, get_verified_user
 
 # Configure HTTPX AsyncClient transport compatibility
 try:
@@ -14,24 +15,34 @@ except AttributeError:
 
 @pytest.mark.anyio
 async def test_upload_document_size_limit():
-    """Verify that uploading a file larger than 10MB fails with 400."""
-    async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
-        large_content = b"a" * (10 * 1024 * 1024 + 1)
-        files = {"file": ("test.pdf", large_content, "application/pdf")}
-        response = await ac.post("/api/v1/agent/upload-document", files=files)
-        assert response.status_code == 400
-        assert "exceeds the 10MB limit" in response.json()["detail"]
+    """Verify that an authenticated oversized upload fails before parsing."""
+    app.dependency_overrides[get_verified_user] = lambda: {"uid": "u1"}
+    try:
+        async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
+            large_content = b"a" * (10 * 1024 * 1024 + 1)
+            files = {"file": ("test.pdf", large_content, "application/pdf")}
+            response = await ac.post("/api/v1/agent/upload-document", files=files)
+            assert response.status_code == 413
+            assert "exceeds the 10 MB limit" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.pop(get_verified_user, None)
 
 
 @pytest.mark.anyio
 async def test_upload_document_mime_validation():
-    """Verify that uploading a file with an unsupported MIME/type fails with 400."""
-    async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
-        invalid_content = b"some executable code"
-        files = {"file": ("malicious.exe", invalid_content, "application/octet-stream")}
-        response = await ac.post("/api/v1/agent/upload-document", files=files)
-        assert response.status_code == 400
-        assert "Unsupported file type" in response.json()["detail"]
+    """Verify that an authenticated upload rejects an unsupported extension."""
+    app.dependency_overrides[get_verified_user] = lambda: {"uid": "u1"}
+    try:
+        async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
+            invalid_content = b"some executable code"
+            files = {
+                "file": ("malicious.exe", invalid_content, "application/octet-stream")
+            }
+            response = await ac.post("/api/v1/agent/upload-document", files=files)
+            assert response.status_code == 415
+            assert "Unsupported filename" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.pop(get_verified_user, None)
 
 
 @pytest.mark.anyio
@@ -40,17 +51,16 @@ async def test_upload_document_success():
     # Mock agent_service to avoid writing file to disk
     mock_agent_service = MagicMock()
 
-    async def dummy_process(content, filename, content_type):
+    async def dummy_process(content, filename, content_type, *, user_id):
         return {"id": 123, "filename": filename, "extracted_text": "Sample text"}
 
     mock_agent_service.process_upload_document = dummy_process
 
-    from app.api.dependencies import get_agent_service
-
     app.dependency_overrides[get_agent_service] = lambda: mock_agent_service
+    app.dependency_overrides[get_verified_user] = lambda: {"uid": "u1"}
     try:
         async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
-            valid_content = b"Sample text"
+            valid_content = b"%PDF-1.4\n"
             files = {"file": ("paper.pdf", valid_content, "application/pdf")}
             response = await ac.post("/api/v1/agent/upload-document", files=files)
             assert response.status_code == 200

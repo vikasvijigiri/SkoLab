@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
+from pathlib import PurePath
+
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from app.schemas.core import AgentChatRequest, ChatRequest
 from app.schemas.agent import (
     AgentChatResponse,
@@ -17,6 +19,41 @@ from app.api.dependencies import (
 
 router = APIRouter()
 
+_MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+_UPLOAD_CHUNK_BYTES = 64 * 1024
+_ALLOWED_UPLOADS = {
+    ".pdf": "application/pdf",
+    ".txt": "text/plain",
+    ".md": "text/markdown",
+    ".csv": "text/csv",
+}
+
+
+def _safe_upload_filename(filename: str) -> tuple[str, str]:
+    """Return a display-safe filename and its permitted extension."""
+    basename = PurePath(filename.replace("\\", "/")).name.strip()
+    suffix = PurePath(basename).suffix.lower()
+    if not basename or len(basename) > 255 or suffix not in _ALLOWED_UPLOADS:
+        raise HTTPException(
+            status_code=415,
+            detail="Unsupported filename. Only PDF, TXT, MD, and CSV files are allowed.",
+        )
+    return basename, suffix
+
+
+async def _read_limited_upload(file: UploadFile) -> bytes:
+    """Read incrementally and refuse the upload as soon as it exceeds the cap."""
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := await file.read(_UPLOAD_CHUNK_BYTES):
+        total += len(chunk)
+        if total > _MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413, detail="File size exceeds the 10 MB limit."
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
+
 
 @router.post("/agent/chat", response_model=AgentChatResponse)
 async def agent_chat(
@@ -33,29 +70,35 @@ async def agent_chat(
 async def upload_document(
     file: UploadFile = File(...),
     agent_service: AgentService = Depends(get_agent_service),
+    user: dict = Depends(get_verified_user),
 ):
-    content = await file.read()
-    # 10MB limit
-    if len(content) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="File size exceeds the 10MB limit.")
-
-    allowed_types = ["application/pdf", "text/plain", "text/markdown", "text/csv"]
-    content_type = file.content_type or ""
-    filename = file.filename or ""
-    is_valid = (
-        content_type in allowed_types
-        or filename.endswith(".pdf")
-        or filename.endswith(".txt")
-        or filename.endswith(".md")
-        or filename.endswith(".csv")
-    )
-    if not is_valid:
+    filename, suffix = _safe_upload_filename(file.filename or "")
+    declared_length = file.headers.get("content-length")
+    if (
+        declared_length
+        and declared_length.isdigit()
+        and int(declared_length) > _MAX_UPLOAD_BYTES
+    ):
         raise HTTPException(
-            status_code=400,
-            detail="Unsupported file type. Only PDF, TXT, MD, and CSV files are allowed.",
+            status_code=413, detail="File size exceeds the 10 MB limit."
         )
 
-    return await agent_service.process_upload_document(content, filename, content_type)
+    content = await _read_limited_upload(file)
+    if suffix == ".pdf" and not content.startswith(b"%PDF-"):
+        raise HTTPException(
+            status_code=415, detail="Uploaded PDF has an invalid signature."
+        )
+
+    user_id = str(user.get("uid") or "")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid Firebase user identity.")
+
+    return await agent_service.process_upload_document(
+        content,
+        filename,
+        _ALLOWED_UPLOADS[suffix],
+        user_id=user_id,
+    )
 
 
 @router.post("/agent/chat-with-author", response_model=ChatWithAuthorResponse)

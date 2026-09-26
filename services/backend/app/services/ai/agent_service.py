@@ -3,6 +3,7 @@ import datetime
 import json
 import re
 import io
+import asyncio
 import pdfplumber
 from app.core.config import settings
 from app.services.platform.connectors import TOOLS_SCHEMA, execute_tool_call
@@ -417,18 +418,12 @@ class AgentService:
             }
 
     async def process_upload_document(
-        self, content: bytes, filename: str, content_type: str
+        self, content: bytes, filename: str, content_type: str, *, user_id: str
     ) -> dict:
         try:
-            extracted_text = ""
-            if content_type == "application/pdf" or filename.endswith(".pdf"):
-                with pdfplumber.open(io.BytesIO(content)) as pdf:
-                    for page in pdf.pages:
-                        text = page.extract_text()
-                        if text:
-                            extracted_text += text + "\n"
-            else:
-                extracted_text = content.decode("utf-8", errors="replace")
+            extracted_text = await asyncio.to_thread(
+                _extract_upload_text, content, content_type
+            )
 
             from app.models.agent_models import AgentDocumentUpload
             import datetime
@@ -439,6 +434,7 @@ class AgentService:
 
             async with self._db_session() as session:
                 doc = AgentDocumentUpload(
+                    user_id=user_id,
                     filename=filename,
                     content_type=content_type,
                     extracted_text=extracted_text.strip(),
@@ -458,3 +454,27 @@ class AgentService:
             }
         except Exception as e:
             raise Exception(str(e))
+
+
+_MAX_PDF_PAGES = 100
+_MAX_EXTRACTED_TEXT_CHARS = 1_000_000
+
+
+def _extract_upload_text(content: bytes, content_type: str) -> str:
+    """Extract bounded text without blocking the async request event loop."""
+    if content_type != "application/pdf":
+        return content.decode("utf-8", errors="replace")[:_MAX_EXTRACTED_TEXT_CHARS]
+
+    parts: list[str] = []
+    extracted_size = 0
+    with pdfplumber.open(io.BytesIO(content)) as pdf:
+        if len(pdf.pages) > _MAX_PDF_PAGES:
+            raise ValueError(f"PDF exceeds the {_MAX_PDF_PAGES}-page limit.")
+        for page in pdf.pages:
+            text = page.extract_text() or ""
+            remaining = _MAX_EXTRACTED_TEXT_CHARS - extracted_size
+            if remaining <= 0:
+                break
+            parts.append(text[:remaining])
+            extracted_size += len(parts[-1])
+    return "\n".join(parts)

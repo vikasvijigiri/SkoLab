@@ -15,7 +15,9 @@ class _FakeAgentService:
     async def process_agent_chat(self, req, base_url=None):
         return {"reply": "hello from the fake agent"}
 
-    async def process_upload_document(self, content, filename, content_type):
+    async def process_upload_document(
+        self, content, filename, content_type, *, user_id
+    ):
         return {"id": 1, "filename": filename, "extracted_text": "body"}
 
 
@@ -49,6 +51,36 @@ async def test_agent_chat_rejects_overlong_message(client):
     assert r.status_code == 422
     body = r.json()
     assert body["code"] == "validation_error"
+
+
+async def test_upload_document_requires_authentication(client, app):
+    app.dependency_overrides.pop(get_verified_user)
+
+    r = await client.post(
+        "/api/v1/agent/upload-document",
+        files={"file": ("notes.txt", b"private notes", "text/plain")},
+    )
+
+    assert r.status_code == 401
+
+
+async def test_upload_document_accepts_bounded_authenticated_text(client):
+    r = await client.post(
+        "/api/v1/agent/upload-document",
+        files={"file": ("notes.txt", b"research notes", "text/plain")},
+    )
+
+    assert r.status_code == 200, r.text
+    assert r.json()["filename"] == "notes.txt"
+
+
+async def test_upload_document_rejects_invalid_pdf_signature(client):
+    r = await client.post(
+        "/api/v1/agent/upload-document",
+        files={"file": ("malformed.pdf", b"not a PDF", "application/pdf")},
+    )
+
+    assert r.status_code == 415
 
 
 async def test_chat_with_author_parses(client):

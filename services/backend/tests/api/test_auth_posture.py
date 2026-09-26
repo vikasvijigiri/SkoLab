@@ -33,6 +33,7 @@ _HTTP_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 # here too — they additionally assert token uid == the request's user_id.
 EXPECTED_AUTHED: set[str] = {
     "/agent/chat",
+    "/agent/upload-document",
     "/industry-academic-tieups",  # require_owner("user_id") — private memory profile
     "/users/quests",  # require_owner("user_id") — private quest records
     # NOTE: /feed/daily/dismiss moved to the Go gateway in Phase 2
