@@ -18,6 +18,8 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import declarative_base
 
+from app.db.url import as_asyncpg_url
+
 # ── Connection URL ────────────────────────────────────────────────────────────
 # Set DATABASE_URL in .env (see .env.example).  Never hard-code credentials here.
 _raw_db_url = os.environ.get("DATABASE_URL", "")
@@ -26,7 +28,7 @@ if not _raw_db_url:
         "DATABASE_URL is not set. "
         "Copy backend/.env.example to backend/.env and point it at your Supabase project."
     )
-DATABASE_URL: str = _raw_db_url
+DATABASE_URL: str = as_asyncpg_url(_raw_db_url)
 
 
 from sqlalchemy.pool import NullPool
