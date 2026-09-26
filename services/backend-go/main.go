@@ -108,6 +108,7 @@ func main() {
 	// ── WebSocket hub ─────────────────────────────────────────────────────────
 	hub := websocket.NewHub()
 	go hub.Run()
+	workspaceAuthorizer := websocket.NewPostgresWorkspaceAuthorizer(db.Pool)
 
 	// ── Health ────────────────────────────────────────────────────────────────
 	r.GET("/gateway-health", func(c *gin.Context) {
@@ -137,7 +138,7 @@ func main() {
 	// :workspace_id; both closed together, see hub.go for the per-workspace
 	// scoping half of the fix). No product code calls this endpoint yet.
 	r.GET("/ws/colab/:workspace_id", auth.VerifyQueryToken(), func(c *gin.Context) {
-		websocket.ServeWs(hub, c)
+		websocket.ServeWs(hub, workspaceAuthorizer, c)
 	})
 	r.GET("/ws/system/health", func(c *gin.Context) {
 		websocket.ServeHealthWs(c)

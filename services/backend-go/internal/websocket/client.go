@@ -107,13 +107,32 @@ func (c *Client) writePump() {
 }
 
 // ServeWs handles websocket requests from the peer. The caller must already
-// be authenticated (see auth.VerifyQueryToken, wired in main.go) -- this only
-// validates that a non-empty :workspace_id was supplied, since that's what
-// scopes broadcast delivery in the Hub.
-func ServeWs(hub *Hub, c *gin.Context) {
+// be authenticated (see auth.VerifyQueryToken, wired in main.go). Before an
+// upgrade it verifies that this identity owns or actively belongs to the
+// requested workspace; a guessed workspace ID is never sufficient.
+func ServeWs(hub *Hub, authorizer WorkspaceAuthorizer, c *gin.Context) {
 	workspaceID := strings.TrimSpace(c.Param("workspace_id"))
 	if workspaceID == "" {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "workspace_id is required"})
+		return
+	}
+	userID := strings.TrimSpace(c.GetString("user_id"))
+	if userID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required"})
+		return
+	}
+	if authorizer == nil {
+		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Workspace authorization is temporarily unavailable"})
+		return
+	}
+	allowed, err := authorizer.Authorize(c.Request.Context(), workspaceID, userID)
+	if err != nil {
+		slog.Error("websocket workspace authorization failed", "workspace_id", workspaceID, "err", err)
+		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Workspace authorization is temporarily unavailable"})
+		return
+	}
+	if !allowed {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You do not have access to this workspace"})
 		return
 	}
 

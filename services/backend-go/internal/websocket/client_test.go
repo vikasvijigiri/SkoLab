@@ -1,12 +1,26 @@
 package websocket
 
 import (
+	"context"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 )
+
+type staticWorkspaceAuthorizer struct {
+	allowed bool
+	err     error
+}
+
+func (a staticWorkspaceAuthorizer) Authorize(context.Context, string, string) (bool, error) {
+	return a.allowed, a.err
+}
 
 // 2026-09-12 endpoint audit: CheckOrigin used to unconditionally return true,
 // letting any page on the internet open a socket to /ws/colab/:workspace_id.
@@ -46,7 +60,10 @@ func TestServeWs_BlankWorkspaceIDRejectedBeforeUpgrade(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	hub := NewHub()
-	r.GET("/ws/colab/:workspace_id", func(c *gin.Context) { ServeWs(hub, c) })
+	r.GET("/ws/colab/:workspace_id", func(c *gin.Context) {
+		c.Set("user_id", "member-user")
+		ServeWs(hub, staticWorkspaceAuthorizer{allowed: true}, c)
+	})
 
 	// %20 decodes to a single space, which TrimSpace reduces to "" --
 	// gin's own router already refuses to match a truly empty segment here,
@@ -57,5 +74,100 @@ func TestServeWs_BlankWorkspaceIDRejectedBeforeUpgrade(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestServeWs_RejectsNonMemberBeforeUpgrade(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.GET("/ws/colab/:workspace_id", func(c *gin.Context) {
+		c.Set("user_id", "researcher-without-access")
+		ServeWs(NewHub(), staticWorkspaceAuthorizer{allowed: false}, c)
+	})
+	server := httptest.NewServer(r)
+	defer server.Close()
+
+	response, err := http.Get(server.URL + "/ws/colab/quantum-manuscript")
+	if err != nil {
+		t.Fatalf("HTTP request failed: %v", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusForbidden)
+	}
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("read response body: %v", err)
+	}
+	if string(body) != `{"error":"You do not have access to this workspace"}` {
+		t.Fatalf("body = %s", body)
+	}
+}
+
+func TestServeWs_AuthorizationFailureReturnsServiceUnavailable(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.GET("/ws/colab/:workspace_id", func(c *gin.Context) {
+		c.Set("user_id", "researcher-ada")
+		ServeWs(NewHub(), staticWorkspaceAuthorizer{err: ErrWorkspaceAuthorizationUnavailable}, c)
+	})
+	server := httptest.NewServer(r)
+	defer server.Close()
+
+	response, err := http.Get(server.URL + "/ws/colab/quantum-manuscript")
+	if err != nil {
+		t.Fatalf("HTTP request failed: %v", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusServiceUnavailable)
+	}
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("read response body: %v", err)
+	}
+	if string(body) != `{"error":"Workspace authorization is temporarily unavailable"}` {
+		t.Fatalf("body = %s", body)
+	}
+}
+
+func TestServeWs_AllowsMemberAndCompletesRealWebSocketHandshake(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	hub := NewHub()
+	go hub.Run()
+	r := gin.New()
+	r.GET("/ws/colab/:workspace_id", func(c *gin.Context) {
+		c.Set("user_id", "researcher-ada")
+		ServeWs(hub, staticWorkspaceAuthorizer{allowed: true}, c)
+	})
+	server := httptest.NewServer(r)
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws/colab/quantum-manuscript"
+	connection, response, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		if response != nil {
+			t.Fatalf("WebSocket handshake failed with HTTP %d: %v", response.StatusCode, err)
+		}
+		t.Fatalf("WebSocket handshake failed: %v", err)
+	}
+	defer connection.Close()
+
+	if response.StatusCode != http.StatusSwitchingProtocols {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusSwitchingProtocols)
+	}
+}
+
+func TestPostgresWorkspaceAuthorizer_FailsClosedWithoutDatabase(t *testing.T) {
+	allowed, err := NewPostgresWorkspaceAuthorizer(nil).Authorize(
+		context.Background(), "quantum-manuscript", "researcher-ada",
+	)
+	if allowed {
+		t.Fatal("nil database pool must not authorize workspace access")
+	}
+	if !errors.Is(err, ErrWorkspaceAuthorizationUnavailable) {
+		t.Fatalf("error = %v, want ErrWorkspaceAuthorizationUnavailable", err)
 	}
 }

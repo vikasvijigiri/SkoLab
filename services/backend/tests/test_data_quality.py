@@ -7,6 +7,8 @@ from app.models.user_models import (
     User,
     UserPreference,
     Connection,
+    Workspace,
+    WorkspaceMember,
 )
 from app.models.researcher_models import ResearcherWork, ResearcherMetrics
 from app.services.data.researcher_worker import teleport_researcher
@@ -133,6 +135,51 @@ async def test_database_unique_constraints():
 
         # Clean up user
         await db.delete(u)
+        await db.commit()
+
+
+@pytest.mark.anyio
+async def test_workspace_membership_constraints():
+    """Only valid, unique workspace membership roles can be persisted."""
+    async with AsyncSessionLocal() as db:
+        owner = User(id="workspace_owner", display_name="Workspace Owner")
+        member = User(id="workspace_member", display_name="Workspace Member")
+        db.add_all([owner, member])
+        await db.commit()
+
+        workspace = Workspace(
+            id="quantum-manuscript",
+            owner_id=owner.id,
+            title="Quantum spin liquids",
+        )
+        db.add(workspace)
+        await db.commit()
+
+        db.add(
+            WorkspaceMember(
+                workspace_id=workspace.id,
+                user_id=member.id,
+                role="editor",
+                status="active",
+            )
+        )
+        await db.commit()
+
+        db.add(
+            WorkspaceMember(
+                workspace_id=workspace.id,
+                user_id=member.id,
+                role="owner",
+                status="active",
+            )
+        )
+        with pytest.raises(IntegrityError):
+            await db.commit()
+        await db.rollback()
+
+        await db.delete(workspace)
+        await db.delete(owner)
+        await db.delete(member)
         await db.commit()
 
 
