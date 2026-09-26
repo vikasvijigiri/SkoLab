@@ -58,6 +58,7 @@ jobs:
         working-directory: services/backend
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:skolab@localhost:5432/skolab
+          TEST_DATABASE_URL: postgresql+asyncpg://postgres:skolab@localhost:5432/skolab
           DATABASE_ENCRYPTION_KEY: dGVzdF9kYXRhYmFzZV9lbmNyeXB0aW9uX2tleV8xMjM=
           GROQ_API: ci-test-groq-token-not-secret
           OPENROUTER_API_KEY: ci-test-openrouter-token-not-secret

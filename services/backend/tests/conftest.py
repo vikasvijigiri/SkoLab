@@ -23,16 +23,15 @@ os.environ["SENTRY_DSN"] = ""
 # explicit value with monkeypatch instead.
 os.environ["INTERNAL_API_TOKEN"] = ""
 
-# Postgres only — no SQLite fallback (2026-09-26, "Supabase only" pass).
-# Locally this is whatever DATABASE_URL points at in services/backend/.env
-# (Supabase); in CI it's the ephemeral Postgres container ci.yml/checks.yml
-# spin up per run. Either way it must be reachable, or every DB-backed test
-# fails loudly here instead of silently running against a different engine.
-db_url = os.environ.get("DATABASE_URL", "")
+# Tests must never infer their database from DATABASE_URL: that variable is
+# also used by local and deployed application processes and may point at
+# production. CI supplies a disposable Postgres URL; developers must supply a
+# separate test project/database. Refuse to collect tests otherwise.
+db_url = os.environ.get("TEST_DATABASE_URL", "")
 if not db_url:
     raise RuntimeError(
-        "DATABASE_URL is not set. Copy .env.example (repo root) to "
-        "services/backend/.env and point it at your Postgres database."
+        "TEST_DATABASE_URL is required for tests. It must point to a dedicated "
+        "test database, never the application's DATABASE_URL."
     )
 os.environ["DATABASE_URL"] = db_url
 

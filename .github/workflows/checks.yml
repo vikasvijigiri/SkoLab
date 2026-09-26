@@ -14,6 +14,20 @@ jobs:
     name: backend lint and unit tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: skolab
+          POSTGRES_PASSWORD: skolab
+          POSTGRES_DB: skolab
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -33,11 +47,17 @@ jobs:
         # Non-blocking — see ci.yml's identical step for why.
         continue-on-error: true
         run: mypy app/ --ignore-missing-imports
+      - name: Bootstrap disposable test database
+        working-directory: services/backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://skolab:skolab@localhost:5432/skolab
+        run: python ci_bootstrap_db.py
       - name: Backend unit tests
         working-directory: services/backend
         env:
           GROQ_API: ci-test-groq-token-not-secret
           OPENROUTER_API_KEY: ci-test-openrouter-token-not-secret
+          TEST_DATABASE_URL: postgresql+asyncpg://skolab:skolab@localhost:5432/skolab
         run: pytest -q
       - name: Go vet and tests
         working-directory: services/backend-go
@@ -92,6 +112,7 @@ jobs:
         working-directory: services/backend
         env:
           DATABASE_URL: postgresql+asyncpg://skolab:skolab@localhost:5432/skolab
+          TEST_DATABASE_URL: postgresql+asyncpg://skolab:skolab@localhost:5432/skolab
           GROQ_API: ci-test-groq-token-not-secret
           OPENROUTER_API_KEY: ci-test-openrouter-token-not-secret
         run: pytest -q
