@@ -18,6 +18,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/skolab/backend-go/internal/activity"
@@ -65,6 +67,35 @@ func main() {
 		}
 	}
 
+	// Error aggregation (Sentry) — mirrors app/core/observability.py's
+	// init_observability(): no-op unless SENTRY_DSN is set, and the
+	// BeforeSend gate keeps a developer's local .env DSN from shipping dev
+	// noise into the same shared production Sentry project.
+	if dsn := os.Getenv("SENTRY_DSN"); dsn != "" {
+		env := os.Getenv("APP_ENV")
+		if env == "" {
+			env = "development"
+		}
+		err := sentry.Init(sentry.ClientOptions{
+			Dsn:         dsn,
+			Environment: env,
+			BeforeSend: func(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
+				if env != "production" && env != "staging" {
+					return nil
+				}
+				return event
+			},
+		})
+		if err != nil {
+			slog.Error("sentry init failed", "err", err)
+		} else {
+			defer sentry.Flush(2 * time.Second)
+			slog.Info("Sentry enabled", "environment", env)
+		}
+	} else {
+		slog.Info("Sentry disabled — no SENTRY_DSN set")
+	}
+
 	auth.InitFirebase()
 
 	// Firestore mirror tier for ported endpoints (e.g. /citation-heatmap). Uses
@@ -79,6 +110,18 @@ func main() {
 
 	r := gin.New()
 	r.Use(middleware.Recovery())
+	// Repanic: true — sentrygin captures the panic as a Sentry event, then
+	// re-panics so middleware.Recovery() (registered above, so it recovers
+	// last) still owns the actual "don't crash, log via slog, respond 500"
+	// behavior. Only registered when Sentry actually initialized above, so
+	// this is a true no-op with no SENTRY_DSN set.
+	if sentry.CurrentHub().Client() != nil {
+		r.Use(sentrygin.New(sentrygin.Options{
+			Repanic:         true,
+			WaitForDelivery: false,
+			Timeout:         5 * time.Second,
+		}))
+	}
 	r.Use(requestID())
 	r.Use(requestLogger())
 	// Ahead of CORS/rate-limiting so a rejected request (429, a blocked
