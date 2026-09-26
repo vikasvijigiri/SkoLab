@@ -92,9 +92,9 @@ func TestAuthorNames(t *testing.T) {
 func TestGetActivityFeed_NilPoolCleanShape(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.GET("/activity_feed", GetActivityFeed)
+	r.GET("/api/v1/activity-feed", GetActivityFeed)
 
-	req := httptest.NewRequest(http.MethodGet, "/activity_feed", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/activity-feed", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -119,9 +119,9 @@ func TestGetActivityFeed_NilPoolCleanShape(t *testing.T) {
 func TestGetActivityFeed_LimitParamAccepted(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.GET("/activity_feed", GetActivityFeed)
+	r.GET("/api/v1/activity-feed", GetActivityFeed)
 
-	req := httptest.NewRequest(http.MethodGet, "/activity_feed?user_id=&author_id=&limit=5", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/activity-feed?user_id=&author_id=&limit=5", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -141,7 +141,7 @@ var devAuth = map[string]string{"Authorization": "Bearer devtoken"}
 func optionalAuthRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.GET("/activity_feed", auth.VerifyUserOptional(), GetActivityFeed)
+	r.GET("/api/v1/activity-feed", auth.VerifyUserOptional(), GetActivityFeed)
 	return r
 }
 
@@ -162,13 +162,13 @@ func fakeVerifiedUser(uid string) gin.HandlerFunc {
 func verifiedUserRouter(uid string) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.GET("/activity_feed", fakeVerifiedUser(uid), GetActivityFeed)
+	r.GET("/api/v1/activity-feed", fakeVerifiedUser(uid), GetActivityFeed)
 	return r
 }
 
 func TestGetActivityFeed_AnonymousNoUserIDStillOK(t *testing.T) {
 	// The public trending floor must keep working with zero auth.
-	req := httptest.NewRequest(http.MethodGet, "/activity_feed", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/activity-feed", nil)
 	w := httptest.NewRecorder()
 	optionalAuthRouter().ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -182,7 +182,7 @@ func TestGetActivityFeed_MismatchedUserIDIs403(t *testing.T) {
 	// connection-derived feed (who they're connected to, at what
 	// institution, recent activity) by supplying that user's id
 	// (2026-09-12 endpoint audit).
-	req := httptest.NewRequest(http.MethodGet, "/activity_feed?user_id=someone_else", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/activity-feed?user_id=someone_else", nil)
 	req.Header.Set("Authorization", devAuth["Authorization"])
 	w := httptest.NewRecorder()
 	optionalAuthRouter().ServeHTTP(w, req)
@@ -194,7 +194,7 @@ func TestGetActivityFeed_MismatchedUserIDIs403(t *testing.T) {
 func TestGetActivityFeed_UnauthenticatedWithUserIDIs403(t *testing.T) {
 	// A caller with no token at all supplying a user_id must also be
 	// rejected, not silently treated as anonymous-with-a-hint.
-	req := httptest.NewRequest(http.MethodGet, "/activity_feed?user_id=someone_else", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/activity-feed?user_id=someone_else", nil)
 	w := httptest.NewRecorder()
 	optionalAuthRouter().ServeHTTP(w, req)
 	if w.Code != http.StatusForbidden {
@@ -203,7 +203,7 @@ func TestGetActivityFeed_UnauthenticatedWithUserIDIs403(t *testing.T) {
 }
 
 func TestGetActivityFeed_OwnUserIDIsAccepted(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/activity_feed?user_id=dev_user", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/activity-feed?user_id=dev_user", nil)
 	w := httptest.NewRecorder()
 	verifiedUserRouter("dev_user").ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -219,7 +219,7 @@ func TestGetActivityFeed_OwnUserIDIsAccepted(t *testing.T) {
 // citationAlert is gated on author_id being non-empty, so an empty author_id
 // (as here) must never reach fetchAuthorHook.
 func TestGetActivityFeed_TrackedAndCitationSourcesDegradeCleanly(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/activity_feed?user_id=dev_user&author_id=", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/activity-feed?user_id=dev_user&author_id=", nil)
 	w := httptest.NewRecorder()
 	verifiedUserRouter("dev_user").ServeHTTP(w, req)
 	if w.Code != http.StatusOK {

@@ -54,7 +54,7 @@ type OrbitMetrics struct {
 
 // ── Author Suggestions ────────────────────────────────────────────────────────
 
-// GetAuthorSuggestions handles GET /api/v1/author_suggestions
+// GetAuthorSuggestions handles GET /api/v1/author-suggestions
 // Priority: PG researcher_metrics → PG researcher_profiles → OpenAlex
 func GetAuthorSuggestions(c *gin.Context) {
 	query := strings.TrimSpace(c.Query("query"))
@@ -189,7 +189,7 @@ func GetAuthorSuggestions(c *gin.Context) {
 
 // ── Orbit Metrics ─────────────────────────────────────────────────────────────
 
-// GetOrbitMetrics handles GET /api/v1/orbit_metrics?author_id=...
+// GetOrbitMetrics handles GET /api/v1/orbit-metrics?author_id=...
 // Returns real network intelligence from OpenAlex (cached 30 min).
 func GetOrbitMetrics(c *gin.Context) {
 	authorID := strings.TrimSpace(c.Query("author_id"))
@@ -309,7 +309,7 @@ var institutionDomains = map[string]string{
 	"copenhagen":                            "nbi.ku.dk",
 }
 
-// ResolveAuthorEmail handles GET /api/v1/resolve_email?name=...&institution=...
+// ResolveAuthorEmail handles GET /api/v1/resolve-email?name=...&institution=...
 func ResolveAuthorEmail(c *gin.Context) {
 	name := strings.TrimSpace(c.Query("name"))
 	if name == "" {

@@ -1,6 +1,6 @@
 package author
 
-// network.go — GET /network_collaborators, ported from the Python pipeline
+// network.go — GET /api/v1/network-collaborators, ported from the Python pipeline
 // (services/backend/app/services/platform/pipeline/network.py + the
 // app/api/v1/endpoints/authors.py handler) as part of "Python is LLM-only"
 // (decisions/0002; docs/plans/2026-09-04-network-collaborators-to-go.md).
@@ -33,7 +33,7 @@ import (
 )
 
 // NetworkCollaborator is one row of the bare JSON array returned by
-// GET /network_collaborators. Field set matches the Python live-compute row
+// GET /api/v1/network-collaborators. Field set matches the Python live-compute row
 // (app/schemas/authors_extra.py NetworkCollaborator, extra="allow"; TS
 // the prior client response contract). `depth` is present on Python live rows and
 // tolerated by both the Pydantic model and the (looser) TS type.
@@ -85,7 +85,7 @@ type netParams struct {
 	offset     int
 }
 
-// GetNetworkCollaborators handles GET /network_collaborators.
+// GetNetworkCollaborators handles GET /api/v1/network-collaborators.
 //
 // TODO: wire internal/cache once feat/go-cache-firestore-heatmap lands — the
 // outer PgBackedCache(name="network_collaborators", ttl=1h) tier from the

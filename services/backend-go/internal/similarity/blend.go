@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// Blend weights for /similar_researchers. Sum need not be 1 — the final score
+// Blend weights for /similar-researchers. Sum need not be 1 — the final score
 // is used only for ordering + MMR, not shown as a percentage. Override any of
 // them with SIM_W_* env vars for live tuning without a redeploy.
 var (
@@ -31,7 +31,7 @@ func envFloat(key string, def float64) float64 {
 // Python NetworkMixin helper): exact set overlap + 0.5 credit per term that is
 // a substring of some term in the other set, over the union, capped at 1.0.
 // Copied rather than imported to keep similarity free of an import cycle with
-// the author package (which re-points search_author at this engine).
+// the author package (which re-points search-author at this engine).
 func jaccardSim(a, b []string) float64 {
 	sa, sb := toLowerSet(a), toLowerSet(b)
 	if len(sa) == 0 || len(sb) == 0 {

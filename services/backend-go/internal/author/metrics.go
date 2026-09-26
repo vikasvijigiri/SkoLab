@@ -24,16 +24,16 @@ import (
 // "not enough recent papers" 422, builds the title/concepts digest, caches the
 // result, and returns the byte-identical AuthorMetricsResponse bundle. The one
 // model-bound step — parsing that digest into the scored bundle — is a call to
-// the Python internal route POST /api/v1/internal/author_metrics_enrich.
+// the Python internal route POST /api/v1/internal/author-metrics-enrich.
 //
 // Deliberate parity change: when enrichment is unavailable (Python down, LLM
 // down, timeout) this returns the empty bundle with 200, not a 503. The Android
-// AuthorMetrics model tolerates it via field defaults. /author_metrics is now a
+// AuthorMetrics model tolerates it via field defaults. /author-stats is now a
 // best-effort enrichment read.
 
 const (
 	metricsFetchTimeout = 45 * time.Second
-	metricsEnrichPath   = "/api/v1/internal/author_metrics_enrich"
+	metricsEnrichPath   = "/api/v1/internal/author-metrics-enrich"
 )
 
 var (
@@ -56,7 +56,7 @@ var (
 	emptyMetricsBundle = []byte(`{"overall_score":0,"topic_toughness":0,"velocity":0,"skills":[],"tools":[],"analysis":""}`)
 )
 
-// GetAuthorMetrics handles GET /api/v1/author_metrics?author_id=... (public).
+// GetAuthorMetrics handles GET /api/v1/author-stats?author_id=... (public).
 func GetAuthorMetrics(c *gin.Context) {
 	authorID := strings.TrimSpace(c.Query("author_id"))
 	if authorID == "" {
@@ -133,7 +133,7 @@ func enrichAuthorMetrics(ctx context.Context, digest string) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	// author_metrics_enrich now requires the shared internal secret (fixed
+	// author-metrics-enrich now requires the shared internal secret (fixed
 	// alongside a real unauthenticated-LLM-endpoint bug on the Python side)
 	// — same convention as fireTeleport/postSimilarEmbed.
 	if token := os.Getenv("INTERNAL_API_TOKEN"); token != "" {
@@ -151,12 +151,12 @@ func enrichAuthorMetrics(ctx context.Context, digest string) ([]byte, error) {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("author_metrics_enrich returned %d", resp.StatusCode)
+		return nil, fmt.Errorf("author-metrics-enrich returned %d", resp.StatusCode)
 	}
 	// Guard against a proxy/HTML error page slipping through as a 200.
 	var probe map[string]any
 	if err := json.Unmarshal(body, &probe); err != nil {
-		return nil, fmt.Errorf("author_metrics_enrich body is not a JSON object: %w", err)
+		return nil, fmt.Errorf("author-metrics-enrich body is not a JSON object: %w", err)
 	}
 	return body, nil
 }

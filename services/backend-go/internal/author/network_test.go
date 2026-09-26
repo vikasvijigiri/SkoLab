@@ -172,7 +172,7 @@ func TestDBReaders_NilPoolAreSafe(t *testing.T) {
 // write failed instantly on context.DeadlineExceeded -- silently, via
 // slog.Warn -- meaning the researcher_connections/pipeline-blob caches this
 // endpoint depends on were never actually populated. Confirmed live: two
-// back-to-back identical GET /api/v1/network_collaborators calls both took
+// back-to-back identical GET /api/v1/api/v1/network-collaborators calls both took
 // ~30s, when the second should have hit one of those caches.
 //
 // detachedWriteContext is the fix: a context rooted at context.Background()
@@ -225,9 +225,9 @@ func TestWriteBack_SurvivesAlreadyExpiredContext(t *testing.T) {
 func TestGetNetworkCollaborators_MissingAuthorIDIs400(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.GET("/network_collaborators", GetNetworkCollaborators)
+	r.GET("/api/v1/network-collaborators", GetNetworkCollaborators)
 
-	req := httptest.NewRequest(http.MethodGet, "/network_collaborators", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/network-collaborators", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 

@@ -19,7 +19,7 @@ import (
 )
 
 // nonPersonRe drops OpenAlex "author" entities that are really institutions,
-// consortia or declarations — the degraded /similar_researchers fallback
+// consortia or declarations — the degraded /similar-researchers fallback
 // derives candidates from paper authorships, which routinely include these.
 // Mirrors author.nonPersonRe.
 var nonPersonRe = regexp.MustCompile(
@@ -91,7 +91,7 @@ func pythonBase() string {
 	return strings.TrimRight(b, "/")
 }
 
-// ── GET /api/v1/similar_papers ─────────────────────────────────────────────
+// ── GET /api/v1/similar-papers ─────────────────────────────────────────────
 
 // GetSimilarPapers ranks papers most like ?work_id= by embedding cosine, with
 // small bonuses for shared concepts and bibliographic coupling, then MMR for
@@ -184,7 +184,7 @@ func GetSimilarPapers(c *gin.Context) {
 	c.JSON(http.StatusOK, out)
 }
 
-// ── GET /api/v1/similar_researchers ───────────────────────────────────────
+// ── GET /api/v1/similar-researchers ───────────────────────────────────────
 
 // GetSimilarResearchers blends embedding cosine, shared-collaborator Jaccard,
 // shared-concept Jaccard and same-institution into one score, drops people the
@@ -274,7 +274,7 @@ func GetSimilarResearchers(c *gin.Context) {
 func ensureWorkVector(ctx context.Context, workID string) {
 	body, _ := json.Marshal(map[string]string{"work_id": workID})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		pythonBase()+"/api/v1/internal/similar/embed_work", bytes.NewReader(body))
+		pythonBase()+"/api/v1/internal/similar/embed-work", bytes.NewReader(body))
 	if err != nil {
 		return
 	}

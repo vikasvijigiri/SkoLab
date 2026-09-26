@@ -129,7 +129,7 @@ func TestReverseProxy_RewritesHostHeaderToTarget(t *testing.T) {
 // in reverseProxy()'s returned handler, so a shorter transport-level timeout
 // silently truncates it. ResponseHeaderTimeout previously stood at 60s while
 // proxyRequestTimeout documented (and enforced via context) 120s -- a real
-// cold-compute daily_feed request was cut off with a 502 at exactly 60.3s,
+// cold-compute /feed/daily request was cut off with a 502 at exactly 60.3s,
 // well inside the documented ~40-80s cold-compute path for that route. A
 // real end-to-end request that takes 60-120s would make this an expensive,
 // flaky test to write directly, so this instead asserts the two durations

@@ -49,7 +49,7 @@ func emptyHeatmap() CitationHeatmap {
 	return CitationHeatmap{Years: []int{}, Citations: []int{}, Works: []int{}}
 }
 
-// GetCitationHeatmap handles GET /api/v1/citation_heatmap?author_id=...
+// GetCitationHeatmap handles GET /api/v1/citation-heatmap?author_id=...
 func GetCitationHeatmap(c *gin.Context) {
 	authorID := strings.TrimSpace(c.Query("author_id"))
 	if authorID == "" {

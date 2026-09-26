@@ -13,13 +13,23 @@ RUN go mod download || true
 # Copy source
 COPY . .
 
-# Run mod tidy to generate go.sum and build
-RUN go mod tidy
+# `go mod tidy` was here previously, but go.sum is already committed and
+# verified by CI (.github/workflows/ci.yml's `go vet`/`go test`) — running
+# tidy at build time can silently rewrite the lockfile inside the image
+# instead of building against the exact, reviewed dependency set (2026-09-26
+# reliability audit). `go mod verify` checks the downloaded modules against
+# the committed go.sum without changing it.
+RUN go mod verify
 RUN go build -o main .
 
 FROM alpine:latest
 WORKDIR /app
-COPY --from=builder /app/main .
+
+# Non-root, mirroring services/backend/Dockerfile's uid/gid convention.
+RUN addgroup -g 10001 -S skolab && \
+    adduser -u 10001 -S -G skolab skolab
+COPY --from=builder --chown=skolab:skolab /app/main .
+USER skolab
 
 EXPOSE 8080
 CMD ["./main"]

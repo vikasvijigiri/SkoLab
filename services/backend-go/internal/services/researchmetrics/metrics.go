@@ -1,7 +1,7 @@
-// Package metrics implements the 10 Modern Research Metrics in pure Go.
+// Package researchmetrics implements the 10 Modern Research Metrics in pure Go.
 // These are pure mathematical computations with no external dependencies —
 // exactly the kind of logic that should run in Go, not Python.
-package metrics
+package researchmetrics
 
 import (
 	"math"

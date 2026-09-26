@@ -11,7 +11,7 @@ import (
 	"github.com/skolab/backend-go/internal/services/openalex"
 )
 
-// GET /api/v1/coach_pulse — the Home page's "Since You Were Here" panel
+// GET /api/v1/coach-pulse — the Home page's "Since You Were Here" panel
 // (replaces the old static Daily Brief, 2026-09-15). Three real, honestly-
 // computed signals, each independent and best-effort (a failed or empty one
 // is just a nil field, never an error for the whole response):
@@ -32,7 +32,7 @@ import (
 //
 // All three run concurrently — this is a read-only, unauthenticated
 // aggregation over public OpenAlex data (same trust level as
-// author_suggestions/network_collaborators), not gated behind VerifyUser.
+// author-suggestions/network-collaborators), not gated behind VerifyUser.
 const pulseLookbackDays = 21
 
 type CoachPulseResponse struct {

@@ -311,7 +311,7 @@ func TestSearchAuthorRequiresName(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodGet, "/search_author", nil)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/search-author", nil)
 	SearchAuthor(c)
 	if w.Code != http.StatusUnprocessableEntity {
 		t.Errorf("status = %d, want 422", w.Code)
@@ -322,7 +322,7 @@ func TestRefreshAuthorRequiresName(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodGet, "/refresh_author", nil)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/refresh-author", nil)
 	RefreshAuthor(c)
 	if w.Code != http.StatusUnprocessableEntity {
 		t.Errorf("status = %d, want 422", w.Code)

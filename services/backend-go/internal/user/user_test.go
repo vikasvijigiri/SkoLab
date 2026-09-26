@@ -29,7 +29,7 @@ func router() *gin.Engine {
 		usersAPI.DELETE("/:userId", DeleteUser)
 	}
 
-	memoryAPI := r.Group("/api/v1/user_memory")
+	memoryAPI := r.Group("/api/v1/user-memory")
 	memoryAPI.Use(auth.VerifyUser())
 	{
 		memoryAPI.POST("/events", SyncUserMemoryEvents)
@@ -123,7 +123,7 @@ func TestDeleteUser_NoDBIs503(t *testing.T) {
 // ── SyncUserMemoryEvents ─────────────────────────────────────────────────────
 
 func TestSyncUserMemoryEvents_MalformedBodyIs400(t *testing.T) {
-	w := do(router(), http.MethodPost, "/api/v1/user_memory/events", "not json", devAuth)
+	w := do(router(), http.MethodPost, "/api/v1/user-memory/events", "not json", devAuth)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", w.Code)
 	}
@@ -133,7 +133,7 @@ func TestSyncUserMemoryEvents_EmptyEventsIsNoOpSuccess(t *testing.T) {
 	// Explicitly short-circuits before ever touching db.Pool -- must succeed
 	// even with no database configured. user_id must be "dev_user" (what
 	// auth.VerifyUser() sets in dev/CI mode) or the ownership check runs first.
-	w := do(router(), http.MethodPost, "/api/v1/user_memory/events",
+	w := do(router(), http.MethodPost, "/api/v1/user-memory/events",
 		`{"user_id":"dev_user","events":[]}`, devAuth)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", w.Code)
@@ -142,7 +142,7 @@ func TestSyncUserMemoryEvents_EmptyEventsIsNoOpSuccess(t *testing.T) {
 
 func TestSyncUserMemoryEvents_NoDBIs503(t *testing.T) {
 	body := `{"user_id":"dev_user","events":[{"type":"PAPER_CLOSED","paperTitle":"On Computing"}]}`
-	w := do(router(), http.MethodPost, "/api/v1/user_memory/events", body, devAuth)
+	w := do(router(), http.MethodPost, "/api/v1/user-memory/events", body, devAuth)
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503 (db.Pool nil in unit test)", w.Code)
 	}
@@ -153,7 +153,7 @@ func TestSyncUserMemoryEvents_MismatchedUserIDIs403(t *testing.T) {
 	// authenticated caller could inject fabricated events into another
 	// user's memory log (2026-09-12 endpoint audit).
 	body := `{"user_id":"someone_else","events":[{"type":"PAPER_CLOSED","paperTitle":"On Computing"}]}`
-	w := do(router(), http.MethodPost, "/api/v1/user_memory/events", body, devAuth)
+	w := do(router(), http.MethodPost, "/api/v1/user-memory/events", body, devAuth)
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403", w.Code)
 	}
@@ -164,7 +164,7 @@ func TestSyncUserMemoryEvents_MismatchedUserIDIs403(t *testing.T) {
 func TestGetUserMemory_NoDBIs503(t *testing.T) {
 	// Path param must be "dev_user" (what auth.VerifyUser() sets in dev/CI
 	// mode) or the ownership check below would 403 first.
-	w := do(router(), http.MethodGet, "/api/v1/user_memory/dev_user", "", devAuth)
+	w := do(router(), http.MethodGet, "/api/v1/user-memory/dev_user", "", devAuth)
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503 (db.Pool nil in unit test, cache empty)", w.Code)
 	}
@@ -173,7 +173,7 @@ func TestGetUserMemory_NoDBIs503(t *testing.T) {
 func TestGetUserMemory_MismatchedUserIs403(t *testing.T) {
 	// Without this check any authenticated caller could read any other
 	// user's aggregated behavioral profile (2026-09-12 endpoint audit).
-	w := do(router(), http.MethodGet, "/api/v1/user_memory/someone_else", "", devAuth)
+	w := do(router(), http.MethodGet, "/api/v1/user-memory/someone_else", "", devAuth)
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403", w.Code)
 	}

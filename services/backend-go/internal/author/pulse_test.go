@@ -13,7 +13,7 @@ func TestGetCoachPulseWithNoParamsReturnsAllNilNoNetworkCall(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/coach_pulse", nil)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/coach-pulse", nil)
 
 	GetCoachPulse(c)
 

@@ -13,7 +13,9 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -27,7 +29,7 @@ import (
 	"github.com/skolab/backend-go/internal/middleware"
 	"github.com/skolab/backend-go/internal/quest"
 	"github.com/skolab/backend-go/internal/recommendation"
-	researchmetrics "github.com/skolab/backend-go/internal/services/metrics"
+	"github.com/skolab/backend-go/internal/services/researchmetrics"
 	"github.com/skolab/backend-go/internal/similarity"
 	"github.com/skolab/backend-go/internal/system"
 	"github.com/skolab/backend-go/internal/user"
@@ -45,11 +47,26 @@ func main() {
 	if os.Getenv("GIN_MODE") == "release" {
 		gin.SetMode(gin.ReleaseMode)
 		slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+
+		// Fail fast: a real deploy must supply INTERNAL_API_TOKEN. Both this
+		// gateway's own /internal/* routes and the Python side's
+		// _check_internal_token (app/api/v1/endpoints/internal.py) treat an
+		// empty token as "skip the check" — a deliberate local-dev
+		// convenience that becomes "every /internal/* route is
+		// unauthenticated" if left unset in a real deployment, with no prior
+		// warning anywhere (2026-09-26 security audit). Mirrors the Python
+		// side's own APP_ENV-gated fail-fast in app/core/config.py.
+		if os.Getenv("INTERNAL_API_TOKEN") == "" {
+			log.Fatal("INTERNAL_API_TOKEN is unset while GIN_MODE=release. Set it " +
+				"(and the matching value on the Python backend) before starting " +
+				"the gateway — otherwise every /internal/* route runs with no " +
+				"authentication.")
+		}
 	}
 
 	auth.InitFirebase()
 
-	// Firestore mirror tier for ported endpoints (e.g. /citation_heatmap). Uses
+	// Firestore mirror tier for ported endpoints (e.g. /citation-heatmap). Uses
 	// the same ambient credentials as auth; degrades to a no-op if unavailable.
 	firestore.Init()
 
@@ -78,6 +95,13 @@ func main() {
 	// ── Rate limiting: 120 req/s per IP, burst of 30 ─────────────────────────
 	rl := middleware.NewRateLimiter(rate.Limit(120), 30)
 	r.Use(rl.Limit())
+
+	// A second, stricter limiter for the routes that are actually expensive
+	// to serve — the LLM-proxy fallthrough to Python (NoRoute, below) and
+	// this gateway's own /internal/* routes — which previously shared only
+	// the generic 120 req/s/IP limit above despite being the costliest calls
+	// in the system (2026-09-26 security audit).
+	expensiveRL := middleware.NewRateLimiter(rate.Limit(10), 5)
 
 	// ── WebSocket hub ─────────────────────────────────────────────────────────
 	hub := websocket.NewHub()
@@ -126,7 +150,7 @@ func main() {
 	}
 
 	// ── User Memory — pure Go aggregation, no AI ──────────────────────────────
-	memoryAPI := r.Group("/api/v1/user_memory")
+	memoryAPI := r.Group("/api/v1/user-memory")
 	memoryAPI.Use(auth.VerifyUser())
 	{
 		memoryAPI.POST("/events", user.SyncUserMemoryEvents)
@@ -134,61 +158,55 @@ func main() {
 	}
 
 	// ── Author endpoints — Go PG + OpenAlex, no AI ───────────────────────────
-	r.GET("/api/v1/author_suggestions", author.GetAuthorSuggestions)
+	r.GET("/api/v1/author-suggestions", author.GetAuthorSuggestions)
 	// Home page "Since You Were Here" panel — see internal/author/pulse.go
 	// for why this replaced the old static Daily Brief and what each of its
 	// three signals is (and isn't) grounded in.
-	r.GET("/api/v1/coach_pulse", author.GetCoachPulse)
-	r.GET("/api/v1/orbit_metrics", author.GetOrbitMetrics)
-	r.GET("/orbit_metrics", author.GetOrbitMetrics)
-	r.GET("/api/v1/authors/orbit_metrics", author.GetOrbitMetrics)
-	r.GET("/api/v1/resolve_email", author.ResolveAuthorEmail)
-	r.GET("/api/v1/authors/resolve_email", author.ResolveAuthorEmail)
-	r.GET("/authors/resolve_email", author.ResolveAuthorEmail)
-	r.GET("/resolve_email", author.ResolveAuthorEmail)
-	// citation_heatmap — ported from services/backend/app/services/platform/
-	// pipeline/heatmap.py (no LLM, no embedding). Only the /api/v1 form was ever
-	// exercised by clients / the Python test.
-	r.GET("/api/v1/citation_heatmap", author.GetCitationHeatmap)
+	r.GET("/api/v1/coach-pulse", author.GetCoachPulse)
+	// orbit-metrics ends in "metrics" — per the /author-stats comment below,
+	// Render's edge 502s any path ending in "metrics" before it reaches this
+	// app. This route was never renamed off it the way author-stats was, so
+	// it may already be 502ing in prod; unrelated to this naming pass, worth
+	// its own follow-up.
+	r.GET("/api/v1/orbit-metrics", author.GetOrbitMetrics)
+	r.GET("/api/v1/resolve-email", author.ResolveAuthorEmail)
+	// citation-heatmap — ported from services/backend/app/services/platform/
+	// pipeline/heatmap.py (no LLM, no embedding).
+	r.GET("/api/v1/citation-heatmap", author.GetCitationHeatmap)
 
-	// GET /network_collaborators — depth-1/2 co-author fan-out + Jaccard, no AI.
+	// GET /network-collaborators — depth-1/2 co-author fan-out + Jaccard, no AI.
 	// Ported from services/backend/app/services/platform/pipeline/network.py
-	// (docs/plans/2026-09-04-network-collaborators-to-go.md). The bare path is
-	// retained alongside the versioned route for API compatibility.
-	r.GET("/api/v1/network_collaborators", author.GetNetworkCollaborators)
-	r.GET("/network_collaborators", author.GetNetworkCollaborators)
-	r.GET("/api/v1/authors/network_collaborators", author.GetNetworkCollaborators)
+	// (docs/plans/2026-09-04-network-collaborators-to-go.md).
+	r.GET("/api/v1/network-collaborators", author.GetNetworkCollaborators)
 
-	// GET /author_metrics — Go serves the endpoint (OpenAlex fetch + 422 + 2 h
-	// cache) and calls Python POST /api/v1/internal/author_metrics_enrich for the
+	// GET /author-stats — Go serves the endpoint (OpenAlex fetch + 422 + 2 h
+	// cache) and calls Python POST /api/v1/internal/author-metrics-enrich for the
 	// one model-bound step; degrades to an empty bundle if that is unavailable.
 	// Ported from authors.py::get_author_metrics — decisions/0010. Was public,
-	// stays public. Android calls the bare path on :8080.
+	// stays public.
 	//
-	// Renamed off "author_metrics" 2026-09-14: confirmed live that Render's
-	// edge 502s ANY path ending in "metrics" before it reaches this app —
-	// reproduced on fake, never-registered paths too, so this wasn't an
-	// app bug. /author_stats is the real, working path now; the old
-	// "metrics"-suffixed aliases are kept registered (so a caller hitting
-	// them gets *some* response if the platform-level block is ever lifted)
-	// but do not rely on them — they 502 at Render's edge today regardless
-	// of anything this app does.
-	r.GET("/api/v1/author_stats", author.GetAuthorMetrics)
-	r.GET("/author_stats", author.GetAuthorMetrics)
-	r.GET("/api/v1/authors/author_stats", author.GetAuthorMetrics)
-	r.GET("/api/v1/author_metrics", author.GetAuthorMetrics)
-	r.GET("/author_metrics", author.GetAuthorMetrics)
-	r.GET("/api/v1/authors/author_metrics", author.GetAuthorMetrics)
+	// Renamed off "author_metrics"/"author-metrics" 2026-09-14: confirmed live
+	// that Render's edge 502s ANY path ending in "metrics" before it reaches
+	// this app — reproduced on fake, never-registered paths too, so this
+	// wasn't an app bug. /author-stats is the one real, working path; the
+	// dead "metrics"-suffixed spelling is not registered at all any more
+	// (2026-09-26 naming-convention pass — it never worked through Render).
+	//
+	// BREAKING for any client still on the old snake_case bare path
+	// (`/author_stats`, no `/api/v1`) — a prior comment here noted Android
+	// called that exact path on :8080. That alias is gone as of this pass;
+	// the Android client needs updating to `/api/v1/author-stats` (2026-09-26
+	// naming-convention pass, applied per explicit instruction to remove all
+	// aliasing — see conversation, not yet reflected in a decisions/ doc).
+	r.GET("/api/v1/author-stats", author.GetAuthorMetrics)
 
 	// ── Similarity engine — pgvector kNN + co-author/concept blend + MMR ─────
 	// internal/similarity. Reads the work_embeddings / author_embeddings store
 	// the Python teleport worker populates (embedding compute is model work =
 	// Python, decisions/0010; ranking is a DB query = Go). Cold rows degrade to
 	// OpenAlex related_works / topic-derived co-authors.
-	r.GET("/api/v1/similar_papers", similarity.GetSimilarPapers)
-	r.GET("/similar_papers", similarity.GetSimilarPapers)
-	r.GET("/api/v1/similar_researchers", similarity.GetSimilarResearchers)
-	r.GET("/similar_researchers", similarity.GetSimilarResearchers)
+	r.GET("/api/v1/similar-papers", similarity.GetSimilarPapers)
+	r.GET("/api/v1/similar-researchers", similarity.GetSimilarResearchers)
 
 	// ── Home activity feed — merged recency stream, no AI ───────────────────
 	// internal/activity. Connected researchers' new papers (OpenAlex) + newly
@@ -201,17 +219,16 @@ func main() {
 	// half of the feed (peer publications, connection events) -- without a
 	// verified identity to check it against, any caller could read that for
 	// an arbitrary user_id with zero auth (2026-09-12 endpoint audit).
-	r.GET("/api/v1/activity_feed", auth.VerifyUserOptional(), activity.GetActivityFeed)
-	r.GET("/activity_feed", auth.VerifyUserOptional(), activity.GetActivityFeed)
+	r.GET("/api/v1/activity-feed", auth.VerifyUserOptional(), activity.GetActivityFeed)
 
 	// ── System metadata — non-LLM, ported from endpoints/system.py ──────────
 	// GET /api/v1/ (API-router root) and GET /api/v1/status (public status
-	// report: DB/cache probe + incidents + LLM-inference flag). /ai_status stays
-	// in Python and is still reached via NoRoute. decisions/0010.
+	// report: DB/cache probe + incidents + LLM-inference flag). /ai-status
+	// stays in Python and is still reached via NoRoute. decisions/0010.
 	r.GET("/api/v1/", system.Root)
 	r.GET("/api/v1/status", system.Status)
 
-	// GET /search_author + /refresh_author — cache → Postgres (researcher_metrics)
+	// GET /search-author + /refresh-author — cache → Postgres (researcher_metrics)
 	// → Firestore (global_researchers) → OpenAlex lookup that assembles the
 	// ~40-field AuthorResponse. No LLM, no embedding. Ported from
 	// services/backend/app/api/v1/endpoints/authors.py (decisions/0002). The LLM
@@ -219,13 +236,11 @@ func main() {
 	// POST {PYTHON_BACKEND_URL}/api/v1/internal/teleport/{id} with the shared
 	// secret header X-Internal-Token (INTERNAL_API_TOKEN). Both routes were
 	// public in Python — kept public here.
-	r.GET("/api/v1/search_author", author.SearchAuthor)
-	r.GET("/search_author", author.SearchAuthor)
-	r.GET("/api/v1/refresh_author", author.RefreshAuthor)
-	r.GET("/refresh_author", author.RefreshAuthor)
+	r.GET("/api/v1/search-author", author.SearchAuthor)
+	r.GET("/api/v1/refresh-author", author.RefreshAuthor)
 
 	// ── Researcher metrics compute — Python → Go, the one reverse direction ──
-	// internal/services/metrics. Pure math (disruption score, citation
+	// internal/services/researchmetrics. Pure math (disruption score, citation
 	// acceleration, etc.) that researcher_worker.py's teleport worker used to
 	// duplicate in Python; that duplicate is retired in favor of this single
 	// implementation (2026-09-12 no-slop audit). Every other internal/*
@@ -233,7 +248,7 @@ func main() {
 	// proxies to Python); this is the first call the other way, protected by
 	// the same shared-secret header + INTERNAL_API_TOKEN convention Python's
 	// own /internal/* routes already use (app/api/v1/endpoints/internal.py).
-	r.POST("/internal/compute_metrics", researchmetrics.ComputeHandler)
+	r.POST("/internal/compute-metrics", expensiveRL.Limit(), researchmetrics.ComputeHandler)
 
 	// ── Leaderboard — PG query only ───────────────────────────────────────────
 	r.GET("/api/v1/leaderboard/:field", quest.GetLeaderboard)
@@ -265,7 +280,7 @@ func main() {
 	// Ported from services/backend feed.py / support.py / integrations.py as
 	// part of "Python is LLM-only" (decisions/0002;
 	// docs/plans/2026-09-04-phase2-feed-to-go.md). Feed *generation*
-	// (GET /api/v1/daily_feed and the daily_conjecture / roadmap / industry
+	// (GET /api/v1/feed/daily and the conjecture / roadmap / industry
 	// LLM routes) stays in Python and is still reached via NoRoute below.
 	//
 	// support/metrics and integrations/zotero/* were removed here (2026-09-11
@@ -276,14 +291,20 @@ func main() {
 	// they're ever actually built, not as standing mock endpoints.
 	// Owner-scoped write: VerifyUser() → 401 without a token; the handler then
 	// requires users.openalex_id (for the verified uid) == body author_id → 403.
-	feedAPI := r.Group("/api/v1/daily_feed")
+	feedAPI := r.Group("/api/v1/feed/daily")
 	feedAPI.Use(auth.VerifyUser())
 	{
 		feedAPI.POST("/dismiss", feed.DismissDailyFeedItem)
 	}
 
 	// ── Fallback: everything else → Python (AI / ML / enrichment) ────────────
-	r.NoRoute(func(c *gin.Context) {
+	// expensiveRL guards this path too: every LLM route (chat, predict,
+	// summarize, analyze, ...) and every Python-side /internal/* route
+	// (teleport, similar/embed-work, author-metrics-enrich) reaches Python
+	// through here, not through a dedicated Go route (2026-09-26 security
+	// audit — this fallthrough previously had only the generic 120 req/s/IP
+	// limit above despite being the costliest path in the system).
+	r.NoRoute(expensiveRL.Limit(), func(c *gin.Context) {
 		if strings.EqualFold(c.GetHeader("Upgrade"), "websocket") {
 			slog.Warn("rejected unhandled websocket upgrade", "path", c.Request.URL.Path)
 			c.AbortWithStatus(http.StatusNotImplemented)
@@ -293,17 +314,37 @@ func main() {
 	})
 
 	addr := ":8080"
-	slog.Info("Go API Gateway starting",
-		"addr", addr,
-		"python_backend", pythonBackendURL,
-	)
-	if err := r.Run(addr); err != nil {
-		log.Fatalf("server error: %v", err)
+	srv := &http.Server{Addr: addr, Handler: r}
+
+	go func() {
+		slog.Info("Go API Gateway starting",
+			"addr", addr,
+			"python_backend", pythonBackendURL,
+		)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("server error: %v", err)
+		}
+	}()
+
+	// Graceful shutdown: a deploy/restart sends SIGTERM, not SIGKILL. Without
+	// this, that signal kills every in-flight connection immediately,
+	// including a request mid-way through the up-to-120s LLM proxy path
+	// (proxyRequestTimeout below) — draining beats severing (2026-09-26
+	// reliability audit).
+	quitCh := make(chan os.Signal, 1)
+	signal.Notify(quitCh, syscall.SIGINT, syscall.SIGTERM)
+	<-quitCh
+	slog.Info("shutdown signal received, draining in-flight requests")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), proxyRequestTimeout+5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		slog.Error("graceful shutdown did not complete cleanly", "err", err)
 	}
 }
 
 // proxyRequestTimeout bounds a single proxied request end-to-end. LLM routes
-// are the slow case (long 70B generations, or a cold-compute daily_feed —
+// are the slow case (long 70B generations, or a cold-compute /feed/daily —
 // see services/backend/app/services/platform/pipeline/feed.py, documented
 // there at ~40-80s uncached); 120s covers them with margin while still
 // guaranteeing a hung upstream cannot hold a goroutine forever.

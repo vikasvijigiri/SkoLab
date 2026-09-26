@@ -165,9 +165,9 @@ func parseDate(s string) time.Time {
 	return t
 }
 
-// ── GET /api/v1/activity_feed ─────────────────────────────────────────────────
+// ── GET /api/v1/activity-feed ─────────────────────────────────────────────────
 
-// GetActivityFeed handles GET /api/v1/activity_feed?user_id=&author_id=&limit=.
+// GetActivityFeed handles GET /api/v1/activity-feed?user_id=&author_id=&limit=.
 //
 // user_id  — the requesting user's users.id, used to read their connections.
 // author_id — the user's own OpenAlex id, used to pick a field for the

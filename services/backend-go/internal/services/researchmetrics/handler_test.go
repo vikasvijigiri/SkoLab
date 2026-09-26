@@ -1,4 +1,4 @@
-package metrics
+package researchmetrics
 
 import (
 	"bytes"
@@ -16,12 +16,12 @@ func init() {
 
 func router() *gin.Engine {
 	r := gin.New()
-	r.POST("/internal/compute_metrics", ComputeHandler)
+	r.POST("/internal/compute-metrics", ComputeHandler)
 	return r
 }
 
 func post(r *gin.Engine, body string, headers map[string]string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(http.MethodPost, "/internal/compute_metrics", bytes.NewBufferString(body))
+	req := httptest.NewRequest(http.MethodPost, "/internal/compute-metrics", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	for k, v := range headers {
 		req.Header.Set(k, v)

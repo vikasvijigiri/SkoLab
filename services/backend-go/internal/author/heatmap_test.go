@@ -16,7 +16,7 @@ func init() { gin.SetMode(gin.TestMode) }
 func TestGetCitationHeatmap_RequiresAuthorID(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/citation_heatmap", nil)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/citation-heatmap", nil)
 
 	GetCitationHeatmap(c)
 

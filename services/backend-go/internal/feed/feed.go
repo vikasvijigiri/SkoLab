@@ -3,14 +3,14 @@
 // (decisions/0002; docs/plans/2026-09-04-phase2-feed-to-go.md).
 //
 // What lives here is pure data / static response — no LLM call, no embeddings:
-//   - POST /api/v1/daily_feed/dismiss         (owner-checked write to cache_entries)
+//   - POST /api/v1/feed/daily/dismiss         (owner-checked write to cache_entries)
 //
 // (support/metrics and integrations/zotero/* were also ported here in Phase 2
 // as stub endpoints, then deleted in the 2026-09-11 backend response audit —
 // permanently-fake data, unreferenced by supported clients. See main.go's comment at
 // the removed route registrations.)
 //
-// Feed *generation* (GET /api/v1/daily_feed and the daily_conjecture / roadmap /
+// Feed *generation* (GET /api/v1/feed/daily and the conjecture / roadmap /
 // industry LLM routes) stays in services/backend and is reached through the
 // gateway's NoRoute proxy.
 package feed
@@ -42,7 +42,7 @@ type cacheEntryEnvelope struct {
 	V []string `json:"v"`
 }
 
-// ── POST /api/v1/daily_feed/dismiss ──────────────────────────────────────────
+// ── POST /api/v1/feed/daily/dismiss ──────────────────────────────────────────
 
 type dismissRequest struct {
 	AuthorID string `json:"author_id" binding:"required"`

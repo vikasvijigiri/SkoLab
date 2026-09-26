@@ -17,7 +17,7 @@ import (
 func TestGetAuthorMetrics_RequiresAuthorID(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/author_metrics", nil)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/author-stats", nil)
 
 	GetAuthorMetrics(c)
 

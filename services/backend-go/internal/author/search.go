@@ -1,6 +1,6 @@
 package author
 
-// search.go — GET /search_author and GET /refresh_author, ported from
+// search.go — GET /api/v1/search-author and GET /api/v1/refresh-author, ported from
 // services/backend/app/api/v1/endpoints/authors.py (search_author,
 // refresh_author, fetch_similar_authors) as part of "Python is LLM-only"
 // (decisions/0002).
@@ -125,8 +125,8 @@ type refreshAuthorResponse struct {
 
 // ── HTTP handlers ────────────────────────────────────────────────────────────
 
-// SearchAuthor handles GET /search_author (+ /api/v1/search_author). Public,
-// matching the Python route.
+// SearchAuthor handles GET /api/v1/search-author. Public, matching the
+// Python route.
 func SearchAuthor(c *gin.Context) {
 	if _, ok := c.GetQuery("name"); !ok {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{
@@ -230,7 +230,7 @@ func SearchAuthor(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// RefreshAuthor handles GET /refresh_author (+ /api/v1/refresh_author). Public.
+// RefreshAuthor handles GET /api/v1/refresh-author. Public.
 // It clears the cached profile, re-resolves the author id and kicks the Python
 // teleport worker.
 func RefreshAuthor(c *gin.Context) {

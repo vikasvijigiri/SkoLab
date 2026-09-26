@@ -22,11 +22,11 @@ import (
 // the chunked-response corruption that fix addresses), but this type wraps
 // *native* Gin routes, and confirmed live (2026-09-14) the same class of
 // bug reaches them too: /observability (metrics.Handler, pure in-memory
-// text) and /api/v1/author_stats with a real author_id (a genuinely large
+// text) and /api/v1/author-stats with a real author_id (a genuinely large
 // JSON bundle) both 502'd at Render's edge with x-render-routing:
 // no-deploy on every attempt -- while the exact same request in the app's
 // own structured log showed a clean 200, and a small response on the same
-// route (author_stats with an invalid id, a one-line JSON error) succeeded
+// route (author-stats with an invalid id, a one-line JSON error) succeeded
 // every time. That is response-size-dependent corruption isolated to
 // multi-flush gzip output, the same signature as the already-fixed proxy
 // bug, just on the writer side that streams straight to the connection

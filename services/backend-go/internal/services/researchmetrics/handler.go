@@ -1,4 +1,4 @@
-package metrics
+package researchmetrics
 
 import (
 	"net/http"
@@ -44,7 +44,7 @@ func checkInternalToken(c *gin.Context) bool {
 	return true
 }
 
-// ComputeHandler handles POST /internal/compute_metrics -- the only caller is
+// ComputeHandler handles POST /internal/compute-metrics -- the only caller is
 // researcher_worker.py's teleport enrichment worker (Python has no other
 // route to the Go gateway; see main.go's registration comment for why this
 // one exists). Not proxied to browsers.
