@@ -145,7 +145,7 @@ func DeleteUser(c *gin.Context) {
 	defer tx.Rollback(context.Background())
 
 	// Anonymize Activity Logs
-	_, _ = tx.Exec(context.Background(), "UPDATE user_activity_logs SET user_id = NULL WHERE user_id = $1", targetUserID)
+	_, _ = tx.Exec(context.Background(), "UPDATE user_activity_log SET user_id = NULL WHERE user_id = $1", targetUserID)
 	// Delete User Preferences
 	_, _ = tx.Exec(context.Background(), "DELETE FROM user_preferences WHERE user_id = $1", targetUserID)
 	// Delete User Profile
@@ -233,7 +233,7 @@ func SyncUserMemoryEvents(c *gin.Context) {
 
 func insertEventsOneByOne(ctx context.Context, _ string, rows [][]any) error {
 	const q = `
-		INSERT INTO user_activity_logs (user_id, event_type, entity_id, entity_name, event_metadata, created_at)
+		INSERT INTO user_activity_log (user_id, event_type, entity_id, entity_name, event_metadata, created_at)
 		VALUES ($1, $2, $3, $4, $5::jsonb, $6)
 	`
 	for _, r := range rows {
@@ -246,7 +246,7 @@ func insertEventsOneByOne(ctx context.Context, _ string, rows [][]any) error {
 
 func insertEventsCopyFrom(ctx context.Context, rows [][]any) error {
 	const q = `
-		INSERT INTO user_activity_logs (user_id, event_type, entity_id, entity_name, event_metadata, created_at)
+		INSERT INTO user_activity_log (user_id, event_type, entity_id, entity_name, event_metadata, created_at)
 		SELECT user_id, event_type, entity_id, entity_name, event_metadata::jsonb, created_at FROM _evt_batch
 	`
 	cols := []string{"user_id", "event_type", "entity_id", "entity_name", "event_metadata", "created_at"}
@@ -296,7 +296,7 @@ func GetUserMemory(c *gin.Context) {
 
 	rows, err := db.Pool.Query(ctx, `
 		SELECT event_type, event_metadata, created_at
-		FROM user_activity_logs
+		FROM user_activity_log
 		WHERE user_id = $1
 		ORDER BY created_at ASC
 	`, userID)
