@@ -35,7 +35,7 @@ class NetworkCollaborator(BaseModel):
 
 
 class CollaboratorSynergyResponse(BaseModel):
-    """``GET /collaborator_synergy`` — pairwise synergy metrics (LLM/graph-shaped)."""
+    """``GET /collaborator-synergy`` — pairwise synergy metrics (LLM/graph-shaped)."""
 
     model_config = ConfigDict(extra="allow")
 
@@ -47,7 +47,7 @@ class CollaboratorSynergyResponse(BaseModel):
 
 
 class CitationHeatmap(BaseModel):
-    """``GET /citation_heatmap``."""
+    """``GET /citation-heatmap``."""
 
     model_config = ConfigDict(extra="allow")
 
@@ -59,7 +59,7 @@ class CitationHeatmap(BaseModel):
 
 
 class GrantMatch(BaseModel):
-    """One row of ``GET /match_grants`` (bare JSON array)."""
+    """One row of ``GET /match-grants`` (bare JSON array)."""
 
     model_config = ConfigDict(extra="allow")
 
@@ -70,7 +70,7 @@ class GrantMatch(BaseModel):
 
 
 class JournalRecommendation(BaseModel):
-    """One row of ``GET /journal_advisor`` (bare JSON array)."""
+    """One row of ``GET /journal-advisor`` (bare JSON array)."""
 
     model_config = ConfigDict(extra="allow")
 
@@ -80,9 +80,9 @@ class JournalRecommendation(BaseModel):
 
 
 class AuthorMetricsResponse(BaseModel):
-    """``POST /internal/author_metrics_enrich`` — the LLM-scored metric bundle.
+    """``POST /internal/author-metrics-enrich`` — the LLM-scored metric bundle.
 
-    ``GET /author_metrics`` itself is served by the Go gateway now
+    ``GET /author-stats`` itself is served by the Go gateway now
     (decisions/0010); Python only runs the enrichment step. Shape:
     ``topic_toughness``/``velocity``/``overall_score`` ints, ``skills``/``tools``
     string arrays, ``analysis`` string. ``extra="allow"`` keeps it a passthrough.
@@ -92,7 +92,7 @@ class AuthorMetricsResponse(BaseModel):
 
 
 class AuthorMetricsEnrichRequest(BaseModel):
-    """Body of ``POST /internal/author_metrics_enrich`` — a title/concepts digest
+    """Body of ``POST /internal/author-metrics-enrich`` — a title/concepts digest
     of the author's recent works, built by the Go gateway."""
 
     context: str

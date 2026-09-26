@@ -33,7 +33,7 @@ async def test_assistant_professor_roadmap_mocked():
             return_value=mock_author,
         ):
             response = await ac.get(
-                "/api/v1/assistant_professor_roadmap?author_id=A12345678&focus=Physics"
+                "/api/v1/feed/roadmap?author_id=A12345678&focus=Physics"
             )
             assert response.status_code == 200
             data = response.json()
@@ -97,7 +97,7 @@ async def test_daily_conjecture_mocked():
                 return_value=mock_works,
             ),
         ):
-            response = await ac.get("/api/v1/daily_conjecture?author_id=A12345678")
+            response = await ac.get("/api/v1/feed/conjecture?author_id=A12345678")
             assert response.status_code == 200
             data = response.json()
             assert "title" in data

@@ -33,15 +33,15 @@ _HTTP_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 # here too — they additionally assert token uid == the request's user_id.
 EXPECTED_AUTHED: set[str] = {
     "/agent/chat",
-    "/industry_academic_tieups",  # require_owner("user_id") — private memory profile
+    "/industry-academic-tieups",  # require_owner("user_id") — private memory profile
     "/users/quests",  # require_owner("user_id") — private quest records
-    # NOTE: /daily_feed/dismiss moved to the Go gateway in Phase 2
+    # NOTE: /feed/daily/dismiss moved to the Go gateway in Phase 2
     # (services/backend-go/internal/feed/feed.go) — see docs/backend-auth-posture.md.
 }
 
 # Routes that personalise when a token is present but work anonymously.
 EXPECTED_OPTIONAL: set[str] = {
-    "/chat_with_author",
+    "/agent/chat-with-author",
     "/discovery/predict",
     "/discovery/nexus-chat",
 }

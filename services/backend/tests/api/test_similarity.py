@@ -156,7 +156,7 @@ async def test_embed_work_route_upserts_row(client, monkeypatch):
 
     try:
         r = await client.post(
-            "/api/v1/internal/similar/embed_work", json={"work_id": "W_sim_route"}
+            "/api/v1/internal/similar/embed-work", json={"work_id": "W_sim_route"}
         )
         assert r.status_code == 200, r.text
         assert r.json()["ok"] is True
@@ -178,7 +178,7 @@ async def test_embed_work_route_upserts_row(client, monkeypatch):
 async def test_embed_work_route_rejects_bad_internal_token(client, monkeypatch):
     monkeypatch.setenv("INTERNAL_API_TOKEN", "s3cret")
     r = await client.post(
-        "/api/v1/internal/similar/embed_work",
+        "/api/v1/internal/similar/embed-work",
         json={"work_id": "W_sim_x"},
         headers={"X-Internal-Token": "wrong"},
     )

@@ -635,10 +635,7 @@ app.mount(
     name="downloads",
 )
 
-# Single mount under /api/v1. The bare-prefix mount was removed (Stream B
-# security hardening): on a public URL it doubled every route's attack surface
-# and defeated the "one canonical path per endpoint" assumption the auth
-# posture and rate-limit fragments rely on. Clients must use /api/v1.
+# Expose one canonical API prefix. Clients must use /api/v1.
 app.include_router(api_router, prefix="/api/v1")
 
 
@@ -718,8 +715,5 @@ async def health():
     )
 
 
-# NOTE: GET /metrics was removed here (docs/plans/2026-09-04-retire-python-infra.md).
-# It served a Prometheus text exposition built from a per-process MetricsStore —
-# scraping one of N uvicorn workers gave a partial, misleading picture. Request
-# metrics belong at the Go gateway. Render health checks and external
-# observability scrape the gateway directly.
+# This service does not expose Prometheus metrics: per-worker process metrics
+# would be incomplete. The Go gateway owns request-level observability.

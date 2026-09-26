@@ -12,7 +12,7 @@ def bare_openalex_id(raw: object) -> object:
 
     ``"https://openalex.org/W123"`` -> ``"W123"``; an already-bare id or a
     non-string value is returned unchanged. Clients build a ``/paper/<id>``
-    route from ``daily_feed`` ids and the canonical URL form 400s once
+    route from ``/feed/daily`` ids and the canonical URL form 400s once
     URL-encoded, so the array this pipeline returns must carry bare ids —
     the same normalisation the Go gateway applies to every id it emits.
     """

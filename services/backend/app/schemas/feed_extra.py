@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict
 
 
 class DailyFeedItem(BaseModel):
-    """One card in ``GET /daily_feed`` (returned as a bare JSON array)."""
+    """One card in ``GET /feed/daily`` (returned as a bare JSON array)."""
 
     model_config = ConfigDict(extra="allow")
 
@@ -33,12 +33,12 @@ class DailyFeedItem(BaseModel):
     key_findings: str | None = None
 
 
-# ``DismissResponse`` (``POST /daily_feed/dismiss``) moved to the Go gateway in
+# ``DismissResponse`` (``POST /feed/daily/dismiss``) moved to the Go gateway in
 # Phase 2 — the handler now lives in services/backend-go/internal/feed/feed.go.
 
 
 class IndustryOpportunity(BaseModel):
-    """One item in ``GET /industry_opportunities`` (bare JSON array)."""
+    """One item in ``GET /feed/industry-opportunities`` (bare JSON array)."""
 
     model_config = ConfigDict(extra="allow")
 
@@ -64,7 +64,7 @@ class IndustryOpportunity(BaseModel):
 
 
 class RoadmapResponse(BaseModel):
-    """``GET /assistant_professor_roadmap`` — milestone/checklist/template plan."""
+    """``GET /feed/roadmap`` — milestone/checklist/template plan."""
 
     model_config = ConfigDict(extra="allow")
 

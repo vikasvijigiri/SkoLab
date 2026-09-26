@@ -60,6 +60,9 @@ def test_production_rejects_default_encryption_key(monkeypatch):
     from app.core.config import Settings, _DEFAULT_DB_ENCRYPTION_KEY
 
     monkeypatch.setenv("APP_ENV", "production")
+    # Not under test here — see test_config_fail_fast.py for the dedicated
+    # INTERNAL_API_TOKEN fail-fast tests.
+    monkeypatch.setenv("INTERNAL_API_TOKEN", "a-real-internal-api-token")
 
     monkeypatch.delenv("DATABASE_ENCRYPTION_KEY", raising=False)
     with pytest.raises(RuntimeError, match="DATABASE_ENCRYPTION_KEY"):
@@ -74,4 +77,5 @@ def test_production_rejects_default_encryption_key(monkeypatch):
     Settings()
     monkeypatch.setenv("APP_ENV", "development")
     monkeypatch.delenv("DATABASE_ENCRYPTION_KEY", raising=False)
+    monkeypatch.delenv("INTERNAL_API_TOKEN", raising=False)
     Settings()

@@ -193,11 +193,11 @@ def test_api_endpoint_success(monkeypatch):
 
     monkeypatch.setattr(IndustryAcademicService, "get_tieups", mock_get_tieups)
 
-    # /industry_academic_tieups is owner-scoped (require_owner("user_id")).
+    # /industry-academic-tieups is owner-scoped (require_owner("user_id")).
     app.dependency_overrides[get_verified_user] = lambda: {"uid": "user_123"}
     try:
         client = TestClient(app)
-        response = client.get("/api/v1/industry_academic_tieups?user_id=user_123")
+        response = client.get("/api/v1/industry-academic-tieups?user_id=user_123")
 
         assert response.status_code == 200
         data = response.json()
@@ -205,12 +205,12 @@ def test_api_endpoint_success(monkeypatch):
         assert data["trending"][0]["title"] == "AI in Drug Discovery"
 
         # A token whose uid is not the requested user_id is an IDOR attempt.
-        mismatch = client.get("/api/v1/industry_academic_tieups?user_id=someone_else")
+        mismatch = client.get("/api/v1/industry-academic-tieups?user_id=someone_else")
         assert mismatch.status_code == 403
 
         # No token at all → 401.
         app.dependency_overrides.pop(get_verified_user, None)
-        anon = client.get("/api/v1/industry_academic_tieups?user_id=user_123")
+        anon = client.get("/api/v1/industry-academic-tieups?user_id=user_123")
         assert anon.status_code == 401
     finally:
         app.dependency_overrides.pop(get_verified_user, None)

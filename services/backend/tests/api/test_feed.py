@@ -1,6 +1,6 @@
 """Feed routes typed against the published response contracts.
 
-`GET /daily_feed` returns a bare typed array. `POST /daily_feed/dismiss` moved to
+`GET /feed/daily` returns a bare typed array. `POST /feed/daily/dismiss` moved to
 the Go gateway in Phase 2 (docs/plans/2026-09-04-phase2-feed-to-go.md), so its
 owner-check tests moved with it (services/backend-go/internal/feed/feed_test.go).
 """
@@ -102,7 +102,7 @@ def test_bare_openalex_id_normalises_daily_feed_ids(raw, expected):
 
 
 async def test_daily_feed_is_a_typed_array(client):
-    r = await client.get("/api/v1/daily_feed", params={"author_id": "A1"})
+    r = await client.get("/api/v1/feed/daily", params={"author_id": "A1"})
     assert r.status_code == 200, r.text
     body = r.json()
     assert isinstance(body, list)
@@ -115,7 +115,7 @@ async def test_daily_feed_returns_202_retry_after_when_compute_is_slow(
     app.dependency_overrides[get_pipeline_services] = lambda: _SlowPipeline()
     monkeypatch.setattr(feed_module, "DAILY_FEED_WAIT_TIMEOUT_SECONDS", 0.02)
 
-    r = await client.get("/api/v1/daily_feed", params={"author_id": "A_SLOW"})
+    r = await client.get("/api/v1/feed/daily", params={"author_id": "A_SLOW"})
 
     assert r.status_code == 202
     assert r.headers["Retry-After"] == str(feed_module.DAILY_FEED_RETRY_AFTER_SECONDS)
@@ -157,7 +157,7 @@ async def test_daily_conjecture_flags_fallback_and_caches_it(app, client, monkey
     # needing to fake an actual LLM failure.
     monkeypatch.setattr(feed_module, "is_llm_working", lambda: False)
 
-    r = await client.get("/api/v1/daily_conjecture", params={"author_id": "A_FALLBACK"})
+    r = await client.get("/api/v1/feed/conjecture", params={"author_id": "A_FALLBACK"})
 
     assert r.status_code == 200, r.text
     body = r.json()
@@ -167,7 +167,7 @@ async def test_daily_conjecture_flags_fallback_and_caches_it(app, client, monkey
     # again, and must still honestly report the flag from the cached copy.
     app.dependency_overrides[get_openalex_service] = lambda: object()
     r2 = await client.get(
-        "/api/v1/daily_conjecture", params={"author_id": "A_FALLBACK"}
+        "/api/v1/feed/conjecture", params={"author_id": "A_FALLBACK"}
     )
     assert r2.status_code == 200, r2.text
     assert r2.json()["is_fallback"] is True

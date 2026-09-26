@@ -24,7 +24,7 @@ from app.core.cache import analyze_paper_cache, _semantic_trending_cache
 router = APIRouter()
 
 
-@router.get("/summarize_work", response_model=SummarizeWorkResponse)
+@router.get("/papers/summarize", response_model=SummarizeWorkResponse)
 async def summarize_work(
     title: str = Query(...),
     doi: Optional[str] = None,
@@ -33,7 +33,7 @@ async def summarize_work(
     return await summarization_service.summarize_paper(title, doi)
 
 
-@router.get("/analyze_paper", response_model=PaperIntelligenceResponse)
+@router.get("/papers/analyze", response_model=PaperIntelligenceResponse)
 async def analyze_paper(
     title: str = Query(..., description="Full paper title"),
     doi: Optional[str] = Query(
@@ -63,7 +63,7 @@ async def analyze_paper(
     return result
 
 
-@router.get("/presentation_outline", response_model=PresentationOutlineResponse)
+@router.get("/papers/presentation-outline", response_model=PresentationOutlineResponse)
 async def presentation_outline(
     title: str = Query(...),
     doi: Optional[str] = None,
@@ -72,10 +72,10 @@ async def presentation_outline(
     return await summarization_service.generate_presentation(title, doi)
 
 
-# NOTE: /semantic_trending returns a fixed-size object envelope (not an unbounded
+# NOTE: /papers/semantic-trending returns a fixed-size object envelope (not an unbounded
 # list) and already bounds its own `limit` (1..30). Left as-is per the plan's
 # "inherently small and fixed" carve-out; only response_model is added.
-@router.get("/semantic_trending", response_model=SemanticTrendingResponse)
+@router.get("/papers/semantic-trending", response_model=SemanticTrendingResponse)
 async def get_semantic_trending(
     author_id: str = Query(..., description="Full OpenAlex author URI or short ID"),
     limit: int = Query(10, ge=1, le=30),

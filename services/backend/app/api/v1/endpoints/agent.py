@@ -29,7 +29,7 @@ async def agent_chat(
     return await agent_service.process_agent_chat(req, base_url=base_url)
 
 
-@router.post("/agent/upload_document", response_model=UploadDocumentResponse)
+@router.post("/agent/upload-document", response_model=UploadDocumentResponse)
 async def upload_document(
     file: UploadFile = File(...),
     agent_service: AgentService = Depends(get_agent_service),
@@ -58,7 +58,7 @@ async def upload_document(
     return await agent_service.process_upload_document(content, filename, content_type)
 
 
-@router.post("/chat_with_author", response_model=ChatWithAuthorResponse)
+@router.post("/agent/chat-with-author", response_model=ChatWithAuthorResponse)
 async def chat_with_author(
     req: ChatRequest,
     pipeline_services: PipelineServices = Depends(get_pipeline_services),

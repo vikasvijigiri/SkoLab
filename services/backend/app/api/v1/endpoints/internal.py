@@ -81,13 +81,13 @@ class EmbedWorkAck(BaseModel):
     work_id: str
 
 
-@router.post("/internal/similar/embed_work", response_model=EmbedWorkAck)
+@router.post("/internal/similar/embed-work", response_model=EmbedWorkAck)
 async def embed_work(
     body: EmbedWorkRequest,
     x_internal_token: str | None = Header(default=None),
 ) -> EmbedWorkAck:
     """Fetch one OpenAlex work, embed title+abstract, upsert into
-    ``work_embeddings``. The Go gateway's ``/similar_papers`` cold path calls
+    ``work_embeddings``. The Go gateway's ``/similar-papers`` cold path calls
     this once for a query work it has never seen, then runs its kNN.
 
     Synchronous (not a background task): the caller waits on the row so its

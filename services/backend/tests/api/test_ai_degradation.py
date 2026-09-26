@@ -5,9 +5,9 @@ retryable — clients should see 503 + Retry-After, not a 500 that reads as
 "the server is broken". Covers the regression from the 2026-09-03 audit where
 ``/api/v1/author_metrics`` returned 500.
 
-``GET /api/v1/author_metrics`` itself moved to the Go gateway (decisions/0010);
+``GET /api/v1/author-stats`` itself moved to the Go gateway (decisions/0010);
 the LLM analysis step it used is now reached via
-``POST /api/v1/internal/author_metrics_enrich``, and that is what must still
+``POST /api/v1/internal/author-metrics-enrich``, and that is what must still
 degrade to 503. The Go gateway degrades the 503 further to an empty bundle on
 its own side — not exercised here.
 """
@@ -38,7 +38,7 @@ async def test_author_metrics_enrich_returns_503_not_500_when_llm_down(
     client, _llm_down
 ):
     r = await client.post(
-        "/api/v1/internal/author_metrics_enrich",
+        "/api/v1/internal/author-metrics-enrich",
         json={"context": "Title: A paper. Concepts: Topic X, Topic Y"},
     )
     assert r.status_code == 503, r.text
@@ -49,7 +49,7 @@ async def test_author_metrics_enrich_returns_503_not_500_when_llm_down(
 
 
 async def test_author_metrics_enrich_requires_context(client):
-    r = await client.post("/api/v1/internal/author_metrics_enrich", json={})
+    r = await client.post("/api/v1/internal/author-metrics-enrich", json={})
     assert r.status_code == 422
     assert r.json()["code"] == "validation_error"
 

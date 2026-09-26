@@ -59,11 +59,11 @@ async def test_lookup_routes_moved_to_go(client, path):
 
 
 async def test_match_grants_and_journal_advisor_are_typed_arrays(client):
-    g = await client.get("/api/v1/match_grants", params={"author_id": "A1"})
+    g = await client.get("/api/v1/match-grants", params={"author_id": "A1"})
     assert g.status_code == 200, g.text
     [GrantMatch(**row) for row in g.json()]
 
-    j = await client.get("/api/v1/journal_advisor", params={"author_id": "A1"})
+    j = await client.get("/api/v1/journal-advisor", params={"author_id": "A1"})
     assert j.status_code == 200, j.text
     [JournalRecommendation(**row) for row in j.json()]
 
@@ -79,7 +79,7 @@ async def test_match_grants_returns_202_retry_after_when_compute_is_slow(
     app.dependency_overrides[get_pipeline_services] = lambda: _SlowGrantsPipeline()
     monkeypatch.setattr(authors_module, "DAILY_FEED_WAIT_TIMEOUT_SECONDS", 0.02)
 
-    r = await client.get("/api/v1/match_grants", params={"author_id": "A_SLOW"})
+    r = await client.get("/api/v1/match-grants", params={"author_id": "A_SLOW"})
 
     assert r.status_code == 202
     assert r.headers["Retry-After"] == str(
@@ -111,7 +111,7 @@ async def test_author_metrics_enrich_returns_scored_bundle(client, monkeypatch):
     )
 
     r = await client.post(
-        "/api/v1/internal/author_metrics_enrich",
+        "/api/v1/internal/author-metrics-enrich",
         json={"context": "Title: A. Concepts: X, Y"},
     )
     assert r.status_code == 200, r.text
@@ -131,14 +131,14 @@ async def test_author_metrics_enrich_rejects_bad_token(client, monkeypatch):
     monkeypatch.setenv("INTERNAL_API_TOKEN", "s3cr3t")
 
     bad = await client.post(
-        "/api/v1/internal/author_metrics_enrich",
+        "/api/v1/internal/author-metrics-enrich",
         json={"context": "Title: A. Concepts: X, Y"},
         headers={"X-Internal-Token": "wrong"},
     )
     assert bad.status_code == 401, bad.text
 
     missing = await client.post(
-        "/api/v1/internal/author_metrics_enrich",
+        "/api/v1/internal/author-metrics-enrich",
         json={"context": "Title: A. Concepts: X, Y"},
     )
     assert missing.status_code == 401, missing.text

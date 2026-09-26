@@ -1,6 +1,6 @@
 """Response models for the papers routes not already covered by ``schemas.core``.
 
-``/summarize_work`` and ``/presentation_outline`` return an LLM-shaped JSON
+``/papers/summarize`` and ``/papers/presentation-outline`` return an LLM-shaped JSON
 object whose exact keys vary with the model output, so their models declare the
 known/degraded fields and allow extras through (``extra="allow"`` — FastAPI
 serialises the extras, so no client field is dropped).
@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict
 
 
 class SummarizeWorkResponse(BaseModel):
-    """``GET /summarize_work`` — legacy bullets/metrics summary or a degraded stub."""
+    """``GET /papers/summarize`` — legacy bullets/metrics summary or a degraded stub."""
 
     model_config = ConfigDict(extra="allow")
 
@@ -26,7 +26,7 @@ class SummarizeWorkResponse(BaseModel):
 
 
 class PresentationOutlineResponse(BaseModel):
-    """``GET /presentation_outline`` — 7-slide outline; keys are LLM-shaped."""
+    """``GET /papers/presentation-outline`` — 7-slide outline; keys are LLM-shaped."""
 
     model_config = ConfigDict(extra="allow")
 
@@ -48,7 +48,7 @@ class SemanticTrendingPaper(BaseModel):
 
 
 class SemanticTrendingResponse(BaseModel):
-    """``GET /semantic_trending`` — field-trending papers for one author."""
+    """``GET /papers/semantic-trending`` — field-trending papers for one author."""
 
     author_concepts: list[str] = []
     papers: list[SemanticTrendingPaper] = []

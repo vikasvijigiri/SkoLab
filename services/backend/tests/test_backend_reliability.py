@@ -18,7 +18,7 @@ async def test_upload_document_size_limit():
     async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
         large_content = b"a" * (10 * 1024 * 1024 + 1)
         files = {"file": ("test.pdf", large_content, "application/pdf")}
-        response = await ac.post("/api/v1/agent/upload_document", files=files)
+        response = await ac.post("/api/v1/agent/upload-document", files=files)
         assert response.status_code == 400
         assert "exceeds the 10MB limit" in response.json()["detail"]
 
@@ -29,7 +29,7 @@ async def test_upload_document_mime_validation():
     async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
         invalid_content = b"some executable code"
         files = {"file": ("malicious.exe", invalid_content, "application/octet-stream")}
-        response = await ac.post("/api/v1/agent/upload_document", files=files)
+        response = await ac.post("/api/v1/agent/upload-document", files=files)
         assert response.status_code == 400
         assert "Unsupported file type" in response.json()["detail"]
 
@@ -52,7 +52,7 @@ async def test_upload_document_success():
         async with httpx.AsyncClient(base_url="http://testserver", **client_args) as ac:
             valid_content = b"Sample text"
             files = {"file": ("paper.pdf", valid_content, "application/pdf")}
-            response = await ac.post("/api/v1/agent/upload_document", files=files)
+            response = await ac.post("/api/v1/agent/upload-document", files=files)
             assert response.status_code == 200
             data = response.json()
             assert data["id"] == 123

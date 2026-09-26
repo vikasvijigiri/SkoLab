@@ -6,7 +6,7 @@ cacheable compute (an LLM/embedding generation pipeline).
 
 Why this exists
 ----------------
-`daily_feed` (and its siblings — see the comment in
+`/feed/daily` (and its siblings — see the comment in
 `app/api/v1/endpoints/feed.py`) synchronously runs an OpenAlex fetch +
 embedding + LLM-ranking pipeline documented at ~40-80s uncached, up to
 ~2m48s for the widest search. Left as a plain `await`, that blocks the

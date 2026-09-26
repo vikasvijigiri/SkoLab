@@ -13,7 +13,7 @@ logger = logging.getLogger("skolab")
 router = APIRouter()
 
 
-@router.get("/industry_academic_tieups", response_model=IndustryAcademicTieupsResponse)
+@router.get("/industry-academic-tieups", response_model=IndustryAcademicTieupsResponse)
 async def get_industry_academic_tieups(
     user_id: str = Query(..., description="Firebase UID of the user"),
     db: AsyncSession = Depends(get_db),

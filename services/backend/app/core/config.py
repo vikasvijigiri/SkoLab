@@ -21,7 +21,8 @@ from dataclasses import dataclass, field
 # serving the wrong, always-empty directory -- the actual root cause behind
 # the dead `downloadUrl`s a 2026-09 production audit found on
 # `/assistant_professor_roadmap` (the committed *_template.md files live in
-# the real <backend_root>/downloads/, never reachable through this path).
+# the real <backend_root>/downloads/, never reachable through this path,
+# path renamed to /feed/roadmap in the 2026-09-26 naming-convention pass).
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -87,7 +88,7 @@ class Settings:
     # ── Go gateway URL (Python -> Go; the one reverse direction) ─────────────
     # Every other internal/* call in this codebase goes Go -> Python. The
     # teleport worker's researcher-metrics compute calls back to Go's
-    # POST /internal/compute_metrics instead of duplicating that math here
+    # POST /internal/compute-metrics instead of duplicating that math here
     # (2026-09-12 no-slop audit) -- this is the one place Python needs the
     # gateway's own URL. Same manual-set-after-first-deploy pattern as the
     # gateway's own PYTHON_BACKEND_URL (render.yaml): Render's `fromService`
@@ -100,7 +101,7 @@ class Settings:
     # Checked by this service's own /internal/* routes (see
     # app/api/v1/endpoints/internal.py's _check_internal_token) and sent as
     # the X-Internal-Token header when this service calls the Go gateway's
-    # /internal/compute_metrics. Unset in either direction ⇒ the check is
+    # /internal/compute-metrics. Unset in either direction ⇒ the check is
     # skipped, matching this repo's "local dev needs no configuration"
     # convention for internal auth.
     internal_api_token: str = field(
@@ -153,7 +154,7 @@ class Settings:
     # failure is silent rather than loud: _embed_via_api() returns None on
     # any connection failure, embed_texts() then falls back to
     # _embed_via_local() (absent in this image) or zero vectors — no error
-    # surfaces to a caller or to /ai_status, only degraded recommendation/
+    # surfaces to a caller or to /ai-status, only degraded recommendation/
     # similarity quality. Verified the new URL live with a real POST
     # (BAAI/bge-small-en-v1.5, this deployment's own token) returning a
     # real 384-dim vector before changing this default.
@@ -263,7 +264,7 @@ class Settings:
     # endpoints/system.py, endpoints/feed.py), so every one of them broke
     # silently and identically — is_llm_working() only checks that GROQ_API
     # is *configured*, not that the configured model is actually callable,
-    # so /ai_status kept reporting llm_active: true throughout. A single
+    # so /ai-status kept reporting llm_active: true throughout. A single
     # settings field means the next Groq deprecation is a one-line env var
     # change on Render, not another emergency multi-file code deploy.
     #
@@ -450,6 +451,20 @@ class Settings:
             raise RuntimeError(
                 "DATABASE_ENCRYPTION_KEY is unset or still the shipped default while "
                 f"APP_ENV={self.environment}. Set a real key before starting the backend."
+            )
+
+        # Fail fast: a staging/production deploy must supply a real
+        # INTERNAL_API_TOKEN. _check_internal_token (endpoints/internal.py) and
+        # its Go-side twin both treat an empty token as "skip the check" — a
+        # deliberate local-dev convenience that becomes "every /internal/*
+        # route is unauthenticated" if it's left unset in a real deployment,
+        # with no prior warning anywhere. Development is unaffected.
+        if self.environment in ("staging", "production") and not self.internal_api_token:
+            raise RuntimeError(
+                "INTERNAL_API_TOKEN is unset while "
+                f"APP_ENV={self.environment}. Set it (and the matching value on "
+                "the Go gateway) before starting the backend — otherwise every "
+                "/internal/* route runs with no authentication."
             )
 
     @property

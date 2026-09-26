@@ -155,11 +155,11 @@ async def _compute_researcher_metrics_via_gateway(
     has_preprint: bool,
     countries: List[str],
 ) -> Dict[str, Any]:
-    """POST the Go gateway's /internal/compute_metrics for the 8 metrics this
+    """POST the Go gateway's /internal/compute-metrics for the 8 metrics this
     worker used to compute with its own duplicate of that same math
     (app/services/platform/metrics_service.py's MetricsService, retired from
     this call site in the 2026-09-12 no-slop audit -- MetricsService itself
-    stays, since /analyze_paper's paper-level scoring still uses it).
+    stays, since /papers/analyze's paper-level scoring still uses it).
 
     Falls back to safe zero-value defaults on any failure (gateway down,
     timeout, bad response) so a Go outage degrades this one enrichment pass
@@ -188,7 +188,7 @@ async def _compute_researcher_metrics_via_gateway(
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(
-                f"{settings.gateway_url.rstrip('/')}/internal/compute_metrics",
+                f"{settings.gateway_url.rstrip('/')}/internal/compute-metrics",
                 json={
                     "n1": n1,
                     "n2": n2,

@@ -25,15 +25,15 @@ from app.api.dependencies import (
 
 router = APIRouter()
 
-# `POST /daily_feed/dismiss` moved to the Go gateway in Phase 2 (Python is
+# `POST /feed/daily/dismiss` moved to the Go gateway in Phase 2 (Python is
 # LLM-only, see decisions/0002 and docs/plans/2026-09-04-phase2-feed-to-go.md):
 #   - dismiss owner check + dismissed-ids write → services/backend-go/internal/feed/feed.go
-# Feed *generation* (`GET /daily_feed`, `/daily_conjecture`,
-# `/assistant_professor_roadmap`, `/industry_opportunities`) stays here — it is
+# Feed *generation* (`GET /feed/daily`, `/feed/conjecture`,
+# `/feed/roadmap`, `/feed/industry-opportunities`) stays here — it is
 # embedding / LLM work.
 
 
-# NOTE: /daily_feed and /industry_opportunities return bare JSON arrays. A
+# NOTE: /feed/daily and /feed/industry-opportunities return bare JSON arrays. A
 # `Page[T]` envelope would be a response-shape change, so they stay `list[T]`
 # until a versioned pagination contract is introduced.
 #
@@ -45,7 +45,7 @@ DAILY_FEED_WAIT_TIMEOUT_SECONDS = 10.0
 DAILY_FEED_RETRY_AFTER_SECONDS = 4
 
 
-@router.get("/daily_feed", response_model=list[DailyFeedItem])
+@router.get("/feed/daily", response_model=list[DailyFeedItem])
 async def get_daily_feed(
     author_id: Optional[str] = None,
     query_fallback: Optional[str] = None,
@@ -150,7 +150,7 @@ def generate_fallback_conjecture(author_data: dict) -> ConjectureResponse:
     return ConjectureResponse(**conjecture_data)
 
 
-@router.get("/daily_conjecture", response_model=ConjectureResponse)
+@router.get("/feed/conjecture", response_model=ConjectureResponse)
 async def get_daily_conjecture(
     author_id: Optional[str] = Query(None),
     name: Optional[str] = Query(None),
@@ -305,7 +305,7 @@ from app.db.database import get_db, AsyncSessionLocal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-@router.get("/industry_opportunities", response_model=list[IndustryOpportunity])
+@router.get("/feed/industry-opportunities", response_model=list[IndustryOpportunity])
 async def get_industry_opportunities(
     focus: str = Query("AI"),
     name: Optional[str] = Query(None),
@@ -346,7 +346,7 @@ async def get_industry_opportunities(
     return result
 
 
-@router.get("/assistant_professor_roadmap", response_model=RoadmapResponse)
+@router.get("/feed/roadmap", response_model=RoadmapResponse)
 async def get_assistant_professor_roadmap(
     author_id: Optional[str] = Query(None),
     name: Optional[str] = Query(None),

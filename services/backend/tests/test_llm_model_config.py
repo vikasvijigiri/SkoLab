@@ -8,7 +8,7 @@ live against the Groq API with this deployment's own key, not assumed.
 With LLM_MAX_FALLBACK_MODELS capping the attempt loop at 4, every attempt
 was Groq and every one was dead: 100% of LLM calls failed, silently,
 before ever reaching an OpenRouter fallback. is_llm_working() (what
-/ai_status reports) only checks that GROQ_API is configured, not that the
+/ai-status reports) only checks that GROQ_API is configured, not that the
 configured model is actually callable, so the health check kept reporting
 llm_active: true throughout.
 

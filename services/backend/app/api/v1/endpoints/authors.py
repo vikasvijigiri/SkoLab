@@ -37,7 +37,7 @@ router = APIRouter()
 # it calls the internal route below for the one model-bound step. decisions/0010.
 
 
-@router.post("/internal/author_metrics_enrich", response_model=AuthorMetricsResponse)
+@router.post("/internal/author-metrics-enrich", response_model=AuthorMetricsResponse)
 async def author_metrics_enrich(
     req: AuthorMetricsEnrichRequest,
     x_internal_token: str | None = Header(default=None),
@@ -62,7 +62,7 @@ async def author_metrics_enrich(
 # docs/plans/2026-09-04-network-collaborators-to-go.md.
 
 
-@router.get("/collaborator_synergy", response_model=CollaboratorSynergyResponse)
+@router.get("/collaborator-synergy", response_model=CollaboratorSynergyResponse)
 async def get_collaborator_synergy(
     author_id: str = Query(...),
     collaborator_id: str = Query(...),
@@ -74,7 +74,7 @@ async def get_collaborator_synergy(
 # GET /citation_heatmap  — migrated to Go (internal/author/heatmap.go)
 
 
-@router.get("/match_grants", response_model=list[GrantMatch])
+@router.get("/match-grants", response_model=list[GrantMatch])
 async def match_grants(
     author_id: str = Query(...),
     pipeline_services: PipelineServices = Depends(get_pipeline_services),
@@ -82,7 +82,7 @@ async def match_grants(
     # match_grants scrapes live funding portals and runs the results through
     # the embedding-grounded match-scoring pipeline (see grants.py) -- 34.9s
     # measured against production on a cache miss, unlike this route's
-    # LLM-pipeline siblings (`daily_feed`, `industry_opportunities`) it had no
+    # LLM-pipeline siblings (`feed/daily`, `feed/industry-opportunities`) it had no
     # bounded-wait protection, so a cold request just blocked the client past
     # every upstream timeout. Same 202/Retry-After single-flight pattern as
     # those two (app/core/pending_compute.py) -- a request that catches the
@@ -103,7 +103,7 @@ async def match_grants(
     return result
 
 
-@router.get("/journal_advisor", response_model=list[JournalRecommendation])
+@router.get("/journal-advisor", response_model=list[JournalRecommendation])
 async def get_journal_advisor(
     author_id: str = Query(...),
     pipeline_services: PipelineServices = Depends(get_pipeline_services),

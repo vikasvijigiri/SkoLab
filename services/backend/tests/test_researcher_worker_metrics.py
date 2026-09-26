@@ -2,7 +2,7 @@
 
 Covers the 2026-09-12 no-slop-audit migration: 8 of the teleport worker's 10
 researcher metrics moved from a Python duplicate (MetricsService) to a call
-against the Go gateway's POST /internal/compute_metrics, with a zero-value
+against the Go gateway's POST /internal/compute-metrics, with a zero-value
 fallback on any failure so a gateway outage degrades this one enrichment
 pass instead of crashing the whole worker.
 """
@@ -101,7 +101,7 @@ def _reset_fake_client(monkeypatch):
 async def test_successful_call_returns_gateway_result():
     result = await _compute_researcher_metrics_via_gateway(**_kwargs())
     assert result == GATEWAY_RESULT
-    assert _FakeAsyncClient.last_url.endswith("/internal/compute_metrics")
+    assert _FakeAsyncClient.last_url.endswith("/internal/compute-metrics")
 
 
 @pytest.mark.asyncio

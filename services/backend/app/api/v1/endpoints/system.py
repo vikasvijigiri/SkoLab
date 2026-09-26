@@ -8,10 +8,10 @@ router = APIRouter()
 # GET /  and  GET /status  — migrated to the Go gateway (internal/system).
 # Both are non-LLM metadata routes: Go serves the API-router root and the
 # public status report (DB/cache probe + incidents + LLM-inference flag).
-# decisions/0010. `/ai_status` stays here — it reports the LLM key/health.
+# `/ai-status` stays here because it reports LLM-key availability and health.
 
 
-@router.get("/ai_status", response_model=AiStatusResponse)
+@router.get("/ai-status", response_model=AiStatusResponse)
 async def ai_status():
     """Checks if the AI services have valid API keys and are reachable."""
     import os

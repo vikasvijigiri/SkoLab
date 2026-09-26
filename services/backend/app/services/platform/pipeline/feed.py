@@ -224,7 +224,7 @@ class FeedMixin:
     ) -> Set[str]:
         """OpenAlex work IDs this author has explicitly dismissed from their feed.
 
-        The *write* path (``POST /daily_feed/dismiss``) moved to the Go gateway
+        The *write* path (``POST /feed/daily/dismiss``) moved to the Go gateway
         in Phase 2 (``services/backend-go/internal/feed/feed.go``); this read is
         still used by ``get_daily_feed`` to filter and to bust a stale cache.
         The Go writer uses the identical ``pipeline_dismissed_recs::<doc_id>``

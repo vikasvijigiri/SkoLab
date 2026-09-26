@@ -67,26 +67,26 @@ def _overrides(app):
 
 
 async def test_summarize_work_parses(client):
-    r = await client.get("/api/v1/summarize_work", params={"title": "Attention"})
+    r = await client.get("/api/v1/papers/summarize", params={"title": "Attention"})
     assert r.status_code == 200, r.text
     SummarizeWorkResponse(**r.json())
 
 
 async def test_summarize_work_requires_title(client):
-    r = await client.get("/api/v1/summarize_work")
+    r = await client.get("/api/v1/papers/summarize")
     assert r.status_code == 422
     assert r.json()["code"] == "validation_error"
 
 
 async def test_presentation_outline_parses(client):
-    r = await client.get("/api/v1/presentation_outline", params={"title": "Attention"})
+    r = await client.get("/api/v1/papers/presentation-outline", params={"title": "Attention"})
     assert r.status_code == 200, r.text
     PresentationOutlineResponse(**r.json())
 
 
 async def test_analyze_paper_parses(client):
     r = await client.get(
-        "/api/v1/analyze_paper", params={"title": "Attention Is All You Need"}
+        "/api/v1/papers/analyze", params={"title": "Attention Is All You Need"}
     )
     assert r.status_code == 200, r.text
     PaperIntelligenceResponse(**r.json())
@@ -101,7 +101,7 @@ async def test_analyze_paper_ai_unavailable_is_503_not_500(client, app):
         analyze_error=AIUnavailable("Paper analysis is temporarily unavailable.")
     )
     r = await client.get(
-        "/api/v1/analyze_paper", params={"title": "A Different Paper Title"}
+        "/api/v1/papers/analyze", params={"title": "A Different Paper Title"}
     )
     assert r.status_code == 503, r.text
     assert r.json()["code"] == "ai_unavailable"
@@ -109,12 +109,12 @@ async def test_analyze_paper_ai_unavailable_is_503_not_500(client, app):
 
 async def test_semantic_trending_parses_and_bounds_limit(client):
     ok = await client.get(
-        "/api/v1/semantic_trending", params={"author_id": "A123", "limit": 5}
+        "/api/v1/papers/semantic-trending", params={"author_id": "A123", "limit": 5}
     )
     assert ok.status_code == 200, ok.text
     SemanticTrendingResponse(**ok.json())
 
     bad = await client.get(
-        "/api/v1/semantic_trending", params={"author_id": "A123", "limit": 999}
+        "/api/v1/papers/semantic-trending", params={"author_id": "A123", "limit": 999}
     )
     assert bad.status_code == 422

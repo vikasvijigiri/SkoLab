@@ -1,57 +1,38 @@
----
-title: Skolab Backend
-emoji: 🎓
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 8000
-pinned: false
----
+# SkoLab FastAPI service
 
-<!-- The block above is Hugging Face Space metadata. It is inert on GitHub and
-     required when this directory is pushed to a Docker Space (see DEPLOY.md).
-     `app_port: 8000` matches the Dockerfile CMD's uvicorn port. -->
+This service provides SkoLab's domain, AI, enrichment, and data API. It runs
+behind the Go gateway in production and is deployed with the repository's
+`render.yaml` blueprint.
 
-# Skolab Backend
+## Local setup
 
-This is the Python (FastAPI) backend for the Skolab project.
-
-## Architecture
-
-This project strictly follows modern FastAPI structure and separates concerns into individual modules:
-
-- **`app/api/`**: Contains API routers and versioning (e.g., `v1`).
-- **`app/core/`**: Configuration, security, and environment variable logic.
-- **`app/models/`**: Database schema models (e.g., SQLAlchemy) and data-related objects. 
-- **`app/services/`**: The core business logic. Separation here ensures your endpoints remain clean and logic is highly testable.
-- **`app/db/`**: Database connection and session management logic.
-- **`tests/`**: Unit and integration tests for the backend.
-
-## Quick Start
-
-### 1. Environment Setup
-Ensure you have Python installed, then create and activate a virtual environment:
-
-```bash
-# Create a virtual environment
+```powershell
+cd services/backend
 python -m venv venv
-
-# Activate it
-# On Windows:
-venv\Scripts\activate
-# On macOS/Linux:
-source venv/bin/activate
-```
-
-### 2. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Run the Development Server
-To make the backend accessible to an Android device or emulator, bind it to all network interfaces:
-
-```bash
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt -r requirements-dev.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
-The API documentation will then be available at `http://localhost:8000/docs`.
+
+Copy the repository `.env.example` to a local `.env` only when required. Never
+commit service credentials or Firebase service-account files.
+
+## Verification
+
+```powershell
+ruff check .
+ruff format --check .
+pytest -q
+```
+
+## Database migrations
+
+Run migrations from this directory:
+
+```powershell
+python scripts/run_migrations.py
+```
+
+The service validates its database schema at startup. For production, provide
+the required secrets through the deployment environment rather than files in
+the repository.

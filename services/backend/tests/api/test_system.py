@@ -31,7 +31,7 @@ async def test_app_root_parses(client):
 
 async def test_ai_status_parses(client):
     # Stays in Python — it reports the LLM key/health.
-    r = await client.get("/api/v1/ai_status")
+    r = await client.get("/api/v1/ai-status")
     assert r.status_code == 200
     AiStatusResponse(**r.json())
 

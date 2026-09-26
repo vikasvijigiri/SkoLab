@@ -4,8 +4,7 @@
 `app.services.platform.pipeline` so every existing
 `from app.services.platform.pipeline_services import PipelineServices` import
 and call site keeps working unchanged. See `app/services/platform/pipeline/`
-for the individual feature modules and
-`docs/plans/2026-09-03-split-pipeline-services.md` for the split rationale.
+for the individual feature modules.
 """
 
 from app.services.platform.pipeline.author_chat import AuthorChatMixin

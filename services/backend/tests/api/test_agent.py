@@ -53,7 +53,7 @@ async def test_agent_chat_rejects_overlong_message(client):
 
 async def test_chat_with_author_parses(client):
     r = await client.post(
-        "/api/v1/chat_with_author",
+        "/api/v1/agent/chat-with-author",
         json={
             "author_id": "A1",
             "paper_title": "On Computable Numbers",
