@@ -16,12 +16,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from app.db.url import as_asyncpg_url
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
 # Set the sqlalchemy.url dynamically
-db_url = os.environ.get("DATABASE_URL", "")
+db_url = as_asyncpg_url(os.environ.get("DATABASE_URL", ""))
 config.set_main_option("sqlalchemy.url", db_url)
 
 # Interpret the config file for Python logging.

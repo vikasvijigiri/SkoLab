@@ -26,10 +26,11 @@ def main() -> int:
 
     from alembic import command
     from alembic.config import Config
+    from app.db.url import as_asyncpg_url
 
     cfg = Config(str(_BACKEND_ROOT / "alembic.ini"))
     cfg.set_main_option("script_location", str(_BACKEND_ROOT / "alembic"))
-    cfg.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
+    cfg.set_main_option("sqlalchemy.url", as_asyncpg_url(os.environ["DATABASE_URL"]))
 
     print("[migrate] upgrading to head ...", flush=True)
     try:
