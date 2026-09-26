@@ -3,8 +3,9 @@ app/db/database.py
 ==================
 Async SQLAlchemy engine and session factory.
 
-DATABASE_URL is read from the environment so credentials are never
-hard-coded. Falls back to a local dev default when the env var is absent.
+DATABASE_URL is read from the environment — Supabase Postgres in every
+environment (local dev, CI, staging, production). No SQLite fallback: this
+service has exactly one database backend (2026-09-26, "Supabase only" pass).
 
 Format: postgresql+asyncpg://user:password@host:port/dbname
 """
@@ -23,7 +24,7 @@ _raw_db_url = os.environ.get("DATABASE_URL", "")
 if not _raw_db_url:
     raise RuntimeError(
         "DATABASE_URL is not set. "
-        "Copy backend/.env.example to backend/.env and fill in your credentials."
+        "Copy backend/.env.example to backend/.env and point it at your Supabase project."
     )
 DATABASE_URL: str = _raw_db_url
 
@@ -41,27 +42,15 @@ _pg_connect_args: dict = {"command_timeout": 30.0}
 if _is_asyncpg:
     _pg_connect_args["statement_cache_size"] = 0
 
-_is_sqlite = DATABASE_URL.startswith("sqlite")
-
-if os.environ.get("TESTING") == "True" or _is_sqlite:
-    # SQLite (the local dev default in DATABASE_URL.example, and the
-    # TESTING=True fast-tier fallback) supports neither asyncpg's
-    # connect_args (command_timeout, statement_cache_size — aiosqlite
-    # raises "unexpected keyword argument") nor QueuePool's pool_size /
-    # max_overflow / pool_pre_ping / pool_recycle. The TESTING branch
-    # already special-cased connect_args for it but the production
-    # (else) branch below didn't apply the same guard to EITHER set of
-    # kwargs, so a plain `uvicorn app.main:app` boot against the SQLite
-    # dev default (no DATABASE_URL override, TESTING unset) failed every
-    # DB call at startup with "Connection() got an unexpected keyword
-    # argument 'command_timeout'" (2026-09-12). NullPool + no
-    # Postgres-only kwargs works for both TESTING and plain local dev.
-    connect_args = {} if _is_sqlite else _pg_connect_args
+if os.environ.get("TESTING") == "True":
+    # NullPool for test runs: a fresh connection per checkout rather than a
+    # sized QueuePool, so many short-lived test sessions in one run never hit
+    # pool_size/max_overflow limits or hold a pooler slot idle between tests.
     engine = create_async_engine(
         DATABASE_URL,
         echo=False,
         poolclass=NullPool,
-        connect_args=connect_args,
+        connect_args=_pg_connect_args,
     )
 else:
     engine = create_async_engine(
@@ -246,24 +235,16 @@ async def init_db() -> None:
         await conn.run_sync(Base.metadata.create_all)
         from sqlalchemy import text
 
-        # `ADD COLUMN IF NOT EXISTS` is Postgres syntax (a drift-repair net
-        # for a live database that predates a column being added to the ORM
-        # model) -- SQLite's ALTER TABLE doesn't support IF NOT EXISTS at
-        # all, so every one of these unconditionally raised a syntax error
-        # against the local dev.db fallback (2026-09-12), even though
-        # create_all() just above already created the column fresh. Skip
-        # entirely for SQLite: a fresh create_all() already has the current
-        # schema, and an existing dev.db missing a column is cheaper to
-        # delete and let recreate than to hand-migrate.
-        _is_postgres = conn.dialect.name == "postgresql"
+        # `ADD COLUMN IF NOT EXISTS` is Postgres syntax — a drift-repair net
+        # for a live Supabase database that predates a column being added to
+        # the ORM model, even though create_all() just above already creates
+        # it fresh on a brand-new database.
         for col_name, col_type in [
             ("username", "VARCHAR(100) UNIQUE"),
             ("author_name", "VARCHAR(255)"),
             ("phone", "VARCHAR(50)"),
             ("research_focus", "TEXT"),
         ]:
-            if not _is_postgres:
-                continue
             try:
                 await conn.execute(
                     text(
@@ -280,8 +261,6 @@ async def init_db() -> None:
             ("skills", "JSON"),
             ("tools", "JSON"),
         ]:
-            if not _is_postgres:
-                continue
             try:
                 await conn.execute(
                     text(
@@ -294,50 +273,47 @@ async def init_db() -> None:
                     flush=True,
                 )
 
-        # ── pgvector similarity tables (Postgres only) ───────────────────────
-        # SQLite (the offline-dev / fast-tier fallback) has no `vector` type,
-        # so this whole block is skipped there and the similarity engine
-        # simply has no store to read — its endpoints degrade to the OpenAlex
-        # fallback path. Mirrors alembic revision b2c3d4e5f6a7 for the
-        # Postgres deployments where `run_schema_create_all` is False.
-        if conn.dialect.name == "postgresql":
-            for ddl in (
-                "CREATE EXTENSION IF NOT EXISTS vector",
-                """
-                CREATE TABLE IF NOT EXISTS work_embeddings (
-                    work_id           text PRIMARY KEY,
-                    embedding         vector(384) NOT NULL,
-                    title             text,
-                    concepts          text[],
-                    referenced_works  text[],
-                    publication_year  integer,
-                    updated_at        timestamptz NOT NULL DEFAULT now()
+        # ── pgvector similarity tables ────────────────────────────────────────
+        # Drift-repair net mirroring alembic revision b2c3d4e5f6a7, for a
+        # Supabase database where `run_schema_create_all` is True (dev) and
+        # migrations haven't necessarily been run yet.
+        for ddl in (
+            "CREATE EXTENSION IF NOT EXISTS vector",
+            """
+            CREATE TABLE IF NOT EXISTS work_embeddings (
+                work_id           text PRIMARY KEY,
+                embedding         vector(384) NOT NULL,
+                title             text,
+                concepts          text[],
+                referenced_works  text[],
+                publication_year  integer,
+                updated_at        timestamptz NOT NULL DEFAULT now()
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS author_embeddings (
+                author_id     text PRIMARY KEY,
+                embedding     vector(384) NOT NULL,
+                concepts      text[],
+                coauthor_ids  text[],
+                institution   text,
+                works_count   integer,
+                h_index       integer,
+                updated_at    timestamptz NOT NULL DEFAULT now()
+            )
+            """,
+            "CREATE INDEX IF NOT EXISTS ix_work_embeddings_updated_at "
+            "ON work_embeddings (updated_at)",
+            "CREATE INDEX IF NOT EXISTS ix_author_embeddings_updated_at "
+            "ON author_embeddings (updated_at)",
+        ):
+            try:
+                await conn.execute(text(ddl))
+            except Exception as e:
+                print(
+                    f"[init_db] Note: pgvector similarity DDL skipped: {e}",
+                    flush=True,
                 )
-                """,
-                """
-                CREATE TABLE IF NOT EXISTS author_embeddings (
-                    author_id     text PRIMARY KEY,
-                    embedding     vector(384) NOT NULL,
-                    concepts      text[],
-                    coauthor_ids  text[],
-                    institution   text,
-                    works_count   integer,
-                    h_index       integer,
-                    updated_at    timestamptz NOT NULL DEFAULT now()
-                )
-                """,
-                "CREATE INDEX IF NOT EXISTS ix_work_embeddings_updated_at "
-                "ON work_embeddings (updated_at)",
-                "CREATE INDEX IF NOT EXISTS ix_author_embeddings_updated_at "
-                "ON author_embeddings (updated_at)",
-            ):
-                try:
-                    await conn.execute(text(ddl))
-                except Exception as e:
-                    print(
-                        f"[init_db] Note: pgvector similarity DDL skipped: {e}",
-                        flush=True,
-                    )
 
 
 import hmac

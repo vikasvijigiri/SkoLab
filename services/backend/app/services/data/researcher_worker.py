@@ -387,10 +387,11 @@ async def _pg_upsert_researcher_works(
 
 # ── pgvector persistence — similarity engine store ──────────────────────────
 # work_embeddings / author_embeddings (see alembic b2c3d4e5f6a7). bge-small
-# 384-d vectors, read by the Go gateway's /similar_papers and
-# /similar_researchers. Postgres-only: on the SQLite dev/CI fallback the tables
-# do not exist and every statement here is swallowed by the try/except, which
-# is the intended degradation (the engine falls back to OpenAlex).
+# 384-d vectors, read by the Go gateway's /similar-papers and
+# /similar-researchers. If these tables or the pgvector extension are ever
+# missing (pre-migration Supabase project), every statement here is swallowed
+# by the try/except, which is the intended degradation (the engine falls
+# back to OpenAlex).
 
 
 def _clean_oa_id(raw: str) -> str:

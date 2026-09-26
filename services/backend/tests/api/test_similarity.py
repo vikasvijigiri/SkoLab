@@ -1,7 +1,7 @@
 """Phase A of the similarity engine — the Python vector-store writers.
 
-Postgres-only: the pgvector tables (work_embeddings / author_embeddings) do
-not exist on the SQLite offline fallback, so the whole module skips there.
+Postgres-only: the pgvector tables (work_embeddings / author_embeddings)
+require the `vector` extension, which only exists on Postgres (Supabase).
 """
 
 from __future__ import annotations

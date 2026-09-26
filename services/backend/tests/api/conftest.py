@@ -1,9 +1,9 @@
 """Fixtures for the API contract suite.
 
 The parent ``tests/conftest.py`` already points ``DATABASE_URL`` at a live
-Postgres or a throwaway SQLite file and runs ``init_db``. This conftest adds an
-ASGI client bound to the real application plus opt-in fakes for the external
-boundary (OpenAlex, the LLM services). Nothing here calls the network.
+Postgres (Supabase) and runs ``init_db``. This conftest adds an ASGI client
+bound to the real application plus opt-in fakes for the external boundary
+(OpenAlex, the LLM services). Nothing here calls the network.
 """
 
 from __future__ import annotations

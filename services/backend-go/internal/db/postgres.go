@@ -24,14 +24,12 @@ func envInt(key string, def int) int {
 var Pool *pgxpool.Pool
 
 // InitDB initializes the high-performance connection pool to PostgreSQL using pgx.
+// No local fallback DSN — Supabase is the only database backend, in every
+// environment (2026-09-26, "Supabase only" pass). DATABASE_URL must be set.
 func InitDB() error {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		// Credential-free local dev fallback — pgx uses the OS user (or PGUSER
-		// / PGPASSWORD) when the DSN omits them. Matches services/backend's
-		// .env.example convention and keeps a credential-shaped literal out of
-		// source. Set DATABASE_URL for anything real.
-		dbURL = "postgres://localhost:5432/skolab?sslmode=disable"
+		return fmt.Errorf("DATABASE_URL is not set — point it at your Supabase project")
 	}
 
 	config, err := pgxpool.ParseConfig(dbURL)
