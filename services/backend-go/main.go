@@ -78,7 +78,7 @@ func main() {
 	}
 
 	r := gin.New()
-	r.Use(gin.Recovery())
+	r.Use(middleware.Recovery())
 	r.Use(requestID())
 	r.Use(requestLogger())
 	// Ahead of CORS/rate-limiting so a rejected request (429, a blocked
