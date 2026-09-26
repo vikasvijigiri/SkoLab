@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/auth"
@@ -51,11 +52,9 @@ func InitFirebase() {
 // verifyTokenAndSetUser validates idToken against Firebase and, on success,
 // stores the verified UID in the Gin context before calling c.Next(). Every
 // failure mode -- missing client in release, missing client in dev/CI, an
-// invalid/expired token -- is handled here so VerifyUser (header) and
-// VerifyQueryToken (query string, for routes like a WebSocket upgrade that
-// cannot send a custom header) share the exact same verification and
-// fail-open/fail-closed behavior; only where the raw token string comes from
-// differs between the two callers.
+// invalid, expired, or revoked token -- is handled here. Browser WebSockets
+// use a short-lived ticket rather than placing a Firebase bearer token in a
+// query string; see internal/websocket/tickets.go.
 func verifyTokenAndSetUser(c *gin.Context, idToken string) {
 	if authClient == nil {
 		// Fail closed in release. The dev_user fallback exists for dev and
@@ -75,7 +74,12 @@ func verifyTokenAndSetUser(c *gin.Context, idToken string) {
 		return
 	}
 
-	token, err := authClient.VerifyIDToken(context.Background(), idToken)
+	// A normal verification accepts an otherwise valid token until expiry,
+	// even after Firebase revokes the user's session. Check revocation on every
+	// protected route so "sign out everywhere" takes effect promptly.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	token, err := authClient.VerifyIDTokenAndCheckRevoked(ctx, idToken)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired Firebase token"})
 		return
@@ -96,24 +100,6 @@ func VerifyUser() gin.HandlerFunc {
 			return
 		}
 		idToken := strings.TrimPrefix(authHeader, "Bearer ")
-		verifyTokenAndSetUser(c, idToken)
-	}
-}
-
-// VerifyQueryToken is VerifyUser's counterpart for routes a browser cannot
-// attach a custom Authorization header to -- the WebSocket upgrade request
-// fired by the browser's own WebSocket API. The token instead travels as a
-// query parameter (?token=<firebase-id-token>); verification itself is the
-// same underlying Firebase call VerifyUser uses (verifyTokenAndSetUser). Used
-// by GET /ws/colab/:workspace_id (main.go) -- any route whose client can
-// control real headers should use VerifyUser instead.
-func VerifyQueryToken() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		idToken := strings.TrimSpace(c.Query("token"))
-		if idToken == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing token query parameter"})
-			return
-		}
 		verifyTokenAndSetUser(c, idToken)
 	}
 }
@@ -139,7 +125,9 @@ func VerifyUserOptional() gin.HandlerFunc {
 			return
 		}
 		idToken := strings.TrimPrefix(authHeader, "Bearer ")
-		token, err := authClient.VerifyIDToken(context.Background(), idToken)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		token, err := authClient.VerifyIDTokenAndCheckRevoked(ctx, idToken)
 		if err != nil {
 			c.Next()
 			return

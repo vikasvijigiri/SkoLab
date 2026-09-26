@@ -45,7 +45,9 @@ async def get_verified_user(
             else:
                 firebase_admin.initialize_app()
 
-        decoded = firebase_auth.verify_id_token(id_token)
+        # Check revocation as well as signature and expiry so Firebase session
+        # revocation takes effect before an ID token's normal expiry.
+        decoded = firebase_auth.verify_id_token(id_token, check_revoked=True)
         return decoded
     except Exception as exc:
         raise HTTPException(

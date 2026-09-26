@@ -152,6 +152,7 @@ func main() {
 	hub := websocket.NewHub()
 	go hub.Run()
 	workspaceAuthorizer := websocket.NewPostgresWorkspaceAuthorizer(db.Pool)
+	workspaceTickets := websocket.NewPostgresWorkspaceTicketStore(db.Pool)
 
 	// ── Health ────────────────────────────────────────────────────────────────
 	r.GET("/gateway-health", func(c *gin.Context) {
@@ -172,17 +173,17 @@ func main() {
 	r.GET("/observability", metrics.Handler())
 
 	// ── WebSockets ────────────────────────────────────────────────────────────
-	// auth.VerifyQueryToken(): a WebSocket upgrade fired by a browser's own
-	// WebSocket API cannot attach a custom Authorization header, so the
-	// Firebase ID token travels as ?token= instead and is verified with the
-	// same underlying check VerifyUser uses for every other protected route
-	// (2026-09-14 endpoint audit — this route had no auth at all, and hub.go
-	// broadcast every message to every connected client regardless of
-	// :workspace_id; both closed together, see hub.go for the per-workspace
-	// scoping half of the fix). No product code calls this endpoint yet.
-	r.GET("/ws/colab/:workspace_id", auth.VerifyQueryToken(), func(c *gin.Context) {
+	// Browsers obtain a single-use ticket from the Firebase-authenticated HTTPS
+	// endpoint below before opening a socket. Only that opaque, one-minute ticket
+	// appears in the WebSocket URL; Firebase bearer tokens never do.
+	r.GET("/ws/colab/:workspace_id", websocket.VerifyTicket(workspaceTickets), func(c *gin.Context) {
 		websocket.ServeWs(hub, workspaceAuthorizer, c)
 	})
+	wsTicketsAPI := r.Group("/api/v1/ws/colab")
+	wsTicketsAPI.Use(auth.VerifyUser())
+	{
+		wsTicketsAPI.POST("/:workspace_id/tickets", websocket.IssueTicket(workspaceAuthorizer, workspaceTickets))
+	}
 	r.GET("/ws/system/health", func(c *gin.Context) {
 		websocket.ServeHealthWs(c)
 	})

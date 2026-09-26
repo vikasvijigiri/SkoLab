@@ -1,8 +1,11 @@
 import base64
+import sys
+from types import ModuleType
 from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
 
 from app.api.v1.endpoints import colab
 from app.api.colab_auth import require_firebase_user
@@ -62,3 +65,27 @@ async def test_compile_route_returns_typed_response(client, app, monkeypatch):
         app.dependency_overrides.pop(require_firebase_user, None)
     assert response.status_code == 200
     assert response.json()["status"] == "compiled"
+
+
+async def test_colab_uses_shared_revocation_aware_firebase_verifier(monkeypatch):
+    firebase_module = ModuleType("firebase_admin")
+    firebase_module._apps = [object()]
+    auth_module = ModuleType("firebase_admin.auth")
+    calls: list[tuple[str, bool]] = []
+
+    def verify_id_token(token: str, *, check_revoked: bool):
+        calls.append((token, check_revoked))
+        return {"uid": "researcher-1"}
+
+    auth_module.verify_id_token = verify_id_token
+    firebase_module.auth = auth_module
+    monkeypatch.setitem(sys.modules, "firebase_admin", firebase_module)
+    monkeypatch.setitem(sys.modules, "firebase_admin.auth", auth_module)
+
+    credentials = HTTPAuthorizationCredentials(
+        scheme="Bearer", credentials="test-firebase-token"
+    )
+    user = await require_firebase_user(credentials)
+
+    assert user == {"uid": "researcher-1"}
+    assert calls == [("test-firebase-token", True)]

@@ -36,7 +36,9 @@ def main() -> int:
     try:
         command.upgrade(cfg, "head")
     except Exception as exc:  # noqa: BLE001 - top-level script boundary
-        print(f"[migrate] FAILED: {exc}", file=sys.stderr)
+        # Several networking exceptions stringify to an empty value. Keep the
+        # exception class in deploy logs, but never log the database URL.
+        print(f"[migrate] FAILED: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
     print("[migrate] done", flush=True)
     return 0

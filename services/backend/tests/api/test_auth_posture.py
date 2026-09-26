@@ -34,6 +34,7 @@ _HTTP_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 EXPECTED_AUTHED: set[str] = {
     "/agent/chat",
     "/agent/upload-document",
+    "/colab/compile",
     "/industry-academic-tieups",  # require_owner("user_id") — private memory profile
     "/users/quests",  # require_owner("user_id") — private quest records
     # NOTE: /feed/daily/dismiss moved to the Go gateway in Phase 2

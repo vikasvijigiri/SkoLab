@@ -62,4 +62,6 @@ USER schoolab
 # longer starves every other. Default 1 keeps a 512 MB box alive; raise it on
 # a multi-vCPU host. --timeout-keep-alive 65 outlives typical upstream
 # (Render / proxy) idle timeouts.
-CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${WEB_CONCURRENCY:-1} --timeout-keep-alive 65"]
+# Run the idempotent migration before accepting traffic. This causes a failed
+# schema upgrade to fail the deploy rather than serve an incompatible image.
+CMD ["sh", "-c", "python scripts/run_migrations.py && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${WEB_CONCURRENCY:-1} --timeout-keep-alive 65"]
