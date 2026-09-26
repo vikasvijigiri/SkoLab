@@ -12,6 +12,7 @@ from app.services.data.openalex_service import OpenAlexService
 from app.services.ai.summarization_service import is_llm_working
 from app.services.ai.llm_service import LLMService
 from app.services.ai.user_context import build_user_context
+from app.core.circuit_breaker import firestore_breaker
 
 try:
     from app.services.data.researcher_worker import FIRESTORE_AVAILABLE
@@ -352,7 +353,7 @@ class QuestsService:
         Fetches the top 10 researchers in a specific field based on their innovation scores.
         """
         try:
-            if FIRESTORE_AVAILABLE:
+            if FIRESTORE_AVAILABLE and await firestore_breaker.allow():
                 db = firestore.client()
                 from google.cloud.firestore_v1.base_query import FieldFilter
 
@@ -391,9 +392,11 @@ class QuestsService:
                             entropy_score=int(d.get("innovation_score") or 0),
                         )
                     )
+                await firestore_breaker.record_success()
                 if results:
                     return results
         except Exception as e:
+            await firestore_breaker.record_failure(e)
             print(f"[QuestsService] Leaderboard Firestore error: {e}", flush=True)
 
         # Fallback 1: Query PostgreSQL local database

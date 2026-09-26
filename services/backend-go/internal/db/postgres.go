@@ -3,7 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"strconv"
 	"time"
@@ -63,7 +63,7 @@ func InitDB() error {
 		return fmt.Errorf("database ping failed: %v", err)
 	}
 
-	log.Println("Successfully connected to PostgreSQL (pgxpool) in Go Gateway.")
+	slog.Info("Successfully connected to PostgreSQL (pgxpool) in Go Gateway.")
 	Pool = pool
 	return nil
 }
@@ -72,6 +72,6 @@ func InitDB() error {
 func CloseDB() {
 	if Pool != nil {
 		Pool.Close()
-		log.Println("PostgreSQL connection pool closed.")
+		slog.Info("PostgreSQL connection pool closed.")
 	}
 }

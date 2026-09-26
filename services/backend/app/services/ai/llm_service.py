@@ -1,9 +1,16 @@
+import logging
 import time
 import httpx
 from typing import List, Dict, Any, Optional
 from openrouter import OpenRouter
 from app.core.config import settings
-from app.core.circuit_breaker import groq_breaker, CircuitBreakerOpenError
+from app.core.circuit_breaker import (
+    groq_breaker,
+    openrouter_breaker,
+    CircuitBreakerOpenError,
+)
+
+logger = logging.getLogger("skolab.llm")
 
 
 # ── Shared HTTP client ───────────────────────────────────────────────────────
@@ -220,9 +227,8 @@ class LLMService:
             else:
                 raise Exception(f"Model {model} returned no choices in the response.")
         except Exception as e:
-            print(
-                f"[LLMService] OpenRouter SDK exception for model {model}: {e}",
-                flush=True,
+            logger.warning(
+                "[LLMService] OpenRouter SDK exception for model %s: %s", model, e
             )
             raise e
 
@@ -288,11 +294,16 @@ class LLMService:
             if not is_or and not await groq_breaker.allow():
                 errors_encountered.append(f"{model}: skipped (groq circuit OPEN)")
                 continue
+            # Same protection for OpenRouter (2026-09-26 reliability audit —
+            # previously only the Groq half of this loop had one).
+            if is_or and not await openrouter_breaker.allow():
+                errors_encountered.append(f"{model}: skipped (openrouter circuit OPEN)")
+                continue
 
             print(f"[LLMService] Attempting query with model: {model} ...", flush=True)
             try:
                 if is_or:
-                    return await self.query_openrouter(
+                    result = await self.query_openrouter(
                         messages=messages,
                         model=model,
                         temperature=temperature,
@@ -301,6 +312,8 @@ class LLMService:
                         tools=tools,
                         tool_choice=tool_choice,
                     )
+                    await openrouter_breaker.record_success()
+                    return result
                 else:
                     payload = {
                         "model": model,
@@ -354,7 +367,7 @@ class LLMService:
                         )
                     else:
                         err_msg = f"Groq returned {resp.status_code}: {resp.text[:200]}"
-                        print(f"[LLMService] {err_msg}", flush=True)
+                        logger.warning("[LLMService] %s", err_msg)
                         if resp.status_code in [401, 403, 429]:
                             set_llm_limit_exceeded(True)
                         raise Exception(err_msg)
@@ -362,10 +375,12 @@ class LLMService:
             except CircuitBreakerOpenError as e:
                 errors_encountered.append(f"{model}: {e}")
             except Exception as e:
-                print(f"[LLMService] Exception for model {model}: {e}", flush=True)
+                logger.warning("[LLMService] Exception for model %s: %s", model, e)
                 errors_encountered.append(f"{model}: {e}")
                 if not is_or:
                     await groq_breaker.record_failure(e)
+                else:
+                    await openrouter_breaker.record_failure(e)
 
         # If we got here, all attempted models failed
         raise Exception(

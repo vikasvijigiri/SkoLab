@@ -2,7 +2,7 @@ package auth
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -30,22 +30,22 @@ func releaseMode() bool {
 // refuses the request (see VerifyUser). Startup logs at ERROR in release
 // because in that mode every protected route is about to start failing.
 func InitFirebase() {
-	level := "WARNING"
+	logAtSeverity := slog.Warn
 	if releaseMode() {
-		level = "ERROR"
+		logAtSeverity = slog.Error
 	}
 	app, err := firebase.NewApp(context.Background(), nil)
 	if err != nil {
-		log.Printf("%s: Firebase app init failed (%v) — protected routes will be refused in release, dev_user in dev/CI\n", level, err)
+		logAtSeverity("Firebase app init failed — protected routes will be refused in release, dev_user in dev/CI", "err", err)
 		return
 	}
 	client, err := app.Auth(context.Background())
 	if err != nil {
-		log.Printf("%s: Firebase auth client unavailable (%v) — protected routes will be refused in release, dev_user in dev/CI\n", level, err)
+		logAtSeverity("Firebase auth client unavailable — protected routes will be refused in release, dev_user in dev/CI", "err", err)
 		return
 	}
 	authClient = client
-	log.Println("Firebase Auth initialized successfully.")
+	slog.Info("Firebase Auth initialized successfully.")
 }
 
 // verifyTokenAndSetUser validates idToken against Firebase and, on success,
@@ -65,11 +65,11 @@ func verifyTokenAndSetUser(c *gin.Context, idToken string) {
 		// requires the string "Bearer " to be present, any garbage token
 		// reached this branch.
 		if releaseMode() {
-			log.Println("ERROR: Firebase auth is unavailable and GIN_MODE=release — refusing the request instead of falling back to dev_user")
+			slog.Error("Firebase auth is unavailable and GIN_MODE=release — refusing the request instead of falling back to dev_user")
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Authentication is temporarily unavailable"})
 			return
 		}
-		log.Println("WARNING: authClient is nil, bypassing auth for development.")
+		slog.Warn("authClient is nil, bypassing auth for development.")
 		c.Set("user_id", "dev_user")
 		c.Next()
 		return

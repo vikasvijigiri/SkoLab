@@ -32,6 +32,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from app.core.circuit_breaker import firestore_breaker
+
 logger = logging.getLogger(__name__)
 
 # ── Firestore availability flag ───────────────────────────────────────────────
@@ -561,12 +563,20 @@ async def _pg_upsert_embeddings(
 # ── Firestore persistence — full enriched document (large, cloud, unlimited) ──
 
 
-def _firestore_save_researcher(clean_id: str, doc_payload: Dict[str, Any]) -> None:
+async def _firestore_save_researcher(
+    clean_id: str, doc_payload: Dict[str, Any]
+) -> None:
     """
     Persist the full enriched researcher document (including works array, all metrics,
     and LLM prediction) to Firestore.
     Best suited here because: large JSON doc, infrequent writes, cold reads,
     cloud-accessible, no disk space concern.
+
+    Gated by firestore_breaker (app/core/circuit_breaker.py, 2026-09-26
+    reliability audit): FIRESTORE_AVAILABLE only tracks whether Firestore was
+    ever configured, not whether it's currently healthy — without this, a
+    mid-session outage meant every teleport run kept trying (and failing)
+    this write individually instead of backing off.
     """
     db = _get_firestore_client()
     if db is None:
@@ -574,12 +584,20 @@ def _firestore_save_researcher(clean_id: str, doc_payload: Dict[str, Any]) -> No
             "[teleport] Firestore unavailable — skipping cloud persist for %s", clean_id
         )
         return
+    if not await firestore_breaker.allow():
+        logger.info(
+            "[teleport] Firestore circuit OPEN — skipping cloud persist for %s",
+            clean_id,
+        )
+        return
     try:
         db.collection("global_researchers").document(clean_id).set(
             doc_payload, merge=True
         )
+        await firestore_breaker.record_success()
         logger.info("[teleport] Firestore global_researchers saved for %s", clean_id)
     except Exception as exc:
+        await firestore_breaker.record_failure(exc)
         logger.error("[teleport] Firestore write failed for %s: %s", clean_id, exc)
 
 
@@ -893,7 +911,7 @@ async def teleport_researcher(author_id: str) -> None:
             for w in works[:50]
         ]
 
-        _firestore_save_researcher(
+        await _firestore_save_researcher(
             clean_id,
             {
                 "openalex_id": author_data.get("id", author_id),

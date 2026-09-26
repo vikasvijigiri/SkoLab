@@ -1,7 +1,7 @@
 package websocket
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -58,7 +58,7 @@ func (c *Client) readPump() {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("error: %v", err)
+				slog.Warn("websocket read error", "err", err)
 			}
 			break
 		}
@@ -119,7 +119,7 @@ func ServeWs(hub *Hub, c *gin.Context) {
 
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Println(err)
+		slog.Warn("websocket upgrade error", "err", err)
 		return
 	}
 	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256), workspaceID: workspaceID}
@@ -134,7 +134,7 @@ func ServeWs(hub *Hub, c *gin.Context) {
 func ServeHealthWs(c *gin.Context) {
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Println("Health ws upgrade error:", err)
+		slog.Warn("health ws upgrade error", "err", err)
 		return
 	}
 	defer conn.Close()

@@ -3,6 +3,8 @@ package firestore
 import (
 	"context"
 	"testing"
+
+	fs "cloud.google.com/go/firestore"
 )
 
 // Init() is deliberately not exercised here: it needs a live Firebase Admin
@@ -75,6 +77,38 @@ func TestDeleteDocNoClientIsNoOp(t *testing.T) {
 	withNilClient(t)
 	if err := DeleteDoc(context.Background(), "users/u1/inbox", "item1"); err != nil {
 		t.Fatalf("DeleteDoc(nil client) = %v, want nil", err)
+	}
+}
+
+// withOpenBreaker forces the package breaker open regardless of a wired
+// client, and restores it afterward — same shape as withNilClient.
+func withOpenBreaker(t *testing.T) {
+	t.Helper()
+	for range 5 {
+		breaker.RecordFailure()
+	}
+	t.Cleanup(func() { breaker.RecordSuccess() })
+}
+
+func TestGetDocOpenBreakerIsCleanMissEvenWithAClient(t *testing.T) {
+	// A non-nil client with the breaker open must degrade exactly like a nil
+	// client — this is the gap the 2026-09-26 reliability audit found: a
+	// mid-session Firestore outage previously kept retrying every call
+	// individually instead of backing off (get() only checked "is a client
+	// wired", never "did the last few calls actually succeed").
+	mu.Lock()
+	client = &fs.Client{}
+	mu.Unlock()
+	t.Cleanup(func() {
+		mu.Lock()
+		client = nil
+		mu.Unlock()
+	})
+	withOpenBreaker(t)
+
+	data, found, err := GetDoc(context.Background(), "citation_heatmaps", "A123")
+	if data != nil || found || err != nil {
+		t.Fatalf("GetDoc(open breaker) = (%v, %v, %v), want (nil, false, nil)", data, found, err)
 	}
 }
 

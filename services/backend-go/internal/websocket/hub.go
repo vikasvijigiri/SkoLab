@@ -2,7 +2,7 @@ package websocket
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 
 	"github.com/skolab/backend-go/internal/pubsub"
 )
@@ -63,7 +63,7 @@ func NewHub() *Hub {
 			for raw := range h.redisRelay {
 				var m wsMessage
 				if err := json.Unmarshal(raw, &m); err != nil {
-					log.Printf("ws hub: dropping malformed redis broadcast: %v", err)
+					slog.Warn("ws hub: dropping malformed redis broadcast", "err", err)
 					continue
 				}
 				h.Broadcast <- m
@@ -82,8 +82,8 @@ func (h *Hub) Run() {
 				h.Clients[client.workspaceID] = make(map[*Client]bool)
 			}
 			h.Clients[client.workspaceID][client] = true
-			log.Printf("Client registered for workspace %q. Clients in workspace: %d\n",
-				client.workspaceID, len(h.Clients[client.workspaceID]))
+			slog.Info("client registered for workspace",
+				"workspace_id", client.workspaceID, "clients_in_workspace", len(h.Clients[client.workspaceID]))
 		case client := <-h.Unregister:
 			if peers, ok := h.Clients[client.workspaceID]; ok {
 				if _, ok := peers[client]; ok {
@@ -92,8 +92,8 @@ func (h *Hub) Run() {
 					if len(peers) == 0 {
 						delete(h.Clients, client.workspaceID)
 					}
-					log.Printf("Client unregistered from workspace %q. Clients in workspace: %d\n",
-						client.workspaceID, len(peers))
+					slog.Info("client unregistered from workspace",
+						"workspace_id", client.workspaceID, "clients_in_workspace", len(peers))
 				}
 			}
 		case message := <-h.Broadcast:
@@ -120,12 +120,12 @@ func (h *Hub) Publish(workspaceID string, message []byte) {
 	if h.Redis != nil {
 		raw, err := json.Marshal(m)
 		if err != nil {
-			log.Printf("ws hub: failed to encode broadcast for redis: %v", err)
+			slog.Warn("ws hub: failed to encode broadcast for redis", "err", err)
 			h.Broadcast <- m // Best-effort local fallback -- still workspace-scoped.
 			return
 		}
 		if pubErr := h.Redis.Publish("ws_broadcast", raw); pubErr != nil {
-			log.Printf("Redis publish error: %v", pubErr)
+			slog.Warn("Redis publish error", "err", pubErr)
 			h.Broadcast <- m // Fallback
 		}
 	} else {

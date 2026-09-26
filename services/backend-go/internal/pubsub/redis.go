@@ -2,7 +2,7 @@ package pubsub
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/redis/go-redis/v9"
@@ -25,19 +25,24 @@ func NewRedisClient() *RedisClient {
 
 	opt, err := redis.ParseURL(redisURL)
 	if err != nil {
-		log.Printf("Warning: Invalid REDIS_URL '%s'. Falling back to memory-only mode. Error: %v\n", redisURL, err)
+		// Not logging redisURL itself: a Redis URL can carry a password
+		// (redis://user:pass@host:port) and this would otherwise put it in
+		// plaintext logs (2026-09-26 reliability audit, found in passing
+		// while converting this file's logging).
+		slog.Warn("Invalid REDIS_URL — falling back to memory-only mode", "err", err)
 		return nil
 	}
 
 	client := redis.NewClient(opt)
 
-	// Ping to check connection
+	// Ping to check connection. opt.Addr is host:port only, no credentials.
 	if err := client.Ping(ctx).Err(); err != nil {
-		log.Printf("Warning: Cannot connect to Redis at %s. Falling back to memory-only mode. Error: %v\n", redisURL, err)
+		slog.Warn("Cannot connect to Redis — falling back to memory-only mode",
+			"addr", opt.Addr, "err", err)
 		return nil
 	}
 
-	log.Println("Successfully connected to Redis Pub/Sub backend.")
+	slog.Info("Successfully connected to Redis Pub/Sub backend.")
 	return &RedisClient{Client: client}
 }
 

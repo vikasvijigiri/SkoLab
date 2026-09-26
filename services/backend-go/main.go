@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/skolab/backend-go/internal/activity"
 	"github.com/skolab/backend-go/internal/auth"
 	"github.com/skolab/backend-go/internal/author"
@@ -71,13 +72,14 @@ func main() {
 	firestore.Init()
 
 	if err := db.InitDB(); err != nil {
-		log.Printf("WARNING: PostgreSQL init failed (%v) — DB-backed endpoints will be degraded\n", err)
+		slog.Warn("PostgreSQL init failed — DB-backed endpoints will be degraded", "err", err)
 	} else {
 		defer db.CloseDB()
 	}
 
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(requestID())
 	r.Use(requestLogger())
 	// Ahead of CORS/rate-limiting so a rejected request (429, a blocked
 	// origin) is still counted -- RED metrics (Rate, Errors, Duration) are
@@ -533,6 +535,29 @@ func reverseProxy(target string) gin.HandlerFunc {
 	}
 }
 
+const requestIDHeader = "X-Request-ID"
+
+// requestID assigns a correlation id to every request — read from the
+// caller's X-Request-ID if already set, else generated fresh — and both logs
+// it (requestLogger, below) and forwards it to Python on the proxied path
+// (reverseProxy's Director copies c.Request.Header verbatim, so setting it
+// here is enough), so the same id shows up in both services' logs for one
+// request. Mirrors services/backend/app/main.py's request_id_var, which
+// already does this on the Python side alone (2026-09-26 reliability audit —
+// there was previously no way to correlate a request across this hop).
+func requestID() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.GetHeader(requestIDHeader)
+		if id == "" {
+			id = uuid.New().String()
+		}
+		c.Set("request_id", id)
+		c.Request.Header.Set(requestIDHeader, id)
+		c.Writer.Header().Set(requestIDHeader, id)
+		c.Next()
+	}
+}
+
 // requestLogger is a minimal structured access logger.
 func requestLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -542,6 +567,7 @@ func requestLogger() gin.HandlerFunc {
 			"path", c.Request.URL.Path,
 			"status", c.Writer.Status(),
 			"ip", c.RemoteIP(),
+			"request_id", c.GetString("request_id"),
 		)
 	}
 }

@@ -39,6 +39,16 @@ jobs:
       - name: Lint Python backend
         working-directory: services/backend
         run: ruff check .
+      - name: Type-check Python backend (informational)
+        working-directory: services/backend
+        # Non-blocking: mypy is pinned in requirements-dev.txt but was never run
+        # anywhere (2026-09-26 reliability audit). It currently reports ~180
+        # pre-existing errors across ~30 files, mostly SQLAlchemy Column[] typing
+        # and Optional handling that predate this step — fixing those is separate,
+        # larger work. This step exists so the count is visible in every CI run
+        # instead of invisible, without blocking anyone's build on day one.
+        continue-on-error: true
+        run: mypy app/ --ignore-missing-imports
       - name: Bootstrap backend schema
         working-directory: services/backend
         env:
@@ -57,3 +67,19 @@ jobs:
         run: |
           go vet ./...
           go test ./... -race
+      - name: Check Go formatting (informational)
+        working-directory: services/backend-go
+        # Non-blocking: gofmt was only ever a local pre-commit hook, never
+        # checked in CI (2026-09-26 reliability audit), and there's no
+        # golangci-lint config either. This makes drift visible without
+        # blocking a build on formatting alone — no way to verify the current
+        # pass/fail state locally (no Go toolchain in the environment that
+        # authored this step), so it starts non-blocking on principle either way.
+        continue-on-error: true
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::warning::gofmt would reformat:"
+            echo "$unformatted"
+            exit 1
+          fi

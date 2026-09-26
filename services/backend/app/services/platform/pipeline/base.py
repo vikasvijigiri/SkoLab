@@ -7,6 +7,7 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
+from app.core.circuit_breaker import firestore_breaker
 from app.core.config import settings
 from app.db.database import AsyncSessionLocal
 from app.db.pg_cache import PgBackedCache
@@ -70,7 +71,7 @@ class _PipelineBase:
         Returns the document dict if found and within time, else None.
         """
         db = self._get_firestore_db()
-        if not db:
+        if not db or not await firestore_breaker.allow():
             return None
         loop = asyncio.get_event_loop()
         try:
@@ -82,13 +83,16 @@ class _PipelineBase:
             result = await asyncio.wait_for(
                 loop.run_in_executor(None, _blocking_get), timeout=timeout
             )
+            await firestore_breaker.record_success()
             return result
-        except asyncio.TimeoutError:
+        except asyncio.TimeoutError as e:
             logger.warning(
                 f"Firestore get timed out ({timeout}s) for {collection}/{doc_id}"
             )
+            await firestore_breaker.record_failure(e)
         except Exception as e:
             logger.warning(f"Firestore get error for {collection}/{doc_id}: {e}")
+            await firestore_breaker.record_failure(e)
         return None
 
     async def _firestore_set_safe(
@@ -99,7 +103,7 @@ class _PipelineBase:
         Prevents the blocking Firestore SDK from stalling the asyncio event loop.
         """
         db = self._get_firestore_db()
-        if not db:
+        if not db or not await firestore_breaker.allow():
             return False
         loop = asyncio.get_event_loop()
         try:
@@ -111,13 +115,16 @@ class _PipelineBase:
             await asyncio.wait_for(
                 loop.run_in_executor(None, _blocking_set), timeout=timeout
             )
+            await firestore_breaker.record_success()
             return True
-        except asyncio.TimeoutError:
+        except asyncio.TimeoutError as e:
             logger.warning(
                 f"Firestore set timed out ({timeout}s) for {collection}/{doc_id}"
             )
+            await firestore_breaker.record_failure(e)
         except Exception as e:
             logger.warning(f"Firestore set error for {collection}/{doc_id}: {e}")
+            await firestore_breaker.record_failure(e)
         return False
 
     async def _save_to_postgres(

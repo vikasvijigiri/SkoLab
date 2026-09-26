@@ -28,6 +28,11 @@ jobs:
       - name: Backend lint
         working-directory: services/backend
         run: ruff check .
+      - name: Backend type-check (informational)
+        working-directory: services/backend
+        # Non-blocking — see ci.yml's identical step for why.
+        continue-on-error: true
+        run: mypy app/ --ignore-missing-imports
       - name: Backend unit tests
         working-directory: services/backend
         env:
@@ -39,6 +44,17 @@ jobs:
         run: |
           go vet ./...
           go test ./...
+      - name: Go formatting check (informational)
+        working-directory: services/backend-go
+        # Non-blocking — see ci.yml's identical step for why.
+        continue-on-error: true
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::warning::gofmt would reformat:"
+            echo "$unformatted"
+            exit 1
+          fi
 
   slow:
     name: backend integration tests (Postgres)

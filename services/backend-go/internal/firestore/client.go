@@ -8,19 +8,28 @@ package firestore
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"sync"
+	"time"
 
 	fs "cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go/v4"
 	"google.golang.org/api/iterator"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/skolab/backend-go/internal/circuitbreaker"
 )
 
 var (
 	mu     sync.RWMutex
 	client *fs.Client
+	// breaker mirrors services/backend/app/core/circuit_breaker.py's
+	// firestore_breaker (2026-09-26 reliability audit): this package
+	// previously had no runtime failure tracking at all, only "is a client
+	// wired" — a mid-session outage meant every call kept trying and timing
+	// out individually instead of backing off, same gap as the Python side.
+	breaker = circuitbreaker.New(5, 30*time.Second)
 )
 
 // ServerTimestamp is re-exported so callers can request a server-set timestamp
@@ -40,24 +49,34 @@ var ServerTimestamp = fs.ServerTimestamp
 func Init() {
 	app, err := firebase.NewApp(context.Background(), nil)
 	if err != nil {
-		log.Printf("WARNING: Firestore init skipped — Firebase app unavailable (%v); Firestore tiers disabled\n", err)
+		slog.Warn("Firestore init skipped — Firebase app unavailable; Firestore tiers disabled", "err", err)
 		return
 	}
 	c, err := app.Firestore(context.Background())
 	if err != nil {
-		log.Printf("WARNING: Firestore client unavailable (%v); Firestore tiers disabled\n", err)
+		slog.Warn("Firestore client unavailable; Firestore tiers disabled", "err", err)
 		return
 	}
 	mu.Lock()
 	client = c
 	mu.Unlock()
-	log.Println("Firestore client initialized successfully.")
+	slog.Info("Firestore client initialized successfully.")
 }
 
+// get returns the wired client, or nil if either no client is configured or
+// the breaker is currently open — both cases degrade identically at every
+// call site below.
 func get() *fs.Client {
 	mu.RLock()
-	defer mu.RUnlock()
-	return client
+	c := client
+	mu.RUnlock()
+	if c == nil {
+		return nil
+	}
+	if err := breaker.Allow(); err != nil {
+		return nil
+	}
+	return c
 }
 
 // Available reports whether a Firestore client is wired.
@@ -75,10 +94,14 @@ func GetDoc(ctx context.Context, collection, docID string) (map[string]any, bool
 	snap, err := c.Collection(collection).Doc(docID).Get(ctx)
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
+			// A miss is a normal outcome, not a dependency failure.
+			breaker.RecordSuccess()
 			return nil, false, nil
 		}
+		breaker.RecordFailure()
 		return nil, false, err
 	}
+	breaker.RecordSuccess()
 	return snap.Data(), true, nil
 }
 
@@ -90,7 +113,12 @@ func SetDoc(ctx context.Context, collection, docID string, data map[string]any) 
 		return nil
 	}
 	_, err := c.Collection(collection).Doc(docID).Set(ctx, data)
-	return err
+	if err != nil {
+		breaker.RecordFailure()
+		return err
+	}
+	breaker.RecordSuccess()
+	return nil
 }
 
 // ListDocs returns every document in collection, capped at limit — for
@@ -115,10 +143,12 @@ func ListDocs(ctx context.Context, collection string, limit int) ([]map[string]a
 			break
 		}
 		if err != nil {
+			breaker.RecordFailure()
 			return nil, err
 		}
 		out = append(out, snap.Data())
 	}
+	breaker.RecordSuccess()
 	return out, nil
 }
 
@@ -149,10 +179,12 @@ func ListDocsWithIDs(ctx context.Context, collection string, limit int) ([]Doc, 
 			break
 		}
 		if err != nil {
+			breaker.RecordFailure()
 			return nil, err
 		}
 		out = append(out, Doc{ID: snap.Ref.ID, Data: snap.Data()})
 	}
+	breaker.RecordSuccess()
 	return out, nil
 }
 
@@ -164,7 +196,12 @@ func DeleteDoc(ctx context.Context, collection, docID string) error {
 		return nil
 	}
 	_, err := c.Collection(collection).Doc(docID).Delete(ctx)
-	return err
+	if err != nil {
+		breaker.RecordFailure()
+		return err
+	}
+	breaker.RecordSuccess()
+	return nil
 }
 
 // QueryEq runs an equality query (`field == value`) against collection,
@@ -187,9 +224,11 @@ func QueryEq(ctx context.Context, collection, field string, value any, limit int
 			break
 		}
 		if err != nil {
+			breaker.RecordFailure()
 			return nil, err
 		}
 		out = append(out, snap.Data())
 	}
+	breaker.RecordSuccess()
 	return out, nil
 }

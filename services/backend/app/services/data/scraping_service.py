@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import httpx
 import asyncio
@@ -7,6 +8,8 @@ from html.parser import HTMLParser
 from typing import List, Dict, Any, Optional
 from app.prompts import JSON_PARSER_SYSTEM_PROMPT
 from app.core.config import settings
+
+logger = logging.getLogger("skolab.scraping")
 
 # Rotating list of modern web browser User-Agent strings
 USER_AGENTS = [
@@ -96,7 +99,7 @@ class ScrapingService:
                         f"Failed to fetch URL. Status code: {res.status_code}"
                     )
         except Exception as e:
-            print(f"[ScrapingService] Error scraping {url}: {e}", flush=True)
+            logger.warning("[ScrapingService] Error scraping %s: %s", url, e)
             raise e
 
     async def search_web(
@@ -167,7 +170,7 @@ class ScrapingService:
                     if results:
                         return results
         except Exception as e:
-            print(f"[ScrapingService] DDG HTML search error: {e}", flush=True)
+            logger.warning("[ScrapingService] DDG HTML search error: %s", e)
 
         # Fallback to DDG Instant Answer API
         try:
@@ -201,7 +204,7 @@ class ScrapingService:
                             )
                     return results
         except Exception as e:
-            print(f"[ScrapingService] DDG API fallback search error: {e}", flush=True)
+            logger.warning("[ScrapingService] DDG API fallback search error: %s", e)
 
         return results
 
@@ -259,9 +262,11 @@ class ScrapingService:
                     )
                     return None
         except Exception as e:
-            print(
-                f"[ScrapingService] Error fetching portal '{portal_name}' ({portal_url}): {e}",
-                flush=True,
+            logger.warning(
+                "[ScrapingService] Error fetching portal '%s' (%s): %s",
+                portal_name,
+                portal_url,
+                e,
             )
             return None
 

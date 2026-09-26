@@ -14,6 +14,7 @@ PDF sourcing priority:
 
 import httpx
 import json
+import logging
 import re
 import io
 import asyncio
@@ -26,7 +27,10 @@ from app.prompts import (
 )
 from app.core.config import settings
 from app.services.ai.llm_service import is_llm_working
+from app.core.circuit_breaker import semantic_scholar_breaker
 from app.core.exceptions import AIUnavailable
+
+logger = logging.getLogger("skolab.summarization")
 
 
 # ── LLM Context Budget ────────────────────────────────────────────────────────
@@ -124,7 +128,7 @@ class SummarizationService:
             # branch above already gets this right with an honest degraded
             # 200; this is the same failure mode, just discovered later).
             # The exception text is logged, never returned to the caller.
-            print(f"[analyze_paper] LLM query failed: {exc}", flush=True)
+            logger.warning("[analyze_paper] LLM query failed: %s", exc)
             raise AIUnavailable(
                 "Paper analysis is temporarily unavailable. Please retry shortly."
             ) from exc
@@ -333,11 +337,21 @@ class SummarizationService:
                     # Fall back to url (may be landing page, but try)
                     return best_oa.get("url")
         except Exception as e:
-            print(f"[Unpaywall] Error: {e}", flush=True)
+            logger.warning("[Unpaywall] Error: %s", e)
         return None
 
     async def _get_semantic_scholar_pdf_url(self, doi: str) -> Optional[str]:
-        """Fetches PDF URL from Semantic Scholar's paper API."""
+        """Fetches PDF URL from Semantic Scholar's paper API.
+
+        semantic_scholar_breaker (app/core/circuit_breaker.py) was defined but
+        never wired in anywhere (2026-09-26 reliability audit) -- this PDF
+        lookup is best-effort and already degrades to None on any failure, so
+        the imperative allow()/record_success()/record_failure() API fits the
+        same shape as groq_breaker's usage in llm_service.py, rather than the
+        @breaker.call decorator (which needs the exception to propagate).
+        """
+        if not await semantic_scholar_breaker.allow():
+            return None
         try:
             clean_doi = self._clean_doi(doi)
             url = f"https://api.semanticscholar.org/graph/v1/paper/{clean_doi}?fields=openAccessPdf"
@@ -347,10 +361,15 @@ class SummarizationService:
                 resp = await client.get(url)
                 if resp.status_code == 200:
                     data = resp.json()
+                    await semantic_scholar_breaker.record_success()
                     oa_pdf = data.get("openAccessPdf") or {}
                     return oa_pdf.get("url")
+                await semantic_scholar_breaker.record_failure(
+                    Exception(f"HTTP {resp.status_code}")
+                )
         except Exception as e:
-            print(f"[SemanticScholar] Error: {e}", flush=True)
+            await semantic_scholar_breaker.record_failure(e)
+            logger.warning("[SemanticScholar] Error: %s", e)
         return None
 
     # ══════════════════════════════════════════════════════════════════════════

@@ -175,6 +175,28 @@ groq_breaker = CircuitBreaker(
     recovery_timeout=30.0,
 )
 
+# Wired into llm_service.py's fallback loop alongside groq_breaker
+# (2026-09-26 reliability audit — the OpenRouter path had no breaker at all,
+# unlike its Groq sibling in the same fallback loop).
+openrouter_breaker = CircuitBreaker(
+    name="openrouter",
+    failure_threshold=5,
+    recovery_timeout=30.0,
+)
+
+# Wired into pipeline/base.py's _firestore_get_safe/_firestore_set_safe (used
+# by feed.py, grants.py, journals.py, synergy.py) and researcher_worker.py's
+# _firestore_save_researcher (2026-09-26 reliability audit — Firestore access
+# previously only had a startup-time "ever configured" flag
+# (FIRESTORE_AVAILABLE), not runtime failure tracking; a mid-session outage
+# meant every call kept trying and timing out individually instead of
+# backing off).
+firestore_breaker = CircuitBreaker(
+    name="firestore",
+    failure_threshold=5,
+    recovery_timeout=30.0,
+)
+
 semantic_scholar_breaker = CircuitBreaker(
     name="semantic_scholar",
     failure_threshold=5,
