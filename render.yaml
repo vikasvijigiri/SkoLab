@@ -1,10 +1,10 @@
-# Backend-only Render Blueprint. Both services deploy from `main`.
+# Backend-only Render Blueprint. Both services deploy from `master`.
 services:
   - type: web
     name: skolab-gateway
     runtime: docker
     repo: https://github.com/vikasvijigiri/SkoLab
-    branch: main
+    branch: master
     plan: free
     region: oregon
     dockerfilePath: ./services/backend-go/Dockerfile
@@ -34,7 +34,7 @@ services:
     name: skolab-backend-py
     runtime: docker
     repo: https://github.com/vikasvijigiri/SkoLab
-    branch: main
+    branch: master
     plan: free
     region: oregon
     dockerfilePath: ./services/backend/Dockerfile
