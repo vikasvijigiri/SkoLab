@@ -35,10 +35,6 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 from app.db.database import Base
 import app.models.user_models  # noqa: F401
-import app.models.researcher_models  # noqa: F401
-import app.models.agent_models  # noqa: F401
-import app.models.analytics_models  # noqa: F401
-import app.models.content_models  # noqa: F401
 
 target_metadata = Base.metadata
 

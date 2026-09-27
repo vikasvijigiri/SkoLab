@@ -2,23 +2,16 @@
 
 ``init_observability()`` is a no-op unless ``settings.sentry_dsn`` is set, and a
 hard no-op under pytest — a developer's local ``.env`` DSN must never ship test
-exceptions to the production project (that is how ``/boom`` and ``/readyz``
-"db is down (injected)" ended up as prod issues).
+exceptions to the production project.
 
 The rest of this module is the anti-noise toolkit the 2026-09 Sentry audit
 asked for:
 
-- ``before_send`` drops events that are expected, self-healing degradation
-  (LLM rate-limits, an open circuit breaker) and events from a non-production
-  environment, and scrubs obvious ``password = …`` secrets from the title.
-- ``is_transient_ai_error`` / ``log_ai_degradation`` — call sites that fall
-  back to a template when the LLM is unavailable log at WARNING, not ERROR, so
-  a working degradation path stops creating issues.
+- ``before_send`` drops events from a non-production environment and scrubs
+  obvious ``password = …`` secrets from the title.
 - ``DiskUsageAlerter`` — alert on *crossing* an escalating band, at most once
   per band per hour, with the percentage rounded so Sentry groups it into one
   issue instead of one per 0.1 %.
-- ``prune_downloads_dir`` — TTL sweep of generated download artefacts, the most
-  likely cause of the slow disk climb.
 """
 
 from __future__ import annotations
@@ -28,7 +21,6 @@ import os
 import re
 import sys
 import time
-from pathlib import Path
 
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
@@ -42,30 +34,6 @@ logger = logging.getLogger("skolab")
 # (development, a local run, an ad-hoc script) is dropped by before_send.
 _REPORTABLE_ENVIRONMENTS = {"production", "staging"}
 
-# Substrings that mark an exception as expected AI degradation rather than a
-# defect. Kept lowercase; matched against ``str(exc)``.
-_TRANSIENT_AI_MARKERS = (
-    "llm services are currently unavailable",
-    "llm query failed across all attempted models",
-    "rate limit reached",
-    "rate-limited",
-    "circuit breaker",
-    "circuit open",
-    "circuit_open",
-    "429",
-    "quota",
-    "temporarily unavailable",
-    # Groq's own generation-side rejection (llm_service.py's per-attempt
-    # `f"Groq returned {status}: {text}"`, e.g. a 400 "Failed to validate
-    # JSON. Please adjust your prompt...") -- a provider-side content
-    # failure, not a bug here, but missing this left SKOLAB-BACKEND-E
-    # logging at ERROR with a full traceback and a real Sentry event while
-    # its 429/circuit-open siblings (covered by the markers above) were
-    # already correctly classified as expected degradation (2026-09-12
-    # endpoint audit).
-    "failed to validate json",
-)
-
 _SECRET_RE = re.compile(
     r"(password|passwd|secret|api[_-]?key|token)\s*[=:]\s*\S+", re.IGNORECASE
 )
@@ -73,35 +41,6 @@ _SECRET_RE = re.compile(
 
 def _under_pytest() -> bool:
     return "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules
-
-
-def is_transient_ai_error(exc: BaseException | str) -> bool:
-    """True when ``exc`` is expected AI-provider degradation, not a bug.
-
-    Used both by ``before_send`` (drop the event) and by ``log_ai_degradation``
-    (log WARNING, no stack trace).
-    """
-    from app.core.circuit_breaker import CircuitBreakerOpenError
-
-    if isinstance(exc, CircuitBreakerOpenError):
-        return True
-    text = (exc if isinstance(exc, str) else str(exc)).lower()
-    return any(marker in text for marker in _TRANSIENT_AI_MARKERS)
-
-
-def log_ai_degradation(
-    log: logging.Logger, context: str, exc: BaseException, *, level: int = logging.ERROR
-) -> None:
-    """Log an AI failure at the right severity.
-
-    Expected degradation (provider down, rate-limited, circuit open) → WARNING
-    with no traceback; anything else → the caller's ``level`` (ERROR by default)
-    with ``exc_info`` so Sentry still sees real defects.
-    """
-    if is_transient_ai_error(exc):
-        log.warning("%s — AI degraded, using fallback: %s", context, exc)
-    else:
-        log.log(level, "%s: %s", context, exc, exc_info=level >= logging.ERROR)
 
 
 def _scrub_secrets(value: object) -> object:
@@ -117,15 +56,7 @@ def _before_send(event: dict, hint: dict) -> dict | None:
     if env and env not in _REPORTABLE_ENVIRONMENTS:
         return None
 
-    # 2. Expected AI degradation is not an issue.
-    exc = hint.get("exc_info", (None, None, None))[1] if hint else None
-    if exc is not None and is_transient_ai_error(exc):
-        return None
-    message = event.get("logentry", {}).get("message") or event.get("message") or ""
-    if message and is_transient_ai_error(message):
-        return None
-
-    # 3. Scrub obvious secrets from the human-facing fields.
+    # 2. Scrub obvious secrets from the human-facing fields.
     if isinstance(event.get("message"), str):
         event["message"] = _scrub_secrets(event["message"])
     le = event.get("logentry")
@@ -236,47 +167,3 @@ def check_disk_usage(alerter: DiskUsageAlerter, *, path: str = "/") -> None:
         logger.critical(msg, extra={"disk_usage_percent": round(pct, 1)})
     else:
         logger.warning(msg, extra={"disk_usage_percent": round(pct, 1)})
-
-
-# ── Download-artefact TTL sweep ─────────────────────────────────────────────
-# app/services/platform/connectors.py writes generated CVs / statements into
-# settings.downloads_dir and nothing ever deletes them — the most plausible
-# cause of the disk creeping from 81 % to 84 % over a few days. Keep the
-# committed *_template.* files; expire everything else.
-
-_DOWNLOADS_KEEP_SUFFIXES = ("_template.md", "_template.pdf", "_template.docx")
-
-
-def prune_downloads_dir(
-    directory: Path | str | None = None, *, max_age_seconds: float = 86_400.0
-) -> int:
-    """Delete generated files older than ``max_age_seconds``. Returns the count.
-
-    Never raises — a cleanup failure must not take the process down.
-    """
-    root = Path(directory) if directory is not None else settings.downloads_dir
-    removed = 0
-    try:
-        if not root.is_dir():
-            return 0
-        cutoff = time.time() - max_age_seconds
-        for entry in root.iterdir():
-            if not entry.is_file():
-                continue
-            if entry.name.endswith(_DOWNLOADS_KEEP_SUFFIXES):
-                continue
-            try:
-                if entry.stat().st_mtime < cutoff:
-                    entry.unlink()
-                    removed += 1
-            except OSError as exc:  # pragma: no cover - fs race
-                logger.warning(
-                    "prune_downloads_dir: could not remove %s: %s", entry, exc
-                )
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.warning("prune_downloads_dir failed for %s: %s", root, exc)
-    if removed:
-        logger.info(
-            "prune_downloads_dir: removed %d stale artefact(s) from %s", removed, root
-        )
-    return removed

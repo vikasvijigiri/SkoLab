@@ -2,16 +2,8 @@ from typing import AsyncGenerator, Awaitable, Callable, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends, HTTPException, Request, Response, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from app.core.quota import QuotaExceeded, consume as consume_quota
 from app.db.database import AsyncSessionLocal
-from app.services.ai.agent_service import AgentService
-from app.services.platform.pipeline_services import PipelineServices
-from app.services.ai.summarization_service import SummarizationService
-from app.services.ai.prediction_service import PredictionService
-from app.services.data.scraping_service import ScrapingService
-from app.services.data.openalex_service import OpenAlexService
-from app.domains.quest.service import QuestsService
-from app.core.cache import history_summary_cache
+from app.core.quota import QuotaExceeded, consume as consume_quota
 
 _bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -73,36 +65,6 @@ async def get_optional_user(
         return None
 
 
-def require_quota(cost: int) -> Callable[..., Awaitable[dict]]:
-    """Verified user + charge ``cost`` units against their hourly/daily budget.
-
-    401 without a valid token (via ``get_verified_user``); 429 with
-    ``Retry-After`` once the account's budget is spent. See app/core/quota.py.
-    """
-
-    async def _require_quota(
-        response: Response,
-        user: dict = Depends(get_verified_user),
-    ) -> dict:
-        uid = str((user or {}).get("uid") or "")
-        if not uid:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-        try:
-            remaining = await consume_quota(uid, cost)
-        except QuotaExceeded as exc:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Your {exc.window} usage budget is spent. Try again later.",
-                headers={"Retry-After": str(exc.retry_after)},
-            ) from exc
-        if remaining:
-            response.headers["X-Quota-Remaining-Hour"] = str(remaining["hourly"])
-            response.headers["X-Quota-Remaining-Day"] = str(remaining["daily"])
-        return user
-
-    return _require_quota
-
-
 def require_owner(*id_params: str) -> Callable[..., Awaitable[dict]]:
     """
     Dependency factory for routes that act on behalf of the *requesting* user
@@ -119,7 +81,7 @@ def require_owner(*id_params: str) -> Callable[..., Awaitable[dict]]:
     Pass the parameter name(s) to check, most-specific first; defaults to
     ``("user_id", "author_id")``. Only use this where the identifier is the
     caller's own Firebase uid — a route that merely looks up *another*
-    researcher's public OpenAlex profile stays public.
+    researcher's public profile stays public.
     """
     names: tuple[str, ...] = id_params or ("user_id", "author_id")
 
@@ -152,67 +114,39 @@ def require_owner(*id_params: str) -> Callable[..., Awaitable[dict]]:
     return _require_owner
 
 
+def require_quota(cost: int) -> Callable[..., Awaitable[dict]]:
+    """Verified user + charge ``cost`` units against their hourly/daily budget.
+
+    401 without a valid token (via ``get_verified_user``); 429 with
+    ``Retry-After`` once the account's budget is spent. See app/core/quota.py.
+    """
+
+    async def _require_quota(
+        response: Response,
+        user: dict = Depends(get_verified_user),
+    ) -> dict:
+        uid = str((user or {}).get("uid") or "")
+        if not uid:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+        try:
+            remaining = await consume_quota(uid, cost)
+        except QuotaExceeded as exc:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Your {exc.window} usage budget is spent. Try again later.",
+                headers={"Retry-After": str(exc.retry_after)},
+            ) from exc
+        if remaining:
+            response.headers["X-Quota-Remaining-Hour"] = str(remaining["hourly"])
+            response.headers["X-Quota-Remaining-Day"] = str(remaining["daily"])
+        return user
+
+    return _require_quota
+
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     FastAPI dependency that yields an async SQLAlchemy session.
     """
     async with AsyncSessionLocal() as session:
         yield session
-
-
-async def get_agent_service(db: AsyncSession = Depends(get_db)) -> AgentService:
-    """
-    Dependency provider for AgentService.
-    """
-    return AgentService(history_summary_cache=history_summary_cache, db=db)
-
-
-async def get_pipeline_services(db: AsyncSession = Depends(get_db)) -> PipelineServices:
-    """
-    Dependency provider for PipelineServices.
-    """
-    return PipelineServices(db=db)
-
-
-async def get_quests_service(db: AsyncSession = Depends(get_db)) -> QuestsService:
-    """
-    Dependency provider for QuestsService.
-    """
-    return QuestsService(db=db)
-
-
-def get_summarization_service() -> SummarizationService:
-    """
-    Dependency provider for SummarizationService.
-    """
-    return SummarizationService()
-
-
-def get_prediction_service() -> PredictionService:
-    """
-    Dependency provider for PredictionService.
-    """
-    return PredictionService()
-
-
-def get_scraping_service() -> ScrapingService:
-    """
-    Dependency provider for ScrapingService.
-    """
-    return ScrapingService()
-
-
-def get_openalex_service() -> OpenAlexService:
-    """
-    Dependency provider for OpenAlexService.
-    """
-    return OpenAlexService()
-
-
-def get_openalex_headers(
-    openalex_service: OpenAlexService = Depends(get_openalex_service),
-) -> dict:
-    """
-    Returns default headers for OpenAlex requests.
-    """
-    return openalex_service.get_headers()

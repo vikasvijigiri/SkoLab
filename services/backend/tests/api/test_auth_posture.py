@@ -28,33 +28,13 @@ from ._route_walk import iter_api_routes
 _V1_PREFIX = "/api/v1"
 _HTTP_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 
-# Routes that require a verified Firebase uid (keyed data, e.g. chat history).
-# ``require_owner`` pulls in ``get_verified_user``, so owner-scoped routes land
-# here too — they additionally assert token uid == the request's user_id.
+# Routes that require a verified Firebase uid. 2026-09-27: the API surface
+# was cut to auth/authorization/CoLab only — /colab/compile (via
+# require_quota, which itself pulls in get_verified_user) is now the entire
+# set. ``require_owner`` still exists as generic authorization infra even
+# though nothing currently uses it.
 EXPECTED_AUTHED: set[str] = {
-    "/agent/chat",
-    "/agent/chat-with-author",
-    "/agent/upload-document",
     "/colab/compile",
-    "/industry-academic-tieups",  # require_owner("user_id") — private memory profile
-    "/users/quests",  # require_owner("user_id") — private quest records
-    # Every LLM / paid-scrape route requires a verified uid (2026-09-27 audit):
-    # these were anonymous, gated only by a per-IP rate limit.
-    "/papers/summarize",
-    "/papers/analyze",
-    "/papers/presentation-outline",
-    "/papers/semantic-trending",
-    "/feed/daily",
-    "/feed/conjecture",
-    "/feed/industry-opportunities",
-    "/feed/roadmap",
-    "/collaborator-synergy",
-    "/match-grants",
-    "/journal-advisor",
-    "/discovery/predict",
-    "/discovery/nexus-chat",
-    # NOTE: /feed/daily/dismiss moved to the Go gateway in Phase 2
-    # (services/backend-go/internal/feed/feed.go) — see docs/backend-auth-posture.md.
 }
 
 # No route may personalise-or-fall-through anonymously any more.
@@ -137,10 +117,14 @@ def _dump(classes: dict[str, set[str]]) -> str:
 
 
 def test_route_table_is_actually_populated(app):
-    """Guards against the vacuous pass: the walk must reach the real surface."""
+    """Guards against the vacuous pass: the walk must reach the real surface.
+
+    2026-09-27: the API surface is deliberately minimal (auth/authorization +
+    CoLab only) — /colab/compile is the only /api/v1 route left.
+    """
     classes = _classify(app)
     total = sum(len(v) for v in classes.values())
-    assert total > 20, (
+    assert total >= 1, (
         f"only {total} API routes reachable — the walk is not resolving the "
         f"lazy router tree; every assertion here would pass vacuously.{_dump(classes)}"
     )

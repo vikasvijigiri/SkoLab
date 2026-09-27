@@ -217,12 +217,8 @@ async def init_db() -> None:
     Must be called after all model modules have been imported so that
     their Table objects are registered on Base.metadata.
     """
-    # Each import is a side-effect import — it registers the ORM mappers with Base.
-    import app.models.user_models  # noqa: F401 — User, Connection, CacheEntry, ResearcherProfile, ResearcherConnection
-    import app.models.researcher_models  # noqa: F401 — ResearcherWork, ResearcherMetrics
-    import app.models.agent_models  # noqa: F401 — AgentHistorySummary, AgentDocumentUpload
-    import app.models.analytics_models  # noqa: F401 — UserSettings, UserActivityLog, ApiRequestLog, AuthorSearchLog
-    import app.models.content_models  # noqa: F401 — DailyFeedItem, Conjecture
+    # Side-effect import — registers the ORM mappers with Base.
+    import app.models.user_models  # noqa: F401 — User, Workspace, WorkspaceMember, UsageCounter
 
     if not settings.run_schema_create_all:
         print(
@@ -259,87 +255,3 @@ async def init_db() -> None:
                     flush=True,
                 )
 
-        for col_name, col_type in [
-            ("skills", "JSON"),
-            ("tools", "JSON"),
-        ]:
-            try:
-                await conn.execute(
-                    text(
-                        f"ALTER TABLE researcher_metrics ADD COLUMN IF NOT EXISTS {col_name} {col_type};"
-                    )
-                )
-            except Exception as e:
-                print(
-                    f"[init_db] Note: could not alter table for column {col_name}: {e}",
-                    flush=True,
-                )
-
-        # ── pgvector similarity tables ────────────────────────────────────────
-        # Drift-repair net mirroring alembic revision b2c3d4e5f6a7, for a
-        # Supabase database where `run_schema_create_all` is True (dev) and
-        # migrations haven't necessarily been run yet.
-        for ddl in (
-            "CREATE EXTENSION IF NOT EXISTS vector",
-            """
-            CREATE TABLE IF NOT EXISTS work_embeddings (
-                work_id           text PRIMARY KEY,
-                embedding         vector(384) NOT NULL,
-                title             text,
-                concepts          text[],
-                referenced_works  text[],
-                publication_year  integer,
-                updated_at        timestamptz NOT NULL DEFAULT now()
-            )
-            """,
-            """
-            CREATE TABLE IF NOT EXISTS author_embeddings (
-                author_id     text PRIMARY KEY,
-                embedding     vector(384) NOT NULL,
-                concepts      text[],
-                coauthor_ids  text[],
-                institution   text,
-                works_count   integer,
-                h_index       integer,
-                updated_at    timestamptz NOT NULL DEFAULT now()
-            )
-            """,
-            "CREATE INDEX IF NOT EXISTS ix_work_embeddings_updated_at "
-            "ON work_embeddings (updated_at)",
-            "CREATE INDEX IF NOT EXISTS ix_author_embeddings_updated_at "
-            "ON author_embeddings (updated_at)",
-        ):
-            try:
-                await conn.execute(text(ddl))
-            except Exception as e:
-                print(
-                    f"[init_db] Note: pgvector similarity DDL skipped: {e}",
-                    flush=True,
-                )
-
-
-import hmac
-import hashlib
-import json
-
-
-def generate_record_signature(user_id: str, record_data: list | dict) -> str:
-    """
-    Generate an HMAC-SHA256 signature for a database record using the database encryption key.
-    """
-    from app.core.config import settings
-
-    key = str(settings.database_encryption_key).encode("utf-8")
-    serialized = json.dumps(record_data, sort_keys=True)
-    payload = f"{user_id}:{serialized}"
-    return hmac.new(key, payload.encode("utf-8"), hashlib.sha256).hexdigest()
-
-
-def verify_record_signature(
-    user_id: str, record_data: list | dict, signature: str
-) -> bool:
-    """
-    Verify if the provided signature matches the computed HMAC-SHA256 signature.
-    """
-    expected = generate_record_signature(user_id, record_data)
-    return hmac.compare_digest(signature, expected)

@@ -42,9 +42,15 @@ def _routes(app):
 
 
 def test_route_table_is_populated(app):
-    """Backstop against a vacuous pass — the walk must reach the real surface."""
+    """Backstop against a vacuous pass — the walk must reach the real surface.
+
+    2026-09-27: the API surface is deliberately minimal (auth/authorization +
+    CoLab only) — /, /livez, /readyz, /health, and /api/v1/colab/compile is
+    the whole set. The threshold just needs to rule out "the walk found
+    nothing," not match the much larger route count from before that cut.
+    """
     n = len(_routes(app))
-    assert n > 20, (
+    assert n >= 4, (
         f"only {n} API routes reachable — the lazy router tree is not being "
         f"resolved; every other assertion here would pass vacuously. "
         f"paths={sorted(p for p, _ in _routes(app))}"

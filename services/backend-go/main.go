@@ -1,20 +1,18 @@
+// Command backend-go is the Go API gateway, scoped to authentication,
+// authorization, and CoLab (2026-09-27: every other domain — author lookups,
+// feed, discovery, quests, recommendations, similarity, activity-feed,
+// user-memory — was removed; see the pre-domain-removal-2026-09-27 git tag
+// for the full-featured version and docs/audits/ for why).
 package main
 
 import (
-	"bytes"
 	"context"
-	"crypto/tls"
 	"errors"
-	"io"
 	"log"
 	"log/slog"
-	"net"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -22,26 +20,19 @@ import (
 	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/skolab/backend-go/internal/activity"
 	"github.com/skolab/backend-go/internal/auth"
-	"github.com/skolab/backend-go/internal/author"
 	"github.com/skolab/backend-go/internal/colab"
 	"github.com/skolab/backend-go/internal/db"
-	"github.com/skolab/backend-go/internal/feed"
-	"github.com/skolab/backend-go/internal/firestore"
 	"github.com/skolab/backend-go/internal/metrics"
 	"github.com/skolab/backend-go/internal/middleware"
-	"github.com/skolab/backend-go/internal/quest"
-	"github.com/skolab/backend-go/internal/recommendation"
-	"github.com/skolab/backend-go/internal/services/researchmetrics"
-	"github.com/skolab/backend-go/internal/similarity"
-	"github.com/skolab/backend-go/internal/system"
 	"github.com/skolab/backend-go/internal/user"
 	"github.com/skolab/backend-go/internal/websocket"
 	"golang.org/x/time/rate"
 )
 
 func main() {
+	// Only remaining caller: internal/colab's fallback path while
+	// COLAB_SANDBOX_URL is unset (see internal/colab/colab.go).
 	pythonBackendURL := os.Getenv("PYTHON_BACKEND_URL")
 	if pythonBackendURL == "" {
 		pythonBackendURL = "http://localhost:8000"
@@ -52,19 +43,16 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 		slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
-		// Fail fast: a real deploy must supply INTERNAL_API_TOKEN. Both this
-		// gateway's own /internal/* routes and the Python side's
-		// _check_internal_token (app/api/v1/endpoints/internal.py) treat an
-		// empty token as "skip the check" — a deliberate local-dev
-		// convenience that becomes "every /internal/* route is
-		// unauthenticated" if left unset in a real deployment, with no prior
-		// warning anywhere (2026-09-26 security audit). Mirrors the Python
-		// side's own APP_ENV-gated fail-fast in app/core/config.py.
+		// Fail fast: a real deploy must supply INTERNAL_API_TOKEN. The
+		// colab-sandbox worker (and, while unset, Python's /colab/compile)
+		// treats an empty token as "skip the check" — a deliberate local-dev
+		// convenience that becomes "compile runs with no authentication" if
+		// left unset in a real deployment, with no prior warning anywhere
+		// (2026-09-26 security audit).
 		if os.Getenv("INTERNAL_API_TOKEN") == "" {
 			log.Fatal("INTERNAL_API_TOKEN is unset while GIN_MODE=release. Set it " +
-				"(and the matching value on the Python backend) before starting " +
-				"the gateway — otherwise every /internal/* route runs with no " +
-				"authentication.")
+				"(and the matching value on the Python backend / colab-sandbox worker) " +
+				"before starting the gateway.")
 		}
 	}
 
@@ -99,10 +87,6 @@ func main() {
 
 	auth.InitFirebase()
 
-	// Firestore mirror tier for ported endpoints (e.g. /citation-heatmap). Uses
-	// the same ambient credentials as auth; degrades to a no-op if unavailable.
-	firestore.Init()
-
 	if err := db.InitDB(); err != nil {
 		slog.Warn("PostgreSQL init failed — DB-backed endpoints will be degraded", "err", err)
 	} else {
@@ -129,25 +113,12 @@ func main() {
 	// origin) is still counted -- RED metrics (Rate, Errors, Duration) are
 	// meant to cover everything the gateway sees, not just what it serves.
 	r.Use(metrics.Middleware())
-	// Compresses every JSON response this gateway writes or proxies for a
-	// client that sends Accept-Encoding: gzip -- negligible CPU cost next
-	// to the network transfer time it saves, especially over a slower
-	// connection. Ahead of CORS/rate-limiting for the same reason metrics
-	// is: registering it early means c.Writer is already swapped before
-	// any handler downstream writes a body.
 	r.Use(middleware.Gzip())
 	r.Use(middleware.CORS())
 
 	// ── Rate limiting: 120 req/s per IP, burst of 30 ─────────────────────────
 	rl := middleware.NewRateLimiter(rate.Limit(120), 30)
 	r.Use(rl.Limit())
-
-	// A second, stricter limiter for the routes that are actually expensive
-	// to serve — the LLM-proxy fallthrough to Python (NoRoute, below) and
-	// this gateway's own /internal/* routes — which previously shared only
-	// the generic 120 req/s/IP limit above despite being the costliest calls
-	// in the system (2026-09-26 security audit).
-	expensiveRL := middleware.NewRateLimiter(rate.Limit(10), 5)
 
 	// ── WebSocket hub ─────────────────────────────────────────────────────────
 	hub := websocket.NewHub()
@@ -163,14 +134,8 @@ func main() {
 	// ── Observability ─────────────────────────────────────────────────────────
 	// Not named /metrics: confirmed live (2026-09-14) that Render's edge
 	// blocks ANY path ending in "metrics" with a 502 before it ever reaches
-	// this app — reproduced on fake, never-registered paths too
-	// (/api/v1/fake_metrics, /api/v1/totally-fake/metrics both 502
-	// identically), so this is a platform-level suffix rule, not
-	// app-specific and not something the Render dashboard's Observability
-	// settings control (checked — that's an unrelated, unconfigured
-	// OpenTelemetry-push feature). External observability/Prometheus
-	// scrapers should be pointed at this path instead of the conventional
-	// /metrics.
+	// this app. External observability/Prometheus scrapers should be
+	// pointed at this path instead of the conventional /metrics.
 	r.GET("/observability", metrics.Handler())
 
 	// ── WebSockets ────────────────────────────────────────────────────────────
@@ -189,125 +154,16 @@ func main() {
 		websocket.ServeHealthWs(c)
 	})
 
-	// ── User management (Firebase-authenticated) ──────────────────────────────
+	// ── User identity (Firebase-authenticated) ────────────────────────────────
+	// Not a "user profile" feature kept for its own sake: workspaces,
+	// workspace_members, and websocket_tickets all carry a foreign key into
+	// users.id, so a Firebase account needs a row here before it can own or
+	// join a CoLab workspace. See internal/user's package doc.
 	usersAPI := r.Group("/api/v1/users")
 	usersAPI.Use(auth.VerifyUser())
 	{
 		usersAPI.POST("/profile/sync", user.SyncUserProfile)
 		usersAPI.DELETE("/:userId", user.DeleteUser)
-	}
-
-	// ── User Memory — pure Go aggregation, no AI ──────────────────────────────
-	memoryAPI := r.Group("/api/v1/user-memory")
-	memoryAPI.Use(auth.VerifyUser())
-	{
-		memoryAPI.POST("/events", user.SyncUserMemoryEvents)
-		memoryAPI.GET("/:userId", user.GetUserMemory)
-	}
-
-	// ── Author endpoints — Go PG + OpenAlex, no AI ───────────────────────────
-	r.GET("/api/v1/author-suggestions", author.GetAuthorSuggestions)
-	// Home page "Since You Were Here" panel — see internal/author/pulse.go
-	// for why this replaced the old static Daily Brief and what each of its
-	// three signals is (and isn't) grounded in.
-	r.GET("/api/v1/coach-pulse", author.GetCoachPulse)
-	// orbit-metrics ends in "metrics" — per the /author-stats comment below,
-	// Render's edge 502s any path ending in "metrics" before it reaches this
-	// app. This route was never renamed off it the way author-stats was, so
-	// it may already be 502ing in prod; unrelated to this naming pass, worth
-	// its own follow-up.
-	r.GET("/api/v1/orbit-metrics", author.GetOrbitMetrics)
-	r.GET("/api/v1/resolve-email", author.ResolveAuthorEmail)
-	// citation-heatmap — ported from services/backend/app/services/platform/
-	// pipeline/heatmap.py (no LLM, no embedding).
-	r.GET("/api/v1/citation-heatmap", author.GetCitationHeatmap)
-
-	// GET /network-collaborators — depth-1/2 co-author fan-out + Jaccard, no AI.
-	// Ported from services/backend/app/services/platform/pipeline/network.py
-	// (docs/plans/2026-09-04-network-collaborators-to-go.md).
-	r.GET("/api/v1/network-collaborators", author.GetNetworkCollaborators)
-
-	// GET /author-stats — Go serves the endpoint (OpenAlex fetch + 422 + 2 h
-	// cache) and calls Python POST /api/v1/internal/author-metrics-enrich for the
-	// one model-bound step; degrades to an empty bundle if that is unavailable.
-	// Ported from authors.py::get_author_metrics — decisions/0010. Was public,
-	// stays public.
-	//
-	// Renamed off "author_metrics"/"author-metrics" 2026-09-14: confirmed live
-	// that Render's edge 502s ANY path ending in "metrics" before it reaches
-	// this app — reproduced on fake, never-registered paths too, so this
-	// wasn't an app bug. /author-stats is the one real, working path; the
-	// dead "metrics"-suffixed spelling is not registered at all any more
-	// (2026-09-26 naming-convention pass — it never worked through Render).
-	//
-	// BREAKING for any client still on the old snake_case bare path
-	// (`/author_stats`, no `/api/v1`) — a prior comment here noted Android
-	// called that exact path on :8080. That alias is gone as of this pass;
-	// the Android client needs updating to `/api/v1/author-stats` (2026-09-26
-	// naming-convention pass, applied per explicit instruction to remove all
-	// aliasing — see conversation, not yet reflected in a decisions/ doc).
-	r.GET("/api/v1/author-stats", author.GetAuthorMetrics)
-
-	// ── Similarity engine — pgvector kNN + co-author/concept blend + MMR ─────
-	// internal/similarity. Reads the work_embeddings / author_embeddings store
-	// the Python teleport worker populates (embedding compute is model work =
-	// Python, decisions/0010; ranking is a DB query = Go). Cold rows degrade to
-	// OpenAlex related_works / topic-derived co-authors.
-	r.GET("/api/v1/similar-papers", similarity.GetSimilarPapers)
-	r.GET("/api/v1/similar-researchers", similarity.GetSimilarResearchers)
-
-	// ── Home activity feed — merged recency stream, no AI ───────────────────
-	// internal/activity. Connected researchers' new papers (OpenAlex) + newly
-	// accepted connections (PG) + a highly-cited-recent field floor. Pure
-	// aggregation + sort, so Go edge not Python (decisions/0010).
-	//
-	// VerifyUserOptional, not VerifyUser: an anonymous caller still gets the
-	// public trending floor (no user_id needed for that part), so this route
-	// isn't hard-gated. But GetActivityFeed's ?user_id= drives the personal
-	// half of the feed (peer publications, connection events) -- without a
-	// verified identity to check it against, any caller could read that for
-	// an arbitrary user_id with zero auth (2026-09-12 endpoint audit).
-	r.GET("/api/v1/activity-feed", auth.VerifyUserOptional(), activity.GetActivityFeed)
-
-	// ── System metadata — non-LLM, ported from endpoints/system.py ──────────
-	// GET /api/v1/ (API-router root) and GET /api/v1/status (public status
-	// report: DB/cache probe + incidents + LLM-inference flag). /ai-status
-	// stays in Python and is still reached via NoRoute. decisions/0010.
-	r.GET("/api/v1/", system.Root)
-	r.GET("/api/v1/status", system.Status)
-
-	// GET /search-author + /refresh-author — cache → Postgres (researcher_metrics)
-	// → Firestore (global_researchers) → OpenAlex lookup that assembles the
-	// ~40-field AuthorResponse. No LLM, no embedding. Ported from
-	// services/backend/app/api/v1/endpoints/authors.py (decisions/0002). The LLM
-	// teleport enrichment worker stays Python: both handlers fire-and-forget
-	// POST {PYTHON_BACKEND_URL}/api/v1/internal/teleport/{id} with the shared
-	// secret header X-Internal-Token (INTERNAL_API_TOKEN). Both routes were
-	// public in Python — kept public here.
-	r.GET("/api/v1/search-author", author.SearchAuthor)
-	r.GET("/api/v1/refresh-author", author.RefreshAuthor)
-
-	// ── Researcher metrics compute — Python → Go, the one reverse direction ──
-	// internal/services/researchmetrics. Pure math (disruption score, citation
-	// acceleration, etc.) that researcher_worker.py's teleport worker used to
-	// duplicate in Python; that duplicate is retired in favor of this single
-	// implementation (2026-09-12 no-slop audit). Every other internal/*
-	// service-to-service call in this codebase goes Go -> Python (the gateway
-	// proxies to Python); this is the first call the other way, protected by
-	// the same shared-secret header + INTERNAL_API_TOKEN convention Python's
-	// own /internal/* routes already use (app/api/v1/endpoints/internal.py).
-	r.POST("/internal/compute-metrics", expensiveRL.Limit(), researchmetrics.ComputeHandler)
-
-	// ── Leaderboard — PG query only ───────────────────────────────────────────
-	r.GET("/api/v1/leaderboard/:field", quest.GetLeaderboard)
-
-	// ── Quests — Go fast-path read; Python slow-path for LLM generation ───────
-	proxy := reverseProxy(pythonBackendURL)
-	questsAPI := r.Group("/api/v1")
-	questsAPI.Use(auth.VerifyUser())
-	{
-		questsAPI.GET("/users/quests", quest.GetUserQuests(proxy))
-		questsAPI.POST("/users/quests/complete", quest.CompleteQuest)
 	}
 
 	// ── CoLab compile — auth + per-user quota + single-flight live in Go;
@@ -321,295 +177,37 @@ func main() {
 		colabAPI.POST("/colab/compile", colab.Handler(db.Pool, &http.Client{}, pythonBackendURL))
 	}
 
-	// ── Recommendations: CoLab peer autocomplete — Go PG only, no AI ─────────
-	// Ported from services/backend/app/domains/recommendation. Hard Firebase
-	// auth (decisions/0008): the Android client attaches a token as of #27
-	// (network/AuthInterceptor.kt). The per-IP limit + the 200-id cap on
-	// check-registered still bound abuse from an authenticated caller.
-	recRL := middleware.NewRateLimiter(rate.Limit(5), 5)
-	recAPI := r.Group("/api/v1/recommendations")
-	recAPI.Use(auth.VerifyUser(), recRL.Limit())
-	{
-		recAPI.GET("/peers", recommendation.GetPeerRecommendations)
-		recAPI.POST("/peers/invite", recommendation.LogPeerInvite)
-		recAPI.POST("/peers/check-registered", recommendation.CheckRegisteredPeers)
-	}
-
-	// ── Phase 2: feed persistence + non-LLM CRUD — Go, no AI ────────────────
-	// Ported from services/backend feed.py / support.py / integrations.py as
-	// part of "Python is LLM-only" (decisions/0002;
-	// docs/plans/2026-09-04-phase2-feed-to-go.md). Feed *generation*
-	// (GET /api/v1/feed/daily and the conjecture / roadmap / industry
-	// LLM routes) stays in Python and is still reached via NoRoute below.
-	//
-	// support/metrics and integrations/zotero/* were removed here (2026-09-11
-	// backend response audit): both were permanently-fake stub data — support
-	// metrics never reflected a real ticket queue, Zotero never made a real
-	// OAuth/API call — reachable by anyone hitting the URL directly, and
-	// No supported client called either. Reintroduce as real integrations if
-	// they're ever actually built, not as standing mock endpoints.
-	// Owner-scoped write: VerifyUser() → 401 without a token; the handler then
-	// requires users.openalex_id (for the verified uid) == body author_id → 403.
-	feedAPI := r.Group("/api/v1/feed/daily")
-	feedAPI.Use(auth.VerifyUser())
-	{
-		feedAPI.POST("/dismiss", feed.DismissDailyFeedItem)
-	}
-
-	// ── Fallback: everything else → Python (AI / ML / enrichment) ────────────
-	// expensiveRL guards this path too: every LLM route (chat, predict,
-	// summarize, analyze, ...) and every Python-side /internal/* route
-	// (teleport, similar/embed-work, author-metrics-enrich) reaches Python
-	// through here, not through a dedicated Go route (2026-09-26 security
-	// audit — this fallthrough previously had only the generic 120 req/s/IP
-	// limit above despite being the costliest path in the system).
-	r.NoRoute(expensiveRL.Limit(), func(c *gin.Context) {
-		if strings.EqualFold(c.GetHeader("Upgrade"), "websocket") {
-			slog.Warn("rejected unhandled websocket upgrade", "path", c.Request.URL.Path)
-			c.AbortWithStatus(http.StatusNotImplemented)
-			return
-		}
-		// Python's /internal/* routes are service-to-service only (the gateway
-		// itself calls PYTHON_BACKEND_URL directly, never through this
-		// fallthrough). Refuse to relay them to the public internet so they
-		// are not reachable even with a leaked shared token.
-		if p := c.Request.URL.Path; strings.HasPrefix(p, "/internal/") || strings.HasPrefix(p, "/api/v1/internal/") {
-			c.AbortWithStatus(http.StatusNotFound)
-			return
-		}
-		proxy(c)
-	})
-
 	addr := ":8080"
 	srv := &http.Server{Addr: addr, Handler: r}
 
 	go func() {
-		slog.Info("Go API Gateway starting",
-			"addr", addr,
-			"python_backend", pythonBackendURL,
-		)
+		slog.Info("Go API Gateway starting", "addr", addr, "python_backend", pythonBackendURL)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("server error: %v", err)
 		}
 	}()
 
 	// Graceful shutdown: a deploy/restart sends SIGTERM, not SIGKILL. Without
-	// this, that signal kills every in-flight connection immediately,
-	// including a request mid-way through the up-to-120s LLM proxy path
-	// (proxyRequestTimeout below) — draining beats severing (2026-09-26
-	// reliability audit).
+	// this, that signal kills every in-flight connection immediately.
 	quitCh := make(chan os.Signal, 1)
 	signal.Notify(quitCh, syscall.SIGINT, syscall.SIGTERM)
 	<-quitCh
 	slog.Info("shutdown signal received, draining in-flight requests")
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), proxyRequestTimeout+5*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("graceful shutdown did not complete cleanly", "err", err)
 	}
 }
 
-// proxyRequestTimeout bounds a single proxied request end-to-end. LLM routes
-// are the slow case (long 70B generations, or a cold-compute /feed/daily —
-// see services/backend/app/services/platform/pipeline/feed.py, documented
-// there at ~40-80s uncached); 120s covers them with margin while still
-// guaranteeing a hung upstream cannot hold a goroutine forever.
-const proxyRequestTimeout = 120 * time.Second
-
-// proxyTransport is a dedicated HTTP transport for the Python upstream. The
-// default (http.DefaultTransport) caps idle connections per host at 2, so under
-// load the gateway constantly reopens TCP connections to the single Python
-// host, and — with no ResponseHeaderTimeout — a hung upstream request pins a
-// gateway goroutine and the client socket indefinitely, leading to goroutine
-// pileup and memory growth.
-//
-// ResponseHeaderTimeout must not be shorter than proxyRequestTimeout: it fires
-// independently of the per-request context deadline below, so a lower value
-// here silently overrides that deadline. It previously stood at 60s while
-// proxyRequestTimeout documented 120s as the intended bound — the mismatch
-// truncated any real request past 60s (confirmed live: a cold-compute
-// daily_feed call was cut off with a 502 at exactly 60.3s).
-//
-// TLSNextProto is set to an empty (non-nil) map to force HTTP/1.1 on this
-// connection, overriding ForceAttemptHTTP2's earlier "true". PYTHON_BACKEND_URL
-// is the Python service's public https://...onrender.com URL (confirmed live
-// in this gateway's own boot log), not a plain-HTTP internal address, so this
-// leg is real TLS -- and Cloudflare's edge in front of it negotiates real
-// HTTP/2 via ALPN when a client offers it, which Go's http.Transport does by
-// default for any TLS connection (ForceAttemptHTTP2 only makes it try harder
-// to prefer h2 even without a prior successful negotiation; removing that
-// flag alone does not disable HTTP/2). The uvicorn origin behind Cloudflare's
-// edge only ever speaks HTTP/1.1. Confirmed live and in isolation: every
-// proxied response large enough to need more than one upstream read/frame came
-// back as unreadable high-entropy bytes -- a different size than the correct
-// response every time, not merely garbled JSON -- while the identical request
-// sent straight to Python (bypassing this transport, and therefore any HTTP/2
-// negotiation Go does on its behalf) was clean every time, a native
-// (non-proxied) Go route was clean every time, and neither this gateway's own
-// gzip wrapping (one real, necessary Flush() fix) nor buffering the response
-// body (a second real, necessary fix) resolved it. That combination of
-// evidence -- proxied-only, size/frame-count-dependent, invisible to a raw
-// curl client that never goes through this Transport -- points at an HTTP/2
-// framing mismatch between Cloudflare's edge and this client specifically,
-// not at anything in this gateway's own gzip or buffering logic (both of
-// which stay fixed regardless, on their own separate merits).
-var proxyTransport http.RoundTripper = &http.Transport{
-	Proxy: http.ProxyFromEnvironment,
-	DialContext: (&net.Dialer{
-		Timeout:   10 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}).DialContext,
-	TLSNextProto:          map[string]func(string, *tls.Conn) http.RoundTripper{},
-	MaxIdleConns:          100,
-	MaxIdleConnsPerHost:   100,
-	IdleConnTimeout:       90 * time.Second,
-	TLSHandshakeTimeout:   10 * time.Second,
-	ExpectContinueTimeout: 1 * time.Second,
-	ResponseHeaderTimeout: proxyRequestTimeout,
-}
-
-// reverseProxy returns a Gin handler that reverse-proxies to target.
-func reverseProxy(target string) gin.HandlerFunc {
-	targetURL, err := url.Parse(target)
-	if err != nil {
-		log.Fatalf("invalid proxy target URL: %v", err)
-	}
-	proxy := httputil.NewSingleHostReverseProxy(targetURL)
-	proxy.Transport = proxyTransport
-	orig := proxy.Director
-	proxy.Director = func(req *http.Request) {
-		orig(req)
-		req.Header.Set("X-Forwarded-Host", req.Header.Get("Host"))
-		req.Header.Set("X-Gateway", "go")
-		// NewSingleHostReverseProxy's default Director rewrites req.URL but
-		// never req.Host, so the outbound request keeps the inbound Host
-		// header (skolab-gateway.onrender.com) while dialing the target's
-		// IP. On Render, the edge routes by Host header, not by the
-		// resolved IP — it saw the gateway's own hostname and sent the
-		// request straight back to the gateway, producing an infinite
-		// loop (HTTP 508, x-render-routing: loop) on every proxied route.
-		req.Host = targetURL.Host
-		// The actual root cause of the discovery/predict corruption (three
-		// prior fixes -- gzip Flush, response buffering, HTTP/2 disable --
-		// were each real but addressed the wrong layer): this outbound
-		// request's Accept-Encoding is not what the inbound client sent.
-		// Confirmed live via a wire-level diagnostic: whatever Cloudflare
-		// edge fronts skolab-gateway rewrites the request's own
-		// Accept-Encoding to "gzip, br" before this Director ever sees it,
-		// regardless of what the real client asked for. Cloudflare's edge
-		// in front of skolab-backend-py then honors that and returns a
-		// genuinely Brotli-compressed body with Content-Encoding: br --
-		// confirmed via the diagnostic's captured bytes, which had no gzip
-		// magic number and matched neither this gateway's own gzip wrapper
-		// nor plain JSON. Go's net/http has no built-in Brotli decoder, and
-		// ModifyResponse (below) was deleting Content-Encoding without ever
-		// decompressing the body -- so every proxied route this gateway
-		// doesn't natively serve was shipping raw Brotli bytes to the
-		// client labeled as if they were plain. Forcing identity here is
-		// the fix: confirmed live and directly, hitting skolab-backend-py
-		// with Accept-Encoding: identity gets a clean, uncompressed
-		// response with no Content-Encoding at all -- Cloudflare's edge in
-		// front of Python does honor identity, it just never received it
-		// before this override, since the client-facing edge had already
-		// replaced it by the time this Director ran.
-		req.Header.Set("Accept-Encoding", "identity")
-	}
-	// The Python backend sets its own CORS headers (see services/backend/app/main.py).
-	// The Go gateway is the sole CORS authority for browser-facing responses
-	// (middleware.CORS() already set them), so drop the upstream's copies here —
-	// otherwise ReverseProxy appends them alongside the gateway's, producing duplicate
-	// Access-Control-Allow-Origin/Vary values that browsers reject as invalid CORS.
-	proxy.ModifyResponse = func(resp *http.Response) error {
-		resp.Header.Del("Access-Control-Allow-Origin")
-		resp.Header.Del("Access-Control-Allow-Credentials")
-		resp.Header.Del("Access-Control-Allow-Methods")
-		resp.Header.Del("Access-Control-Allow-Headers")
-		resp.Header.Del("Vary")
-		// Python/uvicorn itself never sets Content-Encoding (confirmed: no
-		// GZipMiddleware anywhere in services/backend) -- the real source,
-		// found via the wire diagnostic above, was Cloudflare's edge in
-		// front of skolab-backend-py compressing with Brotli whenever the
-		// outbound request's Accept-Encoding allowed it, which this
-		// Director now forces to "identity" specifically to prevent. This
-		// delete is now just a defensive backstop, not the fix: if that
-		// override is ever removed or an edge ignores it, an unstripped
-		// Content-Encoding here would otherwise mean middleware.Gzip()
-		// gzips an already-compressed body a second time, and a client
-		// that decodes only one layer would be left holding undecoded
-		// bytes. Stripping it costs nothing and closes that failure mode.
-		resp.Header.Del("Content-Encoding")
-		resp.Header.Del("Content-Length")
-
-		// Buffer the whole body instead of letting ReverseProxy stream it
-		// chunk-by-chunk. Confirmed live: any proxied route whose response
-		// doesn't fit in one upstream read (Python reports no Content-Length
-		// -- Transfer-Encoding: chunked -- for every route here, so this is
-		// purely a function of response size) came back corrupted at the
-		// client, gzip-wrapped or not, with the same request against Python
-		// directly (no gateway) coming back clean every time and a native,
-		// non-proxied, small Go route staying clean through the same gzip
-		// wrapper -- isolating the break to ReverseProxy's own multi-chunk
-		// copy path, not this gateway's own gzip or header handling. No
-		// route here streams a genuinely unbounded response (discovery/
-		// predict and nexus-chat both return one complete JSON object once
-		// the LLM call finishes, never a chunked SSE-style stream), so
-		// buffering trades nothing real away.
-		//
-		// Deliberately NOT setting Content-Length here (an earlier version
-		// of this fix did, and it was wrong): middleware.Gzip() runs before
-		// this handler in the chain and, for a gzip-accepting client, wraps
-		// c.Writer so every subsequent Write() is compressed on the way out.
-		// A Content-Length set here describes the buffered RAW body -- bytes
-		// that never reach the wire as-is once Gzip() compresses them, so
-		// the client would be told to expect a byte count that doesn't match
-		// what's actually sent. Confirmed live: setting it produced a 502
-		// (the mismatch breaks the response at the transport level) even
-		// though the gateway's own access log showed 200, since that log
-		// only reflects the status line, written before the mismatch is
-		// ever detected. Leaving Content-Length unset keeps the response
-		// Transfer-Encoding: chunked, same as before this fix -- chunked
-		// framing doesn't need the length known upfront, and correctly wraps
-		// however many Write() calls end up happening, buffered or not.
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
-		resp.Body.Close()
-		resp.Body = io.NopCloser(bytes.NewReader(body))
-		resp.ContentLength = -1
-		return nil
-	}
-	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		if errors.Is(err, context.Canceled) {
-			// Client hung up — not a gateway fault, don't log it as an error.
-			return
-		}
-		if errors.Is(err, context.DeadlineExceeded) {
-			slog.Warn("proxy upstream timeout", "path", r.URL.Path)
-			w.WriteHeader(http.StatusGatewayTimeout)
-			return
-		}
-		slog.Error("proxy error", "path", r.URL.Path, "err", err)
-		w.WriteHeader(http.StatusBadGateway)
-	}
-	return func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(c.Request.Context(), proxyRequestTimeout)
-		defer cancel()
-		proxy.ServeHTTP(c.Writer, c.Request.WithContext(ctx))
-	}
-}
-
 const requestIDHeader = "X-Request-ID"
 
 // requestID assigns a correlation id to every request — read from the
-// caller's X-Request-ID if already set, else generated fresh — and both logs
-// it (requestLogger, below) and forwards it to Python on the proxied path
-// (reverseProxy's Director copies c.Request.Header verbatim, so setting it
-// here is enough), so the same id shows up in both services' logs for one
-// request. Mirrors services/backend/app/main.py's request_id_var, which
-// already does this on the Python side alone (2026-09-26 reliability audit —
-// there was previously no way to correlate a request across this hop).
+// caller's X-Request-ID if already set, else generated fresh — and both
+// logs it (requestLogger, below) and forwards it to Python on the colab
+// fallback call (internal/colab/colab.go copies inbound headers), so the
+// same id shows up in both services' logs for one request.
 func requestID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.GetHeader(requestIDHeader)

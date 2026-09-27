@@ -71,11 +71,14 @@ def _jsonb_to_json(table: str, col: str) -> None:
 def _create_all() -> None:
     from app.db.database import Base
 
+    # 2026-09-27: researcher_models/agent_models/analytics_models/
+    # content_models were removed with the LLM/agent/feed/researcher domains
+    # (scope cut to auth/authorization/CoLab only) — a genuinely fresh
+    # deploy target replaying this migration from an empty database now only
+    # gets the tables current models actually define; an already-migrated
+    # database (this repo's real Supabase project) is unaffected, since
+    # create_all() only adds tables that don't already exist.
     import app.models.user_models  # noqa: F401
-    import app.models.researcher_models  # noqa: F401
-    import app.models.agent_models  # noqa: F401
-    import app.models.analytics_models  # noqa: F401
-    import app.models.content_models  # noqa: F401
 
     Base.metadata.create_all(bind=op.get_bind())
 

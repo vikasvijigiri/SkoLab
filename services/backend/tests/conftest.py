@@ -40,7 +40,6 @@ if not db_url:
 os.environ["DATABASE_URL"] = db_url
 
 os.environ["TESTING"] = "True"
-os.environ["GROQ_API"] = "mock_groq_key"
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "service-account.json"
 
 # Inject backend root to sys.path

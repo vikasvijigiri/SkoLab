@@ -29,6 +29,11 @@ services:
         sync: false
       - key: GOOGLE_APPLICATION_CREDENTIALS
         value: /etc/secrets/service-account.json
+      # Set once services/backend-go/cmd/colab-sandbox is deployed as its own
+      # container (docs/deploy/colab-sandbox.md). Unset ⇒ falls back to
+      # proxying /colab/compile to skolab-backend-py.
+      - key: COLAB_SANDBOX_URL
+        sync: false
 
   - type: web
     name: skolab-backend-py
@@ -51,21 +56,22 @@ services:
         sync: false
       - key: DATABASE_ENCRYPTION_KEY
         sync: false
-      - key: GROQ_API
-        sync: false
-      - key: SRE_SECURITY_TOKEN
-        sync: false
-      - key: HF_INFERENCE_TOKEN
-        sync: false
       - key: SENTRY_DSN
         sync: false
       - key: APP_BASE_URL
-        sync: false
-      - key: GATEWAY_URL
         sync: false
       - key: INTERNAL_API_TOKEN
         sync: false
       - key: RUN_DB_CREATE_ALL
         sync: false
       - key: GOOGLE_APPLICATION_CREDENTIALS
+        sync: false
+      - key: EMAIL_BLIND_INDEX_KEY
+        sync: false
+      # Per-user cost quota on /colab/compile — see app/core/quota.py.
+      - key: USER_QUOTA_ENABLED
+        value: "true"
+      - key: USER_QUOTA_HOURLY_UNITS
+        sync: false
+      - key: USER_QUOTA_DAILY_UNITS
         sync: false

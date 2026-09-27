@@ -6,54 +6,7 @@ real env vars in production).  No magic literals anywhere else in the codebase.
 """
 
 import os
-import socket
-from pathlib import Path
 from dataclasses import dataclass, field
-
-# Absolute path to the backend/ root — resolved from this file's location so it
-# works regardless of the current working directory when uvicorn is launched.
-# This file lives at <backend_root>/app/core/config.py, so climbing to
-# <backend_root> needs parents[2] (parents[0]=app/core, parents[1]=app) --
-# `parents[1]` (previously here) resolved to <backend_root>/app instead,
-# silently pointing `downloads_dir` at a nonexistent `app/downloads/` that
-# main.py's mkdir(parents=True) then auto-created empty. The `/downloads`
-# static mount itself worked; every file under it 404'd because it was
-# serving the wrong, always-empty directory -- the actual root cause behind
-# the dead `downloadUrl`s a 2026-09 production audit found on
-# `/assistant_professor_roadmap` (the committed *_template.md files live in
-# the real <backend_root>/downloads/, never reachable through this path,
-# path renamed to /feed/roadmap in the 2026-09-26 naming-convention pass).
-_BACKEND_ROOT = Path(__file__).resolve().parents[2]
-
-
-def _lan_ip() -> str:
-    """Resolve the machine's outbound LAN IP (never 127.0.0.1)."""
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.settimeout(1.0)
-            s.connect(("8.8.8.8", 80))
-            return s.getsockname()[0]
-    except Exception:
-        try:
-            return socket.gethostbyname(socket.gethostname())
-        except Exception:
-            return "127.0.0.1"
-
-
-def _downloads_dir() -> Path:
-    """
-    Absolute path to the downloads/ directory.
-    Override with DOWNLOADS_DIR env var if you want it elsewhere.
-    Falls back to <backend_root>/downloads — always absolute, always portable.
-    """
-    raw = os.environ.get("DOWNLOADS_DIR", "")
-    if raw:
-        p = Path(raw).expanduser().resolve()
-    else:
-        p = _BACKEND_ROOT / "downloads"
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
 
 # Publicly-known default shipped in this file's history. A production process must
 # never run with it (or with an empty key) — see Settings.__post_init__.
@@ -65,7 +18,6 @@ class Settings:
     # ── Server ──────────────────────────────────────────────────────────────
     host: str = field(default_factory=lambda: os.environ.get("HOST", "0.0.0.0"))  # nosec B104
     port: int = field(default_factory=lambda: int(os.environ.get("PORT", "8000")))
-    lan_ip: str = field(default_factory=_lan_ip)
     force_https: bool = field(
         default_factory=lambda: (
             os.environ.get("FORCE_HTTPS", "False").lower() in ("true", "1")
@@ -79,124 +31,19 @@ class Settings:
         default_factory=lambda: os.environ.get("APP_ENV", "development").lower()
     )
 
-    # ── Public base URL (used to build download links, OpenRouter HTTP-Referer, etc.) ──
+    # ── Public base URL (used for CORS and app metadata) ──────────────────────
     # Set APP_BASE_URL in production to your real domain, e.g. https://api.resqit.app
     app_base_url: str = field(
         default_factory=lambda: os.environ.get("APP_BASE_URL", "http://localhost:8000")
     )
 
-    # ── Go gateway URL (Python -> Go; the one reverse direction) ─────────────
-    # Every other internal/* call in this codebase goes Go -> Python. The
-    # teleport worker's researcher-metrics compute calls back to Go's
-    # POST /internal/compute-metrics instead of duplicating that math here
-    # (2026-09-12 no-slop audit) -- this is the one place Python needs the
-    # gateway's own URL. Same manual-set-after-first-deploy pattern as the
-    # gateway's own PYTHON_BACKEND_URL (render.yaml): Render's `fromService`
-    # can't supply the https scheme either service needs.
-    gateway_url: str = field(
-        default_factory=lambda: os.environ.get("GATEWAY_URL", "http://localhost:8080")
-    )
-
     # ── Shared secret for internal/service-to-service calls ──────────────────
-    # Checked by this service's own /internal/* routes (see
-    # app/api/v1/endpoints/internal.py's _check_internal_token) and sent as
-    # the X-Internal-Token header when this service calls the Go gateway's
-    # /internal/compute-metrics. Unset in either direction ⇒ the check is
-    # skipped, matching this repo's "local dev needs no configuration"
-    # convention for internal auth.
+    # Checked by the Go gateway's colab-sandbox call and (while
+    # COLAB_SANDBOX_URL is unset) by Python's own /colab/compile fallback
+    # path. Unset ⇒ the check is skipped, matching this repo's "local dev
+    # needs no configuration" convention for internal auth.
     internal_api_token: str = field(
         default_factory=lambda: os.environ.get("INTERNAL_API_TOKEN", "")
-    )
-
-    # ── Downloads directory (absolute path, portable across OSes) ────────────
-    downloads_dir: Path = field(default_factory=_downloads_dir)
-
-    # ── mDNS service advertisement (must match Android AppConfig.MDNS_SERVICE_NAME) ──
-    mdns_service_type: str = field(
-        default_factory=lambda: os.environ.get("MDNS_SERVICE_TYPE", "_http._tcp.local.")
-    )
-    mdns_service_name: str = field(
-        default_factory=lambda: os.environ.get("MDNS_SERVICE_NAME", "SkoLabBackend")
-    )
-    mdns_port: int = field(
-        default_factory=lambda: int(os.environ.get("MDNS_PORT", "8080"))
-    )
-
-    # ── External API keys ────────────────────────────────────────────────────
-    groq_api_key: str = field(default_factory=lambda: os.environ.get("GROQ_API", ""))
-    openrouter_api_key: str = field(
-        default_factory=lambda: os.environ.get("OPENROUTER_API_KEY", "")
-    )
-    openalex_email: str = field(
-        default_factory=lambda: os.environ.get("OPENALEX_EMAIL", "")
-    )
-    openalex_api_key: str = field(
-        # OPENALEX_API_KEY is the canonical name (Go gateway + web app read the
-        # same). "openalex_api" kept as a legacy fallback for older deployments.
-        default_factory=lambda: (
-            os.environ.get("OPENALEX_API_KEY") or os.environ.get("openalex_api", "")
-        )
-    )
-
-    # ── Embeddings ──────────────────────────────────────────────────────────
-    # When set, app/services/ai/embedding_service.py uses the Hugging Face
-    # Inference API for BAAI/bge-small-en-v1.5 instead of a local
-    # sentence-transformers model — no PyTorch in the image, fits a 512 MB
-    # box. Unset ⇒ fall back to the local model if the package is installed
-    # (dev/CI), else degrade to zero vectors. Base URL is overridable in case
-    # HF moves the serverless endpoint again.
-    #
-    # Incident, 2026-09-04: the old default, api-inference.huggingface.co,
-    # no longer resolves at all (confirmed: DNS lookup fails, not just an
-    # HTTP error) — HF moved the serverless Inference API to
-    # router.huggingface.co/hf-inference. Unlike the same day's Groq
-    # model-decommission incident (config.py's llm_fallback_models), this
-    # failure is silent rather than loud: _embed_via_api() returns None on
-    # any connection failure, embed_texts() then falls back to
-    # _embed_via_local() (absent in this image) or zero vectors — no error
-    # surfaces to a caller or to /ai-status, only degraded recommendation/
-    # similarity quality. Verified the new URL live with a real POST
-    # (BAAI/bge-small-en-v1.5, this deployment's own token) returning a
-    # real 384-dim vector before changing this default.
-    hf_inference_token: str = field(
-        default_factory=lambda: os.environ.get("HF_INFERENCE_TOKEN", "")
-    )
-    hf_inference_base_url: str = field(
-        default_factory=lambda: os.environ.get(
-            "HF_INFERENCE_BASE_URL",
-            "https://router.huggingface.co/hf-inference/models",
-        )
-    )
-
-    # ── Runtime Timeout Controls (env-driven — no rebuild required) ──────────
-    # Set HTTP_TIMEOUT_SECONDS in production to adjust all external API timeouts.
-    # Set LLM_TIMEOUT_SECONDS to tune LLM endpoint response patience.
-    # Defaults match the values previously hardcoded throughout the services.
-    http_timeout_seconds: float = field(
-        default_factory=lambda: float(os.environ.get("HTTP_TIMEOUT_SECONDS", "15.0"))
-    )
-    llm_timeout_seconds: float = field(
-        default_factory=lambda: float(os.environ.get("LLM_TIMEOUT_SECONDS", "30.0"))
-    )
-
-    # ── Cache TTL Controls (env-driven — no rebuild required) ────────────────
-    # Set CACHE_TTL_PROFILE_SECONDS, CACHE_TTL_FEED_SECONDS, etc. to override
-    # the default cache TTLs without redeploying source code.
-    cache_ttl_profile_seconds: int = field(
-        default_factory=lambda: int(os.environ.get("CACHE_TTL_PROFILE_SECONDS", "3600"))
-    )
-    cache_ttl_feed_seconds: int = field(
-        default_factory=lambda: int(os.environ.get("CACHE_TTL_FEED_SECONDS", "3600"))
-    )
-    cache_ttl_analysis_seconds: int = field(
-        default_factory=lambda: int(
-            os.environ.get("CACHE_TTL_ANALYSIS_SECONDS", "21600")
-        )
-    )
-    cache_ttl_agent_history_seconds: int = field(
-        default_factory=lambda: int(
-            os.environ.get("CACHE_TTL_AGENT_HISTORY_SECONDS", "43200")
-        )
     )
 
     # ── Connection pool & concurrency (env-driven — no rebuild required) ──────
@@ -212,12 +59,6 @@ class Settings:
     db_pool_timeout_seconds: float = field(
         default_factory=lambda: float(os.environ.get("DB_POOL_TIMEOUT_SECONDS", "10.0"))
     )
-    # Upper bound on concurrent embedding forward passes. The model is CPU-bound
-    # and single-machine; unbounded callers thrash a shared-CPU host. 0 = resolve
-    # to the container's visible core count at runtime.
-    embed_max_concurrency: int = field(
-        default_factory=lambda: int(os.environ.get("EMBED_MAX_CONCURRENCY", "0"))
-    )
     # Run Base.metadata.create_all + ad-hoc ALTERs on startup. Correct for local
     # dev; in production the schema is owned by Alembic (`alembic upgrade head`
     # as a release step) and running DDL on every deploy is drift + slow starts.
@@ -232,152 +73,6 @@ class Settings:
             in ("1", "true", "yes")
         )
     )
-    # How long a content-hashed embedding vector stays cached in L2. Text→vector
-    # is deterministic for a fixed model, so this can be long; the same paper
-    # abstract is re-embedded across the feed, journal advisor and grant match.
-    embed_vector_cache_ttl_seconds: int = field(
-        default_factory=lambda: int(
-            os.environ.get("EMBED_VECTOR_CACHE_TTL_SECONDS", str(30 * 24 * 3600))
-        )
-    )
-
-    # ── LLM fallback bounds ─────────────────────────────────────────────────
-    # The fallback loop used to try up to 16 models serially, each with a full
-    # llm_timeout_seconds budget — one bad provider window could burn minutes on
-    # a single user request. Cap the attempts and the total wall-clock.
-    llm_max_fallback_models: int = field(
-        default_factory=lambda: int(os.environ.get("LLM_MAX_FALLBACK_MODELS", "4"))
-    )
-    llm_total_deadline_seconds: float = field(
-        default_factory=lambda: float(
-            os.environ.get("LLM_TOTAL_DEADLINE_SECONDS", "90.0")
-        )
-    )
-
-    # ── LLM model selection — env-configurable, never hardcoded in a call
-    # site. Incident, 2026-09-04: "llama-3.3-70b-versatile" (and 4 other
-    # Groq models in the old fallback list) had been decommissioned/removed
-    # by Groq — confirmed via the API's own model_not_found /
-    # model_decommissioned errors, not an assumption. The model name was
-    # hardcoded as a literal string in 6 places across 5 files
-    # (llm_service.py, pipeline/base.py, data/scraping_service.py,
-    # endpoints/system.py, endpoints/feed.py), so every one of them broke
-    # silently and identically — is_llm_working() only checks that GROQ_API
-    # is *configured*, not that the configured model is actually callable,
-    # so /ai-status kept reporting llm_active: true throughout. A single
-    # settings field means the next Groq deprecation is a one-line env var
-    # change on Render, not another emergency multi-file code deploy.
-    #
-    # llm_primary_model: the one model pipeline call sites request first
-    # (app/services/platform/pipeline/base.py's self.model and
-    # data/scraping_service.py's self.model) — still subject to the full
-    # fallback chain below if it fails.
-    llm_primary_model: str = field(
-        default_factory=lambda: os.environ.get(
-            "LLM_PRIMARY_MODEL", "openai/gpt-oss-120b"
-        )
-    )
-    # llm_fast_model: for a background/routine task that wants a small,
-    # cheap, low-latency model rather than the heavier primary — e.g.
-    # agent_service.py's chat-history summarizer.
-    #
-    # Owner's directive (2026-09-07): GPT-OSS-120B for complex tasks,
-    # GPT-OSS-20B for the simpler ones. So the split is 120b (primary) vs
-    # 20b (fast), both first-class Groq models. gpt-oss-20b IS a reasoning
-    # model, so llm_service.py's reasoning-token buffer
-    # (llm_reasoning_model_prefixes = "openai/gpt-oss") already applies and a
-    # tight per-call max_tokens won't truncate before the answer starts.
-    llm_fast_model: str = field(
-        default_factory=lambda: os.environ.get("LLM_FAST_MODEL", "openai/gpt-oss-20b")
-    )
-    # llm_groq_models / llm_openrouter_models: the two halves of the
-    # fallback chain llm_service.py's LLMService tries by default, each
-    # comma-separated, concatenated in this order (Groq first) and capped
-    # at runtime by llm_max_fallback_models above.
-    #
-    # Split into two fields, not one — this itself is a fix, not just the
-    # original one. #47 (2026-09-04) replaced the dead Groq models with
-    # openai/gpt-oss-120b and qwen/qwen3.8-27b, both containing "/" in
-    # their name, then went out still broken: llm_service.py decided
-    # Groq-vs-OpenRouter from the model *string shape* alone
-    # ("/" in model and not model.startswith("groq/")) — an assumption
-    # that held while every Groq model was a bare name like
-    # llama-3.3-70b-versatile, and silently broke the instant a
-    # slash-containing Groq model existed, because Groq's own catalog has
-    # since grown vendor-prefixed slugs too (openai/..., qwen/...,
-    # groq/compound). Both replacement models got misrouted to
-    # query_openrouter() instead of Groq's endpoint; with no
-    # OPENROUTER_API_KEY configured, every model in the chain was
-    # silently skipped (the is_or-and-no-key branch `continue`s without
-    # appending anything) — confirmed live: "LLM query failed across all
-    # attempted models. Errors: " with a genuinely empty error list,
-    # immediately after #47 was deployed. Provider is now a set
-    # membership check against llm_openrouter_models, never inferred from
-    # the name — this class of bug cannot recur no matter what a future
-    # model name looks like.
-    #
-    # Groq entries verified live against a real completion call
-    # (including response_format: json_object, which every
-    # JSON-extraction call site here relies on) on 2026-09-04. OpenRouter
-    # entries are pre-existing, unverified this session (no OpenRouter
-    # key available in this environment), kept as further redundancy if
-    # OPENROUTER_API_KEY is set.
-    #
-    # gpt-oss-120b/-20b are reasoning models — part of `max_tokens` is
-    # spent on an internal reasoning trace before the final answer, so a
-    # call site tuned for a non-reasoning model with a tight max_tokens can
-    # come back empty; raise max_tokens there rather than dropping the
-    # model. qwen3.8-27b is not a reasoning model and answers directly.
-    llm_groq_models: str = field(
-        default_factory=lambda: os.environ.get(
-            "LLM_GROQ_MODELS",
-            "openai/gpt-oss-120b,openai/gpt-oss-20b,qwen/qwen3.8-27b",
-        )
-    )
-    llm_openrouter_models: str = field(
-        default_factory=lambda: os.environ.get(
-            "LLM_OPENROUTER_MODELS",
-            "google/gemma-4-31b-it:free,meta-llama/llama-3.3-70b-instruct:free,"
-            "meta-llama/llama-3.2-3b-instruct:free,openai/gpt-oss-120b:free,"
-            "meta-llama/llama-3.3-70b-instruct,google/gemma-2-9b-it,"
-            "qwen/qwen-2.5-72b-instruct,meta-llama/llama-3-8b-instruct,"
-            "openai/gpt-4o-mini,openrouter/auto",
-        )
-    )
-    # llm_reasoning_model_prefixes / llm_reasoning_token_buffer: the third
-    # and final round of the 2026-09-04 dead-model incident. openai/gpt-
-    # oss-120b and -20b (llm_groq_models above) are reasoning models — they
-    # spend part of `max_tokens` on an internal `reasoning` field before
-    # the final `content`, a behavior the retired llama-3.3-70b-versatile
-    # never had. The ~14 call sites across this codebase that set
-    # max_tokens (100-2048, e.g. journals.py's rationale generation at
-    # max_tokens=100) were all tuned for that old non-reasoning model.
-    # Confirmed live: gpt-oss-120b/-20b came back "200 with an empty
-    # completion" repeatedly right after #49 fixed the routing bug,
-    # tripping the Groq circuit breaker (5 consecutive failures) and
-    # forcing template-only fallback for some rationale/content calls in
-    # the same request. Measured live with a realistic single-sentence
-    # rationale prompt: 90 reasoning tokens + 55 content tokens = 145
-    # total against journals.py's 100-token budget — guaranteed
-    # truncation before content ever starts.
-    #
-    # Rather than hand-tune 14 call sites' budgets for a model-specific
-    # quirk (and re-tune them again for whatever model comes after
-    # gpt-oss), llm_service.py adds this buffer to `max_tokens` itself,
-    # only when the model about to be called is a known reasoning model
-    # (name prefix match against llm_reasoning_model_prefixes) — the
-    # existing call-site budgets stay meant for "the answer" the way
-    # their authors sized them, and this accounts for the one model
-    # family that needs more room to think first.
-    llm_reasoning_model_prefixes: str = field(
-        default_factory=lambda: os.environ.get(
-            "LLM_REASONING_MODEL_PREFIXES", "openai/gpt-oss"
-        )
-    )
-    llm_reasoning_token_buffer: int = field(
-        default_factory=lambda: int(os.environ.get("LLM_REASONING_TOKEN_BUFFER", "220"))
-    )
-
     # ── Observability ────────────────────────────────────────────────────────
     # Sentry DSN. Empty (the default) leaves Sentry inert — the SDK is never
     # initialised. Set SENTRY_DSN in the deployment environment to enable error
@@ -395,13 +90,6 @@ class Settings:
         default_factory=lambda: float(
             os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.2")
         )
-    )
-
-    # ── Monitoring ───────────────────────────────────────────────────────────
-    # Full name of the primary researcher. Used by add_monitors.py to resolve
-    # the OpenAlex author ID at runtime — never hardcoded in source.
-    monitor_author_name: str = field(
-        default_factory=lambda: os.environ.get("MONITOR_AUTHOR_NAME", "")
     )
 
     # ── Firebase ─────────────────────────────────────────────────────────────
@@ -454,23 +142,17 @@ class Settings:
             )
 
         # Fail fast: a staging/production deploy must supply a real
-        # INTERNAL_API_TOKEN. _check_internal_token (endpoints/internal.py) and
-        # its Go-side twin both treat an empty token as "skip the check" — a
-        # deliberate local-dev convenience that becomes "every /internal/*
-        # route is unauthenticated" if it's left unset in a real deployment,
-        # with no prior warning anywhere. Development is unaffected.
+        # INTERNAL_API_TOKEN. The Go gateway's colab-sandbox call and this
+        # service's own /colab/compile fallback both treat an empty token as
+        # "skip the check" — a deliberate local-dev convenience that becomes
+        # "compile runs with no authentication" if left unset in a real
+        # deployment. Development is unaffected.
         if self.environment in ("staging", "production") and not self.internal_api_token:
             raise RuntimeError(
                 "INTERNAL_API_TOKEN is unset while "
                 f"APP_ENV={self.environment}. Set it (and the matching value on "
-                "the Go gateway) before starting the backend — otherwise every "
-                "/internal/* route runs with no authentication."
+                "the Go gateway / colab-sandbox worker) before starting the backend."
             )
-
-    @property
-    def mdns_fqdn(self) -> str:
-        """Fully-qualified mDNS service name as required by zeroconf."""
-        return f"{self.mdns_service_name}.{self.mdns_service_type}"
 
 
 # Single shared instance — import `settings` everywhere, never instantiate directly.

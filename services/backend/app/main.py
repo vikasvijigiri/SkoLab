@@ -18,27 +18,6 @@ if sys.stderr and getattr(sys.stderr, "encoding", None) != "utf-8":
     except Exception:
         pass
 
-import platform
-import sys as _sys
-from collections import namedtuple
-
-# On Windows, zeroconf can trigger a blocking WMI query via platform.uname().
-# We monkey-patch it to return real values from the standard library instead
-# of going through WMI — this is safe on all platforms.
-if _sys.platform == "win32":
-    _node = platform.node() or "localhost"
-    _release = platform.release() or "10"
-    _version = platform.version() or ""
-    _machine = platform.machine() or "AMD64"
-    _processor = platform.processor() or _machine
-    _UnameTuple = namedtuple(
-        "uname_result", ["system", "node", "release", "version", "machine", "processor"]
-    )
-    platform.uname = lambda: _UnameTuple(
-        "Windows", _node, _release, _version, _machine, _processor
-    )
-    platform.machine = lambda: _machine
-
 from dotenv import load_dotenv
 
 # MUST happen BEFORE any import that auto-initialises Firebase or reads env vars.
@@ -176,25 +155,8 @@ builtins.print = schoolab_print_safe
 
 from contextlib import asynccontextmanager
 import asyncio
-import socket
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-
-try:
-    from zeroconf import ServiceInfo
-    from zeroconf.asyncio import AsyncZeroconf
-
-    _ZEROCONF_AVAILABLE = True
-except (ImportError, Exception) as _zeroconf_import_err:
-    _ZEROCONF_AVAILABLE = False
-    ServiceInfo = None  # type: ignore
-    AsyncZeroconf = None  # type: ignore
-    # Use _original_print here — settings is not yet imported so the JSON
-    # formatter would crash if we went through the logging system.
-    _original_print(
-        f"[mDNS] zeroconf unavailable — mDNS service discovery disabled. "
-        f"Reason: {_zeroconf_import_err}"
-    )
 
 from app.core.config import settings
 from app.core.observability import init_observability
@@ -202,23 +164,14 @@ from app.core.observability import init_observability
 # Initialise error aggregation before the app is built (no-op without SENTRY_DSN).
 init_observability()
 
-from app.core.cache import (
-    suggestions_cache,
-    profile_cache,
-    daily_feed_cache,
-    network_collaborators_cache,
-)
 from app.api.v1.router import api_router
 from app.api.errors import register_exception_handlers
 from app.schemas.system import AppInfoResponse, LivenessResponse
 
-_zeroconf: AsyncZeroconf | None = None
-_mdns_info: ServiceInfo | None = None
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Redis Cache & Postgres Schema
+    # Redis (quota's L1 tier — app/core/quota.py) & Postgres schema.
     from app.db.pg_cache import init_redis
 
     await init_redis()
@@ -226,24 +179,14 @@ async def lifespan(app: FastAPI):
     from app.db.database import init_db
 
     print("[Postgres] Initializing local database schema...", flush=True)
-    print("[Storage] Strategy:", flush=True)
-    print(
-        "  PostgreSQL → hot data: users, connections, caches, agent history, search metadata",
-        flush=True,
-    )
-    print(
-        "  Firestore  → large docs: enriched profiles, works arrays, LLM outputs",
-        flush=True,
-    )
     try:
         await init_db()
         print("[Postgres] Database initialization successful.", flush=True)
     except Exception as e:
         print(f"[Postgres] Database initialization failed: {e}", flush=True)
 
-    # Fail loud (in the deploy log, once) if the DB is behind alembic head —
-    # the 2026-09 `researcher_metrics.openalex_id` drift went unnoticed for days
-    # because every read swallows its own error. Never blocks startup.
+    # Fail loud (in the deploy log, once) if the DB is behind alembic head.
+    # Never blocks startup.
     try:
         from app.db.schema_guard import check_schema_current
 
@@ -251,131 +194,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:  # pragma: no cover - guard must never break boot
         print(f"[schema_guard] drift check failed: {e}", flush=True)
 
-    # 2. Verify Firestore & Clear Cache
-    from app.services.data.researcher_worker import (
-        check_connection_sync,
-        set_firestore_available,
-    )
-    import concurrent.futures
-
-    print("[Firestore] Verifying cloud connection on startup...", flush=True)
-
-    # Clear all PgBackedCache entries on startup so stale in-mem L1 is wiped
-    try:
-        await suggestions_cache.clear()
-        await profile_cache.clear()
-        await daily_feed_cache.clear()
-        await network_collaborators_cache.clear()
-        print("[Cache] Startup in-memory L1 caches cleared.", flush=True)
-    except Exception as e:
-        print(f"[Cache] Startup clear failed: {e}", flush=True)
-
-    loop = asyncio.get_event_loop()
-    try:
-        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-        future = loop.run_in_executor(executor, check_connection_sync)
-        success = await asyncio.wait_for(future, timeout=3.0)
-        set_firestore_available(success)
-        executor.shutdown(wait=False)
-        if success:
-            print(
-                "[Firestore] Connected ✔ — large docs (enriched profiles, works) will be stored here.",
-                flush=True,
-            )
-        else:
-            print(
-                "[Firestore] Unavailable — falling back to PostgreSQL-only mode.",
-                flush=True,
-            )
-    except asyncio.TimeoutError:
-        print(
-            "[Firestore] Connection timed out after 3s — Firestore disabled.",
-            flush=True,
-        )
-        set_firestore_available(False)
-    except Exception as e:
-        print(
-            f"[Firestore] Connection check failed: {e} — Firestore disabled.",
-            flush=True,
-        )
-        set_firestore_available(False)
-
-    # 3. Register mDNS (optional — skipped if zeroconf is blocked by antivirus)
-    global _zeroconf, _mdns_info
-    import traceback
-
-    if not _ZEROCONF_AVAILABLE:
-        print(
-            "[mDNS] Skipped — zeroconf library unavailable (likely blocked by antivirus). "
-            "Android clients will connect via manual IP or emulator loopback.",
-            flush=True,
-        )
-    else:
-        try:
-            ips = []
-            try:
-                for info in socket.getaddrinfo(socket.gethostname(), None):
-                    ip = info[4][0]
-                    if (
-                        "." in ip
-                        and not ip.startswith("127.")
-                        and not ip.startswith("169.254")
-                    ):
-                        if ip not in ips:
-                            ips.append(ip)
-            except Exception as e:
-                print(f"[mDNS] Failed to get IPs via getaddrinfo: {e}", flush=True)
-
-            if not ips:
-                ips = [settings.lan_ip]
-
-            addresses = [socket.inet_aton(ip) for ip in ips]
-            print(f"[mDNS] Advertising backend on IPs: {ips}", flush=True)
-
-            _mdns_info = ServiceInfo(
-                type_=settings.mdns_service_type,
-                # zeroconf requires the full "{instance}.{type}" form here
-                # (e.g. "SkoLabBackend._http._tcp.local."), not the bare
-                # instance name -- settings.mdns_fqdn already computes this
-                # correctly but wasn't wired in here, so registration failed
-                # every single startup with BadTypeInNameException
-                # ("Type 'SkoLabBackend' must end with '.local.'") since the
-                # bare name doesn't end in the type's ".local." suffix
-                # (2026-09-12).
-                name=settings.mdns_fqdn,
-                addresses=addresses,
-                port=settings.mdns_port,
-                properties={"path": "/", "version": "1"},
-            )
-            _zeroconf = AsyncZeroconf()
-            await _zeroconf.async_register_service(_mdns_info, allow_name_change=True)
-            print(
-                f"[mDNS] '{settings.mdns_service_name}' registered at {ips}:{settings.mdns_port}"
-            )
-        except Exception as exc:
-            print(f"[mDNS] Registration failed: {exc}")
-            traceback.print_exc()
-
-    # SRE background maintenance: disk-capacity alerting + download-artefact TTL.
-    # The disk alerter fires only on crossing an escalating band (80/85/90/95),
-    # re-alerts a standing condition at most hourly, and rounds the percentage
-    # so Sentry groups it into one issue (2026-09 audit — the old monitor logged
-    # CRITICAL every 60 s and filed a new issue per 0.1 % wobble).
-    from app.core.observability import (
-        DiskUsageAlerter,
-        check_disk_usage,
-        prune_downloads_dir,
-    )
+    # SRE background maintenance: disk-capacity alerting. Fires only on
+    # crossing an escalating band (80/85/90/95), re-alerts a standing
+    # condition at most hourly, and rounds the percentage so Sentry groups
+    # it into one issue (2026-09 audit — the old monitor logged CRITICAL
+    # every 60 s and filed a new issue per 0.1 % wobble).
+    from app.core.observability import DiskUsageAlerter, check_disk_usage
 
     async def sre_maintenance_loop():
         alerter = DiskUsageAlerter()
-        ticks = 0
         while True:
             check_disk_usage(alerter)
-            # Sweep stale generated downloads every ~6 h (360 * 60 s).
-            if ticks % 360 == 0:
-                await asyncio.to_thread(prune_downloads_dir)
-            ticks += 1
             await asyncio.sleep(60.0)
 
     maintenance_task = asyncio.create_task(sre_maintenance_loop())
@@ -389,59 +218,29 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
 
-    # Release the shared outbound HTTP clients' keep-alive connections cleanly.
-    try:
-        from app.services.ai.llm_service import aclose_http_client
-
-        await aclose_http_client()
-    except Exception as e:
-        print(f"[Shutdown] LLM HTTP client close failed: {e}", flush=True)
-    try:
-        from app.services.data.openalex_service import aclose_openalex_client
-
-        await aclose_openalex_client()
-    except Exception as e:
-        print(f"[Shutdown] OpenAlex HTTP client close failed: {e}", flush=True)
-
-    if _zeroconf and _mdns_info:
-        await _zeroconf.async_unregister_service(_mdns_info)
-        await _zeroconf.async_close()
-        print(f"[mDNS] '{settings.mdns_service_name}' unregistered")
-
 
 app = FastAPI(
     title="SkoLab API",
     description=(
-        "Research intelligence backend powering the SkoLab Android app.\n\n"
+        "Authentication, authorization, and CoLab (workspace collaboration + "
+        "LaTeX compile) backend.\n\n"
         "**Auth**: Protected endpoints require a Firebase ID token in the "
         "`Authorization: Bearer <token>` header.\n\n"
         "**Rate limits**: enforced per-IP by the Go API gateway in front of "
-        "this service, not here."
+        "this service, plus a per-user cost quota (app/core/quota.py) on "
+        "/colab/compile."
     ),
-    version="1.1.0",
+    version="2.0.0",
     lifespan=lifespan,
     # Interactive docs and the raw schema are developer tools, not a public
     # surface — expose them everywhere except production (OWASP API8: reduce the
-    # attack surface / avoid information disclosure). Regenerate the committed
+    # attack surface / avoid information disclosure).
     docs_url=None if settings.environment == "production" else "/docs",
     redoc_url=None if settings.environment == "production" else "/redoc",
     openapi_url=None if settings.environment == "production" else "/openapi.json",
     openapi_tags=[
-        {
-            "name": "agent",
-            "description": "AI research agent — chat, document upload, cover letters.",
-        },
-        {"name": "papers", "description": "Paper search, feed, and recommendations."},
-        {
-            "name": "authors",
-            "description": "Researcher profiles, metrics, and co-author graphs.",
-        },
+        {"name": "CoLab", "description": "LaTeX compile (sandboxed) and workspace access."},
         {"name": "users", "description": "User account management and GDPR deletion."},
-        {"name": "feed", "description": "Personalised daily feed and trending items."},
-        {
-            "name": "system",
-            "description": "Health, readiness, and AI status endpoints.",
-        },
     ],
     swagger_ui_parameters={"persistAuthorization": True},
 )
@@ -502,18 +301,9 @@ if settings.force_https:
 
 
 # ── SRE kill-switch guard ───────────────────────────────────────────────────
-# What used to live here — a per-process token-bucket rate limiter, a per-IP
-# admin-subnet gate for /metrics + /ai_status, and a device-signature check —
-# was retired (docs/plans/2026-09-04-retire-python-infra.md):
-#   • Per-IP rate limiting is the Go gateway's job (middleware.NewRateLimiter,
-#     applied globally in services/backend-go/main.go). The Python copy was
-#     redundant and per-worker.
-#   • The admin gate only ever protected /metrics, which is gone (below).
-#   • The device signature was keyed by settings.database_encryption_key — a
-#     server-only secret no client can hold — so it could never pass for a
-#     real client and guarded no real route.
-# The kill switch stays: KILL_SWITCHES=feature1,feature2 makes any route whose
-# path contains that fragment return 503 without a redeploy.
+# KILL_SWITCHES=feature1,feature2 makes any route whose path contains that
+# fragment return 503 without a redeploy. Per-IP rate limiting is the Go
+# gateway's job (middleware.NewRateLimiter) — not duplicated here.
 @app.middleware("http")
 async def security_guard_middleware(request: Request, call_next):
     path = request.url.path.lower()
@@ -616,33 +406,14 @@ async def structured_log_middleware(request: Request, call_next):
             trace_id_var.reset(trace_id_token)
 
 
-# Serve static downloads folder — path is always relative to backend root,
-# never relative to CWD so it works regardless of where uvicorn is launched from.
-from fastapi.staticfiles import StaticFiles
-
-
-class CacheControlledStaticFiles(StaticFiles):
-    async def get_response(self, path: str, scope) -> Response:
-        response = await super().get_response(path, scope)
-        response.headers["Cache-Control"] = "max-age=31536000, immutable"
-        return response
-
-
-_DOWNLOADS_DIR = settings.downloads_dir  # resolved absolute path from config
-app.mount(
-    "/downloads",
-    CacheControlledStaticFiles(directory=str(_DOWNLOADS_DIR)),
-    name="downloads",
-)
-
 # Expose one canonical API prefix. Clients must use /api/v1.
 app.include_router(api_router, prefix="/api/v1")
 
 
 @app.get("/", response_model=AppInfoResponse)
 async def root():
-    """Root endpoint returning API metadata for mobile client verification and discovery."""
-    return {"app": "Skolab API", "status": "online", "version": "1.0.0"}
+    """Root endpoint returning API metadata for client verification."""
+    return {"app": "Skolab API", "status": "online", "version": "2.0.0"}
 
 
 async def check_readiness() -> tuple[bool, dict[str, str]]:
@@ -661,10 +432,9 @@ async def check_readiness() -> tuple[bool, dict[str, str]]:
         logger.error(f"Database health check failed: {e}")
 
     # Read-only cache probe. This endpoint is hit every few seconds by the load
-    # balancer and the status page, so it must not write — the previous
-    # `cache.set()` here put a row into `cache_entries` on every call and made
-    # /health ~10x slower than any real read. Redis-backed L2: PING. Otherwise
-    # the L2 is Postgres, whose reachability the SELECT 1 above already proved.
+    # balancer and the status page, so it must not write. Redis-backed L2: PING.
+    # Otherwise the L2 is Postgres, whose reachability the SELECT 1 above
+    # already proved.
     try:
         from app.db.pg_cache import _redis_active, _redis_client
 
