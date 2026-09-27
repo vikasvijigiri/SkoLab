@@ -10,7 +10,7 @@ from app.schemas.authors_extra import (
 )
 from app.services.platform.pipeline_services import PipelineServices
 from app.services.platform.metrics_service import analyze_author_metrics_context
-from app.api.dependencies import get_pipeline_services
+from app.api.dependencies import get_pipeline_services, require_quota
 from app.api.v1.endpoints.internal import _check_internal_token
 from app.core.pending_compute import PENDING, run_bounded
 from app.api.v1.endpoints.feed import (
@@ -67,6 +67,7 @@ async def get_collaborator_synergy(
     author_id: str = Query(...),
     collaborator_id: str = Query(...),
     pipeline_services: PipelineServices = Depends(get_pipeline_services),
+    _user: dict = Depends(require_quota(2)),
 ):
     return await pipeline_services.get_collaborator_synergy(author_id, collaborator_id)
 
@@ -78,6 +79,7 @@ async def get_collaborator_synergy(
 async def match_grants(
     author_id: str = Query(...),
     pipeline_services: PipelineServices = Depends(get_pipeline_services),
+    _user: dict = Depends(require_quota(5)),
 ):
     # match_grants scrapes live funding portals and runs the results through
     # the embedding-grounded match-scoring pipeline (see grants.py) -- 34.9s
@@ -107,6 +109,7 @@ async def match_grants(
 async def get_journal_advisor(
     author_id: str = Query(...),
     pipeline_services: PipelineServices = Depends(get_pipeline_services),
+    _user: dict = Depends(require_quota(3)),
 ):
     return await pipeline_services.get_journal_advisor(author_id)
 

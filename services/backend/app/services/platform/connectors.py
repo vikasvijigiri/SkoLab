@@ -197,32 +197,6 @@ async def search_researchgate_profile(query: str) -> str:
         return f"Error searching ResearchGate: {e}"
 
 
-def list_local_files(directory_path: str = ".") -> str:
-    """Real connector to list local files in a directory."""
-    try:
-        # Sanitize to prevent accessing root system files
-        safe_path = os.path.abspath(directory_path)
-        if not os.path.exists(safe_path):
-            return f"Directory {safe_path} does not exist."
-        files = os.listdir(safe_path)
-        return f"Files in {safe_path}:\n" + "\n".join(files[:50])
-    except Exception as e:
-        return f"Error reading local folder: {e}"
-
-
-def read_local_file(file_path: str) -> str:
-    """Real connector to read a local file's content."""
-    try:
-        safe_path = os.path.abspath(file_path)
-        if not os.path.exists(safe_path):
-            return f"File {safe_path} does not exist."
-        with open(safe_path, "r", encoding="utf-8") as f:
-            content = f.read(2000)  # read up to 2000 chars
-            return f"Content of {safe_path}:\n{content}"
-    except Exception as e:
-        return f"Error reading file: {e}"
-
-
 async def search_web(query: str, max_results: int = 5) -> str:
     """Real connector to search the web using ScrapingService."""
     from app.services.data.scraping_service import ScrapingService
@@ -902,40 +876,6 @@ TOOLS_SCHEMA = [
     {
         "type": "function",
         "function": {
-            "name": "list_local_files",
-            "description": "Lists files and folders in a local directory on the laptop.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "directory_path": {
-                        "type": "string",
-                        "description": "The path to list, e.g., '.' for current directory",
-                    }
-                },
-                "required": ["directory_path"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "read_local_file",
-            "description": "Reads the content of a local text file.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "file_path": {
-                        "type": "string",
-                        "description": "The absolute or relative path to the file",
-                    }
-                },
-                "required": ["file_path"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "search_web",
             "description": "Searches the live web for recent or dynamic information outside academic databases (e.g., news, current events, software libraries, documentation, or facts). Use this when the user asks about live, real-time, or dynamic topics.",
             "parameters": {
@@ -1291,10 +1231,6 @@ async def execute_tool_call(
             return await search_arxiv_publications(
                 arguments.get("query", ""), arguments.get("max_results", 5)
             )
-        elif tool_name == "list_local_files":
-            return list_local_files(arguments.get("directory_path", "."))
-        elif tool_name == "read_local_file":
-            return read_local_file(arguments.get("file_path", ""))
         elif tool_name == "search_web":
             return await search_web(
                 arguments.get("query", ""), arguments.get("max_results", 5)

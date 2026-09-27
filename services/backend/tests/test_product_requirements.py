@@ -2,6 +2,15 @@ import pytest
 import httpx
 from unittest.mock import patch, MagicMock
 from app.main import app
+from app.api.dependencies import get_verified_user
+
+
+@pytest.fixture(autouse=True)
+def _authenticated_user():
+    app.dependency_overrides[get_verified_user] = lambda: {"uid": "u1"}
+    yield
+    app.dependency_overrides.pop(get_verified_user, None)
+
 
 # Configure HTTPX AsyncClient transport compatibility
 try:

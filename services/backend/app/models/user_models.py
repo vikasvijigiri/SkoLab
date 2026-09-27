@@ -221,6 +221,20 @@ class CacheEntry(Base):
     expires_at = Column(DateTime, nullable=True)
 
 
+class UsageCounter(Base):
+    """Fixed-window cost counter backing per-user quotas (app/core/quota.py).
+
+    One row per (user, window) bucket; ``count`` is the cost units consumed.
+    Rows are dead after ``expires_at`` and swept opportunistically.
+    """
+
+    __tablename__ = "usage_counters"
+
+    bucket_key = Column(String(160), primary_key=True)
+    count = Column(Integer, nullable=False, default=0)
+    expires_at = Column(DateTime, nullable=False, index=True)
+
+
 class ResearcherProfile(Base):
     """
     Persistent store of researcher profiles fetched from OpenAlex.

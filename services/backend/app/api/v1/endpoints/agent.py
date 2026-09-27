@@ -9,12 +9,10 @@ from app.schemas.agent import (
 )
 from app.services.ai.agent_service import AgentService
 from app.services.platform.pipeline_services import PipelineServices
-from typing import Optional
 from app.api.dependencies import (
     get_agent_service,
     get_pipeline_services,
-    get_verified_user,
-    get_optional_user,
+    require_quota,
 )
 
 router = APIRouter()
@@ -60,7 +58,7 @@ async def agent_chat(
     req: AgentChatRequest,
     request: Request,
     agent_service: AgentService = Depends(get_agent_service),
-    _user: dict = Depends(get_verified_user),
+    _user: dict = Depends(require_quota(3)),
 ):
     base_url = str(request.base_url).rstrip("/")
     return await agent_service.process_agent_chat(req, base_url=base_url)
@@ -70,7 +68,7 @@ async def agent_chat(
 async def upload_document(
     file: UploadFile = File(...),
     agent_service: AgentService = Depends(get_agent_service),
-    user: dict = Depends(get_verified_user),
+    user: dict = Depends(require_quota(2)),
 ):
     filename, suffix = _safe_upload_filename(file.filename or "")
     declared_length = file.headers.get("content-length")
@@ -105,13 +103,13 @@ async def upload_document(
 async def chat_with_author(
     req: ChatRequest,
     pipeline_services: PipelineServices = Depends(get_pipeline_services),
-    _user: Optional[dict] = Depends(get_optional_user),
+    _user: dict = Depends(require_quota(3)),
 ):
     hist_dict = [{"role": h.role, "content": h.content} for h in req.history]
     # Real, server-verified uid — never a client-supplied value — so chat
     # history is keyed to who's actually authenticated, not shared across
     # every caller (see chat_with_author's docstring for the prior bug).
-    real_user_id = _user.get("uid") if _user else None
+    real_user_id = _user.get("uid")
     return await pipeline_services.chat_with_author(
         author_id=req.author_id,
         paper_title=req.paper_title,

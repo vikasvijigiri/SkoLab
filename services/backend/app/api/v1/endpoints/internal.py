@@ -16,6 +16,7 @@ clients) and it only enqueues a background task.
 
 from __future__ import annotations
 
+import hmac
 import logging
 import os
 
@@ -53,7 +54,9 @@ async def _run_teleport(author_id: str) -> None:
 
 def _check_internal_token(x_internal_token: str | None) -> None:
     expected = os.environ.get("INTERNAL_API_TOKEN", "")
-    if expected and x_internal_token != expected:
+    if expected and not hmac.compare_digest(
+        (x_internal_token or "").encode(), expected.encode()
+    ):
         raise HTTPException(status_code=401, detail="invalid internal token")
 
 

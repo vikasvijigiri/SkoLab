@@ -6,6 +6,7 @@ from app.api.dependencies import (
     get_openalex_service,
     get_pipeline_services,
     get_summarization_service,
+    get_verified_user,
 )
 from app.core.exceptions import AIUnavailable
 from app.schemas.core import PaperIntelligenceResponse
@@ -62,6 +63,7 @@ def _overrides(app):
     app.dependency_overrides[get_summarization_service] = lambda: _FakeSummarization()
     app.dependency_overrides[get_pipeline_services] = lambda: _FakePipeline()
     app.dependency_overrides[get_openalex_service] = lambda: _FakeOpenAlex()
+    app.dependency_overrides[get_verified_user] = lambda: {"uid": "u1"}
     yield
     app.dependency_overrides.clear()
 
@@ -118,3 +120,24 @@ async def test_semantic_trending_parses_and_bounds_limit(client):
         "/api/v1/papers/semantic-trending", params={"author_id": "A123", "limit": 999}
     )
     assert bad.status_code == 422
+
+
+async def test_analyze_is_metered_per_user(client, monkeypatch):
+    from app.core import quota
+
+    async def _none(*_a, **_k):
+        return None
+
+    monkeypatch.setenv("USER_QUOTA_ENABLED", "true")
+    monkeypatch.setenv("USER_QUOTA_HOURLY_UNITS", "10")  # analyze costs 10
+    monkeypatch.setattr(quota, "_redis_incr", _none)
+    monkeypatch.setattr(quota, "_pg_incr", _none)
+    quota._local.clear()
+    try:
+        first = await client.get("/api/v1/papers/analyze", params={"title": "Q1"})
+        second = await client.get("/api/v1/papers/analyze", params={"title": "Q2"})
+    finally:
+        quota._local.clear()
+    assert first.status_code == 200, first.text
+    assert second.status_code == 429
+    assert int(second.headers["Retry-After"]) >= 1

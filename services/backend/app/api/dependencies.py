@@ -1,7 +1,8 @@
 from typing import AsyncGenerator, Awaitable, Callable, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import Depends, HTTPException, Request, Security, status
+from fastapi import Depends, HTTPException, Request, Response, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from app.core.quota import QuotaExceeded, consume as consume_quota
 from app.db.database import AsyncSessionLocal
 from app.services.ai.agent_service import AgentService
 from app.services.platform.pipeline_services import PipelineServices
@@ -70,6 +71,36 @@ async def get_optional_user(
         return await get_verified_user(credentials)
     except HTTPException:
         return None
+
+
+def require_quota(cost: int) -> Callable[..., Awaitable[dict]]:
+    """Verified user + charge ``cost`` units against their hourly/daily budget.
+
+    401 without a valid token (via ``get_verified_user``); 429 with
+    ``Retry-After`` once the account's budget is spent. See app/core/quota.py.
+    """
+
+    async def _require_quota(
+        response: Response,
+        user: dict = Depends(get_verified_user),
+    ) -> dict:
+        uid = str((user or {}).get("uid") or "")
+        if not uid:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+        try:
+            remaining = await consume_quota(uid, cost)
+        except QuotaExceeded as exc:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Your {exc.window} usage budget is spent. Try again later.",
+                headers={"Retry-After": str(exc.retry_after)},
+            ) from exc
+        if remaining:
+            response.headers["X-Quota-Remaining-Hour"] = str(remaining["hourly"])
+            response.headers["X-Quota-Remaining-Day"] = str(remaining["daily"])
+        return user
+
+    return _require_quota
 
 
 def require_owner(*id_params: str) -> Callable[..., Awaitable[dict]]:

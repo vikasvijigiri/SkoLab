@@ -1,0 +1,45 @@
+# colab-sandbox: a minimal, standalone LaTeX compile worker.
+#
+# Build context is THIS directory (services/backend-go), because the binary
+# is cmd/colab-sandbox from the same Go module as the main gateway — this is
+# a second Dockerfile into the same source tree, not a separate service
+# directory. See docs/deploy/colab-sandbox.md for the exact build/push/
+# deploy commands (build: docker build -f Dockerfile.colab-sandbox .).
+#
+# Deployed as its own service (Cloud Run recommended — see that doc), apart
+# from the main API. Each invocation on Cloud Run runs in its own
+# gVisor-sandboxed, network-namespaced container instance — the "stronger
+# approach" from docs/audits/2026-09-26-backend-security-reliability-reaudit.md,
+# not achievable by a subprocess sharing the gateway's own container.
+#
+# Deliberately tiny: a static Go binary + pdflatex + util-linux (for
+# prlimit). No Python, no Firebase, no database driver — this process holds
+# exactly one secret (INTERNAL_API_TOKEN) and nothing else worth stealing.
+
+FROM golang:1.26-bookworm AS builder
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" \
+    -o /out/colab-sandbox ./cmd/colab-sandbox
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    texlive-latex-base \
+    util-linux \
+    ca-certificates \
+    wget \
+    && rm -rf /var/lib/apt/lists/* && \
+    groupadd -g 10001 sandbox && \
+    useradd -u 10001 -g sandbox -s /usr/sbin/nologin -m sandbox
+
+COPY --from=builder /out/colab-sandbox /usr/local/bin/colab-sandbox
+USER sandbox
+WORKDIR /home/sandbox
+
+ENV PORT=8081
+EXPOSE 8081
+HEALTHCHECK --interval=30s --timeout=3s CMD ["wget", "-qO-", "http://127.0.0.1:8081/healthz"]
+
+ENTRYPOINT ["/usr/local/bin/colab-sandbox"]

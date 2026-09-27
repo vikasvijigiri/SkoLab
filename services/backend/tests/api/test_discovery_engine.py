@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.api.dependencies import get_prediction_service
+from app.api.dependencies import get_prediction_service, get_verified_user
 from app.schemas.discovery import BreakthroughPrediction, NexusChatResponse
 
 
@@ -35,6 +35,7 @@ class _FakePrediction:
 @pytest.fixture(autouse=True)
 def _overrides(app):
     app.dependency_overrides[get_prediction_service] = lambda: _FakePrediction()
+    app.dependency_overrides[get_verified_user] = lambda: {"uid": "u1"}
     yield
     app.dependency_overrides.clear()
 

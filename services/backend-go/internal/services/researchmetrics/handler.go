@@ -1,6 +1,7 @@
 package researchmetrics
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"os"
 
@@ -37,7 +38,7 @@ func checkInternalToken(c *gin.Context) bool {
 	if expected == "" {
 		return true
 	}
-	if c.GetHeader("X-Internal-Token") != expected {
+	if subtle.ConstantTimeCompare([]byte(c.GetHeader("X-Internal-Token")), []byte(expected)) != 1 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid internal token"})
 		return false
 	}

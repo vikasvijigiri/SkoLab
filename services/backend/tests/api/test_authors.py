@@ -10,7 +10,7 @@ import asyncio
 
 import pytest
 
-from app.api.dependencies import get_pipeline_services
+from app.api.dependencies import get_pipeline_services, get_verified_user
 from app.api.v1.endpoints import authors as authors_module
 from app.core import pending_compute
 from app.schemas.authors_extra import GrantMatch, JournalRecommendation
@@ -39,6 +39,7 @@ class _SlowGrantsPipeline:
 @pytest.fixture(autouse=True)
 def _overrides(app):
     app.dependency_overrides[get_pipeline_services] = lambda: _FakePipeline()
+    app.dependency_overrides[get_verified_user] = lambda: {"uid": "u1"}
     yield
     app.dependency_overrides.clear()
     pending_compute._inflight.clear()

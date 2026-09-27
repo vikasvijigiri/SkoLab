@@ -31,3 +31,7 @@ services/backend-go/backend-go.exe
 scratch/
 services/backend/scratch/
 services/backend/downloads/exports/
+
+
+docs/
+.claude/

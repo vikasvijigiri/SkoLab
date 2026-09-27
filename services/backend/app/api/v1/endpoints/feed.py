@@ -21,6 +21,7 @@ from app.core.pending_compute import PENDING, run_bounded
 from app.api.dependencies import (
     get_pipeline_services,
     get_openalex_service,
+    require_quota,
 )
 
 router = APIRouter()
@@ -50,6 +51,7 @@ async def get_daily_feed(
     author_id: Optional[str] = None,
     query_fallback: Optional[str] = None,
     pipeline_services: PipelineServices = Depends(get_pipeline_services),
+    _user: dict = Depends(require_quota(2)),
 ):
     key = f"daily_feed:{author_id or ''}:{query_fallback or ''}"
     result = await run_bounded(
@@ -155,6 +157,7 @@ async def get_daily_conjecture(
     author_id: Optional[str] = Query(None),
     name: Optional[str] = Query(None),
     openalex_service: OpenAlexService = Depends(get_openalex_service),
+    _user: dict = Depends(require_quota(3)),
 ):
     author_data = None
     resolved_id = None
@@ -310,6 +313,7 @@ async def get_industry_opportunities(
     focus: str = Query("AI"),
     name: Optional[str] = Query(None),
     openalex_service: OpenAlexService = Depends(get_openalex_service),
+    _user: dict = Depends(require_quota(4)),
 ):
     # A cache miss here scrapes six job portals plus a DDG search and runs
     # them through the LLM (industry_service.py) -- measured at 35s+ against
@@ -353,6 +357,7 @@ async def get_assistant_professor_roadmap(
     focus: str = Query("AI"),
     openalex_service: OpenAlexService = Depends(get_openalex_service),
     db: AsyncSession = Depends(get_db),
+    _user: dict = Depends(require_quota(4)),
 ):
     if not author_id and not name:
         raise HTTPException(

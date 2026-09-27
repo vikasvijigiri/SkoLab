@@ -12,6 +12,7 @@ import pytest
 from app.api.dependencies import (
     get_openalex_service,
     get_pipeline_services,
+    get_verified_user,
 )
 from app.api.v1.endpoints import feed as feed_module
 from app.core import pending_compute
@@ -79,6 +80,7 @@ class _SlowPipeline:
 def _overrides(app):
     app.dependency_overrides[get_pipeline_services] = lambda: _FakePipeline()
     app.dependency_overrides[get_openalex_service] = lambda: object()
+    app.dependency_overrides[get_verified_user] = lambda: {"uid": "u1"}
     yield
     app.dependency_overrides.clear()
     pending_compute._inflight.clear()

@@ -25,6 +25,7 @@ import (
 	"github.com/skolab/backend-go/internal/activity"
 	"github.com/skolab/backend-go/internal/auth"
 	"github.com/skolab/backend-go/internal/author"
+	"github.com/skolab/backend-go/internal/colab"
 	"github.com/skolab/backend-go/internal/db"
 	"github.com/skolab/backend-go/internal/feed"
 	"github.com/skolab/backend-go/internal/firestore"
@@ -309,6 +310,17 @@ func main() {
 		questsAPI.POST("/users/quests/complete", quest.CompleteQuest)
 	}
 
+	// ── CoLab compile — auth + per-user quota + single-flight live in Go;
+	// the actual pdflatex run happens in cmd/colab-sandbox (COLAB_SANDBOX_URL,
+	// its own per-request-isolated container) once deployed, or falls back to
+	// the existing hardened Python route until then. See internal/colab and
+	// docs/audits/2026-09-26-backend-security-reliability-reaudit.md.
+	colabAPI := r.Group("/api/v1")
+	colabAPI.Use(auth.VerifyUser())
+	{
+		colabAPI.POST("/colab/compile", colab.Handler(db.Pool, &http.Client{}, pythonBackendURL))
+	}
+
 	// ── Recommendations: CoLab peer autocomplete — Go PG only, no AI ─────────
 	// Ported from services/backend/app/domains/recommendation. Hard Firebase
 	// auth (decisions/0008): the Android client attaches a token as of #27
@@ -355,6 +367,14 @@ func main() {
 		if strings.EqualFold(c.GetHeader("Upgrade"), "websocket") {
 			slog.Warn("rejected unhandled websocket upgrade", "path", c.Request.URL.Path)
 			c.AbortWithStatus(http.StatusNotImplemented)
+			return
+		}
+		// Python's /internal/* routes are service-to-service only (the gateway
+		// itself calls PYTHON_BACKEND_URL directly, never through this
+		// fallthrough). Refuse to relay them to the public internet so they
+		// are not reachable even with a leaked shared token.
+		if p := c.Request.URL.Path; strings.HasPrefix(p, "/internal/") || strings.HasPrefix(p, "/api/v1/internal/") {
+			c.AbortWithStatus(http.StatusNotFound)
 			return
 		}
 		proxy(c)

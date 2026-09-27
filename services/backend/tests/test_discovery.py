@@ -2,7 +2,7 @@ import pytest
 import httpx
 from unittest.mock import AsyncMock, MagicMock
 from app.main import app
-from app.api.dependencies import get_prediction_service
+from app.api.dependencies import get_prediction_service, get_verified_user
 
 try:
     transport = httpx.ASGITransport(app=app)
@@ -32,8 +32,10 @@ def mock_prediction_service():
     )
 
     app.dependency_overrides[get_prediction_service] = lambda: mock
+    app.dependency_overrides[get_verified_user] = lambda: {"uid": "u1"}
     yield mock
     app.dependency_overrides.pop(get_prediction_service, None)
+    app.dependency_overrides.pop(get_verified_user, None)
 
 
 @pytest.mark.anyio

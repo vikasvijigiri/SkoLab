@@ -33,20 +33,32 @@ _HTTP_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 # here too — they additionally assert token uid == the request's user_id.
 EXPECTED_AUTHED: set[str] = {
     "/agent/chat",
+    "/agent/chat-with-author",
     "/agent/upload-document",
     "/colab/compile",
     "/industry-academic-tieups",  # require_owner("user_id") — private memory profile
     "/users/quests",  # require_owner("user_id") — private quest records
+    # Every LLM / paid-scrape route requires a verified uid (2026-09-27 audit):
+    # these were anonymous, gated only by a per-IP rate limit.
+    "/papers/summarize",
+    "/papers/analyze",
+    "/papers/presentation-outline",
+    "/papers/semantic-trending",
+    "/feed/daily",
+    "/feed/conjecture",
+    "/feed/industry-opportunities",
+    "/feed/roadmap",
+    "/collaborator-synergy",
+    "/match-grants",
+    "/journal-advisor",
+    "/discovery/predict",
+    "/discovery/nexus-chat",
     # NOTE: /feed/daily/dismiss moved to the Go gateway in Phase 2
     # (services/backend-go/internal/feed/feed.go) — see docs/backend-auth-posture.md.
 }
 
-# Routes that personalise when a token is present but work anonymously.
-EXPECTED_OPTIONAL: set[str] = {
-    "/agent/chat-with-author",
-    "/discovery/predict",
-    "/discovery/nexus-chat",
-}
+# No route may personalise-or-fall-through anonymously any more.
+EXPECTED_OPTIONAL: set[str] = set()
 
 
 def _norm(path: str) -> str:

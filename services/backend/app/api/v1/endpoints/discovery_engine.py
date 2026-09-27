@@ -4,7 +4,7 @@ from typing import Optional, List, Dict, Any
 
 from app.schemas.discovery import BreakthroughPrediction, NexusChatResponse
 from app.services.ai.prediction_service import PredictionService
-from app.api.dependencies import get_prediction_service, get_optional_user
+from app.api.dependencies import get_prediction_service, require_quota
 
 router = APIRouter()
 
@@ -29,7 +29,7 @@ class NexusChatRequest(BaseModel):
 async def predict_discovery(
     req: PredictRequest,
     prediction_service: PredictionService = Depends(get_prediction_service),
-    _user: Optional[dict] = Depends(get_optional_user),
+    _user: dict = Depends(require_quota(5)),
 ):
     if not req.field.strip():
         raise HTTPException(status_code=400, detail="Field query cannot be empty.")
@@ -42,7 +42,7 @@ async def predict_discovery(
 async def nexus_chat(
     req: NexusChatRequest,
     prediction_service: PredictionService = Depends(get_prediction_service),
-    _user: Optional[dict] = Depends(get_optional_user),
+    _user: dict = Depends(require_quota(3)),
 ):
     response_text, is_fallback = await prediction_service.nexus_chat(
         papers=req.papers, messages=req.messages

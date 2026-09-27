@@ -39,6 +39,7 @@ WORKDIR /app
 # base LaTeX classes cover the templates available to supported clients.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     texlive-latex-base \
+    util-linux \
     && rm -rf /var/lib/apt/lists/* && \
     groupadd -g 10001 schoolab && \
     useradd -u 10001 -g schoolab -s /bin/bash -m schoolab

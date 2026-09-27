@@ -23,6 +23,10 @@ os.environ["SENTRY_DSN"] = ""
 # explicit value with monkeypatch instead.
 os.environ["INTERNAL_API_TOKEN"] = ""
 
+# Shared fixtures reuse one fake uid across hundreds of requests; quota tests
+# switch this back on explicitly.
+os.environ["USER_QUOTA_ENABLED"] = "false"
+
 # Tests must never infer their database from DATABASE_URL: that variable is
 # also used by local and deployed application processes and may point at
 # production. CI supplies a disposable Postgres URL; developers must supply a

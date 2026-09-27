@@ -18,6 +18,7 @@ from app.api.dependencies import (
     get_pipeline_services,
     get_openalex_service,
     get_db,
+    require_quota,
 )
 from app.core.cache import analyze_paper_cache, _semantic_trending_cache
 
@@ -29,6 +30,7 @@ async def summarize_work(
     title: str = Query(...),
     doi: Optional[str] = None,
     summarization_service: SummarizationService = Depends(get_summarization_service),
+    _user: dict = Depends(require_quota(5)),
 ):
     return await summarization_service.summarize_paper(title, doi)
 
@@ -43,6 +45,7 @@ async def analyze_paper(
         None, description="OpenAlex work ID (e.g. W2741809807 or full URL)"
     ),
     summarization_service: SummarizationService = Depends(get_summarization_service),
+    _user: dict = Depends(require_quota(10)),
 ):
     """
     Deep paper intelligence: reads the FULL paper text (PDF when available)
@@ -68,6 +71,7 @@ async def presentation_outline(
     title: str = Query(...),
     doi: Optional[str] = None,
     summarization_service: SummarizationService = Depends(get_summarization_service),
+    _user: dict = Depends(require_quota(5)),
 ):
     return await summarization_service.generate_presentation(title, doi)
 
@@ -82,6 +86,7 @@ async def get_semantic_trending(
     pipeline_services: PipelineServices = Depends(get_pipeline_services),
     openalex_service: OpenAlexService = Depends(get_openalex_service),
     db: AsyncSession = Depends(get_db),
+    _user: dict = Depends(require_quota(1)),
 ):
     """
     Returns papers trending specifically in the author's research field.
