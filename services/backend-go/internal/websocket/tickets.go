@@ -116,12 +116,12 @@ func IssueTicket(authorizer WorkspaceAuthorizer, tickets WorkspaceTicketStore) g
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Workspace authorization is temporarily unavailable"})
 			return
 		}
-		allowed, err := authorizer.Authorize(c.Request.Context(), workspaceID, userID)
+		role, err := authorizer.Role(c.Request.Context(), workspaceID, userID)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Workspace authorization is temporarily unavailable"})
 			return
 		}
-		if !allowed {
+		if role == "" {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You do not have access to this workspace"})
 			return
 		}

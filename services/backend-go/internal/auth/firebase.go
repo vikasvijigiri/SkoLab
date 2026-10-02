@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -9,11 +10,11 @@ import (
 	"time"
 
 	firebase "firebase.google.com/go/v4"
-	"firebase.google.com/go/v4/auth"
 	"github.com/gin-gonic/gin"
 )
 
-var authClient *auth.Client
+// authClient is the Firebase Auth client (nil until InitFirebase succeeds).
+var authClient identityProvider
 
 // releaseMode reports whether the gateway is running in a deployed
 // configuration. It reads GIN_MODE directly rather than gin.Mode() so that the
@@ -74,14 +75,26 @@ func verifyTokenAndSetUser(c *gin.Context, idToken string) {
 		return
 	}
 
-	// A normal verification accepts an otherwise valid token until expiry,
-	// even after Firebase revokes the user's session. Check revocation on every
-	// protected route so "sign out everywhere" takes effect promptly.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Signature, expiry, issuer and audience are verified locally against
+	// Google's cached public keys. A valid token can still belong to a
+	// session revoked since it was minted ("sign out everywhere", password
+	// change, account disabled or deleted), so revocation is then checked
+	// against a briefly cached account status -- same rule as Firebase's
+	// check-revoked, without a network round trip on every request.
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
-	token, err := authClient.VerifyIDTokenAndCheckRevoked(ctx, idToken)
+	token, err := authClient.VerifyIDToken(ctx, idToken)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired Firebase token"})
+		return
+	}
+	if err := revocations.check(ctx, authClient, token.UID, token.AuthTime); err != nil {
+		if errors.Is(err, errRevoked) {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Session is no longer valid; sign in again"})
+			return
+		}
+		slog.Error("account status check unavailable", "err", err)
+		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Authentication is temporarily unavailable"})
 		return
 	}
 

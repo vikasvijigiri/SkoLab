@@ -66,16 +66,27 @@ async def test_compile_route_returns_typed_response(client, app, monkeypatch):
 
 
 async def test_colab_uses_shared_revocation_aware_firebase_verifier(monkeypatch):
+    from types import SimpleNamespace
+
+    from app.api import dependencies
+
+    dependencies._user_status.clear()
     firebase_module = ModuleType("firebase_admin")
     firebase_module._apps = [object()]
     auth_module = ModuleType("firebase_admin.auth")
-    calls: list[tuple[str, bool]] = []
+    calls: list[str] = []
 
-    def verify_id_token(token: str, *, check_revoked: bool):
-        calls.append((token, check_revoked))
-        return {"uid": "researcher-1"}
+    # Signature checked locally; revocation via the cached account status.
+    def verify_id_token(token: str):
+        calls.append(token)
+        return {"uid": "researcher-1", "auth_time": 2_000}
+
+    def get_user(uid: str):
+        calls.append("get_user:" + uid)
+        return SimpleNamespace(tokens_valid_after_timestamp=1_000_000, disabled=False)
 
     auth_module.verify_id_token = verify_id_token
+    auth_module.get_user = get_user
     firebase_module.auth = auth_module
     monkeypatch.setitem(sys.modules, "firebase_admin", firebase_module)
     monkeypatch.setitem(sys.modules, "firebase_admin.auth", auth_module)
@@ -85,8 +96,8 @@ async def test_colab_uses_shared_revocation_aware_firebase_verifier(monkeypatch)
     )
     user = await require_firebase_user(credentials)
 
-    assert user == {"uid": "researcher-1"}
-    assert calls == [("test-firebase-token", True)]
+    assert user["uid"] == "researcher-1"
+    assert calls == ["test-firebase-token", "get_user:researcher-1"]
 
 
 # ── hardening ───────────────────────────────────────────────────────────────
@@ -154,7 +165,9 @@ async def test_second_concurrent_compile_by_same_user_is_429(client, app):
     app.dependency_overrides[get_verified_user] = lambda: {"uid": "busy-user"}
     colab._active_users.add("busy-user")
     try:
-        response = await client.post("/api/v1/colab/compile", json={"latex_source": "x"})
+        response = await client.post(
+            "/api/v1/colab/compile", json={"latex_source": "x"}
+        )
     finally:
         colab._active_users.discard("busy-user")
         app.dependency_overrides.pop(get_verified_user, None)
