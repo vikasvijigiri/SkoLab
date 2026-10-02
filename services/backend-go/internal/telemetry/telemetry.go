@@ -128,7 +128,7 @@ func methodLabel(method string) string {
 func (t *Telemetry) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		switch c.Request.URL.Path {
-		case "/gateway-health", "/observability", "/metrics":
+		case "/gateway-health", "/readyz", "/observability", "/metrics":
 			c.Next()
 			return
 		}

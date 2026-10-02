@@ -25,6 +25,8 @@ jobs:
         include:
           - name: Go gateway
             url: https://skolab-gateway.onrender.com/gateway-health
+          - name: Go gateway (readiness, database)
+            url: https://skolab-gateway.onrender.com/readyz
           - name: Python backend (liveness)
             url: https://skolab-backend-py.onrender.com/livez
           - name: Python backend (health)

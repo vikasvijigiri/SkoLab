@@ -258,3 +258,51 @@ def test_invalid_export_protocol_fails_before_starting_readers(monkeypatch):
     monkeypatch.setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc")
     with pytest.raises(ValueError, match="http/protobuf"):
         otel.Telemetry(force=True)
+
+
+class _FakePool:
+    def checkedout(self):
+        return 3
+
+    def checkedin(self):
+        return 2
+
+
+def test_saturation_gauges_report_pool_and_loop_lag(runtime):
+    tel, reader, _ = runtime
+    lag = otel.LoopLagMonitor()
+    lag.record(0.25)
+    lag.record(0.1)
+    otel.observe_saturation(tel, pool=_FakePool, max_connections=7, loop_lag=lag)
+    got = points(reader)
+    by_state = {
+        p.attributes["state"]: p.value for p in got["skolab.db.pool.connections"]
+    }
+    assert by_state == {"acquired": 3, "idle": 2}
+    assert [p.value for p in got["skolab.db.pool.max_connections"]] == [7]
+    # The gauge reports the worst lag since the last export, then resets.
+    assert [p.value for p in got["skolab.runtime.event_loop_lag"]] == [0.25]
+    assert [p.value for p in points(reader)["skolab.runtime.event_loop_lag"]] == [0.0]
+
+
+def test_saturation_skips_pools_without_size_accounting(runtime):
+    from sqlalchemy.pool import NullPool
+
+    tel, reader, _ = runtime
+    otel.observe_saturation(tel, pool=lambda: NullPool(lambda: None))
+    # Nothing observed means nothing exported -- not a series of zeros.
+    assert reader.get_metrics_data() is None
+
+
+@pytest.mark.asyncio
+async def test_loop_lag_monitor_measures_blocking():
+    import asyncio
+    import time
+
+    lag = otel.LoopLagMonitor(interval=0.01)
+    task = asyncio.create_task(lag.run())
+    await asyncio.sleep(0.02)
+    time.sleep(0.1)  # block the loop, as a sync call in a handler would
+    await asyncio.sleep(0.03)
+    task.cancel()
+    assert lag.take() >= 0.05

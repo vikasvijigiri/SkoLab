@@ -85,3 +85,24 @@ jobs:
             echo "$unformatted"
             exit 1
           fi
+
+  slo-rules:
+    # The SLO alert rules are code: regenerated from one table, then checked
+    # and unit-tested with promtool so a broken expression or a threshold that
+    # can never fire fails here instead of silently never paging.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Rules file is up to date with generate.py
+        run: python services/observability/slo/generate.py --check
+      - name: Unit-test the Grafana provisioner
+        run: python -m unittest discover -s services/observability/slo -p "test_*.py"
+      - name: Check and unit-test rules with promtool
+        working-directory: services/observability/slo
+        run: |
+          promtool() { docker run --rm -v "$PWD:/slo" -w /slo --entrypoint promtool prom/prometheus:v3.15.0 "$@"; }
+          promtool check rules skolab-slo.rules.yml
+          promtool test rules skolab-slo.test.yml

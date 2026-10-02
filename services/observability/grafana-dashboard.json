@@ -12,7 +12,7 @@
   "title": "SkoLab backend metrics",
   "description": "Select one service. Rates aggregate instances. Gateway counts are incoming traffic; Python counts are internal service execution. Health probes are excluded.",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "editable": true,
   "tags": [
     "skolab",
@@ -177,19 +177,22 @@
           "refId": "A",
           "expr": "histogram_quantile(0.5, sum by (le) (rate(skolab_http_request_duration_seconds_bucket{job=\"$service\",deployment_environment_name=\"$environment\"}[$__rate_interval])))",
           "legendFormat": "p50",
-          "range": true
+          "range": true,
+          "exemplar": true
         },
         {
           "refId": "B",
           "expr": "histogram_quantile(0.95, sum by (le) (rate(skolab_http_request_duration_seconds_bucket{job=\"$service\",deployment_environment_name=\"$environment\"}[$__rate_interval])))",
           "legendFormat": "p95",
-          "range": true
+          "range": true,
+          "exemplar": true
         },
         {
           "refId": "C",
           "expr": "histogram_quantile(0.99, sum by (le) (rate(skolab_http_request_duration_seconds_bucket{job=\"$service\",deployment_environment_name=\"$environment\"}[$__rate_interval])))",
           "legendFormat": "p99",
-          "range": true
+          "range": true,
+          "exemplar": true
         }
       ],
       "fieldConfig": {
@@ -387,6 +390,336 @@
           "unit": "reqps"
         },
         "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "row",
+      "title": "SLOs (production; from slo/skolab-slo.rules.yml)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "panels": []
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Burn rate by SLO (1h)",
+      "description": "How fast each SLO spends its error budget. 1 = exactly on budget for 30 days; the fast page fires above 14.4, the slow page above 6.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 33
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "slo:sli_error:ratio_rate1h{job=\"$service\"} / on (slo) (1 - slo:objective:ratio)",
+          "legendFormat": "{{slo}}",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "x",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 6
+              },
+              {
+                "color": "red",
+                "value": 14.4
+              }
+            ]
+          },
+          "custom": {
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "Error budget remaining (30d, approx.)",
+      "description": "1 minus the average hourly error ratio over 30 days, as a share of the budget. Time-weighted, so quiet hours count as much as busy ones; good enough to steer by, not to bill by. Requires the SLO rules to have been loaded for 30 days.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 33
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1 - (avg_over_time(slo:sli_error:ratio_rate1h{job=\"$service\"}[30d]) / on (slo) (1 - slo:objective:ratio))",
+          "legendFormat": "{{slo}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": -1,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.25
+              },
+              {
+                "color": "green",
+                "value": 0.5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "id": 12,
+      "type": "row",
+      "title": "Saturation",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 41
+      },
+      "panels": []
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "DB pool connections",
+      "description": "Acquired connections approaching max means requests will queue for a connection. Summed across instances; Python and the gateway share the Supabase pooler's ~60 connections.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 42
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (state) (skolab_db_pool_connections{job=\"$service\",deployment_environment_name=\"$environment\"})",
+          "legendFormat": "{{state}}",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "sum(skolab_db_pool_max_connections{job=\"$service\",deployment_environment_name=\"$environment\"})",
+          "legendFormat": "max",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "DB pool acquire waits (gateway)",
+      "description": "Acquires that had to wait because every connection was busy. Any sustained non-zero value means the pool is the bottleneck. Gateway only; SQLAlchemy exposes no equivalent.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 42
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(skolab_db_pool_acquire_waits_total{job=\"$service\",deployment_environment_name=\"$environment\"}[$__rate_interval]))",
+          "legendFormat": "waits/s",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Event-loop lag (Python)",
+      "description": "Worst asyncio scheduling delay per 30s export. Above ~100ms means blocking work is running on the event loop and delaying every in-flight request on that worker.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 50
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(skolab_runtime_event_loop_lag_seconds{job=\"$service\",deployment_environment_name=\"$environment\"})",
+          "legendFormat": "worst worker",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Goroutines and heap (gateway)",
+      "description": "Steady growth in either with flat traffic is a leak (goroutines often from unclosed WebSockets or requests without timeouts).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 50
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(skolab_runtime_goroutines{job=\"$service\",deployment_environment_name=\"$environment\"})",
+          "legendFormat": "goroutines",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "sum(skolab_runtime_heap_bytes{job=\"$service\",deployment_environment_name=\"$environment\"})",
+          "legendFormat": "heap",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "heap"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {

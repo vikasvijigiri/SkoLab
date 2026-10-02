@@ -27,6 +27,7 @@ import (
 	"github.com/skolab/backend-go/internal/telemetry"
 	"github.com/skolab/backend-go/internal/user"
 	"github.com/skolab/backend-go/internal/websocket"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/time/rate"
 )
 
@@ -104,6 +105,20 @@ func main() {
 		defer db.CloseDB()
 	}
 
+	// Saturation signals (pool usage, goroutines, heap) beside the RED metrics.
+	// Pool stats are read at export time; nil while the pool is down.
+	if err := otel.ObserveDBPool(func() telemetry.PoolStats {
+		if db.Pool == nil {
+			return nil
+		}
+		return db.Pool.Stat()
+	}); err != nil {
+		slog.Warn("DB pool metrics unavailable", "err", err)
+	}
+	if err := otel.ObserveRuntime(); err != nil {
+		slog.Warn("runtime metrics unavailable", "err", err)
+	}
+
 	r := gin.New()
 	r.Use(otel.Middleware())
 	r.Use(middleware.Recovery())
@@ -137,6 +152,26 @@ func main() {
 	// ── Health ────────────────────────────────────────────────────────────────
 	r.GET("/gateway-health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "online", "service": "go-gateway"})
+	})
+	// Readiness — /gateway-health stays the dependency-free liveness probe
+	// Render restarts on; this one answers "can this instance serve DB-backed
+	// routes right now?" for synthetic monitoring and future load balancers.
+	r.GET("/readyz", func(c *gin.Context) {
+		database := "unhealthy"
+		if db.Pool != nil {
+			ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
+			defer cancel()
+			if err := db.Pool.Ping(ctx); err == nil {
+				database = "healthy"
+			} else {
+				slog.Error("readiness: database ping failed", "err", err)
+			}
+		}
+		if database != "healthy" {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "not ready", "database": database})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "ready", "database": database})
 	})
 
 	// ── Observability ─────────────────────────────────────────────────────────
@@ -225,16 +260,23 @@ func requestID() gin.HandlerFunc {
 	}
 }
 
-// requestLogger is a minimal structured access logger.
+// requestLogger is a minimal structured access logger. trace_id/span_id
+// match the OTel server span (telemetry.Middleware runs first), so a log line
+// links straight to its trace in Tempo, the same as Python's JSON logs.
 func requestLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()
-		slog.Info("request",
+		attrs := []any{
 			"method", c.Request.Method,
 			"path", c.Request.URL.Path,
+			"route", c.FullPath(),
 			"status", c.Writer.Status(),
 			"ip", c.RemoteIP(),
 			"request_id", c.GetString("request_id"),
-		)
+		}
+		if sc := trace.SpanContextFromContext(c.Request.Context()); sc.IsValid() {
+			attrs = append(attrs, "trace_id", sc.TraceID().String(), "span_id", sc.SpanID().String())
+		}
+		slog.Info("request", attrs...)
 	}
 }

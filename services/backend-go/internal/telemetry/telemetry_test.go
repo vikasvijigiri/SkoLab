@@ -41,7 +41,7 @@ func TestRequestsCountOnceWithSafeRoutesAndRecoveredErrors(t *testing.T) {
 	r.GET("/widgets/:id", func(c *gin.Context) { c.Status(200) })
 	r.GET("/boom", func(c *gin.Context) { panic("private payload") })
 	r.GET("/gateway-health", func(c *gin.Context) { c.Status(200) })
-	for _, path := range []string{"/widgets/private-one", "/widgets/private-two?token=secret", "/unknown/a", "/unknown/b", "/boom", "/gateway-health", "/observability"} {
+	for _, path := range []string{"/widgets/private-one", "/widgets/private-two?token=secret", "/unknown/a", "/unknown/b", "/boom", "/gateway-health", "/readyz", "/observability"} {
 		r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", path, nil))
 	}
 	var data metricdata.ResourceMetrics
