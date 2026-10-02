@@ -115,7 +115,7 @@ func caller(c *gin.Context) (string, bool) {
 
 // storeError maps a store error onto the API's stable error contract.
 func storeError(c *gin.Context, err error) {
-	if errors.Is(err, ErrNotFound) || errors.Is(err, ErrForbidden) {
+	if errors.Is(err, ErrNotFound) || errors.Is(err, ErrForbidden) || errors.Is(err, ErrInviteForbidden) {
 		security.Record(c, security.Event{Name: security.WorkspaceDenied, Outcome: security.Denied,
 			WorkspaceID: c.Param("id"), Reason: c.Request.Method})
 	}
@@ -128,6 +128,12 @@ func storeError(c *gin.Context, err error) {
 		fail(c, http.StatusForbidden, "workspace_limit_reached", "You have reached the maximum number of workspaces")
 	case errors.Is(err, ErrProfileRequired):
 		fail(c, http.StatusConflict, "profile_required", "Sync your profile before creating a workspace")
+	case errors.Is(err, ErrInviteForbidden):
+		fail(c, http.StatusForbidden, "invite_forbidden", "Only the owner or an editor may manage invites")
+	case errors.Is(err, ErrOwnerCannotLeave):
+		fail(c, http.StatusConflict, "owner_cannot_leave", "The owner cannot leave their own workspace")
+	case errors.Is(err, ErrOwnerImmutable):
+		fail(c, http.StatusConflict, "owner_immutable", "The owner's role cannot be changed or removed")
 	case errors.Is(err, ErrIdempotencyMismatch):
 		fail(c, http.StatusUnprocessableEntity, "idempotency_key_reused", "Idempotency-Key was already used for a different request")
 	default:

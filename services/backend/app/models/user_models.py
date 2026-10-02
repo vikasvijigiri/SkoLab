@@ -138,6 +138,42 @@ class UsageCounter(Base):
     expires_at = Column(DateTime, nullable=False, index=True)
 
 
+class WorkspaceInvite(Base):
+    """A shareable invite link into a workspace (Go gateway, internal/workspace).
+
+    Only a SHA-256 digest of the token is stored; the token itself is shown
+    once, at creation. A link never grants ownership.
+    """
+
+    __tablename__ = "workspace_invites"
+
+    id = Column(String(36), primary_key=True)
+    workspace_id = Column(
+        String(100),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    token_digest = Column(String(64), nullable=False, unique=True)
+    role = Column(String(20), nullable=False)
+    created_by = Column(
+        String(100), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    max_uses = Column(Integer, nullable=True)  # NULL = unlimited until expiry
+    uses = Column(Integer, nullable=False, default=0)
+    revoked_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('editor', 'commenter', 'viewer')", name="chk_invite_role"
+        ),
+        CheckConstraint("max_uses IS NULL OR max_uses > 0", name="chk_invite_max_uses"),
+        CheckConstraint("uses >= 0", name="chk_invite_uses"),
+    )
+
+
 class SecurityAuditLog(Base):
     """Append-only record of account-level security actions.
 

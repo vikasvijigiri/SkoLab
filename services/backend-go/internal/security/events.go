@@ -47,6 +47,13 @@ const (
 	WorkspaceCreated     = "workspace.created"
 	WorkspaceRenamed     = "workspace.renamed"
 	WorkspaceDeleted     = "workspace.deleted"
+	InviteCreated        = "invite.created"
+	InviteRevoked        = "invite.revoked"
+	InviteAccepted       = "invite.accepted"
+	InviteInvalid        = "invite.invalid"
+	MemberRoleChanged    = "member.role_changed"
+	MemberRemoved        = "member.removed"
+	MemberLeft           = "member.left"
 )
 
 type Event struct {
