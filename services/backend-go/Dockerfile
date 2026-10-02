@@ -1,8 +1,11 @@
-FROM golang:1.25-alpine AS builder
+# Keep in step with go.mod's go directive (CI's image job builds this file, so
+# drift fails the PR). GOTOOLCHAIN=local: the build uses this image's Go and
+# never downloads a different toolchain at build time.
+FROM golang:1.26-alpine AS builder
 
 WORKDIR /app
 
-ENV GOTOOLCHAIN=auto
+ENV GOTOOLCHAIN=local
 
 # Copy module files
 COPY go.mod ./

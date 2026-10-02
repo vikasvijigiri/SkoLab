@@ -91,6 +91,31 @@ jobs:
             exit 1
           fi
 
+  images:
+    # Render builds these Dockerfiles; CI tests the code with its own
+    # toolchain. Building the real images (and booting the gateway in release
+    # mode) here means a Dockerfile that cannot build or start fails the PR
+    # instead of silently failing the production deploy.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build gateway image
+        run: docker build -t skolab-gateway services/backend-go
+      - name: Boot gateway in release mode
+        run: |
+          docker run -d --name gateway -p 8080:8080             -e GIN_MODE=release -e APP_ENV=ci -e INTERNAL_API_TOKEN=ci-only skolab-gateway
+          for i in $(seq 1 30); do curl -fs localhost:8080/gateway-health >/dev/null && break; sleep 1; done
+          code() { curl -s -o /dev/null -w '%{http_code}' "localhost:8080$1"; }
+          # Liveness up; the workspace API is mounted and refuses anonymous calls.
+          test "$(code /gateway-health)" = 200
+          test "$(code /api/v1/workspaces)" = 401
+      - name: Gateway logs
+        if: always()
+        run: docker logs gateway || true
+      - name: Build Python image
+        run: docker build -t skolab-backend-py services/backend
+
   slo-rules:
     # The SLO alert rules are code: regenerated from one table, then checked
     # and unit-tested with promtool so a broken expression or a threshold that
