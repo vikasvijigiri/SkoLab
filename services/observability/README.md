@@ -38,6 +38,7 @@ Actions). Never commit them:
 | `GRAFANA_SM_TOKEN` | Synthetic Monitoring access token (Testing & synthetics > Synthetics > Config) |
 | `GRAFANA_CONTACT_POINT` | Contact point that receives all SkoLab alerts (`skolab-oncall`) |
 | `SKOLAB_FIREBASE_API_KEY`, `SKOLAB_SYNTHETIC_EMAIL`, `SKOLAB_SYNTHETIC_PASSWORD` | Journey login fixtures (optional; they turn the journey on) |
+| `FIREBASE_SERVICE_ACCOUNT` | Firebase Admin SDK key (JSON). The deploy keeps the monitoring account existing, enabled and email-verified, because the backend refuses unverified accounts. Admin-level: never commit it, rotate if exposed |
 
 The provisioner discovers the regional API server and the metrics and logs data
 sources from the Synthetic Monitoring plugin's settings. An OTLP ingestion
@@ -46,8 +47,10 @@ token is not a management token.
 **Turning on the journey.** Until the three login secrets are set, deploys
 apply the availability checks only. To enable it:
 
-1. Create a dedicated Firebase email/password account (enable that sign-in
-   provider). Nothing else is needed: on each deploy the provisioner signs in
+1. Choose the monitoring account's email and password (enable the
+   email/password sign-in provider). With `FIREBASE_SERVICE_ACCOUNT` set, the
+   deploy creates the account already email-verified (or repairs an existing
+   one); without it, create and verify the account yourself. Then: on each deploy the provisioner signs in
    as it, syncs its profile, and creates its monitoring workspace through
    `POST /api/v1/workspaces` with a fixed `Idempotency-Key`. The first deploy
    creates the workspace and every later one gets the same one back. That
