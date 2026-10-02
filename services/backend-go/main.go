@@ -27,6 +27,7 @@ import (
 	"github.com/skolab/backend-go/internal/telemetry"
 	"github.com/skolab/backend-go/internal/user"
 	"github.com/skolab/backend-go/internal/websocket"
+	"github.com/skolab/backend-go/internal/workspace"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/time/rate"
 )
@@ -204,6 +205,14 @@ func main() {
 		usersAPI.POST("/profile/sync", user.SyncUserProfile)
 		usersAPI.DELETE("/:userId", user.DeleteUser)
 	}
+
+	// ── Workspaces (Firebase-authenticated) ───────────────────────────────────
+	// The CoLab workspace resource: create/list/read/rename/delete. Ownership
+	// comes from the verified token; visibility matches the WebSocket
+	// authorizer above. See internal/workspace.
+	workspacesAPI := r.Group("/api/v1")
+	workspacesAPI.Use(auth.VerifyUser())
+	workspace.Register(workspacesAPI, workspace.NewPostgresStore(db.Pool))
 
 	// ── CoLab compile — auth + per-user quota + single-flight live in Go;
 	// the actual pdflatex run happens in cmd/colab-sandbox (COLAB_SANDBOX_URL,

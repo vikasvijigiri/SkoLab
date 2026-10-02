@@ -157,3 +157,53 @@ class AdHocVerificationTests(unittest.TestCase):
         clock = patch.object(provision.time, "monotonic", side_effect=[0, 1, 10**6])
         with clock, self.assertRaises(RuntimeError):
             self.run_verify(grafana)
+
+
+FIXTURES = {"SKOLAB_FIREBASE_API_KEY": "AIza-test-key", "SKOLAB_SYNTHETIC_EMAIL": "monitor@example.com",
+            "SKOLAB_SYNTHETIC_PASSWORD": "pw-secret", "SKOLAB_SYNTHETIC_WORKSPACE_ID": ""}
+
+
+class MonitoringWorkspaceTests(unittest.TestCase):
+    def test_workspace_is_created_through_the_api_with_a_fixed_idempotency_key(self):
+        calls = []
+
+        def fake(label, method, url, body=None, token=None, headers=None):
+            calls.append((label, method, url, body, token, headers))
+            return {"Firebase sign-in": {"idToken": "id-token", "localId": "uid-1"},
+                    "Profile sync": {"status": "synced"},
+                    "Workspace create": {"id": "ws-42"}}[label]
+
+        with patch.object(provision, "request_json", fake):
+            self.assertEqual(provision.ensure_monitoring_workspace("AIza-test-key", "monitor@example.com", "pw-secret"), "ws-42")
+        self.assertEqual([c[0] for c in calls], ["Firebase sign-in", "Profile sync", "Workspace create"])
+        sync, create = calls[1], calls[2]
+        self.assertEqual((sync[3]["uid"], sync[4]), ("uid-1", "id-token"))
+        self.assertTrue(create[2].endswith("/api/v1/workspaces"))
+        self.assertEqual(create[5], {"Idempotency-Key": provision.MONITOR_WORKSPACE_KEY})
+        self.assertEqual(create[4], "id-token")
+
+    def test_missing_workspace_is_resolved_and_explicit_one_is_kept(self):
+        resolved = []
+        with patch.dict(os.environ, FIXTURES), patch("builtins.print"):
+            values = provision.journey_secrets(lambda *args: resolved.append(args) or "ws-auto")
+        self.assertEqual(values["skolab-monitor-workspace"], "ws-auto")
+        self.assertEqual(resolved, [("AIza-test-key", "monitor@example.com", "pw-secret")])
+        with patch.dict(os.environ, {**FIXTURES, "SKOLAB_SYNTHETIC_WORKSPACE_ID": "ws-manual"}):
+            values = provision.journey_secrets(lambda *args: self.fail("must not call the API"))
+        self.assertEqual(values["skolab-monitor-workspace"], "ws-manual")
+
+    def test_login_fixtures_remain_required(self):
+        with patch.dict(os.environ, {**FIXTURES, "SKOLAB_SYNTHETIC_PASSWORD": "your_password"}), \
+                self.assertRaises(ValueError) as raised:
+            provision.journey_secrets(lambda *args: "unused")
+        self.assertIn("SKOLAB_SYNTHETIC_PASSWORD", str(raised.exception))
+
+    def test_request_errors_never_reveal_url_or_key(self):
+        error = provision.urllib.error.HTTPError(
+            "https://identitytoolkit.googleapis.com/v1/x?key=AIza-test-key", 400, "bad", {}, None)
+        with patch.object(provision.urllib.request, "urlopen", side_effect=error), \
+                self.assertRaises(RuntimeError) as raised:
+            provision.request_json("Firebase sign-in", "POST", "https://identitytoolkit.googleapis.com/v1/x?key=AIza-test-key", {})
+        self.assertEqual(str(raised.exception), "Firebase sign-in: HTTP 400")
+        with self.assertRaises(ValueError):
+            provision.request_json("Plain", "GET", "http://example.com")

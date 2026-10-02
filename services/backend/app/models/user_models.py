@@ -14,7 +14,9 @@ from sqlalchemy import (
     ForeignKey,
     Text,
     CheckConstraint,
+    Index,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import validates
 from app.db.database import Base
@@ -70,9 +72,19 @@ class Workspace(Base):
     )
     title = Column(String(255), nullable=False)
     created_at = Column(DateTime, default=utcnow, nullable=False)
+    # Idempotency-Key of the POST /api/v1/workspaces call that created this
+    # row (Go gateway, internal/workspace); unique per owner when present.
+    create_request_id = Column(String(100), nullable=True)
 
     __table_args__ = (
         CheckConstraint("length(trim(title)) > 0", name="chk_workspace_title_nonempty"),
+        Index(
+            "uq_workspaces_owner_create_request",
+            "owner_id",
+            "create_request_id",
+            unique=True,
+            postgresql_where=text("create_request_id IS NOT NULL"),
+        ),
     )
 
 

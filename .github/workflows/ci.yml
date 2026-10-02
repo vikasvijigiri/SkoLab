@@ -66,6 +66,11 @@ jobs:
         run: pytest tests/ --cov=app --cov-report=term-missing:skip-covered --cov-fail-under=70
       - name: Verify Go gateway
         working-directory: services/backend-go
+        env:
+          # Same Postgres the Python step bootstrapped above: the workspace
+          # store's integration tests (transactions, idempotency and the
+          # per-user cap under concurrency) run against the real schema.
+          TEST_DATABASE_URL: postgres://postgres:skolab@localhost:5432/skolab
         run: |
           go vet ./...
           go test ./... -race
