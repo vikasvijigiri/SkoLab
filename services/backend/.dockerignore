@@ -30,7 +30,8 @@ __pycache__/
 
 # Dev/CI-only tooling and scripts — not imported by the runtime app
 tests/
-scripts/
+scripts/*
+!scripts/run_migrations.py
 ci_bootstrap_db.py
 docker-compose.yml
 pytest.ini
