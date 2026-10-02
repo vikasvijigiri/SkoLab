@@ -17,53 +17,66 @@ compile a valid tiny document, validate `%PDF-` and `%%EOF`, issue two single-us
 tickets, and confirm a message reaches the second workspace connection. This is
 not a browser UI test or a load test. Its workspace must contain no real users.
 
-Append these credentials to the ignored root `.env` or inject them as environment
-variables. Never commit secrets or reusable Firebase credentials:
+### Deployment: GitHub Actions, nothing local
 
-```dotenv
-GRAFANA_URL=https://your-stack.grafana.net
-GRAFANA_TOKEN=service-account-token
-GRAFANA_SM_TOKEN=synthetic-monitoring-access-token
-GRAFANA_CONTACT_POINT=existing-contact-point-name
-SKOLAB_FIREBASE_API_KEY=firebase-web-api-key
-SKOLAB_SYNTHETIC_EMAIL=dedicated-monitoring-account-email
-SKOLAB_SYNTHETIC_PASSWORD=dedicated-monitoring-account-password
-SKOLAB_SYNTHETIC_WORKSPACE_ID=dedicated-workspace-id
-```
+`.github/workflows/observability-deploy.yml` applies all monitoring to Grafana
+Cloud on every merge to `master` that touches `services/observability/`. It can
+also be run by hand: **Actions > Deploy monitoring to Grafana Cloud > Run
+workflow**, with an optional end-to-end notification test. Each run applies the
+SLO rules (`slo/provision.py`), then these checks, their alerts and dashboards.
+Nothing is installed or run on a developer machine. Probes and the k6 journey
+execute on Grafana's own infrastructure, and CI tests the k6 script against
+local fixtures on GitHub's runners.
 
-Create the Grafana service account under Administration > Users and access with
-Editor permissions for dashboards and alert provisioning. Generate the Synthetic
-Monitoring access token in Testing & synthetics > Synthetics > Config. The
-provisioner discovers the regional API server and metrics datasource from that
-plugin's settings; an OTLP ingestion token is not a management token.
+Configure these **repository secrets** (Settings > Secrets and variables >
+Actions). Never commit them:
 
-Create a dedicated Firebase email/password account, enable that sign-in provider,
-and sign into SkoLab to create its isolated monitoring workspace. Existing
-application authorization remains enforced. The journey account consumes normal
-quota: 48 daily runs at eight units across Go/Python = 384 units, below the default
-600-unit daily limit. If you use lower limits, lengthen its interval; don't bypass
-quotas for monitoring. Repeated manual tests also consume quota.
+| Secret | Value |
+| --- | --- |
+| `GRAFANA_URL` | `https://<stack>.grafana.net` |
+| `GRAFANA_TOKEN` | Grafana service-account token (Editor; see below for the journey) |
+| `GRAFANA_SM_TOKEN` | Synthetic Monitoring access token (Testing & synthetics > Synthetics > Config) |
+| `GRAFANA_CONTACT_POINT` | Contact point that receives all SkoLab alerts (`skolab-oncall`) |
+| `SKOLAB_FIREBASE_API_KEY`, `SKOLAB_SYNTHETIC_EMAIL`, `SKOLAB_SYNTHETIC_PASSWORD`, `SKOLAB_SYNTHETIC_WORKSPACE_ID` | Journey fixtures, optional |
 
-For `--journey`, the Grafana service account additionally needs secure-value
-read/create/write permissions. Secrets are sent to Grafana's secret manager with
-only `synthetic-monitoring` as decrypter. API responses and secrets are never
-printed or stored in the repository. Alternatively create the four secure values
-in Grafana's Synthetic Monitoring Secrets UI with the names used in `journey.js`.
-Grant secret management permissions through Grafana's documented fixed roles.
-When using values already configured in the UI, add `--existing-secrets` to the
-apply command. Confirm a successful manual journey before enabling its schedule.
+The provisioner discovers the regional API server and the metrics and logs data
+sources from the Synthetic Monitoring plugin's settings. An OTLP ingestion
+token is not a management token.
+
+**Turning on the journey.** Until all four journey secrets are set, deploys
+apply the availability checks only. To enable it:
+
+1. Create a dedicated Firebase email/password account (enable that sign-in
+   provider), and sign into SkoLab once as that account to create its isolated
+   monitoring workspace. It must contain no real users. Application
+   authorization still applies. The account consumes normal quota: 48 daily
+   runs at eight units across Go/Python is 384 units, below the default
+   600-unit daily limit. With lower limits, lengthen the journey interval
+   rather than bypass quotas.
+2. Make the four values available to Grafana's secret manager, which only the
+   `synthetic-monitoring` decrypter can read. Either grant the service account
+   secure-value create/read/write (Grafana's fixed secret-management roles) and
+   let the deploy upload them, or create them yourself in the Synthetic
+   Monitoring Secrets UI under the names in `journey.js` and set the repository
+   **variable** `JOURNEY_EXISTING_SECRETS=true`.
+3. Add the four repository secrets and re-run the workflow.
+
+Before scheduling the journey, the deploy runs it once as an **ad-hoc check on
+a Grafana probe** and reads the result back from the stack's Loki logs. A
+failing journey is never scheduled (it would alert every 30 minutes), and the
+run turns red with the failing step's message, with credentials, tickets and
+tokens redacted. To repeat that check without deploying, run
+`provision.py --verify-journey` from the same workflow environment.
+
+The same commands work from any machine with the environment variables set, or
+with the ignored root `.env`:
 
 ```sh
-# Preview public check definitions (no network or changes).
-python services/observability/provision.py
-# Verify the real journey once; k6 must be installed.
-python services/observability/run_journey.py
-# Apply availability checks, alerts, and dashboard.
-python services/observability/provision.py --apply
-# Add the journey and its alert once its isolated fixtures work.
-python services/observability/provision.py --apply --journey
-# Exercise alert evaluation, notification, recovery and cleanup.
-python services/observability/provision.py --test-alert
+python services/observability/provision.py                    # preview check definitions (no network)
+python services/observability/provision.py --apply            # availability checks, alerts, dashboard
+python services/observability/provision.py --apply --journey  # ...plus the verified journey
+python services/observability/provision.py --verify-journey   # one cloud-side journey run
+python services/observability/provision.py --test-alert       # fire, recover and clean up a test alert
 ```
 
 If the preferred probes are unavailable, supply two online public probe names
@@ -73,9 +86,10 @@ discovering the one configured for Synthetic Monitoring; override with
 
 See [RUNBOOK.md](RUNBOOK.md) for incident response, target definitions, notification
 delivery verification, and provider integration limits. The observability CI
-workflow runs the actual k6 script against local HTTP/WebSocket fixtures,
-including authentication failure, invalid PDF and dropped broadcast cases. CI
-never requires or contacts a production account.
+workflow (`observability.yml`) runs the actual k6 script against local
+HTTP/WebSocket fixtures on GitHub's runners, including authentication failure,
+invalid PDF and dropped broadcast cases. It never requires or contacts a
+production account.
 
 References: [Synthetic Monitoring API](https://grafana.com/docs/grafana-cloud/observe-and-act/testing/synthetic-monitoring/api-reference/),
 [Secure values](https://grafana.com/docs/grafana-cloud/observe-and-act/testing/synthetic-monitoring/create-checks/manage-secrets/),
@@ -198,10 +212,10 @@ each alert fires on a real burn and stays quiet on healthy, low-traffic and
 staging traffic. CI runs the same checks and fails if the generated file is
 stale. Never edit the rules file by hand.
 
-**Loading into Grafana Cloud.** `python services/observability/slo/provision.py
---apply` reconciles everything from the same `generate.groups()` data the tests
-cover. It uses the `GRAFANA_URL`/`GRAFANA_TOKEN` already used for the external
-checks:
+**Loading into Grafana Cloud.** The deploy workflow (see *Deployment* above)
+runs `slo/provision.py --apply` and then `--verify` on every merge. That
+reconciles everything from the same `generate.groups()` data the tests cover,
+using the same `GRAFANA_URL`/`GRAFANA_TOKEN` as the external checks:
 
 - **Recording rules** run in Mimir as data-source-managed rules (namespace
   `skolab-slo`), written through Grafana's ruler proxy. Retired groups are
@@ -215,8 +229,8 @@ checks:
 - **The dashboard** is imported into the same folder.
 
 Without flags the script prints its plan. `--contact-email` creates the
-contact point if it is missing, and `--verify` checks that the recorded series
-and all 18 alert rules exist. Re-run `--apply` after every SLO change.
+contact point if it is missing (a one-time step), and `--verify` checks that
+the recorded series and all 18 alert rules exist.
 
 **Relationship to the external checks.** The probes and journey at the top of
 this file answer "can a user reach SkoLab at all?", including when no request

@@ -8,7 +8,7 @@ is the only credential). The burn-rate alerts are Grafana-managed rules in the
 groups(), so they cannot disagree with the promtool-tested rules file.
 
     python provision.py                        # dry run: print the plan
-    python provision.py --apply                # reconcile rules + dashboard
+    python provision.py --apply                # reconcile rules + dashboard (CI does this on merge)
     python provision.py --apply --contact-email you@example.com
                                                # also create the contact point
     python provision.py --verify               # recorded series exist?
