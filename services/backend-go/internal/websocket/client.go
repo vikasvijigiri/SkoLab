@@ -22,10 +22,8 @@ const (
 	// A removed member's open socket must not outlive their access, so the
 	// role is re-checked periodically, not only at upgrade.
 	maxReauthorizeFailures = 3
+	reauthorizeInterval    = 30 * time.Second
 )
-
-// reauthorizeInterval is a variable so tests can shorten it.
-var reauthorizeInterval = 30 * time.Second
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
@@ -182,6 +180,12 @@ func (c *Client) writePump() {
 // upgrade it verifies that this identity owns or actively belongs to the
 // requested workspace; a guessed workspace ID is never sufficient.
 func ServeWs(hub *Hub, authorizer WorkspaceAuthorizer, c *gin.Context) {
+	serveWs(hub, authorizer, c, reauthorizeInterval)
+}
+
+// serveWs takes the re-authorization interval as a parameter (rather than
+// reading a mutable package variable) so tests can shorten it race-free.
+func serveWs(hub *Hub, authorizer WorkspaceAuthorizer, c *gin.Context, reauthorizeEvery time.Duration) {
 	workspaceID := strings.TrimSpace(c.Param("workspace_id"))
 	if workspaceID == "" {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "workspace_id is required"})
@@ -220,7 +224,7 @@ func ServeWs(hub *Hub, authorizer WorkspaceAuthorizer, c *gin.Context) {
 	// Allow collection of memory referenced by the caller by doing all work in new goroutines.
 	go client.writePump()
 	go client.readPump()
-	go client.reauthorize(reauthorizeInterval)
+	go client.reauthorize(reauthorizeEvery)
 }
 
 // ServeHealthWs handles persistent websocket connections for system health.

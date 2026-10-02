@@ -36,16 +36,13 @@ func (r *roleTable) set(userID, role string, err error) {
 // serveRoles starts a gateway whose ?u= query names the authenticated user.
 func serveRoles(t *testing.T, roles *roleTable, interval time.Duration) string {
 	t.Helper()
-	saved := reauthorizeInterval
-	reauthorizeInterval = interval
-	t.Cleanup(func() { reauthorizeInterval = saved })
 	gin.SetMode(gin.TestMode)
 	hub := NewHub()
 	go hub.Run()
 	r := gin.New()
 	r.GET("/ws/colab/:workspace_id", func(c *gin.Context) {
 		c.Set("user_id", c.Query("u"))
-		ServeWs(hub, roles, c)
+		serveWs(hub, roles, c, interval)
 	})
 	server := httptest.NewServer(r)
 	t.Cleanup(server.Close)
