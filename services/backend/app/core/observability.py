@@ -27,6 +27,7 @@ from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 
 from app.core.config import settings
+from app.core.telemetry import export_enabled
 
 logger = logging.getLogger("skolab")
 
@@ -83,10 +84,11 @@ def init_observability(*, force: bool = False) -> None:
         logger.info("Sentry disabled — no SENTRY_DSN set")
         return
 
+    traces_sample_rate = 0.0 if export_enabled() else settings.sentry_traces_sample_rate
     sentry_sdk.init(
         dsn=dsn,
         environment=settings.environment,
-        traces_sample_rate=settings.sentry_traces_sample_rate,
+        traces_sample_rate=traces_sample_rate,
         send_default_pii=False,
         before_send=_before_send,
         integrations=[FastApiIntegration(), StarletteIntegration()],
@@ -94,7 +96,7 @@ def init_observability(*, force: bool = False) -> None:
     logger.info(
         "Sentry enabled (environment=%s, traces_sample_rate=%s)",
         settings.environment,
-        settings.sentry_traces_sample_rate,
+        traces_sample_rate,
     )
 
 

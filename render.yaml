@@ -15,6 +15,14 @@ services:
         value: "8080"
       - key: GIN_MODE
         value: release
+      - key: APP_ENV
+        value: production
+      - key: OTEL_SERVICE_NAME
+        value: skolab-gateway
+      - key: OTEL_EXPORTER_OTLP_PROTOCOL
+        value: http/protobuf
+      - key: OTEL_TRACES_SAMPLER_ARG
+        value: "0.1"
       - key: PYTHON_BACKEND_URL
         sync: false
       - key: DATABASE_URL
@@ -48,6 +56,12 @@ services:
     envVars:
       - key: APP_ENV
         value: production
+      - key: OTEL_SERVICE_NAME
+        value: skolab-backend-py
+      - key: OTEL_EXPORTER_OTLP_PROTOCOL
+        value: http/protobuf
+      - key: OTEL_TRACES_SAMPLER_ARG
+        value: "0.1"
       - key: PORT
         value: "8000"
       - key: WEB_CONCURRENCY

@@ -23,14 +23,25 @@ import (
 	"github.com/skolab/backend-go/internal/auth"
 	"github.com/skolab/backend-go/internal/colab"
 	"github.com/skolab/backend-go/internal/db"
-	"github.com/skolab/backend-go/internal/metrics"
 	"github.com/skolab/backend-go/internal/middleware"
+	"github.com/skolab/backend-go/internal/telemetry"
 	"github.com/skolab/backend-go/internal/user"
 	"github.com/skolab/backend-go/internal/websocket"
 	"golang.org/x/time/rate"
 )
 
 func main() {
+	otel, err := telemetry.New(context.Background())
+	if err != nil {
+		log.Fatalf("telemetry configuration invalid: %v", err)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := otel.Shutdown(ctx); err != nil {
+			slog.Warn("telemetry shutdown incomplete", "err", err)
+		}
+	}()
 	// Only remaining caller: internal/colab's fallback path while
 	// COLAB_SANDBOX_URL is unset (see internal/colab/colab.go).
 	pythonBackendURL := os.Getenv("PYTHON_BACKEND_URL")
@@ -94,6 +105,7 @@ func main() {
 	}
 
 	r := gin.New()
+	r.Use(otel.Middleware())
 	r.Use(middleware.Recovery())
 	// Repanic: true — sentrygin captures the panic as a Sentry event, then
 	// re-panics so middleware.Recovery() (registered above, so it recovers
@@ -109,10 +121,6 @@ func main() {
 	}
 	r.Use(requestID())
 	r.Use(requestLogger())
-	// Ahead of CORS/rate-limiting so a rejected request (429, a blocked
-	// origin) is still counted -- RED metrics (Rate, Errors, Duration) are
-	// meant to cover everything the gateway sees, not just what it serves.
-	r.Use(metrics.Middleware())
 	r.Use(middleware.Gzip())
 	r.Use(middleware.CORS())
 
@@ -132,11 +140,7 @@ func main() {
 	})
 
 	// ── Observability ─────────────────────────────────────────────────────────
-	// Not named /metrics: confirmed live (2026-09-14) that Render's edge
-	// blocks ANY path ending in "metrics" with a 502 before it ever reaches
-	// this app. External observability/Prometheus scrapers should be
-	// pointed at this path instead of the conventional /metrics.
-	r.GET("/observability", metrics.Handler())
+	// Metrics push over OTLP. The former /observability scrape endpoint is retired.
 
 	// ── WebSockets ────────────────────────────────────────────────────────────
 	// Browsers obtain a single-use ticket from the Firebase-authenticated HTTPS
@@ -174,7 +178,7 @@ func main() {
 	colabAPI := r.Group("/api/v1")
 	colabAPI.Use(auth.VerifyUser())
 	{
-		colabAPI.POST("/colab/compile", colab.Handler(db.Pool, &http.Client{}, pythonBackendURL))
+		colabAPI.POST("/colab/compile", colab.Handler(db.Pool, &http.Client{Transport: otel.Transport(nil)}, pythonBackendURL))
 	}
 
 	addr := ":8080"

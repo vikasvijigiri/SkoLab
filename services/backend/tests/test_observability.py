@@ -96,6 +96,32 @@ def test_init_observability_applies_the_configured_traces_sample_rate(monkeypatc
         sentry_sdk.init(dsn=None)
 
 
+def test_otel_export_disables_sentry_performance_tracing(monkeypatch):
+    from types import SimpleNamespace
+    import sentry_sdk
+    from app.core import observability as obs_mod
+
+    monkeypatch.setenv("OTEL_SDK_DISABLED", "false")
+    monkeypatch.setenv(
+        "OTEL_EXPORTER_OTLP_ENDPOINT", "https://telemetry.example.invalid/otlp"
+    )
+    monkeypatch.setattr(
+        obs_mod,
+        "settings",
+        SimpleNamespace(
+            sentry_dsn="https://public@sentry.example.invalid/1",
+            environment="test",
+            sentry_traces_sample_rate=0.42,
+        ),
+    )
+    try:
+        obs_mod.init_observability(force=True)
+        assert sentry_sdk.get_client().options["traces_sample_rate"] == 0.0
+        assert sentry_sdk.get_client().is_active()
+    finally:
+        sentry_sdk.init(dsn=None)
+
+
 @pytest.mark.anyio
 async def test_health_endpoint():
     transport = httpx.ASGITransport(app=app)
@@ -110,8 +136,7 @@ async def test_health_endpoint():
 
 @pytest.mark.anyio
 async def test_metrics_endpoint_removed():
-    """Python no longer serves Prometheus metrics — the per-process MetricsStore
-    and GET /metrics were retired; the Go gateway owns request metrics."""
+    """Python pushes OTLP per worker and exposes no second scrape pipeline."""
     transport = httpx.ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         response = await ac.get("/metrics")
