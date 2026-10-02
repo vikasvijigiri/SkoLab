@@ -37,11 +37,16 @@ jobs:
       SKOLAB_FIREBASE_API_KEY: ${{ secrets.SKOLAB_FIREBASE_API_KEY }}
       SKOLAB_SYNTHETIC_EMAIL: ${{ secrets.SKOLAB_SYNTHETIC_EMAIL }}
       SKOLAB_SYNTHETIC_PASSWORD: ${{ secrets.SKOLAB_SYNTHETIC_PASSWORD }}
+      # Admin SDK credentials: keep the monitoring account existing, enabled
+      # and email-verified (the backend refuses unverified accounts).
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+      - name: Install the Firebase Admin SDK (same pin as the backend)
+        run: pip install --quiet firebase-admin==7.5.0
       - name: Require Grafana credentials
         run: |
           for key in GRAFANA_URL GRAFANA_TOKEN GRAFANA_SM_TOKEN GRAFANA_CONTACT_POINT; do

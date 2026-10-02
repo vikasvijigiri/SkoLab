@@ -185,12 +185,60 @@ def ensure_monitoring_workspace(api_key: str, email: str, password: str) -> str:
     return workspace["id"]
 
 
-def journey_secrets(resolve_workspace=ensure_monitoring_workspace):
+def _admin_auth(raw: str):
+    """firebase_admin.auth bound to the service account in raw (JSON). The
+    import is local: only the deploy installs firebase-admin."""
+    try:
+        info = json.loads(raw)
+    except ValueError:
+        raise ValueError("FIREBASE_SERVICE_ACCOUNT is not valid JSON") from None
+    import functools
+
+    import firebase_admin
+    from firebase_admin import auth, credentials
+
+    try:
+        app = firebase_admin.get_app("skolab-provisioner")
+    except ValueError:
+        app = firebase_admin.initialize_app(credentials.Certificate(info), name="skolab-provisioner")
+    bound = {name: functools.partial(getattr(auth, name), app=app)
+             for name in ("get_user_by_email", "create_user", "update_user")}
+    return type("BoundAuth", (), {**{k: staticmethod(v) for k, v in bound.items()},
+                                  "UserNotFoundError": auth.UserNotFoundError})
+
+
+def ensure_monitoring_account(email: str, password: str, admin_auth=None) -> str | None:
+    """Make the monitoring account exist, enabled and email-verified, using
+    the Admin SDK (FIREBASE_SERVICE_ACCOUNT): the backend refuses unverified
+    email/password accounts, and a system account has no inbox to click a
+    link in. The password is set only on creation -- changing it would revoke
+    the account's sessions on every deploy. Returns what was done, or None
+    when no service account is configured."""
+    if admin_auth is None:
+        raw = os.environ.get("FIREBASE_SERVICE_ACCOUNT", "")
+        if not raw:
+            return None
+        admin_auth = _admin_auth(raw)
+    try:
+        user = admin_auth.get_user_by_email(email)
+    except admin_auth.UserNotFoundError:
+        admin_auth.create_user(email=email, password=password, email_verified=True)
+        return "created"
+    if not user.email_verified or user.disabled:
+        admin_auth.update_user(user.uid, email_verified=True, disabled=False)
+        return "repaired"
+    return "ok"
+
+
+def journey_secrets(resolve_workspace=ensure_monitoring_workspace, ensure_account=ensure_monitoring_account):
     values = {name: os.environ.get(key, "") for name, key in JOURNEY_SECRETS.items()}
     workspace = "skolab-monitor-workspace"
     invalid = [JOURNEY_SECRETS[name] for name, value in values.items() if name != workspace and not _configured(value)]
     if invalid:
         raise ValueError("Missing journey fixture configuration: " + ", ".join(invalid))
+    # Before anything signs in as the monitor: the account must be verified.
+    state = ensure_account(values["skolab-monitor-email"], values["skolab-monitor-password"])
+    print(f"Monitoring account: {state or 'not managed (FIREBASE_SERVICE_ACCOUNT unset)'}")
     if not _configured(values[workspace]):
         # Optional: created through the workspace API when not supplied.
         values[workspace] = resolve_workspace(values["skolab-firebase-api-key"], values["skolab-monitor-email"],
