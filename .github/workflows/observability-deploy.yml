@@ -1,0 +1,73 @@
+name: Deploy monitoring to Grafana Cloud
+
+# Grafana Cloud always matches master: every merge that touches monitoring
+# re-applies the SLO rules, alerts, dashboards and synthetic checks. Nothing
+# runs on a developer machine -- the k6 journey executes on Grafana's probes.
+# Credentials are repository secrets (Settings > Secrets and variables >
+# Actions); see services/observability/README.md for the list.
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'services/observability/**'
+      - '.github/workflows/observability-deploy.yml'
+  workflow_dispatch:
+    inputs:
+      test_alert:
+        description: Also send a test notification through the contact point
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: grafana-monitoring
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GRAFANA_URL: ${{ secrets.GRAFANA_URL }}
+      GRAFANA_TOKEN: ${{ secrets.GRAFANA_TOKEN }}
+      GRAFANA_SM_TOKEN: ${{ secrets.GRAFANA_SM_TOKEN }}
+      GRAFANA_CONTACT_POINT: ${{ secrets.GRAFANA_CONTACT_POINT }}
+      SKOLAB_FIREBASE_API_KEY: ${{ secrets.SKOLAB_FIREBASE_API_KEY }}
+      SKOLAB_SYNTHETIC_EMAIL: ${{ secrets.SKOLAB_SYNTHETIC_EMAIL }}
+      SKOLAB_SYNTHETIC_PASSWORD: ${{ secrets.SKOLAB_SYNTHETIC_PASSWORD }}
+      SKOLAB_SYNTHETIC_WORKSPACE_ID: ${{ secrets.SKOLAB_SYNTHETIC_WORKSPACE_ID }}
+      # 'true' once the four journey secure values exist in Grafana's secret
+      # manager (created in its UI) instead of being uploaded from these secrets.
+      JOURNEY_EXISTING_SECRETS: ${{ vars.JOURNEY_EXISTING_SECRETS }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Require Grafana credentials
+        run: |
+          for key in GRAFANA_URL GRAFANA_TOKEN GRAFANA_SM_TOKEN GRAFANA_CONTACT_POINT; do
+            if [ -z "${!key}" ]; then echo "::error::Repository secret $key is not set"; exit 1; fi
+          done
+      - name: SLO recording rules, burn-rate alerts and backend dashboard
+        run: |
+          python services/observability/slo/provision.py --apply
+          python services/observability/slo/provision.py --verify
+      - name: Availability checks and alerts, plus the journey once configured
+        run: |
+          if [ -n "$SKOLAB_FIREBASE_API_KEY" ] && [ -n "$SKOLAB_SYNTHETIC_EMAIL" ] \
+             && [ -n "$SKOLAB_SYNTHETIC_PASSWORD" ] && [ -n "$SKOLAB_SYNTHETIC_WORKSPACE_ID" ]; then
+            flags="--journey"
+            [ "$JOURNEY_EXISTING_SECRETS" = "true" ] && flags="$flags --existing-secrets"
+            # Runs the journey once on a Grafana probe first; a failing journey
+            # is never scheduled, and this step fails so the merge is visibly red.
+            python services/observability/provision.py --apply $flags
+          else
+            echo "::notice::Journey fixtures are not configured; deploying availability checks only"
+            python services/observability/provision.py --apply
+          fi
+      - name: End-to-end notification test
+        if: ${{ inputs.test_alert }}
+        run: python services/observability/provision.py --test-alert

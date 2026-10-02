@@ -94,3 +94,66 @@ class ProvisionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def adhoc_line(probe, success, logs=()):
+    return {"id": "run-1", "probe": probe, "logs": list(logs),
+            "timeseries": [{"name": "probe_success", "metric": [{"gauge": {"value": 1 if success else 0}}]}]}
+
+
+class FakeGrafanaLoki:
+    """Answers the logs-datasource lookup, then Loki polls with fixed lines."""
+
+    def __init__(self, lines, empty_polls=0):
+        self.lines, self.empty_polls, self.queries = lines, empty_polls, []
+
+    def call(self, method, path, body=None):
+        if path == "/api/datasources":
+            return [{"name": "stack-logs", "uid": "logs-uid"}]
+        self.queries.append(path)
+        if self.empty_polls:
+            self.empty_polls -= 1
+            return {"data": {"result": []}}
+        return {"data": {"result": [{"values": [["1", provision.json.dumps(line)] for line in self.lines]}]}}
+
+
+SM_SETTINGS = {"logs": {"grafanaName": "stack-logs"}}
+
+
+class AdHocVerificationTests(unittest.TestCase):
+
+    def journey(self):
+        return provision.check_definitions([7, 8], 7)[-1]
+
+    def run_verify(self, grafana):
+        sm = FakeAPI()
+        sm.call = lambda method, path, body=None: sm.calls.append((method, path, body)) or {"id": "run-1"}
+        with patch.object(provision.time, "sleep"):
+            result = provision.verify_adhoc(grafana, sm, SM_SETTINGS, self.journey(), 7)
+        return result, sm
+
+    def test_passing_run_submits_unsaved_check_to_one_probe(self):
+        grafana = FakeGrafanaLoki([adhoc_line("Mumbai", True)], empty_polls=2)
+        ok, sm = self.run_verify(grafana)
+        self.assertTrue(ok)
+        method, path, body = sm.calls[0]
+        self.assertEqual((method, path, body["probes"]), ("POST", "/api/v1/check/adhoc", [7]))
+        self.assertIn("scripted", body["settings"])
+        self.assertTrue(all("run-1" in provision.urllib.parse.unquote_plus(q) for q in grafana.queries))
+
+    def test_failing_probe_fails_and_redacts_secrets_in_errors(self):
+        logs = [{"level": "error", "msg": "ws ticket=abc123 token eyJa.eyJb.sig failed"}]
+        grafana = FakeGrafanaLoki([adhoc_line("Mumbai", False, logs)])
+        with patch("builtins.print") as printed:
+            ok, _ = self.run_verify(grafana)
+        self.assertFalse(ok)
+        output = " ".join(str(c.args[0]) for c in printed.call_args_list)
+        self.assertNotIn("abc123", output)
+        self.assertNotIn("eyJa.eyJb.sig", output)
+        self.assertIn("FAILED", output)
+
+    def test_missing_result_times_out_instead_of_passing(self):
+        grafana = FakeGrafanaLoki([], empty_polls=10**6)
+        clock = patch.object(provision.time, "monotonic", side_effect=[0, 1, 10**6])
+        with clock, self.assertRaises(RuntimeError):
+            self.run_verify(grafana)

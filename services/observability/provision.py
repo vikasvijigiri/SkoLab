@@ -9,9 +9,11 @@ import argparse
 import base64
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -146,6 +148,51 @@ def journey_secrets():
     return values
 
 
+def _redact(text: str) -> str:
+    text = re.sub(r"ticket=[^\s\"&]+", "ticket=[REDACTED]", text)
+    return re.sub(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", "[REDACTED_TOKEN]", text)
+
+
+def probe_results(lines: list[dict]) -> dict[str, bool]:
+    """probe name -> probe_success, from ad-hoc result lines (one per probe)."""
+    results = {}
+    for line in lines:
+        for series in line.get("timeseries") or []:
+            if series.get("name") == "probe_success" and series.get("metric"):
+                results[line.get("probe", "?")] = series["metric"][0]["gauge"]["value"] == 1
+    return results
+
+
+def verify_adhoc(grafana: API, sm: API, settings: dict, definition: dict, probe: int) -> bool:
+    """Run one check once on a Grafana probe, without saving it, and wait for
+    its result. Nothing runs locally: the probe executes the check (k6 for the
+    journey) and reports to the stack's Loki, which is read back here."""
+    run = sm.call("POST", "/api/v1/check/adhoc", {
+        "target": definition["target"], "timeout": definition["timeout"],
+        "probes": [probe], "settings": definition["settings"]})
+    logs = [d["uid"] for d in grafana.call("GET", "/api/datasources") if d["name"] == settings["logs"]["grafanaName"]]
+    if len(logs) != 1:
+        raise RuntimeError("Synthetic Monitoring logs datasource not found")
+    started = int(time.time() - 60) * 10**9
+    deadline = time.monotonic() + definition["timeout"] / 1000 + 120
+    while time.monotonic() < deadline:
+        time.sleep(5)
+        selector = '{type="adhoc"} |= "' + run["id"] + '"'
+        query = urllib.parse.urlencode({"query": selector, "start": str(started), "limit": "20"})
+        streams = grafana.call("GET", f"/api/datasources/proxy/uid/{logs[0]}/loki/api/v1/query_range?{query}")["data"]["result"]
+        lines = [json.loads(raw) for stream in streams for _, raw in stream["values"]]
+        results = probe_results(lines)
+        if results:
+            for line in lines:
+                for entry in line.get("logs") or []:
+                    if str(entry.get("level", "")).lower() == "error":
+                        print("  " + _redact(str(entry.get("msg") or entry.get("error") or ""))[:200])
+            for name, ok in results.items():
+                print(f"Ad-hoc {definition['job']} from {name}: {'passed' if ok else 'FAILED'}")
+            return all(results.values())
+    raise RuntimeError(f"No ad-hoc result for {definition['job']} within its timeout")
+
+
 def provision_secrets(grafana: API, stack_id: int):
     values = journey_secrets()
     path = f"/apis/secret.grafana.app/v1beta1/namespaces/stacks-{stack_id}/securevalues"
@@ -186,7 +233,11 @@ def apply(journey: bool, names: list[str], existing_secrets: bool = False):
     if journey and not existing_secrets:
         provision_secrets(grafana, settings["stackId"])
     existing = sm.call("GET", "/api/v1/check")
-    for definition in check_definitions(probes, probes[0] if journey else None):
+    definitions = check_definitions(probes, probes[0] if journey else None)
+    if journey and not verify_adhoc(grafana, sm, settings, definitions[-1], probes[0]):
+        # Never schedule a journey that fails: it would page every 30 minutes.
+        raise RuntimeError("Journey failed its ad-hoc run on a Grafana probe; not scheduling it")
+    for definition in definitions:
         reconcile_check(sm, definition, existing)
     config = json.loads((ROOT / "checks.json").read_text())
     rules = [alert_rule(item["job"], item["service"] + " unavailable", availability_expression(item["job"]), datasource, receiver)
@@ -204,6 +255,17 @@ def apply(journey: bool, names: list[str], existing_secrets: bool = False):
     serialized = json.dumps(dashboard).replace("${DS_PROMETHEUS}", datasource)
     grafana.call("POST", "/api/dashboards/db", {"dashboard": json.loads(serialized), "folderUid": FOLDER, "overwrite": True})
     print("Reconciled availability dashboard")
+
+
+def verify_journey(names: list[str], existing_secrets: bool = False):
+    grafana = API(os.environ["GRAFANA_URL"], os.environ["GRAFANA_TOKEN"])
+    settings = grafana.call("GET", "/api/plugins/grafana-synthetic-monitoring-app/settings")["jsonData"]
+    sm = API(settings["apiHost"], os.environ["GRAFANA_SM_TOKEN"])
+    if not existing_secrets:
+        provision_secrets(grafana, settings["stackId"])
+    probes = choose_probes(sm.call("GET", "/api/v1/probe"), names)
+    if not verify_adhoc(grafana, sm, settings, check_definitions(probes, probes[0])[-1], probes[0]):
+        raise RuntimeError("Journey failed its ad-hoc run")
 
 
 def test_alert():
@@ -255,6 +317,8 @@ def main():
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--journey", action="store_true", help="Enable journey after configuring four Grafana secure values")
     parser.add_argument("--test-alert", action="store_true")
+    parser.add_argument("--verify-journey", action="store_true",
+                        help="Run the journey once on a Grafana probe (no local k6) and report the result")
     parser.add_argument("--existing-secrets", action="store_true", help="Use the four secure values already configured in Grafana instead of uploading local values")
     parser.add_argument("--probes", nargs=2, default=["Mumbai", "Oregon"])
     parser.add_argument("--env-file", type=Path, default=ROOT.parents[1] / ".env")
@@ -262,6 +326,8 @@ def main():
     load_environment(args.env_file)
     if args.test_alert:
         test_alert()
+    elif args.verify_journey:
+        verify_journey(args.probes, args.existing_secrets)
     elif args.apply:
         apply(args.journey, args.probes, args.existing_secrets)
     else:
