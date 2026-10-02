@@ -37,10 +37,6 @@ jobs:
       SKOLAB_FIREBASE_API_KEY: ${{ secrets.SKOLAB_FIREBASE_API_KEY }}
       SKOLAB_SYNTHETIC_EMAIL: ${{ secrets.SKOLAB_SYNTHETIC_EMAIL }}
       SKOLAB_SYNTHETIC_PASSWORD: ${{ secrets.SKOLAB_SYNTHETIC_PASSWORD }}
-      SKOLAB_SYNTHETIC_WORKSPACE_ID: ${{ secrets.SKOLAB_SYNTHETIC_WORKSPACE_ID }}
-      # 'true' once the four journey secure values exist in Grafana's secret
-      # manager (created in its UI) instead of being uploaded from these secrets.
-      JOURNEY_EXISTING_SECRETS: ${{ vars.JOURNEY_EXISTING_SECRETS }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -57,16 +53,14 @@ jobs:
           python services/observability/slo/provision.py --verify
       - name: Availability checks and alerts, plus the journey once configured
         run: |
-          # The workspace secret is optional: without it the provisioner signs
-          # in as the monitoring account and creates (idempotently) its
-          # workspace through POST /api/v1/workspaces.
+          # The provisioner signs in as the monitoring account, creates (or
+          # gets back) its workspace through POST /api/v1/workspaces, and
+          # uploads the journey values to Grafana's secret manager.
           if [ -n "$SKOLAB_FIREBASE_API_KEY" ] && [ -n "$SKOLAB_SYNTHETIC_EMAIL" ] \
              && [ -n "$SKOLAB_SYNTHETIC_PASSWORD" ]; then
-            flags="--journey"
-            [ "$JOURNEY_EXISTING_SECRETS" = "true" ] && flags="$flags --existing-secrets"
             # Runs the journey once on a Grafana probe first; a failing journey
             # is never scheduled, and this step fails so the merge is visibly red.
-            python services/observability/provision.py --apply $flags
+            python services/observability/provision.py --apply --journey
           else
             echo "::notice::Journey fixtures are not configured; deploying availability checks only"
             python services/observability/provision.py --apply

@@ -34,11 +34,10 @@ Actions). Never commit them:
 | Secret | Value |
 | --- | --- |
 | `GRAFANA_URL` | `https://<stack>.grafana.net` |
-| `GRAFANA_TOKEN` | Grafana service-account token (Editor; see below for the journey) |
+| `GRAFANA_TOKEN` | Grafana service-account token (Admin, so it can also write the journey's secure values) |
 | `GRAFANA_SM_TOKEN` | Synthetic Monitoring access token (Testing & synthetics > Synthetics > Config) |
 | `GRAFANA_CONTACT_POINT` | Contact point that receives all SkoLab alerts (`skolab-oncall`) |
 | `SKOLAB_FIREBASE_API_KEY`, `SKOLAB_SYNTHETIC_EMAIL`, `SKOLAB_SYNTHETIC_PASSWORD` | Journey login fixtures (optional; they turn the journey on) |
-| `SKOLAB_SYNTHETIC_WORKSPACE_ID` | Optional; created automatically when omitted |
 
 The provisioner discovers the regional API server and the metrics and logs data
 sources from the Synthetic Monitoring plugin's settings. An OTLP ingestion
@@ -57,14 +56,15 @@ apply the availability checks only. To enable it:
    units across Go/Python is 384 units, below the default 600-unit daily
    limit. With lower limits, lengthen the journey interval rather than bypass
    quotas.
-2. Make the values available to Grafana's secret manager, which only the
-   `synthetic-monitoring` decrypter can read. Either grant the service account
-   secure-value create/read/write (Grafana's fixed secret-management roles) and
-   let the deploy upload them, or create all four yourself in the Synthetic
-   Monitoring Secrets UI under the names in `journey.js` and set the
-   repository **variable** `JOURNEY_EXISTING_SECRETS=true`. In that case,
-   supply the workspace ID too.
+2. Make sure the service account behind `GRAFANA_TOKEN` can write secure
+   values (the Admin role does). The deploy uploads the journey values to
+   Grafana's secret manager, which only the `synthetic-monitoring` decrypter
+   can read.
 3. Add the three login repository secrets and re-run the workflow.
+
+When running `provision.py` by hand, `--existing-secrets` reuses secure values
+already created in the Synthetic Monitoring Secrets UI, and
+`SKOLAB_SYNTHETIC_WORKSPACE_ID` pins a specific workspace. CI uses neither.
 
 Before scheduling the journey, the deploy runs it once as an **ad-hoc check on
 a Grafana probe** and reads the result back from the stack's Loki logs. A
