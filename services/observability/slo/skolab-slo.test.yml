@@ -1,0 +1,147 @@
+# promtool unit tests for skolab-slo.rules.yml:
+#   promtool test rules skolab-slo.test.yml
+# "0+600x90" is a counter growing by 600 per interval for 90 intervals.
+# Tests that start from no history see every window (1h, 6h, 3d) over the same
+# data, so a heavy burn fires all three severities at once; the first test
+# carries three days of history to show the windows separating as in production.
+rule_files:
+  - skolab-slo.rules.yml
+
+evaluation_interval: 1m
+
+tests:
+  # Realistic history: three healthy days, then one hour at a 10% 5xx rate
+  # (20x the 99.5% budget). Only the fast 1h page fires -- the 6h and 3d
+  # windows dilute one bad hour below their thresholds -- and the compile
+  # route's own failures are not charged to the API SLO.
+  - interval: 1m
+    input_series:
+      - series: 'skolab_http_requests_total{job="skolab-backend-py",deployment_environment_name="production",http_route="/api/v1/me",http_response_status_code="200"}'
+        values: '0+540x4380'
+      - series: 'skolab_http_requests_total{job="skolab-backend-py",deployment_environment_name="production",http_route="/api/v1/me",http_response_status_code="500"}'
+        values: '0x4319 0+60x60'
+      - series: 'skolab_http_requests_total{job="skolab-backend-py",deployment_environment_name="production",http_route="/api/v1/colab/compile",http_response_status_code="500"}'
+        values: '0+600x4380'
+    promql_expr_test:
+      - expr: slo:sli_error:ratio_rate5m{slo="api-availability"}
+        eval_time: 73h
+        exp_samples:
+          - labels: 'slo:sli_error:ratio_rate5m{job="skolab-backend-py",slo="api-availability"}'
+            value: 0.1
+    alert_rule_test:
+      - eval_time: 72h
+        alertname: SLOBurnRateApiAvailability
+        exp_alerts: []
+      - eval_time: 73h
+        alertname: SLOBurnRateApiAvailability
+        exp_alerts:
+          - exp_labels: {severity: page, slo: api-availability, window: 1h, job: skolab-backend-py}
+            exp_annotations:
+              summary: "api-availability: burning error budget 14.4x too fast (2% of the 30d budget in 1h)"
+              description: "SLO: 99.5% of Python API requests that do not fail with a 5xx. Error ratio over 1h is 10% (budget allows 0.50%)."
+              runbook_url: https://github.com/vikasvijigiri/SkoLab/blob/master/services/observability/slo/RUNBOOK.md#api-availability
+
+  # The same 10% error rate at a trickle of traffic must not page anyone.
+  - interval: 1m
+    input_series:
+      - series: 'skolab_http_requests_total{job="skolab-backend-py",deployment_environment_name="production",http_route="/api/v1/me",http_response_status_code="200"}'
+        values: '0+0.45x90'
+      - series: 'skolab_http_requests_total{job="skolab-backend-py",deployment_environment_name="production",http_route="/api/v1/me",http_response_status_code="500"}'
+        values: '0+0.05x90'
+    alert_rule_test:
+      - eval_time: 60m
+        alertname: SLOBurnRateApiAvailability
+        exp_alerts: []
+
+  # A healthy service (0.1% errors, inside a 0.5% budget) stays quiet.
+  - interval: 1m
+    input_series:
+      - series: 'skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/users/profile/sync",http_response_status_code="200"}'
+        values: '0+999x90'
+      - series: 'skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/users/profile/sync",http_response_status_code="503"}'
+        values: '0+1x90'
+    alert_rule_test:
+      - eval_time: 60m
+        alertname: SLOBurnRateGatewayAvailability
+        exp_alerts: []
+
+  # Staging failures never page.
+  - interval: 1m
+    input_series:
+      - series: 'skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="staging",http_route="/api/v1/users/profile/sync",http_response_status_code="500"}'
+        values: '0+600x90'
+    alert_rule_test:
+      - eval_time: 60m
+        alertname: SLOBurnRateGatewayAvailability
+        exp_alerts: []
+
+  # Latency: only 10% of requests finish within 1s, against a 95% target. The
+  # bucket is spelled le="1.0" here to prove both OTLP spellings match.
+  # WebSocket routes (socket lifetime, not latency) are excluded entirely.
+  - interval: 1m
+    input_series:
+      - series: 'skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/users/profile/sync",le="1.0"}'
+        values: '0+60x90'
+      - series: 'skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/users/profile/sync"}'
+        values: '0+600x90'
+      - series: 'skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/users/profile/sync",http_response_status_code="200"}'
+        values: '0+600x90'
+      - series: 'skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route="/ws/colab/:workspace_id",le="1"}'
+        values: '0+0x90'
+      - series: 'skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route="/ws/colab/:workspace_id"}'
+        values: '0+600x90'
+    promql_expr_test:
+      - expr: slo:sli_error:ratio_rate1h{slo="gateway-latency"}
+        eval_time: 60m
+        exp_samples:
+          - labels: 'slo:sli_error:ratio_rate1h{job="skolab-gateway",slo="gateway-latency"}'
+            value: 0.9
+    alert_rule_test:
+      - eval_time: 60m
+        alertname: SLOBurnRateGatewayLatency
+        exp_alerts:
+          - exp_labels: {severity: page, slo: gateway-latency, window: 1h, job: skolab-gateway}
+            exp_annotations:
+              summary: "gateway-latency: burning error budget 14.4x too fast (2% of the 30d budget in 1h)"
+              description: "SLO: 95% of Gateway requests that complete within 1s. Error ratio over 1h is 90% (budget allows 5.00%)."
+              runbook_url: https://github.com/vikasvijigiri/SkoLab/blob/master/services/observability/slo/RUNBOOK.md#gateway-latency
+          - exp_labels: {severity: page, slo: gateway-latency, window: 6h, job: skolab-gateway}
+            exp_annotations:
+              summary: "gateway-latency: burning error budget 6x too fast (5% of the 30d budget in 6h)"
+              description: "SLO: 95% of Gateway requests that complete within 1s. Error ratio over 6h is 90% (budget allows 5.00%)."
+              runbook_url: https://github.com/vikasvijigiri/SkoLab/blob/master/services/observability/slo/RUNBOOK.md#gateway-latency
+          - exp_labels: {severity: ticket, slo: gateway-latency, window: 3d, job: skolab-gateway}
+            exp_annotations:
+              summary: "gateway-latency: burning error budget 1x too fast (10% of the 30d budget in 3d)"
+              description: "SLO: 95% of Gateway requests that complete within 1s. Error ratio over 3d is 90% (budget allows 5.00%)."
+              runbook_url: https://github.com/vikasvijigiri/SkoLab/blob/master/services/observability/slo/RUNBOOK.md#gateway-latency
+
+  # Compile failures burn the compile budget, not the gateway's general one.
+  - interval: 1m
+    input_series:
+      - series: 'skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile",http_response_status_code="200"}'
+        values: '0+4x90'
+      - series: 'skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile",http_response_status_code="503"}'
+        values: '0+1x90'
+    alert_rule_test:
+      - eval_time: 60m
+        alertname: SLOBurnRateGatewayAvailability
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: SLOBurnRateCompileAvailability
+        exp_alerts:
+          - exp_labels: {severity: page, slo: compile-availability, window: 1h, job: skolab-gateway}
+            exp_annotations:
+              summary: "compile-availability: burning error budget 14.4x too fast (2% of the 30d budget in 1h)"
+              description: "SLO: 99% of LaTeX compiles that do not fail with a 5xx. Error ratio over 1h is 20% (budget allows 1.00%)."
+              runbook_url: https://github.com/vikasvijigiri/SkoLab/blob/master/services/observability/slo/RUNBOOK.md#compile-availability
+          - exp_labels: {severity: page, slo: compile-availability, window: 6h, job: skolab-gateway}
+            exp_annotations:
+              summary: "compile-availability: burning error budget 6x too fast (5% of the 30d budget in 6h)"
+              description: "SLO: 99% of LaTeX compiles that do not fail with a 5xx. Error ratio over 6h is 20% (budget allows 1.00%)."
+              runbook_url: https://github.com/vikasvijigiri/SkoLab/blob/master/services/observability/slo/RUNBOOK.md#compile-availability
+          - exp_labels: {severity: ticket, slo: compile-availability, window: 3d, job: skolab-gateway}
+            exp_annotations:
+              summary: "compile-availability: burning error budget 1x too fast (10% of the 30d budget in 3d)"
+              description: "SLO: 99% of LaTeX compiles that do not fail with a 5xx. Error ratio over 3d is 20% (budget allows 1.00%)."
+              runbook_url: https://github.com/vikasvijigiri/SkoLab/blob/master/services/observability/slo/RUNBOOK.md#compile-availability

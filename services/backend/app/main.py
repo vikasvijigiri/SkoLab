@@ -41,9 +41,11 @@ user_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("user_id", def
 from app.core.telemetry import (
     trace_id_var,
     span_id_var,
+    LoopLagMonitor,
     Telemetry,
     TelemetryMiddleware,
     instrument_httpx,
+    observe_saturation,
     propagator,
 )
 
@@ -215,15 +217,17 @@ async def lifespan(app: FastAPI):
             await asyncio.sleep(60.0)
 
     maintenance_task = asyncio.create_task(sre_maintenance_loop())
+    loop_lag_task = asyncio.create_task(app.state.loop_lag.run())
 
     try:
         yield
     finally:
-        maintenance_task.cancel()
-        try:
-            await maintenance_task
-        except asyncio.CancelledError:
-            pass
+        for task in (maintenance_task, loop_lag_task):
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
         await asyncio.to_thread(app.state.telemetry.shutdown)
 
 
@@ -479,5 +483,20 @@ async def health():
 
 # Each worker pushes OTLP with its own service.instance.id. No scrape endpoint.
 app.state.telemetry = Telemetry()
+app.state.loop_lag = LoopLagMonitor()
+
+
+def _db_pool():
+    from app.db.database import engine
+
+    return engine.sync_engine.pool
+
+
+observe_saturation(
+    app.state.telemetry,
+    pool=_db_pool,
+    max_connections=settings.db_pool_size + settings.db_max_overflow,
+    loop_lag=app.state.loop_lag,
+)
 app.add_middleware(TelemetryMiddleware, telemetry=app.state.telemetry)
 instrument_httpx()

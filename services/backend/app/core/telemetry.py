@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextvars
 import functools
 import math
 import os
 import sys
+import threading
 import time
 import uuid
 from contextlib import contextmanager
@@ -15,6 +17,7 @@ import httpx
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.metrics import CallbackOptions, Observation
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
@@ -196,6 +199,69 @@ class TelemetryMiddleware:
                 self.telemetry.requests.add(1, labels)
                 self.telemetry.duration.record(time.perf_counter() - started, labels)
                 self.telemetry.active.add(-1, attrs)
+
+
+class LoopLagMonitor:
+    """Worst asyncio event-loop lag since the last export.
+
+    Python's saturation signal: a blocking call on the loop delays every
+    in-flight request on that worker. A sleeper wakes every ``interval`` and
+    records how late it woke; the gauge reports (and resets) the maximum.
+    """
+
+    def __init__(self, interval: float = 0.5):
+        self.interval = interval
+        self._max = 0.0
+        self._lock = threading.Lock()  # export runs on the reader's thread
+
+    def record(self, lag: float) -> None:
+        with self._lock:
+            self._max = max(self._max, lag)
+
+    def take(self) -> float:
+        with self._lock:
+            value, self._max = self._max, 0.0
+        return value
+
+    async def run(self) -> None:
+        loop = asyncio.get_running_loop()
+        while True:
+            started = loop.time()
+            await asyncio.sleep(self.interval)
+            self.record(max(0.0, loop.time() - started - self.interval))
+
+
+def observe_saturation(telemetry, *, pool=None, max_connections=None, loop_lag=None):
+    """Export DB pool usage and loop lag beside the RED metrics.
+
+    ``pool`` is a zero-argument callable returning the SQLAlchemy pool, read
+    at export time. Pools without size accounting (NullPool in tests) report
+    nothing rather than zeros.
+    """
+    meter = telemetry.metrics.get_meter("skolab.runtime")
+
+    def connections(_options: CallbackOptions):
+        current = pool() if pool else None
+        if current is None or not hasattr(current, "checkedout"):
+            return []
+        return [
+            Observation(current.checkedout(), {"state": "acquired"}),
+            Observation(current.checkedin(), {"state": "idle"}),
+        ]
+
+    def limit(_options: CallbackOptions):
+        return [Observation(max_connections)] if max_connections else []
+
+    def lag(_options: CallbackOptions):
+        return [Observation(loop_lag.take())] if loop_lag else []
+
+    meter.create_observable_up_down_counter(
+        "skolab.db.pool.connections", [connections], unit="{connection}"
+    )
+    meter.create_observable_up_down_counter(
+        "skolab.db.pool.max_connections", [limit], unit="{connection}"
+    )
+    meter.create_observable_gauge("skolab.runtime.event_loop_lag", [lag], unit="s")
 
 
 def instrument_httpx():

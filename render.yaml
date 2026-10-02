@@ -22,7 +22,7 @@ services:
       - key: OTEL_EXPORTER_OTLP_PROTOCOL
         value: http/protobuf
       - key: OTEL_TRACES_SAMPLER_ARG
-        value: "0.1"
+        value: "1"
       - key: PYTHON_BACKEND_URL
         sync: false
       - key: DATABASE_URL
@@ -61,7 +61,7 @@ services:
       - key: OTEL_EXPORTER_OTLP_PROTOCOL
         value: http/protobuf
       - key: OTEL_TRACES_SAMPLER_ARG
-        value: "0.1"
+        value: "1"
       - key: PORT
         value: "8000"
       - key: WEB_CONCURRENCY
