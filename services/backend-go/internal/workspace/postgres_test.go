@@ -17,6 +17,10 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	url := os.Getenv("TEST_DATABASE_URL")
 	if url == "" {
+		if os.Getenv("CI") == "true" {
+			// A silent skip in CI would report green without testing anything.
+			t.Fatal("TEST_DATABASE_URL must be set in CI")
+		}
 		t.Skip("TEST_DATABASE_URL not set")
 	}
 	pool, err := pgxpool.New(context.Background(), url)
