@@ -224,6 +224,8 @@ func main() {
 	workspacesAPI := r.Group("/api/v1")
 	workspacesAPI.Use(authenticated...)
 	workspace.Register(workspacesAPI, workspace.NewPostgresStore(db.Pool))
+	// Sharing: invite links (owner or editor) and member management.
+	workspace.RegisterSharing(workspacesAPI, workspace.NewPostgresSharingStore(db.Pool))
 
 	// ── CoLab compile — auth + per-user quota + single-flight live in Go;
 	// the actual pdflatex run happens in cmd/colab-sandbox (COLAB_SANDBOX_URL,
