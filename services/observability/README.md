@@ -1,5 +1,86 @@
 # Backend metrics and traces
 
+## External availability and complete journey
+
+`checks.json`, `journey.js`, `availability-dashboard.json` and `provision.py`
+manage the external checks and their alerts separately from application metrics.
+The provisioner uses stable jobs/UIDs and updates existing resources; duplicate
+jobs are rejected. It never replaces the stack's global notification policy or
+other teams' checks. Grafana's built-in per-check alerts are disabled to avoid
+duplicate availability notifications.
+
+Availability checks run every minute from Mumbai and Oregon. Go checks HTTP 200
+and `status=online`. Python checks HTTP 200, `status=ready`, and healthy database
+and cache. Both require HTTPS and reject redirects. The complete backend journey
+runs every 30 minutes from Mumbai only: fresh Firebase login, identity sync,
+compile a valid tiny document, validate `%PDF-` and `%%EOF`, issue two single-use
+tickets, and confirm a message reaches the second workspace connection. This is
+not a browser UI test or a load test. Its workspace must contain no real users.
+
+Append these credentials to the ignored root `.env` or inject them as environment
+variables. Never commit secrets or reusable Firebase credentials:
+
+```dotenv
+GRAFANA_URL=https://your-stack.grafana.net
+GRAFANA_TOKEN=service-account-token
+GRAFANA_SM_TOKEN=synthetic-monitoring-access-token
+GRAFANA_CONTACT_POINT=existing-contact-point-name
+SKOLAB_FIREBASE_API_KEY=firebase-web-api-key
+SKOLAB_SYNTHETIC_EMAIL=dedicated-monitoring-account-email
+SKOLAB_SYNTHETIC_PASSWORD=dedicated-monitoring-account-password
+SKOLAB_SYNTHETIC_WORKSPACE_ID=dedicated-workspace-id
+```
+
+Create the Grafana service account under Administration > Users and access with
+Editor permissions for dashboards and alert provisioning. Generate the Synthetic
+Monitoring access token in Testing & synthetics > Synthetics > Config. The
+provisioner discovers the regional API server and metrics datasource from that
+plugin's settings; an OTLP ingestion token is not a management token.
+
+Create a dedicated Firebase email/password account, enable that sign-in provider,
+and sign into SkoLab to create its isolated monitoring workspace. Existing
+application authorization remains enforced. The journey account consumes normal
+quota: 48 daily runs at eight units across Go/Python = 384 units, below the default
+600-unit daily limit. If you use lower limits, lengthen its interval; don't bypass
+quotas for monitoring. Repeated manual tests also consume quota.
+
+For `--journey`, the Grafana service account additionally needs secure-value
+read/create/write permissions. Secrets are sent to Grafana's secret manager with
+only `synthetic-monitoring` as decrypter. API responses and secrets are never
+printed or stored in the repository. Alternatively create the four secure values
+in Grafana's Synthetic Monitoring Secrets UI with the names used in `journey.js`.
+Grant secret management permissions through Grafana's documented fixed roles.
+When using values already configured in the UI, add `--existing-secrets` to the
+apply command. Confirm a successful manual journey before enabling its schedule.
+
+```sh
+# Preview public check definitions (no network or changes).
+python services/observability/provision.py
+# Verify the real journey once; k6 must be installed.
+python services/observability/run_journey.py
+# Apply availability checks, alerts, and dashboard.
+python services/observability/provision.py --apply
+# Add the journey and its alert once its isolated fixtures work.
+python services/observability/provision.py --apply --journey
+# Exercise alert evaluation, notification, recovery and cleanup.
+python services/observability/provision.py --test-alert
+```
+
+If the preferred probes are unavailable, supply two online public probe names
+using `--probes Mumbai Oregon`. Multiple Prometheus datasources are handled by
+discovering the one configured for Synthetic Monitoring; override with
+`GRAFANA_PROMETHEUS_UID` only if your setup requires it.
+
+See [RUNBOOK.md](RUNBOOK.md) for incident response, target definitions, notification
+delivery verification, and provider integration limits. The observability CI
+workflow runs the actual k6 script against local HTTP/WebSocket fixtures,
+including authentication failure, invalid PDF and dropped broadcast cases. CI
+never requires or contacts a production account.
+
+References: [Synthetic Monitoring API](https://grafana.com/docs/grafana-cloud/observe-and-act/testing/synthetic-monitoring/api-reference/),
+[Secure values](https://grafana.com/docs/grafana-cloud/observe-and-act/testing/synthetic-monitoring/create-checks/manage-secrets/),
+[Grafana alert provisioning](https://grafana.com/docs/grafana/latest/alerting/set-up/provision-alerting-resources/http-api-provisioning/).
+
 SkoLab has one application metrics pipeline per service: Go and Python push
 OTLP HTTP/protobuf directly to Grafana Cloud (or an OTel Collector). Each process
 has a unique `service.instance.id`; `service.name` distinguishes gateway traffic
@@ -137,12 +218,12 @@ Without flags the script prints its plan. `--contact-email` creates the
 contact point if it is missing, and `--verify` checks that the recorded series
 and all 18 alert rules exist. Re-run `--apply` after every SLO change.
 
-**Relationship to external checks.** Black-box probes answer "can a user reach
-SkoLab at all?", including when no request reaches the app (DNS, TLS, Render
-edge, a crashed or sleeping instance). `.github/workflows/uptime-monitor.yml`
-covers that today. These SLOs answer "are the requests that do arrive
-succeeding, and fast enough?". Both are needed, and neither one's numbers feed
-into the other's. SLO burn alerts use [slo/RUNBOOK.md](slo/RUNBOOK.md).
+**Relationship to the external checks.** The probes and journey at the top of
+this file answer "can a user reach SkoLab at all?", including when no request
+reaches the app (DNS, TLS, Render edge, a crashed or sleeping instance). These
+SLOs answer "are the requests that do arrive succeeding, and fast enough?".
+Both are needed, and neither one's numbers feed into the other's. Probe failures use
+[RUNBOOK.md](RUNBOOK.md); SLO burn alerts use [slo/RUNBOOK.md](slo/RUNBOOK.md).
 
 ## Logs, traces and exemplars
 

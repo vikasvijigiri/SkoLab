@@ -1,0 +1,42 @@
+name: Observability checks
+
+on:
+  push:
+    branches: [main, master]
+    paths: ['services/observability/**', '.github/workflows/observability.yml']
+  pull_request:
+    paths: ['services/observability/**', '.github/workflows/observability.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install test tools
+        run: pip install websockets==17.1 ruff==0.15.4
+      - name: Install pinned k6
+        run: |
+          curl --fail --location --retry 3 --output k6.tar.gz https://github.com/grafana/k6/releases/download/v2.3.0/k6-v2.3.0-linux-amd64.tar.gz
+          curl --fail --location --retry 3 --output checksums.txt https://github.com/grafana/k6/releases/download/v2.3.0/k6-v2.3.0-checksums.txt
+          awk '$2 == "k6-v2.3.0-linux-amd64.tar.gz" {print $1 "  k6.tar.gz"}' checksums.txt > selected-checksum.txt
+          test -s selected-checksum.txt
+          sha256sum --check selected-checksum.txt
+          tar -xzf k6.tar.gz
+          echo "$PWD/k6-v2.3.0-linux-amd64" >> "$GITHUB_PATH"
+      - name: Lint and regenerate dashboard
+        run: |
+          ruff check services/observability
+          python services/observability/build_dashboard.py
+          git diff --exit-code -- services/observability/availability-dashboard.json
+      - name: Test reconciliation and real k6 journey
+        run: python -m unittest discover -s services/observability/tests -v
+      - name: Validate journey configuration
+        run: k6 inspect services/observability/journey.js > /dev/null

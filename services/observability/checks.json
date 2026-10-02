@@ -1,0 +1,13 @@
+{
+  "availability": [
+    {"job": "skolab-gateway-availability", "service": "skolab-gateway", "target": "https://skolab-gateway.onrender.com/gateway-health", "body_patterns": ["\"status\"\\s*:\\s*\"online\""]},
+    {"job": "skolab-python-readiness", "service": "skolab-backend-py", "target": "https://skolab-backend-py.onrender.com/readyz", "body_patterns": ["\"status\"\\s*:\\s*\"ready\"", "\"database\"\\s*:\\s*\"healthy\"", "\"cache\"\\s*:\\s*\"healthy\""]}
+  ],
+  "availability_frequency_ms": 60000,
+  "availability_timeout_ms": 15000,
+  "journey_frequency_ms": 1800000,
+  "journey_timeout_ms": 60000,
+  "preferred_probe_names": ["Mumbai", "Oregon"],
+  "journey_job": "skolab-complete-journey",
+  "availability_slo": 0.999
+}
