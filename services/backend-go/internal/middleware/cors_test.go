@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -77,5 +78,24 @@ func TestCORS_NoOriginHeaderPassesThroughUnmodified(t *testing.T) {
 	}
 	if w.Code != http.StatusOK {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestCORS_AllowsIdempotencyKeyAndExposesCreateHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(CORS())
+	r.POST("/x", func(c *gin.Context) { c.Status(http.StatusCreated) })
+	req := httptest.NewRequest(http.MethodOptions, "/x", nil)
+	req.Header.Set("Origin", "http://localhost:3000")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if !strings.Contains(w.Header().Get("Access-Control-Allow-Headers"), "Idempotency-Key") {
+		t.Fatalf("Allow-Headers = %q", w.Header().Get("Access-Control-Allow-Headers"))
+	}
+	for _, h := range []string{"Location", "Idempotent-Replayed"} {
+		if !strings.Contains(w.Header().Get("Access-Control-Expose-Headers"), h) {
+			t.Fatalf("Expose-Headers = %q, missing %s", w.Header().Get("Access-Control-Expose-Headers"), h)
+		}
 	}
 }

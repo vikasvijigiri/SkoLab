@@ -57,8 +57,11 @@ jobs:
           python services/observability/slo/provision.py --verify
       - name: Availability checks and alerts, plus the journey once configured
         run: |
+          # The workspace secret is optional: without it the provisioner signs
+          # in as the monitoring account and creates (idempotently) its
+          # workspace through POST /api/v1/workspaces.
           if [ -n "$SKOLAB_FIREBASE_API_KEY" ] && [ -n "$SKOLAB_SYNTHETIC_EMAIL" ] \
-             && [ -n "$SKOLAB_SYNTHETIC_PASSWORD" ] && [ -n "$SKOLAB_SYNTHETIC_WORKSPACE_ID" ]; then
+             && [ -n "$SKOLAB_SYNTHETIC_PASSWORD" ]; then
             flags="--journey"
             [ "$JOURNEY_EXISTING_SECRETS" = "true" ] && flags="$flags --existing-secrets"
             # Runs the journey once on a Grafana probe first; a failing journey

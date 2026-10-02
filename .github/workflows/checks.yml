@@ -61,6 +61,10 @@ jobs:
         run: pytest -q
       - name: Go vet and tests
         working-directory: services/backend-go
+        env:
+          # The database bootstrapped above; the workspace store's integration
+          # tests fail (not skip) in CI without it.
+          TEST_DATABASE_URL: postgres://skolab:skolab@localhost:5432/skolab
         run: |
           go vet ./...
           go test ./...

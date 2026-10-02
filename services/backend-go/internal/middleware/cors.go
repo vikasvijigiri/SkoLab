@@ -55,7 +55,10 @@ func CORS() gin.HandlerFunc {
 			c.Header("Access-Control-Allow-Credentials", "true")
 			c.Header("Vary", "Origin")
 			c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+			c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key")
+			// Lets browser code read where a created workspace lives and
+			// whether a create was an idempotent replay.
+			c.Header("Access-Control-Expose-Headers", "Location, Idempotent-Replayed, X-Request-ID")
 		}
 		if c.Request.Method == http.MethodOptions {
 			c.AbortWithStatus(http.StatusNoContent)

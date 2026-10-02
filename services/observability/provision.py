@@ -140,11 +140,62 @@ def choose_probes(items: list[dict], names: list[str]) -> list[int]:
     return result
 
 
-def journey_secrets():
+MONITOR_WORKSPACE_TITLE = "SkoLab monitoring (automated, do not use)"
+# A fixed key makes creation idempotent across deploys: every run gets the
+# same workspace back from POST /api/v1/workspaces instead of a new one.
+MONITOR_WORKSPACE_KEY = "skolab-synthetic-journey-workspace"
+FIREBASE_SIGN_IN = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword"
+
+
+def _configured(value: str) -> bool:
+    return bool(value) and not value.startswith(("the_", "your_"))
+
+
+def request_json(label: str, method: str, url: str, body=None, token=None, headers=None):
+    """HTTPS JSON call whose errors name only `label` -- never the URL (the
+    Firebase URL carries the API key) or the response body."""
+    if not url.startswith("https://"):
+        raise ValueError(f"{label}: HTTPS is required")
+    request = urllib.request.Request(
+        url, method=method, data=json.dumps(body).encode() if body is not None else None,
+        headers={"Content-Type": "application/json", **({"Authorization": f"Bearer {token}"} if token else {}), **(headers or {})})
+    try:
+        # Generous timeout: a sleeping free-tier Render service cold-starts.
+        with urllib.request.urlopen(request, timeout=120) as response:
+            content = response.read()
+            return json.loads(content) if content else None
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"{label}: HTTP {exc.code}") from None
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"{label}: {exc.reason}") from None
+
+
+def ensure_monitoring_workspace(api_key: str, email: str, password: str) -> str:
+    """Sign in as the monitoring account and create (or, on every later run,
+    get back) its dedicated workspace through the public workspace API --
+    the same path a real user takes, so no manual database setup."""
+    login = request_json("Firebase sign-in", "POST", f"{FIREBASE_SIGN_IN}?key={urllib.parse.quote(api_key)}",
+                         {"email": email, "password": password, "returnSecureToken": True})
+    token, uid = login["idToken"], login["localId"]
+    gateway = os.environ.get("SKOLAB_GATEWAY_URL", "https://skolab-gateway.onrender.com").rstrip("/")
+    request_json("Profile sync", "POST", f"{gateway}/api/v1/users/profile/sync",
+                 {"uid": uid, "name": "SkoLab monitoring"}, token)
+    workspace = request_json("Workspace create", "POST", f"{gateway}/api/v1/workspaces",
+                             {"title": MONITOR_WORKSPACE_TITLE}, token, {"Idempotency-Key": MONITOR_WORKSPACE_KEY})
+    return workspace["id"]
+
+
+def journey_secrets(resolve_workspace=ensure_monitoring_workspace):
     values = {name: os.environ.get(key, "") for name, key in JOURNEY_SECRETS.items()}
-    invalid = [JOURNEY_SECRETS[name] for name, value in values.items() if not value or value.startswith(("the_", "your_"))]
+    workspace = "skolab-monitor-workspace"
+    invalid = [JOURNEY_SECRETS[name] for name, value in values.items() if name != workspace and not _configured(value)]
     if invalid:
         raise ValueError("Missing journey fixture configuration: " + ", ".join(invalid))
+    if not _configured(values[workspace]):
+        # Optional: created through the workspace API when not supplied.
+        values[workspace] = resolve_workspace(values["skolab-firebase-api-key"], values["skolab-monitor-email"],
+                                              values["skolab-monitor-password"])
+        print("Monitoring workspace ready")
     return values
 
 

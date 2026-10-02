@@ -37,29 +37,34 @@ Actions). Never commit them:
 | `GRAFANA_TOKEN` | Grafana service-account token (Editor; see below for the journey) |
 | `GRAFANA_SM_TOKEN` | Synthetic Monitoring access token (Testing & synthetics > Synthetics > Config) |
 | `GRAFANA_CONTACT_POINT` | Contact point that receives all SkoLab alerts (`skolab-oncall`) |
-| `SKOLAB_FIREBASE_API_KEY`, `SKOLAB_SYNTHETIC_EMAIL`, `SKOLAB_SYNTHETIC_PASSWORD`, `SKOLAB_SYNTHETIC_WORKSPACE_ID` | Journey fixtures, optional |
+| `SKOLAB_FIREBASE_API_KEY`, `SKOLAB_SYNTHETIC_EMAIL`, `SKOLAB_SYNTHETIC_PASSWORD` | Journey login fixtures (optional; they turn the journey on) |
+| `SKOLAB_SYNTHETIC_WORKSPACE_ID` | Optional; created automatically when omitted |
 
 The provisioner discovers the regional API server and the metrics and logs data
 sources from the Synthetic Monitoring plugin's settings. An OTLP ingestion
 token is not a management token.
 
-**Turning on the journey.** Until all four journey secrets are set, deploys
+**Turning on the journey.** Until the three login secrets are set, deploys
 apply the availability checks only. To enable it:
 
 1. Create a dedicated Firebase email/password account (enable that sign-in
-   provider), and sign into SkoLab once as that account to create its isolated
-   monitoring workspace. It must contain no real users. Application
-   authorization still applies. The account consumes normal quota: 48 daily
-   runs at eight units across Go/Python is 384 units, below the default
-   600-unit daily limit. With lower limits, lengthen the journey interval
-   rather than bypass quotas.
-2. Make the four values available to Grafana's secret manager, which only the
+   provider). Nothing else is needed: on each deploy the provisioner signs in
+   as it, syncs its profile, and creates its monitoring workspace through
+   `POST /api/v1/workspaces` with a fixed `Idempotency-Key`. The first deploy
+   creates the workspace and every later one gets the same one back. That
+   workspace must never be shared with real users. Application authorization
+   still applies. The account consumes normal quota: 48 daily runs at eight
+   units across Go/Python is 384 units, below the default 600-unit daily
+   limit. With lower limits, lengthen the journey interval rather than bypass
+   quotas.
+2. Make the values available to Grafana's secret manager, which only the
    `synthetic-monitoring` decrypter can read. Either grant the service account
    secure-value create/read/write (Grafana's fixed secret-management roles) and
-   let the deploy upload them, or create them yourself in the Synthetic
-   Monitoring Secrets UI under the names in `journey.js` and set the repository
-   **variable** `JOURNEY_EXISTING_SECRETS=true`.
-3. Add the four repository secrets and re-run the workflow.
+   let the deploy upload them, or create all four yourself in the Synthetic
+   Monitoring Secrets UI under the names in `journey.js` and set the
+   repository **variable** `JOURNEY_EXISTING_SECRETS=true`. In that case,
+   supply the workspace ID too.
+3. Add the three login repository secrets and re-run the workflow.
 
 Before scheduling the journey, the deploy runs it once as an **ad-hoc check on
 a Grafana probe** and reads the result back from the stack's Loki logs. A
