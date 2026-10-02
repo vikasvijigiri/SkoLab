@@ -38,7 +38,14 @@ request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(
     "request_id", default=""
 )
 user_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("user_id", default="")
-from app.core.telemetry import trace_id_var, span_id_var
+from app.core.telemetry import (
+    trace_id_var,
+    span_id_var,
+    Telemetry,
+    TelemetryMiddleware,
+    instrument_httpx,
+    propagator,
+)
 
 # PII Masking regex patterns
 PII_PATTERNS = [
@@ -209,14 +216,15 @@ async def lifespan(app: FastAPI):
 
     maintenance_task = asyncio.create_task(sre_maintenance_loop())
 
-    yield
-
-    # ── [Shutdown] ──
-    maintenance_task.cancel()
     try:
-        await maintenance_task
-    except asyncio.CancelledError:
-        pass
+        yield
+    finally:
+        maintenance_task.cancel()
+        try:
+            await maintenance_task
+        except asyncio.CancelledError:
+            pass
+        await asyncio.to_thread(app.state.telemetry.shutdown)
 
 
 app = FastAPI(
@@ -239,7 +247,10 @@ app = FastAPI(
     redoc_url=None if settings.environment == "production" else "/redoc",
     openapi_url=None if settings.environment == "production" else "/openapi.json",
     openapi_tags=[
-        {"name": "CoLab", "description": "LaTeX compile (sandboxed) and workspace access."},
+        {
+            "name": "CoLab",
+            "description": "LaTeX compile (sandboxed) and workspace access.",
+        },
         {"name": "users", "description": "User account management and GDPR deletion."},
     ],
     swagger_ui_parameters={"persistAuthorization": True},
@@ -330,80 +341,61 @@ async def security_guard_middleware(request: Request, call_next):
 
 @app.middleware("http")
 async def structured_log_middleware(request: Request, call_next):
-    # W3C traceparent extraction and validation
-    traceparent = request.headers.get("traceparent")
-    trace_id = ""
-    if traceparent:
-        parts = traceparent.split("-")
-        if len(parts) >= 3:
-            trace_id = parts[1]
+    from opentelemetry import trace
 
-    if not trace_id:
-        trace_id = (
-            request.headers.get("x-trace-id")
-            or request.headers.get("x-request-id")
-            or str(uuid.uuid4()).replace("-", "")
-        )
-
-    # Set context variables temporarily so telemetry Span initialization reads them
-    trace_id_token = trace_id_var.set(trace_id)
-
-    request_id = request.headers.get("x-request-id") or trace_id
-    request_id_token = request_id_var.set(request_id)
-
-    # Try to extract user ID from query parameters
-    user_id = (
-        request.query_params.get("user_id") or request.query_params.get("userId") or ""
+    # OTel middleware owns the server span; logging creates no second span.
+    context = trace.get_current_span().get_span_context()
+    trace_id = (
+        format(context.trace_id, "032x")
+        if context.is_valid
+        else str(uuid.uuid4()).replace("-", "")
     )
-    user_id_token = user_id_var.set(user_id)
-
-    # Start a span for the router path
-    from app.core.telemetry import tracer
-
-    span_name = f"{request.method} {request.url.path}"
-
+    request_id = request.headers.get("x-request-id") or trace_id
+    request_token = request_id_var.set(request_id)
+    trace_token = trace_id_var.set(trace_id)
+    span_token = span_id_var.set(
+        format(context.span_id, "016x") if context.is_valid else ""
+    )
     start_time = time.perf_counter()
     response = None
+    try:
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        carrier = {}
+        propagator.inject(carrier)
+        if "traceparent" in carrier:
+            response.headers["traceparent"] = carrier["traceparent"]
+        elif request.headers.get("traceparent"):
+            # Probes are intentionally excluded from metrics/traces, but valid
+            # incoming trace context still round-trips for diagnostics.
+            from opentelemetry.trace import get_current_span
 
-    # Use the telemetry Span context manager
-    with tracer.start_as_current_span(span_name) as span:
-        try:
-            response = await call_next(request)
-            return response
-        except Exception as e:
-            latency_ms = int((time.perf_counter() - start_time) * 1000)
-            logger.error(
-                f"Uncaught exception: {str(e)}",
-                exc_info=True,
-                extra={
-                    "endpoint": request.url.path,
-                    "method": request.method,
-                    "status_code": 500,
-                    "latency_ms": latency_ms,
-                },
-            )
-            raise e
-        finally:
-            latency_ms = int((time.perf_counter() - start_time) * 1000)
-            status_code = response.status_code if response else 500
-
-            logger.info(
-                f"{request.method} {request.url.path} - {status_code} - {latency_ms}ms",
-                extra={
-                    "endpoint": request.url.path,
-                    "method": request.method,
-                    "status_code": status_code,
-                    "latency_ms": latency_ms,
-                },
-            )
-            if response:
-                response.headers["X-Request-ID"] = request_id
-                response.headers["traceparent"] = (
-                    f"00-{span.trace_id}-{span.span_id}-01"
-                )
-            request_id_var.reset(request_id_token)
-            user_id_var.reset(user_id_token)
-            trace_id_var.reset(trace_id_token)
+            extracted = get_current_span(
+                propagator.extract(dict(request.headers))
+            ).get_span_context()
+            if extracted.is_valid:
+                response.headers["traceparent"] = request.headers["traceparent"]
+        return response
+    except Exception:
+        logger.exception("Uncaught request exception")
+        raise
+    finally:
+        route = getattr(request.scope.get("route"), "path", "unmatched")
+        logger.info(
+            "%s %s - %s",
+            request.method,
+            route,
+            response.status_code if response else 500,
+            extra={
+                "endpoint": route,
+                "method": request.method,
+                "status_code": response.status_code if response else 500,
+                "latency_ms": int((time.perf_counter() - start_time) * 1000),
+            },
+        )
+        request_id_var.reset(request_token)
+        trace_id_var.reset(trace_token)
+        span_id_var.reset(span_token)
 
 
 # Expose one canonical API prefix. Clients must use /api/v1.
@@ -485,5 +477,7 @@ async def health():
     )
 
 
-# This service does not expose Prometheus metrics: per-worker process metrics
-# would be incomplete. The Go gateway owns request-level observability.
+# Each worker pushes OTLP with its own service.instance.id. No scrape endpoint.
+app.state.telemetry = Telemetry()
+app.add_middleware(TelemetryMiddleware, telemetry=app.state.telemetry)
+instrument_httpx()
