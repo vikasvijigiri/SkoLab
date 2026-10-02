@@ -3,6 +3,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location("provision", Path(__file__).resolve().parents[1] / "provision.py")
@@ -207,3 +208,62 @@ class MonitoringWorkspaceTests(unittest.TestCase):
         self.assertEqual(str(raised.exception), "Firebase sign-in: HTTP 400")
         with self.assertRaises(ValueError):
             provision.request_json("Plain", "GET", "http://example.com")
+
+
+class FakeAdminAuth:
+    class UserNotFoundError(Exception):
+        pass
+
+    def __init__(self, user=None):
+        self.user, self.calls = user, []
+
+    def get_user_by_email(self, email):
+        self.calls.append(("get", email))
+        if self.user is None:
+            raise self.UserNotFoundError()
+        return self.user
+
+    def create_user(self, **kwargs):
+        self.calls.append(("create", kwargs))
+
+    def update_user(self, uid, **kwargs):
+        self.calls.append(("update", uid, kwargs))
+
+
+class MonitoringAccountTests(unittest.TestCase):
+    def ensure(self, admin):
+        return provision.ensure_monitoring_account("monitor@example.com", "pw-secret", admin)
+
+    def test_missing_account_is_created_already_verified(self):
+        admin = FakeAdminAuth()
+        self.assertEqual(self.ensure(admin), "created")
+        self.assertEqual(admin.calls[-1], ("create", {"email": "monitor@example.com", "password": "pw-secret",
+                                                     "email_verified": True}))
+
+    def test_unverified_or_disabled_account_is_repaired_without_touching_the_password(self):
+        for user in (SimpleNamespace(uid="u1", email_verified=False, disabled=False),
+                     SimpleNamespace(uid="u1", email_verified=True, disabled=True)):
+            admin = FakeAdminAuth(user)
+            self.assertEqual(self.ensure(admin), "repaired")
+            self.assertEqual(admin.calls[-1], ("update", "u1", {"email_verified": True, "disabled": False}))
+
+    def test_healthy_account_is_left_alone(self):
+        admin = FakeAdminAuth(SimpleNamespace(uid="u1", email_verified=True, disabled=False))
+        self.assertEqual(self.ensure(admin), "ok")
+        self.assertEqual([c[0] for c in admin.calls], ["get"])
+
+    def test_without_a_service_account_nothing_is_managed(self):
+        with patch.dict(os.environ, {"FIREBASE_SERVICE_ACCOUNT": ""}):
+            self.assertIsNone(provision.ensure_monitoring_account("m@example.com", "pw"))
+
+    def test_invalid_service_account_json_never_echoes_its_content(self):
+        with self.assertRaises(ValueError) as raised:
+            provision._admin_auth("not-json PRIVATE KEY material")
+        self.assertNotIn("PRIVATE KEY", str(raised.exception))
+
+    def test_account_is_ensured_before_any_sign_in(self):
+        order = []
+        with patch.dict(os.environ, FIXTURES), patch("builtins.print"):
+            provision.journey_secrets(lambda *a: order.append("workspace") or "ws-1",
+                                      lambda *a: order.append("account") or "ok")
+        self.assertEqual(order, ["account", "workspace"])
