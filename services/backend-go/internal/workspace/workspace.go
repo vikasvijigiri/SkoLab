@@ -26,6 +26,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
+	"github.com/skolab/backend-go/internal/security"
 )
 
 const (
@@ -114,6 +115,10 @@ func caller(c *gin.Context) (string, bool) {
 
 // storeError maps a store error onto the API's stable error contract.
 func storeError(c *gin.Context, err error) {
+	if errors.Is(err, ErrNotFound) || errors.Is(err, ErrForbidden) {
+		security.Record(c, security.Event{Name: security.WorkspaceDenied, Outcome: security.Denied,
+			WorkspaceID: c.Param("id"), Reason: c.Request.Method})
+	}
 	switch {
 	case errors.Is(err, ErrNotFound):
 		fail(c, http.StatusNotFound, "not_found", "Workspace not found")
@@ -173,6 +178,8 @@ func (h handlers) create(c *gin.Context) {
 	}
 	if replayed {
 		c.Header("Idempotent-Replayed", "true")
+	} else {
+		security.Audit(c, security.Event{Name: security.WorkspaceCreated, Outcome: security.Allowed, WorkspaceID: ws.ID})
 	}
 	c.Header("Location", "/api/v1/workspaces/"+ws.ID)
 	c.JSON(http.StatusCreated, ws)
@@ -246,6 +253,7 @@ func (h handlers) rename(c *gin.Context) {
 		storeError(c, err)
 		return
 	}
+	security.Audit(c, security.Event{Name: security.WorkspaceRenamed, Outcome: security.Allowed, WorkspaceID: ws.ID})
 	c.JSON(http.StatusOK, ws)
 }
 
@@ -258,6 +266,7 @@ func (h handlers) delete(c *gin.Context) {
 		storeError(c, err)
 		return
 	}
+	security.Audit(c, security.Event{Name: security.WorkspaceDeleted, Outcome: security.Allowed, WorkspaceID: c.Param("id")})
 	c.Status(http.StatusNoContent)
 }
 

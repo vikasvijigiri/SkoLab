@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/skolab/backend-go/internal/middleware"
+	"github.com/skolab/backend-go/internal/security"
 )
 
 const (
@@ -68,6 +69,8 @@ func (c *Client) currentRole() string {
 // violation). WriteControl and Close are safe to call concurrently with the
 // pumps; readPump then exits and unregisters the client.
 func (c *Client) closePolicy(reason string) {
+	security.RecordContext(context.Background(), security.Event{Name: security.SocketClosed, Outcome: security.Denied,
+		UserID: c.userID, WorkspaceID: c.workspaceID, Reason: reason})
 	_ = c.conn.WriteControl(websocket.CloseMessage,
 		websocket.FormatCloseMessage(websocket.ClosePolicyViolation, reason), time.Now().Add(writeWait))
 	_ = c.conn.Close()
@@ -207,6 +210,7 @@ func serveWs(hub *Hub, authorizer WorkspaceAuthorizer, c *gin.Context, reauthori
 		return
 	}
 	if role == "" {
+		security.Record(c, security.Event{Name: security.WorkspaceDenied, Outcome: security.Denied, WorkspaceID: workspaceID, Reason: "socket"})
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You do not have access to this workspace"})
 		return
 	}

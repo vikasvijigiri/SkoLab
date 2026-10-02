@@ -7,6 +7,7 @@ from typing import AsyncGenerator, Awaitable, Callable, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends, HTTPException, Request, Response, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from app.core import security_events
 from app.db.database import AsyncSessionLocal
 from app.core.quota import QuotaExceeded, consume as consume_quota
 
@@ -75,11 +76,20 @@ async def _ensure_session_valid(firebase_auth, decoded: dict) -> None:
         except not_found:
             with _user_status_lock:
                 _user_status.pop(uid, None)
+            security_events.record(
+                security_events.AUTH_SESSION_REVOKED,
+                security_events.DENIED,
+                reason="account_deleted",
+                actor=uid,
+            )
             raise _unauthorized("Session is no longer valid; sign in again.")
         except Exception as exc:
             if entry is None or now - entry[2] >= _USER_STATUS_MAX_STALE_SECONDS:
                 logger.error(
                     "Firebase account status unavailable: %s", type(exc).__name__
+                )
+                security_events.record(
+                    security_events.AUTH_UNAVAILABLE, security_events.FAILED, actor=uid
                 )
                 raise _auth_unavailable() from exc
         else:
@@ -95,7 +105,46 @@ async def _ensure_session_valid(firebase_auth, decoded: dict) -> None:
 
     valid_after_ms, disabled, _ = entry
     if disabled or auth_time * 1000 < valid_after_ms:
+        security_events.record(
+            security_events.AUTH_SESSION_REVOKED,
+            security_events.DENIED,
+            reason="disabled" if disabled else "revoked",
+            actor=uid,
+        )
         raise _unauthorized("Session is no longer valid; sign in again.")
+
+
+def _enforce_account_policy(decoded: dict) -> None:
+    """Refuse anonymous sessions and unverified email/password accounts (403:
+    the token is genuine, the account is not yet allowed). Federated
+    providers vouch for their identities. Mirrors the gateway's
+    auth.accountPolicy, including the AUTH_REQUIRE_VERIFIED_EMAIL=false
+    rollout switch."""
+    provider = (decoded.get("firebase") or {}).get("sign_in_provider")
+    uid = decoded.get("uid")
+    if provider == "anonymous":
+        security_events.record(
+            security_events.AUTH_ANONYMOUS_REFUSED, security_events.DENIED, actor=uid
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Sign in with an account to use this service.",
+        )
+    require_verified = (
+        os.environ.get("AUTH_REQUIRE_VERIFIED_EMAIL", "true").lower() != "false"
+    )
+    if (
+        provider == "password"
+        and not decoded.get("email_verified", False)
+        and require_verified
+    ):
+        security_events.record(
+            security_events.AUTH_EMAIL_UNVERIFIED, security_events.DENIED, actor=uid
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Verify your email address to continue.",
+        )
 
 
 async def get_verified_user(
@@ -114,6 +163,11 @@ async def get_verified_user(
         firebase_auth = _firebase_auth()
     except Exception as exc:
         logger.error("Firebase initialisation failed: %s", type(exc).__name__)
+        security_events.record(
+            security_events.AUTH_UNAVAILABLE,
+            security_events.FAILED,
+            reason="firebase_not_configured",
+        )
         raise _auth_unavailable() from exc
 
     try:
@@ -124,8 +178,13 @@ async def get_verified_user(
             firebase_auth.verify_id_token, credentials.credentials
         )
     except Exception as exc:
+        security_events.record(
+            security_events.AUTH_TOKEN_INVALID, security_events.DENIED
+        )
         raise _unauthorized("Invalid or expired Firebase token.") from exc
 
+    # A local check on the token, so before the network-backed lookup.
+    _enforce_account_policy(decoded)
     await _ensure_session_valid(firebase_auth, decoded)
     return decoded
 
