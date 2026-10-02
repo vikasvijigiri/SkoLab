@@ -11,10 +11,12 @@ package user
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/skolab/backend-go/internal/auth"
 	"github.com/skolab/backend-go/internal/db"
 )
 
@@ -63,7 +65,14 @@ func SyncUserProfile(c *gin.Context) {
 
 // DeleteUser handles GDPR Right to be Forgotten. Workspace/membership/ticket
 // rows referencing this uid cascade-delete via their own FK definitions
-// (ON DELETE CASCADE) — deleting the users row is enough.
+// (ON DELETE CASCADE). The Firebase identity is then deleted too, which ends
+// every session: otherwise the caller stays signed in and the next profile
+// sync silently recreates the account.
+//
+// Order matters. The database row goes first; if deleting the Firebase
+// identity then fails, the caller is still authenticated and can retry, and
+// both steps are idempotent. The reverse order could strand a row nobody can
+// ever authenticate to delete.
 func DeleteUser(c *gin.Context) {
 	targetUserID := c.Param("userId")
 	tokenUserID := c.GetString("user_id")
@@ -80,6 +89,11 @@ func DeleteUser(c *gin.Context) {
 
 	if _, err := db.Pool.Exec(context.Background(), "DELETE FROM users WHERE id = $1", targetUserID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	if err := auth.DeleteIdentity(c.Request.Context(), targetUserID); err != nil {
+		slog.Error("account deletion: identity provider step failed", "err", err)
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Account data was deleted, but sign-in removal failed; please retry."})
 		return
 	}
 

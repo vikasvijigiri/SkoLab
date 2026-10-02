@@ -1,3 +1,8 @@
+import asyncio
+import logging
+import os
+import threading
+import time
 from typing import AsyncGenerator, Awaitable, Callable, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends, HTTPException, Request, Response, Security, status
@@ -6,6 +11,91 @@ from app.db.database import AsyncSessionLocal
 from app.core.quota import QuotaExceeded, consume as consume_quota
 
 _bearer_scheme = HTTPBearer(auto_error=False)
+logger = logging.getLogger("skolab")
+
+
+# Account status cache: revocation is checked against Firebase's per-user
+# "tokens valid after" timestamp, cached briefly per process, instead of a
+# Firebase round trip on every request (check_revoked=True). A revocation,
+# disabled account or deletion therefore takes effect within the TTL.
+_USER_STATUS_TTL_SECONDS = 60.0
+_USER_STATUS_MAX_STALE_SECONDS = 900.0  # serve a known user through a Firebase blip
+_USER_STATUS_MAX_ENTRIES = 100_000
+# uid -> (tokens_valid_after_ms, disabled, fetched_at_monotonic)
+_user_status: dict[str, tuple[int, bool, float]] = {}
+_user_status_lock = threading.Lock()
+
+
+def _unauthorized(detail: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=detail,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+def _auth_unavailable() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Authentication is temporarily unavailable.",
+    )
+
+
+def _firebase_auth():
+    """The initialised firebase_admin.auth module (initialised once)."""
+    import firebase_admin
+    from firebase_admin import auth as firebase_auth
+
+    if not firebase_admin._apps:
+        cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+        if cred_path and os.path.exists(cred_path):
+            from firebase_admin import credentials as fb_credentials
+
+            firebase_admin.initialize_app(fb_credentials.Certificate(cred_path))
+        else:
+            firebase_admin.initialize_app()
+    return firebase_auth
+
+
+async def _ensure_session_valid(firebase_auth, decoded: dict) -> None:
+    """Reject a token whose sign-in predates the account's revocation point,
+    or whose account is disabled or deleted. Fails closed (503) when Firebase
+    is unreachable and no recent status is known."""
+    uid = decoded["uid"]
+    auth_time = int(decoded.get("auth_time", 0))
+    now = time.monotonic()
+    with _user_status_lock:
+        entry = _user_status.get(uid)
+
+    if entry is None or now - entry[2] >= _USER_STATUS_TTL_SECONDS:
+        not_found = getattr(firebase_auth, "UserNotFoundError", ())
+        try:
+            # get_user is blocking network I/O: keep it off the event loop.
+            user = await asyncio.to_thread(firebase_auth.get_user, uid)
+        except not_found:
+            with _user_status_lock:
+                _user_status.pop(uid, None)
+            raise _unauthorized("Session is no longer valid; sign in again.")
+        except Exception as exc:
+            if entry is None or now - entry[2] >= _USER_STATUS_MAX_STALE_SECONDS:
+                logger.error(
+                    "Firebase account status unavailable: %s", type(exc).__name__
+                )
+                raise _auth_unavailable() from exc
+        else:
+            entry = (
+                int(user.tokens_valid_after_timestamp or 0),
+                bool(user.disabled),
+                now,
+            )
+            with _user_status_lock:
+                if len(_user_status) >= _USER_STATUS_MAX_ENTRIES:
+                    _user_status.clear()  # bounded memory; refills on demand
+                _user_status[uid] = entry
+
+    valid_after_ms, disabled, _ = entry
+    if disabled or auth_time * 1000 < valid_after_ms:
+        raise _unauthorized("Session is no longer valid; sign in again.")
 
 
 async def get_verified_user(
@@ -14,40 +104,30 @@ async def get_verified_user(
     """
     Verifies the Firebase ID token from the Authorization: Bearer <token> header.
     Returns the decoded token payload (contains uid, email, etc.).
-    Raises HTTP 401 if missing or invalid.
+    Raises HTTP 401 if missing, invalid or revoked; 503 if Firebase cannot be
+    used to decide.
     """
     if credentials is None or not credentials.credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing Authorization header.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise _unauthorized("Missing Authorization header.")
 
-    id_token = credentials.credentials
     try:
-        import os
-        import firebase_admin
-        from firebase_admin import auth as firebase_auth
-
-        if not firebase_admin._apps:
-            cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
-            if cred_path and os.path.exists(cred_path):
-                from firebase_admin import credentials as fb_credentials
-
-                firebase_admin.initialize_app(fb_credentials.Certificate(cred_path))
-            else:
-                firebase_admin.initialize_app()
-
-        # Check revocation as well as signature and expiry so Firebase session
-        # revocation takes effect before an ID token's normal expiry.
-        decoded = firebase_auth.verify_id_token(id_token, check_revoked=True)
-        return decoded
+        firebase_auth = _firebase_auth()
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired Firebase token.",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from exc
+        logger.error("Firebase initialisation failed: %s", type(exc).__name__)
+        raise _auth_unavailable() from exc
+
+    try:
+        # Signature, expiry, issuer and audience are checked locally against
+        # Google's cached keys -- off the event loop, since a key refresh is
+        # a blocking HTTP call.
+        decoded = await asyncio.to_thread(
+            firebase_auth.verify_id_token, credentials.credentials
+        )
+    except Exception as exc:
+        raise _unauthorized("Invalid or expired Firebase token.") from exc
+
+    await _ensure_session_valid(firebase_auth, decoded)
+    return decoded
 
 
 async def get_optional_user(

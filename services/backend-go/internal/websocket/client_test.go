@@ -18,8 +18,11 @@ type staticWorkspaceAuthorizer struct {
 	err     error
 }
 
-func (a staticWorkspaceAuthorizer) Authorize(context.Context, string, string) (bool, error) {
-	return a.allowed, a.err
+func (a staticWorkspaceAuthorizer) Role(context.Context, string, string) (string, error) {
+	if a.err != nil || !a.allowed {
+		return "", a.err
+	}
+	return RoleEditor, nil
 }
 
 // 2026-09-12 endpoint audit: CheckOrigin used to unconditionally return true,
@@ -161,10 +164,10 @@ func TestServeWs_AllowsMemberAndCompletesRealWebSocketHandshake(t *testing.T) {
 }
 
 func TestPostgresWorkspaceAuthorizer_FailsClosedWithoutDatabase(t *testing.T) {
-	allowed, err := NewPostgresWorkspaceAuthorizer(nil).Authorize(
+	role, err := NewPostgresWorkspaceAuthorizer(nil).Role(
 		context.Background(), "quantum-manuscript", "researcher-ada",
 	)
-	if allowed {
+	if role != "" {
 		t.Fatal("nil database pool must not authorize workspace access")
 	}
 	if !errors.Is(err, ErrWorkspaceAuthorizationUnavailable) {

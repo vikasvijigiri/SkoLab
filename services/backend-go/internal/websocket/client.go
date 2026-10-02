@@ -1,9 +1,11 @@
 package websocket
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -16,7 +18,14 @@ const (
 	pongWait       = 60 * time.Second
 	pingPeriod     = (pongWait * 9) / 10
 	maxMessageSize = 512000
+
+	// A removed member's open socket must not outlive their access, so the
+	// role is re-checked periodically, not only at upgrade.
+	maxReauthorizeFailures = 3
 )
+
+// reauthorizeInterval is a variable so tests can shorten it.
+var reauthorizeInterval = 30 * time.Second
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
@@ -44,9 +53,64 @@ type Client struct {
 	conn        *websocket.Conn
 	send        chan []byte
 	workspaceID string
+	userID      string
+	authorizer  WorkspaceAuthorizer
+	role        atomic.Pointer[string]
+	done        chan struct{} // closed when readPump exits
+}
+
+func (c *Client) currentRole() string {
+	if role := c.role.Load(); role != nil {
+		return *role
+	}
+	return ""
+}
+
+// closePolicy ends the connection with RFC 6455 code 1008 (policy
+// violation). WriteControl and Close are safe to call concurrently with the
+// pumps; readPump then exits and unregisters the client.
+func (c *Client) closePolicy(reason string) {
+	_ = c.conn.WriteControl(websocket.CloseMessage,
+		websocket.FormatCloseMessage(websocket.ClosePolicyViolation, reason), time.Now().Add(writeWait))
+	_ = c.conn.Close()
+}
+
+// reauthorize re-reads the caller's role on a timer: a revoked member is
+// disconnected, a changed role takes effect, and authorization that stays
+// unavailable for several checks fails closed.
+func (c *Client) reauthorize(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	failures := 0
+	for {
+		select {
+		case <-c.done:
+			return
+		case <-ticker.C:
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		role, err := c.authorizer.Role(ctx, c.workspaceID, c.userID)
+		cancel()
+		if err != nil {
+			if failures++; failures >= maxReauthorizeFailures {
+				slog.Warn("websocket closed: authorization unavailable", "workspace_id", c.workspaceID, "err", err)
+				c.closePolicy("authorization unavailable")
+				return
+			}
+			continue
+		}
+		failures = 0
+		if role == "" {
+			slog.Info("websocket closed: workspace access revoked", "workspace_id", c.workspaceID, "user_id", c.userID)
+			c.closePolicy("access revoked")
+			return
+		}
+		c.role.Store(&role)
+	}
 }
 
 func (c *Client) readPump() {
+	defer close(c.done)
 	defer func() {
 		c.hub.Unregister <- c
 		c.conn.Close()
@@ -60,6 +124,13 @@ func (c *Client) readPump() {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				slog.Warn("websocket read error", "err", err)
 			}
+			break
+		}
+		if !CanPublish(c.currentRole()) {
+			// Read-only roles receive updates but never change the document.
+			slog.Warn("websocket closed: write from read-only role", "workspace_id", c.workspaceID,
+				"user_id", c.userID, "role", c.currentRole())
+			c.closePolicy("read-only role")
 			break
 		}
 		c.hub.Publish(c.workspaceID, message)
@@ -125,13 +196,13 @@ func ServeWs(hub *Hub, authorizer WorkspaceAuthorizer, c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Workspace authorization is temporarily unavailable"})
 		return
 	}
-	allowed, err := authorizer.Authorize(c.Request.Context(), workspaceID, userID)
+	role, err := authorizer.Role(c.Request.Context(), workspaceID, userID)
 	if err != nil {
 		slog.Error("websocket workspace authorization failed", "workspace_id", workspaceID, "err", err)
 		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Workspace authorization is temporarily unavailable"})
 		return
 	}
-	if !allowed {
+	if role == "" {
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You do not have access to this workspace"})
 		return
 	}
@@ -141,12 +212,15 @@ func ServeWs(hub *Hub, authorizer WorkspaceAuthorizer, c *gin.Context) {
 		slog.Warn("websocket upgrade error", "err", err)
 		return
 	}
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256), workspaceID: workspaceID}
+	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256), workspaceID: workspaceID,
+		userID: userID, authorizer: authorizer, done: make(chan struct{})}
+	client.role.Store(&role)
 	client.hub.Register <- client
 
 	// Allow collection of memory referenced by the caller by doing all work in new goroutines.
 	go client.writePump()
 	go client.readPump()
+	go client.reauthorize(reauthorizeInterval)
 }
 
 // ServeHealthWs handles persistent websocket connections for system health.
