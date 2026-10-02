@@ -152,6 +152,27 @@ def test_disabled_export_and_unique_workers(monkeypatch):
         second.shutdown()
 
 
+@pytest.mark.asyncio
+async def test_another_sdk_wrapper_does_not_cause_double_instrumentation(
+    runtime, monkeypatch
+):
+    _, _, exporter = runtime
+    otel.instrument_httpx()
+    original = httpx.AsyncClient.send
+
+    async def another_sdk(self, request, **kwargs):
+        return await original(self, request, **kwargs)
+
+    monkeypatch.setattr(httpx.AsyncClient, "send", another_sdk)
+    otel.instrument_httpx()
+    assert httpx.AsyncClient.send is another_sdk
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: httpx.Response(200))
+    ) as client:
+        await client.get("https://example.test/compile")
+    assert len(exporter.get_finished_spans()) == 1
+
+
 def test_real_otlp_delivery_auth_resource_and_single_metric(monkeypatch):
     from http.server import BaseHTTPRequestHandler, HTTPServer
     from threading import Thread

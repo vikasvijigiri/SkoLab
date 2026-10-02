@@ -42,6 +42,7 @@ METHODS = {
     "TRACE",
 }
 _provider: TracerProvider | None = None
+_httpx_instrumented = False
 
 
 def export_enabled() -> bool:
@@ -199,7 +200,10 @@ class TelemetryMiddleware:
 
 def instrument_httpx():
     """Trace outgoing HTTP once; never export paths, queries or headers."""
-    if getattr(httpx.AsyncClient.send, "_skolab_traced", False):
+    global _httpx_instrumented
+    # Sentry can wrap send() without preserving function attributes.
+    # Keep installation state independently so later calls cannot wrap twice.
+    if _httpx_instrumented:
         return
     async_send, sync_send = httpx.AsyncClient.send, httpx.Client.send
 
@@ -235,5 +239,5 @@ def instrument_httpx():
                 span.set_status(StatusCode.ERROR)
             return response
 
-    traced_async._skolab_traced = True
     httpx.AsyncClient.send, httpx.Client.send = traced_async, traced_sync
+    _httpx_instrumented = True
