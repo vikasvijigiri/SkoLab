@@ -24,6 +24,7 @@ import (
 	"github.com/skolab/backend-go/internal/colab"
 	"github.com/skolab/backend-go/internal/db"
 	"github.com/skolab/backend-go/internal/middleware"
+	"github.com/skolab/backend-go/internal/security"
 	"github.com/skolab/backend-go/internal/telemetry"
 	"github.com/skolab/backend-go/internal/user"
 	"github.com/skolab/backend-go/internal/websocket"
@@ -119,6 +120,12 @@ func main() {
 	if err := otel.ObserveRuntime(); err != nil {
 		slog.Warn("runtime metrics unavailable", "err", err)
 	}
+	// Security decisions: counted for dashboards/alerts; account-level
+	// actions also land in the durable security_audit_log table.
+	if err := security.UseMeter(otel.Metrics.Meter("skolab.security")); err != nil {
+		slog.Warn("security event metrics unavailable", "err", err)
+	}
+	security.UseStore(db.Pool)
 
 	r := gin.New()
 	r.Use(otel.Middleware())
@@ -143,6 +150,10 @@ func main() {
 	// ── Rate limiting: 120 req/s per IP, burst of 30 ─────────────────────────
 	rl := middleware.NewRateLimiter(rate.Limit(120), 30)
 	r.Use(rl.Limit())
+
+	// Per-user limit on authenticated routes (20 req/s, burst 40), applied
+	// after the identity is verified -- see middleware.RateLimiter.PerUser.
+	authenticated := []gin.HandlerFunc{auth.VerifyUser(), middleware.NewRateLimiter(rate.Limit(20), 40).PerUser()}
 
 	// ── WebSocket hub ─────────────────────────────────────────────────────────
 	hub := websocket.NewHub()
@@ -186,7 +197,7 @@ func main() {
 		websocket.ServeWs(hub, workspaceAuthorizer, c)
 	})
 	wsTicketsAPI := r.Group("/api/v1/ws/colab")
-	wsTicketsAPI.Use(auth.VerifyUser())
+	wsTicketsAPI.Use(authenticated...)
 	{
 		wsTicketsAPI.POST("/:workspace_id/tickets", websocket.IssueTicket(workspaceAuthorizer, workspaceTickets))
 	}
@@ -200,7 +211,7 @@ func main() {
 	// users.id, so a Firebase account needs a row here before it can own or
 	// join a CoLab workspace. See internal/user's package doc.
 	usersAPI := r.Group("/api/v1/users")
-	usersAPI.Use(auth.VerifyUser())
+	usersAPI.Use(authenticated...)
 	{
 		usersAPI.POST("/profile/sync", user.SyncUserProfile)
 		usersAPI.DELETE("/:userId", user.DeleteUser)
@@ -211,7 +222,7 @@ func main() {
 	// comes from the verified token; visibility matches the WebSocket
 	// authorizer above. See internal/workspace.
 	workspacesAPI := r.Group("/api/v1")
-	workspacesAPI.Use(auth.VerifyUser())
+	workspacesAPI.Use(authenticated...)
 	workspace.Register(workspacesAPI, workspace.NewPostgresStore(db.Pool))
 
 	// ── CoLab compile — auth + per-user quota + single-flight live in Go;
@@ -220,7 +231,7 @@ func main() {
 	// the existing hardened Python route until then. See internal/colab and
 	// docs/audits/2026-09-26-backend-security-reliability-reaudit.md.
 	colabAPI := r.Group("/api/v1")
-	colabAPI.Use(auth.VerifyUser())
+	colabAPI.Use(authenticated...)
 	{
 		colabAPI.POST("/colab/compile", colab.Handler(db.Pool, &http.Client{Transport: otel.Transport(nil)}, pythonBackendURL))
 	}

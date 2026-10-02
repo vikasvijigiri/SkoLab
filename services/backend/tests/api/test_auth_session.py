@@ -27,6 +27,8 @@ class FakeFirebase:
         )
         self.get_user_error: Exception | None = None
         self.bad_token = False
+        self.provider: str | None = None
+        self.email_verified = True
         self.lookups = 0
         self.threads: set[int] = set()
 
@@ -34,7 +36,11 @@ class FakeFirebase:
         self.threads.add(threading.get_ident())
         if self.bad_token:
             raise ValueError("bad signature")
-        return {"uid": "ada", "auth_time": self.auth_time}
+        claims = {"uid": "ada", "auth_time": self.auth_time}
+        if self.provider:
+            claims["firebase"] = {"sign_in_provider": self.provider}
+            claims["email_verified"] = self.email_verified
+        return claims
 
     def get_user(self, uid):
         self.lookups += 1
@@ -147,3 +153,66 @@ async def test_firebase_misconfiguration_is_503_not_401(monkeypatch):
 
     monkeypatch.setattr(dependencies, "_firebase_auth", broken)
     assert await status_of(verify()) == 503
+
+
+@pytest.mark.parametrize(
+    ("provider", "verified", "switch", "expected"),
+    [
+        ("password", True, None, 200),
+        ("password", False, None, 403),
+        ("password", False, "false", 200),
+        ("anonymous", True, None, 403),
+        ("google.com", False, None, 200),
+    ],
+    ids=[
+        "verified-password",
+        "unverified-password",
+        "rollout-switch-off",
+        "anonymous",
+        "federated-vouches-for-itself",
+    ],
+)
+async def test_account_policy(
+    firebase, monkeypatch, provider, verified, switch, expected
+):
+    firebase.provider, firebase.email_verified = provider, verified
+    if switch is not None:
+        monkeypatch.setenv("AUTH_REQUIRE_VERIFIED_EMAIL", switch)
+    assert await status_of(verify()) == expected
+    if expected == 403:
+        assert firebase.lookups == 0, "policy refusals must not cost a Firebase lookup"
+
+
+async def test_security_events_are_logged_and_counted(firebase, caplog):
+    from opentelemetry.sdk.metrics import MeterProvider
+    from opentelemetry.sdk.metrics.export import InMemoryMetricReader
+
+    from app.core import security_events
+
+    reader = InMemoryMetricReader()
+    security_events.use_meter(MeterProvider(metric_readers=[reader]).get_meter("t"))
+    try:
+        firebase.provider, firebase.email_verified = "password", False
+        caplog.set_level("WARNING", logger="skolab")
+        assert await status_of(verify()) == 403
+        firebase.bad_token = True
+        assert await status_of(verify()) == 401
+    finally:
+        security_events._counter = None
+
+    events = [r for r in caplog.records if r.getMessage() == "security_event"]
+    assert [(r.event, r.outcome) for r in events] == [
+        ("auth.email_unverified", "denied"),
+        ("auth.token_invalid", "denied"),
+    ]
+    points = {
+        (p.attributes["event"], p.attributes["outcome"]): p.value
+        for rm in reader.get_metrics_data().resource_metrics
+        for sm in rm.scope_metrics
+        for m in sm.metrics
+        for p in m.data.data_points
+    }
+    assert points == {
+        ("auth.email_unverified", "denied"): 1,
+        ("auth.token_invalid", "denied"): 1,
+    }

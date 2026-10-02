@@ -11,6 +11,7 @@ import (
 
 	firebase "firebase.google.com/go/v4"
 	"github.com/gin-gonic/gin"
+	"github.com/skolab/backend-go/internal/security"
 )
 
 // authClient is the Firebase Auth client (nil until InitFirebase succeeds).
@@ -66,6 +67,7 @@ func verifyTokenAndSetUser(c *gin.Context, idToken string) {
 		// reached this branch.
 		if releaseMode() {
 			slog.Error("Firebase auth is unavailable and GIN_MODE=release — refusing the request instead of falling back to dev_user")
+			security.Record(c, security.Event{Name: security.AuthUnavailable, Outcome: security.Failed, Reason: "firebase_not_configured"})
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Authentication is temporarily unavailable"})
 			return
 		}
@@ -85,15 +87,21 @@ func verifyTokenAndSetUser(c *gin.Context, idToken string) {
 	defer cancel()
 	token, err := authClient.VerifyIDToken(ctx, idToken)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired Firebase token"})
+		reject(c, security.AuthTokenInvalid, "token_invalid", "Invalid or expired Firebase token")
+		return
+	}
+	// Account policy is a local check on the token, so it runs before the
+	// (possibly network-backed) revocation lookup.
+	if !accountPolicy(c, token) {
 		return
 	}
 	if err := revocations.check(ctx, authClient, token.UID, token.AuthTime); err != nil {
 		if errors.Is(err, errRevoked) {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Session is no longer valid; sign in again"})
+			reject(c, security.AuthSessionRevoked, "session_revoked", "Session is no longer valid; sign in again")
 			return
 		}
 		slog.Error("account status check unavailable", "err", err)
+		security.Record(c, security.Event{Name: security.AuthUnavailable, Outcome: security.Failed, UserID: token.UID})
 		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Authentication is temporarily unavailable"})
 		return
 	}
@@ -107,6 +115,9 @@ func verifyTokenAndSetUser(c *gin.Context, idToken string) {
 // from the Authorization header.
 func VerifyUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if throttled(c) {
+			return
+		}
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid Authorization header"})

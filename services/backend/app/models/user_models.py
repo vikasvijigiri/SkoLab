@@ -7,6 +7,7 @@ def utcnow():
 
 import re
 from sqlalchemy import (
+    BigInteger,
     Column,
     String,
     Integer,
@@ -135,3 +136,30 @@ class UsageCounter(Base):
     bucket_key = Column(String(160), primary_key=True)
     count = Column(Integer, nullable=False, default=0)
     expires_at = Column(DateTime, nullable=False, index=True)
+
+
+class SecurityAuditLog(Base):
+    """Append-only record of account-level security actions.
+
+    Written by the Go gateway (internal/security.Audit) for account deletion
+    and workspace create/rename/delete. Deliberately has no foreign keys: the
+    trail must outlive the account and workspace it describes. High-volume
+    denials (bad tokens, throttling) are metrics and logs, not rows here.
+    """
+
+    __tablename__ = "security_audit_log"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    occurred_at = Column(DateTime, nullable=False, default=utcnow)
+    event = Column(String(64), nullable=False)
+    outcome = Column(String(16), nullable=False)
+    actor_id = Column(String(100), nullable=True)
+    workspace_id = Column(String(100), nullable=True)
+    ip = Column(String(64), nullable=True)
+    request_id = Column(String(100), nullable=True)
+    reason = Column(String(255), nullable=True)
+
+    __table_args__ = (
+        Index("ix_security_audit_log_actor_time", "actor_id", "occurred_at"),
+        Index("ix_security_audit_log_time", "occurred_at"),
+    )

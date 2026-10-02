@@ -18,6 +18,7 @@ import (
 
 	"github.com/skolab/backend-go/internal/auth"
 	"github.com/skolab/backend-go/internal/db"
+	"github.com/skolab/backend-go/internal/security"
 )
 
 type UserProfileSyncRequest struct {
@@ -91,6 +92,7 @@ func DeleteUser(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
 	}
+	security.Audit(c, security.Event{Name: security.AccountDeleted, Outcome: security.Allowed})
 	if err := auth.DeleteIdentity(c.Request.Context(), targetUserID); err != nil {
 		slog.Error("account deletion: identity provider step failed", "err", err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "Account data was deleted, but sign-in removal failed; please retry."})

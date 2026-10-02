@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/skolab/backend-go/internal/security"
 )
 
 const websocketTicketTTL = time.Minute
@@ -122,6 +123,7 @@ func IssueTicket(authorizer WorkspaceAuthorizer, tickets WorkspaceTicketStore) g
 			return
 		}
 		if role == "" {
+			security.Record(c, security.Event{Name: security.WorkspaceDenied, Outcome: security.Denied, WorkspaceID: workspaceID, Reason: "ticket"})
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You do not have access to this workspace"})
 			return
 		}
@@ -151,6 +153,7 @@ func VerifyTicket(tickets WorkspaceTicketStore) gin.HandlerFunc {
 		}
 		userID, err := tickets.Consume(c.Request.Context(), workspaceID, ticket)
 		if errors.Is(err, ErrInvalidWorkspaceTicket) {
+			security.Record(c, security.Event{Name: security.SocketTicketInvalid, Outcome: security.Denied, WorkspaceID: workspaceID})
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired WebSocket ticket"})
 			return
 		}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/skolab/backend-go/internal/security"
 	"golang.org/x/time/rate"
 )
 
@@ -34,6 +35,12 @@ func NewRateLimiter(r rate.Limit, b int) *RateLimiter {
 	}
 	go rl.cleanupLoop()
 	return rl
+}
+
+// Limiter returns the token bucket for key (an IP, a user ID...), creating
+// it on first use. Idle buckets are evicted after three minutes.
+func (rl *RateLimiter) Limiter(key string) *rate.Limiter {
+	return rl.getLimiter(key)
 }
 
 func (rl *RateLimiter) getLimiter(ip string) *rate.Limiter {
@@ -99,9 +106,31 @@ func (rl *RateLimiter) Limit() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ip := clientIP(c)
 		if !rl.getLimiter(ip).Allow() {
+			c.Header("Retry-After", "1")
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 				"error":       "rate_limit_exceeded",
 				"retry_after": "1s",
+			})
+			return
+		}
+		c.Next()
+	}
+}
+
+// PerUser enforces the limit per authenticated user. Mount it after
+// auth.VerifyUser, so one account cannot exhaust the service from many IPs
+// (or many accounts from one IP -- that is the per-IP limit's job). The
+// buckets live in this process: exact with one instance per service, as on
+// Render today; with several instances each enforces its own share, and a
+// shared store (Redis) would be needed for a global limit.
+func (rl *RateLimiter) PerUser() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		uid := c.GetString("user_id")
+		if uid != "" && !rl.getLimiter(uid).Allow() {
+			security.Record(c, security.Event{Name: security.RateLimitUser, Outcome: security.Throttled})
+			c.Header("Retry-After", "1")
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+				"error": "Too many requests; slow down", "code": "rate_limit_exceeded",
 			})
 			return
 		}

@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -161,5 +162,37 @@ func TestRateLimiter_RefillsOverTime(t *testing.T) {
 
 	if w := doGet(r, "10.0.0.5"); w.Code != http.StatusOK {
 		t.Errorf("request after refill window: status = %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestPerUserLimitIsIndependentPerAccount(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	limiter := NewRateLimiter(rate.Limit(0.001), 3) // burst 3, effectively no refill
+	r := gin.New()
+	r.GET("/x", func(c *gin.Context) {
+		if u := c.Query("u"); u != "" {
+			c.Set("user_id", u)
+		}
+		c.Next()
+	}, limiter.PerUser(), func(c *gin.Context) { c.Status(http.StatusOK) })
+	hit := func(user string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/x?u="+user, nil))
+		return w
+	}
+	for i := 0; i < 3; i++ {
+		if w := hit("ada"); w.Code != http.StatusOK {
+			t.Fatalf("request %d: %d", i, w.Code)
+		}
+	}
+	w := hit("ada")
+	if w.Code != http.StatusTooManyRequests || w.Header().Get("Retry-After") == "" || !strings.Contains(w.Body.String(), `"code":"rate_limit_exceeded"`) {
+		t.Fatalf("over limit: %d %v %s", w.Code, w.Header(), w.Body)
+	}
+	if w := hit("grace"); w.Code != http.StatusOK {
+		t.Fatalf("another account was throttled: %d", w.Code)
+	}
+	if w := hit(""); w.Code != http.StatusOK {
+		t.Fatalf("requests without an identity are left to the auth layer: %d", w.Code)
 	}
 }

@@ -38,6 +38,7 @@ request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(
     "request_id", default=""
 )
 user_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("user_id", default="")
+from app.core import security_events
 from app.core.telemetry import (
     trace_id_var,
     span_id_var,
@@ -93,6 +94,11 @@ class JSONFormatter(logging.Formatter):
                 log_payload[key] = record.__dict__[key]
             else:
                 log_payload[key] = None
+        # Security events (app/core/security_events.py) carry these; other
+        # lines do not, so they are added only when present.
+        for key in ["event", "outcome", "reason", "actor"]:
+            if key in record.__dict__:
+                log_payload[key] = record.__dict__[key]
         # Include full stack traces only in non-production environments.
         # In production, log only the sanitised error message to prevent leaking
         # internal file paths, module names, or sensitive variable values.
@@ -484,6 +490,7 @@ async def health():
 # Each worker pushes OTLP with its own service.instance.id. No scrape endpoint.
 app.state.telemetry = Telemetry()
 app.state.loop_lag = LoopLagMonitor()
+security_events.use_meter(app.state.telemetry.metrics.get_meter("skolab.security"))
 
 
 def _db_pool():

@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"firebase.google.com/go/v4/auth"
+	"github.com/skolab/backend-go/internal/middleware"
+	"golang.org/x/time/rate"
 )
 
 var errNotFound = errors.New("user not found")
@@ -19,6 +21,8 @@ type fakeFirebase struct {
 	disabled   bool
 	getUserErr error
 	badToken   bool
+	provider   string // Firebase sign_in_provider; "" means a federated default
+	unverified bool   // email_verified=false
 	getUsers   int
 	revoked    []string
 	deleted    []string
@@ -28,7 +32,9 @@ func (f *fakeFirebase) VerifyIDToken(_ context.Context, token string) (*auth.Tok
 	if f.badToken {
 		return nil, errors.New("bad signature")
 	}
-	return &auth.Token{UID: "ada", AuthTime: f.authTime}, nil
+	return &auth.Token{UID: "ada", AuthTime: f.authTime,
+		Firebase: auth.FirebaseInfo{SignInProvider: f.provider},
+		Claims:   map[string]interface{}{"email_verified": !f.unverified}}, nil
 }
 
 func (f *fakeFirebase) GetUser(_ context.Context, uid string) (*auth.UserRecord, error) {
@@ -54,12 +60,15 @@ func (f *fakeFirebase) DeleteUser(_ context.Context, uid string) error {
 func withFirebase(t *testing.T, fake *fakeFirebase) *time.Time {
 	t.Helper()
 	t.Setenv("GIN_MODE", "release")
-	savedClient, savedCache, savedNotFound := authClient, revocations, isUserNotFound
+	savedClient, savedCache, savedNotFound, savedThrottle := authClient, revocations, isUserNotFound, failedLogins
 	clock := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
 	authClient = fake
 	revocations = &revocationCache{entries: map[string]userStatus{}, now: func() time.Time { return clock }}
 	isUserNotFound = func(err error) bool { return errors.Is(err, errNotFound) }
-	t.Cleanup(func() { authClient, revocations, isUserNotFound = savedClient, savedCache, savedNotFound })
+	failedLogins = middleware.NewRateLimiter(rate.Every(15*time.Second), 20)
+	t.Cleanup(func() {
+		authClient, revocations, isUserNotFound, failedLogins = savedClient, savedCache, savedNotFound, savedThrottle
+	})
 	return &clock
 }
 
