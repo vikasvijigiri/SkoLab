@@ -137,6 +137,35 @@ class Migration(unittest.TestCase):
         self.assertNotIn("PORT", api)
         self.assertEqual(render.files["api"], {"service-account.json": "{}"})
 
+    def test_empty_placeholders_count_as_missing(self):
+        render = FakeRender(services=LEGACY,
+                            env={"api": {"DATABASE_ENCRYPTION_KEY": "", "SET": "kept"},
+                                 "py": {"DATABASE_ENCRYPTION_KEY": "k", "SET": "other", "EMPTY": ""}, "go": {}},
+                            files={"api": {"service-account.json": ""}, "go": {"service-account.json": "{}"}})
+        copied = release.adopt_settings(render, "api")
+        self.assertEqual(copied, ["DATABASE_ENCRYPTION_KEY", "secret file service-account.json"])
+        self.assertEqual(render.env["api"], {"DATABASE_ENCRYPTION_KEY": "k", "SET": "kept"})
+
+    def test_failed_deploy_prints_the_service_logs(self):
+        render = FakeRender([d("a", "old", "live")], ["build_failed"])
+        render.recent_logs = lambda owner, service: ["RuntimeError: DATABASE_ENCRYPTION_KEY is unset"]
+        with self.assertLogsPrinted() as out, self.assertRaisesRegex(RuntimeError, "build_failed"):
+            release.ship(render, "svc", "new-sha", owner="own", sleep=lambda _: None, clock=ticks(),
+                         changed=lambda *_: True)
+        self.assertIn("DATABASE_ENCRYPTION_KEY is unset", out.getvalue())
+
+    def assertLogsPrinted(self):
+        import contextlib
+        import io
+
+        buffer = io.StringIO()
+
+        @contextlib.contextmanager
+        def capture():
+            with contextlib.redirect_stdout(buffer):
+                yield buffer
+        return capture()
+
     def test_nothing_to_copy_once_settings_exist_or_legacy_is_gone(self):
         render = FakeRender(services=LEGACY, env={"api": {"K": "1"}, "py": {"K": "2"}, "go": {}})
         self.assertEqual(release.adopt_settings(render, "api"), [])

@@ -111,6 +111,10 @@ class Render:
     def get_deploy(self, service: str, deploy: str) -> dict:
         return self.call("GET", f"/services/{service}/deploys/{deploy}")
 
+    def recent_logs(self, owner: str, service: str, limit: int = 60) -> list[str]:
+        page = self.call("GET", f"/logs?ownerId={owner}&resource={service}&limit={limit}&direction=backward")
+        return [entry["message"] for entry in reversed(page.get("logs") or [])]
+
 
 def wait_for_service(render: Render, name: str, *, timeout: float = 600, poll: float = 15,
                      sleep=time.sleep, clock=time.monotonic) -> dict:
@@ -128,9 +132,10 @@ def wait_for_service(render: Render, name: str, *, timeout: float = 600, poll: f
 
 
 def adopt_settings(render: Render, target: str, legacy=LEGACY) -> list[str]:
-    """Copy env vars and secret files the target lacks from the services it
-    replaced. Values already on the target (from render.yaml or set by hand)
-    are never overwritten. Returns the names copied; values are never printed."""
+    """Copy env vars and secret files the target lacks (absent or empty: a
+    Blueprint creates `sync: false` keys without values) from the services
+    it replaced. Values already set on the target are never overwritten.
+    Returns the names copied; values are never printed."""
     sources = [s for s in (render.find_service(name) for name in legacy) if s]
     if not sources:
         return []
@@ -142,11 +147,11 @@ def adopt_settings(render: Render, target: str, legacy=LEGACY) -> list[str]:
         files.update(render.secret_files(source["id"]))
     copied = []
     for key, value in sorted(env.items()):
-        if key not in have_env and key not in PER_PROCESS:
+        if not have_env.get(key) and value and key not in PER_PROCESS:
             render.set_env_var(target, key, value)
             copied.append(key)
     for name, content in sorted(files.items()):
-        if name not in have_files:
+        if not have_files.get(name):
             render.set_secret_file(target, name, content)
             copied.append(f"secret file {name}")
     return copied
@@ -177,7 +182,8 @@ def source_changed(since: str | None, commit: str, paths=SOURCES) -> bool:
 
 
 def ship(render: Render, service: str, commit: str, *, fresh: bool = False, timeout: float = 1500,
-         poll: float = 15, sleep=time.sleep, clock=time.monotonic, changed=source_changed) -> str:
+         poll: float = 15, sleep=time.sleep, clock=time.monotonic, changed=source_changed,
+         owner: str | None = None) -> str:
     """Bring the service to `commit` (or confirm its live image is
     equivalent) and return what happened. Reuses a deploy of the same commit
     already running instead of starting a second -- unless `fresh`: settings
@@ -203,7 +209,8 @@ def ship(render: Render, service: str, commit: str, *, fresh: bool = False, time
         if status == "live":
             return "deployed"
         if status in FAILED:
-            raise RuntimeError(f"deploy {deploy_id} ended {status} (see its Render logs)")
+            print_failure_logs(render, owner, service)
+            raise RuntimeError(f"deploy {deploy_id} ended {status}")
         if status in SUPERSEDED:
             # Replaced by a newer deploy: follow it if it is the same commit.
             same = [d for d in render.deploys(service) if d.get("commit", {}).get("id") == commit
@@ -215,6 +222,21 @@ def ship(render: Render, service: str, commit: str, *, fresh: bool = False, time
             deploy_id = same[0]["id"]
         sleep(poll)
     raise RuntimeError(f"deploy {deploy_id} not live after {timeout:.0f}s")
+
+
+def print_failure_logs(render: Render, owner: str | None, service: str) -> None:
+    """Show the service's last log lines, so a failed deploy explains itself
+    in the workflow run. Best effort: never masks the original failure."""
+    if not owner:
+        return
+    try:
+        lines = render.recent_logs(owner, service)
+    except RuntimeError as exc:
+        print(f"(could not fetch Render logs: {exc})")
+        return
+    print("Last log lines from the failed deploy:")
+    for line in lines:
+        print("  | " + line[:300])
 
 
 def status_of(url: str, token: str | None = None, body: dict | None = None) -> int:
@@ -312,7 +334,8 @@ def main() -> int:
             copied = adopt_settings(render, service["id"])
             if copied:
                 print(f"{SERVICE}: copied from the replaced services: {', '.join(copied)}", flush=True)
-            print(f"{SERVICE}: {ship(render, service['id'], args.commit, fresh=bool(copied))}", flush=True)
+            result = ship(render, service["id"], args.commit, fresh=bool(copied), owner=service.get("ownerId"))
+            print(f"{SERVICE}: {result}", flush=True)
     base = base.rstrip("/")
     print(f"Smoke checks against {base}:", flush=True)
     smoke(base, os.environ["SKOLAB_FIREBASE_API_KEY"], os.environ["SKOLAB_SYNTHETIC_EMAIL"],
