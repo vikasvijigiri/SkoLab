@@ -96,6 +96,19 @@ class Render:
     def set_secret_file(self, service: str, name: str, content: str) -> None:
         self.call("PUT", f"/services/{service}/secret-files/{name}", {"content": content})
 
+    def env_groups(self) -> list[dict]:
+        """Every environment group, with the IDs of the services it is linked to."""
+        groups = []
+        for row in self.call("GET", "/env-groups?limit=100"):
+            row = row.get("envGroup", row)  # tolerate both list shapes
+            detail = self.call("GET", f"/env-groups/{row['id']}")
+            groups.append({"id": row["id"], "name": detail.get("name", row["id"]),
+                           "services": [link["id"] for link in detail.get("serviceLinks") or []]})
+        return groups
+
+    def link_env_group(self, group: str, service: str) -> None:
+        self.call("POST", f"/env-groups/{group}/services/{service}")
+
     def suspend(self, service: str) -> None:
         self.call("POST", f"/services/{service}/suspend")
 
@@ -132,20 +145,28 @@ def wait_for_service(render: Render, name: str, *, timeout: float = 600, poll: f
 
 
 def adopt_settings(render: Render, target: str, legacy=LEGACY) -> list[str]:
-    """Copy env vars and secret files the target lacks (absent or empty: a
-    Blueprint creates `sync: false` keys without values) from the services
-    it replaced. Values already set on the target are never overwritten.
-    Returns the names copied; values are never printed."""
+    """Give the target what the services it replaced had: link the
+    environment groups they were linked to, then copy env vars and secret
+    files the target lacks (absent or empty: a Blueprint creates `sync:
+    false` keys without values). Values set on the target are never
+    overwritten, and a service's own value beats a group's on Render.
+    Returns what was adopted, by name; values are never printed."""
     sources = [s for s in (render.find_service(name) for name in legacy) if s]
     if not sources:
         return []
+    adopted = []
+    source_ids = {source["id"] for source in sources}
+    for group in render.env_groups():
+        if source_ids & set(group["services"]) and target not in group["services"]:
+            render.link_env_group(group["id"], target)
+            adopted.append(f"env group {group['name']}")
     have_env, have_files = render.env_vars(target), render.secret_files(target)
     env: dict[str, str] = {}
     files: dict[str, str] = {}
     for source in sources:
         env.update(render.env_vars(source["id"]))
         files.update(render.secret_files(source["id"]))
-    copied = []
+    copied = adopted
     for key, value in sorted(env.items()):
         if not have_env.get(key) and value and key not in PER_PROCESS:
             render.set_env_var(target, key, value)
