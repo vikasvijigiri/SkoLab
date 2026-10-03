@@ -32,6 +32,7 @@ __pycache__/
 tests/
 scripts/*
 !scripts/run_migrations.py
+!scripts/check_connection_budget.py
 ci_bootstrap_db.py
 docker-compose.yml
 pytest.ini

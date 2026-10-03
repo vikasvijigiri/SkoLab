@@ -22,6 +22,7 @@ services/backend/htmlcov/
 services/backend/tests/
 services/backend/scripts/*
 !services/backend/scripts/run_migrations.py
+!services/backend/scripts/check_connection_budget.py
 services/backend/ci_bootstrap_db.py
 services/backend/docker-compose.yml
 services/backend/pytest.ini
