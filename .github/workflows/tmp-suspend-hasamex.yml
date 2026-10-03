@@ -1,0 +1,31 @@
+name: tmp suspend hasamex-api
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  suspend:
+    runs-on: ubuntu-latest
+    env:
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+    steps:
+      - name: Suspend hasamex-api and report every service's state
+        shell: python
+        run: |
+          import json, os, time, urllib.request
+          def call(method, path):
+              r = urllib.request.Request("https://api.render.com/v1" + path, method=method,
+                  headers={"Authorization": "Bearer " + os.environ["RENDER_API_KEY"], "Accept": "application/json"})
+              with urllib.request.urlopen(r, timeout=60) as resp:
+                  body = resp.read()
+                  return json.loads(body) if body else None
+          services = {row["service"]["name"]: row["service"] for row in call("GET", "/services?limit=50")}
+          target = services.get("hasamex-api")
+          if not target:
+              raise SystemExit("hasamex-api not found")
+          if target.get("suspended") != "suspended":
+              call("POST", f"/services/{target['id']}/suspend")
+              print("Suspend requested for hasamex-api")
+          time.sleep(10)
+          for row in call("GET", "/services?limit=50"):
+              s = row["service"]
+              print(f"{s['name']}: {s.get('suspended')} ({s.get('serviceDetails', {}).get('region')})")
