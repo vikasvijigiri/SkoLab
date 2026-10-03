@@ -22,6 +22,8 @@ trap cleanup EXIT
 python "$here/users.py" create --base-url "$base" --out "$work/qa.env" --state "$work/state.json" || exit 1
 
 # Files run in name order on one connection: 06 deletes an account.
+# --delay paces requests (about 13/s) under the API's real per-IP and
+# per-user rate limits, which production keeps.
 hurl --test --jobs 1 --color \
     --variables-file "$work/qa.env" \
     --report-junit "$reports/hurl-junit.xml" \

@@ -28,9 +28,9 @@ GET {{base}}/api/v1/workspaces/{{ws}}/invite-options
 Authorization: Bearer {{owner_token}}
 HTTP 200
 [Asserts]
-jsonpath "$.roles" includes "editor"
-jsonpath "$.roles" not includes "owner"
-jsonpath "$.expires_in_hours" includes 168
+jsonpath "$.roles" contains "editor"
+jsonpath "$.roles" not contains "owner"
+jsonpath "$.expires_in_hours" contains 168
 
 POST {{base}}/api/v1/workspaces/{{ws}}/invites
 Authorization: Bearer {{owner_token}}
