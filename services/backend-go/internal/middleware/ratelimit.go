@@ -3,9 +3,9 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -56,22 +56,40 @@ func (rl *RateLimiter) warnFallback(err error) {
 
 // Allow spends a token from key's bucket and reports whether one was there.
 func (rl *RateLimiter) Allow(ctx context.Context, key string) bool {
+	ok, _ := rl.Check(ctx, key)
+	return ok
+}
+
+// Check distinguishes an exhausted bucket from an unavailable shared store.
+func (rl *RateLimiter) Check(ctx context.Context, key string) (bool, error) {
+	if shared.Required() && rl.shared == nil {
+		return false, fmt.Errorf("shared limits unavailable")
+	}
 	if rl.shared != nil {
 		ok, err := rl.shared.Allow(ctx, rl.name+":"+key, rl.every(), rl.b)
 		if err == nil {
-			return ok
+			return ok, nil
+		}
+		if shared.Required() {
+			return false, err
 		}
 		rl.warnFallback(err)
 	}
-	return rl.getLimiter(key).Allow()
+	return rl.getLimiter(key).Allow(), nil
 }
 
 // Available reports whether key's bucket has a token, without spending it.
 func (rl *RateLimiter) Available(ctx context.Context, key string) bool {
+	if shared.Required() && rl.shared == nil {
+		return false
+	}
 	if rl.shared != nil {
 		ok, err := rl.shared.Available(ctx, rl.name+":"+key, rl.every(), rl.b)
 		if err == nil {
 			return ok
+		}
+		if shared.Required() {
+			return false
 		}
 		rl.warnFallback(err)
 	}
@@ -124,40 +142,27 @@ func (rl *RateLimiter) cleanupLoop() {
 	}
 }
 
-// clientIP extracts the real client IP, respecting common reverse-proxy
-// headers.
-//
-// CF-Connecting-IP is checked first and is the only one of these that's
-// actually safe to trust for rate-limiting: Render's public edge is
-// Cloudflare (confirmed live -- every response carries CF-RAY and
-// Server: cloudflare), and Cloudflare's edge sets this header from the
-// real TCP connection, overwriting any client-supplied value of the same
-// name -- an end user cannot spoof it. X-Real-IP / X-Forwarded-For, by
-// contrast, are ordinary headers any client can set to an arbitrary value
-// on the original request; trusting them without knowing whether the
-// specific hop in front of this service actually overwrites (rather than
-// merely appends to) a client-supplied value means a request can rotate a
-// fake X-Forwarded-For on every call and land in a fresh rate-limit bucket
-// each time, defeating the limiter entirely. Kept as a fallback, in that
-// order, only for an environment with no Cloudflare in front (local dev,
-// docker-compose) where CF-Connecting-IP is never present.
+// clientIP uses the audit layer's edge-IP policy. Arbitrary X-Forwarded-For
+// and X-Real-IP values never create fresh rate-limit buckets.
 func clientIP(c *gin.Context) string {
-	if ip := c.GetHeader("CF-Connecting-IP"); ip != "" {
-		return strings.TrimSpace(ip)
-	}
-	if ip := c.GetHeader("X-Real-IP"); ip != "" {
-		return strings.TrimSpace(ip)
-	}
-	if fwd := c.GetHeader("X-Forwarded-For"); fwd != "" {
-		return strings.TrimSpace(strings.SplitN(fwd, ",", 2)[0])
-	}
-	return c.RemoteIP()
+	return security.ClientIP(c)
 }
 
 // Limit returns a Gin handler that enforces the configured rate limit per IP.
 func (rl *RateLimiter) Limit() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !rl.Allow(c.Request.Context(), clientIP(c)) {
+		// Health probes must remain available during a shared-state outage.
+		if c.Request.URL.Path == "/gateway-health" || c.Request.URL.Path == "/readyz" {
+			c.Next()
+			return
+		}
+		ok, err := rl.Check(c.Request.Context(), clientIP(c))
+		if err != nil {
+			c.Header("Retry-After", "1")
+			apierror.Abort(c, http.StatusServiceUnavailable, "shared_state_unavailable", "Service temporarily unavailable")
+			return
+		}
+		if !ok {
 			c.Header("Retry-After", "1")
 			apierror.Abort(c, http.StatusTooManyRequests, "rate_limit_exceeded", "Too many requests; slow down")
 			return
@@ -175,7 +180,17 @@ func (rl *RateLimiter) Limit() gin.HandlerFunc {
 func (rl *RateLimiter) PerUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uid := c.GetString("user_id")
-		if uid != "" && !rl.Allow(c.Request.Context(), uid) {
+		if uid == "" {
+			c.Next()
+			return
+		}
+		ok, err := rl.Check(c.Request.Context(), uid)
+		if err != nil {
+			c.Header("Retry-After", "1")
+			apierror.Abort(c, http.StatusServiceUnavailable, "shared_state_unavailable", "Service temporarily unavailable")
+			return
+		}
+		if !ok {
 			security.Record(c, security.Event{Name: security.RateLimitUser, Outcome: security.Throttled})
 			c.Header("Retry-After", "1")
 			apierror.Abort(c, http.StatusTooManyRequests, "rate_limit_exceeded", "Too many requests; slow down")

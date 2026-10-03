@@ -99,3 +99,40 @@ func TestCORS_AllowsIdempotencyKeyAndExposesCreateHeaders(t *testing.T) {
 		}
 	}
 }
+
+func TestCORS_ProductionOnlyAllowsConfiguredOrigins(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("APP_BASE_URL", "https://app.skolab.example")
+	t.Setenv("CORS_ORIGINS", "https://preview.skolab.example")
+	r := newCORSRouter()
+	for _, tc := range []struct {
+		origin  string
+		allowed bool
+	}{
+		{"http://localhost:3000", false},
+		{"http://127.0.0.1:8000", false},
+		{"https://app.skolab.example", true},
+		{"https://preview.skolab.example", true},
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+		req.Header.Set("Origin", tc.origin)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		got := w.Header().Get("Access-Control-Allow-Origin")
+		if tc.allowed && got != tc.origin || !tc.allowed && got != "" {
+			t.Errorf("origin %q: Access-Control-Allow-Origin = %q, allowed = %v", tc.origin, got, tc.allowed)
+		}
+		if IsAllowedOrigin(tc.origin) != tc.allowed {
+			t.Errorf("origin %q: WebSocket origin policy differs from HTTP", tc.origin)
+		}
+	}
+}
+
+func TestCORS_ProductionDoesNotTrustDefaultBaseURL(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("APP_BASE_URL", "http://localhost:8000")
+	t.Setenv("CORS_ORIGINS", "")
+	if IsAllowedOrigin("http://localhost:8000") {
+		t.Fatal("production must not trust the default local APP_BASE_URL")
+	}
+}

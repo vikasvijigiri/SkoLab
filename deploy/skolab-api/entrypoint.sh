@@ -23,7 +23,12 @@ stop() {
 # PID 1 ignores signals it does not handle, so handle them from the start.
 trap 'stop; wait; exit 143' TERM INT
 
-python scripts/run_migrations.py || exit 1
+python scripts/check_connection_budget.py || exit 1
+# Scaled deployments migrate once in the platform's pre-deploy command.
+# Their application replicas must not race one another through migrations.
+if [ "${SKIP_STARTUP_MIGRATIONS:-0}" != "1" ]; then
+    python scripts/run_migrations.py || exit 1
+fi
 
 OTEL_SERVICE_NAME=skolab-backend-py uvicorn app.main:app \
     --host 127.0.0.1 --port 8000 \

@@ -6,11 +6,9 @@
 # directory. See docs/deploy/colab-sandbox.md for the exact build/push/
 # deploy commands (build: docker build -f Dockerfile.colab-sandbox .).
 #
-# Deployed as its own service (Cloud Run recommended — see that doc), apart
-# from the main API. Each invocation on Cloud Run runs in its own
-# gVisor-sandboxed, network-namespaced container instance — the "stronger
-# approach" from docs/audits/2026-09-26-backend-security-reliability-reaudit.md,
-# not achievable by a subprocess sharing the gateway's own container.
+# Deploy separately from the main API. Long-lived workers and Cloud Run
+# can reuse a container across requests; concurrency 1 is not per-job container
+# isolation. See deploy/RELIABILITY.md for the rollout and isolation limits.
 #
 # Deliberately tiny: a static Go binary + pdflatex + util-linux (for
 # prlimit). No Python, no Firebase, no database driver — this process holds

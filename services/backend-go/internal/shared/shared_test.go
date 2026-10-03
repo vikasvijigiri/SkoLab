@@ -92,3 +92,14 @@ func TestConnectWithoutURLIsNil(t *testing.T) {
 		t.Fatal("an unreachable Redis means in-process limits")
 	}
 }
+
+func TestRequiredConfigurationRejectsMissingStore(t *testing.T) {
+	t.Setenv("SHARED_STATE_REQUIRED", "true")
+	if ValidateConfiguration(nil) == nil {
+		t.Fatal("scaled deployment must not start without shared state")
+	}
+	store, _ := newStore(t)
+	if err := ValidateConfiguration(store); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -23,12 +23,15 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/skolab/backend-go/internal/shared"
 )
 
 const (
 	hourSeconds = 3600
 	daySeconds  = 86400
 )
+
+var ErrUnavailable = errors.New("shared quota accounting unavailable")
 
 var upsertSQL = `
 	INSERT INTO usage_counters (bucket_key, count, expires_at)
@@ -156,7 +159,13 @@ func incr(ctx context.Context, pool *pgxpool.Pool, key string, cost int, windowE
 		if err == nil {
 			return count, nil
 		}
+		if shared.Required() {
+			return 0, ErrUnavailable
+		}
 		slog.Warn("quota: postgres unavailable — falling back to local memory", "err", err)
+	}
+	if shared.Required() {
+		return 0, ErrUnavailable
 	}
 	return local.incr(key, cost, windowEnd, now), nil
 }

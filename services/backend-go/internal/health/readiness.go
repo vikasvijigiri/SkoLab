@@ -17,10 +17,15 @@ type Pinger interface {
 
 const probeTimeout = 2 * time.Second
 
+type Dependency struct {
+	Name  string
+	Check func(context.Context) error
+}
+
 // Readiness checks the database and the Python service's own /readyz
 // (which in turn checks its database and cache connections). It returns
 // each dependency's state and whether all are healthy.
-func Readiness(ctx context.Context, db Pinger, client *http.Client, pythonURL string) (map[string]string, bool) {
+func Readiness(ctx context.Context, db Pinger, client *http.Client, pythonURL string, dependencies ...Dependency) (map[string]string, bool) {
 	state := map[string]string{"database": "unhealthy", "python": "unhealthy"}
 	if db != nil {
 		pingCtx, cancel := context.WithTimeout(ctx, probeTimeout)
@@ -32,7 +37,18 @@ func Readiness(ctx context.Context, db Pinger, client *http.Client, pythonURL st
 	if pythonReady(ctx, client, pythonURL) {
 		state["python"] = "healthy"
 	}
-	return state, state["database"] == "healthy" && state["python"] == "healthy"
+	ready := state["database"] == "healthy" && state["python"] == "healthy"
+	for _, dependency := range dependencies {
+		probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
+		state[dependency.Name] = "unhealthy"
+		if dependency.Check != nil && dependency.Check(probeCtx) == nil {
+			state[dependency.Name] = "healthy"
+		} else {
+			ready = false
+		}
+		cancel()
+	}
+	return state, ready
 }
 
 func pythonReady(ctx context.Context, client *http.Client, baseURL string) bool {

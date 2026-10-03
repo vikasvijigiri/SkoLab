@@ -89,6 +89,22 @@ func TestSlotsAcquireTimesOutWhenSaturated(t *testing.T) {
 	}
 }
 
+func TestCancelledAdmissionDoesNotConsumeASlot(t *testing.T) {
+	slots := NewSlots(1)
+	if err := slots.Acquire(time.Second); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := slots.AcquireContext(ctx, time.Hour); err != context.Canceled {
+		t.Fatalf("cancelled admission: %v", err)
+	}
+	slots.Release()
+	if err := slots.Acquire(time.Second); err != nil {
+		t.Fatal("slot was lost after cancellation")
+	}
+}
+
 func TestScrubPathsRemovesWorkDir(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "skolab-tex-abc123")
 	log := "error in " + filepath.Join(dir, "main.tex") + " at line 3"

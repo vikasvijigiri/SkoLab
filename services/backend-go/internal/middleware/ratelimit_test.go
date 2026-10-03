@@ -69,7 +69,7 @@ func TestRateLimiter_IsolatedPerIP(t *testing.T) {
 	}
 }
 
-func TestRateLimiter_XForwardedForTakesPrecedenceOverRemoteAddr(t *testing.T) {
+func TestRateLimiter_UntrustedForwardingHeadersCannotBypassLimits(t *testing.T) {
 	rl := NewRateLimiter(rate.Limit(1), 1)
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
@@ -85,12 +85,11 @@ func TestRateLimiter_XForwardedForTakesPrecedenceOverRemoteAddr(t *testing.T) {
 		t.Fatalf("first request: status = %d, want %d", w1.Code, http.StatusOK)
 	}
 
-	// Same X-Forwarded-For client IP but a different RemoteAddr (simulating the
-	// same client behind different proxy hops) should still hit the same bucket
-	// and be rate-limited, since clientIP() must key off X-Forwarded-For.
+	// An attacker rotating forwarding headers must still spend the same bucket.
 	req2 := httptest.NewRequest(http.MethodGet, "/ping", nil)
-	req2.RemoteAddr = "192.168.1.2:2222"
-	req2.Header.Set("X-Forwarded-For", "203.0.113.5, 10.0.0.2")
+	req2.RemoteAddr = "192.168.1.1:2222"
+	req2.Header.Set("X-Forwarded-For", "203.0.113.6, 10.0.0.2")
+	req2.Header.Set("X-Real-IP", "203.0.113.7")
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req2)
 	if w2.Code != http.StatusTooManyRequests {

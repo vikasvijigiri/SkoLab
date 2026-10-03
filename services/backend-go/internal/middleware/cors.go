@@ -8,24 +8,29 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// defaultCORSOrigins mirrors the Python backend's allow-list (services/backend/app/main.py)
-// so both services accept the same local dev origins out of the box.
+// defaultCORSOrigins are for local development only. Production browser
+// origins must be explicitly configured, as on the Python backend.
 var defaultCORSOrigins = []string{
 	"http://localhost",
+	"http://localhost:8000",
 	"http://localhost:3000",
 	"http://127.0.0.1",
+	"http://127.0.0.1:8000",
 	"http://127.0.0.1:3000",
 }
 
-// allowedOrigins builds the same origin allow-list CORS() uses, from
-// defaultCORSOrigins plus the comma-separated CORS_ORIGINS env var. Exported
-// as IsAllowedOrigin below so non-HTTP callers (the websocket upgrader's
-// CheckOrigin, which has no CORS preflight of its own) can apply the exact
-// same policy instead of accepting every origin.
+// allowedOrigins builds the same allow-list for HTTP CORS and WebSocket
+// CheckOrigin. Production excludes local defaults and the default APP_BASE_URL.
 func allowedOrigins() map[string]bool {
 	allowed := make(map[string]bool)
-	for _, o := range defaultCORSOrigins {
-		allowed[o] = true
+	production := strings.EqualFold(os.Getenv("APP_ENV"), "production")
+	if !production {
+		for _, o := range defaultCORSOrigins {
+			allowed[o] = true
+		}
+	}
+	if baseURL := strings.TrimSpace(os.Getenv("APP_BASE_URL")); baseURL != "" && !(production && baseURL == "http://localhost:8000") {
+		allowed[baseURL] = true
 	}
 	if extra := os.Getenv("CORS_ORIGINS"); extra != "" {
 		for _, o := range strings.Split(extra, ",") {
