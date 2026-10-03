@@ -121,6 +121,7 @@ func VerifyUser() gin.HandlerFunc {
 		}
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+			c.Header("WWW-Authenticate", "Bearer")
 			apierror.Abort(c, http.StatusUnauthorized, "token_missing", "Missing or invalid Authorization header")
 			return
 		}

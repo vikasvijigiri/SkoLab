@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -165,5 +166,72 @@ func TestUpstreamUnreachableReturns503NotAnErrorLeak(t *testing.T) {
 	w := doCompile(r, `{"latex_source":"hi"}`)
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503", w.Code)
+	}
+}
+
+func TestInvalidRequestsAre400AndSpendNoQuota(t *testing.T) {
+	calls := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		calls++
+		_, _ = w.Write([]byte(`{"status":"compiled"}`))
+	}))
+	defer upstream.Close()
+	r := newTestRouter(t, "careless-user", upstream.URL, "http://unused")
+
+	for body, code := range map[string]string{
+		`not json`:            "invalid_body",
+		`{}`:                  "invalid_body",
+		`{"latex_source":42}`: "invalid_body",
+		`{"latex_source":""}`: "invalid_source",
+		`{"latex_source":"` + strings.Repeat("é", 100_001) + `"}`: "invalid_source",
+		`{"latex_source":"x","engine":"lualatex"}`:                "invalid_engine",
+	} {
+		w := doCompile(r, body)
+		if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), `"`+code+`"`) {
+			t.Fatalf("%.40s: %d %s, want 400 %s", body, w.Code, w.Body, code)
+		}
+	}
+	if calls != 0 {
+		t.Fatalf("invalid requests reached the backend %d times", calls)
+	}
+	// The budget (8 units) is untouched: two real compiles still fit.
+	for i := 0; i < 2; i++ {
+		if w := doCompile(r, `{"latex_source":"hi"}`); w.Code != http.StatusOK {
+			t.Fatalf("compile %d after invalid requests: %d", i+1, w.Code)
+		}
+	}
+}
+
+func TestBackendErrorsUseTheGatewayContract(t *testing.T) {
+	cases := []struct {
+		upstream   int
+		retryAfter string
+		want       int
+		code       string
+	}{
+		{http.StatusServiceUnavailable, "7", http.StatusServiceUnavailable, "compile_busy"},
+		{http.StatusTooManyRequests, "", http.StatusTooManyRequests, "compile_in_progress"},
+		{http.StatusUnauthorized, "", http.StatusUnauthorized, "token_invalid"},
+		{http.StatusForbidden, "", http.StatusBadGateway, "compile_failed"},
+		{http.StatusUnprocessableEntity, "", http.StatusBadGateway, "compile_failed"},
+		{http.StatusInternalServerError, "", http.StatusBadGateway, "compile_failed"},
+	}
+	for i, tc := range cases {
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			if tc.retryAfter != "" {
+				w.Header().Set("Retry-After", tc.retryAfter)
+			}
+			w.WriteHeader(tc.upstream)
+			_, _ = w.Write([]byte(`{"detail":"internal detail that must not leak"}`))
+		}))
+		r := newTestRouter(t, "user-"+strconv.Itoa(i), upstream.URL, "http://unused")
+		w := doCompile(r, `{"latex_source":"hi"}`)
+		upstream.Close()
+		if w.Code != tc.want || !strings.Contains(w.Body.String(), `"`+tc.code+`"`) || strings.Contains(w.Body.String(), "internal detail") {
+			t.Fatalf("upstream %d: got %d %s, want %d %s", tc.upstream, w.Code, w.Body, tc.want, tc.code)
+		}
+		if tc.retryAfter != "" && w.Header().Get("Retry-After") != tc.retryAfter {
+			t.Fatalf("upstream %d: Retry-After = %q, want %q", tc.upstream, w.Header().Get("Retry-After"), tc.retryAfter)
+		}
 	}
 }

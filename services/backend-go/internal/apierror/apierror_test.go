@@ -26,3 +26,30 @@ func TestAbortWritesTheStandardBody(t *testing.T) {
 		t.Fatal("the request must stop here")
 	}
 }
+
+func TestUnknownPathIs404AndWrongMethodIs405WithAllow(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.HandleMethodNotAllowed = true
+	r.NoRoute(NoRoute)
+	r.NoMethod(NoMethod)
+	r.GET("/things", func(c *gin.Context) { c.Status(http.StatusOK) })
+	r.DELETE("/things", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/nothing-here", nil))
+	if w.Code != http.StatusNotFound || !json.Valid(w.Body.Bytes()) {
+		t.Fatalf("unknown path: %d %s", w.Code, w.Body)
+	}
+
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPut, "/things", nil))
+	var body map[string]string
+	_ = json.Unmarshal(w.Body.Bytes(), &body)
+	if w.Code != http.StatusMethodNotAllowed || body["code"] != "method_not_allowed" {
+		t.Fatalf("wrong method: %d %s", w.Code, w.Body)
+	}
+	if allow := w.Header().Get("Allow"); allow != "GET, DELETE" && allow != "DELETE, GET" {
+		t.Fatalf("Allow = %q", allow)
+	}
+}

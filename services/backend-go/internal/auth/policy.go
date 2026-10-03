@@ -8,6 +8,7 @@ import (
 
 	"firebase.google.com/go/v4/auth"
 	"github.com/gin-gonic/gin"
+	"github.com/skolab/backend-go/internal/apierror"
 	"github.com/skolab/backend-go/internal/middleware"
 	"github.com/skolab/backend-go/internal/security"
 	"golang.org/x/time/rate"
@@ -25,9 +26,7 @@ func throttled(c *gin.Context) bool {
 	}
 	security.Record(c, security.Event{Name: security.AuthThrottled, Outcome: security.Throttled})
 	c.Header("Retry-After", "15")
-	c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-		"error": "Too many failed sign-in attempts; try again shortly", "code": "auth_throttled",
-	})
+	apierror.Abort(c, http.StatusTooManyRequests, "auth_throttled", "Too many failed sign-in attempts; try again shortly")
 	return true
 }
 
@@ -36,7 +35,8 @@ func throttled(c *gin.Context) bool {
 func reject(c *gin.Context, event, code, message string) {
 	failedLogins.Limiter(security.ClientIP(c)).Allow()
 	security.Record(c, security.Event{Name: event, Outcome: security.Denied, Reason: code})
-	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": message, "code": code})
+	c.Header("WWW-Authenticate", `Bearer error="invalid_token"`)
+	apierror.Abort(c, http.StatusUnauthorized, code, message)
 }
 
 // requireVerifiedEmail is on unless AUTH_REQUIRE_VERIFIED_EMAIL=false (a
@@ -54,16 +54,12 @@ func accountPolicy(c *gin.Context, token *auth.Token) bool {
 	switch token.Firebase.SignInProvider {
 	case "anonymous":
 		security.Record(c, security.Event{Name: security.AuthAnonymousRefused, Outcome: security.Denied, UserID: token.UID})
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-			"error": "Sign in with an account to use this service", "code": "anonymous_not_allowed",
-		})
+		apierror.Abort(c, http.StatusForbidden, "anonymous_not_allowed", "Sign in with an account to use this service")
 		return false
 	case "password":
 		if verified, _ := token.Claims["email_verified"].(bool); !verified && requireVerifiedEmail() {
 			security.Record(c, security.Event{Name: security.AuthEmailUnverified, Outcome: security.Denied, UserID: token.UID})
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"error": "Verify your email address to continue", "code": "email_unverified",
-			})
+			apierror.Abort(c, http.StatusForbidden, "email_unverified", "Verify your email address to continue")
 			return false
 		}
 	}
