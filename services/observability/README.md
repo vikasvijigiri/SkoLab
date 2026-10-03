@@ -55,9 +55,9 @@ apply the availability checks only. To enable it:
    `POST /api/v1/workspaces` with a fixed `Idempotency-Key`. The first deploy
    creates the workspace and every later one gets the same one back. That
    workspace must never be shared with real users. Application authorization
-   still applies. The account consumes normal quota: 48 daily runs at eight
-   units across Go/Python is 384 units, below the default 600-unit daily
-   limit. With lower limits, lengthen the journey interval rather than bypass
+   still applies. The account consumes normal quota: 48 daily runs at four
+   units (one compile, charged once by the gateway) is 192 units, below the
+   default 600-unit daily limit. With lower limits, lengthen the journey interval rather than bypass
    quotas.
 2. Make sure the service account behind `GRAFANA_TOKEN` can write secure
    values (the Admin role does). The deploy uploads the journey values to

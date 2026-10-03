@@ -64,8 +64,8 @@ func TestIssueTicket_DeniesNonMember(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/ws/colab/w-1/tickets", nil))
 
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusNotFound)
 	}
 	if tickets.issuedFor != "" {
 		t.Fatal("a non-member must never receive a WebSocket ticket")

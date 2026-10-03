@@ -1,13 +1,15 @@
 import asyncio
+import hmac
 import logging
 import os
 import threading
 import time
 from typing import AsyncGenerator, Awaitable, Callable, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import Depends, HTTPException, Request, Response, Security, status
+from fastapi import Depends, Header, HTTPException, Request, Response, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.core import security_events
+from app.core.config import settings
 from app.db.database import AsyncSessionLocal
 from app.core.quota import QuotaExceeded, consume as consume_quota
 
@@ -281,6 +283,25 @@ def require_quota(cost: int) -> Callable[..., Awaitable[dict]]:
         return user
 
     return _require_quota
+
+
+def require_gateway(x_internal_token: Optional[str] = Header(default=None)) -> None:
+    """Admit only calls forwarded by the Go gateway.
+
+    The gateway authenticates the user, charges the compile quota and enforces
+    one compile per user before forwarding with X-Internal-Token, so a direct
+    call to this service must not skip those controls. With no token
+    configured (local development) the check is off; production refuses to
+    start without one (app/core/config.py).
+    """
+    expected = settings.internal_api_token
+    if not expected:
+        return
+    if not x_internal_token or not hmac.compare_digest(x_internal_token.encode(), expected.encode()):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This endpoint is only reachable through the API gateway.",
+        )
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

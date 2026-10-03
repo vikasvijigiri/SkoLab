@@ -75,9 +75,10 @@ func TestProxiesToSandboxWhenConfiguredAndChecksSharedSecret(t *testing.T) {
 }
 
 func TestFallsBackToPythonWhenSandboxURLUnset(t *testing.T) {
-	var hitPath string
+	var hitPath, gotToken string
 	pythonUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		hitPath = req.URL.Path
+		gotToken = req.Header.Get("X-Internal-Token")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"compiled"}`))
 	}))
@@ -91,6 +92,11 @@ func TestFallsBackToPythonWhenSandboxURLUnset(t *testing.T) {
 	}
 	if hitPath != "/api/v1/colab/compile" {
 		t.Fatalf("python upstream got path %q", hitPath)
+	}
+	// Python serves compiles only for the gateway (it does not charge the
+	// quota again), so the gateway must prove itself on the fallback too.
+	if gotToken != "shared-secret" {
+		t.Fatalf("python upstream got X-Internal-Token %q", gotToken)
 	}
 }
 

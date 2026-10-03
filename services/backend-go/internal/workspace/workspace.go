@@ -26,6 +26,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
+	"github.com/skolab/backend-go/internal/apierror"
 	"github.com/skolab/backend-go/internal/security"
 )
 
@@ -99,7 +100,7 @@ type titleRequest struct {
 }
 
 func fail(c *gin.Context, status int, code, message string) {
-	c.AbortWithStatusJSON(status, gin.H{"error": message, "code": code})
+	apierror.Abort(c, status, code, message)
 }
 
 // caller returns the verified Firebase uid, or aborts with 401.

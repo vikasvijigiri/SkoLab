@@ -25,6 +25,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/skolab/backend-go/internal/apierror"
 	"github.com/skolab/backend-go/internal/quota"
 )
 
@@ -67,15 +68,13 @@ func Handler(pool *pgxpool.Pool, httpClient *http.Client, pythonURL string) gin.
 	return func(c *gin.Context) {
 		uid := c.GetString("user_id")
 		if uid == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required"})
+			apierror.Abort(c, http.StatusUnauthorized, "unauthenticated", "Authentication is required")
 			return
 		}
 
 		if !inFlight.tryStart(uid) {
 			c.Header("Retry-After", strconv.Itoa(retryAfterSeconds))
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error": "You already have a compile in progress.",
-			})
+			apierror.Abort(c, http.StatusTooManyRequests, "compile_in_progress", "You already have a compile in progress")
 			return
 		}
 		defer inFlight.finish(uid)
@@ -84,9 +83,7 @@ func Handler(pool *pgxpool.Pool, httpClient *http.Client, pythonURL string) gin.
 		if err != nil {
 			if exc, ok := quota.AsExceeded(err); ok {
 				c.Header("Retry-After", strconv.Itoa(int(exc.RetryAfter.Seconds())+1))
-				c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-					"error": exc.Window + " usage budget is spent. Try again later.",
-				})
+				apierror.Abort(c, http.StatusTooManyRequests, "quota_exceeded", "Your "+exc.Window+" usage budget is spent. Try again later")
 				return
 			}
 			slog.Error("colab: quota check failed", "err", err)
@@ -98,7 +95,7 @@ func Handler(pool *pgxpool.Pool, httpClient *http.Client, pythonURL string) gin.
 
 		body, readErr := io.ReadAll(c.Request.Body)
 		if readErr != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "could not read request body"})
+			apierror.Abort(c, http.StatusBadRequest, "invalid_body", "Could not read the request body")
 			return
 		}
 
@@ -108,13 +105,11 @@ func Handler(pool *pgxpool.Pool, httpClient *http.Client, pythonURL string) gin.
 		if sandboxURL != "" {
 			status, respBody, upstreamErr = callSandbox(c.Request.Context(), httpClient, sandboxURL, internalToken, body)
 		} else {
-			status, respBody, upstreamErr = callPython(c.Request.Context(), httpClient, pythonURL, c.Request.Header, body)
+			status, respBody, upstreamErr = callPython(c.Request.Context(), httpClient, pythonURL, internalToken, c.Request.Header, body)
 		}
 		if upstreamErr != nil {
 			slog.Error("colab: compile backend unreachable", "err", upstreamErr, "sandbox", sandboxURL != "")
-			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
-				"error": "The compile service is temporarily unavailable.",
-			})
+			apierror.Abort(c, http.StatusServiceUnavailable, "compile_unavailable", "The compile service is temporarily unavailable")
 			return
 		}
 		c.Data(status, "application/json", respBody)
@@ -131,12 +126,16 @@ func callSandbox(ctx context.Context, client *http.Client, baseURL, token string
 	return doWithTimeout(client, req)
 }
 
-func callPython(ctx context.Context, client *http.Client, baseURL string, inHeaders http.Header, body []byte) (int, []byte, error) {
+// callPython forwards the caller's Firebase token plus the gateway's
+// X-Internal-Token: Python serves compiles only for the gateway, which has
+// already charged the quota and holds the per-user single-flight slot.
+func callPython(ctx context.Context, client *http.Client, baseURL, token string, inHeaders http.Header, body []byte) (int, []byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/api/v1/colab/compile", bytes.NewReader(body))
 	if err != nil {
 		return 0, nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Token", token)
 	if auth := inHeaders.Get("Authorization"); auth != "" {
 		req.Header.Set("Authorization", auth)
 	}

@@ -24,9 +24,10 @@ func envInt(key string, def int) int {
 var Pool *pgxpool.Pool
 
 // InitDB initializes the high-performance connection pool to PostgreSQL using pgx.
+// tracer (may be nil) receives one span per statement.
 // No local fallback DSN — Supabase is the only database backend, in every
 // environment (2026-09-26, "Supabase only" pass). DATABASE_URL must be set.
-func InitDB() error {
+func InitDB(tracer pgx.QueryTracer) error {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
 		return fmt.Errorf("DATABASE_URL is not set — point it at your Supabase project")
@@ -51,6 +52,7 @@ func InitDB() error {
 	// prepared statement resolves against the wrong session. QueryExecModeExec
 	// sends each query on the simple protocol with no statement caching.
 	config.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
+	config.ConnConfig.Tracer = tracer
 
 	pool, err := pgxpool.NewWithConfig(context.Background(), config)
 	if err != nil {

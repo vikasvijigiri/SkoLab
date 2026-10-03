@@ -1,0 +1,96 @@
+package middleware
+
+import (
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/gin-gonic/gin"
+)
+
+func hardenedRouter() *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(SecurityHeaders(), BodyLimit(16))
+	echo := func(c *gin.Context) {
+		body, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			c.AbortWithStatus(http.StatusBadRequest)
+			return
+		}
+		c.String(http.StatusOK, string(body))
+	}
+	r.POST("/api/v1/echo", echo)
+	r.GET("/gateway-health", func(c *gin.Context) { c.Status(http.StatusOK) })
+	return r
+}
+
+func TestSecurityHeadersOnEveryResponse(t *testing.T) {
+	r := hardenedRouter()
+	for _, path := range []string{"/gateway-health", "/api/v1/echo", "/nope"} {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		for _, header := range []string{"Strict-Transport-Security", "X-Content-Type-Options", "X-Frame-Options", "Referrer-Policy", "Content-Security-Policy"} {
+			if w.Header().Get(header) == "" {
+				t.Fatalf("%s: missing %s", path, header)
+			}
+		}
+	}
+}
+
+func TestAPIResponsesAreNeverCached(t *testing.T) {
+	r := hardenedRouter()
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/echo", strings.NewReader("hi")))
+	if got := w.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("api Cache-Control = %q", got)
+	}
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/gateway-health", nil))
+	if got := w.Header().Get("Cache-Control"); got != "" {
+		t.Fatalf("health Cache-Control = %q", got)
+	}
+}
+
+func TestBodyLimit(t *testing.T) {
+	r := hardenedRouter()
+	cases := []struct {
+		name    string
+		body    io.Reader
+		chunked bool
+		want    int
+	}{
+		{"within the limit", strings.NewReader("small"), false, http.StatusOK},
+		{"declared too large", strings.NewReader(strings.Repeat("x", 17)), false, http.StatusRequestEntityTooLarge},
+		{"undeclared and too large", io.MultiReader(strings.NewReader(strings.Repeat("x", 64))), true, http.StatusBadRequest},
+	}
+	for _, tc := range cases {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/echo", tc.body)
+		if tc.chunked {
+			req.ContentLength = -1
+		}
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != tc.want {
+			t.Fatalf("%s: status %d, want %d", tc.name, w.Code, tc.want)
+		}
+	}
+}
+
+func TestRequestIDValid(t *testing.T) {
+	for id, want := range map[string]bool{
+		"3f2b9c1e-7a4d-4e0b-9a51-0c3e1d2f4a5b": true,
+		"req_123.abc:9":                        true,
+		"":                                     false,
+		strings.Repeat("a", 129):               false,
+		"bad id":                               false,
+		"inject\nfake=log":                     false,
+		"<script>":                             false,
+	} {
+		if got := RequestIDValid(id); got != want {
+			t.Fatalf("RequestIDValid(%q) = %v, want %v", id, got, want)
+		}
+	}
+}

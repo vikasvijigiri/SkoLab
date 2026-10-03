@@ -101,7 +101,7 @@ func main() {
 
 	auth.InitFirebase()
 
-	if err := db.InitDB(); err != nil {
+	if err := db.InitDB(otel.DBTracer()); err != nil {
 		slog.Warn("PostgreSQL init failed — DB-backed endpoints will be degraded", "err", err)
 	} else {
 		defer db.CloseDB()
@@ -144,6 +144,8 @@ func main() {
 	}
 	r.Use(requestID())
 	r.Use(requestLogger())
+	r.Use(middleware.SecurityHeaders())
+	r.Use(middleware.BodyLimit(middleware.MaxBodyBytes))
 	r.Use(middleware.Gzip())
 	r.Use(middleware.CORS())
 
@@ -201,9 +203,6 @@ func main() {
 	{
 		wsTicketsAPI.POST("/:workspace_id/tickets", websocket.IssueTicket(workspaceAuthorizer, workspaceTickets))
 	}
-	r.GET("/ws/system/health", func(c *gin.Context) {
-		websocket.ServeHealthWs(c)
-	})
 
 	// ── User identity (Firebase-authenticated) ────────────────────────────────
 	// Not a "user profile" feature kept for its own sake: workspaces,
@@ -264,15 +263,15 @@ func main() {
 
 const requestIDHeader = "X-Request-ID"
 
-// requestID assigns a correlation id to every request — read from the
-// caller's X-Request-ID if already set, else generated fresh — and both
+// requestID assigns a correlation id to every request — the caller's
+// X-Request-ID when it is short and log-safe, else a fresh one — and both
 // logs it (requestLogger, below) and forwards it to Python on the colab
 // fallback call (internal/colab/colab.go copies inbound headers), so the
 // same id shows up in both services' logs for one request.
 func requestID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.GetHeader(requestIDHeader)
-		if id == "" {
+		if !middleware.RequestIDValid(id) {
 			id = uuid.New().String()
 		}
 		c.Set("request_id", id)

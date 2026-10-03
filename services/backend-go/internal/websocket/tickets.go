@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/skolab/backend-go/internal/apierror"
 	"github.com/skolab/backend-go/internal/security"
 )
 
@@ -106,30 +107,32 @@ func IssueTicket(authorizer WorkspaceAuthorizer, tickets WorkspaceTicketStore) g
 		workspaceID := strings.TrimSpace(c.Param("workspace_id"))
 		userID := strings.TrimSpace(c.GetString("user_id"))
 		if workspaceID == "" {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "workspace_id is required"})
+			apierror.Abort(c, http.StatusBadRequest, "invalid_workspace", "workspace_id is required")
 			return
 		}
 		if userID == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required"})
+			apierror.Abort(c, http.StatusUnauthorized, "unauthenticated", "Authentication is required")
 			return
 		}
 		if authorizer == nil || tickets == nil {
-			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Workspace authorization is temporarily unavailable"})
+			apierror.Abort(c, http.StatusServiceUnavailable, "authorization_unavailable", "Workspace authorization is temporarily unavailable")
 			return
 		}
 		role, err := authorizer.Role(c.Request.Context(), workspaceID, userID)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Workspace authorization is temporarily unavailable"})
+			apierror.Abort(c, http.StatusServiceUnavailable, "authorization_unavailable", "Workspace authorization is temporarily unavailable")
 			return
 		}
 		if role == "" {
 			security.Record(c, security.Event{Name: security.WorkspaceDenied, Outcome: security.Denied, WorkspaceID: workspaceID, Reason: "ticket"})
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You do not have access to this workspace"})
+			// 404, like every workspace route: whether a workspace exists is
+			// not revealed to someone who is not a member of it.
+			apierror.Abort(c, http.StatusNotFound, "not_found", "Workspace not found")
 			return
 		}
 		ticket, err := tickets.Issue(c.Request.Context(), workspaceID, userID)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "WebSocket tickets are temporarily unavailable"})
+			apierror.Abort(c, http.StatusServiceUnavailable, "tickets_unavailable", "WebSocket tickets are temporarily unavailable")
 			return
 		}
 		c.Header("Cache-Control", "no-store")
@@ -144,21 +147,21 @@ func VerifyTicket(tickets WorkspaceTicketStore) gin.HandlerFunc {
 		workspaceID := strings.TrimSpace(c.Param("workspace_id"))
 		ticket := strings.TrimSpace(c.Query("ticket"))
 		if workspaceID == "" || ticket == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing WebSocket ticket"})
+			apierror.Abort(c, http.StatusUnauthorized, "ticket_missing", "Missing WebSocket ticket")
 			return
 		}
 		if tickets == nil {
-			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "WebSocket tickets are temporarily unavailable"})
+			apierror.Abort(c, http.StatusServiceUnavailable, "tickets_unavailable", "WebSocket tickets are temporarily unavailable")
 			return
 		}
 		userID, err := tickets.Consume(c.Request.Context(), workspaceID, ticket)
 		if errors.Is(err, ErrInvalidWorkspaceTicket) {
 			security.Record(c, security.Event{Name: security.SocketTicketInvalid, Outcome: security.Denied, WorkspaceID: workspaceID})
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired WebSocket ticket"})
+			apierror.Abort(c, http.StatusUnauthorized, "ticket_invalid", "Invalid or expired WebSocket ticket")
 			return
 		}
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "WebSocket tickets are temporarily unavailable"})
+			apierror.Abort(c, http.StatusServiceUnavailable, "tickets_unavailable", "WebSocket tickets are temporarily unavailable")
 			return
 		}
 		c.Set("user_id", userID)

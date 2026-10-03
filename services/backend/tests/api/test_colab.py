@@ -189,7 +189,8 @@ def test_saturated_workers_refuse_fast_with_retry_after(monkeypatch):
     assert exc.value.headers["Retry-After"]
 
 
-async def test_compile_is_metered_per_user(client, app, monkeypatch):
+async def test_compile_is_not_charged_again_behind_the_gateway(client, app, monkeypatch):
+    """The gateway charges the compile quota; Python must not charge it twice."""
     from app.api.dependencies import get_verified_user
     from app.core import quota
 
@@ -197,7 +198,7 @@ async def test_compile_is_metered_per_user(client, app, monkeypatch):
         return None
 
     monkeypatch.setenv("USER_QUOTA_ENABLED", "true")
-    monkeypatch.setenv("USER_QUOTA_HOURLY_UNITS", "4")  # exactly one compile
+    monkeypatch.setenv("USER_QUOTA_HOURLY_UNITS", "4")  # one compile's worth
     monkeypatch.setattr(quota, "_redis_incr", _none)
     monkeypatch.setattr(quota, "_pg_incr", _none)
     quota._local.clear()
@@ -206,13 +207,40 @@ async def test_compile_is_metered_per_user(client, app, monkeypatch):
     )
     app.dependency_overrides[get_verified_user] = lambda: {"uid": "metered"}
     try:
-        first = await client.post("/api/v1/colab/compile", json={"latex_source": "x"})
-        second = await client.post("/api/v1/colab/compile", json={"latex_source": "x"})
+        responses = [
+            await client.post("/api/v1/colab/compile", json={"latex_source": "x"})
+            for _ in range(3)
+        ]
     finally:
         app.dependency_overrides.pop(get_verified_user, None)
         quota._local.clear()
-    assert first.status_code == 200
-    assert second.status_code == 429
+    assert [r.status_code for r in responses] == [200, 200, 200]
+
+
+@pytest.mark.parametrize(
+    ("header", "expected"),
+    [(None, 403), ("wrong-token", 403), ("gateway-secret", 200)],
+)
+async def test_compile_only_accepts_calls_forwarded_by_the_gateway(
+    client, app, monkeypatch, header, expected
+):
+    from app.api.dependencies import get_verified_user
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "internal_api_token", "gateway-secret")
+    monkeypatch.setattr(
+        colab, "_compile_source", lambda _s: CompileResponse(status="compiled")
+    )
+    app.dependency_overrides[get_verified_user] = lambda: {"uid": "direct-caller"}
+    try:
+        response = await client.post(
+            "/api/v1/colab/compile",
+            json={"latex_source": "x"},
+            headers={"X-Internal-Token": header} if header else {},
+        )
+    finally:
+        app.dependency_overrides.pop(get_verified_user, None)
+    assert response.status_code == expected
 
 
 # ── real pdflatex (skipped where no TeX is installed) ───────────────────────
