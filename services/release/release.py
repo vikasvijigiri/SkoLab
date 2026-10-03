@@ -228,6 +228,21 @@ def status_of(url: str, token: str | None = None, body: dict | None = None) -> i
         return exc.code
 
 
+def oversized_body_status(base: str) -> int:
+    """Status for a 2 MiB body (the limit is 1 MiB). Through Render's edge
+    the 413 always arrives. Talking to the server directly (CI staging), Go
+    answers 413 and closes without reading the rest, so the sender may see
+    the connection reset first; then the server must still be up."""
+    try:
+        return status_of(f"{base}/api/v1/invites/preview", None, {"token": "x" * (2 << 20)})
+    except (urllib.error.URLError, ConnectionError) as exc:
+        reason = getattr(exc, "reason", exc)
+        direct = base.startswith(("http://127.0.0.1:", "http://localhost:"))
+        if direct and isinstance(reason, ConnectionError) and status_of(f"{base}/gateway-health") == 200:
+            return 413
+        raise
+
+
 def expect(label: str, actual, wanted) -> None:
     if actual != wanted:
         raise RuntimeError(f"smoke: {label}: got {actual!r}, want {wanted!r}")
@@ -246,7 +261,7 @@ def smoke(base: str, api_key: str, email: str, password: str) -> None:
     with urllib.request.urlopen(f"{base}/gateway-health", timeout=120) as response:
         expect("HSTS and nosniff headers", (bool(response.headers.get("Strict-Transport-Security")),
                                             response.headers.get("X-Content-Type-Options")), (True, "nosniff"))
-    expect("oversized body refused", status_of(f"{base}/api/v1/invites/preview", None, {"token": "x" * (2 << 20)}), 413)
+    expect("oversized body refused", oversized_body_status(base), 413)
 
     workspace = ensure_monitoring_workspace(api_key, email, password, base)
     token = request_json("Firebase sign-in", "POST", f"{FIREBASE_SIGN_IN}?key={api_key}",
