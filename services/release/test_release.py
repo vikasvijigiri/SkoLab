@@ -33,6 +33,17 @@ class FakeRender:
     def suspend(self, service):
         self.suspended.append(service)
 
+    groups = ()
+
+    def env_groups(self):
+        return [dict(g) for g in self.groups]
+
+    def link_env_group(self, group, service):
+        self.writes.append(f"link {group}")
+        for g in self.groups:
+            if g["id"] == group:
+                g["services"].append(service)
+
     # deploys
     def deploys(self, service):
         return self.listed
@@ -136,6 +147,15 @@ class Migration(unittest.TestCase):
         self.assertNotIn("OTEL_SERVICE_NAME", api)              # per-process: set by the entrypoint
         self.assertNotIn("PORT", api)
         self.assertEqual(render.files["api"], {"service-account.json": "{}"})
+
+    def test_links_the_env_groups_the_replaced_services_used(self):
+        render = FakeRender(services=LEGACY, env={"api": {}, "py": {}, "go": {}})
+        render.groups = [{"id": "grp-1", "name": "skolab", "services": ["py"]},
+                         {"id": "grp-2", "name": "other-app", "services": ["srv-other"]}]
+        self.assertEqual(release.adopt_settings(render, "api"), ["env group skolab"])
+        self.assertEqual(render.writes, ["link grp-1"])
+        # Already linked: nothing to do the second time.
+        self.assertEqual(release.adopt_settings(render, "api"), [])
 
     def test_empty_placeholders_count_as_missing(self):
         render = FakeRender(services=LEGACY,
