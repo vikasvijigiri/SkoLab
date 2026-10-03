@@ -64,6 +64,8 @@ jobs:
         # CoLab only shrank the codebase to a much better-tested core (79%
         # measured locally); 70 leaves real headroom, not a rubber-stamp floor.
         run: pytest tests/ --cov=app --cov-report=term-missing:skip-covered --cov-fail-under=70
+      - name: Install compiler for real sandbox integration tests
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends texlive-latex-base util-linux
       - name: Verify Go gateway
         working-directory: services/backend-go
         env:
@@ -214,6 +216,8 @@ jobs:
           name: qa-reports-staging
           path: qa-reports
           if-no-files-found: ignore
+      - name: Backup and restore staging into an isolated database
+        run: bash services/qa/restore-drill.sh
       - name: Staging logs
         if: always()
         run: docker logs skolab-api 2>&1 | tail -n 200 || true
@@ -234,6 +238,8 @@ jobs:
         run: python -m unittest discover -s services/observability/slo -p "test_*.py"
       - name: Unit-test the release script
         run: python -m unittest discover -s services/release -p "test_*.py"
+      - name: Validate database connection budget logic
+        run: python -m unittest discover -s services/backend/scripts -p "test_connection_budget.py"
       - name: Check and unit-test rules with promtool
         working-directory: services/observability/slo
         run: |
@@ -241,9 +247,18 @@ jobs:
           promtool check rules skolab-slo.rules.yml
           promtool test rules skolab-slo.test.yml
 
+  security:
+    permissions:
+      contents: read
+      security-events: write
+    uses: ./.github/workflows/security-scan.yml
+
   release:
+    permissions:
+      contents: read
+      actions: read
     # Only a push to master that passed every job above reaches production.
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    needs: [build-and-test, images, slo-rules, staging]
+    needs: [build-and-test, images, slo-rules, staging, security]
     uses: ./.github/workflows/release.yml
     secrets: inherit

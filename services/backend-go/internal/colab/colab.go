@@ -15,11 +15,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -56,20 +59,47 @@ var locks *shared.Store
 func ShareLocks(store *shared.Store) { locks = store }
 
 // start takes uid's compile slot and returns its release, or ok=false when
-// a compile is already running for uid. A Redis error falls back to the
-// in-process slot rather than refusing the compile.
-func start(ctx context.Context, uid string) (release func(), ok bool) {
+// a compile is already running for uid. Redis errors refuse the compile in
+// required shared-state mode; optional deployments can use an in-process slot.
+func start(ctx context.Context, uid string) (release func(), ok bool, err error) {
+	if shared.Required() && locks == nil {
+		return nil, false, fmt.Errorf("shared compile lock unavailable")
+	}
 	if locks != nil {
 		release, ok, err := locks.Lock(ctx, "compile:"+uid, sandboxCallTimeout+5*time.Second)
 		if err == nil {
-			return release, ok
+			return release, ok, nil
+		}
+		if shared.Required() {
+			return nil, false, err
 		}
 		slog.Warn("colab: shared compile lock unavailable; using in-process slot", "err", err)
 	}
 	if !inFlight.tryStart(uid) {
-		return nil, false
+		return nil, false, nil
 	}
-	return func() { inFlight.finish(uid) }, true
+	return func() { inFlight.finish(uid) }, true, nil
+}
+
+func ValidateConfiguration() error {
+	if strings.EqualFold(os.Getenv("COLAB_REQUIRE_SANDBOX"), "true") && SandboxURL() == "" {
+		return fmt.Errorf("COLAB_REQUIRE_SANDBOX=true requires COLAB_SANDBOX_URL")
+	}
+	if worker := SandboxURL(); worker != "" {
+		u, err := url.Parse(worker)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+			return fmt.Errorf("compile worker must have an HTTP(S) URL without credentials, query, or fragment")
+		}
+	}
+	return nil
+}
+
+// Render supplies private addresses as host:port, without a URL scheme.
+func SandboxURL() string {
+	if hostport := strings.TrimSpace(os.Getenv("COLAB_SANDBOX_HOSTPORT")); hostport != "" {
+		return "http://" + hostport
+	}
+	return strings.TrimRight(os.Getenv("COLAB_SANDBOX_URL"), "/")
 }
 
 func (a *activeUsers) tryStart(uid string) bool {
@@ -92,7 +122,7 @@ func (a *activeUsers) finish(uid string) {
 // is the existing Python backend base URL, used only as the fallback path
 // when COLAB_SANDBOX_URL is unset.
 func Handler(pool *pgxpool.Pool, httpClient *http.Client, pythonURL string) gin.HandlerFunc {
-	sandboxURL := os.Getenv("COLAB_SANDBOX_URL")
+	sandboxURL := SandboxURL()
 	internalToken := os.Getenv("INTERNAL_API_TOKEN")
 
 	return func(c *gin.Context) {
@@ -114,7 +144,12 @@ func Handler(pool *pgxpool.Pool, httpClient *http.Client, pythonURL string) gin.
 			return
 		}
 
-		release, ok := start(c.Request.Context(), uid)
+		release, ok, lockErr := start(c.Request.Context(), uid)
+		if lockErr != nil {
+			c.Header("Retry-After", strconv.Itoa(retryAfterSeconds))
+			apierror.Abort(c, http.StatusServiceUnavailable, "compile_unavailable", "The compile service is temporarily unavailable")
+			return
+		}
 		if !ok {
 			c.Header("Retry-After", strconv.Itoa(retryAfterSeconds))
 			apierror.Abort(c, http.StatusTooManyRequests, "compile_in_progress", "You already have a compile in progress")
@@ -130,6 +165,11 @@ func Handler(pool *pgxpool.Pool, httpClient *http.Client, pythonURL string) gin.
 				return
 			}
 			slog.Error("colab: quota check failed", "err", err)
+			if shared.Required() {
+				c.Header("Retry-After", strconv.Itoa(retryAfterSeconds))
+				apierror.Abort(c, http.StatusServiceUnavailable, "compile_unavailable", "The compile service is temporarily unavailable")
+				return
+			}
 			// Availability over strict accounting (quota.Consume itself
 			// already falls back to a local counter on a Postgres error) —
 			// reaching this branch means even that failed, so degrade to
@@ -249,7 +289,12 @@ func doWithTimeout(client *http.Client, req *http.Request) (int, http.Header, []
 		return 0, nil, nil, err
 	}
 	defer resp.Body.Close()
-	b, err := io.ReadAll(resp.Body)
+	// A worker response contains at most an 8 MiB PDF encoded as base64.
+	const maxResponseBytes = 12 * 1024 * 1024
+	b, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
+	if len(b) > maxResponseBytes {
+		return 0, nil, nil, fmt.Errorf("compile response exceeds limit")
+	}
 	if err != nil {
 		return 0, nil, nil, err
 	}

@@ -3,10 +3,9 @@
 // This is a Go port of services/backend/app/api/v1/endpoints/colab.py's
 // _compile_source, moved here so it can run as its own minimal, Cloud-Run/
 // Fargate-deployable binary (cmd/colab-sandbox) instead of a subprocess
-// inside the always-on API — a genuinely stronger isolation boundary (its
-// own container, its own filesystem and network namespace, torn down after
-// use) than anything a shared process can offer itself. See
-// docs/audits/2026-09-26-backend-security-reliability-reaudit.md for why.
+// inside the API. Worker separation reduces resource contention and exposure
+// of API credentials. Per-request container isolation requires a job runtime;
+// a long-lived worker provides per-request temporary directories and processes.
 //
 // Layers, in order: (1) admission control — a bounded worker pool, refuse
 // fast past it; (2) source policy — file-I/O / shell-adjacent primitives
@@ -81,10 +80,18 @@ func NewSlots(n int) Slots {
 var ErrBusy = fmt.Errorf("compile workers are busy")
 
 func (s Slots) Acquire(wait time.Duration) error {
+	return s.AcquireContext(context.Background(), wait)
+}
+
+func (s Slots) AcquireContext(ctx context.Context, wait time.Duration) error {
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
 	select {
 	case <-s:
 		return nil
-	case <-time.After(wait):
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
 		return ErrBusy
 	}
 }

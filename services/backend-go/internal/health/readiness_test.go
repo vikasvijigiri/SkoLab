@@ -47,3 +47,13 @@ func TestReadiness(t *testing.T) {
 		}
 	}
 }
+
+func TestReadinessIncludesRequiredSharedState(t *testing.T) {
+	up := python(http.StatusOK)
+	defer up.Close()
+	state, ready := Readiness(context.Background(), pinger{}, http.DefaultClient, up.URL,
+		Dependency{Name: "shared_state", Check: func(context.Context) error { return errors.New("Redis unavailable") }})
+	if ready || state["shared_state"] != "unhealthy" {
+		t.Fatalf("outage must remove instance from traffic: %v %v", state, ready)
+	}
+}

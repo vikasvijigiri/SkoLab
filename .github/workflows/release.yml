@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   release:
@@ -28,6 +29,7 @@ jobs:
       cancel-in-progress: false
     env:
       RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      SKOLAB_SANDBOX_SERVICE: ${{ vars.SKOLAB_SANDBOX_SERVICE }}
       SKOLAB_FIREBASE_API_KEY: ${{ secrets.SKOLAB_FIREBASE_API_KEY }}
       SKOLAB_SYNTHETIC_EMAIL: ${{ secrets.SKOLAB_SYNTHETIC_EMAIL }}
       SKOLAB_SYNTHETIC_PASSWORD: ${{ secrets.SKOLAB_SYNTHETIC_PASSWORD }}
@@ -40,6 +42,11 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+      - name: Require successful checks before a manual deployment
+        if: github.event_name == 'workflow_dispatch' && !inputs.smoke_only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python services/release/verify_ci.py --commit "$GITHUB_SHA"
       - name: Deploy, wait until live, smoke-test production
         run: python services/release/release.py --commit "$GITHUB_SHA" ${{ inputs.smoke_only && '--smoke-only' || '' }}
       - uses: ./.github/actions/qa-tools

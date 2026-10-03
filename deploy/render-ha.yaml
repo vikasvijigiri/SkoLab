@@ -1,0 +1,101 @@
+# Paid rollout candidate. Do not switch the Blueprint path until approved.
+# Existing API secrets and its secret-file mount must be retained on Render.
+services:
+  - type: web
+    name: skolab-api
+    runtime: docker
+    repo: https://github.com/vikasvijigiri/SkoLab
+    branch: master
+    region: singapore
+    plan: 0.5c-512mb
+    numInstances: 2
+    dockerfilePath: ./deploy/skolab-api/Dockerfile
+    dockerContext: .
+    preDeployCommand: python scripts/check_connection_budget.py && python scripts/run_migrations.py
+    healthCheckPath: /readyz
+    autoDeployTrigger: "off"
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: GIN_MODE
+        value: release
+      - key: PORT
+        value: "8080"
+      - key: SKIP_STARTUP_MIGRATIONS
+        value: "1"
+      - key: RUN_DB_CREATE_ALL
+        value: "0"
+      - key: SHARED_STATE_REQUIRED
+        value: "true"
+      - key: SHARED_STATE_REDIS_URL
+        fromService:
+          name: skolab-shared-state
+          type: keyvalue
+          property: connectionString
+      - key: COLAB_REQUIRE_SANDBOX
+        value: "true"
+      - key: COLAB_SANDBOX_HOSTPORT
+        fromService:
+          name: skolab-colab-sandbox
+          type: pserv
+          property: hostport
+      # Four is the ceiling including two old + two new rollout instances.
+      - key: APP_MAX_INSTANCES
+        value: "4"
+      - key: DB_MAX_CONNS
+        value: "5"
+      - key: DB_MIN_CONNS
+        value: "1"
+      - key: WEB_CONCURRENCY
+        value: "1"
+      - key: DB_POOL_SIZE
+        value: "3"
+      - key: DB_MAX_OVERFLOW
+        value: "2"
+      - key: DB_RESERVED_CONNECTIONS
+        value: "10"
+      # Verify the actual project's usable pool capacity; never assume a tier limit.
+      - key: DB_CONNECTION_BUDGET
+        sync: false
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: /etc/secrets/service-account.json
+      - key: OTEL_EXPORTER_OTLP_PROTOCOL
+        value: http/protobuf
+      - key: USER_QUOTA_ENABLED
+        value: "true"
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_ENCRYPTION_KEY
+        sync: false
+      - key: EMAIL_BLIND_INDEX_KEY
+        sync: false
+      - key: INTERNAL_API_TOKEN
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+  - type: pserv
+    name: skolab-colab-sandbox
+    runtime: docker
+    repo: https://github.com/vikasvijigiri/SkoLab
+    branch: master
+    region: singapore
+    plan: 0.5c-512mb
+    numInstances: 2
+    dockerfilePath: ./services/backend-go/Dockerfile.colab-sandbox
+    dockerContext: ./services/backend-go
+    healthCheckPath: /healthz
+    autoDeployTrigger: "off"
+    envVars:
+      - key: PORT
+        value: "8081"
+      - key: COLAB_MAX_CONCURRENT_COMPILES
+        value: "1"
+      # Match the API's existing token. No database or Firebase keys on workers.
+      - key: INTERNAL_API_TOKEN
+        sync: false
+  - type: keyvalue
+    name: skolab-shared-state
+    region: singapore
+    plan: 256mb
+    maxmemoryPolicy: noeviction
+    ipAllowList: []

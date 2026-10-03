@@ -1,8 +1,9 @@
 # SkoLab FastAPI service
 
-This service provides SkoLab's domain, AI, enrichment, and data API. It runs
-behind the Go gateway in production and is deployed with the repository's
-`render.yaml` blueprint.
+FastAPI provides the internal Python portion of SkoLab's identity and CoLab
+backend, including the compile fallback. In production, it listens on
+`127.0.0.1:8000` inside the `skolab-api` Render container. Clients call the Go
+gateway on port 8080; they do not call this process directly.
 
 ## Local setup
 
@@ -11,11 +12,14 @@ cd services/backend
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt -r requirements-dev.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Copy the repository `.env.example` to a local `.env` only when required. Never
-commit service credentials or Firebase service-account files.
+Use the repository `.env.example` as a configuration reference. Keep local
+secrets out of Git; set production values in Render's environment. Both Go and
+Python need their own compatible `DATABASE_URL` format and the same Firebase
+service-account credentials. Production CORS allows only `APP_BASE_URL` and
+explicit `CORS_ORIGINS` values.
 
 ## Verification
 
@@ -33,6 +37,4 @@ Run migrations from this directory:
 python scripts/run_migrations.py
 ```
 
-The service validates its database schema at startup. For production, provide
-the required secrets through the deployment environment rather than files in
-the repository.
+The production entrypoint runs migrations before starting either API process.

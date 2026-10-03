@@ -352,6 +352,12 @@ def main() -> int:
         service = wait_for_service(render, SERVICE)
         base = base or service["serviceDetails"]["url"]
         if not args.smoke_only:
+            # Opt-in only after the reviewed paid worker has been provisioned.
+            # Ship its compatible compile contract before switching the API.
+            if worker_name := os.environ.get("SKOLAB_SANDBOX_SERVICE"):
+                worker = wait_for_service(render, worker_name)
+                result = ship(render, worker["id"], args.commit, owner=worker.get("ownerId"))
+                print(f"{worker_name}: {result}", flush=True)
             copied = adopt_settings(render, service["id"])
             if copied:
                 print(f"{SERVICE}: copied from the replaced services: {', '.join(copied)}", flush=True)

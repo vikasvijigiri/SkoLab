@@ -8,10 +8,8 @@ WORKDIR /app
 ENV GOTOOLCHAIN=local
 
 # Copy module files
-COPY go.mod ./
-# If go.sum exists, copy it. Otherwise skip.
-COPY go.su[m] ./
-RUN go mod download || true
+COPY go.mod go.sum ./
+RUN go mod download
 
 # Copy source
 COPY . .
@@ -30,8 +28,8 @@ FROM alpine:3.24
 WORKDIR /app
 
 # Non-root, mirroring services/backend/Dockerfile's uid/gid convention.
-RUN addgroup -g 10001 -S skolab && \
-    adduser -u 10001 -S -G skolab skolab
+RUN addgroup -g 10001 -S skolab
+RUN adduser -u 10001 -S -G skolab skolab
 COPY --from=builder --chown=skolab:skolab /app/main .
 USER skolab
 

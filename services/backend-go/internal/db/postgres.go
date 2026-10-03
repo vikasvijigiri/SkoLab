@@ -44,6 +44,9 @@ func InitDB(tracer pgx.QueryTracer) error {
 	// via DB_MAX_CONNS / DB_MIN_CONNS.
 	config.MaxConns = int32(envInt("DB_MAX_CONNS", 15))
 	config.MinConns = int32(envInt("DB_MIN_CONNS", 3))
+	if config.MaxConns < 1 || config.MinConns < 0 || config.MinConns > config.MaxConns {
+		return fmt.Errorf("invalid pool limits: require DB_MAX_CONNS >= 1 and 0 <= DB_MIN_CONNS <= DB_MAX_CONNS")
+	}
 	config.MaxConnLifetime = 30 * time.Minute
 	config.MaxConnIdleTime = 5 * time.Minute
 	config.HealthCheckPeriod = 1 * time.Minute
@@ -55,12 +58,15 @@ func InitDB(tracer pgx.QueryTracer) error {
 	config.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
 	config.ConnConfig.Tracer = tracer
 
-	pool, err := pgxpool.NewWithConfig(context.Background(), config)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return fmt.Errorf("error connecting to the database: %v", err)
 	}
 
-	if err := pool.Ping(context.Background()); err != nil {
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
 		return fmt.Errorf("database ping failed: %v", err)
 	}
 

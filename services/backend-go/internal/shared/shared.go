@@ -1,15 +1,18 @@
 // Package shared keeps rate-limit buckets and per-user locks in Redis, so
 // every gateway instance enforces the same limits. It is optional: with no
 // SHARED_STATE_REDIS_URL (one instance, as on Render's free tier today) callers keep
-// their in-process state, and on a Redis error they fall back to it rather
-// than refuse traffic.
+// their in-process state. SHARED_STATE_REQUIRED=true requires Redis and
+// prevents local fallbacks in a scaled deployment.
 package shared
 
 import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"log/slog"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -18,6 +21,20 @@ import (
 // Store is a Redis-backed limit store. A nil *Store means "not configured".
 type Store struct {
 	client *redis.Client
+}
+
+// Required enables fail-closed shared state for a multi-instance deployment.
+func Required() bool { return strings.EqualFold(os.Getenv("SHARED_STATE_REQUIRED"), "true") }
+
+func (s *Store) Ping(ctx context.Context) error { return s.client.Ping(ctx).Err() }
+func (s *Store) Close() error                   { return s.client.Close() }
+
+// ValidateConfiguration refuses unsafe scaled deployments at startup.
+func ValidateConfiguration(store *Store) error {
+	if Required() && store == nil {
+		return fmt.Errorf("SHARED_STATE_REQUIRED=true requires reachable SHARED_STATE_REDIS_URL")
+	}
+	return nil
 }
 
 // Connect returns a Store for url, or nil when url is empty or Redis cannot
@@ -32,6 +49,12 @@ func Connect(ctx context.Context, url string) *Store {
 		slog.Warn("shared limits: invalid REDIS_URL; using in-process limits", "err", err)
 		return nil
 	}
+	// Bound outages instead of allowing Redis calls to queue indefinitely.
+	opt.DialTimeout = time.Second
+	opt.ReadTimeout = time.Second
+	opt.WriteTimeout = time.Second
+	opt.MaxRetries = 1
+	opt.ContextTimeoutEnabled = true
 	client := redis.NewClient(opt)
 	pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()

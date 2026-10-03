@@ -1,13 +1,10 @@
 // Command colab-sandbox is a minimal, standalone HTTP service that does
 // nothing but compile LaTeX under services/backend-go/internal/texsandbox.
 //
-// It is deliberately not part of the main gateway binary: deployed as its
-// own container (Cloud Run / Fargate / any per-request-isolated runtime),
-// each compile gets a fresh container instance — its own filesystem and
-// network namespace, torn down after use — which is a strictly stronger
-// isolation boundary than a subprocess sharing the gateway's own long-lived
-// container. See docs/audits/2026-09-26-backend-security-reliability-reaudit.md
-// ("the stronger approach") for the reasoning.
+// It is deliberately separate from the API binary and its credentials.
+// Each compile gets a fresh temporary directory and bounded subprocess.
+// A long-lived worker does not provide a fresh container per request;
+// stronger isolation requires an ephemeral job runtime. See deploy/RELIABILITY.md.
 //
 // This binary intentionally knows nothing about Firebase, Postgres, or
 // quotas — that all stays in the gateway (internal/colab), which is the
@@ -29,11 +26,12 @@ import (
 	"strconv"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"github.com/skolab/backend-go/internal/texsandbox"
 )
 
-const maxRequestBytes = 200 * 1024 // LaTeX source; matches CompileRequest's 100_000-char cap with headroom.
+const maxRequestBytes = 1024 * 1024 // Includes UTF-8 and JSON escapes for 100,000 characters.
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
@@ -95,6 +93,7 @@ func main() {
 
 type compileRequest struct {
 	LatexSource string `json:"latex_source"`
+	Engine      string `json:"engine"`
 }
 
 func compileHandler(engine string, slots texsandbox.Slots, token string) http.HandlerFunc {
@@ -120,13 +119,13 @@ func compileHandler(engine string, slots texsandbox.Slots, token string) http.Ha
 			return
 		}
 		var req compileRequest
-		if err := json.Unmarshal(body, &req); err != nil || req.LatexSource == "" {
+		if err := json.Unmarshal(body, &req); err != nil || req.LatexSource == "" || utf8.RuneCountInString(req.LatexSource) > 100_000 || (req.Engine != "" && req.Engine != "pdflatex") {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
 		const admissionWait = 5 * time.Second
-		if err := slots.Acquire(admissionWait); err != nil {
+		if err := slots.AcquireContext(r.Context(), admissionWait); err != nil {
 			w.Header().Set("Retry-After", "5")
 			w.WriteHeader(http.StatusServiceUnavailable)
 			_ = json.NewEncoder(w).Encode(map[string]any{

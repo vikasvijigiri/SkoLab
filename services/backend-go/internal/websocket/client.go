@@ -113,7 +113,10 @@ func (c *Client) reauthorize(interval time.Duration) {
 func (c *Client) readPump() {
 	defer close(c.done)
 	defer func() {
-		c.hub.Unregister <- c
+		select {
+		case c.hub.Unregister <- c:
+		case <-c.hub.ctx.Done():
+		}
 		c.conn.Close()
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
@@ -134,7 +137,10 @@ func (c *Client) readPump() {
 			c.closePolicy("read-only role")
 			break
 		}
-		c.hub.Publish(c.workspaceID, message)
+		if err := c.hub.Publish(c.workspaceID, message); err != nil {
+			_ = c.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseTryAgainLater, "collaboration temporarily unavailable; reconnect"), time.Now().Add(writeWait))
+			break
+		}
 	}
 }
 
@@ -189,6 +195,10 @@ func ServeWs(hub *Hub, authorizer WorkspaceAuthorizer, c *gin.Context) {
 // serveWs takes the re-authorization interval as a parameter (rather than
 // reading a mutable package variable) so tests can shorten it race-free.
 func serveWs(hub *Hub, authorizer WorkspaceAuthorizer, c *gin.Context, reauthorizeEvery time.Duration) {
+	if hub.ctx.Err() != nil {
+		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Service restarting"})
+		return
+	}
 	workspaceID := strings.TrimSpace(c.Param("workspace_id"))
 	if workspaceID == "" {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "workspace_id is required"})
@@ -223,7 +233,12 @@ func serveWs(hub *Hub, authorizer WorkspaceAuthorizer, c *gin.Context, reauthori
 	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256), workspaceID: workspaceID,
 		userID: userID, authorizer: authorizer, done: make(chan struct{})}
 	client.role.Store(&role)
-	client.hub.Register <- client
+	select {
+	case client.hub.Register <- client:
+	case <-hub.ctx.Done():
+		_ = conn.Close()
+		return
+	}
 
 	// Allow collection of memory referenced by the caller by doing all work in new goroutines.
 	go client.writePump()

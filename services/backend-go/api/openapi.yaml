@@ -53,7 +53,7 @@ paths:
     get:
       tags: [health]
       operationId: readiness
-      summary: Readiness (database and Python)
+      summary: Readiness (database, Python, and required shared state)
       security: []
       responses:
         "200":
@@ -535,11 +535,20 @@ components:
         service: { type: string }
     Readiness:
       type: object
-      required: [status, database, python]
+      required: [status]
       properties:
-        status: { type: string, enum: [ready, not ready] }
+        status: { type: string, enum: [ready, not ready, draining] }
         database: { type: string, enum: [healthy, unhealthy] }
         python: { type: string, enum: [healthy, unhealthy] }
+        dependencies:
+          type: object
+          additionalProperties: { type: string, enum: [healthy, unhealthy] }
+      oneOf:
+        - properties:
+            status: { const: draining }
+        - required: [database, python]
+          properties:
+            status: { enum: [ready, not ready] }
     ProfileSync:
       type: object
       required: [uid, name]

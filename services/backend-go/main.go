@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -165,6 +166,15 @@ func main() {
 	// without it they stay in process (exact with one instance, as on
 	// Render's free tier). Deliberately not REDIS_URL, the Python cache's.
 	limits := shared.Connect(context.Background(), os.Getenv("SHARED_STATE_REDIS_URL"))
+	if err := shared.ValidateConfiguration(limits); err != nil {
+		log.Fatal(err)
+	}
+	if err := colab.ValidateConfiguration(); err != nil {
+		log.Fatal(err)
+	}
+	if limits != nil {
+		defer limits.Close()
+	}
 	auth.ShareFailedLogins(limits)
 	colab.ShareLocks(limits)
 
@@ -180,7 +190,16 @@ func main() {
 
 	// ── WebSocket hub ─────────────────────────────────────────────────────────
 	hub := websocket.NewHub()
+	if shared.Required() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		err := hub.Ready(ctx)
+		cancel()
+		if err != nil {
+			log.Fatal("shared WebSocket broadcasts unavailable at startup")
+		}
+	}
 	go hub.Run()
+	var draining atomic.Bool
 	workspaceAuthorizer := websocket.NewPostgresWorkspaceAuthorizer(db.Pool)
 	workspaceTickets := websocket.NewPostgresWorkspaceTicketStore(db.Pool)
 
@@ -195,17 +214,25 @@ func main() {
 	// route right now?": the database and the Python service beside it.
 	readinessClient := &http.Client{}
 	r.GET("/readyz", func(c *gin.Context) {
+		if draining.Load() {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "draining"})
+			return
+		}
 		var pool health.Pinger
 		if db.Pool != nil {
 			pool = db.Pool
 		}
-		state, ready := health.Readiness(c.Request.Context(), pool, readinessClient, pythonBackendURL)
+		var dependencies []health.Dependency
+		if shared.Required() {
+			dependencies = append(dependencies, health.Dependency{Name: "shared_state", Check: limits.Ping}, health.Dependency{Name: "broadcasts", Check: hub.Ready})
+		}
+		state, ready := health.Readiness(c.Request.Context(), pool, readinessClient, pythonBackendURL, dependencies...)
 		if !ready {
-			slog.Error("readiness: dependency unhealthy", "database", state["database"], "python", state["python"])
-			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "not ready", "database": state["database"], "python": state["python"]})
+			slog.Error("readiness: dependency unhealthy", "dependencies", state)
+			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "not ready", "database": state["database"], "python": state["python"], "dependencies": state})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"status": "ready", "database": state["database"], "python": state["python"]})
+		c.JSON(http.StatusOK, gin.H{"status": "ready", "database": state["database"], "python": state["python"], "dependencies": state})
 	})
 
 	// ── Observability ─────────────────────────────────────────────────────────
@@ -258,7 +285,7 @@ func main() {
 	}
 
 	addr := ":8080"
-	srv := &http.Server{Addr: addr, Handler: r}
+	srv := &http.Server{Addr: addr, Handler: r, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 65 * time.Second, MaxHeaderBytes: 32 * 1024}
 
 	go func() {
 		slog.Info("Go API Gateway starting", "addr", addr, "python_backend", pythonBackendURL)
@@ -272,10 +299,14 @@ func main() {
 	quitCh := make(chan os.Signal, 1)
 	signal.Notify(quitCh, syscall.SIGINT, syscall.SIGTERM)
 	<-quitCh
+	draining.Store(true)
 	slog.Info("shutdown signal received, draining in-flight requests")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	if err := hub.Shutdown(shutdownCtx); err != nil {
+		slog.Error("WebSocket shutdown incomplete", "err", err)
+	}
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("graceful shutdown did not complete cleanly", "err", err)
 	}

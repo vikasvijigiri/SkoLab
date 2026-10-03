@@ -1,6 +1,7 @@
 package colab
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,8 +10,53 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
+	"github.com/skolab/backend-go/internal/shared"
 )
+
+func TestSharedCompileLockSpansStoresAndFailsClosedOnOutage(t *testing.T) {
+	t.Setenv("SHARED_STATE_REQUIRED", "true")
+	server := miniredis.RunT(t)
+	a := shared.New(redis.NewClient(&redis.Options{Addr: server.Addr(), MaxRetries: -1}))
+	b := shared.New(redis.NewClient(&redis.Options{Addr: server.Addr(), MaxRetries: -1}))
+	ShareLocks(a)
+	t.Cleanup(func() { ShareLocks(nil); a.Close(); b.Close() })
+	release, ok, err := start(context.Background(), "same-user")
+	if err != nil || !ok {
+		t.Fatalf("first lock: %v %v", ok, err)
+	}
+	ShareLocks(b)
+	if _, ok, err := start(context.Background(), "same-user"); err != nil || ok {
+		t.Fatalf("second instance must see lock: %v %v", ok, err)
+	}
+	release()
+	server.Close()
+	if _, _, err := start(context.Background(), "same-user"); err == nil {
+		t.Fatal("outage must not create a local compile slot")
+	}
+}
+
+func TestRequiredSandboxCannotFallBackToPython(t *testing.T) {
+	t.Setenv("COLAB_REQUIRE_SANDBOX", "true")
+	t.Setenv("COLAB_SANDBOX_HOSTPORT", "")
+	t.Setenv("COLAB_SANDBOX_URL", "")
+	if ValidateConfiguration() == nil {
+		t.Fatal("isolated compile mode requires a worker")
+	}
+}
+
+func TestPrivateWorkerAddressOverridesLegacyURL(t *testing.T) {
+	t.Setenv("COLAB_SANDBOX_HOSTPORT", "sandbox:8081")
+	t.Setenv("COLAB_SANDBOX_URL", "https://legacy.example")
+	if SandboxURL() != "http://sandbox:8081" {
+		t.Fatal(SandboxURL())
+	}
+	if err := ValidateConfiguration(); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func newTestRouter(t *testing.T, userID string, sandboxURL, pythonURL string) *gin.Engine {
 	t.Setenv("USER_QUOTA_ENABLED", "true")

@@ -107,3 +107,11 @@ func TestPostgresErrorFallsBackToLocalRatherThanFailingOpenOrClosed(t *testing.T
 		t.Fatalf("expected hourly Exceeded via local fallback, got %v", err)
 	}
 }
+
+func TestScaledDeploymentDoesNotFallBackToLocalAccounting(t *testing.T) {
+	t.Setenv("SHARED_STATE_REQUIRED", "true")
+	t.Setenv("USER_QUOTA_ENABLED", "true")
+	if _, _, err := Consume(context.Background(), nil, "user", 4); err != ErrUnavailable {
+		t.Fatalf("missing shared ledger: %v", err)
+	}
+}
