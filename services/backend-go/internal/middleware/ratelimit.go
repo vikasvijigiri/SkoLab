@@ -2,14 +2,18 @@
 package middleware
 
 import (
+	"context"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/skolab/backend-go/internal/apierror"
 	"github.com/skolab/backend-go/internal/security"
+	"github.com/skolab/backend-go/internal/shared"
 	"golang.org/x/time/rate"
 )
 
@@ -18,12 +22,60 @@ type visitor struct {
 	lastSeen time.Time
 }
 
-// RateLimiter holds per-IP token-bucket limiters and evicts stale entries.
+// RateLimiter holds per-key token buckets: in this process, or in Redis
+// when shared (see Share) so every instance enforces one limit.
 type RateLimiter struct {
 	mu       sync.Mutex
 	visitors map[string]*visitor
 	r        rate.Limit
 	b        int
+
+	shared   *shared.Store
+	name     string
+	lastWarn atomic.Int64
+}
+
+// Share keeps this limiter's buckets in store under name (nil store: stay
+// in process). On a Redis error a check falls back to the local bucket.
+func (rl *RateLimiter) Share(store *shared.Store, name string) *RateLimiter {
+	rl.shared, rl.name = store, name
+	return rl
+}
+
+func (rl *RateLimiter) every() time.Duration {
+	return time.Duration(float64(time.Second) / float64(rl.r))
+}
+
+// warnFallback logs a Redis failure at most once a minute per limiter.
+func (rl *RateLimiter) warnFallback(err error) {
+	now := time.Now().Unix()
+	if last := rl.lastWarn.Load(); now-last >= 60 && rl.lastWarn.CompareAndSwap(last, now) {
+		slog.Warn("shared limits unavailable; using in-process limits", "limiter", rl.name, "err", err)
+	}
+}
+
+// Allow spends a token from key's bucket and reports whether one was there.
+func (rl *RateLimiter) Allow(ctx context.Context, key string) bool {
+	if rl.shared != nil {
+		ok, err := rl.shared.Allow(ctx, rl.name+":"+key, rl.every(), rl.b)
+		if err == nil {
+			return ok
+		}
+		rl.warnFallback(err)
+	}
+	return rl.getLimiter(key).Allow()
+}
+
+// Available reports whether key's bucket has a token, without spending it.
+func (rl *RateLimiter) Available(ctx context.Context, key string) bool {
+	if rl.shared != nil {
+		ok, err := rl.shared.Available(ctx, rl.name+":"+key, rl.every(), rl.b)
+		if err == nil {
+			return ok
+		}
+		rl.warnFallback(err)
+	}
+	return rl.getLimiter(key).Tokens() >= 1
 }
 
 // NewRateLimiter creates a limiter that allows r events/second and bursts of b.
@@ -105,8 +157,7 @@ func clientIP(c *gin.Context) string {
 // Limit returns a Gin handler that enforces the configured rate limit per IP.
 func (rl *RateLimiter) Limit() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ip := clientIP(c)
-		if !rl.getLimiter(ip).Allow() {
+		if !rl.Allow(c.Request.Context(), clientIP(c)) {
 			c.Header("Retry-After", "1")
 			apierror.Abort(c, http.StatusTooManyRequests, "rate_limit_exceeded", "Too many requests; slow down")
 			return
@@ -120,11 +171,11 @@ func (rl *RateLimiter) Limit() gin.HandlerFunc {
 // (or many accounts from one IP -- that is the per-IP limit's job). The
 // buckets live in this process: exact with one instance per service, as on
 // Render today; with several instances each enforces its own share, and a
-// shared store (Redis) would be needed for a global limit.
+// shared store (Share, with SHARED_STATE_REDIS_URL) makes it one global limit.
 func (rl *RateLimiter) PerUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uid := c.GetString("user_id")
-		if uid != "" && !rl.getLimiter(uid).Allow() {
+		if uid != "" && !rl.Allow(c.Request.Context(), uid) {
 			security.Record(c, security.Event{Name: security.RateLimitUser, Outcome: security.Throttled})
 			c.Header("Retry-After", "1")
 			apierror.Abort(c, http.StatusTooManyRequests, "rate_limit_exceeded", "Too many requests; slow down")

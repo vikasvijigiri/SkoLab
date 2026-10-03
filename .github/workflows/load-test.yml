@@ -1,0 +1,84 @@
+name: Load test
+
+# Throughput and latency baseline for the API, on CI staging (the
+# production image on a GitHub runner with its own Postgres), never on
+# production. Weekly, and by hand (Actions > Load test > Run workflow). The
+# result is the run's summary; a breached threshold fails the run.
+on:
+  schedule:
+    - cron: '0 3 * * 1' # Mondays 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      peak_rps:
+        description: Peak request rate (requests per second)
+        type: choice
+        options: ['100', '200', '400']
+        default: '200'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: load-test
+  cancel-in-progress: false
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: skolab
+          POSTGRES_DB: skolab
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SKOLAB_FIREBASE_API_KEY: ${{ secrets.SKOLAB_FIREBASE_API_KEY }}
+      SKOLAB_SYNTHETIC_EMAIL: ${{ secrets.SKOLAB_SYNTHETIC_EMAIL }}
+      SKOLAB_SYNTHETIC_PASSWORD: ${{ secrets.SKOLAB_SYNTHETIC_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: ./.github/actions/staging
+        with:
+          firebase-service-account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          # One test account drives all the load, so lift the per-user and
+          # per-IP limits that would otherwise (correctly) throttle it.
+          extra-env: |
+            RATE_LIMIT_USER_RPS=100000
+            RATE_LIMIT_USER_BURST=100000
+            RATE_LIMIT_IP_RPS=100000
+            RATE_LIMIT_IP_BURST=100000
+      - name: Install pinned k6
+        run: |
+          curl --fail --location --retry 3 --output k6.tar.gz https://github.com/grafana/k6/releases/download/v2.3.0/k6-v2.3.0-linux-amd64.tar.gz
+          curl --fail --location --retry 3 --output checksums.txt https://github.com/grafana/k6/releases/download/v2.3.0/k6-v2.3.0-checksums.txt
+          awk '$2 == "k6-v2.3.0-linux-amd64.tar.gz" {print $1 "  k6.tar.gz"}' checksums.txt > selected-checksum.txt
+          test -s selected-checksum.txt
+          sha256sum --check selected-checksum.txt
+          tar -xzf k6.tar.gz
+          echo "$PWD/k6-v2.3.0-linux-amd64" >> "$GITHUB_PATH"
+      - name: Sign in and prepare the workspace
+        run: python services/loadtest/fixture.py --base-url http://127.0.0.1:8080
+      - name: Run the load test
+        env:
+          PEAK_RPS: ${{ inputs.peak_rps || '200' }}
+          SUMMARY_FILE: ${{ runner.temp }}/load-summary.md
+        run: |
+          status=0
+          k6 run --quiet services/loadtest/api.js || status=$?
+          cat "$SUMMARY_FILE" >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+      - name: Staging logs
+        if: failure()
+        run: docker logs skolab-api 2>&1 | tail -n 200 || true

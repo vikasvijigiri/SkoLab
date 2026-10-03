@@ -29,6 +29,7 @@ import (
 
 	"github.com/skolab/backend-go/internal/apierror"
 	"github.com/skolab/backend-go/internal/quota"
+	"github.com/skolab/backend-go/internal/shared"
 )
 
 const (
@@ -45,6 +46,31 @@ type activeUsers struct {
 }
 
 var inFlight = &activeUsers{uids: map[string]struct{}{}}
+
+// locks, when set, holds each user's compile slot in Redis so the
+// one-compile-per-user rule spans gateway instances (see ShareLocks).
+var locks *shared.Store
+
+// ShareLocks keeps compile slots in store (Redis). A nil store keeps them
+// in process.
+func ShareLocks(store *shared.Store) { locks = store }
+
+// start takes uid's compile slot and returns its release, or ok=false when
+// a compile is already running for uid. A Redis error falls back to the
+// in-process slot rather than refusing the compile.
+func start(ctx context.Context, uid string) (release func(), ok bool) {
+	if locks != nil {
+		release, ok, err := locks.Lock(ctx, "compile:"+uid, sandboxCallTimeout+5*time.Second)
+		if err == nil {
+			return release, ok
+		}
+		slog.Warn("colab: shared compile lock unavailable; using in-process slot", "err", err)
+	}
+	if !inFlight.tryStart(uid) {
+		return nil, false
+	}
+	return func() { inFlight.finish(uid) }, true
+}
 
 func (a *activeUsers) tryStart(uid string) bool {
 	a.mu.Lock()
@@ -88,12 +114,13 @@ func Handler(pool *pgxpool.Pool, httpClient *http.Client, pythonURL string) gin.
 			return
 		}
 
-		if !inFlight.tryStart(uid) {
+		release, ok := start(c.Request.Context(), uid)
+		if !ok {
 			c.Header("Retry-After", strconv.Itoa(retryAfterSeconds))
 			apierror.Abort(c, http.StatusTooManyRequests, "compile_in_progress", "You already have a compile in progress")
 			return
 		}
-		defer inFlight.finish(uid)
+		defer release()
 
 		_, _, err := quota.Consume(c.Request.Context(), pool, uid, compileQuotaCost)
 		if err != nil {

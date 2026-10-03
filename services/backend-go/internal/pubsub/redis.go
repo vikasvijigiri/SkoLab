@@ -17,10 +17,13 @@ type RedisClient struct {
 
 // NewRedisClient creates a new connected Redis client
 func NewRedisClient() *RedisClient {
-	redisURL := os.Getenv("REDIS_URL")
+	// SHARED_STATE_REDIS_URL, not REDIS_URL: the Python service's cache
+	// Redis must not silently route every WebSocket message through itself.
+	// Set it only when running more than one gateway instance.
+	redisURL := os.Getenv("SHARED_STATE_REDIS_URL")
 	if redisURL == "" {
-		// Use a local default or fallback
-		redisURL = "redis://localhost:6379/0"
+		// One instance: broadcasts stay in process, no dial attempt.
+		return nil
 	}
 
 	opt, err := redis.ParseURL(redisURL)
