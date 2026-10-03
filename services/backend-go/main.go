@@ -152,6 +152,7 @@ func main() {
 	r.Use(requestLogger())
 	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.BodyLimit(middleware.MaxBodyBytes))
+	r.Use(middleware.ValidQuery())
 	r.Use(middleware.Gzip())
 	r.Use(middleware.CORS())
 

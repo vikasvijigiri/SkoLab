@@ -94,3 +94,26 @@ func TestRequestIDValid(t *testing.T) {
 		}
 	}
 }
+
+func TestMalformedQueryIs400(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(ValidQuery())
+	r.GET("/api/v1/items", func(c *gin.Context) { c.String(http.StatusOK, c.Query("page_token")) })
+	for query, want := range map[string]int{
+		"":                  http.StatusOK,
+		"?page_token=abc":   http.StatusOK,
+		"?page_token=a%2Bb": http.StatusOK,
+		"?page_token=%%%":   http.StatusBadRequest,
+		"?page_token=%zz":   http.StatusBadRequest,
+		"?a=1&b=%":          http.StatusBadRequest,
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/items", nil)
+		req.URL.RawQuery = strings.TrimPrefix(query, "?")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != want {
+			t.Fatalf("%q: status %d, want %d", query, w.Code, want)
+		}
+	}
+}
