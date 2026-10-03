@@ -197,6 +197,14 @@ func (h handlers) list(c *gin.Context) {
 	if !ok {
 		return
 	}
+	// Unknown parameters are refused rather than ignored, so a typo (for
+	// example pagesize=5) is caught instead of silently returning page one.
+	for name := range c.Request.URL.Query() {
+		if name != "page_size" && name != "page_token" {
+			fail(c, http.StatusBadRequest, "unknown_parameter", "Unknown query parameter: "+name)
+			return
+		}
+	}
 	size := defaultPageSize
 	if raw := c.Query("page_size"); raw != "" {
 		n, err := strconv.Atoi(raw)

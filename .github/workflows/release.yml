@@ -31,6 +31,8 @@ jobs:
       SKOLAB_FIREBASE_API_KEY: ${{ secrets.SKOLAB_FIREBASE_API_KEY }}
       SKOLAB_SYNTHETIC_EMAIL: ${{ secrets.SKOLAB_SYNTHETIC_EMAIL }}
       SKOLAB_SYNTHETIC_PASSWORD: ${{ secrets.SKOLAB_SYNTHETIC_PASSWORD }}
+      # Admin SDK: creates and deletes the temporary end-to-end test users.
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -40,6 +42,16 @@ jobs:
           python-version: "3.12"
       - name: Deploy, wait until live, smoke-test production
         run: python services/release/release.py --commit "$GITHUB_SHA" ${{ inputs.smoke_only && '--smoke-only' || '' }}
+      - uses: ./.github/actions/qa-tools
+      - name: End-to-end scenarios against production (Hurl, temporary users)
+        run: bash services/qa/e2e.sh https://skolab-api.onrender.com qa-reports
+      - name: QA reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: qa-reports-production
+          path: qa-reports
+          if-no-files-found: ignore
 
   monitoring:
     needs: release

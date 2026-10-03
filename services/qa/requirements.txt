@@ -1,0 +1,4 @@
+# QA toolchain (pinned). Hurl and k6 are installed as binaries by
+# .github/actions/qa-tools.
+firebase-admin==7.5.0
+schemathesis==4.29.0

@@ -219,3 +219,20 @@ func TestMaxPerUserIsConfigurable(t *testing.T) {
 		t.Fatal("invalid cap must fall back to the default")
 	}
 }
+
+func TestListRefusesUnknownQueryParameters(t *testing.T) {
+	for query, want := range map[string]int{
+		"":                        http.StatusOK,
+		"?page_size=5":            http.StatusOK,
+		"?pagesize=5":             http.StatusBadRequest, // a typo is caught, not ignored
+		"?page_size=5&debug=true": http.StatusBadRequest,
+	} {
+		w := serve(t, &fakeStore{}, "ada", "GET", "/api/v1/workspaces"+query, "", nil)
+		if w.Code != want {
+			t.Fatalf("%q: status %d, want %d", query, w.Code, want)
+		}
+		if want == http.StatusBadRequest && errorCode(t, w) != "unknown_parameter" {
+			t.Fatalf("%q: code %q", query, errorCode(t, w))
+		}
+	}
+}

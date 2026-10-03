@@ -3,6 +3,7 @@ package auth
 import (
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,7 +20,17 @@ import (
 // spends one token from the caller IP's bucket -- 20 failures, refilling one
 // every 15s. An IP that runs out is refused before any verification work, so
 // a token-stuffing client cannot keep this service busy or keep probing.
-var failedLogins = middleware.NewRateLimiter(rate.Every(15*time.Second), 20)
+var failedLogins = middleware.NewRateLimiter(rate.Every(15*time.Second), failedLoginBurst())
+
+// failedLoginBurst is 20 unless AUTH_FAILED_LOGIN_BURST says otherwise. CI
+// staging raises it: its fuzzer sends bad credentials on purpose, and the
+// lockout would otherwise block the whole run's IP.
+func failedLoginBurst() int {
+	if n, err := strconv.Atoi(os.Getenv("AUTH_FAILED_LOGIN_BURST")); err == nil && n > 0 {
+		return n
+	}
+	return 20
+}
 
 // ShareFailedLogins counts failed sign-ins in store (Redis), so the
 // throttle holds across gateway instances. A nil store keeps it in process.

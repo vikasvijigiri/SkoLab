@@ -174,6 +174,30 @@ class WorkspaceInvite(Base):
     )
 
 
+class WebSocketTicket(Base):
+    """A single-use, short-lived ticket for the collaboration WebSocket
+    (Go gateway, internal/websocket/tickets.go). Only the ticket's SHA-256
+    is stored. Mirrors migration d4e5f6a7b8c9, so a database created from
+    these models (a new environment, CI staging) has the same table.
+    """
+
+    __tablename__ = "websocket_tickets"
+
+    ticket_hash = Column(String(64), primary_key=True)
+    workspace_id = Column(
+        String(100), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id = Column(
+        String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=text("CURRENT_TIMESTAMP")
+    )
+
+    __table_args__ = (Index("ix_websocket_tickets_expires_at", "expires_at"),)
+
+
 class SecurityAuditLog(Base):
     """Append-only record of account-level security actions.
 

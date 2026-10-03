@@ -1,0 +1,666 @@
+openapi: 3.1.0
+info:
+  title: SkoLab API
+  version: "1.0"
+  description: |
+    The public API of skolab-api: the Go gateway. (The Python service runs in
+    the same container and is not reachable from outside; compiles reach it
+    through POST /api/v1/colab/compile.)
+
+    Every error is `{"error": "<message for people>", "code": "<stable code>"}`;
+    clients branch on `code`. Every response carries HSTS, nosniff and frame
+    and referrer policies, and responses under /api are never cached.
+
+    The collaboration WebSocket (`GET /ws/colab/{workspace_id}?ticket=...`)
+    is not described here: open it with a ticket from
+    `POST /api/v1/ws/colab/{workspace_id}/tickets`.
+
+    This file is the contract the QA tools test against (services/qa).
+servers:
+  - url: https://skolab-api.onrender.com
+security:
+  - firebase: []
+
+tags:
+  - name: health
+  - name: users
+  - name: workspaces
+  - name: sharing
+  - name: collaboration
+
+paths:
+  /gateway-health:
+    get:
+      tags: [health]
+      operationId: liveness
+      summary: Liveness (no dependencies)
+      security: []
+      responses:
+        "200":
+          description: The gateway process is up.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Liveness" }
+    head:
+      tags: [health]
+      operationId: livenessHead
+      summary: Liveness for monitors that probe with HEAD
+      security: []
+      responses:
+        "200": { description: The gateway process is up. }
+
+  /readyz:
+    get:
+      tags: [health]
+      operationId: readiness
+      summary: Readiness (database and Python)
+      security: []
+      responses:
+        "200":
+          description: Every dependency is healthy.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Readiness" }
+        "503":
+          description: A dependency is unhealthy.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Readiness" }
+
+  /api/v1/users/profile/sync:
+    post:
+      tags: [users]
+      operationId: syncProfile
+      summary: Create or update the caller's own profile
+      description: Required once per account before it can own or join a workspace.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProfileSync" }
+      responses:
+        "200":
+          description: Profile saved.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, uid]
+                properties:
+                  status: { const: synced }
+                  uid: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/users/{userId}:
+    delete:
+      tags: [users]
+      operationId: deleteAccount
+      summary: Delete the caller's own account (data and sign-in)
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Account deleted. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "502":
+          description: Data deleted, but removing the sign-in failed; retry.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/workspaces:
+    post:
+      tags: [workspaces]
+      operationId: createWorkspace
+      summary: Create a workspace (the caller becomes owner)
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Retrying with the same key and body returns the same workspace (201, Idempotent-Replayed true). Empty means no key. At most 100 printable ASCII characters; trailing spaces or tabs are removed in transit, as for any HTTP header.
+          schema: { type: string, pattern: "^([!-~]{1,100}[ \t]*)?$" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Title" }
+      responses:
+        "201":
+          description: Created (or replayed).
+          headers:
+            Location: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Workspace" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "422":
+          description: Idempotency-Key already used for a different request.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    get:
+      tags: [workspaces]
+      operationId: listWorkspaces
+      summary: Workspaces the caller owns or is a member of
+      description: Query parameters other than page_size and page_token are refused (400 unknown_parameter).
+      parameters:
+        - { name: page_size, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100 } }
+        - { name: page_token, in: query, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [workspaces, next_page_token]
+                properties:
+                  workspaces: { type: array, items: { $ref: "#/components/schemas/Workspace" } }
+                  next_page_token: { type: string, description: Empty on the last page. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/workspaces/{id}:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+    get:
+      tags: [workspaces]
+      operationId: getWorkspace
+      responses:
+        "200":
+          description: The workspace, with the caller's role.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Workspace" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    patch:
+      tags: [workspaces]
+      operationId: renameWorkspace
+      summary: Rename (owner only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Title" }
+      responses:
+        "200":
+          description: Renamed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Workspace" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    delete:
+      tags: [workspaces]
+      operationId: deleteWorkspace
+      summary: Delete (owner only)
+      responses:
+        "204": { description: Deleted. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/workspaces/{id}/invite-options:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+    get:
+      tags: [sharing]
+      operationId: inviteOptions
+      summary: The choices an inviter may pick from (owner or editor)
+      responses:
+        "200":
+          description: Allowed roles, expiries and use counts, with defaults.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InviteOptions" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/workspaces/{id}/invites:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+    post:
+      tags: [sharing]
+      operationId: createInvite
+      summary: Create an invite link (owner or editor); the token is shown once
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InviteRequest" }
+      responses:
+        "201":
+          description: Created; `token` appears only in this response.
+          headers:
+            Location: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Invite" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    get:
+      tags: [sharing]
+      operationId: listInvites
+      summary: Active invites (owner or editor); tokens are never listed
+      responses:
+        "200":
+          description: Active invites.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invites]
+                properties:
+                  invites: { type: array, items: { $ref: "#/components/schemas/Invite" } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/workspaces/{id}/invites/{invite_id}:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+      - { name: invite_id, in: path, required: true, schema: { type: string } }
+    delete:
+      tags: [sharing]
+      operationId: revokeInvite
+      summary: Revoke an invite (owner or editor)
+      responses:
+        "204": { description: Revoked. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/invites/preview:
+    post:
+      tags: [sharing]
+      operationId: previewInvite
+      summary: What an invite offers (token in the body, never the URL)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InviteToken" }
+      responses:
+        "200":
+          description: The workspace and role the invite grants.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvitePreview" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/InviteInvalid" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/invites/accept:
+    post:
+      tags: [sharing]
+      operationId: acceptInvite
+      summary: Join a workspace through an invite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InviteToken" }
+      responses:
+        "200":
+          description: The caller's resulting membership (changed is false if they already had this access or more).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Membership" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/InviteInvalid" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/workspaces/{id}/members:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+    get:
+      tags: [sharing]
+      operationId: listMembers
+      summary: Members, owner first (any member)
+      responses:
+        "200":
+          description: Members.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [members]
+                properties:
+                  members: { type: array, items: { $ref: "#/components/schemas/Member" } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/workspaces/{id}/members/{user_id}:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+      - { name: user_id, in: path, required: true, schema: { type: string } }
+    patch:
+      tags: [sharing]
+      operationId: changeMemberRole
+      summary: Change a member's role (owner only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { $ref: "#/components/schemas/GrantableRole" }
+      responses:
+        "200":
+          description: Changed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user_id, role]
+                properties:
+                  user_id: { type: string }
+                  role: { $ref: "#/components/schemas/GrantableRole" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    delete:
+      tags: [sharing]
+      operationId: removeMember
+      summary: Remove a member (owner), or leave (the member themself)
+      responses:
+        "204": { description: Removed. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/ws/colab/{workspace_id}/tickets:
+    parameters:
+      - { name: workspace_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [collaboration]
+      operationId: issueTicket
+      summary: A single-use, one-minute ticket for the collaboration WebSocket
+      responses:
+        "201":
+          description: Ticket issued.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ticket, expires_in_seconds]
+                properties:
+                  ticket: { type: string }
+                  expires_in_seconds: { type: integer, minimum: 1 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/colab/compile:
+    post:
+      tags: [collaboration]
+      operationId: compile
+      summary: Compile LaTeX to PDF (charges the caller's quota; one at a time per user)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [latex_source]
+              properties:
+                latex_source: { type: string, minLength: 1, maxLength: 100000 }
+                engine: { type: string, enum: [pdflatex] }
+      responses:
+        "200":
+          description: The compile ran; `status` says whether it produced a PDF.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [compiled, error, timeout] }
+                  pdf_base64: { type: [string, "null"] }
+                  log: { type: string }
+                  errors: { type: array, items: { type: string } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "502":
+          description: The compile backend failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+components:
+  securitySchemes:
+    firebase:
+      type: http
+      scheme: bearer
+      bearerFormat: Firebase ID token
+
+  parameters:
+    WorkspaceId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+
+  schemas:
+    Error:
+      type: object
+      required: [error, code]
+      additionalProperties: false
+      properties:
+        error: { type: string, description: For people; wording may change. }
+        code: { type: string, pattern: "^[a-z_]+$", description: Stable; branch on this. }
+    Liveness:
+      type: object
+      required: [status]
+      properties:
+        status: { const: online }
+        service: { type: string }
+    Readiness:
+      type: object
+      required: [status, database, python]
+      properties:
+        status: { type: string, enum: [ready, not ready] }
+        database: { type: string, enum: [healthy, unhealthy] }
+        python: { type: string, enum: [healthy, unhealthy] }
+    ProfileSync:
+      type: object
+      required: [uid, name]
+      properties:
+        uid: { type: string, minLength: 1, description: Must be the caller's own Firebase uid. }
+        name: { $ref: "#/components/schemas/Text255" }
+        discipline: { type: string }
+    Text255:
+      type: string
+      description: 1-255 characters after trimming, no control characters.
+      minLength: 1
+      maxLength: 255
+      pattern: "^[^\\u0000-\\u001f\\u007f-\\u009f\\s][^\\u0000-\\u001f\\u007f-\\u009f]*$"
+    Title:
+      type: object
+      required: [title]
+      properties:
+        title: { $ref: "#/components/schemas/Text255" }
+    Role:
+      type: string
+      enum: [owner, editor, commenter, viewer]
+    GrantableRole:
+      type: string
+      enum: [editor, commenter, viewer]
+    Workspace:
+      type: object
+      required: [id, title, owner_id, role, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        owner_id: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        created_at: { type: string, format: date-time }
+    InviteOptions:
+      type: object
+      required: [roles, expires_in_hours, max_uses, defaults]
+      properties:
+        roles: { type: array, items: { $ref: "#/components/schemas/GrantableRole" } }
+        expires_in_hours: { type: array, items: { type: integer } }
+        max_uses: { type: array, items: { type: [integer, "null"] } }
+        defaults: { type: object }
+    InviteRequest:
+      type: object
+      required: [role, expires_in_hours]
+      properties:
+        role: { $ref: "#/components/schemas/GrantableRole" }
+        expires_in_hours: { type: integer, enum: [24, 168, 720] }
+        max_uses: { type: [integer, "null"], enum: [1, 10, null] }
+    Invite:
+      type: object
+      required: [id, role, created_by, created_at, expires_at, max_uses, uses]
+      properties:
+        id: { type: string }
+        role: { $ref: "#/components/schemas/GrantableRole" }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        max_uses: { type: [integer, "null"] }
+        uses: { type: integer, minimum: 0 }
+        token: { type: string, pattern: "^inv_", description: Only in the create response. }
+    InviteToken:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string }
+    InvitePreview:
+      type: object
+      required: [workspace_id, workspace_title, role, expires_at]
+      properties:
+        workspace_id: { type: string }
+        workspace_title: { type: string }
+        role: { $ref: "#/components/schemas/GrantableRole" }
+        expires_at: { type: string, format: date-time }
+    Membership:
+      type: object
+      required: [workspace_id, role, changed]
+      properties:
+        workspace_id: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        changed: { type: boolean }
+    Member:
+      type: object
+      required: [user_id, display_name, role, since]
+      properties:
+        user_id: { type: string }
+        display_name: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        since: { type: string, format: date-time }
+
+  responses:
+    BadRequest:
+      description: The request is malformed or outside the contract.
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Unauthorized:
+      description: Missing, invalid, expired or revoked Firebase ID token.
+      headers:
+        WWW-Authenticate: { schema: { type: string } }
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Forbidden:
+      description: Signed in, but not allowed (role, account policy, or someone else's resource).
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    NotFound:
+      description: Absent, or not visible to the caller (existence is never revealed).
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    InviteInvalid:
+      description: Unknown, expired, revoked or used up; indistinguishable on purpose.
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Conflict:
+      description: The request conflicts with current state (e.g. owner changes, profile not synced).
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    TooLarge:
+      description: Request body over 1 MiB.
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    TooMany:
+      description: Rate limited or quota spent; see Retry-After.
+      headers:
+        Retry-After: { schema: { type: integer } }
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Internal:
+      description: Unexpected failure.
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Unavailable:
+      description: A dependency (database, Firebase, compile backend) is unavailable.
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
