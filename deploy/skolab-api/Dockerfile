@@ -1,0 +1,55 @@
+# skolab-api: the Go gateway and the Python service in one container.
+#
+# One free Render service instead of two: Render's free tier grants 750
+# instance-hours per workspace per month, and two always-on services need
+# ~1,440. The gateway is the only public listener; Python binds 127.0.0.1
+# and is reachable only from inside the container. entrypoint.sh supervises
+# both: if either exits, the container exits and Render restarts it.
+#
+# Build context is the repository root (see /.dockerignore).
+
+# ── Gateway binary ────────────────────────────────────────────────────────
+# Keep in step with services/backend-go/go.mod. CGO off: the binary is
+# static, so this Alpine-built binary runs on the Debian runtime below.
+FROM golang:1.26-alpine AS gateway
+WORKDIR /src
+ENV GOTOOLCHAIN=local CGO_ENABLED=0
+COPY services/backend-go/go.mod services/backend-go/go.sum ./
+RUN go mod download && go mod verify
+COPY services/backend-go/ ./
+RUN go build -trimpath -o /out/skolab-gateway .
+
+# ── Python dependencies ───────────────────────────────────────────────────
+FROM python:3.12-slim AS pydeps
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+COPY services/backend/requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+# ── Runtime ───────────────────────────────────────────────────────────────
+FROM python:3.12-slim
+WORKDIR /app
+
+# TeX for CoLab compiles (a bounded, sandboxed subprocess; see
+# services/backend/app/api/v1/endpoints/colab.py) and util-linux for prlimit.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    texlive-latex-base \
+    util-linux \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -g 10001 schoolab \
+    && useradd -u 10001 -g schoolab -s /bin/bash -m schoolab
+
+COPY --from=pydeps --chown=schoolab:schoolab /root/.local /home/schoolab/.local
+COPY --chown=schoolab:schoolab services/backend/ ./
+COPY --from=gateway /out/skolab-gateway /usr/local/bin/skolab-gateway
+COPY deploy/skolab-api/entrypoint.sh /usr/local/bin/skolab-entrypoint
+
+ENV PATH=/home/schoolab/.local/bin:$PATH \
+    PYTHONUNBUFFERED=1 \
+    PYTHON_BACKEND_URL=http://127.0.0.1:8000
+
+USER schoolab
+EXPOSE 8080
+# Run through bash so the script needs no executable bit (Windows checkouts
+# drop it).
+CMD ["bash", "/usr/local/bin/skolab-entrypoint"]

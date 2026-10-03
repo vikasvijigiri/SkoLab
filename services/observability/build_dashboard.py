@@ -3,8 +3,8 @@ import json
 from pathlib import Path
 
 DS = {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}
-AVAILABILITY = 'job=~"skolab-gateway-availability|skolab-python-readiness"'
-ALL = 'job=~"skolab-gateway-availability|skolab-python-readiness|skolab-complete-journey"'
+AVAILABILITY = 'job=~"skolab-gateway-availability|skolab-api-readiness"'
+ALL = 'job=~"skolab-gateway-availability|skolab-api-readiness|skolab-complete-journey"'
 SPECS = [
     ("Availability by location", f"probe_success{{{AVAILABILITY}}}", "{{job}} / {{probe}}", "timeseries", "percentunit"),
     ("Availability over 30 days (target 99.9%)", f"avg by (job) (avg_over_time(probe_success{{{AVAILABILITY}}}[30d]))", "{{job}}", "stat", "percentunit"),

@@ -24,6 +24,7 @@ import (
 	"github.com/skolab/backend-go/internal/auth"
 	"github.com/skolab/backend-go/internal/colab"
 	"github.com/skolab/backend-go/internal/db"
+	"github.com/skolab/backend-go/internal/health"
 	"github.com/skolab/backend-go/internal/middleware"
 	"github.com/skolab/backend-go/internal/security"
 	"github.com/skolab/backend-go/internal/telemetry"
@@ -177,24 +178,21 @@ func main() {
 	r.GET("/gateway-health", liveness)
 	r.HEAD("/gateway-health", liveness) // uptime monitors often probe with HEAD
 	// Readiness — /gateway-health stays the dependency-free liveness probe
-	// Render restarts on; this one answers "can this instance serve DB-backed
-	// routes right now?" for synthetic monitoring and future load balancers.
+	// Render restarts on; this one answers "can this instance serve every
+	// route right now?": the database and the Python service beside it.
+	readinessClient := &http.Client{}
 	r.GET("/readyz", func(c *gin.Context) {
-		database := "unhealthy"
+		var pool health.Pinger
 		if db.Pool != nil {
-			ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
-			defer cancel()
-			if err := db.Pool.Ping(ctx); err == nil {
-				database = "healthy"
-			} else {
-				slog.Error("readiness: database ping failed", "err", err)
-			}
+			pool = db.Pool
 		}
-		if database != "healthy" {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "not ready", "database": database})
+		state, ready := health.Readiness(c.Request.Context(), pool, readinessClient, pythonBackendURL)
+		if !ready {
+			slog.Error("readiness: dependency unhealthy", "database", state["database"], "python", state["python"])
+			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "not ready", "database": state["database"], "python": state["python"]})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"status": "ready", "database": database})
+		c.JSON(http.StatusOK, gin.H{"status": "ready", "database": state["database"], "python": state["python"]})
 	})
 
 	// ── Observability ─────────────────────────────────────────────────────────

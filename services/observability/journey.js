@@ -12,7 +12,7 @@ export const options = {
   systemTags: ['name', 'method', 'status', 'check', 'group', 'scenario'],
 };
 
-const gateway = __ENV.SKOLAB_GATEWAY_URL || 'https://skolab-gateway.onrender.com';
+const gateway = __ENV.SKOLAB_GATEWAY_URL || 'https://skolab-api.onrender.com';
 const authBase = __ENV.SKOLAB_FIREBASE_AUTH_URL || 'https://identitytoolkit.googleapis.com';
 if (authBase !== 'https://identitytoolkit.googleapis.com' && !/^http:\/\/127\.0\.0\.1:\d+$/.test(authBase)) {
   throw new Error('Firebase authentication override is allowed only for local mock tests');

@@ -1,0 +1,29 @@
+# Build context for deploy/skolab-api/Dockerfile is the repository root.
+# Send only what that image needs, minus dev/test artifacts (same rules as
+# services/backend/.dockerignore, which applies when that directory is the
+# context).
+*
+!deploy/skolab-api/
+!services/backend/
+!services/backend-go/
+
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.env
+**/.env.*
+**/*.db
+**/*.db-*
+services/backend/.coverage
+services/backend/htmlcov/
+services/backend/tests/
+services/backend/scripts/*
+!services/backend/scripts/run_migrations.py
+services/backend/ci_bootstrap_db.py
+services/backend/docker-compose.yml
+services/backend/pytest.ini
+services/backend/ruff.toml
+services/backend/requirements-dev.txt

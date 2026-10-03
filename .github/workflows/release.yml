@@ -1,10 +1,12 @@
 name: Release to Render
 
-# The last stage of CI on master (ci.yml calls this after every test job
-# passes): deploy the commit to Render, wait until it is live, then smoke-test
-# production. A merge is done only when this is green. Run it by hand
-# (Actions > Release to Render > Run workflow) to redeploy or re-check master.
-# Secrets: RENDER_API_KEY plus the monitoring account's three login secrets.
+# The last stage of CI on master (ci.yml calls this after every test job,
+# including staging, passes): deploy the commit to Render, wait until it is
+# live, smoke-test production, then bring Grafana's monitoring in line with
+# what is now deployed. A merge is done only when this is green. Run it by
+# hand (Actions > Release to Render > Run workflow) to redeploy or re-check.
+# Secrets: RENDER_API_KEY plus the monitoring account's three login secrets
+# (and the Grafana ones, for the monitoring job).
 on:
   workflow_call:
   workflow_dispatch:
@@ -38,3 +40,9 @@ jobs:
           python-version: "3.12"
       - name: Deploy, wait until live, smoke-test production
         run: python services/release/release.py --commit "$GITHUB_SHA" ${{ inputs.smoke_only && '--smoke-only' || '' }}
+
+  monitoring:
+    needs: release
+    if: ${{ !inputs.smoke_only }}
+    uses: ./.github/workflows/observability-deploy.yml
+    secrets: inherit

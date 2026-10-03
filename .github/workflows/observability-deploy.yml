@@ -1,16 +1,14 @@
 name: Deploy monitoring to Grafana Cloud
 
-# Grafana Cloud always matches master: every merge that touches monitoring
-# re-applies the SLO rules, alerts, dashboards and synthetic checks. Nothing
-# runs on a developer machine -- the k6 journey executes on Grafana's probes.
-# Credentials are repository secrets (Settings > Secrets and variables >
-# Actions); see services/observability/README.md for the list.
+# Grafana Cloud always matches what is deployed: release.yml calls this after
+# every successful production release, so SLO rules, alerts, dashboards and
+# synthetic checks are re-applied only once the service they watch is live
+# (never probing a URL before it serves). Nothing runs on a developer
+# machine -- the k6 journey executes on Grafana's probes. Credentials are
+# repository secrets (Settings > Secrets and variables > Actions); see
+# services/observability/README.md for the list.
 on:
-  push:
-    branches: [master]
-    paths:
-      - 'services/observability/**'
-      - '.github/workflows/observability-deploy.yml'
+  workflow_call:
   workflow_dispatch:
     inputs:
       test_alert:
@@ -21,13 +19,12 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: grafana-monitoring
-  cancel-in-progress: false
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    concurrency:
+      group: grafana-monitoring
+      cancel-in-progress: false
     timeout-minutes: 20
     env:
       GRAFANA_URL: ${{ secrets.GRAFANA_URL }}
