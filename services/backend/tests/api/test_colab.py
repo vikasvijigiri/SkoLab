@@ -224,10 +224,15 @@ async def test_compile_is_not_charged_again_behind_the_gateway(client, app, monk
 async def test_compile_only_accepts_calls_forwarded_by_the_gateway(
     client, app, monkeypatch, header, expected
 ):
-    from app.api.dependencies import get_verified_user
-    from app.core.config import settings
+    from types import SimpleNamespace
 
-    monkeypatch.setattr(settings, "internal_api_token", "gateway-secret")
+    from app.api import dependencies
+    from app.api.dependencies import get_verified_user
+
+    # Settings is a frozen dataclass: swap the reference the check reads.
+    monkeypatch.setattr(
+        dependencies, "settings", SimpleNamespace(internal_api_token="gateway-secret")
+    )
     monkeypatch.setattr(
         colab, "_compile_source", lambda _s: CompileResponse(status="compiled")
     )
