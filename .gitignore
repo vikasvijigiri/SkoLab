@@ -35,3 +35,6 @@ services/backend/downloads/exports/
 
 docs/
 .claude/
+
+# Personal Postman collection (local testing tool; may hold pasted tokens).
+postman/
