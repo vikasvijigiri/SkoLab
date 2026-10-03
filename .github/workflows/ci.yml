@@ -204,6 +204,7 @@ jobs:
             --exclude-operation-id deleteAccount \
             --exclude-operation-id compile \
             --max-examples 25 \
+            --generation-deterministic \
             --rate-limit 15/s \
             --report junit --report-dir qa-reports/schemathesis
       - name: QA reports

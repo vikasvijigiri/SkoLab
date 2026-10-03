@@ -1,10 +1,13 @@
 name: Security scan (OWASP ZAP)
 
-# Dynamic application security testing: OWASP ZAP's API scan exercises
-# every operation in services/backend-go/api/openapi.yaml, signed in, and
-# reports injection, header, cookie and misconfiguration findings. It runs
-# against CI staging (the production image on a GitHub runner), never
-# production. Weekly and by hand; the HTML report is attached to the run.
+# Weekly deep testing on CI staging (the production image on a GitHub
+# runner), never production:
+# - Schemathesis random exploration: unlike the deterministic PR gate, new
+#   random inputs every week, many more per operation.
+# - OWASP ZAP's API scan exercises every operation in
+#   services/backend-go/api/openapi.yaml, signed in, and reports injection,
+#   header, cookie and misconfiguration findings.
+# Weekly and by hand; reports are attached to the run.
 on:
   schedule:
     - cron: '0 4 * * 1' # Mondays 04:00 UTC
@@ -57,6 +60,18 @@ jobs:
             RATE_LIMIT_IP_BURST=100000
       - name: Sign in the monitoring account
         run: python services/loadtest/fixture.py --base-url http://127.0.0.1:8080
+      - uses: ./.github/actions/qa-tools
+      - name: Contract fuzzing, random exploration (Schemathesis)
+        run: |
+          st --config-file services/qa/schemathesis.toml run services/backend-go/api/openapi.yaml \
+            --url http://127.0.0.1:8080 \
+            --header "Authorization: Bearer $TOKEN" \
+            --checks all \
+            --exclude-operation-id deleteAccount \
+            --exclude-operation-id compile \
+            --max-examples 300 \
+            --continue-on-failure \
+            --report junit --report-dir zap/schemathesis
       - name: ZAP API scan
         run: |
           mkdir -p zap
