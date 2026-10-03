@@ -57,6 +57,8 @@ EXPOSE 8000
 # Switch to non-root user
 USER schoolab
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/livez', timeout=4)"
+
 # Run the app.
 # WEB_CONCURRENCY controls uvicorn worker processes — one event loop per worker,
 # so CPU-bound work (large JSON parsing, PDF extraction) in one request no
