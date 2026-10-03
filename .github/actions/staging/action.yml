@@ -1,0 +1,53 @@
+name: Start staging
+description: >
+  Build the production image (deploy/skolab-api) and run it against the
+  job's Postgres service on 127.0.0.1:5432, with real Firebase sign-in.
+  Waits until migrations ran, Python is live and the gateway answers.
+  Secrets other than the Firebase Admin key are throwaway values generated
+  for this run.
+
+inputs:
+  firebase-service-account:
+    description: Firebase Admin SDK key (JSON)
+    required: true
+  extra-env:
+    description: Extra container settings, one KEY=value per line
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Build the production image
+      shell: bash
+      run: docker build -f deploy/skolab-api/Dockerfile -t skolab-api .
+    - name: Start the container
+      shell: bash
+      env:
+        FIREBASE_SERVICE_ACCOUNT: ${{ inputs.firebase-service-account }}
+        EXTRA_ENV: ${{ inputs.extra-env }}
+      run: |
+        secrets="$RUNNER_TEMP/secrets"
+        mkdir -p "$secrets"
+        printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$secrets/service-account.json"
+        chmod 0644 "$secrets/service-account.json" # readable by the image's non-root user
+        printf '%s\n' "$EXTRA_ENV" | grep -v '^\s*$' > "$RUNNER_TEMP/extra.env" || true
+        docker run -d --name skolab-api --network host \
+          -v "$secrets:/etc/secrets:ro" \
+          --env-file "$RUNNER_TEMP/extra.env" \
+          -e GOOGLE_APPLICATION_CREDENTIALS=/etc/secrets/service-account.json \
+          -e DATABASE_URL=postgresql://postgres:skolab@127.0.0.1:5432/skolab \
+          -e GIN_MODE=release -e APP_ENV=staging \
+          -e INTERNAL_API_TOKEN="$(openssl rand -hex 32)" \
+          -e DATABASE_ENCRYPTION_KEY="$(python3 -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')" \
+          -e COLAB_MAX_CONCURRENT_COMPILES=1 \
+          skolab-api
+        # Migrations, then Python, then the gateway: wait for the last.
+        for _ in $(seq 1 90); do
+          curl -fs http://127.0.0.1:8080/gateway-health >/dev/null && exit 0
+          [ "$(docker inspect -f '{{.State.Running}}' skolab-api)" = true ] || break
+          sleep 2
+        done
+        echo "::error::staging did not start"
+        docker logs skolab-api 2>&1 | tail -n 100
+        exit 1

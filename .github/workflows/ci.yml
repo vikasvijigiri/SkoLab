@@ -161,31 +161,9 @@ jobs:
           for key in FIREBASE_SERVICE_ACCOUNT SKOLAB_FIREBASE_API_KEY SKOLAB_SYNTHETIC_EMAIL SKOLAB_SYNTHETIC_PASSWORD; do
             if [ -z "${!key}" ]; then echo "::error::Repository secret $key is not set"; exit 1; fi
           done
-      - name: Build the production image
-        run: docker build -f deploy/skolab-api/Dockerfile -t skolab-api .
-      - name: Start staging
-        run: |
-          secrets="$RUNNER_TEMP/secrets"
-          mkdir -p "$secrets"
-          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$secrets/service-account.json"
-          chmod 0644 "$secrets/service-account.json" # readable by the image's non-root user
-          docker run -d --name skolab-api --network host \
-            -v "$secrets:/etc/secrets:ro" \
-            -e GOOGLE_APPLICATION_CREDENTIALS=/etc/secrets/service-account.json \
-            -e DATABASE_URL=postgresql://postgres:skolab@127.0.0.1:5432/skolab \
-            -e GIN_MODE=release -e APP_ENV=staging \
-            -e INTERNAL_API_TOKEN="$(openssl rand -hex 32)" \
-            -e DATABASE_ENCRYPTION_KEY="$(python -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')" \
-            -e COLAB_MAX_CONCURRENT_COMPILES=1 \
-            skolab-api
-          # Migrations, then Python, then the gateway: wait for the last.
-          for _ in $(seq 1 90); do
-            curl -fs http://127.0.0.1:8080/gateway-health >/dev/null && exit 0
-            [ "$(docker inspect -f '{{.State.Running}}' skolab-api)" = true ] || break
-            sleep 2
-          done
-          echo "::error::staging did not start"
-          exit 1
+      - uses: ./.github/actions/staging
+        with:
+          firebase-service-account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       - name: Smoke-test staging (the same checks as production)
         run: python services/release/release.py --commit "$GITHUB_SHA" --smoke-only --base-url http://127.0.0.1:8080
       - name: Staging logs

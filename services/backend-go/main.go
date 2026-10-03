@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/skolab/backend-go/internal/health"
 	"github.com/skolab/backend-go/internal/middleware"
 	"github.com/skolab/backend-go/internal/security"
+	"github.com/skolab/backend-go/internal/shared"
 	"github.com/skolab/backend-go/internal/telemetry"
 	"github.com/skolab/backend-go/internal/user"
 	"github.com/skolab/backend-go/internal/websocket"
@@ -158,12 +160,23 @@ func main() {
 	r.Use(middleware.CORS())
 
 	// ── Rate limiting: 120 req/s per IP, burst of 30 ─────────────────────────
-	rl := middleware.NewRateLimiter(rate.Limit(120), 30)
+	// With SHARED_STATE_REDIS_URL, rate limits, the failed-login throttle,
+	// compile slots and WebSocket broadcasts are shared by every instance;
+	// without it they stay in process (exact with one instance, as on
+	// Render's free tier). Deliberately not REDIS_URL, the Python cache's.
+	limits := shared.Connect(context.Background(), os.Getenv("SHARED_STATE_REDIS_URL"))
+	auth.ShareFailedLogins(limits)
+	colab.ShareLocks(limits)
+
+	// Limits are tunable per environment (the load test raises them so one
+	// test account can drive the service); production uses the defaults.
+	rl := middleware.NewRateLimiter(envLimit("RATE_LIMIT_IP_RPS", 120), envBurst("RATE_LIMIT_IP_BURST", 30)).Share(limits, "ip")
 	r.Use(rl.Limit())
 
 	// Per-user limit on authenticated routes (20 req/s, burst 40), applied
 	// after the identity is verified -- see middleware.RateLimiter.PerUser.
-	authenticated := []gin.HandlerFunc{auth.VerifyUser(), middleware.NewRateLimiter(rate.Limit(20), 40).PerUser()}
+	perUser := middleware.NewRateLimiter(envLimit("RATE_LIMIT_USER_RPS", 20), envBurst("RATE_LIMIT_USER_BURST", 40))
+	authenticated := []gin.HandlerFunc{auth.VerifyUser(), perUser.Share(limits, "user").PerUser()}
 
 	// ── WebSocket hub ─────────────────────────────────────────────────────────
 	hub := websocket.NewHub()
@@ -266,6 +279,21 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("graceful shutdown did not complete cleanly", "err", err)
 	}
+}
+
+// envLimit and envBurst read a positive rate limit setting, else def.
+func envLimit(key string, def float64) rate.Limit {
+	if v, err := strconv.ParseFloat(os.Getenv(key), 64); err == nil && v > 0 {
+		return rate.Limit(v)
+	}
+	return rate.Limit(def)
+}
+
+func envBurst(key string, def int) int {
+	if v, err := strconv.Atoi(os.Getenv(key)); err == nil && v > 0 {
+		return v
+	}
+	return def
 }
 
 const requestIDHeader = "X-Request-ID"

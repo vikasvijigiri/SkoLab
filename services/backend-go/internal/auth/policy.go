@@ -11,6 +11,7 @@ import (
 	"github.com/skolab/backend-go/internal/apierror"
 	"github.com/skolab/backend-go/internal/middleware"
 	"github.com/skolab/backend-go/internal/security"
+	"github.com/skolab/backend-go/internal/shared"
 	"golang.org/x/time/rate"
 )
 
@@ -20,8 +21,14 @@ import (
 // a token-stuffing client cannot keep this service busy or keep probing.
 var failedLogins = middleware.NewRateLimiter(rate.Every(15*time.Second), 20)
 
+// ShareFailedLogins counts failed sign-ins in store (Redis), so the
+// throttle holds across gateway instances. A nil store keeps it in process.
+func ShareFailedLogins(store *shared.Store) {
+	failedLogins.Share(store, "failed-login")
+}
+
 func throttled(c *gin.Context) bool {
-	if failedLogins.Limiter(security.ClientIP(c)).Tokens() >= 1 {
+	if failedLogins.Available(c.Request.Context(), security.ClientIP(c)) {
 		return false
 	}
 	security.Record(c, security.Event{Name: security.AuthThrottled, Outcome: security.Throttled})
@@ -33,7 +40,7 @@ func throttled(c *gin.Context) bool {
 // reject answers 401 for a failed credential and charges the failure to the
 // caller's IP.
 func reject(c *gin.Context, event, code, message string) {
-	failedLogins.Limiter(security.ClientIP(c)).Allow()
+	failedLogins.Allow(c.Request.Context(), security.ClientIP(c))
 	security.Record(c, security.Event{Name: event, Outcome: security.Denied, Reason: code})
 	c.Header("WWW-Authenticate", `Bearer error="invalid_token"`)
 	apierror.Abort(c, http.StatusUnauthorized, code, message)

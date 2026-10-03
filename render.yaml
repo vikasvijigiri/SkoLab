@@ -65,6 +65,10 @@ services:
         sync: false
       - key: REDIS_URL
         sync: false
+      # Only when running more than one instance: the gateway's rate limits,
+      # compile slots and WebSocket broadcasts then go through this Redis.
+      - key: SHARED_STATE_REDIS_URL
+        sync: false
       - key: USER_QUOTA_HOURLY_UNITS
         sync: false
       - key: USER_QUOTA_DAILY_UNITS
