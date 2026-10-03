@@ -1,0 +1,29 @@
+name: tmp render inspect (names only)
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    env:
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+    steps:
+      - name: List setting names (never values)
+        shell: python
+        run: |
+          import json, os, urllib.request
+          def get(path):
+              r = urllib.request.Request("https://api.render.com/v1" + path, headers={"Authorization": "Bearer " + os.environ["RENDER_API_KEY"], "Accept": "application/json"})
+              return json.load(urllib.request.urlopen(r, timeout=60))
+          services = [row["service"] for row in get("/services?limit=50")]
+          for s in services:
+              print(f"SERVICE {s['name']} id={s['id']} region={s.get('serviceDetails',{}).get('region')} suspended={s.get('suspended')} url={s.get('serviceDetails',{}).get('url')}")
+              if s["name"].startswith("skolab"):
+                  keys = sorted(row["envVar"]["key"] + ("" if row["envVar"]["value"] else "(EMPTY)") for row in get(f"/services/{s['id']}/env-vars?limit=100"))
+                  print("  env keys:", ", ".join(keys))
+                  files = [row["secretFile"]["name"] for row in get(f"/services/{s['id']}/secret-files?limit=100")]
+                  print("  secret files:", ", ".join(files))
+          for row in get("/env-groups?limit=50"):
+              g = row["envGroup"] if "envGroup" in row else row
+              detail = get(f"/env-groups/{g['id']}")
+              print(f"ENVGROUP {detail.get('name')} services={[x.get('id') for x in detail.get('serviceLinks', [])]} keys={sorted(v['key'] for v in detail.get('envVars', []))} files={[f['name'] for f in detail.get('secretFiles', [])]}")
