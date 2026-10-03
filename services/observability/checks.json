@@ -1,8 +1,9 @@
 {
   "availability": [
-    {"job": "skolab-gateway-availability", "service": "skolab-gateway", "target": "https://skolab-gateway.onrender.com/gateway-health", "body_patterns": ["\"status\"\\s*:\\s*\"online\""]},
-    {"job": "skolab-python-readiness", "service": "skolab-backend-py", "target": "https://skolab-backend-py.onrender.com/readyz", "body_patterns": ["\"status\"\\s*:\\s*\"ready\"", "\"database\"\\s*:\\s*\"healthy\"", "\"cache\"\\s*:\\s*\"healthy\""]}
+    {"job": "skolab-gateway-availability", "service": "skolab-api", "title": "SkoLab API down", "target": "https://skolab-api.onrender.com/gateway-health", "body_patterns": ["\"status\"\\s*:\\s*\"online\""]},
+    {"job": "skolab-api-readiness", "service": "skolab-api", "title": "SkoLab API not ready (database or Python)", "target": "https://skolab-api.onrender.com/readyz", "body_patterns": ["\"status\"\\s*:\\s*\"ready\"", "\"database\"\\s*:\\s*\"healthy\"", "\"python\"\\s*:\\s*\"healthy\""]}
   ],
+  "retired_jobs": ["skolab-python-readiness"],
   "availability_frequency_ms": 60000,
   "availability_timeout_ms": 15000,
   "journey_frequency_ms": 1800000,

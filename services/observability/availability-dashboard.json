@@ -39,7 +39,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "probe_success{job=~\"skolab-gateway-availability|skolab-python-readiness\"}",
+          "expr": "probe_success{job=~\"skolab-gateway-availability|skolab-api-readiness\"}",
           "legendFormat": "{{job}} / {{probe}}",
           "datasource": {
             "type": "prometheus",
@@ -72,7 +72,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (job) (avg_over_time(probe_success{job=~\"skolab-gateway-availability|skolab-python-readiness\"}[30d]))",
+          "expr": "avg by (job) (avg_over_time(probe_success{job=~\"skolab-gateway-availability|skolab-api-readiness\"}[30d]))",
           "legendFormat": "{{job}}",
           "datasource": {
             "type": "prometheus",
@@ -105,7 +105,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "probe_duration_seconds{job=~\"skolab-gateway-availability|skolab-python-readiness\"}",
+          "expr": "probe_duration_seconds{job=~\"skolab-gateway-availability|skolab-api-readiness\"}",
           "legendFormat": "{{job}} / {{probe}}",
           "datasource": {
             "type": "prometheus",
@@ -204,7 +204,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "time() - max by (job) (timestamp(probe_success{job=~\"skolab-gateway-availability|skolab-python-readiness|skolab-complete-journey\"}))",
+          "expr": "time() - max by (job) (timestamp(probe_success{job=~\"skolab-gateway-availability|skolab-api-readiness|skolab-complete-journey\"}))",
           "legendFormat": "{{job}}",
           "datasource": {
             "type": "prometheus",

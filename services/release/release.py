@@ -2,13 +2,20 @@
 
 Runs as the last job of CI on master (.github/workflows/release.yml), so a
 merge is finished only when the commit is serving traffic and the checks
-below pass against the real services. Nothing runs on a developer machine.
+below pass against the real service. Nothing runs on a developer machine.
 
   python services/release/release.py --commit <sha>
+  python services/release/release.py --commit <sha> --smoke-only [--base-url URL]
 
-Order matters: skolab-backend-py runs the alembic migrations on start, so it
-goes live before the gateway that reads the new tables. A service whose
-directory did not change since its live commit is not rebuilt.
+Production is one Render service, skolab-api: the Go gateway and the Python
+service in one container (deploy/skolab-api). It is not rebuilt when none of
+its source directories changed since its live commit.
+
+It replaced two services (skolab-gateway, skolab-backend-py). Render does not
+carry secrets over to a service a Blueprint adds, so the first release copies
+them from those services (adopt_settings) and, once the new service passes
+the smoke checks, suspends them (retire_legacy) -- reversibly; deleting them
+is a separate, manual decision. Both steps are no-ops once that is done.
 """
 from __future__ import annotations
 
@@ -30,11 +37,14 @@ from provision import (
 )
 
 RENDER_API = "https://api.render.com/v1"
-GATEWAY = os.environ.get("SKOLAB_GATEWAY_URL", "https://skolab-gateway.onrender.com").rstrip("/")
-BACKEND = os.environ.get("SKOLAB_BACKEND_URL", "https://skolab-backend-py.onrender.com").rstrip("/")
-
-# (Render service name, the source directory its image is built from)
-SERVICES = [("skolab-backend-py", "services/backend"), ("skolab-gateway", "services/backend-go")]
+SERVICE = "skolab-api"
+SOURCES = ("services/backend", "services/backend-go", "deploy/skolab-api", ".dockerignore")
+# Replaced services, oldest-precedence first: on a conflicting key the
+# gateway's value wins (both must already agree on shared secrets).
+LEGACY = ("skolab-backend-py", "skolab-gateway")
+# Set per process by deploy/skolab-api/entrypoint.sh or fixed by the image;
+# never copied from the replaced services.
+PER_PROCESS = {"OTEL_SERVICE_NAME", "PORT", "PYTHON_BACKEND_URL"}
 
 IN_PROGRESS = {"created", "queued", "build_in_progress", "update_in_progress", "pre_deploy_in_progress"}
 FAILED = {"build_failed", "update_failed", "pre_deploy_failed"}
@@ -58,12 +68,36 @@ class Render:
             # Never print the response body or the key.
             raise RuntimeError(f"Render {method} {path.split('?')[0]}: HTTP {exc.code}") from None
 
-    def service_id(self, name: str) -> str:
-        matches = [row["service"]["id"] for row in self.call("GET", f"/services?name={name}&limit=20")
+    def find_service(self, name: str) -> dict | None:
+        matches = [row["service"] for row in self.call("GET", f"/services?name={name}&limit=20")
                    if row["service"]["name"] == name]
-        if len(matches) != 1:
+        if len(matches) > 1:
             raise RuntimeError(f"expected one Render service named {name}, found {len(matches)}")
-        return matches[0]
+        return matches[0] if matches else None
+
+    def _pages(self, path: str, key: str) -> list[dict]:
+        items, cursor = [], None
+        while True:
+            page = self.call("GET", f"{path}?limit=100" + (f"&cursor={cursor}" if cursor else ""))
+            items += [row[key] for row in page]
+            if len(page) < 100:
+                return items
+            cursor = page[-1]["cursor"]
+
+    def env_vars(self, service: str) -> dict[str, str]:
+        return {item["key"]: item["value"] for item in self._pages(f"/services/{service}/env-vars", "envVar")}
+
+    def set_env_var(self, service: str, key: str, value: str) -> None:
+        self.call("PUT", f"/services/{service}/env-vars/{key}", {"value": value})
+
+    def secret_files(self, service: str) -> dict[str, str]:
+        return {item["name"]: item["content"] for item in self._pages(f"/services/{service}/secret-files", "secretFile")}
+
+    def set_secret_file(self, service: str, name: str, content: str) -> None:
+        self.call("PUT", f"/services/{service}/secret-files/{name}", {"content": content})
+
+    def suspend(self, service: str) -> None:
+        self.call("POST", f"/services/{service}/suspend")
 
     def deploys(self, service: str) -> list[dict]:
         return [row["deploy"] for row in self.call("GET", f"/services/{service}/deploys?limit=20")]
@@ -71,36 +105,97 @@ class Render:
     def deploy(self, service: str, commit: str) -> dict:
         return self.call("POST", f"/services/{service}/deploys", {"commitId": commit, "clearCache": "do_not_clear"})
 
+    def cancel(self, service: str, deploy: str) -> None:
+        self.call("POST", f"/services/{service}/deploys/{deploy}/cancel")
+
     def get_deploy(self, service: str, deploy: str) -> dict:
         return self.call("GET", f"/services/{service}/deploys/{deploy}")
+
+
+def wait_for_service(render: Render, name: str, *, timeout: float = 600, poll: float = 15,
+                     sleep=time.sleep, clock=time.monotonic) -> dict:
+    """The Blueprint creates the service when it syncs this commit, which
+    can trail the merge by a minute or two."""
+    deadline = clock() + timeout
+    while True:
+        service = render.find_service(name)
+        if service:
+            return service
+        if clock() >= deadline:
+            raise RuntimeError(f"Render service {name} does not exist. Sync the Blueprint "
+                               "(Render > Blueprints > skolab.ai > Manual Sync), then re-run this workflow.")
+        sleep(poll)
+
+
+def adopt_settings(render: Render, target: str, legacy=LEGACY) -> list[str]:
+    """Copy env vars and secret files the target lacks from the services it
+    replaced. Values already on the target (from render.yaml or set by hand)
+    are never overwritten. Returns the names copied; values are never printed."""
+    sources = [s for s in (render.find_service(name) for name in legacy) if s]
+    if not sources:
+        return []
+    have_env, have_files = render.env_vars(target), render.secret_files(target)
+    env: dict[str, str] = {}
+    files: dict[str, str] = {}
+    for source in sources:
+        env.update(render.env_vars(source["id"]))
+        files.update(render.secret_files(source["id"]))
+    copied = []
+    for key, value in sorted(env.items()):
+        if key not in have_env and key not in PER_PROCESS:
+            render.set_env_var(target, key, value)
+            copied.append(key)
+    for name, content in sorted(files.items()):
+        if name not in have_files:
+            render.set_secret_file(target, name, content)
+            copied.append(f"secret file {name}")
+    return copied
+
+
+def retire_legacy(render: Render, legacy=LEGACY) -> list[str]:
+    """Suspend the replaced services so they stop spending free hours.
+    Suspension is reversible (Render dashboard > Resume)."""
+    retired = []
+    for name in legacy:
+        service = render.find_service(name)
+        if service and service.get("suspended") != "suspended":
+            render.suspend(service["id"])
+            retired.append(name)
+    return retired
 
 
 def live_commit(deploys: list[dict]) -> str | None:
     return next((d["commit"]["id"] for d in deploys if d["status"] == "live" and d.get("commit")), None)
 
 
-def source_changed(since: str | None, commit: str, path: str) -> bool:
-    """True unless git proves `path` is identical at both commits."""
+def source_changed(since: str | None, commit: str, paths=SOURCES) -> bool:
+    """True unless git proves every path is identical at both commits."""
     if not since:
         return True
-    result = subprocess.run(["git", "diff", "--quiet", since, commit, "--", path], capture_output=True, check=False)
+    result = subprocess.run(["git", "diff", "--quiet", since, commit, "--", *paths], capture_output=True, check=False)
     return result.returncode != 0  # 1 = differs, anything else = unknown -> deploy
 
 
-def ship(render: Render, name: str, path: str, commit: str, *, timeout: float = 1500,
+def ship(render: Render, service: str, commit: str, *, fresh: bool = False, timeout: float = 1500,
          poll: float = 15, sleep=time.sleep, clock=time.monotonic, changed=source_changed) -> str:
-    """Bring `name` to `commit` (or confirm its live image is equivalent) and
-    return what happened. Reuses a deploy of the same commit already running
-    (e.g. one Render started itself) instead of starting a second."""
-    service = render.service_id(name)
+    """Bring the service to `commit` (or confirm its live image is
+    equivalent) and return what happened. Reuses a deploy of the same commit
+    already running instead of starting a second -- unless `fresh`: settings
+    just changed, so deploys started before that are cancelled."""
     deploys = render.deploys(service)
     current = live_commit(deploys)
-    if current == commit:
-        return "already live"
-    if not changed(current, commit, path):
-        return f"unchanged since {current[:7]}, not rebuilt"
+    if not fresh:
+        if current == commit:
+            return "already live"
+        if current and not changed(current, commit):
+            return f"unchanged since {current[:7]}, not rebuilt"
 
-    ours = next((d for d in deploys if d.get("commit", {}).get("id") == commit and d["status"] in IN_PROGRESS), None)
+    running = [d for d in deploys if d["status"] in IN_PROGRESS]
+    ours = next((d for d in running if d.get("commit", {}).get("id") == commit), None)
+    if fresh:
+        for d in running:
+            render.cancel(service, d["id"])
+        ours = None
     deploy_id = (ours or render.deploy(service, commit))["id"]
     deadline = clock() + timeout
     while clock() < deadline:
@@ -108,18 +203,18 @@ def ship(render: Render, name: str, path: str, commit: str, *, timeout: float = 
         if status == "live":
             return "deployed"
         if status in FAILED:
-            raise RuntimeError(f"{name}: deploy {deploy_id} ended {status} (see its Render logs)")
+            raise RuntimeError(f"deploy {deploy_id} ended {status} (see its Render logs)")
         if status in SUPERSEDED:
             # Replaced by a newer deploy: follow it if it is the same commit.
             same = [d for d in render.deploys(service) if d.get("commit", {}).get("id") == commit
                     and (d["status"] == "live" or d["status"] in IN_PROGRESS)]
             if not same:
-                raise RuntimeError(f"{name}: deploy {deploy_id} was {status} by a deploy of another commit")
+                raise RuntimeError(f"deploy {deploy_id} was {status} by a deploy of another commit")
             if same[0]["status"] == "live":
                 return "deployed"
             deploy_id = same[0]["id"]
         sleep(poll)
-    raise RuntimeError(f"{name}: deploy {deploy_id} not live after {timeout:.0f}s")
+    raise RuntimeError(f"deploy {deploy_id} not live after {timeout:.0f}s")
 
 
 def status_of(url: str, token: str | None = None, body: dict | None = None) -> int:
@@ -139,25 +234,28 @@ def expect(label: str, actual, wanted) -> None:
     print(f"  ok  {label}")
 
 
-def smoke(api_key: str, email: str, password: str) -> None:
-    """Health, security headers, refusals (anonymous, oversized, gateway
-    bypass), and the invite lifecycle as the verified monitoring account on
-    its own workspace. The link it creates is revoked."""
-    for url in (f"{GATEWAY}/gateway-health", f"{GATEWAY}/readyz", f"{BACKEND}/livez", f"{BACKEND}/health"):
-        expect(url.split("//")[1], status_of(url), 200)
-    expect("anonymous /api/v1/workspaces refused", status_of(f"{GATEWAY}/api/v1/workspaces"), 401)
-    with urllib.request.urlopen(f"{GATEWAY}/gateway-health", timeout=120) as response:
+def smoke(base: str, api_key: str, email: str, password: str) -> None:
+    """Health (gateway, database, Python), security headers, refusals
+    (anonymous, oversized), a real compile, and the invite lifecycle as the
+    verified monitoring account on its own workspace. The link it creates is
+    revoked."""
+    expect("liveness", status_of(f"{base}/gateway-health"), 200)
+    ready = request_json("Readiness", "GET", f"{base}/readyz")
+    expect("readiness: database and python", (ready["database"], ready["python"]), ("healthy", "healthy"))
+    expect("anonymous /api/v1/workspaces refused", status_of(f"{base}/api/v1/workspaces"), 401)
+    with urllib.request.urlopen(f"{base}/gateway-health", timeout=120) as response:
         expect("HSTS and nosniff headers", (bool(response.headers.get("Strict-Transport-Security")),
                                             response.headers.get("X-Content-Type-Options")), (True, "nosniff"))
-    expect("oversized body refused", status_of(f"{GATEWAY}/api/v1/invites/preview", None, {"token": "x" * (2 << 20)}), 413)
+    expect("oversized body refused", status_of(f"{base}/api/v1/invites/preview", None, {"token": "x" * (2 << 20)}), 413)
 
-    workspace = ensure_monitoring_workspace(api_key, email, password)
+    workspace = ensure_monitoring_workspace(api_key, email, password, base)
     token = request_json("Firebase sign-in", "POST", f"{FIREBASE_SIGN_IN}?key={api_key}",
                          {"email": email, "password": password, "returnSecureToken": True})["idToken"]
-    api = f"{GATEWAY}/api/v1"
+    api = f"{base}/api/v1"
     expect("signed-in list workspaces", status_of(f"{api}/workspaces", token), 200)
-    expect("python compile refuses calls that skip the gateway",
-           status_of(f"{BACKEND}/api/v1/colab/compile", token, {"latex_source": "x"}), 403)
+    compiled = request_json("Compile", "POST", f"{api}/colab/compile",
+                            {"latex_source": r"\documentclass{article}\begin{document}Release check.\end{document}"}, token)
+    expect("compile produces a PDF", (compiled["status"], (compiled.get("pdf_base64") or "")[:4]), ("compiled", "JVBE"))
 
     options = request_json("Invite options", "GET", f"{api}/workspaces/{workspace}/invite-options", token=token)
     expect("invite options offer viewer", "viewer" in options["roles"], True)
@@ -179,21 +277,36 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--commit", required=True)
     parser.add_argument("--smoke-only", action="store_true", help="skip deploying; only run the smoke checks")
+    parser.add_argument("--base-url", help="smoke-test this URL instead of the Render service's own")
     args = parser.parse_args()
 
-    missing = [k for k in ("RENDER_API_KEY", "SKOLAB_FIREBASE_API_KEY", "SKOLAB_SYNTHETIC_EMAIL",
-                           "SKOLAB_SYNTHETIC_PASSWORD") if not os.environ.get(k)]
+    needed = ["SKOLAB_FIREBASE_API_KEY", "SKOLAB_SYNTHETIC_EMAIL", "SKOLAB_SYNTHETIC_PASSWORD"]
+    if not args.base_url:
+        needed.append("RENDER_API_KEY")
+    missing = [k for k in needed if not os.environ.get(k)]
     if missing:
         print("Missing secrets: " + ", ".join(missing), file=sys.stderr)
         return 2
-    if not args.smoke_only:
-        render = Render(os.environ["RENDER_API_KEY"])
-        for name, path in SERVICES:
-            print(f"{name}: {ship(render, name, path, args.commit)}", flush=True)
-    print("Smoke checks against production:", flush=True)
-    smoke(os.environ["SKOLAB_FIREBASE_API_KEY"], os.environ["SKOLAB_SYNTHETIC_EMAIL"],
+
+    render = Render(os.environ["RENDER_API_KEY"]) if not args.base_url else None
+    base = args.base_url
+    if render:
+        service = wait_for_service(render, SERVICE)
+        base = base or service["serviceDetails"]["url"]
+        if not args.smoke_only:
+            copied = adopt_settings(render, service["id"])
+            if copied:
+                print(f"{SERVICE}: copied from the replaced services: {', '.join(copied)}", flush=True)
+            print(f"{SERVICE}: {ship(render, service['id'], args.commit, fresh=bool(copied))}", flush=True)
+    base = base.rstrip("/")
+    print(f"Smoke checks against {base}:", flush=True)
+    smoke(base, os.environ["SKOLAB_FIREBASE_API_KEY"], os.environ["SKOLAB_SYNTHETIC_EMAIL"],
           os.environ["SKOLAB_SYNTHETIC_PASSWORD"])
-    print(f"Release {args.commit[:7]} is live and healthy.")
+    if render and not args.smoke_only:
+        retired = retire_legacy(render)
+        if retired:
+            print(f"Suspended the replaced services: {', '.join(retired)}")
+    print(f"Release {args.commit[:7]} is live and healthy at {base}.")
     return 0
 
 

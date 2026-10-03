@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -33,7 +34,7 @@ func InitDB(tracer pgx.QueryTracer) error {
 		return fmt.Errorf("DATABASE_URL is not set — point it at your Supabase project")
 	}
 
-	config, err := pgxpool.ParseConfig(dbURL)
+	config, err := pgxpool.ParseConfig(NormalizeURL(dbURL))
 	if err != nil {
 		return fmt.Errorf("error parsing database connection string: %v", err)
 	}
@@ -66,6 +67,18 @@ func InitDB(tracer pgx.QueryTracer) error {
 	slog.Info("Successfully connected to PostgreSQL (pgxpool) in Go Gateway.")
 	Pool = pool
 	return nil
+}
+
+// NormalizeURL accepts the SQLAlchemy driver form the Python service uses
+// (postgresql+asyncpg://...), so both processes in the container can share
+// one DATABASE_URL. Other URLs are returned unchanged.
+func NormalizeURL(url string) string {
+	for _, prefix := range []string{"postgresql+asyncpg://", "postgres+asyncpg://"} {
+		if strings.HasPrefix(url, prefix) {
+			return "postgresql://" + strings.TrimPrefix(url, prefix)
+		}
+	}
+	return url
 }
 
 // CloseDB gracefully shuts down the connection pool.

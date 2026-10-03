@@ -19,6 +19,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 FOLDER = "skolab-monitoring"
+# The public API (skolab-api on Render: Go gateway + Python in one container).
+API_URL = os.environ.get("SKOLAB_GATEWAY_URL", "https://skolab-api.onrender.com").rstrip("/")
 JOURNEY_SECRETS = {
     "skolab-firebase-api-key": "SKOLAB_FIREBASE_API_KEY",
     "skolab-monitor-email": "SKOLAB_SYNTHETIC_EMAIL",
@@ -75,7 +77,7 @@ def check_definitions(probes: list[int], journey_probe: int | None = None):
         })
     if journey_probe is not None:
         definitions.append({
-            "job": config["journey_job"], "target": "https://skolab-gateway.onrender.com",
+            "job": config["journey_job"], "target": API_URL,
             "description": "Fresh login, identity sync, compile/PDF validation, tickets and two-peer collaboration delivery.",
             "enabled": True, "frequency": config["journey_frequency_ms"], "timeout": config["journey_timeout_ms"],
             "probes": [journey_probe], "alertSensitivity": "none", "basicMetricsOnly": True,
@@ -128,6 +130,18 @@ def reconcile_check(api: API, definition: dict, existing: list[dict]):
     print(f"Reconciled check: {definition['job']} (id={result['id']})")
 
 
+def retire_checks(sm: API, grafana: API, jobs: list[str], existing: list[dict]):
+    """Delete checks (and their alert rules, which share the job as UID) that
+    checks.json lists as retired, e.g. after a service was replaced."""
+    for job in jobs:
+        for check in [item for item in existing if item["job"] == job]:
+            sm.call("DELETE", f"/api/v1/check/{check['id']}")
+            print(f"Retired check: {job} (id={check['id']})")
+        if grafana.call("GET", f"/api/v1/provisioning/alert-rules/{job}", allow_missing=True):
+            grafana.call("DELETE", f"/api/v1/provisioning/alert-rules/{job}")
+            print(f"Retired alert: {job}")
+
+
 def choose_probes(items: list[dict], names: list[str]) -> list[int]:
     result = []
     for name in names:
@@ -154,8 +168,8 @@ def _configured(value: str) -> bool:
 def request_json(label: str, method: str, url: str, body=None, token=None, headers=None):
     """HTTPS JSON call whose errors name only `label` -- never the URL (the
     Firebase URL carries the API key) or the response body."""
-    if not url.startswith("https://"):
-        raise ValueError(f"{label}: HTTPS is required")
+    if not url.startswith(("https://", "http://127.0.0.1:", "http://localhost:")):
+        raise ValueError(f"{label}: HTTPS is required (plain HTTP only to this machine)")
     request = urllib.request.Request(
         url, method=method, data=json.dumps(body).encode() if body is not None else None,
         headers={"Content-Type": "application/json", **({"Authorization": f"Bearer {token}"} if token else {}), **(headers or {})})
@@ -170,14 +184,13 @@ def request_json(label: str, method: str, url: str, body=None, token=None, heade
         raise RuntimeError(f"{label}: {exc.reason}") from None
 
 
-def ensure_monitoring_workspace(api_key: str, email: str, password: str) -> str:
+def ensure_monitoring_workspace(api_key: str, email: str, password: str, gateway: str = API_URL) -> str:
     """Sign in as the monitoring account and create (or, on every later run,
     get back) its dedicated workspace through the public workspace API --
     the same path a real user takes, so no manual database setup."""
     login = request_json("Firebase sign-in", "POST", f"{FIREBASE_SIGN_IN}?key={urllib.parse.quote(api_key)}",
                          {"email": email, "password": password, "returnSecureToken": True})
     token, uid = login["idToken"], login["localId"]
-    gateway = os.environ.get("SKOLAB_GATEWAY_URL", "https://skolab-gateway.onrender.com").rstrip("/")
     request_json("Profile sync", "POST", f"{gateway}/api/v1/users/profile/sync",
                  {"uid": uid, "name": "SkoLab monitoring"}, token)
     workspace = request_json("Workspace create", "POST", f"{gateway}/api/v1/workspaces",
@@ -339,7 +352,8 @@ def apply(journey: bool, names: list[str], existing_secrets: bool = False):
     for definition in definitions:
         reconcile_check(sm, definition, existing)
     config = json.loads((ROOT / "checks.json").read_text())
-    rules = [alert_rule(item["job"], item["service"] + " unavailable", availability_expression(item["job"]), datasource, receiver)
+    retire_checks(sm, grafana, config.get("retired_jobs", []), existing)
+    rules = [alert_rule(item["job"], item.get("title", item["service"] + " unavailable"), availability_expression(item["job"]), datasource, receiver)
              for item in config["availability"]]
     if journey:
         rules.append(alert_rule("skolab-journey-failed", "SkoLab complete journey failed",

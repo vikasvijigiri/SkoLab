@@ -6,8 +6,8 @@ name: Uptime Monitor
 # configured for Actions failures on this repo (GitHub's default for the
 # workflow's own committer / repo watchers).
 #
-# Every check retries across a wide window before failing, on purpose: both
-# Render services are on the free tier and spin down after 15 minutes idle,
+# Every check retries across a wide window before failing, on purpose: the
+# Render service is on the free tier and spins down after 15 minutes idle,
 # so a single slow response is an expected cold start, not an incident. Only
 # a target that stays unreachable across every retry is a real outage.
 on:
@@ -23,14 +23,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Go gateway
-            url: https://skolab-gateway.onrender.com/gateway-health
-          - name: Go gateway (readiness, database)
-            url: https://skolab-gateway.onrender.com/readyz
-          - name: Python backend (liveness)
-            url: https://skolab-backend-py.onrender.com/livez
-          - name: Python backend (health)
-            url: https://skolab-backend-py.onrender.com/health
+          - name: SkoLab API (liveness)
+            url: https://skolab-api.onrender.com/gateway-health
+          - name: SkoLab API (readiness - database and Python)
+            url: https://skolab-api.onrender.com/readyz
     steps:
       - name: Check ${{ matrix.name }}
         run: |

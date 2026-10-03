@@ -115,7 +115,8 @@ metrics and `/observability` endpoint are retired; remove any existing scrape jo
    an ingestion token with metrics/traces write permissions. Use the endpoint and
    `OTEL_EXPORTER_OTLP_HEADERS` value provided there. Keep credentials in Render's
    environment settings, never in Git or the dashboard JSON.
-2. Add these variables to **both** Render services:
+2. Add these variables to the `skolab-api` Render service (it runs both
+   processes; each reports under its own `service.name`):
 
    ```dotenv
    OTEL_EXPORTER_OTLP_ENDPOINT=https://<your-otlp-host>/otlp
@@ -128,7 +129,8 @@ metrics and `/observability` endpoint are retired; remove any existing scrape jo
    `/v1/traces`. If using the standard signal-specific endpoint variables instead,
    provide the complete URL for each signal. Headers follow the SDK's URL-encoded
    comma-separated `key=value` format. Copy Grafana's generated configuration.
-   Render Blueprint already sets distinct service names and production environment.
+   The container entrypoint sets each process's service name
+   (`skolab-gateway`, `skolab-backend-py`); the Blueprint sets the environment.
    Endpoint and credentials are deliberately optional so an unconfigured deployment
    remains functional without sending telemetry elsewhere.
 3. Deploy the code, make several normal API requests, and wait about 30 seconds.

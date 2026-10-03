@@ -1,2 +1,5 @@
 # Generated artifacts should not dominate GitHub language statistics.
 services/backend/alembic/versions/** linguist-generated
+
+# Shell scripts run in Linux containers: never check them out with CRLF.
+*.sh text eol=lf

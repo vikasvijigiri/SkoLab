@@ -43,7 +43,7 @@ also requires the short window (5m, 30m or 6h) to still be burning.
 
 - **Rollback**: Render keeps previous images, and rolling back is the
   fastest fix for a bad deploy.
-- **Kill switch**: `KILL_SWITCHES=<path fragment>` on `skolab-backend-py`
+- **Kill switch**: `KILL_SWITCHES=<path fragment>` on the `skolab-api` service
   returns 503 for matching routes without a redeploy. Use it to shed a
   failing feature so it stops taking the rest of the API down. Those 503s
   still count against availability, so the budget keeps burning; the
@@ -91,8 +91,9 @@ when the compile backend is unreachable or exceeds 25s
 (`colab.sandboxCallTimeout`).
 
 - `COLAB_SANDBOX_URL` set: check the `colab-sandbox` container is up.
-- Unset: compiles fall back to `skolab-backend-py`, which admits only
-  `COLAB_MAX_CONCURRENT_COMPILES` (default 2) at once. A burst of large
+- Unset: compiles run in the Python process inside `skolab-api`, which
+  admits only `COLAB_MAX_CONCURRENT_COMPILES` (1 on the 512 MB free
+  instance) at once. A burst of large
   documents shows up as queueing, then 503s. Check *Compile requests by
   status*.
 

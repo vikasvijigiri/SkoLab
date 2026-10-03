@@ -1,15 +1,31 @@
-# Backend-only Render Blueprint. Both services deploy from `master`.
+# Backend-only Render Blueprint: one service, deployed from `master`.
+#
+# skolab-api runs the Go gateway (public, :8080) and the Python service
+# (127.0.0.1:8000, never public) in one container -- deploy/skolab-api/.
+# One free service fits Render's 750 free instance-hours a month; two
+# always-on services did not. Singapore puts it beside the database
+# (Supabase ap-southeast-1): ~1 ms per query instead of ~175 ms from Oregon.
+#
+# Deploys come from CI, not from Render: a push to master that passes every
+# check runs .github/workflows/release.yml, which deploys this exact commit,
+# waits until it is live and smoke-tests production.
+#
+# `sync: false` values are secrets set on the service (Render dashboard or
+# API), never in this file. Render does not prompt for them when a Blueprint
+# adds a service, so the release copies them once from the services this one
+# replaced (services/release/release.py, adopt_settings).
 services:
   - type: web
-    name: skolab-gateway
+    name: skolab-api
     runtime: docker
     repo: https://github.com/vikasvijigiri/SkoLab
     branch: master
     plan: free
-    region: oregon
-    dockerfilePath: ./services/backend-go/Dockerfile
-    dockerContext: ./services/backend-go
+    region: singapore
+    dockerfilePath: ./deploy/skolab-api/Dockerfile
+    dockerContext: .
     healthCheckPath: /gateway-health
+    autoDeployTrigger: "off"
     envVars:
       - key: PORT
         value: "8080"
@@ -17,75 +33,44 @@ services:
         value: release
       - key: APP_ENV
         value: production
-      - key: OTEL_SERVICE_NAME
-        value: skolab-gateway
       - key: OTEL_EXPORTER_OTLP_PROTOCOL
         value: http/protobuf
       - key: OTEL_TRACES_SAMPLER_ARG
         value: "1"
-      - key: PYTHON_BACKEND_URL
-        sync: false
-      - key: DATABASE_URL
-        sync: false
+      # Both processes share these connections' Supabase pooler budget.
       - key: DB_MAX_CONNS
         value: "15"
       - key: DB_MIN_CONNS
         value: "3"
-      - key: REDIS_URL
-        sync: false
-      - key: INTERNAL_API_TOKEN
-        sync: false
-      - key: GOOGLE_APPLICATION_CREDENTIALS
-        value: /etc/secrets/service-account.json
-      # Set once services/backend-go/cmd/colab-sandbox is deployed as its own
-      # container (docs/deploy/colab-sandbox.md). Unset ⇒ falls back to
-      # proxying /colab/compile to skolab-backend-py.
-      - key: COLAB_SANDBOX_URL
-        sync: false
-
-  - type: web
-    name: skolab-backend-py
-    runtime: docker
-    repo: https://github.com/vikasvijigiri/SkoLab
-    branch: master
-    plan: free
-    region: oregon
-    dockerfilePath: ./services/backend/Dockerfile
-    dockerContext: ./services/backend
-    healthCheckPath: /livez
-    envVars:
-      - key: APP_ENV
-        value: production
-      - key: OTEL_SERVICE_NAME
-        value: skolab-backend-py
-      - key: OTEL_EXPORTER_OTLP_PROTOCOL
-        value: http/protobuf
-      - key: OTEL_TRACES_SAMPLER_ARG
-        value: "1"
-      - key: PORT
-        value: "8000"
       - key: WEB_CONCURRENCY
         value: "1"
+      # One 512 MB instance hosts both processes: one compile at a time.
+      - key: COLAB_MAX_CONCURRENT_COMPILES
+        value: "1"
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: /etc/secrets/service-account.json
+      - key: USER_QUOTA_ENABLED
+        value: "true"
       - key: DATABASE_URL
         sync: false
       - key: DATABASE_ENCRYPTION_KEY
+        sync: false
+      - key: EMAIL_BLIND_INDEX_KEY
+        sync: false
+      - key: INTERNAL_API_TOKEN
         sync: false
       - key: SENTRY_DSN
         sync: false
       - key: APP_BASE_URL
         sync: false
-      - key: INTERNAL_API_TOKEN
+      - key: REDIS_URL
         sync: false
-      - key: RUN_DB_CREATE_ALL
-        sync: false
-      - key: GOOGLE_APPLICATION_CREDENTIALS
-        sync: false
-      - key: EMAIL_BLIND_INDEX_KEY
-        sync: false
-      # Per-user cost quota on /colab/compile — see app/core/quota.py.
-      - key: USER_QUOTA_ENABLED
-        value: "true"
       - key: USER_QUOTA_HOURLY_UNITS
         sync: false
       - key: USER_QUOTA_DAILY_UNITS
+        sync: false
+      # Optional: a separately deployed colab-sandbox worker
+      # (docs/deploy/colab-sandbox.md). Unset: compiles run in this
+      # container's sandboxed Python worker.
+      - key: COLAB_SANDBOX_URL
         sync: false

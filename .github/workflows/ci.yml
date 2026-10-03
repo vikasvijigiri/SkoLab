@@ -92,10 +92,9 @@ jobs:
           fi
 
   images:
-    # Render builds these Dockerfiles; CI tests the code with its own
-    # toolchain. Building the real images (and booting the gateway in release
-    # mode) here means a Dockerfile that cannot build or start fails the PR
-    # instead of silently failing the production deploy.
+    # The gateway on its own, in release mode, without a database: its
+    # router and auth contract must hold before anything else is up. The
+    # production image itself is built and exercised by the staging job.
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -104,7 +103,8 @@ jobs:
         run: docker build -t skolab-gateway services/backend-go
       - name: Boot gateway in release mode
         run: |
-          docker run -d --name gateway -p 8080:8080             -e GIN_MODE=release -e APP_ENV=ci -e INTERNAL_API_TOKEN=ci-only skolab-gateway
+          docker run -d --name gateway -p 8080:8080 \
+            -e GIN_MODE=release -e APP_ENV=ci -e INTERNAL_API_TOKEN=ci-only skolab-gateway
           for i in $(seq 1 30); do curl -fs localhost:8080/gateway-health >/dev/null && break; sleep 1; done
           code() { curl -s -o /dev/null -w '%{http_code}' "localhost:8080$1"; }
           # Liveness up; the workspace API is mounted and refuses anonymous calls.
@@ -121,8 +121,76 @@ jobs:
       - name: Gateway logs
         if: always()
         run: docker logs gateway || true
-      - name: Build Python image
-        run: docker build -t skolab-backend-py services/backend
+
+  staging:
+    # A production-like environment for every PR and merge, at no cost: the
+    # exact image Render runs (deploy/skolab-api: gateway + Python in one
+    # container), booted on a fresh Postgres with real Firebase sign-in, then
+    # put through the same smoke checks the release runs against production
+    # (services/release/release.py). Nothing reaches production unless this
+    # passes. Secrets are throwaway values generated per run, except the
+    # monitoring account's sign-in and the Firebase Admin key.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: skolab
+          POSTGRES_DB: skolab
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      SKOLAB_FIREBASE_API_KEY: ${{ secrets.SKOLAB_FIREBASE_API_KEY }}
+      SKOLAB_SYNTHETIC_EMAIL: ${{ secrets.SKOLAB_SYNTHETIC_EMAIL }}
+      SKOLAB_SYNTHETIC_PASSWORD: ${{ secrets.SKOLAB_SYNTHETIC_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Require staging secrets
+        run: |
+          for key in FIREBASE_SERVICE_ACCOUNT SKOLAB_FIREBASE_API_KEY SKOLAB_SYNTHETIC_EMAIL SKOLAB_SYNTHETIC_PASSWORD; do
+            if [ -z "${!key}" ]; then echo "::error::Repository secret $key is not set"; exit 1; fi
+          done
+      - name: Build the production image
+        run: docker build -f deploy/skolab-api/Dockerfile -t skolab-api .
+      - name: Start staging
+        run: |
+          secrets="$RUNNER_TEMP/secrets"
+          mkdir -p "$secrets"
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$secrets/service-account.json"
+          chmod 0644 "$secrets/service-account.json" # readable by the image's non-root user
+          docker run -d --name skolab-api --network host \
+            -v "$secrets:/etc/secrets:ro" \
+            -e GOOGLE_APPLICATION_CREDENTIALS=/etc/secrets/service-account.json \
+            -e DATABASE_URL=postgresql://postgres:skolab@127.0.0.1:5432/skolab \
+            -e GIN_MODE=release -e APP_ENV=staging \
+            -e INTERNAL_API_TOKEN="$(openssl rand -hex 32)" \
+            -e DATABASE_ENCRYPTION_KEY="$(python -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')" \
+            -e COLAB_MAX_CONCURRENT_COMPILES=1 \
+            skolab-api
+          # Migrations, then Python, then the gateway: wait for the last.
+          for _ in $(seq 1 90); do
+            curl -fs http://127.0.0.1:8080/gateway-health >/dev/null && exit 0
+            [ "$(docker inspect -f '{{.State.Running}}' skolab-api)" = true ] || break
+            sleep 2
+          done
+          echo "::error::staging did not start"
+          exit 1
+      - name: Smoke-test staging (the same checks as production)
+        run: python services/release/release.py --commit "$GITHUB_SHA" --smoke-only --base-url http://127.0.0.1:8080
+      - name: Staging logs
+        if: always()
+        run: docker logs skolab-api 2>&1 | tail -n 200 || true
 
   slo-rules:
     # The SLO alert rules are code: regenerated from one table, then checked
@@ -150,6 +218,6 @@ jobs:
   release:
     # Only a push to master that passed every job above reaches production.
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    needs: [build-and-test, images, slo-rules]
+    needs: [build-and-test, images, slo-rules, staging]
     uses: ./.github/workflows/release.yml
     secrets: inherit
