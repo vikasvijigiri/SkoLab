@@ -130,9 +130,18 @@ jobs:
         run: python services/observability/slo/generate.py --check
       - name: Unit-test the Grafana provisioner
         run: python -m unittest discover -s services/observability/slo -p "test_*.py"
+      - name: Unit-test the release script
+        run: python -m unittest discover -s services/release -p "test_*.py"
       - name: Check and unit-test rules with promtool
         working-directory: services/observability/slo
         run: |
           promtool() { docker run --rm -v "$PWD:/slo" -w /slo --entrypoint promtool prom/prometheus:v3.15.0 "$@"; }
           promtool check rules skolab-slo.rules.yml
           promtool test rules skolab-slo.test.yml
+
+  release:
+    # Only a push to master that passed every job above reaches production.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: [build-and-test, images, slo-rules]
+    uses: ./.github/workflows/release.yml
+    secrets: inherit

@@ -1,0 +1,40 @@
+name: Release to Render
+
+# The last stage of CI on master (ci.yml calls this after every test job
+# passes): deploy the commit to Render, wait until it is live, then smoke-test
+# production. A merge is done only when this is green. Run it by hand
+# (Actions > Release to Render > Run workflow) to redeploy or re-check master.
+# Secrets: RENDER_API_KEY plus the monitoring account's three login secrets.
+on:
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      smoke_only:
+        description: Skip deploying; only run the production smoke checks
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: render-release
+      cancel-in-progress: false
+    env:
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      SKOLAB_FIREBASE_API_KEY: ${{ secrets.SKOLAB_FIREBASE_API_KEY }}
+      SKOLAB_SYNTHETIC_EMAIL: ${{ secrets.SKOLAB_SYNTHETIC_EMAIL }}
+      SKOLAB_SYNTHETIC_PASSWORD: ${{ secrets.SKOLAB_SYNTHETIC_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # skip rebuilding a service whose directory did not change
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Deploy, wait until live, smoke-test production
+        run: python services/release/release.py --commit "$GITHUB_SHA" ${{ inputs.smoke_only && '--smoke-only' || '' }}
