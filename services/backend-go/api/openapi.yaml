@@ -127,8 +127,8 @@ paths:
         - name: Idempotency-Key
           in: header
           required: false
-          description: Retrying with the same key and body returns the same workspace (201, Idempotent-Replayed true). Empty means no key.
-          schema: { type: string, maxLength: 100, pattern: "^[!-~]*$" }
+          description: Retrying with the same key and body returns the same workspace (201, Idempotent-Replayed true). Empty means no key. Printable ASCII; surrounding spaces or tabs are removed in transit, as for any HTTP header.
+          schema: { type: string, maxLength: 100, pattern: "^[ 	]*[!-~]*[ 	]*$" }
       requestBody:
         required: true
         content:
