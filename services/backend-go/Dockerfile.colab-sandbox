@@ -23,7 +23,9 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" \
     -o /out/colab-sandbox ./cmd/colab-sandbox
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Apply available security fixes to packages inherited from the base image.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
     texlive-latex-base \
     util-linux \
     ca-certificates \

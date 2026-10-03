@@ -37,7 +37,9 @@ WORKDIR /app
 # an authenticated, bounded subprocess and must work after deployment, not
 # only on a developer machine. Keep the package set minimal; pdflatex and the
 # base LaTeX classes cover the templates available to supported clients.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Apply available security fixes to packages inherited from the base image.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
     texlive-latex-base \
     util-linux \
     && rm -rf /var/lib/apt/lists/* && \

@@ -32,7 +32,9 @@ WORKDIR /app
 
 # TeX for CoLab compiles (a bounded, sandboxed subprocess; see
 # services/backend/app/api/v1/endpoints/colab.py) and util-linux for prlimit.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Apply available security fixes to packages inherited from the base image.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
     texlive-latex-base \
     util-linux \
     && rm -rf /var/lib/apt/lists/* \
