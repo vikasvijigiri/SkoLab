@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -44,6 +45,19 @@ func BodyLimit(limit int64) gin.HandlerFunc {
 		}
 		if c.Request.Body != nil {
 			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
+		}
+		c.Next()
+	}
+}
+
+// ValidQuery refuses a query string that cannot be decoded (a stray "%",
+// say) with 400. Go's parser would otherwise drop the broken parameter
+// silently, and the handler would answer as if it had never been sent.
+func ValidQuery() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if _, err := url.ParseQuery(c.Request.URL.RawQuery); err != nil {
+			apierror.Abort(c, http.StatusBadRequest, "invalid_query", "The query string is malformed")
+			return
 		}
 		c.Next()
 	}
