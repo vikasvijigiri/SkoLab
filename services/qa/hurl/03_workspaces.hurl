@@ -116,6 +116,12 @@ HTTP 400
 [Asserts]
 jsonpath "$.code" == "invalid_page_size"
 
+GET {{base}}/api/v1/workspaces?pagesize=1
+Authorization: Bearer {{owner_token}}
+HTTP 400
+[Asserts]
+jsonpath "$.code" == "unknown_parameter"
+
 GET {{base}}/api/v1/workspaces?page_token=forged
 Authorization: Bearer {{owner_token}}
 HTTP 400

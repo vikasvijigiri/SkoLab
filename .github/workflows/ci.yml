@@ -197,7 +197,7 @@ jobs:
           rm -f "$secrets"
       - name: Contract fuzzing against the OpenAPI spec (Schemathesis)
         run: |
-          st run services/backend-go/api/openapi.yaml \
+          st --config-file services/qa/schemathesis.toml run services/backend-go/api/openapi.yaml \
             --url http://127.0.0.1:8080 \
             --header "Authorization: Bearer $TOKEN" \
             --checks all \

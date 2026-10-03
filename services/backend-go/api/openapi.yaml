@@ -127,8 +127,8 @@ paths:
         - name: Idempotency-Key
           in: header
           required: false
-          description: Retrying with the same key and body returns the same workspace (201, Idempotent-Replayed true).
-          schema: { type: string, minLength: 1, maxLength: 100, pattern: "^[!-~]+$" }
+          description: Retrying with the same key and body returns the same workspace (201, Idempotent-Replayed true). Empty means no key.
+          schema: { type: string, maxLength: 100, pattern: "^[!-~]*$" }
       requestBody:
         required: true
         content:
@@ -158,6 +158,7 @@ paths:
       tags: [workspaces]
       operationId: listWorkspaces
       summary: Workspaces the caller owns or is a member of
+      description: Query parameters other than page_size and page_token are refused (400 unknown_parameter).
       parameters:
         - { name: page_size, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100 } }
         - { name: page_token, in: query, required: false, schema: { type: string } }
@@ -543,7 +544,7 @@ components:
       type: object
       required: [uid, name]
       properties:
-        uid: { type: string, description: Must be the caller's own Firebase uid. }
+        uid: { type: string, minLength: 1, description: Must be the caller's own Firebase uid. }
         name: { $ref: "#/components/schemas/Text255" }
         discipline: { type: string }
     Text255:

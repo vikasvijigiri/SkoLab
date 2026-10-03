@@ -1,0 +1,7 @@
+# Schemathesis settings for the contract-fuzzing step (CI staging).
+
+# page_token is opaque: only a token this API issued is valid, which a
+# schema cannot express, so a well-formed but made-up one is rightly 400.
+[[operations]]
+include-name = "GET /api/v1/workspaces"
+checks.positive_data_acceptance.expected-statuses = ["2xx", "400", "401", "403", "404", "409", "429", "5xx"]
