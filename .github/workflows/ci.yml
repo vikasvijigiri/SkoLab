@@ -73,7 +73,12 @@ jobs:
           TEST_DATABASE_URL: postgres://postgres:skolab@localhost:5432/skolab
         run: |
           go vet ./...
-          go test ./... -race
+          go test ./... -race -coverprofile=coverage.out
+          # Floor, not target: raise it as coverage grows, never lower it.
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {sub("%", "", $3); print $3}')
+          echo "Go statement coverage: ${total}%"
+          echo "Go statement coverage: **${total}%** (floor 60%)" >> "$GITHUB_STEP_SUMMARY"
+          awk -v t="$total" 'BEGIN { exit !(t >= 60) }' || { echo "::error::Go coverage ${total}% is below the 60% floor"; exit 1; }
       - name: Check Go formatting (informational)
         working-directory: services/backend-go
         # Non-blocking: gofmt was only ever a local pre-commit hook, never
@@ -126,12 +131,14 @@ jobs:
     # A production-like environment for every PR and merge, at no cost: the
     # exact image Render runs (deploy/skolab-api: gateway + Python in one
     # container), booted on a fresh Postgres with real Firebase sign-in, then
-    # put through the same smoke checks the release runs against production
-    # (services/release/release.py). Nothing reaches production unless this
-    # passes. Secrets are throwaway values generated per run, except the
-    # monitoring account's sign-in and the Firebase Admin key.
+    # put through the full QA suite (services/qa): the release smoke checks,
+    # multi-user end-to-end scenarios (Hurl), the real-time WebSocket journey
+    # (k6) and OpenAPI contract fuzzing (Schemathesis). Nothing reaches
+    # production unless this passes. Secrets are throwaway values generated
+    # per run, except the monitoring account's sign-in and the Firebase Admin
+    # key; test users are temporary and deleted at the end.
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -164,8 +171,48 @@ jobs:
       - uses: ./.github/actions/staging
         with:
           firebase-service-account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          # The contract fuzzer sends bad credentials on purpose; without
+          # this the failed-login lockout would block the run's own IP.
+          extra-env: |
+            AUTH_FAILED_LOGIN_BURST=100000
       - name: Smoke-test staging (the same checks as production)
         run: python services/release/release.py --commit "$GITHUB_SHA" --smoke-only --base-url http://127.0.0.1:8080
+      - uses: ./.github/actions/qa-tools
+      - name: End-to-end scenarios (Hurl; owner, editor, viewer, outsider, deleted account)
+        run: bash services/qa/e2e.sh http://127.0.0.1:8080 qa-reports
+      - name: Sign in the monitoring account
+        run: python services/loadtest/fixture.py --base-url http://127.0.0.1:8080
+      - name: Real-time collaboration (k6 WebSocket journey)
+        env:
+          SKOLAB_GATEWAY_URL: http://127.0.0.1:8080
+        run: |
+          secrets="$RUNNER_TEMP/journey-secrets"
+          {
+            echo "skolab-firebase-api-key=$SKOLAB_FIREBASE_API_KEY"
+            echo "skolab-monitor-email=$SKOLAB_SYNTHETIC_EMAIL"
+            echo "skolab-monitor-password=$SKOLAB_SYNTHETIC_PASSWORD"
+            echo "skolab-monitor-workspace=$WORKSPACE_ID"
+          } > "$secrets"
+          k6 run --quiet --secret-source "file=$secrets" services/observability/journey.js
+          rm -f "$secrets"
+      - name: Contract fuzzing against the OpenAPI spec (Schemathesis)
+        run: |
+          st run services/backend-go/api/openapi.yaml \
+            --url http://127.0.0.1:8080 \
+            --header "Authorization: Bearer $TOKEN" \
+            --checks all \
+            --exclude-operation-id deleteAccount \
+            --exclude-operation-id compile \
+            --max-examples 25 \
+            --rate-limit 15/s \
+            --report junit --report-dir qa-reports/schemathesis
+      - name: QA reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: qa-reports-staging
+          path: qa-reports
+          if-no-files-found: ignore
       - name: Staging logs
         if: always()
         run: docker logs skolab-api 2>&1 | tail -n 200 || true

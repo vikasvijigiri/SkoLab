@@ -1,0 +1,86 @@
+name: Security scan (OWASP ZAP)
+
+# Dynamic application security testing: OWASP ZAP's API scan exercises
+# every operation in services/backend-go/api/openapi.yaml, signed in, and
+# reports injection, header, cookie and misconfiguration findings. It runs
+# against CI staging (the production image on a GitHub runner), never
+# production. Weekly and by hand; the HTML report is attached to the run.
+on:
+  schedule:
+    - cron: '0 4 * * 1' # Mondays 04:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-dast
+  cancel-in-progress: false
+
+jobs:
+  zap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: skolab
+          POSTGRES_DB: skolab
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SKOLAB_FIREBASE_API_KEY: ${{ secrets.SKOLAB_FIREBASE_API_KEY }}
+      SKOLAB_SYNTHETIC_EMAIL: ${{ secrets.SKOLAB_SYNTHETIC_EMAIL }}
+      SKOLAB_SYNTHETIC_PASSWORD: ${{ secrets.SKOLAB_SYNTHETIC_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: ./.github/actions/staging
+        with:
+          firebase-service-account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          # A scanner probes with bad input at speed; keep it from being
+          # locked out of the very API it is scanning.
+          extra-env: |
+            AUTH_FAILED_LOGIN_BURST=100000
+            RATE_LIMIT_USER_RPS=100000
+            RATE_LIMIT_USER_BURST=100000
+            RATE_LIMIT_IP_RPS=100000
+            RATE_LIMIT_IP_BURST=100000
+      - name: Sign in the monitoring account
+        run: python services/loadtest/fixture.py --base-url http://127.0.0.1:8080
+      - name: ZAP API scan
+        run: |
+          mkdir -p zap
+          # The spec names production; point this copy at staging.
+          sed 's#https://skolab-api.onrender.com#http://127.0.0.1:8080#' \
+            services/backend-go/api/openapi.yaml > zap/openapi.yaml
+          chmod -R a+rw zap
+          status=0
+          docker run --rm --network host -v "$PWD/zap:/zap/wrk:rw" \
+            -e ZAP_AUTH_HEADER=Authorization \
+            -e ZAP_AUTH_HEADER_VALUE="Bearer $TOKEN" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-api-scan.py -t /zap/wrk/openapi.yaml -f openapi \
+              -r report.html -J report.json -w report.md -I || status=$?
+          if [ -f zap/report.md ]; then cat zap/report.md >> "$GITHUB_STEP_SUMMARY"; fi
+          # -I: warnings are reported, not fatal; failures (status 1) fail the run.
+          [ "$status" -le 2 ] && [ "$status" -ne 1 ] || exit "$status"
+      - name: ZAP report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: zap-report
+          path: zap
+          if-no-files-found: ignore
+      - name: Staging logs
+        if: failure()
+        run: docker logs skolab-api 2>&1 | tail -n 200 || true

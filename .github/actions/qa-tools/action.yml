@@ -1,0 +1,32 @@
+name: QA tools
+description: >
+  Install the pinned, checksum-verified QA toolchain: Hurl (end-to-end
+  scenarios), k6 (WebSocket journey), and the Python packages for test users
+  and Schemathesis (contract fuzzing).
+
+runs:
+  using: composite
+  steps:
+    - name: Install Hurl 8.0.1
+      shell: bash
+      run: |
+        base=https://github.com/Orange-OpenSource/hurl/releases/download/8.0.1
+        curl --fail --location --retry 3 -o hurl.deb "$base/hurl_8.0.1_amd64.deb"
+        curl --fail --location --retry 3 -o hurl.deb.sha256 "$base/hurl_8.0.1_amd64.deb.sha256"
+        echo "$(awk '{print $1}' hurl.deb.sha256)  hurl.deb" | sha256sum --check
+        sudo apt-get install -y --no-install-recommends ./hurl.deb >/dev/null
+        rm -f hurl.deb hurl.deb.sha256
+        hurl --version | head -1
+    - name: Install k6 2.3.0
+      shell: bash
+      run: |
+        base=https://github.com/grafana/k6/releases/download/v2.3.0
+        curl --fail --location --retry 3 -o k6.tar.gz "$base/k6-v2.3.0-linux-amd64.tar.gz"
+        curl --fail --location --retry 3 -o k6-checksums.txt "$base/k6-v2.3.0-checksums.txt"
+        awk '$2 == "k6-v2.3.0-linux-amd64.tar.gz" {print $1 "  k6.tar.gz"}' k6-checksums.txt > k6.sha256
+        test -s k6.sha256 && sha256sum --check k6.sha256
+        tar -xzf k6.tar.gz && sudo mv k6-v2.3.0-linux-amd64/k6 /usr/local/bin/k6
+        rm -rf k6.tar.gz k6-checksums.txt k6.sha256 k6-v2.3.0-linux-amd64
+    - name: Install Python QA packages
+      shell: bash
+      run: pip install --quiet -r services/qa/requirements.txt
