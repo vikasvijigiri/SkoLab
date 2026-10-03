@@ -25,7 +25,8 @@ COPY . .
 RUN go mod verify
 RUN go build -o main .
 
-FROM alpine:latest
+# Pinned, not :latest, so a rebuild cannot silently change the base OS.
+FROM alpine:3.24
 WORKDIR /app
 
 # Non-root, mirroring services/backend/Dockerfile's uid/gid convention.
@@ -35,4 +36,5 @@ COPY --from=builder --chown=skolab:skolab /app/main .
 USER skolab
 
 EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD wget -q -O /dev/null http://127.0.0.1:8080/gateway-health || exit 1
 CMD ["./main"]

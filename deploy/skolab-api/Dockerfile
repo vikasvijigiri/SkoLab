@@ -50,6 +50,9 @@ ENV PATH=/home/schoolab/.local/bin:$PATH \
 
 USER schoolab
 EXPOSE 8080
+# Container-level liveness for any runtime that honours it (Render uses its
+# own check on /gateway-health). The start period covers migrations + Python.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=180s --retries=3 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/gateway-health', timeout=4)"
 # Run through bash so the script needs no executable bit (Windows checkouts
 # drop it).
 CMD ["bash", "/usr/local/bin/skolab-entrypoint"]

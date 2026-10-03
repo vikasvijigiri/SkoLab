@@ -237,21 +237,16 @@ async def init_db() -> None:
         # for a live Supabase database that predates a column being added to
         # the ORM model, even though create_all() just above already creates
         # it fresh on a brand-new database.
-        for col_name, col_type in [
-            ("username", "VARCHAR(100) UNIQUE"),
-            ("author_name", "VARCHAR(255)"),
-            ("phone", "VARCHAR(50)"),
-            ("research_focus", "TEXT"),
-        ]:
+        # Fixed statements, never assembled from values: DDL cannot take bind
+        # parameters, so nothing here may be built by string formatting.
+        for statement in (
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(100) UNIQUE",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS author_name VARCHAR(255)",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50)",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS research_focus TEXT",
+        ):
             try:
-                await conn.execute(
-                    text(
-                        f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col_name} {col_type};"
-                    )
-                )
+                await conn.execute(text(statement))
             except Exception as e:
-                print(
-                    f"[init_db] Note: could not alter table for column {col_name}: {e}",
-                    flush=True,
-                )
+                print(f"[init_db] Note: could not apply {statement!r}: {e}", flush=True)
 
