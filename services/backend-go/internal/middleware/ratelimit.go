@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/skolab/backend-go/internal/apierror"
 	"github.com/skolab/backend-go/internal/security"
 	"golang.org/x/time/rate"
 )
@@ -107,10 +108,7 @@ func (rl *RateLimiter) Limit() gin.HandlerFunc {
 		ip := clientIP(c)
 		if !rl.getLimiter(ip).Allow() {
 			c.Header("Retry-After", "1")
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error":       "rate_limit_exceeded",
-				"retry_after": "1s",
-			})
+			apierror.Abort(c, http.StatusTooManyRequests, "rate_limit_exceeded", "Too many requests; slow down")
 			return
 		}
 		c.Next()
@@ -129,9 +127,7 @@ func (rl *RateLimiter) PerUser() gin.HandlerFunc {
 		if uid != "" && !rl.getLimiter(uid).Allow() {
 			security.Record(c, security.Event{Name: security.RateLimitUser, Outcome: security.Throttled})
 			c.Header("Retry-After", "1")
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error": "Too many requests; slow down", "code": "rate_limit_exceeded",
-			})
+			apierror.Abort(c, http.StatusTooManyRequests, "rate_limit_exceeded", "Too many requests; slow down")
 			return
 		}
 		c.Next()

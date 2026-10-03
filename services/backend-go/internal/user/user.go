@@ -12,6 +12,9 @@ package user
 import (
 	"log/slog"
 	"net/http"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 
@@ -41,6 +44,12 @@ func SyncUserProfile(c *gin.Context) {
 	// from the client-controlled JSON body, so without this check any
 	// authenticated caller could overwrite any other user's display_name
 	// (2026-09-12 endpoint audit).
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Name == "" || utf8.RuneCountInString(req.Name) > 255 || strings.IndexFunc(req.Name, unicode.IsControl) >= 0 {
+		apierror.Abort(c, http.StatusBadRequest, "invalid_name", "name must be 1 to 255 characters with no control characters")
+		return
+	}
+
 	if req.UID != c.GetString("user_id") {
 		apierror.Abort(c, http.StatusForbidden, "forbidden", "You may only sync your own profile")
 		return
@@ -99,5 +108,5 @@ func DeleteUser(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "success", "detail": "Account deleted successfully."})
+	c.Status(http.StatusNoContent)
 }

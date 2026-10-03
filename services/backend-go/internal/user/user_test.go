@@ -3,6 +3,7 @@ package user
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -61,6 +62,16 @@ func TestSyncUserProfile_MissingRequiredFieldIs400(t *testing.T) {
 	w := do(router(), http.MethodPost, "/api/v1/users/profile/sync", `{"name":"Ada"}`, devAuth)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400 (missing uid)", w.Code)
+	}
+}
+
+func TestSyncUserProfile_InvalidNameIs400(t *testing.T) {
+	for _, name := range []string{"   ", strings.Repeat("a", 256), "Ada\nLovelace"} {
+		body := `{"uid":"dev_user","name":` + strconv.Quote(name) + `}`
+		w := do(router(), http.MethodPost, "/api/v1/users/profile/sync", body, devAuth)
+		if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), `"invalid_name"`) {
+			t.Fatalf("name %q: status = %d %s, want 400 invalid_name", name, w.Code, w.Body)
+		}
 	}
 }
 

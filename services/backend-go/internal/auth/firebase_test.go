@@ -106,6 +106,10 @@ func TestVerifyUser_RejectsMissingOrMalformedHeader(t *testing.T) {
 				t.Errorf("GIN_MODE=%q header=%q: status = %d, want %d",
 					mode, header, w.Code, http.StatusUnauthorized)
 			}
+			// RFC 6750: a 401 tells the client which scheme to use.
+			if got := w.Header().Get("WWW-Authenticate"); got != "Bearer" {
+				t.Errorf("header=%q: WWW-Authenticate = %q", header, got)
+			}
 		}
 	}
 }

@@ -122,13 +122,13 @@ func storeError(c *gin.Context, err error) {
 	}
 	switch {
 	case errors.Is(err, ErrNotFound):
-		fail(c, http.StatusNotFound, "not_found", "Workspace not found")
+		fail(c, http.StatusNotFound, "not_found", "Not found, or you do not have access to it")
 	case errors.Is(err, ErrForbidden):
 		fail(c, http.StatusForbidden, "owner_required", "Only the workspace owner may do this")
 	case errors.Is(err, ErrLimitReached):
 		fail(c, http.StatusForbidden, "workspace_limit_reached", "You have reached the maximum number of workspaces")
 	case errors.Is(err, ErrProfileRequired):
-		fail(c, http.StatusConflict, "profile_required", "Sync your profile before creating a workspace")
+		fail(c, http.StatusConflict, "profile_required", "Sync your profile first (POST /api/v1/users/profile/sync)")
 	case errors.Is(err, ErrInviteForbidden):
 		fail(c, http.StatusForbidden, "invite_forbidden", "Only the owner or an editor may manage invites")
 	case errors.Is(err, ErrOwnerCannotLeave):

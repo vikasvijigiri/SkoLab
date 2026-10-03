@@ -20,6 +20,7 @@ import (
 	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/skolab/backend-go/internal/apierror"
 	"github.com/skolab/backend-go/internal/auth"
 	"github.com/skolab/backend-go/internal/colab"
 	"github.com/skolab/backend-go/internal/db"
@@ -128,6 +129,11 @@ func main() {
 	security.UseStore(db.Pool)
 
 	r := gin.New()
+	// Unknown paths answer 404 and known paths with the wrong method 405
+	// (Gin adds the Allow header), both in the standard error body.
+	r.HandleMethodNotAllowed = true
+	r.NoRoute(apierror.NoRoute)
+	r.NoMethod(apierror.NoMethod)
 	r.Use(otel.Middleware())
 	r.Use(middleware.Recovery())
 	// Repanic: true — sentrygin captures the panic as a Sentry event, then
@@ -164,9 +170,11 @@ func main() {
 	workspaceTickets := websocket.NewPostgresWorkspaceTicketStore(db.Pool)
 
 	// ── Health ────────────────────────────────────────────────────────────────
-	r.GET("/gateway-health", func(c *gin.Context) {
+	liveness := func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "online", "service": "go-gateway"})
-	})
+	}
+	r.GET("/gateway-health", liveness)
+	r.HEAD("/gateway-health", liveness) // uptime monitors often probe with HEAD
 	// Readiness — /gateway-health stays the dependency-free liveness probe
 	// Render restarts on; this one answers "can this instance serve DB-backed
 	// routes right now?" for synthetic monitoring and future load balancers.

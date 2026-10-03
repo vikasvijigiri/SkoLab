@@ -110,6 +110,14 @@ jobs:
           # Liveness up; the workspace API is mounted and refuses anonymous calls.
           test "$(code /gateway-health)" = 200
           test "$(code /api/v1/workspaces)" = 401
+          # Router contract: JSON 404 for unknown paths, 405 + Allow for a
+          # known path with the wrong method, HEAD answered on liveness.
+          test "$(code /no-such-endpoint)" = 404
+          curl -s localhost:8080/no-such-endpoint | grep -q '"code":"not_found"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X PUT localhost:8080/gateway-health)" = 405
+          curl -s -D - -o /dev/null -X PUT localhost:8080/gateway-health | grep -qi '^allow:'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -I localhost:8080/gateway-health)" = 200
+          curl -s -D - -o /dev/null localhost:8080/api/v1/workspaces | grep -qi '^www-authenticate: bearer'
       - name: Gateway logs
         if: always()
         run: docker logs gateway || true

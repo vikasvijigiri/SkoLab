@@ -14,6 +14,7 @@ package colab
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -33,6 +35,8 @@ const (
 	compileQuotaCost   = 4
 	retryAfterSeconds  = 5
 	sandboxCallTimeout = 25 * time.Second
+	// maxSourceRunes matches the compile backends' own limit.
+	maxSourceRunes = 100_000
 )
 
 type activeUsers struct {
@@ -72,6 +76,18 @@ func Handler(pool *pgxpool.Pool, httpClient *http.Client, pythonURL string) gin.
 			return
 		}
 
+		// Validate first: a malformed request is refused with 400 before it
+		// takes the single-flight slot or spends any quota.
+		body, readErr := io.ReadAll(c.Request.Body)
+		if readErr != nil {
+			apierror.Abort(c, http.StatusBadRequest, "invalid_body", "Could not read the request body")
+			return
+		}
+		if code, message := validateRequest(body); code != "" {
+			apierror.Abort(c, http.StatusBadRequest, code, message)
+			return
+		}
+
 		if !inFlight.tryStart(uid) {
 			c.Header("Retry-After", strconv.Itoa(retryAfterSeconds))
 			apierror.Abort(c, http.StatusTooManyRequests, "compile_in_progress", "You already have a compile in progress")
@@ -93,33 +109,89 @@ func Handler(pool *pgxpool.Pool, httpClient *http.Client, pythonURL string) gin.
 			// "allow" rather than lock every user out on an infra fault.
 		}
 
-		body, readErr := io.ReadAll(c.Request.Body)
-		if readErr != nil {
-			apierror.Abort(c, http.StatusBadRequest, "invalid_body", "Could not read the request body")
-			return
-		}
-
 		var status int
+		var header http.Header
 		var respBody []byte
 		var upstreamErr error
 		if sandboxURL != "" {
-			status, respBody, upstreamErr = callSandbox(c.Request.Context(), httpClient, sandboxURL, internalToken, body)
+			status, header, respBody, upstreamErr = callSandbox(c.Request.Context(), httpClient, sandboxURL, internalToken, body)
 		} else {
-			status, respBody, upstreamErr = callPython(c.Request.Context(), httpClient, pythonURL, internalToken, c.Request.Header, body)
+			status, header, respBody, upstreamErr = callPython(c.Request.Context(), httpClient, pythonURL, internalToken, c.Request.Header, body)
 		}
 		if upstreamErr != nil {
 			slog.Error("colab: compile backend unreachable", "err", upstreamErr, "sandbox", sandboxURL != "")
+			c.Header("Retry-After", strconv.Itoa(retryAfterSeconds))
 			apierror.Abort(c, http.StatusServiceUnavailable, "compile_unavailable", "The compile service is temporarily unavailable")
+			return
+		}
+		if status >= 400 {
+			upstreamError(c, status, header)
 			return
 		}
 		c.Data(status, "application/json", respBody)
 	}
 }
 
-func callSandbox(ctx context.Context, client *http.Client, baseURL, token string, body []byte) (int, []byte, error) {
+type compileRequest struct {
+	LatexSource *string `json:"latex_source"`
+	Engine      string  `json:"engine"`
+}
+
+// validateRequest applies the compile contract (same limits as the
+// backends) and returns an error code and message, or "" when valid.
+func validateRequest(body []byte) (string, string) {
+	var req compileRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		return "invalid_body", "Request body must be JSON with latex_source"
+	}
+	if req.LatexSource == nil {
+		return "invalid_body", "latex_source is required"
+	}
+	switch n := utf8.RuneCountInString(*req.LatexSource); {
+	case n == 0:
+		return "invalid_source", "latex_source must not be empty"
+	case n > maxSourceRunes:
+		return "invalid_source", "latex_source must be at most 100,000 characters"
+	case req.Engine != "" && req.Engine != "pdflatex":
+		return "invalid_engine", "engine must be pdflatex"
+	}
+	return "", ""
+}
+
+// upstreamError answers a failed backend call in the gateway's own error
+// contract. Backend bodies are not passed through: their shape differs
+// from the gateway's and could carry internal detail.
+func upstreamError(c *gin.Context, status int, header http.Header) {
+	retryAfter := header.Get("Retry-After")
+	if retryAfter == "" {
+		retryAfter = strconv.Itoa(retryAfterSeconds)
+	}
+	switch {
+	case status == http.StatusUnauthorized:
+		apierror.Abort(c, http.StatusUnauthorized, "token_invalid", "Session is no longer valid; sign in again")
+	case status == http.StatusTooManyRequests:
+		c.Header("Retry-After", retryAfter)
+		apierror.Abort(c, http.StatusTooManyRequests, "compile_in_progress", "You already have a compile in progress")
+	case status == http.StatusServiceUnavailable:
+		c.Header("Retry-After", retryAfter)
+		apierror.Abort(c, http.StatusServiceUnavailable, "compile_busy", "All compile workers are busy; try again shortly")
+	case status < 500 && status != http.StatusForbidden:
+		// The gateway already validated the request, so a backend 4xx is a
+		// contract mismatch between the two services, not the caller's fault.
+		slog.Error("colab: compile backend refused a validated request", "status", status)
+		apierror.Abort(c, http.StatusBadGateway, "compile_failed", "The compile service could not process the request")
+	default:
+		// 403 means the backend refused the gateway's own credential: a
+		// deployment misconfiguration, never the caller's fault.
+		slog.Error("colab: compile backend failed", "status", status)
+		apierror.Abort(c, http.StatusBadGateway, "compile_failed", "The compile service failed; try again")
+	}
+}
+
+func callSandbox(ctx context.Context, client *http.Client, baseURL, token string, body []byte) (int, http.Header, []byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/compile", bytes.NewReader(body))
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Internal-Token", token)
@@ -129,10 +201,10 @@ func callSandbox(ctx context.Context, client *http.Client, baseURL, token string
 // callPython forwards the caller's Firebase token plus the gateway's
 // X-Internal-Token: Python serves compiles only for the gateway, which has
 // already charged the quota and holds the per-user single-flight slot.
-func callPython(ctx context.Context, client *http.Client, baseURL, token string, inHeaders http.Header, body []byte) (int, []byte, error) {
+func callPython(ctx context.Context, client *http.Client, baseURL, token string, inHeaders http.Header, body []byte) (int, http.Header, []byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/api/v1/colab/compile", bytes.NewReader(body))
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Internal-Token", token)
@@ -142,17 +214,17 @@ func callPython(ctx context.Context, client *http.Client, baseURL, token string,
 	return doWithTimeout(client, req)
 }
 
-func doWithTimeout(client *http.Client, req *http.Request) (int, []byte, error) {
+func doWithTimeout(client *http.Client, req *http.Request) (int, http.Header, []byte, error) {
 	ctx, cancel := context.WithTimeout(req.Context(), sandboxCallTimeout)
 	defer cancel()
 	resp, err := client.Do(req.WithContext(ctx))
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
-	return resp.StatusCode, b, nil
+	return resp.StatusCode, resp.Header, b, nil
 }
