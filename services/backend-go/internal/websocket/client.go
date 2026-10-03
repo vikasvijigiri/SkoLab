@@ -230,28 +230,3 @@ func serveWs(hub *Hub, authorizer WorkspaceAuthorizer, c *gin.Context, reauthori
 	go client.readPump()
 	go client.reauthorize(reauthorizeEvery)
 }
-
-// ServeHealthWs handles persistent websocket connections for system health.
-func ServeHealthWs(c *gin.Context) {
-	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-	if err != nil {
-		slog.Warn("health ws upgrade error", "err", err)
-		return
-	}
-	defer conn.Close()
-
-	conn.SetReadLimit(maxMessageSize)
-	conn.SetReadDeadline(time.Now().Add(pongWait))
-	conn.SetPongHandler(func(string) error { conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
-
-	// Block and keep the connection alive
-	for {
-		mt, message, err := conn.ReadMessage()
-		if err != nil {
-			break
-		}
-		// Optional: echo back any payload (like ping timestamps)
-		conn.SetWriteDeadline(time.Now().Add(writeWait))
-		conn.WriteMessage(mt, message)
-	}
-}

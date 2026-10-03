@@ -3,8 +3,9 @@
 Untrusted TeX source is code execution in all but name, so this route is
 layered defence, not a single control:
 
-1. Identity + budget: verified Firebase user, charged against the per-user
-   cost quota (app/core/quota.py) — 429 once spent.
+1. Gateway only + identity: the call must carry the gateway's
+   X-Internal-Token and a verified Firebase user. The gateway charges the
+   per-user compile quota before forwarding, so it is not charged again here.
 2. Admission control: one compile per user at a time, and a bounded number of
    concurrent compiles per worker; excess load is refused fast (503 +
    Retry-After) instead of queueing unbounded CPU-heavy processes.
@@ -35,7 +36,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.api.dependencies import require_quota
+from app.api.dependencies import get_verified_user, require_gateway
 from app.schemas.colab import CompileRequest, CompileResponse
 
 logger = logging.getLogger("skolab.colab")
@@ -50,7 +51,6 @@ _ERROR_LINE = re.compile(r"^(.*?):(\d+):\s*(.*)$")
 _MAX_CONCURRENT = max(1, int(os.environ.get("COLAB_MAX_CONCURRENT_COMPILES", "2")))
 _ADMISSION_WAIT_SECONDS = 5
 _RETRY_AFTER_SECONDS = 5
-_COMPILE_QUOTA_COST = 4
 
 # OS limits applied through prlimit(1): CPU seconds, address space, max file
 # written, open files. pdflatex needs well under these for a normal paper.
@@ -232,7 +232,9 @@ def _compile_in_sandbox(engine: str, source: str) -> CompileResponse:
 
 @router.post("/colab/compile", response_model=CompileResponse)
 async def compile_latex(
-    req: CompileRequest, user: dict = Depends(require_quota(_COMPILE_QUOTA_COST))
+    req: CompileRequest,
+    _gateway: None = Depends(require_gateway),
+    user: dict = Depends(get_verified_user),
 ) -> CompileResponse:
     """Compile an authenticated researcher's source in an isolated sandbox.
 

@@ -140,17 +140,24 @@ def expect(label: str, actual, wanted) -> None:
 
 
 def smoke(api_key: str, email: str, password: str) -> None:
-    """Health, an anonymous refusal, and the invite lifecycle as the verified
-    monitoring account on its own workspace. The link it creates is revoked."""
+    """Health, security headers, refusals (anonymous, oversized, gateway
+    bypass), and the invite lifecycle as the verified monitoring account on
+    its own workspace. The link it creates is revoked."""
     for url in (f"{GATEWAY}/gateway-health", f"{GATEWAY}/readyz", f"{BACKEND}/livez", f"{BACKEND}/health"):
         expect(url.split("//")[1], status_of(url), 200)
     expect("anonymous /api/v1/workspaces refused", status_of(f"{GATEWAY}/api/v1/workspaces"), 401)
+    with urllib.request.urlopen(f"{GATEWAY}/gateway-health", timeout=120) as response:
+        expect("HSTS and nosniff headers", (bool(response.headers.get("Strict-Transport-Security")),
+                                            response.headers.get("X-Content-Type-Options")), (True, "nosniff"))
+    expect("oversized body refused", status_of(f"{GATEWAY}/api/v1/invites/preview", None, {"token": "x" * (2 << 20)}), 413)
 
     workspace = ensure_monitoring_workspace(api_key, email, password)
     token = request_json("Firebase sign-in", "POST", f"{FIREBASE_SIGN_IN}?key={api_key}",
                          {"email": email, "password": password, "returnSecureToken": True})["idToken"]
     api = f"{GATEWAY}/api/v1"
     expect("signed-in list workspaces", status_of(f"{api}/workspaces", token), 200)
+    expect("python compile refuses calls that skip the gateway",
+           status_of(f"{BACKEND}/api/v1/colab/compile", token, {"latex_source": "x"}), 403)
 
     options = request_json("Invite options", "GET", f"{api}/workspaces/{workspace}/invite-options", token=token)
     expect("invite options offer viewer", "viewer" in options["roles"], True)

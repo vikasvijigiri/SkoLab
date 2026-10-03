@@ -11,6 +11,7 @@ import (
 
 	firebase "firebase.google.com/go/v4"
 	"github.com/gin-gonic/gin"
+	"github.com/skolab/backend-go/internal/apierror"
 	"github.com/skolab/backend-go/internal/security"
 )
 
@@ -68,7 +69,7 @@ func verifyTokenAndSetUser(c *gin.Context, idToken string) {
 		if releaseMode() {
 			slog.Error("Firebase auth is unavailable and GIN_MODE=release — refusing the request instead of falling back to dev_user")
 			security.Record(c, security.Event{Name: security.AuthUnavailable, Outcome: security.Failed, Reason: "firebase_not_configured"})
-			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Authentication is temporarily unavailable"})
+			apierror.Abort(c, http.StatusServiceUnavailable, "auth_unavailable", "Authentication is temporarily unavailable")
 			return
 		}
 		slog.Warn("authClient is nil, bypassing auth for development.")
@@ -102,7 +103,7 @@ func verifyTokenAndSetUser(c *gin.Context, idToken string) {
 		}
 		slog.Error("account status check unavailable", "err", err)
 		security.Record(c, security.Event{Name: security.AuthUnavailable, Outcome: security.Failed, UserID: token.UID})
-		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Authentication is temporarily unavailable"})
+		apierror.Abort(c, http.StatusServiceUnavailable, "auth_unavailable", "Authentication is temporarily unavailable")
 		return
 	}
 
@@ -120,7 +121,7 @@ func VerifyUser() gin.HandlerFunc {
 		}
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid Authorization header"})
+			apierror.Abort(c, http.StatusUnauthorized, "token_missing", "Missing or invalid Authorization header")
 			return
 		}
 		idToken := strings.TrimPrefix(authHeader, "Bearer ")

@@ -10,12 +10,12 @@
 package user
 
 import (
-	"context"
 	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/skolab/backend-go/internal/apierror"
 	"github.com/skolab/backend-go/internal/auth"
 	"github.com/skolab/backend-go/internal/db"
 	"github.com/skolab/backend-go/internal/security"
@@ -32,7 +32,7 @@ type UserProfileSyncRequest struct {
 func SyncUserProfile(c *gin.Context) {
 	var req UserProfileSyncRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		apierror.Abort(c, http.StatusBadRequest, "invalid_body", "Request body must be JSON with uid and name")
 		return
 	}
 
@@ -42,12 +42,12 @@ func SyncUserProfile(c *gin.Context) {
 	// authenticated caller could overwrite any other user's display_name
 	// (2026-09-12 endpoint audit).
 	if req.UID != c.GetString("user_id") {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: you may only sync your own profile."})
+		apierror.Abort(c, http.StatusForbidden, "forbidden", "You may only sync your own profile")
 		return
 	}
 
 	if db.Pool == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "database unavailable"})
+		apierror.Abort(c, http.StatusServiceUnavailable, "database_unavailable", "The database is temporarily unavailable")
 		return
 	}
 
@@ -56,8 +56,8 @@ func SyncUserProfile(c *gin.Context) {
 		VALUES ($1, $2)
 		ON CONFLICT (id) DO UPDATE SET display_name = $2
 	`
-	if _, err := db.Pool.Exec(context.Background(), query, req.UID, req.Name); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to sync user to database"})
+	if _, err := db.Pool.Exec(c.Request.Context(), query, req.UID, req.Name); err != nil {
+		apierror.Abort(c, http.StatusInternalServerError, "internal_error", "Could not save the profile")
 		return
 	}
 
@@ -79,23 +79,23 @@ func DeleteUser(c *gin.Context) {
 	tokenUserID := c.GetString("user_id")
 
 	if targetUserID != tokenUserID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: you may only delete your own account."})
+		apierror.Abort(c, http.StatusForbidden, "forbidden", "You may only delete your own account")
 		return
 	}
 
 	if db.Pool == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "database unavailable"})
+		apierror.Abort(c, http.StatusServiceUnavailable, "database_unavailable", "The database is temporarily unavailable")
 		return
 	}
 
-	if _, err := db.Pool.Exec(context.Background(), "DELETE FROM users WHERE id = $1", targetUserID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+	if _, err := db.Pool.Exec(c.Request.Context(), "DELETE FROM users WHERE id = $1", targetUserID); err != nil {
+		apierror.Abort(c, http.StatusInternalServerError, "internal_error", "Could not delete the account data")
 		return
 	}
 	security.Audit(c, security.Event{Name: security.AccountDeleted, Outcome: security.Allowed})
 	if err := auth.DeleteIdentity(c.Request.Context(), targetUserID); err != nil {
 		slog.Error("account deletion: identity provider step failed", "err", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Account data was deleted, but sign-in removal failed; please retry."})
+		apierror.Abort(c, http.StatusBadGateway, "identity_delete_failed", "Account data was deleted, but sign-in removal failed; please retry")
 		return
 	}
 
