@@ -1,0 +1,129 @@
+name: Database backup
+
+# Nightly encrypted backup of production's application data, kept only after
+# a restore from the encrypted copy succeeds and matches production. Archives
+# are AES-256 encrypted with BACKUP_PASSPHRASE and kept as run artifacts for
+# 35 days. See services/backup/README.md for recovery.
+#
+# Pull requests that touch the backup run the same script against a seeded
+# throwaway database instead (never production).
+on:
+  schedule:
+    - cron: '30 20 * * *' # 02:00 IST, nightly
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - services/backup/**
+      - .github/workflows/backup.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-backup-${{ github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      restore:
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_PASSWORD: restore-drill-only
+          POSTGRES_DB: skolab
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Require backup secrets
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          for key in DATABASE_URL BACKUP_PASSPHRASE; do
+            if [ -z "${!key}" ]; then echo "::error::Repository secret $key is not set"; exit 1; fi
+          done
+      - name: Back up, encrypt, and restore from the encrypted copy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          RESTORE_URL: postgresql://postgres:restore-drill-only@127.0.0.1:5433/skolab
+        run: bash services/backup/backup.sh backup
+      - uses: actions/upload-artifact@v7
+        with:
+          name: skolab-db-${{ github.run_id }}
+          path: backup
+          retention-days: 35
+          if-no-files-found: error
+
+  drill:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      source:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: source-only
+          POSTGRES_DB: skolab
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      restore:
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_PASSWORD: restore-drill-only
+          POSTGRES_DB: skolab
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:source-only@127.0.0.1:5432/skolab
+      RESTORE_URL: postgresql://postgres:restore-drill-only@127.0.0.1:5433/skolab
+      BACKUP_PASSPHRASE: drill-only-not-a-secret
+    steps:
+      - uses: actions/checkout@v7
+      - name: Seed a production-shaped database
+        run: |
+          docker run --rm -i --network host postgres:18 psql -v ON_ERROR_STOP=1 \
+            postgresql://postgres:source-only@127.0.0.1:5432/skolab <<'SQL'
+          CREATE SCHEMA extensions;
+          CREATE EXTENSION vector WITH SCHEMA extensions;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE TABLE alembic_version (version_num varchar(32) PRIMARY KEY);
+          INSERT INTO alembic_version VALUES ('b8c9d0e1f2a3');
+          CREATE TABLE users (id text PRIMARY KEY, name text NOT NULL);
+          CREATE TABLE workspaces (id uuid PRIMARY KEY, owner_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE, title text);
+          CREATE TABLE work_embeddings (id int PRIMARY KEY, embedding extensions.vector(3) NOT NULL);
+          INSERT INTO users SELECT 'u' || g, 'User ' || g FROM generate_series(1, 50) g;
+          INSERT INTO workspaces SELECT gen_random_uuid(), 'u' || (g % 50 + 1), 'W' || g FROM generate_series(1, 120) g;
+          INSERT INTO work_embeddings VALUES (1, '[1,2,3]');
+          ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+          CREATE POLICY own_row ON users TO authenticated USING (true);
+          GRANT SELECT ON users TO authenticated;
+          SQL
+      - name: Back up, encrypt, and restore from the encrypted copy
+        run: bash services/backup/backup.sh backup
+      - name: Archive is encrypted, checksummed, and recoverable with the passphrase alone
+        run: |
+          cd backup
+          sha256sum -c ./*.sha256
+          ! tar -tf ./*.tar.gpg 2>/dev/null
+          gpg --batch --quiet --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" -d ./*.tar.gpg | tar -t | sort | tr '\n' ' ' \
+            | grep -qx 'manifest.json row_counts.txt skolab.dump '

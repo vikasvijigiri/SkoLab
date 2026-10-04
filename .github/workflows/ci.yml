@@ -39,15 +39,8 @@ jobs:
       - name: Lint Python backend
         working-directory: services/backend
         run: ruff check .
-      - name: Type-check Python backend (informational)
+      - name: Type-check Python backend
         working-directory: services/backend
-        # Non-blocking: mypy is pinned in requirements-dev.txt but was never run
-        # anywhere (2026-09-26 reliability audit). It currently reports ~180
-        # pre-existing errors across ~30 files, mostly SQLAlchemy Column[] typing
-        # and Optional handling that predate this step — fixing those is separate,
-        # larger work. This step exists so the count is visible in every CI run
-        # instead of invisible, without blocking anyone's build on day one.
-        continue-on-error: true
         run: mypy app/ --ignore-missing-imports
       - name: Bootstrap backend schema
         working-directory: services/backend

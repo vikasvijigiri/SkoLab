@@ -22,6 +22,7 @@ import (
 	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/skolab/backend-go/internal/apierror"
 	"github.com/skolab/backend-go/internal/auth"
 	"github.com/skolab/backend-go/internal/colab"
@@ -132,35 +133,7 @@ func main() {
 	}
 	security.UseStore(db.Pool)
 
-	r := gin.New()
-	// Unknown paths answer 404 and known paths with the wrong method 405
-	// (Gin adds the Allow header), both in the standard error body.
-	r.HandleMethodNotAllowed = true
-	r.NoRoute(apierror.NoRoute)
-	r.NoMethod(apierror.NoMethod)
-	r.Use(otel.Middleware())
-	r.Use(middleware.Recovery())
-	// Repanic: true — sentrygin captures the panic as a Sentry event, then
-	// re-panics so middleware.Recovery() (registered above, so it recovers
-	// last) still owns the actual "don't crash, log via slog, respond 500"
-	// behavior. Only registered when Sentry actually initialized above, so
-	// this is a true no-op with no SENTRY_DSN set.
-	if sentry.CurrentHub().Client() != nil {
-		r.Use(sentrygin.New(sentrygin.Options{
-			Repanic:         true,
-			WaitForDelivery: false,
-			Timeout:         5 * time.Second,
-		}))
-	}
-	r.Use(requestID())
-	r.Use(requestLogger())
-	r.Use(middleware.SecurityHeaders())
-	r.Use(middleware.BodyLimit(middleware.MaxBodyBytes))
-	r.Use(middleware.ValidQuery())
-	r.Use(middleware.Gzip())
-	r.Use(middleware.CORS())
-
-	// ── Rate limiting: 120 req/s per IP, burst of 30 ─────────────────────────
+	// ── Shared state ──────────────────────────────────────────────────────────
 	// With SHARED_STATE_REDIS_URL, rate limits, the failed-login throttle,
 	// compile slots and WebSocket broadcasts are shared by every instance;
 	// without it they stay in process (exact with one instance, as on
@@ -178,16 +151,6 @@ func main() {
 	auth.ShareFailedLogins(limits)
 	colab.ShareLocks(limits)
 
-	// Limits are tunable per environment (the load test raises them so one
-	// test account can drive the service); production uses the defaults.
-	rl := middleware.NewRateLimiter(envLimit("RATE_LIMIT_IP_RPS", 120), envBurst("RATE_LIMIT_IP_BURST", 30)).Share(limits, "ip")
-	r.Use(rl.Limit())
-
-	// Per-user limit on authenticated routes (20 req/s, burst 40), applied
-	// after the identity is verified -- see middleware.RateLimiter.PerUser.
-	perUser := middleware.NewRateLimiter(envLimit("RATE_LIMIT_USER_RPS", 20), envBurst("RATE_LIMIT_USER_BURST", 40))
-	authenticated := []gin.HandlerFunc{auth.VerifyUser(), perUser.Share(limits, "user").PerUser()}
-
 	// ── WebSocket hub ─────────────────────────────────────────────────────────
 	hub := websocket.NewHub()
 	if shared.Required() {
@@ -200,89 +163,16 @@ func main() {
 	}
 	go hub.Run()
 	var draining atomic.Bool
-	workspaceAuthorizer := websocket.NewPostgresWorkspaceAuthorizer(db.Pool)
-	workspaceTickets := websocket.NewPostgresWorkspaceTicketStore(db.Pool)
 
-	// ── Health ────────────────────────────────────────────────────────────────
-	liveness := func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "online", "service": "go-gateway"})
-	}
-	r.GET("/gateway-health", liveness)
-	r.HEAD("/gateway-health", liveness) // uptime monitors often probe with HEAD
-	// Readiness — /gateway-health stays the dependency-free liveness probe
-	// Render restarts on; this one answers "can this instance serve every
-	// route right now?": the database and the Python service beside it.
-	readinessClient := &http.Client{}
-	r.GET("/readyz", func(c *gin.Context) {
-		if draining.Load() {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "draining"})
-			return
-		}
-		var pool health.Pinger
-		if db.Pool != nil {
-			pool = db.Pool
-		}
-		var dependencies []health.Dependency
-		if shared.Required() {
-			dependencies = append(dependencies, health.Dependency{Name: "shared_state", Check: limits.Ping}, health.Dependency{Name: "broadcasts", Check: hub.Ready})
-		}
-		state, ready := health.Readiness(c.Request.Context(), pool, readinessClient, pythonBackendURL, dependencies...)
-		if !ready {
-			slog.Error("readiness: dependency unhealthy", "dependencies", state)
-			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "not ready", "database": state["database"], "python": state["python"], "dependencies": state})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"status": "ready", "database": state["database"], "python": state["python"], "dependencies": state})
+	r := newRouter(gateway{
+		pool:      db.Pool,
+		limits:    limits,
+		hub:       hub,
+		draining:  &draining,
+		python:    pythonBackendURL,
+		telemetry: otel.Middleware(),
+		transport: otel.Transport(nil),
 	})
-
-	// ── Observability ─────────────────────────────────────────────────────────
-	// Metrics push over OTLP. The former /observability scrape endpoint is retired.
-
-	// ── WebSockets ────────────────────────────────────────────────────────────
-	// Browsers obtain a single-use ticket from the Firebase-authenticated HTTPS
-	// endpoint below before opening a socket. Only that opaque, one-minute ticket
-	// appears in the WebSocket URL; Firebase bearer tokens never do.
-	r.GET("/ws/colab/:workspace_id", websocket.VerifyTicket(workspaceTickets), func(c *gin.Context) {
-		websocket.ServeWs(hub, workspaceAuthorizer, c)
-	})
-	wsTicketsAPI := r.Group("/api/v1/ws/colab")
-	wsTicketsAPI.Use(authenticated...)
-	{
-		wsTicketsAPI.POST("/:workspace_id/tickets", websocket.IssueTicket(workspaceAuthorizer, workspaceTickets))
-	}
-
-	// ── User identity (Firebase-authenticated) ────────────────────────────────
-	// Not a "user profile" feature kept for its own sake: workspaces,
-	// workspace_members, and websocket_tickets all carry a foreign key into
-	// users.id, so a Firebase account needs a row here before it can own or
-	// join a CoLab workspace. See internal/user's package doc.
-	usersAPI := r.Group("/api/v1/users")
-	usersAPI.Use(authenticated...)
-	{
-		usersAPI.POST("/profile/sync", user.SyncUserProfile)
-		usersAPI.DELETE("/:userId", user.DeleteUser)
-	}
-
-	// ── Workspaces (Firebase-authenticated) ───────────────────────────────────
-	// The CoLab workspace resource: create/list/read/rename/delete. Ownership
-	// comes from the verified token; visibility matches the WebSocket
-	// authorizer above. See internal/workspace.
-	workspacesAPI := r.Group("/api/v1")
-	workspacesAPI.Use(authenticated...)
-	workspace.Register(workspacesAPI, workspace.NewPostgresStore(db.Pool))
-	// Sharing: invite links (owner or editor) and member management.
-	workspace.RegisterSharing(workspacesAPI, workspace.NewPostgresSharingStore(db.Pool))
-
-	// ── CoLab compile — auth + per-user quota + single-flight live in Go;
-	// the actual pdflatex run happens in cmd/colab-sandbox (COLAB_SANDBOX_URL,
-	// its own per-request-isolated container) once deployed, or falls back to
-	// the existing hardened Python route until then. See internal/colab and
-	// docs/audits/2026-09-26-backend-security-reliability-reaudit.md.
-	colabAPI := r.Group("/api/v1")
-	colabAPI.Use(authenticated...)
-	{
-		colabAPI.POST("/colab/compile", colab.Handler(db.Pool, &http.Client{Transport: otel.Transport(nil)}, pythonBackendURL))
-	}
 
 	addr := ":8080"
 	srv := &http.Server{Addr: addr, Handler: r, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 65 * time.Second, MaxHeaderBytes: 32 * 1024}
@@ -310,6 +200,147 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("graceful shutdown did not complete cleanly", "err", err)
 	}
+}
+
+// gateway is everything the router needs; main connects it, tests fake it.
+type gateway struct {
+	pool      *pgxpool.Pool // nil while the database is down
+	limits    *shared.Store // nil: limits stay in process
+	hub       *websocket.Hub
+	draining  *atomic.Bool
+	python    string
+	telemetry gin.HandlerFunc // nil: no tracing
+	transport http.RoundTripper
+}
+
+// newRouter wires middleware and every route.
+func newRouter(g gateway) *gin.Engine {
+	r := gin.New()
+	// Unknown paths answer 404 and known paths with the wrong method 405
+	// (Gin adds the Allow header), both in the standard error body.
+	r.HandleMethodNotAllowed = true
+	r.NoRoute(apierror.NoRoute)
+	r.NoMethod(apierror.NoMethod)
+	if g.telemetry != nil {
+		r.Use(g.telemetry)
+	}
+	r.Use(middleware.Recovery())
+	// Repanic: true — sentrygin captures the panic as a Sentry event, then
+	// re-panics so middleware.Recovery() (registered above, so it recovers
+	// last) still owns the actual "don't crash, log via slog, respond 500"
+	// behavior. Only registered when Sentry actually initialized above, so
+	// this is a true no-op with no SENTRY_DSN set.
+	if sentry.CurrentHub().Client() != nil {
+		r.Use(sentrygin.New(sentrygin.Options{
+			Repanic:         true,
+			WaitForDelivery: false,
+			Timeout:         5 * time.Second,
+		}))
+	}
+	r.Use(requestID())
+	r.Use(requestLogger())
+	r.Use(middleware.SecurityHeaders())
+	r.Use(middleware.BodyLimit(middleware.MaxBodyBytes))
+	r.Use(middleware.ValidQuery())
+	r.Use(middleware.Gzip())
+	r.Use(middleware.CORS())
+
+	// ── Rate limiting: 120 req/s per IP, burst of 30 ─────────────────────────
+	// Limits are tunable per environment (the load test raises them so one
+	// test account can drive the service); production uses the defaults.
+	rl := middleware.NewRateLimiter(envLimit("RATE_LIMIT_IP_RPS", 120), envBurst("RATE_LIMIT_IP_BURST", 30)).Share(g.limits, "ip")
+	r.Use(rl.Limit())
+
+	// Per-user limit on authenticated routes (20 req/s, burst 40), applied
+	// after the identity is verified -- see middleware.RateLimiter.PerUser.
+	perUser := middleware.NewRateLimiter(envLimit("RATE_LIMIT_USER_RPS", 20), envBurst("RATE_LIMIT_USER_BURST", 40))
+	authenticated := []gin.HandlerFunc{auth.VerifyUser(), perUser.Share(g.limits, "user").PerUser()}
+
+	workspaceAuthorizer := websocket.NewPostgresWorkspaceAuthorizer(g.pool)
+	workspaceTickets := websocket.NewPostgresWorkspaceTicketStore(g.pool)
+
+	// ── Health ────────────────────────────────────────────────────────────────
+	liveness := func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "online", "service": "go-gateway"})
+	}
+	r.GET("/gateway-health", liveness)
+	r.HEAD("/gateway-health", liveness) // uptime monitors often probe with HEAD
+	// Readiness — /gateway-health stays the dependency-free liveness probe
+	// Render restarts on; this one answers "can this instance serve every
+	// route right now?": the database and the Python service beside it.
+	readinessClient := &http.Client{}
+	r.GET("/readyz", func(c *gin.Context) {
+		if g.draining.Load() {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "draining"})
+			return
+		}
+		var pool health.Pinger
+		if g.pool != nil {
+			pool = g.pool
+		}
+		var dependencies []health.Dependency
+		if shared.Required() {
+			dependencies = append(dependencies, health.Dependency{Name: "shared_state", Check: g.limits.Ping}, health.Dependency{Name: "broadcasts", Check: g.hub.Ready})
+		}
+		state, ready := health.Readiness(c.Request.Context(), pool, readinessClient, g.python, dependencies...)
+		if !ready {
+			slog.Error("readiness: dependency unhealthy", "dependencies", state)
+			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "not ready", "database": state["database"], "python": state["python"], "dependencies": state})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "ready", "database": state["database"], "python": state["python"], "dependencies": state})
+	})
+
+	// ── Observability ─────────────────────────────────────────────────────────
+	// Metrics push over OTLP. The former /observability scrape endpoint is retired.
+
+	// ── WebSockets ────────────────────────────────────────────────────────────
+	// Browsers obtain a single-use ticket from the Firebase-authenticated HTTPS
+	// endpoint below before opening a socket. Only that opaque, one-minute ticket
+	// appears in the WebSocket URL; Firebase bearer tokens never do.
+	r.GET("/ws/colab/:workspace_id", websocket.VerifyTicket(workspaceTickets), func(c *gin.Context) {
+		websocket.ServeWs(g.hub, workspaceAuthorizer, c)
+	})
+	wsTicketsAPI := r.Group("/api/v1/ws/colab")
+	wsTicketsAPI.Use(authenticated...)
+	{
+		wsTicketsAPI.POST("/:workspace_id/tickets", websocket.IssueTicket(workspaceAuthorizer, workspaceTickets))
+	}
+
+	// ── User identity (Firebase-authenticated) ────────────────────────────────
+	// Not a "user profile" feature kept for its own sake: workspaces,
+	// workspace_members, and websocket_tickets all carry a foreign key into
+	// users.id, so a Firebase account needs a row here before it can own or
+	// join a CoLab workspace. See internal/user's package doc.
+	usersAPI := r.Group("/api/v1/users")
+	usersAPI.Use(authenticated...)
+	{
+		usersAPI.POST("/profile/sync", user.SyncUserProfile)
+		usersAPI.DELETE("/:userId", user.DeleteUser)
+	}
+
+	// ── Workspaces (Firebase-authenticated) ───────────────────────────────────
+	// The CoLab workspace resource: create/list/read/rename/delete. Ownership
+	// comes from the verified token; visibility matches the WebSocket
+	// authorizer above. See internal/workspace.
+	workspacesAPI := r.Group("/api/v1")
+	workspacesAPI.Use(authenticated...)
+	workspace.Register(workspacesAPI, workspace.NewPostgresStore(g.pool))
+	// Sharing: invite links (owner or editor) and member management.
+	workspace.RegisterSharing(workspacesAPI, workspace.NewPostgresSharingStore(g.pool))
+
+	// ── CoLab compile — auth + per-user quota + single-flight live in Go;
+	// the actual pdflatex run happens in cmd/colab-sandbox (COLAB_SANDBOX_URL,
+	// its own per-request-isolated container) once deployed, or falls back to
+	// the existing hardened Python route until then. See internal/colab and
+	// docs/audits/2026-09-26-backend-security-reliability-reaudit.md.
+	colabAPI := r.Group("/api/v1")
+	colabAPI.Use(authenticated...)
+	{
+		colabAPI.POST("/colab/compile", colab.Handler(g.pool, &http.Client{Transport: g.transport}, g.python))
+	}
+
+	return r
 }
 
 // envLimit and envBurst read a positive rate limit setting, else def.
