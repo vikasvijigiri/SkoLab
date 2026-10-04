@@ -18,6 +18,7 @@ import (
 	"runtime/debug"
 
 	"github.com/gin-gonic/gin"
+	"github.com/skolab/backend-go/internal/apierror"
 )
 
 // Recovery replaces gin.Recovery(): same "don't crash the process" behavior,
@@ -35,7 +36,13 @@ func Recovery() gin.HandlerFunc {
 					"path", c.Request.URL.Path,
 					"request_id", c.GetString("request_id"),
 				)
-				c.AbortWithStatus(http.StatusInternalServerError)
+				// The standard error body, unless the handler already started
+				// writing its response (then the status can no longer change).
+				if c.Writer.Written() {
+					c.Abort()
+					return
+				}
+				apierror.Abort(c, http.StatusInternalServerError, "internal_error", "Internal server error")
 			}
 		}()
 		c.Next()
