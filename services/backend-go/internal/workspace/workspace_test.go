@@ -236,3 +236,17 @@ func TestListRefusesUnknownQueryParameters(t *testing.T) {
 		}
 	}
 }
+
+func TestListRefusesAmbiguousPageSize(t *testing.T) {
+	for query, code := range map[string]string{
+		"?page_size=&page_size=junk": "duplicate_parameter",
+		"?page_size=5&page_size=6":   "duplicate_parameter",
+		"?page_token=a&page_token=b": "duplicate_parameter",
+		"?page_size=":                "invalid_page_size",
+	} {
+		w := serve(t, &fakeStore{}, "ada", "GET", "/api/v1/workspaces"+query, "", nil)
+		if w.Code != http.StatusBadRequest || errorCode(t, w) != code {
+			t.Fatalf("%q: got %d %q, want 400 %s", query, w.Code, errorCode(t, w), code)
+		}
+	}
+}

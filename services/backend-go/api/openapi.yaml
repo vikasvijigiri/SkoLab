@@ -158,7 +158,7 @@ paths:
       tags: [workspaces]
       operationId: listWorkspaces
       summary: Workspaces the caller owns or is a member of
-      description: Query parameters other than page_size and page_token are refused (400 unknown_parameter).
+      description: Query parameters other than page_size and page_token are refused (400 unknown_parameter), and so is any parameter given more than once (400 duplicate_parameter).
       parameters:
         - { name: page_size, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100 } }
         - { name: page_token, in: query, required: false, schema: { type: string } }

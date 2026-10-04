@@ -199,14 +199,19 @@ func (h handlers) list(c *gin.Context) {
 	}
 	// Unknown parameters are refused rather than ignored, so a typo (for
 	// example pagesize=5) is caught instead of silently returning page one.
-	for name := range c.Request.URL.Query() {
+	// A repeated parameter is ambiguous (which value wins?), so it is refused too.
+	for name, values := range c.Request.URL.Query() {
 		if name != "page_size" && name != "page_token" {
 			fail(c, http.StatusBadRequest, "unknown_parameter", "Unknown query parameter: "+name)
 			return
 		}
+		if len(values) > 1 {
+			fail(c, http.StatusBadRequest, "duplicate_parameter", "Query parameter given more than once: "+name)
+			return
+		}
 	}
 	size := defaultPageSize
-	if raw := c.Query("page_size"); raw != "" {
+	if raw, given := c.GetQuery("page_size"); given {
 		n, err := strconv.Atoi(raw)
 		if err != nil || n < 1 || n > maxPageSize {
 			fail(c, http.StatusBadRequest, "invalid_page_size", "page_size must be between 1 and 100")
