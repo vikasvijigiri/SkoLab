@@ -31,6 +31,7 @@ jobs:
       GRAFANA_TOKEN: ${{ secrets.GRAFANA_TOKEN }}
       GRAFANA_SM_TOKEN: ${{ secrets.GRAFANA_SM_TOKEN }}
       GRAFANA_CONTACT_POINT: ${{ secrets.GRAFANA_CONTACT_POINT }}
+      SLACK_ALERT_WEBHOOK_URL: ${{ secrets.SLACK_ALERT_WEBHOOK_URL }}
       SKOLAB_FIREBASE_API_KEY: ${{ secrets.SKOLAB_FIREBASE_API_KEY }}
       SKOLAB_SYNTHETIC_EMAIL: ${{ secrets.SKOLAB_SYNTHETIC_EMAIL }}
       SKOLAB_SYNTHETIC_PASSWORD: ${{ secrets.SKOLAB_SYNTHETIC_PASSWORD }}
@@ -49,6 +50,9 @@ jobs:
           for key in GRAFANA_URL GRAFANA_TOKEN GRAFANA_SM_TOKEN GRAFANA_CONTACT_POINT; do
             if [ -z "${!key}" ]; then echo "::error::Repository secret $key is not set"; exit 1; fi
           done
+      - name: Configure Slack alert receiver
+        if: ${{ env.SLACK_ALERT_WEBHOOK_URL != '' }}
+        run: python services/observability/slack_contact.py
       - name: SLO recording rules, burn-rate alerts and backend dashboard
         run: |
           python services/observability/slo/provision.py --apply
