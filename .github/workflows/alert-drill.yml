@@ -1,0 +1,36 @@
+name: Alert delivery drill
+
+# Monthly proof that an alert reaches a person, not just that rules evaluate:
+# a temporary TEST rule fires through the real contact point, recovers, and
+# is deleted (services/observability/RUNBOOK.md). Production is not touched.
+# The recipient should receive "TEST: SkoLab monitoring notification" twice
+# (firing, then resolved); if it does not arrive, alerting is broken.
+on:
+  schedule:
+    - cron: '30 3 1 * *' # 09:00 IST on the 1st of each month
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: grafana-monitoring
+  cancel-in-progress: false
+
+jobs:
+  drill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GRAFANA_URL: ${{ secrets.GRAFANA_URL }}
+      GRAFANA_TOKEN: ${{ secrets.GRAFANA_TOKEN }}
+      GRAFANA_CONTACT_POINT: ${{ secrets.GRAFANA_CONTACT_POINT }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Fire, recover, and remove a test alert
+        run: |
+          python services/observability/provision.py --test-alert
+          echo "Test alert fired and recovered through the configured contact point. Confirm both notifications arrived." >> "$GITHUB_STEP_SUMMARY"

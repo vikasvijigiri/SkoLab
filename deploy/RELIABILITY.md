@@ -72,6 +72,10 @@ https://render.com/docs/health-checks.
 
 ## Database backups and recovery
 
+Production is backed up nightly, encrypted, and restored from the encrypted
+copy in the same run before it is kept: see `services/backup/README.md` for
+the schedule, RPO/RTO targets, and the recovery procedure.
+
 `services/qa/restore-drill.sh` dumps CI staging to a temporary archive, restores
 it into a fresh isolated Postgres container, and compares application table
 counts. It accepts only the CI loopback database. Its temporary data is removed

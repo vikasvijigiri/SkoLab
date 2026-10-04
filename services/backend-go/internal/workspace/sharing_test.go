@@ -185,3 +185,36 @@ func TestEverySharingRouteRequiresAuthentication(t *testing.T) {
 		}
 	}
 }
+
+func TestListAndRevokeInvitesAndListMembers(t *testing.T) {
+	store := &fakeSharing{}
+	w := serveSharing(t, store, "ada", "GET", "/api/v1/workspaces/ws-1/invites", "")
+	var invites struct{ Invites []Invite }
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &invites) != nil || len(invites.Invites) != 1 {
+		t.Fatalf("list invites: %d %s", w.Code, w.Body)
+	}
+	if w := serveSharing(t, store, "ada", "DELETE", "/api/v1/workspaces/ws-1/invites/inv-1", ""); w.Code != 204 {
+		t.Fatalf("revoke: %d", w.Code)
+	}
+	w = serveSharing(t, store, "ada", "GET", "/api/v1/workspaces/ws-1/members", "")
+	var members struct{ Members []Member }
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &members) != nil || len(members.Members) != 1 {
+		t.Fatalf("list members: %d %s", w.Code, w.Body)
+	}
+	if strings.Join(store.calls, ",") != "list,revoke:inv-1,members" {
+		t.Fatalf("calls = %v", store.calls)
+	}
+
+	denied := &fakeSharing{err: ErrInviteForbidden}
+	for _, route := range [][2]string{
+		{"GET", "/api/v1/workspaces/ws-1/invites"},
+		{"DELETE", "/api/v1/workspaces/ws-1/invites/inv-1"},
+	} {
+		if w := serveSharing(t, denied, "ada", route[0], route[1], ""); errorCode(t, w) != "invite_forbidden" {
+			t.Fatalf("%s %s: got %s, want invite_forbidden", route[0], route[1], errorCode(t, w))
+		}
+	}
+	if w := serveSharing(t, &fakeSharing{err: ErrNotFound}, "ada", "GET", "/api/v1/workspaces/ws-1/members", ""); errorCode(t, w) != "not_found" {
+		t.Fatalf("members of a hidden workspace: got %s, want not_found", errorCode(t, w))
+	}
+}

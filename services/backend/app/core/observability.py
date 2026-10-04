@@ -22,12 +22,17 @@ import re
 import sys
 import time
 
+from typing import TYPE_CHECKING
+
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 
 from app.core.config import settings
 from app.core.telemetry import export_enabled
+
+if TYPE_CHECKING:
+    from sentry_sdk.types import Event, Hint
 
 logger = logging.getLogger("skolab")
 
@@ -44,13 +49,17 @@ def _under_pytest() -> bool:
     return "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules
 
 
+def _scrub_text(text: str) -> str:
+    return _SECRET_RE.sub(r"\1=[REDACTED]", text)
+
+
 def _scrub_secrets(value: object) -> object:
     if isinstance(value, str):
-        return _SECRET_RE.sub(r"\1=[REDACTED]", value)
+        return _scrub_text(value)
     return value
 
 
-def _before_send(event: dict, hint: dict) -> dict | None:
+def _before_send(event: Event, hint: Hint) -> Event | None:
     """Sentry ``before_send`` — drop noise, scrub secrets. Returns None to drop."""
     # 1. Only production / staging events are worth keeping.
     env = (event.get("environment") or "").lower()
@@ -58,8 +67,9 @@ def _before_send(event: dict, hint: dict) -> dict | None:
         return None
 
     # 2. Scrub obvious secrets from the human-facing fields.
-    if isinstance(event.get("message"), str):
-        event["message"] = _scrub_secrets(event["message"])
+    message = event.get("message")
+    if isinstance(message, str):
+        event["message"] = _scrub_text(message)
     le = event.get("logentry")
     if isinstance(le, dict) and isinstance(le.get("message"), str):
         le["message"] = _scrub_secrets(le["message"])

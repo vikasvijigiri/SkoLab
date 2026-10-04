@@ -10,13 +10,14 @@ service has exactly one database backend (2026-09-26, "Supabase only" pass).
 Format: postgresql+asyncpg://user:password@host:port/dbname
 """
 
+from collections.abc import AsyncIterator
 import os
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import DeclarativeBase
 
 from app.db.url import as_asyncpg_url
 
@@ -157,11 +158,12 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 # ── Declarative base ──────────────────────────────────────────────────────────
-Base = declarative_base()
+class Base(DeclarativeBase):
+    """Base class for every ORM model."""
 
 
 # ── FastAPI dependency ────────────────────────────────────────────────────────
-async def get_db() -> AsyncSession:
+async def get_db() -> AsyncIterator[AsyncSession]:
     """Yields a database session for use in FastAPI route dependencies.
 
     Rolls back on a propagating error so the underlying connection is never

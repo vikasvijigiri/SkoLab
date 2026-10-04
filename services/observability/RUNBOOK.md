@@ -43,6 +43,8 @@ healthy, observes recovery, and deletes it. This does not interrupt production.
 The recipient must confirm notification receipt: seeing `firing` proves rule
 evaluation, not delivery into an inbox. If cleanup fails, delete only the rule
 with UID `skolab-notification-test` in Grafana and rerun the test.
+The **Alert delivery drill** workflow runs this on the 1st of every month;
+if its two notifications do not arrive, treat alerting as down.
 
 ## Reliability targets and infrastructure
 

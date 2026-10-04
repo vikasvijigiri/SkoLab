@@ -30,6 +30,7 @@ import time
 import json
 import logging
 import uuid
+from typing import Any
 import contextvars
 import re
 
@@ -76,7 +77,7 @@ def mask_pii(text: str) -> str:
 
 class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        log_payload = {
+        log_payload: dict[str, Any] = {
             "timestamp": self.formatTime(record, "%Y-%m-%dT%H:%M:%S") + ".000Z",
             "level": record.levelname,
             "service": "skolab-backend",
@@ -371,7 +372,7 @@ async def structured_log_middleware(request: Request, call_next):
     try:
         response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
-        carrier = {}
+        carrier: dict[str, str] = {}
         propagator.inject(carrier)
         if "traceparent" in carrier:
             response.headers["traceparent"] = carrier["traceparent"]

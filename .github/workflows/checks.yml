@@ -42,10 +42,8 @@ jobs:
       - name: Backend lint
         working-directory: services/backend
         run: ruff check .
-      - name: Backend type-check (informational)
+      - name: Backend type-check
         working-directory: services/backend
-        # Non-blocking — see ci.yml's identical step for why.
-        continue-on-error: true
         run: mypy app/ --ignore-missing-imports
       - name: Bootstrap disposable test database
         working-directory: services/backend
