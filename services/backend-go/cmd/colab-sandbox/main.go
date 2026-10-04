@@ -17,6 +17,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -36,27 +37,12 @@ const maxRequestBytes = 1024 * 1024 // Includes UTF-8 and JSON escapes for 100,0
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
-	engine, err := lookPathPdflatex()
+	engine, token, maxConcurrent, err := settings()
 	if err != nil {
-		slog.Error("pdflatex not found on PATH — refusing to start", "err", err)
+		slog.Error("refusing to start", "err", err)
 		os.Exit(1)
 	}
-
-	token := os.Getenv("INTERNAL_API_TOKEN")
-	if token == "" {
-		slog.Error("INTERNAL_API_TOKEN is unset — this worker must not accept unauthenticated compiles")
-		os.Exit(1)
-	}
-
-	maxConcurrent := envInt("COLAB_MAX_CONCURRENT_COMPILES", 2)
-	slots := texsandbox.NewSlots(maxConcurrent)
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
-	mux.HandleFunc("/compile", compileHandler(engine, slots, token))
+	mux := newMux(engine, texsandbox.NewSlots(maxConcurrent), token)
 
 	port := os.Getenv("PORT") // Cloud Run convention
 	if port == "" {
@@ -89,6 +75,30 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Error("graceful shutdown did not complete cleanly", "err", err)
 	}
+}
+
+// settings reads and checks the worker's configuration.
+func settings() (engine, token string, maxConcurrent int, err error) {
+	engine, err = lookPathPdflatex()
+	if err != nil {
+		return "", "", 0, fmt.Errorf("pdflatex not found on PATH: %w", err)
+	}
+	token = os.Getenv("INTERNAL_API_TOKEN")
+	if token == "" {
+		return "", "", 0, errors.New("INTERNAL_API_TOKEN is unset; this worker must not accept unauthenticated compiles")
+	}
+	return engine, token, envInt("COLAB_MAX_CONCURRENT_COMPILES", 2), nil
+}
+
+// newMux serves the health probe and the compile endpoint.
+func newMux(engine string, slots texsandbox.Slots, token string) *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+	mux.HandleFunc("/compile", compileHandler(engine, slots, token))
+	return mux
 }
 
 type compileRequest struct {

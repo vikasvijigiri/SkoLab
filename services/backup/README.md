@@ -48,7 +48,9 @@ project, check it, then point the service at it.
    pooler** URL (port 5432):
 
    ```sh
-   pg_restore -d "$NEW_DATABASE_URL" --no-owner --no-acl --exit-on-error skolab.dump
+   # The new database already has a public schema; restore everything else.
+   pg_restore -l skolab.dump | grep -v " SCHEMA - public " > toc
+   pg_restore -d "$NEW_DATABASE_URL" --no-owner --no-acl --exit-on-error -L toc skolab.dump
    ```
 
 5. Compare `row_counts.txt` with the new project's tables.

@@ -90,8 +90,10 @@ run "$RESTORE_URL" psql -qX -v ON_ERROR_STOP=1 \
             EXECUTE format('CREATE ROLE %I NOLOGIN', r);
           END IF;
         END LOOP; END \$\$"
+# Every database already has a public schema: restore everything but that.
+docker run --rm -v "$work:/work" "$image" sh -c   'pg_restore -l /work/check/skolab.dump | grep -v " SCHEMA - public " > /work/check/toc'
 started=$(date +%s)
-run "$RESTORE_URL" pg_restore --exit-on-error --no-owner --no-acl /work/check/skolab.dump
+run "$RESTORE_URL" pg_restore --exit-on-error --no-owner --no-acl -L /work/check/toc /work/check/skolab.dump
 restore_seconds=$(( $(date +%s) - started ))
 counts "$RESTORE_URL" > "$work/restored"
 
