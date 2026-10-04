@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	gorillaws "github.com/gorilla/websocket"
@@ -48,12 +49,18 @@ type Hub struct {
 	// redisRelay carries raw bytes off Redis before they're decoded back
 	// into a wsMessage and handed to Broadcast -- Redis itself only ever
 	// speaks []byte.
-	redisRelay chan []byte
-	ctx        context.Context
-	cancel     context.CancelFunc
-	stopped    chan struct{}
-	stopOnce   sync.Once
-	initErr    error
+	redisRelay   chan []byte
+	ctx          context.Context
+	cancel       context.CancelFunc
+	stopped      chan struct{}
+	stopOnce     sync.Once
+	initErr      error
+	admissionMu  sync.Mutex
+	connections  int
+	users        map[string]int
+	workspaces   map[string]int
+	queuedBytes  atomic.Int64
+	CheckSession func(context.Context, string, int64) error
 }
 
 func NewHub() *Hub {
@@ -68,6 +75,7 @@ func NewHubWithRedis(redis *pubsub.RedisClient) *Hub {
 		Register:   make(chan *Client),
 		Unregister: make(chan *Client),
 		Clients:    make(map[string]map[*Client]bool),
+		users:      make(map[string]int), workspaces: make(map[string]int),
 		Redis:      redis,
 		redisRelay: make(chan []byte),
 		ctx:        ctx, cancel: cancel, stopped: make(chan struct{}),
@@ -124,10 +132,10 @@ func (h *Hub) Run() {
 							defer closing.Done()
 							_ = c.conn.WriteControl(gorillaws.CloseMessage, gorillaws.FormatCloseMessage(gorillaws.CloseServiceRestart, "service restarting; reconnect"), time.Now().Add(time.Second))
 							_ = c.conn.Close()
-							close(c.send)
+							c.closeQueue()
 						}(client)
 					} else {
-						close(client.send)
+						client.closeQueue()
 					}
 				}
 			}
@@ -137,6 +145,9 @@ func (h *Hub) Run() {
 			}
 			return
 		case client := <-h.Register:
+			if client.hub == nil {
+				client.hub = h
+			}
 			if h.Clients[client.workspaceID] == nil {
 				h.Clients[client.workspaceID] = make(map[*Client]bool)
 			}
@@ -147,7 +158,7 @@ func (h *Hub) Run() {
 			if peers, ok := h.Clients[client.workspaceID]; ok {
 				if _, ok := peers[client]; ok {
 					delete(peers, client)
-					close(client.send)
+					client.closeQueue()
 					if len(peers) == 0 {
 						delete(h.Clients, client.workspaceID)
 					}
@@ -159,15 +170,45 @@ func (h *Hub) Run() {
 			// Only the clients registered for this exact workspace ever see
 			// the message -- the fix for the broadcast-to-everyone gap.
 			for client := range h.Clients[message.WorkspaceID] {
-				select {
-				case client.send <- message.Payload:
-				default:
-					close(client.send)
+				if !client.enqueue(message.Payload) {
+					client.closeQueue()
+					if client.conn != nil {
+						_ = client.conn.Close()
+					}
 					delete(h.Clients[message.WorkspaceID], client)
 				}
 			}
 		}
 	}
+}
+
+// Reserve before upgrade: concurrent handshakes count towards these limits.
+// Limits are per replica; shared deployment limits must account for replicas.
+func (h *Hub) reserve(user, workspace string) (func(), bool) {
+	h.admissionMu.Lock()
+	defer h.admissionMu.Unlock()
+	if h.connections >= 64 || h.users[user] >= 4 || h.workspaces[workspace] >= 16 {
+		return nil, false
+	}
+	h.connections++
+	h.users[user]++
+	h.workspaces[workspace]++
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			h.admissionMu.Lock()
+			defer h.admissionMu.Unlock()
+			h.connections--
+			h.users[user]--
+			h.workspaces[workspace]--
+			if h.users[user] == 0 {
+				delete(h.users, user)
+			}
+			if h.workspaces[workspace] == 0 {
+				delete(h.workspaces, workspace)
+			}
+		})
+	}, true
 }
 
 // Publish is used by clients to send a message to every other client

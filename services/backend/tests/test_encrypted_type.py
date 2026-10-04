@@ -1,6 +1,9 @@
 from sqlalchemy import create_engine, Column, Integer, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 from app.db.encrypted_type import EncryptedString
+import pytest
+from cryptography.fernet import Fernet
+from types import SimpleNamespace
 
 Base = declarative_base()
 
@@ -44,3 +47,22 @@ def test_encrypted_string_lifecycle():
         assert decrypted_val == test_email
 
     session.close()
+
+
+def test_invalid_key_is_rejected_instead_of_padded(monkeypatch):
+    monkeypatch.setattr("app.db.encrypted_type.settings", SimpleNamespace(database_encryption_key="weak"))
+    with pytest.raises(ValueError, match="valid Fernet key"):
+        EncryptedString()
+
+
+@pytest.mark.parametrize("stored", ["plaintext@example.com", "not-a-fernet-token"])
+def test_plaintext_and_corruption_fail_closed(stored):
+    with pytest.raises(ValueError, match="could not be decrypted"):
+        EncryptedString().process_result_value(stored, None)
+
+
+def test_wrong_key_fails_closed_without_disclosing_content():
+    ciphertext = Fernet(Fernet.generate_key()).encrypt(b"private@example.com").decode()
+    with pytest.raises(ValueError, match="could not be decrypted") as exc:
+        EncryptedString().process_result_value(ciphertext, None)
+    assert "private@example.com" not in str(exc.value)

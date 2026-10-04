@@ -19,6 +19,42 @@ type staticTicketStore struct {
 	consumed     string
 }
 
+type sessionTicketFake struct {
+	staticTicketStore
+	authTime int64
+}
+
+func (s *sessionTicketFake) IssueSession(ctx context.Context, w, u string, at int64) (string, error) {
+	s.authTime = at
+	return s.Issue(ctx, w, u)
+}
+func (s *sessionTicketFake) ConsumeSession(ctx context.Context, w, t string) (string, int64, error) {
+	u, err := s.Consume(ctx, w, t)
+	return u, s.authTime, err
+}
+
+func TestTicketPreservesOriginalSessionSignInTime(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := &sessionTicketFake{staticTicketStore: staticTicketStore{issuedTicket: "opaque", consumeUser: "member"}}
+	r := gin.New()
+	r.POST("/ws/:workspace_id", func(c *gin.Context) {
+		c.Set("user_id", "member")
+		c.Set("session_auth_time", int64(123))
+		IssueTicket(staticWorkspaceAuthorizer{allowed: true}, store)(c)
+	})
+	r.GET("/ws/:workspace_id", VerifyTicket(store), func(c *gin.Context) { c.JSON(200, gin.H{"auth_time": c.GetInt64("session_auth_time")}) })
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest("POST", "/ws/paper", nil))
+	if w.Code != 201 || store.authTime != 123 {
+		t.Fatalf("sign-in time lost on issue: %d %d", w.Code, store.authTime)
+	}
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest("GET", "/ws/paper?ticket=opaque", nil))
+	if w.Code != 200 || w.Body.String() != `{"auth_time":123}` {
+		t.Fatalf("sign-in time lost on consume: %s", w.Body.String())
+	}
+}
+
 func (s *staticTicketStore) Issue(_ context.Context, workspaceID, userID string) (string, error) {
 	s.issuedFor = workspaceID + ":" + userID
 	return s.issuedTicket, s.issueErr

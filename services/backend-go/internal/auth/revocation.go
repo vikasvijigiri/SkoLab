@@ -48,6 +48,15 @@ type revocationCache struct {
 
 var revocations = &revocationCache{entries: map[string]userStatus{}, now: time.Now}
 
+// CheckSession also applies to established sockets, using the original
+// Firebase sign-in time preserved in their one-use connection ticket.
+func CheckSession(ctx context.Context, uid string, authTime int64) error {
+	if authClient == nil || authTime <= 0 {
+		return errStatusUnavailable
+	}
+	return revocations.check(ctx, authClient, uid, authTime)
+}
+
 // check fails with errRevoked when the token's sign-in predates the user's
 // revocation, or the account is disabled or deleted; with
 // errStatusUnavailable when Firebase cannot be reached and no recent status

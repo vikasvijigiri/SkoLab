@@ -27,8 +27,10 @@ import (
 )
 
 const (
-	hourSeconds = 3600
-	daySeconds  = 86400
+	hourSeconds           = 3600
+	daySeconds            = 86400
+	maxLocalEntries       = 10_000
+	localCapacityExceeded = int(^uint(0) >> 1)
 )
 
 var ErrUnavailable = errors.New("shared quota accounting unavailable")
@@ -91,8 +93,9 @@ func windowBucket(now time.Time, size int64) (int64, time.Time) {
 // itself is unreachable — availability over strict accounting, matching
 // Python's identical rationale in app/core/quota.py.
 type localFallback struct {
-	mu   sync.Mutex
-	data map[string]struct {
+	mu        sync.Mutex
+	nextSweep time.Time
+	data      map[string]struct {
 		count int
 		exp   time.Time
 	}
@@ -106,7 +109,18 @@ var local = &localFallback{data: map[string]struct {
 func (l *localFallback) incr(key string, cost int, windowEnd, now time.Time) int {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if !now.Before(l.nextSweep) || len(l.data) >= maxLocalEntries {
+		for bucket, entry := range l.data {
+			if !entry.exp.After(now) {
+				delete(l.data, bucket)
+			}
+		}
+		l.nextSweep = now.Add(time.Minute)
+	}
 	entry, ok := l.data[key]
+	if !ok && len(l.data) >= maxLocalEntries {
+		return localCapacityExceeded
+	}
 	if !ok || entry.exp.Before(now) {
 		entry = struct {
 			count int
@@ -167,7 +181,24 @@ func incr(ctx context.Context, pool *pgxpool.Pool, key string, cost int, windowE
 	if shared.Required() {
 		return 0, ErrUnavailable
 	}
-	return local.incr(key, cost, windowEnd, now), nil
+	count := local.incr(key, cost, windowEnd, now)
+	if count == localCapacityExceeded {
+		return 0, ErrUnavailable
+	}
+	return count, nil
+}
+
+// Sweep removes a bounded batch, keeping cleanup transactions short. Run once
+// per minute from the gateway, independently of whether quotas are consumed.
+func Sweep(ctx context.Context, pool *pgxpool.Pool) error {
+	if pool == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	_, err := pool.Exec(ctx, `DELETE FROM usage_counters WHERE bucket_key IN
+		(SELECT bucket_key FROM usage_counters WHERE expires_at <= NOW() LIMIT 1000)`)
+	return err
 }
 
 // AsExceeded is a small errors.As convenience for HTTP handlers.

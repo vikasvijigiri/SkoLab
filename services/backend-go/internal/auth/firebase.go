@@ -18,6 +18,9 @@ import (
 // authClient is the Firebase Auth client (nil until InitFirebase succeeds).
 var authClient identityProvider
 
+// Ready reports initialization, not a remote Firebase availability probe.
+func Ready() bool { return authClient != nil }
+
 // releaseMode reports whether the gateway is running in a deployed
 // configuration. It reads GIN_MODE directly rather than gin.Mode() so that the
 // answer does not depend on main() having run: middleware built inside a test
@@ -109,6 +112,7 @@ func verifyTokenAndSetUser(c *gin.Context, idToken string) {
 
 	// Set the verified user ID in the Gin context
 	c.Set("user_id", token.UID)
+	c.Set("session_auth_time", token.AuthTime)
 	c.Next()
 }
 

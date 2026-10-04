@@ -4,8 +4,8 @@
 //
 // Two backends, selected at boot by whether COLAB_SANDBOX_URL is set:
 //   - Set: proxy to the standalone colab-sandbox worker (cmd/colab-sandbox),
-//     deployed as its own per-request-isolated container (Cloud Run/
-//     Fargate) — the stronger isolation boundary.
+//     deployed separately from the API. Workers can reuse containers; per-job
+//     container isolation requires additional infrastructure.
 //   - Unset: fall back to the existing Python /api/v1/colab/compile route
 //     (still hardened, just sharing the API's own container) so nothing
 //     breaks before the sandbox service is actually deployed.

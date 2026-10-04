@@ -30,6 +30,7 @@ import (
 	"github.com/skolab/backend-go/internal/db"
 	"github.com/skolab/backend-go/internal/health"
 	"github.com/skolab/backend-go/internal/middleware"
+	"github.com/skolab/backend-go/internal/quota"
 	"github.com/skolab/backend-go/internal/security"
 	"github.com/skolab/backend-go/internal/shared"
 	"github.com/skolab/backend-go/internal/telemetry"
@@ -107,14 +108,37 @@ func main() {
 	}
 
 	auth.InitFirebase()
+	if os.Getenv("GIN_MODE") == "release" && !auth.Ready() {
+		log.Fatal("Firebase initialization failed; refusing to start a deployed gateway")
+	}
 
-	if err := db.InitDB(otel.DBTracer()); err != nil {
-		slog.Warn("PostgreSQL init failed — DB-backed endpoints will be degraded", "err", err)
+	dbErr := retryDatabaseInitialization(func() error { return db.InitDB(otel.DBTracer()) }, time.Sleep)
+	if dbErr != nil {
+		if os.Getenv("GIN_MODE") == "release" {
+			log.Fatal("PostgreSQL initialization failed after retries; refusing to start gateway")
+		}
+		slog.Warn("PostgreSQL unavailable in development", "err", dbErr)
 	} else {
 		defer db.CloseDB()
 	}
 
 	// Saturation signals (pool usage, goroutines, heap) beside the RED metrics.
+	cleanupCtx, stopCleanup := context.WithCancel(context.Background())
+	defer stopCleanup()
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			if err := quota.Sweep(cleanupCtx, db.Pool); err != nil {
+				slog.Warn("quota cleanup unavailable")
+			}
+			select {
+			case <-cleanupCtx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
 	// Pool stats are read at export time; nil while the pool is down.
 	if err := otel.ObserveDBPool(func() telemetry.PoolStats {
 		if db.Pool == nil {
@@ -154,6 +178,9 @@ func main() {
 
 	// ── WebSocket hub ─────────────────────────────────────────────────────────
 	hub := websocket.NewHub()
+	if os.Getenv("GIN_MODE") == "release" {
+		hub.CheckSession = auth.CheckSession
+	}
 	if shared.Required() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		err := hub.Ready(ctx)
@@ -181,7 +208,7 @@ func main() {
 	})
 
 	addr := ":8080"
-	srv := &http.Server{Addr: addr, Handler: r, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 65 * time.Second, MaxHeaderBytes: 32 * 1024}
+	srv := &http.Server{Addr: addr, Handler: r, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 65 * time.Second, MaxHeaderBytes: 32 * 1024}
 
 	go func() {
 		slog.Info("Go API Gateway starting", "addr", addr, "python_backend", pythonBackendURL)
@@ -206,6 +233,21 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("graceful shutdown did not complete cleanly", "err", err)
 	}
+}
+
+// Do not construct stores until initialization succeeds; they capture the pool.
+func retryDatabaseInitialization(initialize func() error, pause func(time.Duration)) error {
+	var err error
+	for attempt := 1; attempt <= 3; attempt++ {
+		err = initialize()
+		if err == nil {
+			return nil
+		}
+		if attempt < 3 {
+			pause(time.Duration(attempt) * time.Second)
+		}
+	}
+	return err
 }
 
 // gateway is everything the router needs; main connects it, tests fake it.
@@ -286,6 +328,14 @@ func newRouter(g gateway) *gin.Engine {
 			pool = g.pool
 		}
 		var dependencies []health.Dependency
+		if os.Getenv("GIN_MODE") == "release" {
+			dependencies = append(dependencies, health.Dependency{Name: "authentication", Check: func(context.Context) error {
+				if !auth.Ready() {
+					return errors.New("authentication unavailable")
+				}
+				return nil
+			}})
+		}
 		if shared.Required() {
 			dependencies = append(dependencies, health.Dependency{Name: "shared_state", Check: g.limits.Ping}, health.Dependency{Name: "broadcasts", Check: g.hub.Ready})
 		}

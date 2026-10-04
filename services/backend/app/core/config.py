@@ -7,6 +7,7 @@ real env vars in production).  No magic literals anywhere else in the codebase.
 
 import os
 from dataclasses import dataclass, field
+from cryptography.fernet import Fernet
 
 # Publicly-known default shipped in this file's history. A production process must
 # never run with it (or with an empty key) — see Settings.__post_init__.
@@ -140,6 +141,14 @@ class Settings:
                 "DATABASE_ENCRYPTION_KEY is unset or still the shipped default while "
                 f"APP_ENV={self.environment}. Set a real key before starting the backend."
             )
+
+        if self.environment in ("staging", "production"):
+            try:
+                Fernet(self.database_encryption_key.encode("utf-8"))
+            except (ValueError, TypeError) as e:
+                raise RuntimeError(
+                    "DATABASE_ENCRYPTION_KEY must be a valid Fernet key"
+                ) from e
 
         # Fail fast: a staging/production deploy must supply a real
         # INTERNAL_API_TOKEN. The Go gateway's colab-sandbox call and this

@@ -13,10 +13,11 @@ Local dev (`APP_ENV` unset) and CI (fake keys, `APP_ENV` unset) must still boot.
 """
 
 import pytest
+from cryptography.fernet import Fernet
 
 from app.core.config import Settings, _DEFAULT_DB_ENCRYPTION_KEY
 
-_REAL_KEY = "a-real-deployment-provided-key"
+_REAL_KEY = Fernet.generate_key().decode()
 _REAL_TOKEN = "a-real-internal-api-token"
 
 
@@ -75,3 +76,13 @@ def test_development_tolerates_default_key(monkeypatch):
     monkeypatch.setenv("DATABASE_ENCRYPTION_KEY", _DEFAULT_DB_ENCRYPTION_KEY)
     monkeypatch.delenv("INTERNAL_API_TOKEN", raising=False)
     Settings()  # dev is never gated on either key
+
+
+@pytest.mark.parametrize("key", ["weak", "x" * 44, "!!!!"])
+@pytest.mark.parametrize("env", ["staging", "production"])
+def test_deployed_settings_reject_malformed_encryption_key(monkeypatch, env, key):
+    monkeypatch.setenv("APP_ENV", env)
+    monkeypatch.setenv("INTERNAL_API_TOKEN", _REAL_TOKEN)
+    monkeypatch.setenv("DATABASE_ENCRYPTION_KEY", key)
+    with pytest.raises(RuntimeError, match="valid Fernet key"):
+        Settings()

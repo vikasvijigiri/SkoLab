@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/skolab/backend-go/internal/middleware"
 	"github.com/skolab/backend-go/internal/security"
+	"golang.org/x/time/rate"
 )
 
 const (
@@ -56,6 +57,42 @@ type Client struct {
 	authorizer  WorkspaceAuthorizer
 	role        atomic.Pointer[string]
 	done        chan struct{} // closed when readPump exits
+	release     func()
+	authTime    int64
+	queuedBytes atomic.Int64
+}
+
+func (c *Client) enqueue(message []byte) bool {
+	n := int64(len(message))
+	if c.queuedBytes.Add(n) > 1024*1024 {
+		c.queuedBytes.Add(-n)
+		return false
+	}
+	if c.hub.queuedBytes.Add(n) > 16*1024*1024 {
+		c.hub.queuedBytes.Add(-n)
+		c.queuedBytes.Add(-n)
+		return false
+	}
+	select {
+	case c.send <- message:
+		return true
+	default:
+		c.releaseBytes(message)
+		return false
+	}
+}
+
+func (c *Client) releaseBytes(message []byte) {
+	c.queuedBytes.Add(-int64(len(message)))
+	c.hub.queuedBytes.Add(-int64(len(message)))
+}
+
+// Called only by the hub, which owns channel sends and closure.
+func (c *Client) closeQueue() {
+	close(c.send)
+	for message := range c.send {
+		c.releaseBytes(message)
+	}
 }
 
 func (c *Client) currentRole() string {
@@ -90,6 +127,13 @@ func (c *Client) reauthorize(interval time.Duration) {
 		case <-ticker.C:
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if c.hub.CheckSession != nil {
+			if err := c.hub.CheckSession(ctx, c.userID, c.authTime); err != nil {
+				cancel()
+				c.closePolicy("session unavailable or revoked")
+				return
+			}
+		}
 		role, err := c.authorizer.Role(ctx, c.workspaceID, c.userID)
 		cancel()
 		if err != nil {
@@ -111,6 +155,9 @@ func (c *Client) reauthorize(interval time.Duration) {
 }
 
 func (c *Client) readPump() {
+	if c.release != nil {
+		defer c.release()
+	}
 	defer close(c.done)
 	defer func() {
 		select {
@@ -122,12 +169,20 @@ func (c *Client) readPump() {
 	c.conn.SetReadLimit(maxMessageSize)
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+	messages := rate.NewLimiter(30, 60)
+	bytes := rate.NewLimiter(256*1024, maxMessageSize)
+	lifetime := time.AfterFunc(15*time.Minute, func() { c.closePolicy("session renewal required") })
+	defer lifetime.Stop()
 	for {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				slog.Warn("websocket read error", "err", err)
 			}
+			break
+		}
+		if !messages.Allow() || !bytes.AllowN(time.Now(), len(message)) {
+			c.closePolicy("message rate exceeded")
 			break
 		}
 		if !CanPublish(c.currentRole()) {
@@ -158,6 +213,7 @@ func (c *Client) writePump() {
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
+			c.releaseBytes(message)
 
 			w, err := c.conn.NextWriter(websocket.TextMessage)
 			if err != nil {
@@ -169,7 +225,9 @@ func (c *Client) writePump() {
 			n := len(c.send)
 			for i := 0; i < n; i++ {
 				w.Write([]byte{'\n'})
-				w.Write(<-c.send)
+				queued := <-c.send
+				c.releaseBytes(queued)
+				w.Write(queued)
 			}
 
 			if err := w.Close(); err != nil {
@@ -225,17 +283,35 @@ func serveWs(hub *Hub, authorizer WorkspaceAuthorizer, c *gin.Context, reauthori
 		return
 	}
 
+	if hub.CheckSession != nil {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+		err := hub.CheckSession(ctx, userID, c.GetInt64("session_auth_time"))
+		cancel()
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Session unavailable or revoked"})
+			return
+		}
+	}
+	release, admitted := hub.reserve(userID, workspaceID)
+	if !admitted {
+		c.Header("Retry-After", "5")
+		c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "Collaboration connection limit reached"})
+		return
+	}
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
+		release()
 		slog.Warn("websocket upgrade error", "err", err)
 		return
 	}
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256), workspaceID: workspaceID,
-		userID: userID, authorizer: authorizer, done: make(chan struct{})}
+	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 8), workspaceID: workspaceID,
+		userID: userID, authorizer: authorizer, done: make(chan struct{}), release: release,
+		authTime: c.GetInt64("session_auth_time")}
 	client.role.Store(&role)
 	select {
 	case client.hub.Register <- client:
 	case <-hub.ctx.Done():
+		release()
 		_ = conn.Close()
 		return
 	}
