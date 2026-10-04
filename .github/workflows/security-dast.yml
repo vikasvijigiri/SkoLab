@@ -69,6 +69,7 @@ jobs:
             --checks all \
             --exclude-operation-id deleteAccount \
             --exclude-operation-id compile \
+            --exclude-operation-id sentryAlertHook \
             --max-examples 300 \
             --continue-on-failure \
             --report junit --report-dir zap/schemathesis

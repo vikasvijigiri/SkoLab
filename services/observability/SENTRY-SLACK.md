@@ -1,39 +1,53 @@
-# Sentry email alerts to Slack without the Sentry Slack integration
+# Alerts in Slack
 
-Grafana sends directly to Slack through `slack_contact.py`. The deployment and
-monthly drill workflows read the repository secret `SLACK_ALERT_WEBHOOK_URL`.
-The script adds a Slack integration to the existing `GRAFANA_CONTACT_POINT`,
-retaining email. The webhook's authorized channel determines delivery.
+Everything lands in `#all-skolab-alerts` through one Slack incoming webhook
+(`SLACK_ALERT_WEBHOOK_URL`).
 
-Sentry stays on email alerts. Install the included `sentry-email-relay.gs` in
-the Gmail account receiving those alerts:
+## Grafana
 
-1. Open https://script.google.com/ and create a project named SkoLab Sentry alerts.
-2. Replace Code.gs with the contents of `sentry-email-relay.gs`.
-3. Project Settings > Script Properties: add `SLACK_ALERT_WEBHOOK_URL` with
-   the same webhook URL. GitHub secrets are not accessible to Apps Script.
-4. Save and run `testSlackRelay`; authorize the script and confirm its explicitly
-   labeled test appears in #all-skolab-alerts. This proves webhook delivery only.
-5. Run `installRelay` and authorize Gmail and scheduled trigger access. This
-   creates the SkoLab-Sentry label and one five-minute trigger; old mail is skipped.
-6. In Gmail, inspect a real SkoLab Sentry issue notification. Create a filter
-   matching its actual sender and SkoLab project subject. Apply the SkoLab-Sentry
-   label. Avoid labeling Sentry newsletters or notifications for other projects.
-7. Confirm Sentry issue alerts reach this Gmail account. After a new real/test
-   SkoLab issue notification arrives, confirm the relay posts its subject and issue
-   link. Only this verifies the complete Sentry-email-Slack route.
+`slack_contact.py` adds Slack to the existing `GRAFANA_CONTACT_POINT`, keeping
+email. The monitoring deploy and the monthly alert drill run it whenever the
+repository secret `SLACK_ALERT_WEBHOOK_URL` is set.
 
-The script scans labeled mail from the last seven days, checks the sender's
-Sentry domain and organization issue link, and records each delivered message
-individually. Replies in a thread do not cause earlier alerts to be re-forwarded.
-Failed posts are retried on the next run. A failure after Slack accepts a message
-but before its marker is saved can duplicate that message. It sends at most
-20 notifications per run and scans at most 200 matching threads; high volume
-requires a different relay. Google quotas and email delivery add delay; this is
-not an instant incident paging service. Check Apps Script Executions for failures.
-Webhook values and email bodies must not be committed or copied into logs.
+## Sentry (free plan)
 
-References:
-- https://developers.google.com/apps-script/reference/gmail/gmail-app
-- https://developers.google.com/apps-script/guides/triggers/installable
-- https://api.slack.com/messaging/webhooks
+Sentry's Slack integration needs a paid plan, so Sentry calls the gateway
+instead, and the gateway posts to Slack:
+
+```
+Sentry alert rule -> internal integration webhook -> POST /hooks/sentry -> Slack
+```
+
+The gateway accepts a call only with a valid `Sentry-Hook-Signature` (HMAC of
+the body under the integration's client secret) and forwards only the alert's
+title, level, and issue link. Stack traces, request data and user details stay
+in Sentry. No mailbox access is involved.
+
+Setup, once:
+
+1. Sentry: **Settings → Developer Settings → Custom Integrations → Create New
+   Integration → Internal Integration**. Name it `SkoLab Slack relay`.
+   - Webhook URL: `https://skolab-api.onrender.com/hooks/sentry`
+   - Turn on **Alert Rule Action**.
+   - Permissions: leave all at **No Access** (the relay reads nothing from Sentry).
+   - Save, then copy its **Client Secret**.
+2. Render, service `skolab-api`, Environment: set `SENTRY_WEBHOOK_SECRET` to that
+   client secret and `SLACK_ALERT_WEBHOOK_URL` to the Slack webhook. Deploy.
+   Until both are set, `/hooks/sentry` answers 503.
+3. Sentry: **Alerts → Create Alert → Issues**, project `skolab` (or each
+   SkoLab project). When "A new issue is created" (and, optionally, "The issue
+   changes state from resolved to unresolved"), action **Send a notification
+   via SkoLab Slack relay**. Keep the email action too if you want both.
+4. Test: in the alert rule, use **Send Test Notification**, or trigger a real
+   error. A message starting `Sentry:` with an issue link appears in Slack.
+
+Metric alerts (for example an error-rate threshold) can use the same
+integration as their action; critical, warning and resolved states are posted.
+
+## Troubleshooting
+
+- 401 in Sentry's integration request log: the client secret in Render does not
+  match the integration's (regenerate in Sentry, update Render, redeploy).
+- 503: `SENTRY_WEBHOOK_SECRET` or `SLACK_ALERT_WEBHOOK_URL` is not set on the service.
+- 502: Slack refused the webhook (revoked or channel deleted); create a new
+  incoming webhook and update both Render and the GitHub secret.
