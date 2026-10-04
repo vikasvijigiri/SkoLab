@@ -41,7 +41,7 @@ Actions). Never commit them:
 | `SKOLAB_FIREBASE_API_KEY`, `SKOLAB_SYNTHETIC_EMAIL`, `SKOLAB_SYNTHETIC_PASSWORD` | Journey login fixtures (optional; they turn the journey on) |
 | `FIREBASE_SERVICE_ACCOUNT` | Firebase Admin SDK key (JSON). The deploy keeps the monitoring account existing, enabled and email-verified, because the backend refuses unverified accounts. Admin-level: never commit it, rotate if exposed |
 
-For direct Slack setup and the free-plan Sentry email relay, see [SENTRY-SLACK.md](SENTRY-SLACK.md).
+For Slack delivery of Grafana and Sentry alerts (free plan, via the gateway's /hooks/sentry), see [SENTRY-SLACK.md](SENTRY-SLACK.md).
 
 The provisioner discovers the regional API server and the metrics and logs data
 sources from the Synthetic Monitoring plugin's settings. An OTLP ingestion

@@ -215,3 +215,11 @@ func TestEnvLimits(t *testing.T) {
 		t.Fatal("a positive value must be used")
 	}
 }
+
+func TestSentryHookIsUnavailableUntilConfigured(t *testing.T) {
+	r, _ := testRouter(t, gateway{})
+	w := serve(r, http.MethodPost, "/hooks/sentry")
+	if w.Code != http.StatusServiceUnavailable || decode(t, w)["code"] != "not_configured" {
+		t.Fatalf("got %d %s, want 503 not_configured", w.Code, w.Body)
+	}
+}

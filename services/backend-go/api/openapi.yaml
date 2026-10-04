@@ -67,6 +67,44 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Readiness" }
 
+  /hooks/sentry:
+    post:
+      tags: [health]
+      operationId: sentryAlertHook
+      summary: Sentry alert webhook, relayed to Slack (title and issue link only)
+      description: >-
+        Called by a Sentry internal integration, not by apps. Authenticated by
+        Sentry-Hook-Signature, the hex HMAC-SHA256 of the raw body under the
+        integration's client secret. Alerts (Sentry-Hook-Resource event_alert or
+        metric_alert) are posted to Slack; other resources are acknowledged.
+      security:
+        - sentrySignature: []
+      parameters:
+        - name: Sentry-Hook-Resource
+          in: header
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "204": { description: Verified; relayed to Slack or nothing to relay. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "401":
+          description: Missing or invalid Sentry-Hook-Signature.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "502":
+          description: Slack did not accept the alert.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
   /api/v1/users/profile/sync:
     post:
       tags: [users]
@@ -511,6 +549,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: Firebase ID token
+    sentrySignature:
+      type: apiKey
+      in: header
+      name: Sentry-Hook-Signature
 
   parameters:
     WorkspaceId:

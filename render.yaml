@@ -61,6 +61,13 @@ services:
         sync: false
       - key: SENTRY_DSN
         sync: false
+      # Sentry alert webhooks relayed to Slack (POST /hooks/sentry):
+      # the Sentry internal integration's client secret, and the Slack
+      # incoming webhook. Either unset: the relay answers 503.
+      - key: SENTRY_WEBHOOK_SECRET
+        sync: false
+      - key: SLACK_ALERT_WEBHOOK_URL
+        sync: false
       - key: APP_BASE_URL
         sync: false
       - key: REDIS_URL

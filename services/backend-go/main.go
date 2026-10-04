@@ -23,6 +23,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/skolab/backend-go/internal/alerts"
 	"github.com/skolab/backend-go/internal/apierror"
 	"github.com/skolab/backend-go/internal/auth"
 	"github.com/skolab/backend-go/internal/colab"
@@ -172,6 +173,11 @@ func main() {
 		python:    pythonBackendURL,
 		telemetry: otel.Middleware(),
 		transport: otel.Transport(nil),
+		sentry: alerts.Relay{
+			Secret: os.Getenv("SENTRY_WEBHOOK_SECRET"),
+			Slack:  alerts.SlackWebhook(os.Getenv("SLACK_ALERT_WEBHOOK_URL")),
+			Client: &http.Client{Transport: otel.Transport(nil)},
+		},
 	})
 
 	addr := ":8080"
@@ -211,6 +217,7 @@ type gateway struct {
 	python    string
 	telemetry gin.HandlerFunc // nil: no tracing
 	transport http.RoundTripper
+	sentry    alerts.Relay // unconfigured: /hooks/sentry answers 503
 }
 
 // newRouter wires middleware and every route.
@@ -292,6 +299,9 @@ func newRouter(g gateway) *gin.Engine {
 	})
 
 	// ── Observability ─────────────────────────────────────────────────────────
+	// Sentry alert webhooks (a Sentry internal integration) relayed to Slack;
+	// authenticated by Sentry's HMAC signature, not a Firebase token.
+	r.POST("/hooks/sentry", g.sentry.Handler())
 	// Metrics push over OTLP. The former /observability scrape endpoint is retired.
 
 	// ── WebSockets ────────────────────────────────────────────────────────────
