@@ -33,6 +33,11 @@ type WorkspaceTicketStore interface {
 	Consume(context.Context, string, string) (string, error)
 }
 
+type sessionTicketStore interface {
+	IssueSession(context.Context, string, string, int64) (string, error)
+	ConsumeSession(context.Context, string, string) (string, int64, error)
+}
+
 type postgresWorkspaceTicketStore struct {
 	pool *pgxpool.Pool
 }
@@ -55,6 +60,10 @@ func newTicket() (string, error) {
 }
 
 func (s *postgresWorkspaceTicketStore) Issue(ctx context.Context, workspaceID, userID string) (string, error) {
+	return s.IssueSession(ctx, workspaceID, userID, 0)
+}
+
+func (s *postgresWorkspaceTicketStore) IssueSession(ctx context.Context, workspaceID, userID string, authTime int64) (string, error) {
 	if s == nil || s.pool == nil {
 		return "", ErrWorkspaceTicketUnavailable
 	}
@@ -69,9 +78,9 @@ func (s *postgresWorkspaceTicketStore) Issue(ctx context.Context, workspaceID, u
 		return "", errors.Join(ErrWorkspaceTicketUnavailable, err)
 	}
 	_, err = s.pool.Exec(ctx, `
-		INSERT INTO websocket_tickets (ticket_hash, workspace_id, user_id, expires_at)
-		VALUES ($1, $2, $3, NOW() + ($4 * INTERVAL '1 second'))`,
-		ticketDigest(ticket), workspaceID, userID, int(websocketTicketTTL.Seconds()))
+		INSERT INTO websocket_tickets (ticket_hash, workspace_id, user_id, expires_at, session_auth_time)
+		VALUES ($1, $2, $3, NOW() + ($4 * INTERVAL '1 second'), $5)`,
+		ticketDigest(ticket), workspaceID, userID, int(websocketTicketTTL.Seconds()), authTime)
 	if err != nil {
 		return "", errors.Join(ErrWorkspaceTicketUnavailable, err)
 	}
@@ -79,24 +88,30 @@ func (s *postgresWorkspaceTicketStore) Issue(ctx context.Context, workspaceID, u
 }
 
 func (s *postgresWorkspaceTicketStore) Consume(ctx context.Context, workspaceID, ticket string) (string, error) {
+	uid, _, err := s.ConsumeSession(ctx, workspaceID, ticket)
+	return uid, err
+}
+
+func (s *postgresWorkspaceTicketStore) ConsumeSession(ctx context.Context, workspaceID, ticket string) (string, int64, error) {
 	if s == nil || s.pool == nil {
-		return "", ErrWorkspaceTicketUnavailable
+		return "", 0, ErrWorkspaceTicketUnavailable
 	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
 	var userID string
+	var authTime int64
 	err := s.pool.QueryRow(ctx, `
 		DELETE FROM websocket_tickets
 		WHERE ticket_hash = $1 AND workspace_id = $2 AND expires_at > NOW()
-		RETURNING user_id`, ticketDigest(ticket), workspaceID).Scan(&userID)
+		RETURNING user_id, session_auth_time`, ticketDigest(ticket), workspaceID).Scan(&userID, &authTime)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", ErrInvalidWorkspaceTicket
+		return "", 0, ErrInvalidWorkspaceTicket
 	}
 	if err != nil {
-		return "", errors.Join(ErrWorkspaceTicketUnavailable, err)
+		return "", 0, errors.Join(ErrWorkspaceTicketUnavailable, err)
 	}
-	return userID, nil
+	return userID, authTime, nil
 }
 
 // IssueTicket exchanges a Firebase-authenticated session for a short-lived
@@ -130,7 +145,12 @@ func IssueTicket(authorizer WorkspaceAuthorizer, tickets WorkspaceTicketStore) g
 			apierror.Abort(c, http.StatusNotFound, "not_found", "Workspace not found")
 			return
 		}
-		ticket, err := tickets.Issue(c.Request.Context(), workspaceID, userID)
+		var ticket string
+		if sessions, ok := tickets.(sessionTicketStore); ok {
+			ticket, err = sessions.IssueSession(c.Request.Context(), workspaceID, userID, c.GetInt64("session_auth_time"))
+		} else {
+			ticket, err = tickets.Issue(c.Request.Context(), workspaceID, userID)
+		}
 		if err != nil {
 			apierror.Abort(c, http.StatusServiceUnavailable, "tickets_unavailable", "WebSocket tickets are temporarily unavailable")
 			return
@@ -154,7 +174,15 @@ func VerifyTicket(tickets WorkspaceTicketStore) gin.HandlerFunc {
 			apierror.Abort(c, http.StatusServiceUnavailable, "tickets_unavailable", "WebSocket tickets are temporarily unavailable")
 			return
 		}
-		userID, err := tickets.Consume(c.Request.Context(), workspaceID, ticket)
+		var userID string
+		var err error
+		if sessions, ok := tickets.(sessionTicketStore); ok {
+			var authTime int64
+			userID, authTime, err = sessions.ConsumeSession(c.Request.Context(), workspaceID, ticket)
+			c.Set("session_auth_time", authTime)
+		} else {
+			userID, err = tickets.Consume(c.Request.Context(), workspaceID, ticket)
+		}
 		if errors.Is(err, ErrInvalidWorkspaceTicket) {
 			security.Record(c, security.Event{Name: security.SocketTicketInvalid, Outcome: security.Denied, WorkspaceID: workspaceID})
 			apierror.Abort(c, http.StatusUnauthorized, "ticket_invalid", "Invalid or expired WebSocket ticket")

@@ -73,7 +73,9 @@ def test_production_rejects_default_encryption_key(monkeypatch):
         Settings()
 
     # A real key in production, and any key outside production, build fine.
-    monkeypatch.setenv("DATABASE_ENCRYPTION_KEY", "a-real-deployment-provided-key")
+    from cryptography.fernet import Fernet
+
+    monkeypatch.setenv("DATABASE_ENCRYPTION_KEY", Fernet.generate_key().decode())
     Settings()
     monkeypatch.setenv("APP_ENV", "development")
     monkeypatch.delenv("DATABASE_ENCRYPTION_KEY", raising=False)

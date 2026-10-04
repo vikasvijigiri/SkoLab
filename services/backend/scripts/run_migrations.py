@@ -61,9 +61,10 @@ def main() -> int:
 
     try:
         if asyncio.run(_bootstrap_if_empty(as_asyncpg_url(os.environ["DATABASE_URL"]))):
-            command.stamp(cfg, "head")
-            print("[migrate] empty database: created the schema and stamped head", flush=True)
-            return 0
+            # Models reproduce the schema through this revision. Later
+            # security/data migrations must run, rather than be stamped away.
+            command.stamp(cfg, "b8c9d0e1f2a3")
+            print("[migrate] empty database: created schema; applying security migrations", flush=True)
         print("[migrate] upgrading to head ...", flush=True)
         command.upgrade(cfg, "head")
     except Exception as exc:  # noqa: BLE001 - top-level script boundary

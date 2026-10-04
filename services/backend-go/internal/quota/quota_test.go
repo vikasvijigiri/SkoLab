@@ -2,9 +2,36 @@ package quota
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 )
+
+func TestLocalQuotaCleanupAndCapacity(t *testing.T) {
+	l := &localFallback{data: map[string]struct {
+		count int
+		exp   time.Time
+	}{}}
+	now := time.Now()
+	l.incr("expired", 1, now.Add(-time.Second), now.Add(-time.Minute))
+	l.incr("active", 1, now.Add(time.Hour), now)
+	if _, ok := l.data["expired"]; ok {
+		t.Fatal("expired bucket retained")
+	}
+	for i := 0; i < maxLocalEntries-1; i++ {
+		l.incr(fmt.Sprint(i), 1, now.Add(time.Hour), now)
+	}
+	if used := l.incr("overflow", 1, now.Add(time.Hour), now); used != localCapacityExceeded {
+		t.Fatal("capacity did not fail closed")
+	}
+	if len(l.data) != maxLocalEntries {
+		t.Fatal("fallback exceeds bound")
+	}
+	l.incr("new-window", 1, now.Add(2*time.Hour), now.Add(time.Hour))
+	if len(l.data) != 1 {
+		t.Fatal("full cache did not recover after expiry")
+	}
+}
 
 func resetLocal() {
 	local.mu.Lock()

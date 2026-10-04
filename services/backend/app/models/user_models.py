@@ -183,6 +183,8 @@ class WebSocketTicket(Base):
 
     __tablename__ = "websocket_tickets"
 
+    session_auth_time = Column(BigInteger, nullable=False, server_default="0")
+
     ticket_hash = Column(String(64), primary_key=True)
     workspace_id = Column(
         String(100), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False

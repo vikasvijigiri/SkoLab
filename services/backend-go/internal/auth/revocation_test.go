@@ -119,6 +119,22 @@ func TestRevocationTakesEffectWhenTheCacheExpires(t *testing.T) {
 	}
 }
 
+func TestSocketSessionUsesOriginalSignInTime(t *testing.T) {
+	fake := &fakeFirebase{authTime: 1000}
+	clock := withFirebase(t, fake)
+	if err := CheckSession(context.Background(), "member", 1000); err != nil {
+		t.Fatal(err)
+	}
+	fake.validAfter = 2_000_000
+	*clock = clock.Add(userStatusTTL)
+	if err := CheckSession(context.Background(), "member", 1000); !errors.Is(err, errRevoked) {
+		t.Fatalf("revoked socket allowed: %v", err)
+	}
+	if err := CheckSession(context.Background(), "member", 0); !errors.Is(err, errStatusUnavailable) {
+		t.Fatal("legacy ticket without sign-in time allowed")
+	}
+}
+
 func TestFirebaseOutage(t *testing.T) {
 	down := errors.New("connection refused")
 

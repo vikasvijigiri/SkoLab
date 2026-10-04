@@ -10,9 +10,11 @@
 package user
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -65,7 +67,9 @@ func SyncUserProfile(c *gin.Context) {
 		VALUES ($1, $2)
 		ON CONFLICT (id) DO UPDATE SET display_name = $2
 	`
-	if _, err := db.Pool.Exec(c.Request.Context(), query, req.UID, req.Name); err != nil {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+	defer cancel()
+	if _, err := db.Pool.Exec(ctx, query, req.UID, req.Name); err != nil {
 		apierror.Abort(c, http.StatusInternalServerError, "internal_error", "Could not save the profile")
 		return
 	}
@@ -97,7 +101,9 @@ func DeleteUser(c *gin.Context) {
 		return
 	}
 
-	if _, err := db.Pool.Exec(c.Request.Context(), "DELETE FROM users WHERE id = $1", targetUserID); err != nil {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+	defer cancel()
+	if _, err := db.Pool.Exec(ctx, "DELETE FROM users WHERE id = $1", targetUserID); err != nil {
 		apierror.Abort(c, http.StatusInternalServerError, "internal_error", "Could not delete the account data")
 		return
 	}
