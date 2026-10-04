@@ -37,8 +37,11 @@ Actions). Never commit them:
 | `GRAFANA_TOKEN` | Grafana service-account token (Admin, so it can also write the journey's secure values) |
 | `GRAFANA_SM_TOKEN` | Synthetic Monitoring access token (Testing & synthetics > Synthetics > Config) |
 | `GRAFANA_CONTACT_POINT` | Contact point that receives all SkoLab alerts (`skolab-oncall`) |
+| `SLACK_ALERT_WEBHOOK_URL` | Optional Slack incoming webhook for #all-skolab-alerts; deployment adds Slack to the existing contact point |
 | `SKOLAB_FIREBASE_API_KEY`, `SKOLAB_SYNTHETIC_EMAIL`, `SKOLAB_SYNTHETIC_PASSWORD` | Journey login fixtures (optional; they turn the journey on) |
 | `FIREBASE_SERVICE_ACCOUNT` | Firebase Admin SDK key (JSON). The deploy keeps the monitoring account existing, enabled and email-verified, because the backend refuses unverified accounts. Admin-level: never commit it, rotate if exposed |
+
+For direct Slack setup and the free-plan Sentry email relay, see [SENTRY-SLACK.md](SENTRY-SLACK.md).
 
 The provisioner discovers the regional API server and the metrics and logs data
 sources from the Synthetic Monitoring plugin's settings. An OTLP ingestion
