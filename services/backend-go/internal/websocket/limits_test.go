@@ -111,6 +111,43 @@ func TestSocketChecksSessionBeforeUpgrade(t *testing.T) {
 	}
 }
 
+func TestSocketRefusesUpgradeAtUserConnectionCap(t *testing.T) {
+	h := NewHubWithRedis(nil)
+	for i := 0; i < 4; i++ {
+		release, ok := h.reserve("test-editor", "paper")
+		if !ok {
+			t.Fatal("unexpected reservation failure")
+		}
+		defer release()
+	}
+	_, response, err := gorillaws.DefaultDialer.Dial(socketServer(t, h), nil)
+	if err == nil || response == nil || response.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("connection cap ignored: %v %v", response, err)
+	}
+	if response != nil {
+		response.Body.Close()
+	}
+}
+
+func TestSocketClosesWhenByteRateIsExceeded(t *testing.T) {
+	h := NewHubWithRedis(nil)
+	go h.Run()
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = h.Shutdown(ctx)
+	})
+	conn := dial(t, socketServer(t, h), "")
+	for i := 0; i < 2; i++ {
+		if err := conn.WriteMessage(gorillaws.TextMessage, make([]byte, maxMessageSize)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if code := closeCode(t, conn); code != gorillaws.ClosePolicyViolation {
+		t.Fatalf("byte flood close=%d", code)
+	}
+}
+
 func TestReauthorizeClosesOnSessionRevocation(t *testing.T) {
 	h := NewHubWithRedis(nil)
 	go h.Run()

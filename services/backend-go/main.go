@@ -112,16 +112,7 @@ func main() {
 		log.Fatal("Firebase initialization failed; refusing to start a deployed gateway")
 	}
 
-	var dbErr error
-	for attempt := 1; attempt <= 3; attempt++ {
-		dbErr = db.InitDB(otel.DBTracer())
-		if dbErr == nil {
-			break
-		}
-		if attempt < 3 {
-			time.Sleep(time.Duration(attempt) * time.Second)
-		}
-	}
+	dbErr := retryDatabaseInitialization(func() error { return db.InitDB(otel.DBTracer()) }, time.Sleep)
 	if dbErr != nil {
 		if os.Getenv("GIN_MODE") == "release" {
 			log.Fatal("PostgreSQL initialization failed after retries; refusing to start gateway")
@@ -242,6 +233,21 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("graceful shutdown did not complete cleanly", "err", err)
 	}
+}
+
+// Do not construct stores until initialization succeeds; they capture the pool.
+func retryDatabaseInitialization(initialize func() error, pause func(time.Duration)) error {
+	var err error
+	for attempt := 1; attempt <= 3; attempt++ {
+		err = initialize()
+		if err == nil {
+			return nil
+		}
+		if attempt < 3 {
+			pause(time.Duration(attempt) * time.Second)
+		}
+	}
+	return err
 }
 
 // gateway is everything the router needs; main connects it, tests fake it.

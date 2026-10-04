@@ -154,9 +154,9 @@ func readTitle(c *gin.Context) (string, bool) {
 	switch {
 	case title == "":
 		fail(c, http.StatusBadRequest, "invalid_title", "Title must not be blank")
-	case utf8.RuneCountInString(title) > maxTitleRunes:
+	case utf8.RuneCountInString(req.Title) > maxTitleRunes:
 		fail(c, http.StatusBadRequest, "invalid_title", "Title must be at most 255 characters")
-	case strings.IndexFunc(title, unicode.IsControl) >= 0:
+	case strings.IndexFunc(req.Title, unicode.IsControl) >= 0:
 		fail(c, http.StatusBadRequest, "invalid_title", "Title must not contain control characters")
 	default:
 		return title, true

@@ -109,7 +109,10 @@ func TestCreate_RejectsInvalidInputBeforeTouchingTheStore(t *testing.T) {
 		"not json":         {`title`, "", "invalid_body"},
 		"blank title":      {`{"title":"   "}`, "", "invalid_title"},
 		"too long":         {`{"title":"` + strings.Repeat("é", 256) + `"}`, "", "invalid_title"},
+		"padded too long":  {`{"title":"` + strings.Repeat(" ", 255) + `x"}`, "", "invalid_title"},
 		"control chars":    {`{"title":"a\u0007b"}`, "", "invalid_title"},
+		"trailing newline": {`{"title":"quarter\n"}`, "", "invalid_title"},
+		"leading tab":      {`{"title":"\tquarter"}`, "", "invalid_title"},
 		"long key":         {`{"title":"T"}`, strings.Repeat("k", 101), "invalid_idempotency_key"},
 		"key with a space": {`{"title":"T"}`, "a b", "invalid_idempotency_key"},
 	}
