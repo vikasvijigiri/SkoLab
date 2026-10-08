@@ -27,6 +27,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/skolab/backend-go/internal/apierror"
+	"github.com/skolab/backend-go/internal/middleware"
 	"github.com/skolab/backend-go/internal/security"
 )
 
@@ -309,7 +310,7 @@ func decodeCursor(token string) (Cursor, error) {
 	if err := json.Unmarshal(raw, &cursor); err != nil {
 		return cursor, err
 	}
-	if cursor.ID == "" || cursor.CreatedAt.IsZero() {
+	if cursor.ID == "" || cursor.CreatedAt.IsZero() || !middleware.Storable(cursor.ID) {
 		return cursor, errors.New("incomplete cursor")
 	}
 	return cursor, nil

@@ -119,7 +119,7 @@ func TestCreateInviteAcceptsOnlyServedChoices(t *testing.T) {
 }
 
 func TestMalformedOrUnknownTokensLookTheSame(t *testing.T) {
-	for _, body := range []string{`{}`, `{"token":"not-an-invite"}`, `{"token":"inv_` + strings.Repeat("x", 200) + `"}`, `garbage`} {
+	for _, body := range []string{`{}`, `{"token":"not-an-invite"}`, `{"token":"inv_` + strings.Repeat("x", 200) + `"}`, `{"token":"inv_\u0000"}`, `garbage`} {
 		store := &fakeSharing{}
 		w := serveSharing(t, store, "ada", "POST", "/api/v1/invites/accept", body)
 		if w.Code != 404 || errorCode(t, w) != "invite_invalid" || len(store.calls) != 0 {
@@ -228,7 +228,8 @@ func TestTransferOwnershipHandler(t *testing.T) {
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"owner_id":"grace"`) || strings.Join(store.calls, ",") != "transfer:grace" {
 		t.Fatalf("transfer: %d %s %v", w.Code, w.Body, store.calls)
 	}
-	for _, body := range []string{`{}`, `{"user_id":"  "}`, `x`} {
+	// A NUL byte would reach Postgres and fail there as a 503.
+	for _, body := range []string{`{}`, `{"user_id":"  "}`, `x`, `{"user_id":"gr\u0000ace"}`} {
 		if w := serveSharing(t, &fakeSharing{}, "ada", "POST", "/api/v1/workspaces/ws-1/owner", body); w.Code != 400 {
 			t.Fatalf("%s: %d", body, w.Code)
 		}
