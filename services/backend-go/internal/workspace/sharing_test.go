@@ -52,6 +52,9 @@ func (f *fakeSharing) ChangeRole(_ context.Context, _, _, target, role string) e
 func (f *fakeSharing) RemoveMember(_ context.Context, _, _, target string) error {
 	return f.note("remove:" + target)
 }
+func (f *fakeSharing) TransferOwnership(_ context.Context, _, _, target string, _ int) error {
+	return f.note("transfer:" + target)
+}
 
 func serveSharing(t *testing.T, store SharingStore, user, method, path, body string) *httptest.ResponseRecorder {
 	t.Helper()
@@ -176,7 +179,7 @@ func TestEverySharingRouteRequiresAuthentication(t *testing.T) {
 		{"GET", "/api/v1/workspaces/w/invites"}, {"DELETE", "/api/v1/workspaces/w/invites/i"},
 		{"POST", "/api/v1/invites/preview"}, {"POST", "/api/v1/invites/accept"},
 		{"GET", "/api/v1/workspaces/w/members"}, {"PATCH", "/api/v1/workspaces/w/members/u"},
-		{"DELETE", "/api/v1/workspaces/w/members/u"},
+		{"DELETE", "/api/v1/workspaces/w/members/u"}, {"POST", "/api/v1/workspaces/w/owner"},
 	}
 	for _, r := range routes {
 		store := &fakeSharing{}
@@ -216,5 +219,25 @@ func TestListAndRevokeInvitesAndListMembers(t *testing.T) {
 	}
 	if w := serveSharing(t, &fakeSharing{err: ErrNotFound}, "ada", "GET", "/api/v1/workspaces/ws-1/members", ""); errorCode(t, w) != "not_found" {
 		t.Fatalf("members of a hidden workspace: got %s, want not_found", errorCode(t, w))
+	}
+}
+
+func TestTransferOwnershipHandler(t *testing.T) {
+	store := &fakeSharing{}
+	w := serveSharing(t, store, "ada", "POST", "/api/v1/workspaces/ws-1/owner", `{"user_id":"grace"}`)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"owner_id":"grace"`) || strings.Join(store.calls, ",") != "transfer:grace" {
+		t.Fatalf("transfer: %d %s %v", w.Code, w.Body, store.calls)
+	}
+	for _, body := range []string{`{}`, `{"user_id":"  "}`, `x`} {
+		if w := serveSharing(t, &fakeSharing{}, "ada", "POST", "/api/v1/workspaces/ws-1/owner", body); w.Code != 400 {
+			t.Fatalf("%s: %d", body, w.Code)
+		}
+	}
+	for err, code := range map[error]string{ErrTransferTarget: "transfer_target_invalid",
+		ErrTransferLimit: "new_owner_limit_reached", ErrForbidden: "owner_required", ErrNotFound: "not_found"} {
+		w := serveSharing(t, &fakeSharing{err: err}, "ada", "POST", "/api/v1/workspaces/ws-1/owner", `{"user_id":"grace"}`)
+		if errorCode(t, w) != code {
+			t.Fatalf("%v -> %s, want %s", err, errorCode(t, w), code)
+		}
 	}
 }

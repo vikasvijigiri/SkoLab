@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -36,45 +37,58 @@ const maxRequestBytes = 1024 * 1024 // Includes UTF-8 and JSON escapes for 100,0
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
-
-	engine, token, maxConcurrent, err := settings()
-	if err != nil {
-		slog.Error("refusing to start", "err", err)
-		os.Exit(1)
-	}
-	mux := newMux(engine, texsandbox.NewSlots(maxConcurrent), token)
-
 	port := os.Getenv("PORT") // Cloud Run convention
 	if port == "" {
 		port = "8081"
 	}
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	if err := run(ctx, ":"+port, nil); err != nil {
+		slog.Error("refusing to start", "err", err)
+		os.Exit(1)
+	}
+}
+
+// run serves compiles on addr until ctx ends, then lets in-flight compiles
+// finish. listening (optional) receives the bound address.
+func run(ctx context.Context, addr string, listening func(net.Addr)) error {
+	engine, token, maxConcurrent, err := settings()
+	if err != nil {
+		return err
+	}
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("listen on %s: %w", addr, err)
+	}
+	if listening != nil {
+		listening(listener.Addr())
+	}
 	srv := &http.Server{
-		Addr:              ":" + port,
-		Handler:           mux,
+		Handler:           newMux(engine, texsandbox.NewSlots(maxConcurrent), token),
 		ReadTimeout:       10 * time.Second,
 		ReadHeaderTimeout: 5 * time.Second,
 		// Comfortably above texsandbox.CompileTimeout + admission wait so a
 		// legitimate slow compile is never cut off by the HTTP layer itself.
 		WriteTimeout: texsandbox.CompileTimeout + 15*time.Second,
 	}
-
+	served := make(chan error, 1)
 	go func() {
-		slog.Info("colab-sandbox starting", "addr", srv.Addr, "max_concurrent", maxConcurrent)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("server error", "err", err)
-			os.Exit(1)
-		}
+		slog.Info("colab-sandbox starting", "addr", listener.Addr().String(), "max_concurrent", maxConcurrent)
+		served <- srv.Serve(listener)
 	}()
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	select {
+	case err := <-served:
+		return fmt.Errorf("server error: %w", err)
+	case <-ctx.Done():
+	}
 	slog.Info("shutdown signal received, draining in-flight compiles")
-	ctx, cancel := context.WithTimeout(context.Background(), texsandbox.CompileTimeout+10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), texsandbox.CompileTimeout+10*time.Second)
 	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("graceful shutdown did not complete cleanly", "err", err)
 	}
+	return nil
 }
 
 // settings reads and checks the worker's configuration.

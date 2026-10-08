@@ -22,8 +22,9 @@ from app.db.url import as_asyncpg_url
 # access to the values within the .ini file in use.
 config = context.config
 
-# Set the sqlalchemy.url dynamically
-db_url = as_asyncpg_url(os.environ.get("DATABASE_URL", ""))
+# Set the sqlalchemy.url dynamically. Migrations run as the schema owner
+# (MIGRATION_DATABASE_URL) when the service itself runs as skolab_app.
+db_url = as_asyncpg_url(os.environ.get("MIGRATION_DATABASE_URL") or os.environ.get("DATABASE_URL", ""))
 config.set_main_option("sqlalchemy.url", db_url)
 
 # Interpret the config file for Python logging.

@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -144,5 +145,38 @@ func TestFailedAuditWriteIsReportedNotFatal(t *testing.T) {
 	Audit(ginContext("ada"), Event{Name: WorkspaceCreated, Outcome: Allowed})
 	if counts(t, reader)["audit.write_failed/failed"] != 1 {
 		t.Fatal("a failed audit write must be counted")
+	}
+}
+
+func TestAuditRetentionDefaultsToAYearWithAFloor(t *testing.T) {
+	day := 24 * time.Hour
+	for value, want := range map[string]time.Duration{"": 365 * day, "junk": 365 * day, "90": 90 * day, "1": 30 * day, "-5": 30 * day} {
+		t.Setenv("SECURITY_AUDIT_RETENTION_DAYS", value)
+		if got := AuditRetention(); got != want {
+			t.Fatalf("%q: %v, want %v", value, got, want)
+		}
+	}
+}
+
+func TestSweepAuditRemovesOnlyExpiredRows(t *testing.T) {
+	if err := SweepAudit(context.Background(), nil, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	pool := testPool(t)
+	ctx := context.Background()
+	actor := "retention-" + uuid.NewString()
+	t.Cleanup(func() { _, _ = pool.Exec(ctx, "DELETE FROM security_audit_log WHERE actor_id = $1", actor) })
+	for _, age := range []string{"400 days", "1 day"} {
+		if _, err := pool.Exec(ctx, `INSERT INTO security_audit_log (occurred_at, event, outcome, actor_id)
+			VALUES (NOW() AT TIME ZONE 'UTC' - $1::interval, 'account.deleted', 'allowed', $2)`, age, actor); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := SweepAudit(ctx, pool, 365*24*time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	var kept int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM security_audit_log WHERE actor_id = $1", actor).Scan(&kept); err != nil || kept != 1 {
+		t.Fatalf("rows kept = %d (%v), want only the recent one", kept, err)
 	}
 }

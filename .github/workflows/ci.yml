@@ -72,8 +72,8 @@ jobs:
           # Floor, not target: raise it as coverage grows, never lower it.
           total=$(go tool cover -func=coverage.out | awk '/^total:/ {sub("%", "", $3); print $3}')
           echo "Go statement coverage: ${total}%"
-          echo "Go statement coverage: **${total}%** (floor 80%)" >> "$GITHUB_STEP_SUMMARY"
-          awk -v t="$total" 'BEGIN { exit !(t >= 80) }' || { echo "::error::Go coverage ${total}% is below the 80% floor"; exit 1; }
+          echo "Go statement coverage: **${total}%** (floor 85%)" >> "$GITHUB_STEP_SUMMARY"
+          awk -v t="$total" 'BEGIN { exit !(t >= 85) }' || { echo "::error::Go coverage ${total}% is below the 85% floor"; exit 1; }
       - name: Check Go formatting (informational)
         working-directory: services/backend-go
         # Non-blocking: gofmt was only ever a local pre-commit hook, never

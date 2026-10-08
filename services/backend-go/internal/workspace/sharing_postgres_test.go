@@ -290,3 +290,48 @@ func TestSharing_LinksDieWithTheirCreatorsAuthority(t *testing.T) {
 		t.Fatalf("current editor's link: %+v %v", m, err)
 	}
 }
+
+func TestSharing_TransferOwnership(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	sharing := NewPostgresSharingStore(pool)
+	workspaces := NewPostgresStore(pool)
+	owner, editor, viewer, outsider := newUser(t, pool), newUser(t, pool), newUser(t, pool), newUser(t, pool)
+	ws := newWorkspace(t, workspaces, owner)
+	for user, role := range map[string]string{editor: "editor", viewer: "viewer"} {
+		inv, _ := sharing.CreateInvite(ctx, ws, owner, role, week(), nil)
+		if _, err := sharing.AcceptInvite(ctx, inv.Token, user); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for target, want := range map[string]error{viewer: ErrTransferTarget, outsider: ErrTransferTarget, owner: ErrTransferTarget} {
+		if err := sharing.TransferOwnership(ctx, ws, owner, target, 10); !errors.Is(err, want) {
+			t.Fatalf("transfer to %s: %v, want %v", target, err, want)
+		}
+	}
+	if err := sharing.TransferOwnership(ctx, ws, editor, viewer, 10); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("non-owner transferring: %v", err)
+	}
+	if err := sharing.TransferOwnership(ctx, ws, owner, editor, 0); !errors.Is(err, ErrTransferLimit) {
+		t.Fatalf("transfer past the new owner's cap: %v", err)
+	}
+
+	if err := sharing.TransferOwnership(ctx, ws, owner, editor, 10); err != nil {
+		t.Fatal(err)
+	}
+	got, err := workspaces.Get(ctx, ws, editor)
+	if err != nil || got.OwnerID != editor || got.Role != "owner" {
+		t.Fatalf("new owner sees %+v %v", got, err)
+	}
+	if role, _ := sharing.CallerRole(ctx, ws, owner); role != "editor" {
+		t.Fatalf("former owner's role = %q, want editor", role)
+	}
+	// The new owner now has the owner's powers; the former owner does not.
+	if err := sharing.RemoveMember(ctx, ws, editor, owner); err != nil {
+		t.Fatalf("new owner removing former owner: %v", err)
+	}
+	if err := sharing.RemoveMember(ctx, ws, editor, editor); !errors.Is(err, ErrOwnerCannotLeave) {
+		t.Fatalf("new owner leaving: %v", err)
+	}
+}

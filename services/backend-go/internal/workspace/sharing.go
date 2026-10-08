@@ -22,6 +22,7 @@ import (
 //	GET    /workspaces/:id/members            members (any member)
 //	PATCH  /workspaces/:id/members/:user_id   change role (owner)
 //	DELETE /workspaces/:id/members/:user_id   remove (owner) or leave (self) -> 204
+//	POST   /workspaces/:id/owner              transfer ownership to an active editor (owner)
 //
 // Every choice a caller can make is served by invite-options; no request
 // needs free text. Tokens travel only in request bodies, never in URL paths,
@@ -37,7 +38,7 @@ func intPtr(n int) *int { return &n }
 
 // RegisterSharing mounts invite and member routes on an authenticated group.
 func RegisterSharing(group *gin.RouterGroup, store SharingStore) {
-	h := sharingHandlers{store: store}
+	h := sharingHandlers{store: store, maxPerUser: maxPerUser()}
 	group.GET("/workspaces/:id/invite-options", h.inviteOptions)
 	group.POST("/workspaces/:id/invites", h.createInvite)
 	group.GET("/workspaces/:id/invites", h.listInvites)
@@ -47,9 +48,13 @@ func RegisterSharing(group *gin.RouterGroup, store SharingStore) {
 	group.GET("/workspaces/:id/members", h.listMembers)
 	group.PATCH("/workspaces/:id/members/:user_id", h.changeRole)
 	group.DELETE("/workspaces/:id/members/:user_id", h.removeMember)
+	group.POST("/workspaces/:id/owner", h.transferOwnership)
 }
 
-type sharingHandlers struct{ store SharingStore }
+type sharingHandlers struct {
+	store      SharingStore
+	maxPerUser int
+}
 
 func (h sharingHandlers) inviteOptions(c *gin.Context) {
 	uid, ok := caller(c)
@@ -260,4 +265,27 @@ func (h sharingHandlers) removeMember(c *gin.Context) {
 	}
 	security.Audit(c, security.Event{Name: event, Outcome: security.Allowed, WorkspaceID: c.Param("id"), Reason: target})
 	c.Status(http.StatusNoContent)
+}
+
+type transferRequest struct {
+	UserID string `json:"user_id"`
+}
+
+func (h sharingHandlers) transferOwnership(c *gin.Context) {
+	uid, ok := caller(c)
+	if !ok {
+		return
+	}
+	var req transferRequest
+	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.UserID) == "" {
+		fail(c, http.StatusBadRequest, "invalid_body", "Request body must be JSON with the new owner's user_id")
+		return
+	}
+	if err := h.store.TransferOwnership(c.Request.Context(), c.Param("id"), uid, req.UserID, h.maxPerUser); err != nil {
+		storeError(c, err)
+		return
+	}
+	security.Audit(c, security.Event{Name: security.OwnershipTransferred, Outcome: security.Allowed,
+		WorkspaceID: c.Param("id"), Reason: uid + "->" + req.UserID})
+	c.JSON(http.StatusOK, gin.H{"workspace_id": c.Param("id"), "owner_id": req.UserID, "your_role": "editor"})
 }

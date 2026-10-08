@@ -63,7 +63,11 @@ services:
         value: http/protobuf
       - key: USER_QUOTA_ENABLED
         value: "true"
+      # Least-privilege login in the skolab_app role; migrations (the
+      # preDeployCommand) use the schema owner. deploy/AUDIT-2026-10-08.md item 4.
       - key: DATABASE_URL
+        sync: false
+      - key: MIGRATION_DATABASE_URL
         sync: false
       - key: DATABASE_ENCRYPTION_KEY
         sync: false

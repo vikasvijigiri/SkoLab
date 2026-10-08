@@ -8,8 +8,10 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -42,9 +44,22 @@ import (
 )
 
 func main() {
+	// A deploy/restart sends SIGTERM, not SIGKILL: run drains on it instead
+	// of killing every in-flight connection.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	if err := run(ctx, ":8080", nil); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// run starts the gateway on addr and serves until ctx ends, then drains.
+// A configuration a deployment must not run with is returned as an error
+// before anything listens; listening (optional) receives the bound address.
+func run(ctx context.Context, addr string, listening func(net.Addr)) error {
 	otel, err := telemetry.New(context.Background())
 	if err != nil {
-		log.Fatalf("telemetry configuration invalid: %v", err)
+		return fmt.Errorf("telemetry configuration invalid: %w", err)
 	}
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -61,7 +76,8 @@ func main() {
 	}
 
 	// Structured JSON logging in production.
-	if os.Getenv("GIN_MODE") == "release" {
+	release := os.Getenv("GIN_MODE") == "release"
+	if release {
 		gin.SetMode(gin.ReleaseMode)
 		slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
@@ -72,9 +88,9 @@ func main() {
 		// left unset in a real deployment, with no prior warning anywhere
 		// (2026-09-26 security audit).
 		if os.Getenv("INTERNAL_API_TOKEN") == "" {
-			log.Fatal("INTERNAL_API_TOKEN is unset while GIN_MODE=release. Set it " +
+			return errors.New("INTERNAL_API_TOKEN is unset while GIN_MODE=release. Set it " +
 				"(and the matching value on the Python backend / colab-sandbox worker) " +
-				"before starting the gateway.")
+				"before starting the gateway")
 		}
 	}
 
@@ -108,37 +124,25 @@ func main() {
 	}
 
 	auth.InitFirebase()
-	if os.Getenv("GIN_MODE") == "release" && !auth.Ready() {
-		log.Fatal("Firebase initialization failed; refusing to start a deployed gateway")
+	if release && !auth.Ready() {
+		return errors.New("firebase initialization failed; refusing to start a deployed gateway")
 	}
 
 	dbErr := retryDatabaseInitialization(func() error { return db.InitDB(otel.DBTracer()) }, time.Sleep)
 	if dbErr != nil {
-		if os.Getenv("GIN_MODE") == "release" {
-			log.Fatal("PostgreSQL initialization failed after retries; refusing to start gateway")
+		if release {
+			return errors.New("PostgreSQL initialization failed after retries; refusing to start gateway")
 		}
 		slog.Warn("PostgreSQL unavailable in development", "err", dbErr)
 	} else {
 		defer db.CloseDB()
 	}
 
-	// Saturation signals (pool usage, goroutines, heap) beside the RED metrics.
+	// Expired quota buckets and audit rows past retention, once a minute.
 	cleanupCtx, stopCleanup := context.WithCancel(context.Background())
 	defer stopCleanup()
-	go func() {
-		ticker := time.NewTicker(time.Minute)
-		defer ticker.Stop()
-		for {
-			if err := quota.Sweep(cleanupCtx, db.Pool); err != nil {
-				slog.Warn("quota cleanup unavailable")
-			}
-			select {
-			case <-cleanupCtx.Done():
-				return
-			case <-ticker.C:
-			}
-		}
-	}()
+	go maintain(cleanupCtx, db.Pool, time.Minute)
+	// Saturation signals (pool usage, goroutines, heap) beside the RED metrics.
 	// Pool stats are read at export time; nil while the pool is down.
 	if err := otel.ObserveDBPool(func() telemetry.PoolStats {
 		if db.Pool == nil {
@@ -164,21 +168,21 @@ func main() {
 	// without it they stay in process (exact with one instance, as on
 	// Render's free tier). Deliberately not REDIS_URL, the Python cache's.
 	limits := shared.Connect(context.Background(), os.Getenv("SHARED_STATE_REDIS_URL"))
-	if err := shared.ValidateConfiguration(limits); err != nil {
-		log.Fatal(err)
-	}
-	if err := colab.ValidateConfiguration(); err != nil {
-		log.Fatal(err)
-	}
 	if limits != nil {
 		defer limits.Close()
+	}
+	if err := shared.ValidateConfiguration(limits); err != nil {
+		return err
+	}
+	if err := colab.ValidateConfiguration(); err != nil {
+		return err
 	}
 	auth.ShareFailedLogins(limits)
 	colab.ShareLocks(limits)
 
 	// ── WebSocket hub ─────────────────────────────────────────────────────────
 	hub := websocket.NewHub()
-	if os.Getenv("GIN_MODE") == "release" {
+	if release {
 		hub.CheckSession = auth.CheckSession
 	}
 	if shared.Required() {
@@ -186,7 +190,7 @@ func main() {
 		err := hub.Ready(ctx)
 		cancel()
 		if err != nil {
-			log.Fatal("shared WebSocket broadcasts unavailable at startup")
+			return errors.New("shared WebSocket broadcasts unavailable at startup")
 		}
 	}
 	go hub.Run()
@@ -207,21 +211,27 @@ func main() {
 		},
 	})
 
-	addr := ":8080"
-	srv := &http.Server{Addr: addr, Handler: r, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 65 * time.Second, MaxHeaderBytes: 32 * 1024}
-
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		_ = hub.Shutdown(context.Background())
+		return fmt.Errorf("listen on %s: %w", addr, err)
+	}
+	if listening != nil {
+		listening(listener.Addr())
+	}
+	srv := &http.Server{Handler: r, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 65 * time.Second, MaxHeaderBytes: 32 * 1024}
+	served := make(chan error, 1)
 	go func() {
-		slog.Info("Go API Gateway starting", "addr", addr, "python_backend", pythonBackendURL)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("server error: %v", err)
-		}
+		slog.Info("Go API Gateway starting", "addr", listener.Addr().String(), "python_backend", pythonBackendURL)
+		served <- srv.Serve(listener)
 	}()
 
-	// Graceful shutdown: a deploy/restart sends SIGTERM, not SIGKILL. Without
-	// this, that signal kills every in-flight connection immediately.
-	quitCh := make(chan os.Signal, 1)
-	signal.Notify(quitCh, syscall.SIGINT, syscall.SIGTERM)
-	<-quitCh
+	select {
+	case err := <-served:
+		_ = hub.Shutdown(context.Background())
+		return fmt.Errorf("server error: %w", err)
+	case <-ctx.Done():
+	}
 	draining.Store(true)
 	slog.Info("shutdown signal received, draining in-flight requests")
 
@@ -232,6 +242,27 @@ func main() {
 	}
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("graceful shutdown did not complete cleanly", "err", err)
+	}
+	return nil
+}
+
+// maintain runs periodic database housekeeping until ctx ends: expired
+// quota buckets and security audit rows past their retention.
+func maintain(ctx context.Context, pool *pgxpool.Pool, every time.Duration) {
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+	for {
+		if err := quota.Sweep(ctx, pool); err != nil && ctx.Err() == nil {
+			slog.Warn("quota cleanup unavailable")
+		}
+		if err := security.SweepAudit(ctx, pool, security.AuditRetention()); err != nil && ctx.Err() == nil {
+			slog.Warn("audit log retention cleanup unavailable")
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
 	}
 }
 

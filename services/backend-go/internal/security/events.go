@@ -12,6 +12,8 @@ package security
 import (
 	"context"
 	"log/slog"
+	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -54,6 +56,7 @@ const (
 	MemberRoleChanged    = "member.role_changed"
 	MemberRemoved        = "member.removed"
 	MemberLeft           = "member.left"
+	OwnershipTransferred = "workspace.ownership_transferred"
 )
 
 type Event struct {
@@ -161,4 +164,35 @@ func Audit(c *gin.Context, e Event) {
 	if err != nil {
 		RecordContext(ctx, Event{Name: "audit.write_failed", Outcome: Failed, Reason: e.Name})
 	}
+}
+
+const (
+	defaultAuditRetentionDays = 365
+	minAuditRetentionDays     = 30 // an investigation needs at least this much history
+)
+
+// AuditRetention is how long security_audit_log rows are kept:
+// SECURITY_AUDIT_RETENTION_DAYS (at least 30), else one year. Rows name
+// people (actor, IP, member ids in reason) and deliberately outlive deleted
+// accounts, so they must not be kept forever.
+func AuditRetention() time.Duration {
+	days := defaultAuditRetentionDays
+	if n, err := strconv.Atoi(os.Getenv("SECURITY_AUDIT_RETENTION_DAYS")); err == nil {
+		days = max(n, minAuditRetentionDays)
+	}
+	return time.Duration(days) * 24 * time.Hour
+}
+
+// SweepAudit deletes a bounded batch of rows older than retention, keeping
+// each cleanup transaction short; run it on a timer.
+func SweepAudit(ctx context.Context, pool *pgxpool.Pool, retention time.Duration) error {
+	if pool == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	_, err := pool.Exec(ctx, `DELETE FROM security_audit_log WHERE id IN
+		(SELECT id FROM security_audit_log WHERE occurred_at < $1 LIMIT 1000)`,
+		time.Now().UTC().Add(-retention))
+	return err
 }

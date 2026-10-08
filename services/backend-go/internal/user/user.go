@@ -79,7 +79,10 @@ func SyncUserProfile(c *gin.Context) {
 
 // DeleteUser handles GDPR Right to be Forgotten. Workspace/membership/ticket
 // rows referencing this uid cascade-delete via their own FK definitions
-// (ON DELETE CASCADE). The Firebase identity is then deleted too, which ends
+// (ON DELETE CASCADE). That cascade would also delete workspaces the user
+// owns but others actively collaborate in, so deletion is refused with 409
+// owns_shared_workspaces (listing them) until each is transferred
+// (POST /workspaces/:id/owner) or deleted explicitly. The Firebase identity is then deleted too, which ends
 // every session: otherwise the caller stays signed in and the next profile
 // sync silently recreates the account.
 //
@@ -103,8 +106,17 @@ func DeleteUser(c *gin.Context) {
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
 	defer cancel()
-	if _, err := db.Pool.Exec(ctx, "DELETE FROM users WHERE id = $1", targetUserID); err != nil {
+	shared, err := deleteUnlessSharing(ctx, targetUserID)
+	if err != nil {
 		apierror.Abort(c, http.StatusInternalServerError, "internal_error", "Could not delete the account data")
+		return
+	}
+	if len(shared) > 0 {
+		c.AbortWithStatusJSON(http.StatusConflict, gin.H{
+			"code":       "owns_shared_workspaces",
+			"error":      "Transfer or delete the workspaces you share with others before deleting your account",
+			"workspaces": shared,
+		})
 		return
 	}
 	security.Audit(c, security.Event{Name: security.AccountDeleted, Outcome: security.Allowed})
@@ -115,4 +127,58 @@ func DeleteUser(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+// SharedWorkspace is an owned workspace that blocks account deletion.
+type SharedWorkspace struct {
+	ID      string `json:"id"`
+	Title   string `json:"title"`
+	Members int    `json:"members"` // active members besides the owner
+}
+
+// deleteUnlessSharing deletes uid's row unless uid owns a workspace with
+// other active members, which it returns instead. Owned workspaces are
+// locked first: an invite accept racing the deletion must take a key-share
+// lock on its workspace, so it either commits before the check (and is
+// counted) or waits until the cascade has run.
+func deleteUnlessSharing(ctx context.Context, uid string) ([]SharedWorkspace, error) {
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after Commit
+	if _, err := tx.Exec(ctx, "SELECT 1 FROM workspaces WHERE owner_id = $1 FOR UPDATE", uid); err != nil {
+		return nil, err
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT w.id, w.title, count(*)
+		FROM workspaces w
+		JOIN workspace_members m ON m.workspace_id = w.id AND m.status = 'active' AND m.user_id <> w.owner_id
+		WHERE w.owner_id = $1
+		GROUP BY w.id, w.title, w.created_at
+		ORDER BY w.created_at, w.id
+		LIMIT 100`, uid)
+	if err != nil {
+		return nil, err
+	}
+	var shared []SharedWorkspace
+	for rows.Next() {
+		var ws SharedWorkspace
+		if err := rows.Scan(&ws.ID, &ws.Title, &ws.Members); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		shared = append(shared, ws)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(shared) > 0 {
+		return shared, nil
+	}
+	if _, err := tx.Exec(ctx, "DELETE FROM users WHERE id = $1", uid); err != nil {
+		return nil, err
+	}
+	return nil, tx.Commit(ctx)
 }

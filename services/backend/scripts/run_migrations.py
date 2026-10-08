@@ -3,7 +3,10 @@ release command so a schema change ships with the code that needs it.
 
     python scripts/run_migrations.py
 
-Reads DATABASE_URL from the environment (same as the app and alembic/env.py).
+Reads MIGRATION_DATABASE_URL, else DATABASE_URL (same rule as
+alembic/env.py). Set MIGRATION_DATABASE_URL to the schema owner once the
+running service connects as the least-privilege skolab_app role, which may
+not change the schema.
 A completely empty database (a new environment: CI staging, a fresh
 project) is created from the ORM models and stamped at head, because the
 migrations only patch an existing schema. Exits non-zero if the upgrade fails, so a broken migration fails the deploy
@@ -46,9 +49,14 @@ async def _bootstrap_if_empty(url: str) -> bool:
         await engine.dispose()
 
 
+def migration_url() -> str:
+    """The schema owner's URL: MIGRATION_DATABASE_URL, else DATABASE_URL."""
+    return os.environ.get("MIGRATION_DATABASE_URL") or os.environ.get("DATABASE_URL", "")
+
+
 def main() -> int:
-    if not os.environ.get("DATABASE_URL"):
-        print("[migrate] DATABASE_URL is not set", file=sys.stderr)
+    if not migration_url():
+        print("[migrate] neither MIGRATION_DATABASE_URL nor DATABASE_URL is set", file=sys.stderr)
         return 2
 
     from alembic import command
@@ -57,10 +65,10 @@ def main() -> int:
 
     cfg = Config(str(_BACKEND_ROOT / "alembic.ini"))
     cfg.set_main_option("script_location", str(_BACKEND_ROOT / "alembic"))
-    cfg.set_main_option("sqlalchemy.url", as_asyncpg_url(os.environ["DATABASE_URL"]))
+    cfg.set_main_option("sqlalchemy.url", as_asyncpg_url(migration_url()))
 
     try:
-        if asyncio.run(_bootstrap_if_empty(as_asyncpg_url(os.environ["DATABASE_URL"]))):
+        if asyncio.run(_bootstrap_if_empty(as_asyncpg_url(migration_url()))):
             # Models reproduce the schema through this revision. Later
             # security/data migrations must run, rather than be stamped away.
             command.stamp(cfg, "b8c9d0e1f2a3")
