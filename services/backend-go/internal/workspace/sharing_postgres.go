@@ -19,6 +19,8 @@ var (
 	ErrOwnerCannotLeave = errors.New("the owner cannot leave their own workspace")
 	ErrOwnerImmutable   = errors.New("the owner's role cannot be changed or removed")
 	ErrInviteForbidden  = errors.New("only the owner or an editor may manage invites")
+	ErrTransferTarget   = errors.New("the new owner must be an active editor of the workspace")
+	ErrTransferLimit    = errors.New("the new owner has reached their workspace limit")
 )
 
 // rank orders roles; a link never grants "owner".
@@ -74,6 +76,7 @@ type SharingStore interface {
 	ListMembers(ctx context.Context, workspaceID, callerID string) ([]Member, error)
 	ChangeRole(ctx context.Context, workspaceID, callerID, targetID, role string) error
 	RemoveMember(ctx context.Context, workspaceID, callerID, targetID string) error
+	TransferOwnership(ctx context.Context, workspaceID, callerID, targetID string, maxPerUser int) error
 }
 
 type postgresSharing struct{ pool *pgxpool.Pool }
@@ -95,8 +98,23 @@ func digest(token string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// usable selects invites that can still be redeemed.
-const usable = `revoked_at IS NULL AND expires_at > $2 AND (max_uses IS NULL OR uses < max_uses)`
+// usable selects invites (aliased i) that can still be redeemed. A link is
+// only as good as its creator's current authority: once the creator is no
+// longer the owner or an active editor (removed, demoted, account deleted),
+// their links stop working, so a removed editor cannot rejoin through a link
+// they minted while they were a member.
+const usable = `i.revoked_at IS NULL AND i.expires_at > $2 AND (i.max_uses IS NULL OR i.uses < i.max_uses)
+	AND EXISTS (
+		SELECT 1 FROM workspaces iw
+		LEFT JOIN workspace_members im
+		       ON im.workspace_id = iw.id AND im.user_id = i.created_by AND im.status = 'active'
+		WHERE iw.id = i.workspace_id AND (iw.owner_id = i.created_by OR im.role IN ('owner', 'editor')))`
+
+// revokeLinksBy revokes every open link userID created in workspaceID. Run
+// when userID loses invite rights, so a later re-promotion does not silently
+// revive links the owner may have forgotten about.
+const revokeLinksBy = `UPDATE workspace_invites SET revoked_at = $3
+	WHERE workspace_id = $1 AND created_by = $2 AND revoked_at IS NULL`
 
 func (s *postgresSharing) ready() error {
 	if s.pool == nil {
@@ -164,9 +182,9 @@ func (s *postgresSharing) ListInvites(ctx context.Context, workspaceID, callerID
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, role, COALESCE(created_by, ''), created_at, expires_at, max_uses, uses
-		FROM workspace_invites WHERE workspace_id = $1 AND `+usable+`
-		ORDER BY created_at DESC LIMIT 100`, workspaceID, time.Now().UTC())
+		SELECT i.id, i.role, COALESCE(i.created_by, ''), i.created_at, i.expires_at, i.max_uses, i.uses
+		FROM workspace_invites i WHERE i.workspace_id = $1 AND `+usable+`
+		ORDER BY i.created_at DESC LIMIT 100`, workspaceID, time.Now().UTC())
 	if err != nil {
 		return nil, unavailable(err)
 	}
@@ -347,13 +365,26 @@ func (s *postgresSharing) ChangeRole(ctx context.Context, workspaceID, callerID,
 	}
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
-	tag, err := s.pool.Exec(ctx, `UPDATE workspace_members SET role = $3
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return unavailable(err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after Commit
+	tag, err := tx.Exec(ctx, `UPDATE workspace_members SET role = $3
 		WHERE workspace_id = $1 AND user_id = $2 AND status = 'active'`, workspaceID, targetID, role)
 	if err != nil {
 		return unavailable(err)
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
+	}
+	if !canInvite(role) {
+		if _, err := tx.Exec(ctx, revokeLinksBy, workspaceID, targetID, time.Now().UTC()); err != nil {
+			return unavailable(err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return unavailable(err)
 	}
 	return nil
 }
@@ -375,7 +406,12 @@ func (s *postgresSharing) RemoveMember(ctx context.Context, workspaceID, callerI
 	}
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
-	tag, err := s.pool.Exec(ctx, `
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return unavailable(err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after Commit
+	tag, err := tx.Exec(ctx, `
 		UPDATE workspace_members m SET status = 'removed'
 		FROM workspaces w
 		WHERE m.workspace_id = w.id AND m.workspace_id = $1 AND m.user_id = $2
@@ -391,6 +427,13 @@ func (s *postgresSharing) RemoveMember(ctx context.Context, workspaceID, callerI
 		}
 		return ErrNotFound
 	}
+	// A departed member's links leave with them.
+	if _, err := tx.Exec(ctx, revokeLinksBy, workspaceID, targetID, time.Now().UTC()); err != nil {
+		return unavailable(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return unavailable(err)
+	}
 	return nil
 }
 
@@ -399,4 +442,77 @@ func (s *postgresSharing) isOwner(ctx context.Context, workspaceID, userID strin
 	err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM workspaces WHERE id = $1 AND owner_id = $2)`,
 		workspaceID, userID).Scan(&owner)
 	return owner, err
+}
+
+// TransferOwnership hands workspaceID from its owner (the caller) to
+// targetID, who must already be an active editor: a trusted collaborator
+// who can do the work, never a stranger handed a workspace unasked. The
+// former owner stays on as an editor. The new owner's workspace cap applies,
+// serialized with their own creates by the same advisory lock.
+func (s *postgresSharing) TransferOwnership(ctx context.Context, workspaceID, callerID, targetID string, maxPerUser int) error {
+	if err := s.requireOwner(ctx, workspaceID, callerID); err != nil {
+		return err
+	}
+	if targetID == callerID {
+		return ErrTransferTarget
+	}
+	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
+	defer cancel()
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return unavailable(err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after Commit
+
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext('workspace-create:' || $1))", targetID); err != nil {
+		return unavailable(err)
+	}
+	// Re-check ownership under a row lock: a concurrent transfer or delete wins once.
+	var owner string
+	err = tx.QueryRow(ctx, `SELECT owner_id FROM workspaces WHERE id = $1 FOR UPDATE`, workspaceID).Scan(&owner)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return unavailable(err)
+	}
+	if owner != callerID {
+		return ErrForbidden
+	}
+	var role string
+	err = tx.QueryRow(ctx, `SELECT role FROM workspace_members
+		WHERE workspace_id = $1 AND user_id = $2 AND status = 'active' FOR UPDATE`, workspaceID, targetID).Scan(&role)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && role != "editor") {
+		return ErrTransferTarget
+	}
+	if err != nil {
+		return unavailable(err)
+	}
+	var owned int
+	if err := tx.QueryRow(ctx, "SELECT count(*) FROM workspaces WHERE owner_id = $1", targetID).Scan(&owned); err != nil {
+		return unavailable(err)
+	}
+	if owned >= maxPerUser {
+		return ErrTransferLimit
+	}
+	for _, stmt := range []struct {
+		sql  string
+		args []any
+	}{
+		{`UPDATE workspaces SET owner_id = $2 WHERE id = $1`, []any{workspaceID, targetID}},
+		{`UPDATE workspace_members SET role = 'owner' WHERE workspace_id = $1 AND user_id = $2`, []any{workspaceID, targetID}},
+		// The former owner keeps working on it, as an editor.
+		{`INSERT INTO workspace_members (workspace_id, user_id, role, status, created_at)
+			VALUES ($1, $2, 'editor', 'active', $3)
+			ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = 'editor', status = 'active'`,
+			[]any{workspaceID, callerID, time.Now().UTC()}},
+	} {
+		if _, err := tx.Exec(ctx, stmt.sql, stmt.args...); err != nil {
+			return unavailable(err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return unavailable(err)
+	}
+	return nil
 }

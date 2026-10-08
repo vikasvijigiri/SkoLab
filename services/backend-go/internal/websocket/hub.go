@@ -24,10 +24,10 @@ type wsMessage struct {
 }
 
 // Hub maintains the set of active clients, keyed by :workspace_id, and
-// broadcasts a message only to OTHER clients connected to that same
-// workspace -- not to every connected client regardless of workspace, which
-// is what this used to do (2026-09-14 endpoint audit: self-documented as a
-// known gap, closed here alongside adding auth to the route in main.go).
+// broadcasts a message to every client connected to that same workspace --
+// the sender included, so every replica (and every peer) sees one ordered
+// stream; clients ignore their own echo. Never to a client in a different
+// workspace (2026-09-14 endpoint audit).
 type Hub struct {
 	// Registered clients, partitioned by workspace_id so a broadcast never
 	// has to scan (or accidentally reach) a client in a different workspace.
@@ -178,6 +178,9 @@ func (h *Hub) Run() {
 					delete(h.Clients[message.WorkspaceID], client)
 				}
 			}
+			if peers, ok := h.Clients[message.WorkspaceID]; ok && len(peers) == 0 {
+				delete(h.Clients, message.WorkspaceID)
+			}
 		}
 	}
 }
@@ -211,8 +214,8 @@ func (h *Hub) reserve(user, workspace string) (func(), bool) {
 	}, true
 }
 
-// Publish is used by clients to send a message to every other client
-// connected to the same workspaceID. If Redis is enabled, it pushes to Redis
+// Publish is used by clients to send a message to every client (sender
+// included) connected to the same workspaceID. If Redis is enabled, it pushes to Redis
 // (JSON-encoded, so scoping survives a multi-instance deployment); otherwise
 // it pushes straight to the local Broadcast channel.
 func (h *Hub) Publish(workspaceID string, message []byte) error {

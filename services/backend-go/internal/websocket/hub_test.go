@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -9,7 +10,7 @@ import (
 // broadcast every message to all of them, ignoring :workspace_id entirely --
 // self-documented in this package's own prior comments as a known gap. These
 // tests lock in the fix: Clients is now partitioned by workspace_id, and a
-// broadcast only ever reaches other clients in the same workspace as the
+// broadcast only ever reaches clients in the same workspace as the
 // sender.
 
 // newTestClient builds a Client with just enough state for Hub.Run() to
@@ -122,5 +123,27 @@ func TestHub_DifferentWorkspacesDoNotInterfereOnRegister(t *testing.T) {
 		}
 	case <-time.After(200 * time.Millisecond):
 		// expected: a's channel is untouched (still open, no message).
+	}
+}
+
+// A client dropped mid-broadcast (its queue is full) must not leave its
+// workspace's empty entry behind: over time that leaks one map per workspace.
+func TestHub_DroppingTheLastSlowClientForgetsItsWorkspace(t *testing.T) {
+	h := NewHub()
+	go h.Run()
+
+	slow := newTestClient("workspace-slow")
+	h.Register <- slow
+	for i := 0; i <= cap(slow.send); i++ { // one more than the queue holds
+		if err := h.Publish("workspace-slow", []byte("update")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := h.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// Run has returned (Shutdown waited on it), so reading Clients is safe.
+	if _, ok := h.Clients["workspace-slow"]; ok {
+		t.Fatal("empty workspace entry left behind after its last client was dropped")
 	}
 }

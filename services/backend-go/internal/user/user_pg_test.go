@@ -112,3 +112,49 @@ func TestDatabaseErrorsAreInternalErrors(t *testing.T) {
 		t.Fatalf("delete: %d, want 500", w.Code)
 	}
 }
+
+// Deleting an account must not silently delete workspaces other people
+// actively collaborate in: 409 until they are transferred or deleted.
+func TestDeleteIsRefusedWhileOwningSharedWorkspaces(t *testing.T) {
+	pool := withDatabase(t)
+	ctx := context.Background()
+	owner, collaborator := "user-pg-test-owner", "user-pg-test-collaborator"
+	t.Cleanup(func() { _, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = ANY($1)", []string{owner, collaborator}) })
+	for _, stmt := range []string{
+		`INSERT INTO users (id, display_name) VALUES ('` + owner + `', 'Owner'), ('` + collaborator + `', 'Collaborator') ON CONFLICT (id) DO NOTHING`,
+		`INSERT INTO workspaces (id, owner_id, title, created_at) VALUES
+			('pg-test-shared', '` + owner + `', 'Shared', NOW()), ('pg-test-solo', '` + owner + `', 'Solo', NOW())`,
+		`INSERT INTO workspace_members (workspace_id, user_id, role, status, created_at) VALUES
+			('pg-test-shared', '` + owner + `', 'owner', 'active', NOW()),
+			('pg-test-solo', '` + owner + `', 'owner', 'active', NOW()),
+			('pg-test-shared', '` + collaborator + `', 'editor', 'active', NOW())`,
+	} {
+		if _, err := pool.Exec(ctx, stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	w := call(signedIn(owner), http.MethodDelete, "/api/v1/users/"+owner, "")
+	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), `"code":"owns_shared_workspaces"`) ||
+		!strings.Contains(w.Body.String(), `"id":"pg-test-shared"`) || strings.Contains(w.Body.String(), "pg-test-solo") {
+		t.Fatalf("delete while sharing: %d %s", w.Code, w.Body)
+	}
+	if _, ok := displayName(t, pool, owner); !ok {
+		t.Fatal("refused deletion still deleted the account")
+	}
+
+	// Once the shared workspace has a new owner, deletion goes through and
+	// the collaborator keeps their workspace; the solo one goes with the account.
+	if _, err := pool.Exec(ctx, `UPDATE workspaces SET owner_id = $1 WHERE id = 'pg-test-shared'`, collaborator); err != nil {
+		t.Fatal(err)
+	}
+	if w := call(signedIn(owner), http.MethodDelete, "/api/v1/users/"+owner, ""); w.Code != http.StatusNoContent {
+		t.Fatalf("delete after transfer: %d %s", w.Code, w.Body)
+	}
+	var shared, solo int
+	_ = pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE id = 'pg-test-shared'), count(*) FILTER (WHERE id = 'pg-test-solo') FROM workspaces`).Scan(&shared, &solo)
+	if shared != 1 || solo != 0 {
+		t.Fatalf("after deletion: shared=%d solo=%d, want 1 and 0", shared, solo)
+	}
+	_, _ = pool.Exec(ctx, "DELETE FROM workspaces WHERE id = 'pg-test-shared'")
+}

@@ -147,6 +147,15 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: >-
+            owns_shared_workspaces. The caller owns workspaces other people
+            actively collaborate in; deleting the account would delete them.
+            Transfer each (POST /api/v1/workspaces/{id}/owner) or delete it,
+            then retry. Nothing was deleted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspacesConflict" }
         "429": { $ref: "#/components/responses/TooMany" }
         "500": { $ref: "#/components/responses/Internal" }
         "502":
@@ -436,6 +445,7 @@ paths:
       tags: [sharing]
       operationId: changeMemberRole
       summary: Change a member's role (owner only)
+      description: Demoting a member below editor revokes the invite links they created; promoting them again does not revive those links.
       requestBody:
         required: true
         content:
@@ -468,6 +478,7 @@ paths:
       tags: [sharing]
       operationId: removeMember
       summary: Remove a member (owner), or leave (the member themself)
+      description: The member's open invite links are revoked with them.
       responses:
         "204": { description: Removed. }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -475,6 +486,48 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/workspaces/{id}/owner:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+    post:
+      tags: [sharing]
+      operationId: transferOwnership
+      summary: Transfer ownership to an active editor (owner only)
+      description: >-
+        The new owner must already be an active editor and below their
+        workspace limit. The former owner stays on as an editor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id: { type: string, pattern: "\\S", description: "An active editor of this workspace." }
+      responses:
+        "200":
+          description: Transferred.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [workspace_id, owner_id, your_role]
+                properties:
+                  workspace_id: { type: string }
+                  owner_id: { type: string }
+                  your_role: { type: string, enum: [editor] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: transfer_target_invalid (not an active editor) or new_owner_limit_reached.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "413": { $ref: "#/components/responses/TooLarge" }
         "429": { $ref: "#/components/responses/TooMany" }
         "503": { $ref: "#/components/responses/Unavailable" }
 
@@ -569,6 +622,25 @@ components:
       properties:
         error: { type: string, description: For people; wording may change. }
         code: { type: string, pattern: "^[a-z_]+$", description: Stable; branch on this. }
+    SharedWorkspacesConflict:
+      type: object
+      required: [error, code, workspaces]
+      additionalProperties: false
+      properties:
+        error: { type: string }
+        code: { const: owns_shared_workspaces }
+        workspaces:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            required: [id, title, members]
+            additionalProperties: false
+            properties:
+              id: { type: string }
+              title: { type: string }
+              members: { type: integer, minimum: 1, description: Active members besides the owner. }
     Liveness:
       type: object
       required: [status]
@@ -696,7 +768,7 @@ components:
       description: Absent, or not visible to the caller (existence is never revealed).
       content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     InviteInvalid:
-      description: Unknown, expired, revoked or used up; indistinguishable on purpose.
+      description: Unknown, expired, revoked or used up, or its creator can no longer invite (removed, demoted below editor, or deleted); indistinguishable on purpose.
       content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     Conflict:
       description: The request conflicts with current state (e.g. owner changes, profile not synced).

@@ -52,17 +52,28 @@ from app.core.telemetry import (
 )
 
 # PII Masking regex patterns
+# Bearer tokens are masked first, so the other patterns never split one.
+# Phone numbers must look like phone numbers (a leading + or the 3-3-4
+# grouping with separators) and stand alone: a bare digit run is far more
+# often an IP, port, timestamp, latency or ID than a phone number, and
+# masking those made the logs useless ("127.0.0.1:8000" became
+# "[MASKED_PHONE]:[MASKED_PHONE]").
+_STANDALONE_START = r"(?<![\w.:/-])"
+_STANDALONE_END = r"(?![\w:/-]|\.\w)"
 PII_PATTERNS = [
-    (re.compile(r"[\w\.-]+@[\w\.-]+\.\w+"), "[MASKED_EMAIL]"),
-    (
-        re.compile(
-            r"\+?\d{1,4}[-.\s]?\(?\d{1,3}\)?[-.\s]?\d{1,4}[-.\s]?\d{1,4}[-.\s]?\d{1,9}"
-        ),
-        "[MASKED_PHONE]",
-    ),
     (
         re.compile(r"(bearer\s+)[A-Za-z0-9\-\._~\+\/]+=*", re.IGNORECASE),
         r"\1[MASKED_TOKEN]",
+    ),
+    (re.compile(r"[\w\.-]+@[\w\.-]+\.\w+"), "[MASKED_EMAIL]"),
+    (
+        re.compile(
+            _STANDALONE_START
+            + r"(?:\+\d{1,3}[\s.-]?(?:\(\d{1,4}\)|\d{1,4})(?:[\s.-]?\d{2,4}){2,4}"
+            + r"|\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4})"
+            + _STANDALONE_END
+        ),
+        "[MASKED_PHONE]",
     ),
 ]
 

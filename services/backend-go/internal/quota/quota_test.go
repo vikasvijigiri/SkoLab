@@ -142,3 +142,24 @@ func TestScaledDeploymentDoesNotFallBackToLocalAccounting(t *testing.T) {
 		t.Fatalf("missing shared ledger: %v", err)
 	}
 }
+
+func TestRefundReturnsTheChargeToBothWindows(t *testing.T) {
+	t.Setenv("USER_QUOTA_ENABLED", "true")
+	t.Setenv("USER_QUOTA_HOURLY_UNITS", "8")
+	t.Setenv("USER_QUOTA_DAILY_UNITS", "100")
+	resetLocal()
+	ctx := context.Background()
+
+	for i := 0; i < 5; i++ { // five failed compiles, each refunded
+		receipt, _, _, err := Charge(ctx, nil, "carol", 4)
+		if err != nil {
+			t.Fatalf("charge %d: %v", i, err)
+		}
+		receipt.Refund(ctx, nil)
+	}
+	hourly, daily, err := Consume(ctx, nil, "carol", 4)
+	if err != nil || hourly != 4 || daily != 96 {
+		t.Fatalf("after refunds: hourly=%d daily=%d err=%v", hourly, daily, err)
+	}
+	Receipt{}.Refund(ctx, nil) // the zero receipt is a no-op
+}

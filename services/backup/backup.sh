@@ -82,10 +82,13 @@ tar -C "$work/check" -xf "$work/check.tar"
   || { echo "::error::Decrypted dump does not match the original"; exit 1; }
 
 # Supabase places extensions in their own schema and may grant to its roles.
+# Roles are cluster-wide, so a dump never carries them: skolab_app (the
+# runtime role, alembic e1f2a3b4c5d6) must exist for its row-security
+# policies to restore.
 run "$RESTORE_URL" psql -qX -v ON_ERROR_STOP=1 \
   -c "CREATE SCHEMA IF NOT EXISTS extensions" \
   -c "DO \$\$ DECLARE r text; BEGIN
-        FOREACH r IN ARRAY ARRAY['anon', 'authenticated', 'service_role'] LOOP
+        FOREACH r IN ARRAY ARRAY['anon', 'authenticated', 'service_role', 'skolab_app'] LOOP
           IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = r) THEN
             EXECUTE format('CREATE ROLE %I NOLOGIN', r);
           END IF;

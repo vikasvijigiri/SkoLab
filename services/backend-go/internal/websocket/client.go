@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/skolab/backend-go/internal/apierror"
 	"github.com/skolab/backend-go/internal/middleware"
 	"github.com/skolab/backend-go/internal/security"
 	"golang.org/x/time/rate"
@@ -37,10 +38,10 @@ var upgrader = websocket.Upgrader{
 	// callers -- Origin is a browser-enforced header, so its absence isn't
 	// itself suspicious.
 	//
-	// The route also now requires a verified Firebase token (?token=, see
-	// auth.VerifyQueryToken in main.go) and the Hub only broadcasts a message
-	// to other clients registered for the same :workspace_id (see hub.go) --
-	// 2026-09-14 endpoint audit closed both gaps together.
+	// The route also requires a single-use connection ticket (VerifyTicket,
+	// tickets.go), issued only to a verified member over HTTPS, and the Hub
+	// only broadcasts to clients registered for the same :workspace_id (see
+	// hub.go).
 	CheckOrigin: func(r *http.Request) bool {
 		origin := r.Header.Get("Origin")
 		return origin == "" || middleware.IsAllowedOrigin(origin)
@@ -243,7 +244,7 @@ func (c *Client) writePump() {
 }
 
 // ServeWs handles websocket requests from the peer. The caller must already
-// be authenticated (see auth.VerifyQueryToken, wired in main.go). Before an
+// be authenticated (see VerifyTicket, wired in main.go). Before an
 // upgrade it verifies that this identity owns or actively belongs to the
 // requested workspace; a guessed workspace ID is never sufficient.
 func ServeWs(hub *Hub, authorizer WorkspaceAuthorizer, c *gin.Context) {
@@ -254,32 +255,32 @@ func ServeWs(hub *Hub, authorizer WorkspaceAuthorizer, c *gin.Context) {
 // reading a mutable package variable) so tests can shorten it race-free.
 func serveWs(hub *Hub, authorizer WorkspaceAuthorizer, c *gin.Context, reauthorizeEvery time.Duration) {
 	if hub.ctx.Err() != nil {
-		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Service restarting"})
+		apierror.Abort(c, http.StatusServiceUnavailable, "service_restarting", "Service restarting")
 		return
 	}
 	workspaceID := strings.TrimSpace(c.Param("workspace_id"))
 	if workspaceID == "" {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "workspace_id is required"})
+		apierror.Abort(c, http.StatusBadRequest, "invalid_workspace", "workspace_id is required")
 		return
 	}
 	userID := strings.TrimSpace(c.GetString("user_id"))
 	if userID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required"})
+		apierror.Abort(c, http.StatusUnauthorized, "unauthenticated", "Authentication is required")
 		return
 	}
 	if authorizer == nil {
-		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Workspace authorization is temporarily unavailable"})
+		apierror.Abort(c, http.StatusServiceUnavailable, "authorization_unavailable", "Workspace authorization is temporarily unavailable")
 		return
 	}
 	role, err := authorizer.Role(c.Request.Context(), workspaceID, userID)
 	if err != nil {
 		slog.Error("websocket workspace authorization failed", "workspace_id", workspaceID, "err", err)
-		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Workspace authorization is temporarily unavailable"})
+		apierror.Abort(c, http.StatusServiceUnavailable, "authorization_unavailable", "Workspace authorization is temporarily unavailable")
 		return
 	}
 	if role == "" {
 		security.Record(c, security.Event{Name: security.WorkspaceDenied, Outcome: security.Denied, WorkspaceID: workspaceID, Reason: "socket"})
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You do not have access to this workspace"})
+		apierror.Abort(c, http.StatusForbidden, "forbidden", "You do not have access to this workspace")
 		return
 	}
 
@@ -288,14 +289,14 @@ func serveWs(hub *Hub, authorizer WorkspaceAuthorizer, c *gin.Context, reauthori
 		err := hub.CheckSession(ctx, userID, c.GetInt64("session_auth_time"))
 		cancel()
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Session unavailable or revoked"})
+			apierror.Abort(c, http.StatusUnauthorized, "session_revoked", "Session unavailable or revoked")
 			return
 		}
 	}
 	release, admitted := hub.reserve(userID, workspaceID)
 	if !admitted {
 		c.Header("Retry-After", "5")
-		c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "Collaboration connection limit reached"})
+		apierror.Abort(c, http.StatusTooManyRequests, "connection_limit_reached", "Collaboration connection limit reached")
 		return
 	}
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)

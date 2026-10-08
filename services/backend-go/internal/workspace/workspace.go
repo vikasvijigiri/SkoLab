@@ -135,6 +135,10 @@ func storeError(c *gin.Context, err error) {
 		fail(c, http.StatusConflict, "owner_cannot_leave", "The owner cannot leave their own workspace")
 	case errors.Is(err, ErrOwnerImmutable):
 		fail(c, http.StatusConflict, "owner_immutable", "The owner's role cannot be changed or removed")
+	case errors.Is(err, ErrTransferTarget):
+		fail(c, http.StatusConflict, "transfer_target_invalid", "The new owner must be an active editor of this workspace")
+	case errors.Is(err, ErrTransferLimit):
+		fail(c, http.StatusConflict, "new_owner_limit_reached", "The new owner has reached their workspace limit")
 	case errors.Is(err, ErrIdempotencyMismatch):
 		fail(c, http.StatusUnprocessableEntity, "idempotency_key_reused", "Idempotency-Key was already used for a different request")
 	default:

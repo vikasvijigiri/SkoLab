@@ -281,3 +281,34 @@ func TestBackendErrorsUseTheGatewayContract(t *testing.T) {
 		}
 	}
 }
+
+// A compile the caller never got (backend down, busy or failing) is refunded;
+// one that ran, even with LaTeX errors, stays charged.
+func TestFailedBackendCallsAreRefunded(t *testing.T) {
+	statuses := []int{http.StatusServiceUnavailable, http.StatusInternalServerError, http.StatusTooManyRequests}
+	served := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if served < len(statuses) {
+			w.WriteHeader(statuses[served])
+			served++
+			return
+		}
+		_, _ = w.Write([]byte(`{"status":"error","errors":["line 1: Undefined control sequence."]}`))
+	}))
+	defer upstream.Close()
+	r := newTestRouter(t, "unlucky-user", upstream.URL, "http://unused")
+
+	for range statuses { // budget is 8 units, 4 per compile: refunds keep it whole
+		if w := doCompile(r, `{"latex_source":"hi"}`); w.Code < 400 {
+			t.Fatalf("failing backend answered %d", w.Code)
+		}
+	}
+	for i := 0; i < 2; i++ {
+		if w := doCompile(r, `{"latex_source":"\\bad"}`); w.Code != http.StatusOK {
+			t.Fatalf("compile %d after refunds: %d", i+1, w.Code)
+		}
+	}
+	if w := doCompile(r, `{"latex_source":"hi"}`); w.Code != http.StatusTooManyRequests {
+		t.Fatalf("compiles that ran must stay charged: %d", w.Code)
+	}
+}

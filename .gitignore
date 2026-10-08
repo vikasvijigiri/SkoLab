@@ -38,3 +38,6 @@ docs/
 
 # Personal Postman collection (local testing tool; may hold pasted tokens).
 postman/
+
+# Schemathesis local run cache
+.schemathesis/
