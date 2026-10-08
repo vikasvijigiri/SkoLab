@@ -42,7 +42,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Require backup secrets
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -57,7 +57,7 @@ jobs:
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
           RESTORE_URL: postgresql://postgres:restore-drill-only@127.0.0.1:5433/skolab
         run: bash services/backup/backup.sh backup
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: skolab-db-${{ github.run_id }}
           path: backup
@@ -98,7 +98,7 @@ jobs:
       RESTORE_URL: postgresql://postgres:restore-drill-only@127.0.0.1:5433/skolab
       BACKUP_PASSPHRASE: drill-only-not-a-secret
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Seed a production-shaped database
         run: |
           docker run --rm -i --network host postgres:18 psql -v ON_ERROR_STOP=1 \

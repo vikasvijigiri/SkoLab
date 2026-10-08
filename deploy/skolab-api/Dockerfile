@@ -11,7 +11,7 @@
 # ── Gateway binary ────────────────────────────────────────────────────────
 # Keep in step with services/backend-go/go.mod. CGO off: the binary is
 # static, so this Alpine-built binary runs on the Debian runtime below.
-FROM golang:1.26-alpine AS gateway
+FROM golang:1.26-alpine@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c AS gateway
 WORKDIR /src
 ENV GOTOOLCHAIN=local CGO_ENABLED=0
 COPY services/backend-go/go.mod services/backend-go/go.sum ./
@@ -20,14 +20,14 @@ COPY services/backend-go/ ./
 RUN go build -trimpath -o /out/skolab-gateway .
 
 # ── Python dependencies ───────────────────────────────────────────────────
-FROM python:3.12-slim AS pydeps
+FROM python:3.12-slim@sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f AS pydeps
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
     && rm -rf /var/lib/apt/lists/*
 COPY services/backend/requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
 # ── Runtime ───────────────────────────────────────────────────────────────
-FROM python:3.12-slim
+FROM python:3.12-slim@sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f
 WORKDIR /app
 
 # TeX for CoLab compiles (a bounded, sandboxed subprocess; see

@@ -1,7 +1,7 @@
 # Keep in step with go.mod's go directive (CI's image job builds this file, so
 # drift fails the PR). GOTOOLCHAIN=local: the build uses this image's Go and
 # never downloads a different toolchain at build time.
-FROM golang:1.26-alpine AS builder
+FROM golang:1.26-alpine@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c AS builder
 
 WORKDIR /app
 
@@ -24,7 +24,7 @@ RUN go mod verify
 RUN go build -o main .
 
 # Pinned, not :latest, so a rebuild cannot silently change the base OS.
-FROM alpine:3.24
+FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 WORKDIR /app
 
 # Non-root, mirroring services/backend/Dockerfile's uid/gid convention.

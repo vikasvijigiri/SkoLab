@@ -53,3 +53,23 @@ func TestUnknownPathIs404AndWrongMethodIs405WithAllow(t *testing.T) {
 		t.Fatalf("Allow = %q", allow)
 	}
 }
+
+func TestAbortWithKeepsTheStandardFieldsAndAddsDetails(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	AbortWith(c, http.StatusConflict, "owns_shared_workspaces", "Transfer them first",
+		gin.H{"workspaces": []string{"w1"}, "code": "spoofed", "error": "spoofed"})
+
+	var body struct {
+		Code       string   `json:"code"`
+		Error      string   `json:"error"`
+		Workspaces []string `json:"workspaces"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != 409 || body.Code != "owns_shared_workspaces" || body.Error != "Transfer them first" || len(body.Workspaces) != 1 || !c.IsAborted() {
+		t.Fatalf("%d %+v", w.Code, body)
+	}
+}

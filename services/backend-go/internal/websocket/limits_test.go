@@ -78,8 +78,10 @@ func TestOutboundBytesBoundedAndReleased(t *testing.T) {
 	h := NewHubWithRedis(nil)
 	c := &Client{hub: h, send: make(chan []byte, 8)}
 	payload := make([]byte, 512*1024)
-	if !c.enqueue(payload) || !c.enqueue(payload) {
-		t.Fatal("valid budget refused")
+	for i := 0; i < 2; i++ {
+		if !c.enqueue(payload) {
+			t.Fatal("valid budget refused")
+		}
 	}
 	if c.enqueue(payload) {
 		t.Fatal("client byte cap bypassed")

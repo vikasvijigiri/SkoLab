@@ -99,3 +99,14 @@ and an authenticated compile/collaboration journey. After rollout, inspect
 Check alert delivery with a controlled staging fault. Existing Grafana synthetic
 and SLO definitions live in `services/observability`; deploying their definitions
 does not by itself prove someone receives the alerts.
+
+## Automatic rollback
+
+A release that deploys a new image smoke-tests production
+(`services/release/release.py`). A failure is retried once, so an edge or
+Firebase blip does not cost a rollback. A second failure rolls the service back
+to the deploy it replaced, through Render's rollback API (the old image, not a
+rebuild), waits until it is live, and checks liveness and readiness. The
+workflow still fails, so a human sees it. If the rollback itself fails, the run
+says production needs a manual rollback. The schema is not reverted: this is
+safe only because migrations are expand/contract (see above).

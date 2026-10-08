@@ -112,11 +112,9 @@ func DeleteUser(c *gin.Context) {
 		return
 	}
 	if len(shared) > 0 {
-		c.AbortWithStatusJSON(http.StatusConflict, gin.H{
-			"code":       "owns_shared_workspaces",
-			"error":      "Transfer or delete the workspaces you share with others before deleting your account",
-			"workspaces": shared,
-		})
+		apierror.AbortWith(c, http.StatusConflict, "owns_shared_workspaces",
+			"Transfer or delete the workspaces you share with others before deleting your account",
+			gin.H{"workspaces": shared})
 		return
 	}
 	security.Audit(c, security.Event{Name: security.AccountDeleted, Outcome: security.Allowed})

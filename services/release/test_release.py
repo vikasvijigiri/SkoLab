@@ -217,5 +217,77 @@ class SourceChanged(unittest.TestCase):
         self.assertTrue(release.source_changed("0" * 40, "HEAD", ("services",)))
 
 
+
+class RollbackRender(FakeRender):
+    def __init__(self, script=None, rollback_error=None):
+        super().__init__(script=script)
+        self.rolled_back, self.rollback_error = [], rollback_error
+
+    def rollback(self, service, deploy):
+        if self.rollback_error:
+            raise RuntimeError(self.rollback_error)
+        self.rolled_back.append(deploy)
+        return {"id": "restored"}
+
+
+def failing(times):
+    calls = []
+
+    def check():
+        calls.append(1)
+        if len(calls) <= times:
+            raise RuntimeError(f"smoke failure {len(calls)}")
+    return check, calls
+
+
+def verify(render, check, previous=None, healthy=None):
+    return release.verify_or_roll_back(render, "svc", previous, check, healthy=healthy,
+                                       sleep=lambda _: None, clock=ticks())
+
+
+class VerifyOrRollBack(unittest.TestCase):
+    previous = d("old", "old-sha", "live")
+
+    def test_passing_smoke_never_rolls_back(self):
+        render, (check, calls) = RollbackRender(), failing(0)
+        verify(render, check, self.previous)
+        self.assertEqual((len(calls), render.rolled_back), (1, []))
+
+    def test_one_blip_is_retried_not_rolled_back(self):
+        render, (check, calls) = RollbackRender(), failing(1)
+        verify(render, check, self.previous)
+        self.assertEqual((len(calls), render.rolled_back), (2, []))
+
+    def test_repeated_failure_rolls_back_to_the_replaced_deploy_and_fails(self):
+        render, (check, _) = RollbackRender(script=["update_in_progress", "live"]), failing(2)
+        checked = []
+        with self.assertRaisesRegex(RuntimeError, "rolled back to old-sha"):
+            verify(render, check, self.previous, healthy=lambda: checked.append(1))
+        self.assertEqual((render.rolled_back, checked), (["old"], [1]))
+
+    def test_without_a_replaced_deploy_the_failure_is_raised_as_is(self):
+        render, (check, _) = RollbackRender(), failing(2)
+        with self.assertRaisesRegex(RuntimeError, "smoke failure 2"):
+            verify(render, check, None)
+        self.assertEqual(render.rolled_back, [])
+
+    def test_a_failed_rollback_says_production_needs_a_manual_one(self):
+        render, (check, _) = RollbackRender(rollback_error="api down"), failing(2)
+        with self.assertRaisesRegex(RuntimeError, "manual rollback"):
+            verify(render, check, self.previous)
+
+    def test_a_rollback_that_never_goes_live_is_reported(self):
+        render, (check, _) = RollbackRender(script=["build_failed"]), failing(2)
+        with self.assertRaisesRegex(RuntimeError, "manual rollback"):
+            verify(render, check, self.previous)
+
+
+class LiveDeploy(unittest.TestCase):
+    def test_picks_the_live_deploy(self):
+        rows = [d("a", "x", "build_in_progress"), d("b", "y", "live"), d("c", "z", "deactivated")]
+        self.assertEqual(release.live_deploy(rows)["id"], "b")
+        self.assertIsNone(release.live_deploy([d("a", "x", "deactivated")]))
+
+
 if __name__ == "__main__":
     unittest.main()
