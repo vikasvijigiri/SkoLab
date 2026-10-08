@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/skolab/backend-go/internal/middleware"
 	"github.com/skolab/backend-go/internal/security"
 )
 
@@ -153,7 +154,7 @@ func readToken(c *gin.Context) (string, bool) {
 	var req tokenRequest
 	_ = c.ShouldBindJSON(&req)
 	token := strings.TrimSpace(req.Token)
-	if !strings.HasPrefix(token, "inv_") || len(token) > 100 {
+	if !strings.HasPrefix(token, "inv_") || len(token) > 100 || !middleware.Storable(token) {
 		invalidInvite(c)
 		return "", false
 	}
@@ -277,7 +278,7 @@ func (h sharingHandlers) transferOwnership(c *gin.Context) {
 		return
 	}
 	var req transferRequest
-	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.UserID) == "" {
+	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.UserID) == "" || !middleware.Storable(req.UserID) {
 		fail(c, http.StatusBadRequest, "invalid_body", "Request body must be JSON with the new owner's user_id")
 		return
 	}

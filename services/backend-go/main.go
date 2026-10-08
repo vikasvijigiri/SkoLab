@@ -323,6 +323,7 @@ func newRouter(g gateway) *gin.Engine {
 	r.Use(requestLogger())
 	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.BodyLimit(middleware.MaxBodyBytes))
+	r.Use(middleware.ValidPath())
 	r.Use(middleware.ValidQuery())
 	r.Use(middleware.Gzip())
 	r.Use(middleware.CORS())

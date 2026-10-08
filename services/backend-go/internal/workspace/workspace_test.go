@@ -205,7 +205,8 @@ func TestListPaginatesWithOpaqueTokens(t *testing.T) {
 	if !strings.Contains(empty.Body.String(), `"workspaces":[]`) || !strings.Contains(empty.Body.String(), `"next_page_token":""`) {
 		t.Fatalf("empty list body = %s", empty.Body)
 	}
-	for _, query := range []string{"page_size=0", "page_size=101", "page_size=x", "page_token=not*base64", "page_token=e30"} {
+	nulCursor := encodeCursor(Cursor{CreatedAt: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), ID: "w\x00"})
+	for _, query := range []string{"page_size=0", "page_size=101", "page_size=x", "page_token=not*base64", "page_token=e30", "page_token=" + nulCursor} {
 		if w := serve(t, &fakeStore{}, "ada", "GET", "/api/v1/workspaces?"+query, "", nil); w.Code != http.StatusBadRequest {
 			t.Fatalf("%s: status = %d, want 400", query, w.Code)
 		}

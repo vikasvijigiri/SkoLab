@@ -101,12 +101,16 @@ func TestMalformedQueryIs400(t *testing.T) {
 	r.Use(ValidQuery())
 	r.GET("/api/v1/items", func(c *gin.Context) { c.String(http.StatusOK, c.Query("page_token")) })
 	for query, want := range map[string]int{
-		"":                  http.StatusOK,
-		"?page_token=abc":   http.StatusOK,
-		"?page_token=a%2Bb": http.StatusOK,
-		"?page_token=%%%":   http.StatusBadRequest,
-		"?page_token=%zz":   http.StatusBadRequest,
-		"?a=1&b=%":          http.StatusBadRequest,
+		"":                   http.StatusOK,
+		"?page_token=abc":    http.StatusOK,
+		"?page_token=a%2Bb":  http.StatusOK,
+		"?page_token=%%%":    http.StatusBadRequest,
+		"?page_token=%zz":    http.StatusBadRequest,
+		"?a=1&b=%":           http.StatusBadRequest,
+		"?page_token=a%00b":  http.StatusBadRequest,
+		"?page_token=%ff":    http.StatusBadRequest,
+		"?a%00=1":            http.StatusBadRequest,
+		"?page_token=%C3%A9": http.StatusOK,
 	} {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/items", nil)
 		req.URL.RawQuery = strings.TrimPrefix(query, "?")
@@ -114,6 +118,33 @@ func TestMalformedQueryIs400(t *testing.T) {
 		r.ServeHTTP(w, req)
 		if w.Code != want {
 			t.Fatalf("%q: status %d, want %d", query, w.Code, want)
+		}
+	}
+}
+
+func TestPathWithNULOrInvalidUTF8Is404(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(ValidPath())
+	r.GET("/api/v1/workspaces/:id", func(c *gin.Context) { c.String(http.StatusOK, c.Param("id")) })
+	for path, want := range map[string]int{
+		"/api/v1/workspaces/ws-1":      http.StatusOK,
+		"/api/v1/workspaces/caf%C3%A9": http.StatusOK,
+		"/api/v1/workspaces/ws%001":    http.StatusNotFound,
+		"/api/v1/workspaces/%ff":       http.StatusNotFound,
+	} {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		if w.Code != want {
+			t.Fatalf("%s: status %d, want %d", path, w.Code, want)
+		}
+	}
+}
+
+func TestStorable(t *testing.T) {
+	for s, want := range map[string]bool{"": true, "ada": true, "café": true, "a\x00b": false, "\xff": false} {
+		if got := Storable(s); got != want {
+			t.Fatalf("Storable(%q) = %v, want %v", s, got, want)
 		}
 	}
 }
