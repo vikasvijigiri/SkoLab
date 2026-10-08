@@ -67,6 +67,13 @@ func newTestRouter(t *testing.T, userID string, sandboxURL, pythonURL string) *g
 	}
 	t.Setenv("INTERNAL_API_TOKEN", "shared-secret")
 
+	// Quotas and compile slots outlive a test in this process (the
+	// in-memory quota fallback, with no pool), so each router gets its own
+	// account: repeated runs (-count=N) must not inherit a spent budget.
+	if userID != "" {
+		userID += "-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
