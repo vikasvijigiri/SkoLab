@@ -7,6 +7,9 @@ below pass against the real service. Nothing runs on a developer machine.
   python services/release/release.py --commit <sha>
   python services/release/release.py --commit <sha> --smoke-only [--base-url URL]
 
+If the smoke test fails twice, the release rolls the service back to the
+deploy it replaced and still fails (verify_or_roll_back).
+
 Production is one Render service, skolab-api: the Go gateway and the Python
 service in one container (deploy/skolab-api). It is not rebuilt when none of
 its source directories changed since its live commit.
@@ -124,6 +127,10 @@ class Render:
     def get_deploy(self, service: str, deploy: str) -> dict:
         return self.call("GET", f"/services/{service}/deploys/{deploy}")
 
+    def rollback(self, service: str, deploy: str) -> dict:
+        """Redeploy the image of an earlier deploy (no rebuild)."""
+        return self.call("POST", f"/services/{service}/rollbacks", {"deployId": deploy})
+
     def recent_logs(self, owner: str, service: str, limit: int = 60) -> list[str]:
         page = self.call("GET", f"/logs?ownerId={owner}&resource={service}&limit={limit}&direction=backward")
         return [entry["message"] for entry in reversed(page.get("logs") or [])]
@@ -194,6 +201,10 @@ def live_commit(deploys: list[dict]) -> str | None:
     return next((d["commit"]["id"] for d in deploys if d["status"] == "live" and d.get("commit")), None)
 
 
+def live_deploy(deploys: list[dict]) -> dict | None:
+    return next((d for d in deploys if d["status"] == "live"), None)
+
+
 def source_changed(since: str | None, commit: str, paths=SOURCES) -> bool:
     """True unless git proves every path is identical at both commits."""
     if not since:
@@ -245,6 +256,54 @@ def ship(render: Render, service: str, commit: str, *, fresh: bool = False, time
     raise RuntimeError(f"deploy {deploy_id} not live after {timeout:.0f}s")
 
 
+def wait_until_live(render: Render, service: str, deploy_id: str, *, timeout: float = 900, poll: float = 15,
+                    sleep=time.sleep, clock=time.monotonic) -> None:
+    deadline = clock() + timeout
+    while clock() < deadline:
+        status = render.get_deploy(service, deploy_id)["status"]
+        if status == "live":
+            return
+        if status in FAILED or status in SUPERSEDED:
+            raise RuntimeError(f"deploy {deploy_id} ended {status}")
+        sleep(poll)
+    raise RuntimeError(f"deploy {deploy_id} not live after {timeout:.0f}s")
+
+
+def verify_or_roll_back(render: Render | None, service: str | None, previous: dict | None, check, *,
+                        healthy=None, retry_after: float = 30, sleep=time.sleep, clock=time.monotonic) -> None:
+    """Run the smoke `check`; a failure is retried once (an edge or Firebase
+    blip must not cost a rollback). If it fails again and this release
+    replaced a live deploy, roll back to that deploy's image, wait until it
+    is live and healthy, and fail the release either way: production must
+    never be left serving a commit that failed its own smoke test.
+
+    The rollback reuses the old image without reverting the schema, which is
+    safe because migrations are expand/contract (deploy/RELIABILITY.md)."""
+    try:
+        check()
+        return
+    except Exception as first:  # noqa: BLE001 -- any smoke failure counts
+        print(f"Smoke check failed ({first}); retrying once in {retry_after:.0f}s", flush=True)
+    sleep(retry_after)
+    try:
+        check()
+        return
+    except Exception as failure:  # noqa: BLE001
+        if not (render and service and previous):
+            raise
+        commit = (previous.get("commit") or {}).get("id", "?")
+        print(f"Smoke check failed again; rolling back to deploy {previous['id']} ({commit[:7]})", flush=True)
+        try:
+            restored = render.rollback(service, previous["id"])
+            wait_until_live(render, service, restored["id"], sleep=sleep, clock=clock)
+            if healthy:
+                healthy()
+        except Exception as rollback_error:  # noqa: BLE001
+            raise RuntimeError(f"smoke failed ({failure}) AND rollback failed ({rollback_error}); "
+                               "production needs a manual rollback now") from failure
+        raise RuntimeError(f"smoke failed ({failure}); rolled back to {commit[:7]}, which is live and healthy") from failure
+
+
 def print_failure_logs(render: Render, owner: str | None, service: str) -> None:
     """Show the service's last log lines, so a failed deploy explains itself
     in the workflow run. Best effort: never masks the original failure."""
@@ -292,14 +351,19 @@ def expect(label: str, actual, wanted) -> None:
     print(f"  ok  {label}")
 
 
+def healthy(base: str) -> None:
+    """The part of the smoke test that needs no account: after a rollback."""
+    expect("liveness", status_of(f"{base}/gateway-health"), 200)
+    ready = request_json("Readiness", "GET", f"{base}/readyz")
+    expect("readiness: database and python", (ready["database"], ready["python"]), ("healthy", "healthy"))
+
+
 def smoke(base: str, api_key: str, email: str, password: str) -> None:
     """Health (gateway, database, Python), security headers, refusals
     (anonymous, oversized), a real compile, and the invite lifecycle as the
     verified monitoring account on its own workspace. The link it creates is
     revoked."""
-    expect("liveness", status_of(f"{base}/gateway-health"), 200)
-    ready = request_json("Readiness", "GET", f"{base}/readyz")
-    expect("readiness: database and python", (ready["database"], ready["python"]), ("healthy", "healthy"))
+    healthy(base)
     expect("anonymous /api/v1/workspaces refused", status_of(f"{base}/api/v1/workspaces"), 401)
     with urllib.request.urlopen(f"{base}/gateway-health", timeout=120) as response:
         expect("HSTS and nosniff headers", (bool(response.headers.get("Strict-Transport-Security")),
@@ -348,6 +412,7 @@ def main() -> int:
 
     render = Render(os.environ["RENDER_API_KEY"]) if not args.base_url else None
     base = args.base_url
+    service_id, previous = None, None
     if render:
         service = wait_for_service(render, SERVICE)
         base = base or service["serviceDetails"]["url"]
@@ -361,12 +426,18 @@ def main() -> int:
             copied = adopt_settings(render, service["id"])
             if copied:
                 print(f"{SERVICE}: copied from the replaced services: {', '.join(copied)}", flush=True)
+            before = live_deploy(render.deploys(service["id"]))
             result = ship(render, service["id"], args.commit, fresh=bool(copied), owner=service.get("ownerId"))
             print(f"{SERVICE}: {result}", flush=True)
+            if result == "deployed" and before and (before.get("commit") or {}).get("id") != args.commit:
+                service_id, previous = service["id"], before
     base = base.rstrip("/")
     print(f"Smoke checks against {base}:", flush=True)
-    smoke(base, os.environ["SKOLAB_FIREBASE_API_KEY"], os.environ["SKOLAB_SYNTHETIC_EMAIL"],
-          os.environ["SKOLAB_SYNTHETIC_PASSWORD"])
+    verify_or_roll_back(
+        render, service_id, previous,
+        lambda: smoke(base, os.environ["SKOLAB_FIREBASE_API_KEY"], os.environ["SKOLAB_SYNTHETIC_EMAIL"],
+                      os.environ["SKOLAB_SYNTHETIC_PASSWORD"]),
+        healthy=lambda: healthy(base))
     if render and not args.smoke_only:
         retired = retire_legacy(render)
         if retired:

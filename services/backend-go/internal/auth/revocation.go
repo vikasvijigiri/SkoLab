@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"firebase.google.com/go/v4/auth"
+	"golang.org/x/sync/singleflight"
 )
 
 // identityProvider is the subset of *auth.Client the gateway uses, so tests
@@ -44,6 +45,10 @@ type revocationCache struct {
 	mu      sync.Mutex
 	entries map[string]userStatus
 	now     func() time.Time
+	// One Firebase lookup per uid at a time: when a user's status expires
+	// while their client fires a burst (page load, reconnect storm), the
+	// burst shares a single GetUser instead of fanning out to Firebase.
+	fetches singleflight.Group
 }
 
 var revocations = &revocationCache{entries: map[string]userStatus{}, now: time.Now}
@@ -68,9 +73,14 @@ func (c *revocationCache) check(ctx context.Context, provider identityProvider, 
 	now := c.now()
 
 	if !known || now.Sub(entry.fetched) >= userStatusTTL {
-		fetchCtx, cancel := context.WithTimeout(ctx, userStatusFetchTimeout)
-		user, err := provider.GetUser(fetchCtx, uid)
-		cancel()
+		// Detached from this request: the lookup is shared, so one caller
+		// disconnecting must not fail it for the others waiting on it.
+		result, err, _ := c.fetches.Do(uid, func() (any, error) {
+			fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), userStatusFetchTimeout)
+			defer cancel()
+			return provider.GetUser(fetchCtx, uid)
+		})
+		user, _ := result.(*auth.UserRecord)
 		switch {
 		case err == nil:
 			entry = userStatus{validAfterMillis: user.TokensValidAfterMillis, disabled: user.Disabled, fetched: now}

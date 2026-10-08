@@ -17,7 +17,7 @@
 # successfully (pre-2026-09-11) instead of anything more recent.
 
 # Stage 1: Build dependencies
-FROM python:3.12-slim AS builder
+FROM python:3.12-slim@sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f AS builder
 
 WORKDIR /app
 
@@ -29,7 +29,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
 # Stage 2: Final minimal image
-FROM python:3.12-slim
+FROM python:3.12-slim@sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f
 
 WORKDIR /app
 

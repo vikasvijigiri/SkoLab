@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -202,5 +204,67 @@ func TestDeleteIdentityWithoutFirebaseIsANoOp(t *testing.T) {
 	withNilClient(t)
 	if err := DeleteIdentity(context.Background(), "ada"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// slowFirebase blocks GetUser until released and counts calls atomically.
+type slowFirebase struct {
+	fakeFirebase
+	calls   atomic.Int32
+	release chan struct{}
+}
+
+func (f *slowFirebase) GetUser(_ context.Context, uid string) (*auth.UserRecord, error) {
+	f.calls.Add(1)
+	<-f.release
+	return &auth.UserRecord{UserInfo: &auth.UserInfo{UID: uid}}, nil
+}
+
+func TestABurstForOneUserSharesOneStatusLookup(t *testing.T) {
+	fake := &slowFirebase{release: make(chan struct{})}
+	cache := &revocationCache{entries: map[string]userStatus{}, now: time.Now}
+	const burst = 20
+	errs := make(chan error, burst)
+	var started sync.WaitGroup
+	started.Add(burst)
+	for i := 0; i < burst; i++ {
+		go func() {
+			started.Done()
+			errs <- cache.check(context.Background(), fake, "ada", time.Now().Unix())
+		}()
+	}
+	started.Wait()
+	// Let every goroutine reach the shared lookup before it returns.
+	for deadline := time.Now().Add(2 * time.Second); fake.calls.Load() == 0 && time.Now().Before(deadline); {
+		time.Sleep(time.Millisecond)
+	}
+	time.Sleep(50 * time.Millisecond)
+	close(fake.release)
+	for i := 0; i < burst; i++ {
+		if err := <-errs; err != nil {
+			t.Fatalf("check: %v", err)
+		}
+	}
+	if n := fake.calls.Load(); n < 1 || n > 2 {
+		t.Fatalf("a burst of %d checks made %d Firebase lookups; want 1 (at most 2 if one arrived after the first finished)", burst, n)
+	}
+}
+
+func TestASharedLookupSurvivesTheFirstCallerLeaving(t *testing.T) {
+	fake := &slowFirebase{release: make(chan struct{})}
+	cache := &revocationCache{entries: map[string]userStatus{}, now: time.Now}
+	ctx, cancel := context.WithCancel(context.Background())
+	first := make(chan error, 1)
+	go func() { first <- cache.check(ctx, fake, "ada", time.Now().Unix()) }()
+	for fake.calls.Load() == 0 {
+		time.Sleep(time.Millisecond)
+	}
+	cancel() // the first request's client disconnects mid-lookup
+	close(fake.release)
+	if err := <-first; err != nil {
+		t.Fatalf("a detached lookup must still complete: %v", err)
+	}
+	if err := cache.check(context.Background(), fake, "ada", time.Now().Unix()); err != nil || fake.calls.Load() != 1 {
+		t.Fatalf("the shared result must be cached: err=%v calls=%d", err, fake.calls.Load())
 	}
 }
