@@ -45,3 +45,23 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "service-account.json"
 # Inject backend root to sys.path
 if backend_root not in sys.path:
     sys.path.insert(0, backend_root)
+
+
+import pytest  # noqa: E402 - after the environment above is pinned
+
+
+@pytest.fixture(autouse=True)
+def _no_leaked_sentry_client():
+    """Deactivate any Sentry client a test started, whatever the test order.
+
+    `sentry_sdk.init(dsn=None)` -- what the observability tests' cleanup
+    calls -- leaves the client active in sentry-sdk 2.x, so a later test that
+    expects Sentry to be inert failed depending on order (pytest-randomly).
+    """
+    yield
+    import sentry_sdk
+
+    client = sentry_sdk.get_client()
+    if client.is_active():
+        client.close(timeout=0)
+        sentry_sdk.get_global_scope().set_client(None)

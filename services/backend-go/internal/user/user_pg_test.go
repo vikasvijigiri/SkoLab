@@ -2,16 +2,19 @@ package user
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/skolab/backend-go/internal/db"
+	"github.com/skolab/backend-go/internal/workspace"
 )
 
 // Runs against the real schema in CI (TEST_DATABASE_URL); skips elsewhere.
@@ -157,4 +160,113 @@ func TestDeleteIsRefusedWhileOwningSharedWorkspaces(t *testing.T) {
 		t.Fatalf("after deletion: shared=%d solo=%d, want 1 and 0", shared, solo)
 	}
 	_, _ = pool.Exec(ctx, "DELETE FROM workspaces WHERE id = 'pg-test-shared'")
+}
+
+// sharedWorkspaceFixture: oldOwner owns ws, with target and collab as active
+// editors. Returns the workspace id.
+func sharedWorkspaceFixture(t *testing.T, pool *pgxpool.Pool, prefix string) (ws, oldOwner, target, collab string) {
+	t.Helper()
+	ctx := context.Background()
+	ws, oldOwner, target, collab = prefix+"-ws", prefix+"-old-owner", prefix+"-target", prefix+"-collab"
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM workspaces WHERE id = $1", ws)
+		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = ANY($1)", []string{oldOwner, target, collab})
+	})
+	for _, stmt := range []struct {
+		sql  string
+		args []any
+	}{
+		{"INSERT INTO users (id, display_name) VALUES ($1, 'O'), ($2, 'T'), ($3, 'C')", []any{oldOwner, target, collab}},
+		{"INSERT INTO workspaces (id, owner_id, title, created_at) VALUES ($1, $2, 'Shared', NOW())", []any{ws, oldOwner}},
+		{`INSERT INTO workspace_members (workspace_id, user_id, role, status, created_at) VALUES
+			($1, $2, 'owner', 'active', NOW()), ($1, $3, 'editor', 'active', NOW()), ($1, $4, 'editor', 'active', NOW())`,
+			[]any{ws, oldOwner, target, collab}},
+	} {
+		if _, err := pool.Exec(ctx, stmt.sql, stmt.args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return ws, oldOwner, target, collab
+}
+
+// A transfer TO an account that commits while that account's deletion is
+// in flight must not let the cascade take the collaborators' workspace: the
+// deletion waits for the transfer, sees the new ownership, and answers 409.
+// The transfer below takes TransferOwnership's locks in its order and is
+// held open while the deletion starts.
+func TestDeleteWaitsForAConcurrentTransferToTheAccount(t *testing.T) {
+	pool := withDatabase(t)
+	ctx := context.Background()
+	ws, oldOwner, target, _ := sharedWorkspaceFixture(t, pool, "race-a")
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after Commit
+	for _, stmt := range []struct {
+		sql  string
+		args []any
+	}{
+		{"SELECT owner_id FROM workspaces WHERE id = $1 FOR UPDATE", []any{ws}},
+		{"SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2 AND status = 'active' FOR UPDATE", []any{ws, target}},
+		{"UPDATE workspaces SET owner_id = $2 WHERE id = $1", []any{ws, target}},
+		{"UPDATE workspace_members SET role = 'owner' WHERE workspace_id = $1 AND user_id = $2", []any{ws, target}},
+		{"UPDATE workspace_members SET role = 'editor' WHERE workspace_id = $1 AND user_id = $2", []any{ws, oldOwner}},
+	} {
+		if _, err := tx.Exec(ctx, stmt.sql, stmt.args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	done := make(chan *httptest.ResponseRecorder, 1)
+	go func() { done <- call(signedIn(target), http.MethodDelete, "/api/v1/users/"+target, "") }()
+	time.Sleep(300 * time.Millisecond) // the deletion is now blocked behind the transfer
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	w := <-done
+	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), `"id":"`+ws+`"`) {
+		t.Fatalf("deletion during transfer: %d %s, want 409 listing %s", w.Code, w.Body, ws)
+	}
+	var owner string
+	if err := pool.QueryRow(ctx, "SELECT owner_id FROM workspaces WHERE id = $1", ws).Scan(&owner); err != nil || owner != target {
+		t.Fatalf("shared workspace after the race: owner %q, err %v", owner, err)
+	}
+}
+
+// The other order: once the deletion holds the account's membership rows, a
+// transfer TO it waits, then finds no active editor and is refused; the
+// workspace stays with its owner.
+func TestTransferToAnAccountBeingDeletedIsRefused(t *testing.T) {
+	pool := withDatabase(t)
+	ctx := context.Background()
+	ws, oldOwner, target, _ := sharedWorkspaceFixture(t, pool, "race-b")
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after Commit
+	// deleteUnlessSharing's first lock, then its delete, held open.
+	if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_members WHERE user_id = $1 FOR UPDATE", target); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- workspace.NewPostgresSharingStore(pool).TransferOwnership(ctx, ws, oldOwner, target, 100)
+	}()
+	time.Sleep(300 * time.Millisecond) // the transfer is now blocked behind the deletion
+	if _, err := tx.Exec(ctx, "DELETE FROM users WHERE id = $1", target); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; !errors.Is(err, workspace.ErrTransferTarget) {
+		t.Fatalf("transfer to a deleted account: %v, want ErrTransferTarget", err)
+	}
+	var owner string
+	if err := pool.QueryRow(ctx, "SELECT owner_id FROM workspaces WHERE id = $1", ws).Scan(&owner); err != nil || owner != oldOwner {
+		t.Fatalf("workspace after refused transfer: owner %q, err %v", owner, err)
+	}
 }

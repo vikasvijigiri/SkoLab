@@ -69,6 +69,9 @@ func TestRunServesThenDrains(t *testing.T) {
 		t.Skip("TEST_DATABASE_URL not set")
 	}
 	t.Setenv("DATABASE_URL", url)
+	// An address nothing listens on: the default (localhost:8000) is wherever
+	// a developer runs the Python service, which would make readiness pass.
+	t.Setenv("PYTHON_BACKEND_URL", "http://127.0.0.1:1")
 	ctx, cancel := context.WithCancel(context.Background())
 	addrs := make(chan net.Addr, 1)
 	done := make(chan error, 1)

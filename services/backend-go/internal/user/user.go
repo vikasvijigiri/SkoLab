@@ -137,16 +137,25 @@ type SharedWorkspace struct {
 }
 
 // deleteUnlessSharing deletes uid's row unless uid owns a workspace with
-// other active members, which it returns instead. Owned workspaces are
-// locked first: an invite accept racing the deletion must take a key-share
-// lock on its workspace, so it either commits before the check (and is
-// counted) or waits until the cascade has run.
+// other active members, which it returns instead. Two races are closed by
+// lock order:
+//   - uid's own membership rows are locked first. An ownership transfer TO
+//     uid locks the same row (workspace.TransferOwnership), so the two
+//     serialize: a transfer that commits first is seen by the check below
+//     (409); one that comes second finds no active editor and is refused.
+//     Without this, a transfer committing mid-deletion was cascade-deleted.
+//   - Owned workspaces are locked next: an invite accept racing the
+//     deletion must take a key-share lock on its workspace, so it either
+//     commits before the check (and is counted) or waits for the cascade.
 func deleteUnlessSharing(ctx context.Context, uid string) ([]SharedWorkspace, error) {
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck // no-op after Commit
+	if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_members WHERE user_id = $1 FOR UPDATE", uid); err != nil {
+		return nil, err
+	}
 	if _, err := tx.Exec(ctx, "SELECT 1 FROM workspaces WHERE owner_id = $1 FOR UPDATE", uid); err != nil {
 		return nil, err
 	}
