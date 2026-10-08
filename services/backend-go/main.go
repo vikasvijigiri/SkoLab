@@ -90,7 +90,7 @@ func run(ctx context.Context, addr string, listening func(net.Addr)) error {
 		if os.Getenv("INTERNAL_API_TOKEN") == "" {
 			return errors.New("INTERNAL_API_TOKEN is unset while GIN_MODE=release. Set it " +
 				"(and the matching value on the Python backend / colab-sandbox worker) " +
-				"before starting the gateway")
+				"before starting the gateway.")
 		}
 	}
 
@@ -125,7 +125,8 @@ func run(ctx context.Context, addr string, listening func(net.Addr)) error {
 
 	auth.InitFirebase()
 	if release && !auth.Ready() {
-		return errors.New("firebase initialization failed; refusing to start a deployed gateway")
+		// Exact wording: CI's image check and operators grep for it.
+		return errors.New("Firebase initialization failed; refusing to start a deployed gateway")
 	}
 
 	dbErr := retryDatabaseInitialization(func() error { return db.InitDB(otel.DBTracer()) }, time.Sleep)

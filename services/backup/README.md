@@ -43,7 +43,11 @@ project, check it, then point the service at it.
    ```
 
 3. Create a new Supabase project in Singapore. In its SQL editor run
-   `CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions;`
+   `CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions;` and
+   `CREATE ROLE skolab_app NOLOGIN NOINHERIT;` (roles are not in the dump,
+   and the tables' row-security policies name this one). If the service ran
+   as a `skolab_api` login, recreate it too:
+   `CREATE ROLE skolab_api LOGIN PASSWORD '...' IN ROLE skolab_app;`
 4. Restore with a Postgres 18 client, using the new project's **session
    pooler** URL (port 5432):
 

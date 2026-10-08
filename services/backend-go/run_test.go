@@ -35,7 +35,7 @@ func TestRunRefusesUnsafeDeployments(t *testing.T) {
 	}{
 		"release without internal token": {map[string]string{"GIN_MODE": "release"}, "INTERNAL_API_TOKEN"},
 		"release without firebase": {map[string]string{"GIN_MODE": "release", "INTERNAL_API_TOKEN": "t",
-			"FIREBASE_CONFIG": "", "GOOGLE_CLOUD_PROJECT": ""}, "firebase"},
+			"FIREBASE_CONFIG": "", "GOOGLE_CLOUD_PROJECT": ""}, "Firebase initialization failed"}, // ci.yml's images job greps this
 		"required sandbox missing":      {map[string]string{"COLAB_REQUIRE_SANDBOX": "true", "DATABASE_URL": "postgres://127.0.0.1:1/x"}, "COLAB_SANDBOX_URL"},
 		"required shared state missing": {map[string]string{"SHARED_STATE_REQUIRED": "true", "DATABASE_URL": "postgres://127.0.0.1:1/x"}, "SHARED_STATE_REDIS_URL"},
 	}

@@ -28,6 +28,10 @@ for _ in $(seq 1 30); do
   docker exec "$target" pg_isready -U postgres -d skolab >/dev/null 2>&1 && break
   sleep 1
 done
+# Roles are cluster-wide, so a dump never carries them: the runtime role's
+# row-security policies (alembic e1f2a3b4c5d6) need it to exist first.
+docker exec "$target" psql -U postgres -d skolab -qX -v ON_ERROR_STOP=1 \
+  -c "CREATE ROLE skolab_app NOLOGIN NOINHERIT"
 docker exec -i "$target" pg_restore -U postgres -d skolab \
   --exit-on-error --no-owner --no-acl < "$work/backup.dump"
 
