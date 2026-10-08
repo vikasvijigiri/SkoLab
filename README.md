@@ -1,4 +1,4 @@
-# SkoLab backend
+# SkoLab
 
 SkoLab's current API supports Firebase identity, CoLab workspaces, invitations,
 membership, real-time collaboration, and LaTeX compilation. The public Go
@@ -7,6 +7,7 @@ calls an internal FastAPI service for the Python operations it still needs.
 
 | Path | Purpose |
 | --- | --- |
+| `apps/web` | Web app (sign-in and account flows), a static site on Render |
 | `services/backend-go` | Public Go gateway and WebSocket server |
 | `services/backend` | Internal FastAPI service and database migrations |
 | `deploy/skolab-api` | Production image and two-process entrypoint |
