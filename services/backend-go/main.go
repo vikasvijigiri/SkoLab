@@ -88,9 +88,9 @@ func run(ctx context.Context, addr string, listening func(net.Addr)) error {
 		// left unset in a real deployment, with no prior warning anywhere
 		// (2026-09-26 security audit).
 		if os.Getenv("INTERNAL_API_TOKEN") == "" {
-			return errors.New("INTERNAL_API_TOKEN is unset while GIN_MODE=release. Set it " +
+			return errors.New("INTERNAL_API_TOKEN is unset while GIN_MODE=release; set it " +
 				"(and the matching value on the Python backend / colab-sandbox worker) " +
-				"before starting the gateway.")
+				"before starting the gateway")
 		}
 	}
 
@@ -126,6 +126,7 @@ func run(ctx context.Context, addr string, listening func(net.Addr)) error {
 	auth.InitFirebase()
 	if release && !auth.Ready() {
 		// Exact wording: CI's image check and operators grep for it.
+		//lint:ignore ST1005 the capitalized wording is a grep contract (ci.yml images job)
 		return errors.New("Firebase initialization failed; refusing to start a deployed gateway")
 	}
 
