@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="description" content="Sign in to SkoLab: collaborative LaTeX writing and compiling." />
+    <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>SkoLab</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="boot-error" hidden class="mx-auto mt-[20vh] max-w-md px-4">
+      <h1 class="text-xl font-semibold">SkoLab couldn't start</h1>
+      <p class="mt-2 text-zinc-600 dark:text-zinc-400">Reload the page. If this keeps happening, check your connection or try another browser.</p>
+    </div>
+    <noscript>
+      <p class="mt-[20vh] text-center">SkoLab needs JavaScript to sign you in.</p>
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
