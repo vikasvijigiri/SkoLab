@@ -5,3 +5,5 @@ playwright-report
 test-results
 .env.local
 .env.*.local
+# Not a secret: the e2e build config (in-memory identity, stubbed API).
+!.env.e2e
