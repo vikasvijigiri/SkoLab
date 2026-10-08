@@ -147,6 +147,52 @@ func TestRealCompileReadsNoServerFiles(t *testing.T) {
 	}
 }
 
+// The keyword denylist is a fast first refusal, not the security boundary:
+// TeX can spell any primitive without naming it (\csname, catcodes). These
+// sources slip past FindForbidden on purpose, so the test proves the real
+// controls -- kpathsea's paranoid openin/openout and -no-shell-escape --
+// still refuse every read, write and command.
+func TestRealCompileContainsDenylistBypasses(t *testing.T) {
+	engine := findPdflatex(t)
+	secretPath := filepath.ToSlash(filepath.Join(t.TempDir(), "secret.txt"))
+	// Reading the file prints the marker into the log: compiled PDFs are
+	// compressed, so a typeset secret would not be visible in the output.
+	if err := os.WriteFile(secretPath, []byte(`\message{SUPER-SECRET-TOKEN-12345}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	marker := filepath.ToSlash(filepath.Join(outside, "pwned"))
+	doc := func(body string) string {
+		return `\documentclass{article}\begin{document}` + body + `x\end{document}`
+	}
+	sources := map[string]string{
+		"csname absolute read":  doc(`\csname input\endcsname{` + secretPath + `}`),
+		"catcode absolute read": doc("\\catcode`\\@=0 @input " + secretPath + " "),
+		"csname parent read":    doc(`\csname input\endcsname{../../../../../../..` + secretPath + `}`),
+		"csname pipe read":      doc(`\csname input\endcsname{|cat ` + secretPath + `}`),
+		"csname shell escape":   doc(`\immediate\csname write\endcsname18{touch ` + marker + `}`),
+		"csname absolute write": doc(`\csname newwrite\endcsname\f\immediate\csname openout\endcsname\f=` +
+			marker + `.tex \immediate\csname write\endcsname\f{x}\immediate\closeout\f `),
+	}
+	for name, src := range sources {
+		t.Run(name, func(t *testing.T) {
+			if hit := FindForbidden(src); hit != "" {
+				t.Fatalf("bypass no longer bypasses the denylist (%q); rewrite it", hit)
+			}
+			result := Compile(context.Background(), engine, t.TempDir(), src)
+			pdf, _ := base64.StdEncoding.DecodeString(result.PDFBase64)
+			if strings.Contains(result.Log, "SUPER-SECRET") || strings.Contains(string(pdf), "SUPER-SECRET") {
+				t.Fatal("secret leaked")
+			}
+			for _, path := range []string{marker, marker + ".tex"} {
+				if _, err := os.Stat(path); err == nil {
+					t.Fatalf("sandbox wrote %s", path)
+				}
+			}
+		})
+	}
+}
+
 func TestRealCompileProducesAPDFWithoutLeakingPaths(t *testing.T) {
 	engine := findPdflatex(t)
 	dir := t.TempDir()

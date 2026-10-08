@@ -103,7 +103,7 @@ func TestServeWs_RejectsNonMemberBeforeUpgrade(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read response body: %v", err)
 	}
-	if string(body) != `{"error":"You do not have access to this workspace"}` {
+	if string(body) != `{"code":"forbidden","error":"You do not have access to this workspace"}` {
 		t.Fatalf("body = %s", body)
 	}
 }
@@ -131,7 +131,7 @@ func TestServeWs_AuthorizationFailureReturnsServiceUnavailable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read response body: %v", err)
 	}
-	if string(body) != `{"error":"Workspace authorization is temporarily unavailable"}` {
+	if string(body) != `{"code":"authorization_unavailable","error":"Workspace authorization is temporarily unavailable"}` {
 		t.Fatalf("body = %s", body)
 	}
 }

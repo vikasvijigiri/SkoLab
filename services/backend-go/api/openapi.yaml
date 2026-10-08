@@ -436,6 +436,7 @@ paths:
       tags: [sharing]
       operationId: changeMemberRole
       summary: Change a member's role (owner only)
+      description: Demoting a member below editor revokes the invite links they created; promoting them again does not revive those links.
       requestBody:
         required: true
         content:
@@ -468,6 +469,7 @@ paths:
       tags: [sharing]
       operationId: removeMember
       summary: Remove a member (owner), or leave (the member themself)
+      description: The member's open invite links are revoked with them.
       responses:
         "204": { description: Removed. }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -696,7 +698,7 @@ components:
       description: Absent, or not visible to the caller (existence is never revealed).
       content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     InviteInvalid:
-      description: Unknown, expired, revoked or used up; indistinguishable on purpose.
+      description: Unknown, expired, revoked or used up, or its creator can no longer invite (removed, demoted below editor, or deleted); indistinguishable on purpose.
       content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     Conflict:
       description: The request conflicts with current state (e.g. owner changes, profile not synced).

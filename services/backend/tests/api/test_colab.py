@@ -265,6 +265,39 @@ def test_real_compile_reads_no_server_files(tmp_path):
     assert not result.pdf_base64
 
 
+# The keyword denylist is a fast first refusal, not the security boundary:
+# TeX can spell any primitive without naming it (\csname, catcodes). These
+# sources slip past it on purpose, so the test proves the real controls --
+# kpathsea's paranoid openin/openout and -no-shell-escape -- still hold.
+_BYPASSES = {
+    "csname absolute read": r"\csname input\endcsname{%(secret)s}",
+    "catcode absolute read": r"\catcode`\@=0 @input %(secret)s ",
+    "csname parent read": r"\csname input\endcsname{../../../../../../..%(secret)s}",
+    "csname pipe read": r"\csname input\endcsname{|cat %(secret)s}",
+    "csname shell escape": r"\immediate\csname write\endcsname18{touch %(marker)s}",
+    "csname absolute write": (
+        r"\csname newwrite\endcsname\f\immediate\csname openout\endcsname\f=%(marker)s.tex "
+        r"\immediate\csname write\endcsname\f{x}\immediate\closeout\f "
+    ),
+}
+
+
+@needs_tex
+@pytest.mark.parametrize("name", sorted(_BYPASSES))
+def test_real_compile_contains_denylist_bypasses(tmp_path, name):
+    secret = tmp_path / "secret.txt"
+    # Reading the file prints the marker into the log (PDFs are compressed).
+    secret.write_text(r"\message{SUPER-SECRET-TOKEN-12345}")
+    marker = tmp_path / "pwned"
+    body = _BYPASSES[name] % {"secret": secret.as_posix(), "marker": marker.as_posix()}
+    source = _DOC % (body + "x")
+    assert colab._find_forbidden(source) is None, "bypass no longer bypasses; rewrite it"
+    result = colab._compile_source(source)
+    pdf = base64.b64decode(result.pdf_base64 or "")
+    assert "SUPER-SECRET" not in (result.log or "") and b"SUPER-SECRET" not in pdf
+    assert not marker.exists() and not (tmp_path / "pwned.tex").exists()
+
+
 @needs_tex
 def test_real_compile_produces_a_pdf_without_leaking_paths():
     result = colab._compile_source(_DOC % "Hello, world.")

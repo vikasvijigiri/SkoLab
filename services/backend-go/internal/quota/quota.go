@@ -132,60 +132,111 @@ func (l *localFallback) incr(key string, cost int, windowEnd, now time.Time) int
 	return entry.count
 }
 
+func (l *localFallback) refund(key string, cost int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if entry, ok := l.data[key]; ok {
+		entry.count = max(entry.count-cost, 0)
+		l.data[key] = entry
+	}
+}
+
 // Consume charges cost units to uid, checked against both the hourly and
 // daily budget. Returns (allowed, remaining-hourly, remaining-daily, err).
 // err is only a real infra failure; an exhausted budget is *Exceeded, not
 // err — callers should errors.As it.
 func Consume(ctx context.Context, pool *pgxpool.Pool, uid string, cost int) (int, int, error) {
+	_, hourly, daily, err := Charge(ctx, pool, uid, cost)
+	return hourly, daily, err
+}
+
+// Receipt records what one successful Charge spent, so a request that never
+// got the service it paid for (backend down, busy or failing) can be
+// refunded. The zero Receipt refunds nothing.
+type Receipt struct {
+	cost    int
+	entries []charged
+}
+
+type charged struct {
+	key   string
+	local bool // charged to the in-process fallback, not Postgres
+}
+
+// Charge is Consume plus the Receipt needed to undo it.
+func Charge(ctx context.Context, pool *pgxpool.Pool, uid string, cost int) (Receipt, int, int, error) {
 	limits := ReadLimits()
 	if !limits.Enabled {
-		return limits.Hourly, limits.Daily, nil
+		return Receipt{}, limits.Hourly, limits.Daily, nil
 	}
 	now := time.Now()
+	receipt := Receipt{cost: cost}
 
 	hBucket, hEnd := windowBucket(now, hourSeconds)
-	usedH, err := incr(ctx, pool, fmt.Sprintf("q:%s:h:%d", uid, hBucket), cost, hEnd, now)
+	hKey := fmt.Sprintf("q:%s:h:%d", uid, hBucket)
+	usedH, local, err := incr(ctx, pool, hKey, cost, hEnd, now)
 	if err != nil {
-		return 0, 0, err
+		return Receipt{}, 0, 0, err
 	}
+	receipt.entries = append(receipt.entries, charged{hKey, local})
 	if usedH > limits.Hourly {
-		return 0, 0, &Exceeded{"hourly", limits.Hourly, time.Until(hEnd)}
+		return Receipt{}, 0, 0, &Exceeded{"hourly", limits.Hourly, time.Until(hEnd)}
 	}
 
 	dBucket, dEnd := windowBucket(now, daySeconds)
-	usedD, err := incr(ctx, pool, fmt.Sprintf("q:%s:d:%d", uid, dBucket), cost, dEnd, now)
+	dKey := fmt.Sprintf("q:%s:d:%d", uid, dBucket)
+	usedD, local, err := incr(ctx, pool, dKey, cost, dEnd, now)
 	if err != nil {
-		return 0, 0, err
+		return Receipt{}, 0, 0, err
 	}
+	receipt.entries = append(receipt.entries, charged{dKey, local})
 	if usedD > limits.Daily {
-		return 0, 0, &Exceeded{"daily", limits.Daily, time.Until(dEnd)}
+		return Receipt{}, 0, 0, &Exceeded{"daily", limits.Daily, time.Until(dEnd)}
 	}
 
-	return limits.Hourly - usedH, limits.Daily - usedD, nil
+	return receipt, limits.Hourly - usedH, limits.Daily - usedD, nil
 }
 
-func incr(ctx context.Context, pool *pgxpool.Pool, key string, cost int, windowEnd, now time.Time) (int, error) {
+// Refund gives back what r charged. Best effort: a failed refund only costs
+// the user budget, so it is logged, never surfaced.
+func (r Receipt) Refund(ctx context.Context, pool *pgxpool.Pool) {
+	for _, e := range r.entries {
+		if e.local || pool == nil {
+			local.refund(e.key, r.cost)
+			continue
+		}
+		ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		_, err := pool.Exec(ctx, `UPDATE usage_counters SET count = GREATEST(count - $2, 0) WHERE bucket_key = $1`, e.key, r.cost)
+		cancel()
+		if err != nil {
+			slog.Warn("quota: refund failed", "err", err)
+		}
+	}
+}
+
+// incr reports the new count and whether the local fallback tier took it.
+func incr(ctx context.Context, pool *pgxpool.Pool, key string, cost int, windowEnd, now time.Time) (int, bool, error) {
 	if pool != nil {
 		ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		defer cancel()
 		var count int
 		err := pool.QueryRow(ctx, upsertSQL, key, cost, windowEnd.Add(60*time.Second)).Scan(&count)
 		if err == nil {
-			return count, nil
+			return count, false, nil
 		}
 		if shared.Required() {
-			return 0, ErrUnavailable
+			return 0, false, ErrUnavailable
 		}
 		slog.Warn("quota: postgres unavailable — falling back to local memory", "err", err)
 	}
 	if shared.Required() {
-		return 0, ErrUnavailable
+		return 0, false, ErrUnavailable
 	}
 	count := local.incr(key, cost, windowEnd, now)
 	if count == localCapacityExceeded {
-		return 0, ErrUnavailable
+		return 0, false, ErrUnavailable
 	}
-	return count, nil
+	return count, true, nil
 }
 
 // Sweep removes a bounded batch, keeping cleanup transactions short. Run once

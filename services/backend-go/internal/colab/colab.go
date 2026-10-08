@@ -157,7 +157,7 @@ func Handler(pool *pgxpool.Pool, httpClient *http.Client, pythonURL string) gin.
 		}
 		defer release()
 
-		_, _, err := quota.Consume(c.Request.Context(), pool, uid, compileQuotaCost)
+		receipt, _, _, err := quota.Charge(c.Request.Context(), pool, uid, compileQuotaCost)
 		if err != nil {
 			if exc, ok := quota.AsExceeded(err); ok {
 				c.Header("Retry-After", strconv.Itoa(int(exc.RetryAfter.Seconds())+1))
@@ -184,6 +184,13 @@ func Handler(pool *pgxpool.Pool, httpClient *http.Client, pythonURL string) gin.
 			status, header, respBody, upstreamErr = callSandbox(c.Request.Context(), httpClient, sandboxURL, internalToken, body)
 		} else {
 			status, header, respBody, upstreamErr = callPython(c.Request.Context(), httpClient, pythonURL, internalToken, c.Request.Header, body)
+		}
+		if upstreamErr != nil || status >= 400 {
+			// The caller never got the compile they paid for: unreachable,
+			// busy, or failing backend. A compile that ran (even one whose
+			// LaTeX failed or timed out, answered 200) stays charged.
+			// Detached context: the refund must survive a client disconnect.
+			receipt.Refund(context.WithoutCancel(c.Request.Context()), pool)
 		}
 		if upstreamErr != nil {
 			slog.Error("colab: compile backend unreachable", "err", upstreamErr, "sandbox", sandboxURL != "")

@@ -227,3 +227,66 @@ func TestSharing_MemberManagementPermissions(t *testing.T) {
 		t.Fatalf("former member listing: %v", err)
 	}
 }
+
+// A link is only as good as its creator's current authority: an editor who
+// is removed or demoted cannot rejoin (or let anyone in) through a link they
+// minted while they could invite, and re-promotion does not revive it.
+func TestSharing_LinksDieWithTheirCreatorsAuthority(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	sharing := NewPostgresSharingStore(pool)
+	owner, editor, demoted, guest := newUser(t, pool), newUser(t, pool), newUser(t, pool), newUser(t, pool)
+	ws := newWorkspace(t, NewPostgresStore(pool), owner)
+	for _, user := range []string{editor, demoted} {
+		inv, _ := sharing.CreateInvite(ctx, ws, owner, "editor", week(), nil)
+		if _, err := sharing.AcceptInvite(ctx, inv.Token, user); err != nil {
+			t.Fatal(err)
+		}
+	}
+	removedLink, err := sharing.CreateInvite(ctx, ws, editor, "editor", week(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	demotedLink, err := sharing.CreateInvite(ctx, ws, demoted, "viewer", week(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := sharing.RemoveMember(ctx, ws, owner, editor); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sharing.AcceptInvite(ctx, removedLink.Token, editor); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("removed editor rejoining through own link: %v", err)
+	}
+	if role, _ := sharing.CallerRole(ctx, ws, editor); role != "" {
+		t.Fatalf("removed editor regained %q", role)
+	}
+
+	if err := sharing.ChangeRole(ctx, ws, owner, demoted, "viewer"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sharing.PreviewInvite(ctx, demotedLink.Token); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("demoted editor's link still previews: %v", err)
+	}
+	if err := sharing.ChangeRole(ctx, ws, owner, demoted, "editor"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sharing.AcceptInvite(ctx, demotedLink.Token, guest); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("re-promotion revived a revoked link: %v", err)
+	}
+	invites, err := sharing.ListInvites(ctx, ws, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, inv := range invites {
+		if inv.ID == removedLink.ID || inv.ID == demotedLink.ID {
+			t.Fatalf("stale link still listed: %+v", inv)
+		}
+	}
+
+	// A link from someone who still has the authority keeps working.
+	live, _ := sharing.CreateInvite(ctx, ws, demoted, "viewer", week(), nil)
+	if m, err := sharing.AcceptInvite(ctx, live.Token, guest); err != nil || m.Role != "viewer" {
+		t.Fatalf("current editor's link: %+v %v", m, err)
+	}
+}

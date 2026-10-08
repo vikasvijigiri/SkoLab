@@ -95,8 +95,23 @@ func digest(token string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// usable selects invites that can still be redeemed.
-const usable = `revoked_at IS NULL AND expires_at > $2 AND (max_uses IS NULL OR uses < max_uses)`
+// usable selects invites (aliased i) that can still be redeemed. A link is
+// only as good as its creator's current authority: once the creator is no
+// longer the owner or an active editor (removed, demoted, account deleted),
+// their links stop working, so a removed editor cannot rejoin through a link
+// they minted while they were a member.
+const usable = `i.revoked_at IS NULL AND i.expires_at > $2 AND (i.max_uses IS NULL OR i.uses < i.max_uses)
+	AND EXISTS (
+		SELECT 1 FROM workspaces iw
+		LEFT JOIN workspace_members im
+		       ON im.workspace_id = iw.id AND im.user_id = i.created_by AND im.status = 'active'
+		WHERE iw.id = i.workspace_id AND (iw.owner_id = i.created_by OR im.role IN ('owner', 'editor')))`
+
+// revokeLinksBy revokes every open link userID created in workspaceID. Run
+// when userID loses invite rights, so a later re-promotion does not silently
+// revive links the owner may have forgotten about.
+const revokeLinksBy = `UPDATE workspace_invites SET revoked_at = $3
+	WHERE workspace_id = $1 AND created_by = $2 AND revoked_at IS NULL`
 
 func (s *postgresSharing) ready() error {
 	if s.pool == nil {
@@ -164,9 +179,9 @@ func (s *postgresSharing) ListInvites(ctx context.Context, workspaceID, callerID
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, role, COALESCE(created_by, ''), created_at, expires_at, max_uses, uses
-		FROM workspace_invites WHERE workspace_id = $1 AND `+usable+`
-		ORDER BY created_at DESC LIMIT 100`, workspaceID, time.Now().UTC())
+		SELECT i.id, i.role, COALESCE(i.created_by, ''), i.created_at, i.expires_at, i.max_uses, i.uses
+		FROM workspace_invites i WHERE i.workspace_id = $1 AND `+usable+`
+		ORDER BY i.created_at DESC LIMIT 100`, workspaceID, time.Now().UTC())
 	if err != nil {
 		return nil, unavailable(err)
 	}
@@ -347,13 +362,26 @@ func (s *postgresSharing) ChangeRole(ctx context.Context, workspaceID, callerID,
 	}
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
-	tag, err := s.pool.Exec(ctx, `UPDATE workspace_members SET role = $3
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return unavailable(err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after Commit
+	tag, err := tx.Exec(ctx, `UPDATE workspace_members SET role = $3
 		WHERE workspace_id = $1 AND user_id = $2 AND status = 'active'`, workspaceID, targetID, role)
 	if err != nil {
 		return unavailable(err)
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
+	}
+	if !canInvite(role) {
+		if _, err := tx.Exec(ctx, revokeLinksBy, workspaceID, targetID, time.Now().UTC()); err != nil {
+			return unavailable(err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return unavailable(err)
 	}
 	return nil
 }
@@ -375,7 +403,12 @@ func (s *postgresSharing) RemoveMember(ctx context.Context, workspaceID, callerI
 	}
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
-	tag, err := s.pool.Exec(ctx, `
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return unavailable(err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after Commit
+	tag, err := tx.Exec(ctx, `
 		UPDATE workspace_members m SET status = 'removed'
 		FROM workspaces w
 		WHERE m.workspace_id = w.id AND m.workspace_id = $1 AND m.user_id = $2
@@ -390,6 +423,13 @@ func (s *postgresSharing) RemoveMember(ctx context.Context, workspaceID, callerI
 			}
 		}
 		return ErrNotFound
+	}
+	// A departed member's links leave with them.
+	if _, err := tx.Exec(ctx, revokeLinksBy, workspaceID, targetID, time.Now().UTC()); err != nil {
+		return unavailable(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return unavailable(err)
 	}
 	return nil
 }
