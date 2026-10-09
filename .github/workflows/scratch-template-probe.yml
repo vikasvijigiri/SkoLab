@@ -1,7 +1,7 @@
 name: scratch template probe
 
-# Temporary (removed before review): lists the journal classes and
-# templates the runtime image's TeX Live offers.
+# Temporary (removed before review): compiles candidate journal templates
+# with the runtime image's TeX Live and keeps their .bbl files.
 on:
   push:
     branches: [claude/latex-editor-wj1lcj]
@@ -16,25 +16,45 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: List classes and doc templates
+      - name: Compile candidates
         run: |
-          mkdir -p scratch/results scratch/debian
+          rm -rf scratch && mkdir -p scratch/probe2
           docker run --rm -v "$PWD/scratch:/out" python:3.12-slim@sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f bash -c '
             apt-get update -qq
             DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends texlive-latex-base texlive-latex-recommended \
-              texlive-fonts-recommended texlive-publishers texlive-science texlive-latex-extra lmodern >/dev/null 2>&1
-            find /usr/share/texlive/texmf-dist/tex -name "*.cls" | sed "s|/usr/share/texlive/texmf-dist/tex/||" | sort > /out/results/classes.txt
+              texlive-fonts-recommended texlive-publishers texlive-science texlive-latex-extra lmodern texlive-binaries >/dev/null 2>&1
             mkdir -p /tmp/x && cd /tmp
             for p in texlive-publishers-doc texlive-latex-extra-doc texlive-science-doc; do apt-get download -qq $p && dpkg-deb -x ${p}_*.deb /tmp/x; done
-            find /tmp/x/usr/share/doc/texlive-doc -type f \( -name "*.tex" -o -name "*.tex.gz" -o -name "*.bib" -o -name "*.bib.gz" \) | sed "s|/tmp/x/usr/share/doc/texlive-doc/||" | sort > /out/results/doc-tex.txt
-            for d in achemso revtex oup-authoring-template nature pnas plos bmc elsarticle jpsj nwejm cmpj rsc aastex mnras ametsoc copernicus iucr; do
-              [ -d /tmp/x/usr/share/doc/texlive-doc/latex/$d ] && mkdir -p /out/debian/$d && cp -r /tmp/x/usr/share/doc/texlive-doc/latex/$d/. /out/debian/$d/ && find /out/debian/$d -name "*.gz" -exec gunzip -f {} \; ; true
-            done
-            find /out/debian -name "*.pdf" -delete
+            D=/tmp/x/usr/share/doc/texlive-doc/latex
+            find $D -name "*.gz" -exec gunzip -f {} \; 2>/dev/null
+            for d in beilstein aomart els-cas-templates quantumarticle; do mkdir -p /out/docs/$d && cp -r $D/$d/. /out/docs/$d/; done
+            find /out/docs -name "*.pdf" -delete
+            run() { # name dir file
+              w=/tmp/w/$1; rm -rf $w; mkdir -p $w; cp -r $D/$2/. $w/; cd $w
+              f=$3
+              pdflatex -interaction=nonstopmode -halt-on-error $f.tex >/dev/null 2>&1; a=$?
+              bibtex $f >/dev/null 2>&1
+              pdflatex -interaction=nonstopmode -halt-on-error $f.tex >/dev/null 2>&1
+              pdflatex -interaction=nonstopmode -halt-on-error $f.tex >/dev/null 2>&1; b=$?
+              echo "$1 first=$a last=$b pdf=$( [ -f $f.pdf ] && echo yes || echo no )" >> /out/probe2/summary.txt
+              mkdir -p /out/probe2/$1
+              cp $f.log /out/probe2/$1/ 2>/dev/null; cp $f.bbl /out/probe2/$1/ 2>/dev/null; cp $f.blg /out/probe2/$1/ 2>/dev/null
+              grep -n "^!" -A3 $f.log | head -20 > /out/probe2/$1/errors.txt
+              cd /tmp
+            }
+            run achemso achemso achemso-demo
+            run beilstein beilstein beilstein-template
+            run aomart aomart aomsample
+            run cas-sc els-cas-templates cas-sc-template
+            run cas-dc els-cas-templates cas-dc-template
+            run quantum quantumarticle quantum-template
+            run oup oup-authoring-template oup-authoring-template
+            run nature nature nature-template
+            run jpsj jpsj template
           '
       - name: Commit results
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f scratch
-          git commit -m "scratch: journal classes and templates in TeX Live 2024" && git push
+          git commit -m "scratch: candidate journal templates compiled" && git push
