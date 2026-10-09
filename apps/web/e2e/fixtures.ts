@@ -63,6 +63,15 @@ export async function serveBackend(page: Page, backend: FakeBackend) {
 
 /** WCAG 2.2 AA, in the current color scheme. */
 export async function expectAccessible(page: Page) {
+  // Let entrance animations finish: text caught mid-fade reads as low contrast.
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity)
+        .map((animation) => animation.finished.catch(() => undefined)),
+    ),
+  );
   const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
   expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
 }

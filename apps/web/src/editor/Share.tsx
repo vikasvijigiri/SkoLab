@@ -261,7 +261,7 @@ export function Share({
                   {copied ? "Copied" : "Copy"}
                 </Button>
               </div>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400" role="status">
+              <p className="text-xs text-zinc-700 dark:text-zinc-300" role="status">
                 {copied ? "Link copied. " : ""}
                 They'll join as “{ROLE_LABELS[created.invite.role].toLowerCase()}” once signed in. The link works until {formatDate(created.invite.expires_at)}, and this is the only time
                 it's shown.
