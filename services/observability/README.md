@@ -266,6 +266,17 @@ When trace volume nears the Grafana Cloud quota, lower the ratio and add tail
 sampling in an OTel Collector, which keeps every error and slow trace (see
 below). Sentry captures every exception either way.
 
+### Did a request reach production?
+
+**Actions > Telemetry lookup > Run workflow** lists every `skolab-gateway`
+and `skolab-backend-py` trace in a UTC window (default: the last 30 minutes)
+with its trace id, plus per-route request counts, in the run summary. It
+hides the per-minute background traces unless asked. Spans carry no user
+identifiers, so match a user action by time and shape: a browser call starts
+with an `OPTIONS` preflight, while the synthetic journey's
+`POST /api/v1/users/profile/sync` arrives with a compile, two tickets and two
+WebSocket connections and no preflight.
+
 ## Infrastructure and growth
 
 Use **Render > service > Metrics** for CPU/memory and platform diagnostics.

@@ -1,0 +1,49 @@
+name: Telemetry lookup
+
+# "Did my request reach production?" Lists the backend's traces and request
+# counts from Grafana Cloud for a time window. Actions > Telemetry lookup >
+# Run workflow, with UTC start and end; leave both empty for the last 30
+# minutes. Read-only: it only queries Grafana with the existing secrets.
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: Window start, UTC (e.g. 2026-10-09T05:00:00Z). Empty = 30 minutes ago
+        required: false
+      end:
+        description: Window end, UTC. Empty = now
+        required: false
+      show_noise:
+        description: Include the per-minute background traces
+        type: boolean
+        default: false
+  pull_request:
+    paths: ['services/observability/telemetry_lookup.py', '.github/workflows/telemetry-lookup.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  lookup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+      - name: Query Grafana Cloud
+        env:
+          GRAFANA_URL: ${{ secrets.GRAFANA_URL }}
+          GRAFANA_TOKEN: ${{ secrets.GRAFANA_TOKEN }}
+          START: ${{ inputs.start }}
+          END: ${{ inputs.end }}
+          SHOW_NOISE: ${{ inputs.show_noise && '--show-noise' || '' }}
+        run: |
+          if [ -z "$GRAFANA_URL" ] || [ -z "$GRAFANA_TOKEN" ]; then
+            echo "::error::GRAFANA_URL and GRAFANA_TOKEN repository secrets are required"; exit 1
+          fi
+          END="${END:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
+          START="${START:-$(date -u -d "$END -30 minutes" +%Y-%m-%dT%H:%M:%SZ)}"
+          python services/observability/telemetry_lookup.py --start "$START" --end "$END" $SHOW_NOISE | tee report.md
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
