@@ -170,3 +170,32 @@ func TestStoreErrorsMapToTheContract(t *testing.T) {
 		t.Fatalf("get of an invisible workspace: %d", w.Code)
 	}
 }
+
+func TestResponsesCarryInsightsForTheSourceTheyReturn(t *testing.T) {
+	store := &fakeStore{}
+	source := `\title{Spin waves}\begin{document}\section{Introduction} Magnons.\end{document}`
+	put := serve(t, store, "alice", http.MethodPut, "/api/v1/workspaces/ws-1/document",
+		`{"source":`+strconvQuote(source)+`,"base_version":0}`)
+	if put.Code != http.StatusOK {
+		t.Fatalf("put = %d %s", put.Code, put.Body)
+	}
+	insights := body(t, put)["insights"].(map[string]any)
+	stats := insights["stats"].(map[string]any)
+	if stats["sections"] != float64(1) || stats["words"] != float64(2) {
+		t.Fatalf("stats = %v", stats)
+	}
+	progress := insights["progress"].(map[string]any)
+	if progress["percent"] != float64(25) || len(progress["checks"].([]any)) != 8 {
+		t.Fatalf("progress = %v", progress)
+	}
+
+	get := serve(t, store, "alice", http.MethodGet, "/api/v1/workspaces/ws-1/document", "")
+	if _, ok := body(t, get)["insights"].(map[string]any)["unresolved_citations"].([]any); !ok {
+		t.Fatalf("GET must carry insights with lists, got %s", get.Body)
+	}
+}
+
+func strconvQuote(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}

@@ -101,6 +101,11 @@ jsonpath "$.version" == 1
 jsonpath "$.template_id" == "aps-physical-review"
 jsonpath "$.updated_by" == "{{owner_uid}}"
 jsonpath "$.updated_at" isString
+# Every answer reads the source back: "First draft." is two words.
+jsonpath "$.insights.stats.words" == 2
+jsonpath "$.insights.progress.percent" == 0
+jsonpath "$.insights.progress.checks" count == 8
+jsonpath "$.insights.unresolved_citations" count == 0
 
 # A second "first save" lost the race: nothing changes, the caller learns
 # the current version.

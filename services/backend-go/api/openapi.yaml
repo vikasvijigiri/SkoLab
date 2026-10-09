@@ -568,7 +568,7 @@ paths:
       description: A workspace that was never saved reads as version 0 with an empty source.
       responses:
         "200":
-          description: The document, with the caller's role.
+          description: The document, with the caller's role and its insights.
           headers:
             ETag: { schema: { type: string, pattern: '^"v[0-9]+"$' } }
           content:
@@ -849,7 +849,7 @@ components:
       pattern: "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f-\\u009f]*$"
     Document:
       type: object
-      required: [workspace_id, source, template_id, version, updated_at, updated_by, role]
+      required: [workspace_id, source, template_id, version, updated_at, updated_by, role, insights]
       properties:
         workspace_id: { type: string }
         source: { $ref: "#/components/schemas/LatexSource" }
@@ -858,6 +858,45 @@ components:
         updated_at: { type: [string, "null"], format: date-time }
         updated_by: { type: [string, "null"], description: Null before the first save or once that account is deleted. }
         role: { $ref: "#/components/schemas/Role" }
+        insights: { $ref: "#/components/schemas/ManuscriptInsights" }
+    ManuscriptInsights:
+      type: object
+      description: >-
+        A reading of the source (not a compile): how long it is, what it
+        contains, and which parts a submission needs are in place. Progress is
+        the share of the checks met, with partial credit for length.
+      required: [stats, progress, unresolved_citations]
+      properties:
+        stats:
+          type: object
+          required: [words, sections, figures, tables, equations, citations, references]
+          properties:
+            words: { type: integer, minimum: 0, description: Running text of the body, without math, floats or the bibliography. }
+            sections: { type: integer, minimum: 0 }
+            figures: { type: integer, minimum: 0 }
+            tables: { type: integer, minimum: 0 }
+            equations: { type: integer, minimum: 0 }
+            citations: { type: integer, minimum: 0, description: Distinct keys cited. }
+            references: { type: integer, minimum: 0, description: "\\bibitem entries." }
+        progress:
+          type: object
+          required: [percent, checks]
+          properties:
+            percent: { type: integer, minimum: 0, maximum: 100 }
+            checks:
+              type: array
+              items:
+                type: object
+                required: [id, label, done]
+                properties:
+                  id: { type: string, enum: [title, authors, abstract, introduction, conclusion, references, citations, length] }
+                  label: { type: string }
+                  done: { type: boolean }
+        unresolved_citations:
+          type: array
+          maxItems: 20
+          description: Cited keys with no matching bibitem entry, sorted.
+          items: { type: string }
     DocumentSave:
       type: object
       required: [source, base_version]

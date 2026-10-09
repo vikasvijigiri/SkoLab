@@ -5,6 +5,9 @@
 //	GET /api/v1/workspaces/:id/document  any active member -> 200
 //	PUT /api/v1/workspaces/:id/document  owner or editor   -> 200
 //
+// Both answer with the document and its insights (internal/manuscript):
+// word count, sections, figures, citations and a completeness checklist.
+//
 // A workspace that has never been saved reads as version 0 with an empty
 // source. Every save names the version it was based on (base_version); a
 // save based on anything but the current version is refused with 409 and
@@ -28,6 +31,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/skolab/backend-go/internal/apierror"
+	"github.com/skolab/backend-go/internal/manuscript"
 	"github.com/skolab/backend-go/internal/security"
 )
 
@@ -58,6 +62,8 @@ type Document struct {
 	UpdatedAt   *time.Time `json:"updated_at"`
 	UpdatedBy   *string    `json:"updated_by"`
 	Role        string     `json:"role"` // the caller's role, so a client knows whether it may save
+	// Insights reads the source: length, contents and how complete it is.
+	Insights manuscript.Insights `json:"insights"`
 }
 
 // Store is narrow so handlers are tested without PostgreSQL.
@@ -116,6 +122,12 @@ func storeError(c *gin.Context, err error) {
 	}
 }
 
+func respond(c *gin.Context, doc Document) {
+	doc.Insights = manuscript.Analyze(doc.Source)
+	c.Header("ETag", etag(doc.Version))
+	c.JSON(http.StatusOK, doc)
+}
+
 func (h handlers) get(c *gin.Context) {
 	uid, ok := caller(c)
 	if !ok {
@@ -126,8 +138,7 @@ func (h handlers) get(c *gin.Context) {
 		storeError(c, err)
 		return
 	}
-	c.Header("ETag", etag(doc.Version))
-	c.JSON(http.StatusOK, doc)
+	respond(c, doc)
 }
 
 type saveRequest struct {
@@ -206,6 +217,5 @@ func (h handlers) put(c *gin.Context) {
 		storeError(c, err)
 		return
 	}
-	c.Header("ETag", etag(doc.Version))
-	c.JSON(http.StatusOK, doc)
+	respond(c, doc)
 }
