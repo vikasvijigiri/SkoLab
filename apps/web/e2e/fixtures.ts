@@ -1,12 +1,41 @@
+import { readFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test as base, type Page } from "@playwright/test";
+import { createFakeBackend, TEST_TEMPLATES, type FakeBackend } from "../src/test/fakeBackend";
 
 export interface ProfileCall {
   authorization: string | null;
   body: unknown;
 }
 
-export const test = base.extend<{ profileCalls: ProfileCall[] }>({
+// The real template sources the gateway serves (services/backend-go/internal/templates/files).
+const TEMPLATES = TEST_TEMPLATES.map((template) => ({
+  ...template,
+  source: readFileSync(new URL(`../../../services/backend-go/internal/templates/files/${template.id}.tex`, import.meta.url), "utf8"),
+}));
+
+export const test = base.extend<{ profileCalls: ProfileCall[]; backend: FakeBackend }>({
+  /** The editor endpoints (workspaces, templates, documents), served in memory. */
+  backend: [
+    async ({ page }, provide) => {
+    const backend = createFakeBackend(TEMPLATES);
+    await page.route(/\/__api\/api\/v1\/(workspaces|templates)/, async (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      const answer = backend.handle({
+        method: request.method(),
+        url: url.pathname.replace(/^\/__api/, "") + url.search,
+        headers: request.headers(),
+        body: request.postData() ? (request.postDataJSON() as unknown) : null,
+      });
+      if (!answer) return route.fallback();
+      await route.fulfill({ status: answer.status, ...(answer.headers ? { headers: answer.headers } : {}), ...(answer.status === 204 ? {} : { json: answer.body }) });
+    });
+    await provide(backend);
+    },
+    // Every signed-in page reads documents and templates.
+    { auto: true },
+  ],
   profileCalls: async ({ page }, provide) => {
     const calls: ProfileCall[] = [];
     await page.route("**/__api/api/v1/users/profile/sync", async (route) => {
@@ -16,7 +45,8 @@ export const test = base.extend<{ profileCalls: ProfileCall[] }>({
     });
     const violations: string[] = [];
     page.on("console", (message) => {
-      if (message.type() === "error") violations.push(message.text());
+      // A 409 version_conflict is an answer the editor handles, but Chromium still logs it.
+      if (message.type() === "error" && !/status of 409 \(Conflict\)/.test(message.text())) violations.push(message.text());
     });
     await provide(calls);
     // A CSP violation or React error in the console fails the test.

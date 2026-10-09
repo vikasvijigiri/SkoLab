@@ -26,18 +26,21 @@ async function signIn(page: Page) {
   await expect(page.getByRole("heading", { name: "Welcome, Ada Lovelace" })).toBeVisible();
 }
 
-test("a template opens in the editor, compiles and previews under the production CSP", async ({ page, profileCalls, isMobile }) => {
+test("a journal template opens in the editor, compiles, previews and saves to the account", async ({ page, profileCalls, backend, isMobile }) => {
   const calls = await stubCompile(page);
   await signIn(page);
-  await page.getByRole("button", { name: "Use the IEEE Conference Paper template" }).click();
+  await page.getByRole("button", { name: "Mathematics" }).click();
+  await page.getByRole("button", { name: "Use the AMS Journal Article (amsart) template" }).click();
 
   await expect(page).toHaveURL(/\/editor\/[0-9a-f-]{36}$/);
-  await expect(page.getByLabel("Document title")).toHaveValue("IEEE Conference Paper");
+  await expect(page.getByLabel("Document title")).toHaveValue("AMS Journal Article (amsart)");
   // pdf.js drew the page on a canvas.
   await expect(page.getByRole("img", { name: "Page 1 of 1" })).toBeVisible();
   expect(calls).toHaveLength(1);
   expect(calls[0]?.authorization).toBe("Bearer fake-token:google-ada");
-  expect(calls[0]?.body.latex_source).toContain("\\documentclass[conference]{IEEEtran}");
+  expect(calls[0]?.body.latex_source).toContain("\\documentclass{amsart}");
+  const id = new URL(page.url()).pathname.split("/").pop() ?? "";
+  expect(backend.document(id)).toMatchObject({ template_id: "ams-article", version: 1 });
 
   // Edit the source, then compile.
   if (isMobile) await page.getByRole("tab", { name: "Source" }).click();
@@ -52,13 +55,49 @@ test("a template opens in the editor, compiles and previews under the production
   expect(calls[1]?.body.latex_source).toContain("% edited in the browser test");
   await expect(page.getByRole("img", { name: "Page 1 of 1" })).toBeVisible();
 
-  // The edit survives a reload, and the document is listed at home.
-  await expect(page.getByText("Saved in this browser")).toBeAttached();
+  // The edit is saved to the account, survives a reload, and the document is listed at home.
+  await expect.poll(() => backend.document(id)?.source ?? "").toContain("% edited in the browser test");
+  await expect(page.getByText("All changes saved")).toBeAttached();
   await page.reload();
   if (isMobile) await page.getByRole("tab", { name: "Source" }).click();
   await expect(page.getByText("% edited in the browser test")).toBeVisible();
   await page.getByRole("link", { name: "Back to your documents" }).click();
-  await expect(page.getByRole("link", { name: "IEEE Conference Paper" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "AMS Journal Article (amsart)" })).toBeVisible();
+  expect(profileCalls.length).toBeGreaterThan(0);
+});
+
+test("a co-author's save is not overwritten", async ({ page, profileCalls, backend, isMobile }) => {
+  await stubCompile(page);
+  await signIn(page);
+  await page.getByRole("button", { name: "Use the Nature template" }).click();
+  await expect(page.getByRole("img", { name: "Page 1 of 1" })).toBeVisible();
+  const id = new URL(page.url()).pathname.split("/").pop() ?? "";
+  backend.saveAs("grace", id, "\\documentclass{nature}\n% grace's version\n");
+
+  if (isMobile) await page.getByRole("tab", { name: "Source" }).click();
+  await page.getByRole("textbox", { name: "LaTeX source" }).click();
+  await page.keyboard.type("% mine");
+  await expect(page.getByText("Someone else saved this document while you were editing.")).toBeVisible();
+  expect(backend.document(id)?.source).toContain("% grace's version");
+  await page.getByRole("button", { name: "Load their version" }).click();
+  await expect(page.getByText("% grace's version")).toBeAttached();
+  await expect(page.getByText(/Someone else saved/)).toHaveCount(0);
+  expect(profileCalls.length).toBeGreaterThan(0);
+});
+
+test("a shared document opens read-only for a viewer", async ({ page, profileCalls, backend, isMobile }) => {
+  await stubCompile(page);
+  const id = backend.seed("grace", "Grace's paper", { source: "\\documentclass{amsart}\n\\begin{document}\nShared\n\\end{document}\n", templateId: "ams-article", members: { "google-ada": "viewer" } });
+  await signIn(page);
+  await expect(page.getByText("Can view · created")).toBeVisible();
+  await page.getByRole("link", { name: "Grace's paper" }).click();
+  await expect(page.getByRole("heading", { name: "Grace's paper" })).toBeVisible();
+  await expect(page.getByText(/Ask its owner for edit access/)).toBeVisible();
+  if (isMobile) await page.getByRole("tab", { name: "Source" }).click();
+  await page.getByRole("textbox", { name: "LaTeX source" }).click();
+  await page.keyboard.type("nope");
+  await expect(page.getByText("nope")).toHaveCount(0);
+  expect(backend.document(id)?.version).toBe(1);
   expect(profileCalls.length).toBeGreaterThan(0);
 });
 
@@ -69,7 +108,7 @@ test("compile errors point at their line", async ({ page, profileCalls, isMobile
       : { status: "error", errors: ["line 2: Undefined control sequence."], log: "./main.tex:2: Undefined control sequence." },
   );
   await signIn(page);
-  await page.getByRole("button", { name: "Use the Blank Article template" }).click();
+  await page.getByRole("button", { name: "Use the ACS Journal (achemso) template" }).click();
   await expect(page.getByRole("img", { name: "Page 1 of 1" })).toBeVisible();
   await page.getByRole("button", { name: "Compile", exact: true }).click();
   await expect(page.getByText("Compilation failed; showing the last good PDF.")).toBeVisible();
@@ -85,8 +124,9 @@ for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
     await signIn(page);
     await expect(page.getByText("You're all set")).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Use the / })).toHaveCount(4);
     await expectAccessible(page);
-    await page.getByRole("button", { name: "Use the Elsevier Journal Article template" }).click();
+    await page.getByRole("button", { name: "Use the APS Physical Review (REVTeX 4.2) template" }).click();
     await expect(page.getByRole("img", { name: "Page 1 of 1" })).toBeVisible();
     await expectAccessible(page);
     expect(profileCalls.length).toBeGreaterThan(0);
@@ -98,7 +138,7 @@ test("the editor fits a phone screen", async ({ page, isMobile, profileCalls }) 
   await stubCompile(page);
   await signIn(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.getByRole("button", { name: "Use the Beamer Conference Talk template" }).click();
+  await page.getByRole("button", { name: "Use the Nature template" }).click();
   await expect(page.getByRole("img", { name: "Page 1 of 1" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(profileCalls.length).toBeGreaterThan(0);

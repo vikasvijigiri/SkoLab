@@ -84,10 +84,12 @@ interface LatexEditorProps {
   /** Ctrl/Cmd+Enter and Ctrl/Cmd+S, with the current text. */
   onCompile: (value: string) => void;
   label: string;
+  /** Viewers and commenters can read, select and copy, but not change the text. */
+  readOnly?: boolean;
 }
 
-/** A LaTeX source editor (CodeMirror 6). Uncontrolled: initialValue is read once. */
-export const LatexEditor = forwardRef<LatexEditorHandle, LatexEditorProps>(function LatexEditor({ initialValue, onChange, onCompile, label }, ref) {
+/** A LaTeX source editor (CodeMirror 6). Uncontrolled: initialValue and readOnly are read once (remount with a key to change them). */
+export const LatexEditor = forwardRef<LatexEditorHandle, LatexEditorProps>(function LatexEditor({ initialValue, onChange, onCompile, label, readOnly = false }, ref) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const callbacks = useRef({ onChange, onCompile });
@@ -133,7 +135,8 @@ export const LatexEditor = forwardRef<LatexEditorHandle, LatexEditorProps>(funct
           syntaxHighlighting(highlight),
           EditorView.lineWrapping,
           theme,
-          EditorView.contentAttributes.of({ "aria-label": label }),
+          EditorState.readOnly.of(readOnly),
+          EditorView.contentAttributes.of(readOnly ? { "aria-label": label, "aria-readonly": "true" } : { "aria-label": label }),
           keymap.of([
             { key: "Mod-Enter", run: compile, preventDefault: true },
             { key: "Mod-s", run: compile, preventDefault: true },
@@ -158,7 +161,7 @@ export const LatexEditor = forwardRef<LatexEditorHandle, LatexEditorProps>(funct
       editor.destroy();
       view.current = null;
     };
-    // initialValue is read once by design; the editor owns the text afterwards.
+    // initialValue and readOnly are read once by design; the editor owns the text afterwards.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

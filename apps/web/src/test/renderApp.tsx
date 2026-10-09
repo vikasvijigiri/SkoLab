@@ -3,11 +3,36 @@ import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 import { App } from "../App";
 import { createFakeAuth } from "../auth/fakeAuth";
+import { createFakeBackend, TEST_TEMPLATES, type FakeBackend } from "./fakeBackend";
 
 export function stubApi(handler: (url: string, init: RequestInit) => Response = () => Response.json({ status: "synced", uid: "x" })) {
   const fetchMock = vi.fn((url: string, init: RequestInit) => Promise.resolve(handler(url, init)));
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
+}
+
+/**
+ * Serves the editor endpoints from an in-memory backend, profile sync as
+ * "synced", and anything else (the compiler) from `other`.
+ */
+export function stubBackend(other: (url: string, init: RequestInit) => Response = () => Response.json({ status: "synced", uid: "x" })) {
+  const backend: FakeBackend = createFakeBackend(TEST_TEMPLATES);
+  const fetchMock = stubApi((url, init) => {
+    const headers: Record<string, string> = {};
+    new Headers(init.headers).forEach((value, key) => {
+      headers[key] = value;
+    });
+    const answer = backend.handle({
+      method: init.method ?? "GET",
+      url,
+      headers,
+      body: typeof init.body === "string" ? (JSON.parse(init.body) as unknown) : null,
+    });
+    if (!answer) return other(url, init);
+    if (answer.status === 204) return new Response(null, { status: 204 });
+    return Response.json(answer.body, { status: answer.status, ...(answer.headers ? { headers: answer.headers } : {}) });
+  });
+  return { backend, fetchMock };
 }
 
 export async function renderApp(path: string, setup?: (auth: ReturnType<typeof createFakeAuth>) => Promise<void>) {

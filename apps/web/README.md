@@ -5,21 +5,30 @@ password reset, and, once signed in, a LaTeX editor with official templates.
 
 ## LaTeX editor
 
-- **Home** lists the user's documents and a gallery of templates
-  (`src/editor/templates.ts`). Each template is the maintainer's own file
-  from CTAN, taken from the TeX Live release the compiler runs so class and
-  template versions match; every change from upstream is listed in the
-  file's header. CI compiles all of them through the production image
-  (`services/qa/templates_compile.py`).
+- **Home** lists the user's documents (their workspaces, own and shared)
+  and the journal templates for physics, chemistry, mathematics and
+  biology, read from `GET /api/v1/templates`. The gateway is the single
+  source of templates (`services/backend-go/internal/templates`); each is
+  the publisher's or class author's own file from the TeX Live release the
+  compiler runs, with every change from upstream listed in its header. CI
+  compiles all of them through the production image
+  (`services/qa/templates_compile.py`). "Use template" creates a workspace
+  and saves the template as its first document version.
 - **Editor** (`/editor/:id`): CodeMirror 6 with LaTeX highlighting and
   completion, a pdf.js preview drawn on canvases (works on phones and under
   the strict CSP), compile errors that jump to their line, zoom, and .tex /
   PDF downloads. Ctrl/Cmd+Enter or Ctrl/Cmd+S compiles.
 - **Compiles** go to `POST /api/v1/colab/compile` (pdfLaTeX, one file, up to
   three passes so references settle). They count against the user's quota.
-- **Storage:** documents are kept in this browser (`localStorage`, per
-  account) until the API has a document store; `src/editor/documents.ts` is
-  the one place that changes then.
+- **Storage:** each workspace has one document in the API
+  (`GET`/`PUT /api/v1/workspaces/{id}/document`, `src/api/editor.ts`). The
+  editor saves a short pause after typing, naming the version it started
+  from; if a co-author saved in between, the API answers 409 and the editor
+  stops and asks whether to load their version or keep this one, so nobody
+  overwrites anyone silently. Owners and editors write and owners rename;
+  commenters and viewers get a read-only editor.
+- **Tests** run against `src/test/fakeBackend.ts`, an in-memory copy of the
+  gateway's editor endpoints shared by the unit tests and the browser tests.
 - CodeMirror runs inside a shadow root, where it can style itself with
   constructed stylesheets; in the page it would need an inline `<style>`,
   which the CSP refuses.

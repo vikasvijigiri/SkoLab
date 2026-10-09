@@ -4,20 +4,24 @@ import { config } from "../config";
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
+  /** The whole error body, for answers that carry more than code and error (a 409's current_version). */
+  readonly details: Readonly<Record<string, unknown>>;
 
-  constructor(status: number, code: string, message: string) {
+  constructor(status: number, code: string, message: string, details: Record<string, unknown> = {}) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
 const TIMEOUT_MS = 15_000;
 
 interface RequestOptions {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   token?: string | null;
+  headers?: Record<string, string>;
   body?: unknown;
   signal?: AbortSignal;
   /** Defaults to 15 seconds; a compile may run up to the backend's own limit. */
@@ -26,7 +30,7 @@ interface RequestOptions {
 
 /** JSON request to the gateway. Throws ApiError for any non-2xx answer. */
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const headers: Record<string, string> = { Accept: "application/json" };
+  const headers: Record<string, string> = { Accept: "application/json", ...options.headers };
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
 
@@ -48,11 +52,12 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   if (response.status === 204) return undefined as T;
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    const body = (payload ?? {}) as { code?: unknown; error?: unknown };
+    const body = (typeof payload === "object" && payload !== null ? payload : {}) as Record<string, unknown>;
     throw new ApiError(
       response.status,
       typeof body.code === "string" ? body.code : "http_error",
       typeof body.error === "string" ? body.error : `Request failed (${response.status})`,
+      body,
     );
   }
   return payload as T;
