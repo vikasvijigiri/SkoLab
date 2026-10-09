@@ -296,6 +296,37 @@ func TestPostgres_MovingAFolderMovesItsContents(t *testing.T) {
 	}
 }
 
+func TestPostgres_RenamingKeepsAFilesType(t *testing.T) {
+	pool := testPool(t)
+	store, ctx := NewPostgresStore(pool), context.Background()
+	owner := newUser(t, pool)
+	ws := newWorkspace(t, pool, owner, nil)
+
+	notes, err := store.Create(ctx, ws, owner, text("notes.txt", "@a{}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	png, _ := classify("a.png", pngBytes)
+	img, err := store.Create(ctx, ws, owner, png)
+	if err != nil {
+		t.Fatal(err)
+	}
+	renamed, err := store.Move(ctx, ws, owner, notes.ID, "refs.bib")
+	if err != nil || renamed.ContentType != "text/x-bibtex" {
+		t.Fatalf("text to text: %+v %v", renamed, err)
+	}
+	for _, c := range []struct{ id, target string }{
+		{notes.ID, "refs.png"}, {img.ID, "a.jpg"}, {img.ID, "a.tex"}, {img.ID, "a.docx"},
+	} {
+		if _, err := store.Move(ctx, ws, owner, c.id, c.target); !errors.Is(err, ErrTypeChange) {
+			t.Fatalf("%s: %v", c.target, err)
+		}
+	}
+	if moved, err := store.Move(ctx, ws, owner, img.ID, "fig/A.PNG"); err != nil || moved.ContentType != "image/png" {
+		t.Fatalf("same type: %+v %v", moved, err)
+	}
+}
+
 func TestPostgres_DeletingAFolderDeletesItsContents(t *testing.T) {
 	pool := testPool(t)
 	store, ctx := NewPostgresStore(pool), context.Background()

@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { EditorView } from "@codemirror/view";
-import type { FakeBackend } from "../test/fakeBackend";
+import type { FakeAnswer, FakeBackend, FakeCompileInput } from "../test/fakeBackend";
 import { renderApp, stubBackend } from "../test/renderApp";
 
 // pdf.js needs a real canvas; the browser tests (e2e/editor.spec.ts) cover it.
@@ -26,15 +26,16 @@ function seed(source = SOURCE, options: { templateId?: string | null; owner?: st
   };
 }
 
-function compileAnswers(...answers: (() => Response)[]) {
-  const calls: unknown[] = [];
-  const stub = stubBackend((url, init) => {
-    if (!url.endsWith("/api/v1/colab/compile")) return Response.json({ status: "synced", uid: "x" });
-    calls.push(JSON.parse(init.body as string));
-    const next = answers.shift();
-    return next ? next() : Response.json({ status: "compiled", pdf_base64: btoa("%PDF again") });
-  });
+/** What the project compile answers, in turn (then a compiled PDF). */
+function compileAnswers(...answers: (() => FakeAnswer)[]) {
+  const calls: FakeCompileInput[] = [];
+  const stub = stubBackend();
   backend = stub.backend;
+  backend.setCompiler((input) => {
+    calls.push(input);
+    const next = answers.shift();
+    return next ? next() : { status: 200, body: { status: "compiled", pdf_base64: btoa("%PDF again") } };
+  });
   return { calls, fetchMock: stub.fetchMock };
 }
 
@@ -59,12 +60,12 @@ describe("editor", () => {
     Range.prototype.getBoundingClientRect = () => new DOMRect();
   });
   it("compiles on open and shows the PDF", async () => {
-    const { calls } = compileAnswers(() => Response.json({ status: "compiled", pdf_base64: btoa("%PDF-1.7 first"), log: "" }));
+    const { calls } = compileAnswers(() => ({ status: 200, body: { status: "compiled", pdf_base64: btoa("%PDF-1.7 first"), log: "" } }));
     const doc = seed();
     await openEditor(doc.id);
     // The first test also loads the editor's code.
     expect(await screen.findByTestId("pdf", {}, { timeout: 5000 })).toHaveTextContent("%PDF-1.7 first");
-    expect(calls).toEqual([{ latex_source: doc.source, engine: "pdflatex" }]);
+    expect(calls).toEqual([{ latex_source: doc.source, engine: "pdflatex", files: [] }]);
     expect(screen.getByDisplayValue("My paper")).toBeInTheDocument();
     expect(screen.getByText("Template: AMS Journal Article (amsart) (LPPL 1.3c)")).toBeInTheDocument();
     expect(screen.getByText("All changes saved")).toBeInTheDocument();
@@ -73,8 +74,8 @@ describe("editor", () => {
 
   it("lists compile errors, keeps the last good PDF and shows the log", async () => {
     compileAnswers(
-      () => Response.json({ status: "compiled", pdf_base64: btoa("%PDF good") }),
-      () => Response.json({ status: "error", errors: ["line 3: Undefined control sequence.", "Something else"], log: "full log" }),
+      () => ({ status: 200, body: { status: "compiled", pdf_base64: btoa("%PDF good") } }),
+      () => ({ status: 200, body: { status: "error", errors: ["line 3: Undefined control sequence.", "Something else"], log: "full log" } }),
     );
     const doc = seed();
     const { user } = await openEditor(doc.id);
@@ -89,10 +90,10 @@ describe("editor", () => {
 
   it("explains a compile that could not run", async () => {
     compileAnswers(
-      () => Response.json({ code: "compile_in_progress", error: "busy" }, { status: 429 }),
-      () => Response.json({ code: "quota_exceeded", error: "spent" }, { status: 429 }),
-      () => Response.json({ code: "compile_unavailable", error: "down" }, { status: 503 }),
-      () => Response.json({ status: "timeout", errors: ["Compilation exceeded the 20 second limit."], log: "" }),
+      () => ({ status: 429, body: { code: "compile_in_progress", error: "busy" } }),
+      () => ({ status: 429, body: { code: "quota_exceeded", error: "spent" } }),
+      () => ({ status: 503, body: { code: "compile_unavailable", error: "down" } }),
+      () => ({ status: 200, body: { status: "timeout", errors: ["Compilation exceeded the 20 second limit."], log: "" } }),
     );
     const doc = seed();
     const { user } = await openEditor(doc.id);

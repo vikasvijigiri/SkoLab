@@ -772,7 +772,7 @@ paths:
     patch:
       tags: [editor]
       operationId: moveFile
-      summary: Rename or move a file or folder; a folder takes its contents along (owner or editor)
+      summary: Rename or move a file or folder; a folder takes its contents along, a file keeps its type (owner or editor)
       requestBody:
         required: true
         content:
@@ -794,6 +794,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "415": { $ref: "#/components/responses/Unsupported" }
         "429": { $ref: "#/components/responses/TooMany" }
         "503": { $ref: "#/components/responses/Unavailable" }
     delete:

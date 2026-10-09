@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { ApiError } from "../api/client";
-import { compileLatex, MAX_SOURCE_LENGTH, pdfBytes, type CompileResult } from "../api/compile";
+import { MAX_SOURCE_LENGTH, pdfBytes, type CompileResult } from "../api/compile";
 import {
   canEdit,
   characterCount,
@@ -18,6 +18,7 @@ import {
   type TemplateSummary,
   type Workspace,
 } from "../api/editor";
+import { compileProject, listFiles, outputPdf } from "../api/files";
 import { listMembers } from "../api/sharing";
 import { useAuth } from "../auth/AuthProvider";
 import { useIdToken } from "../auth/useIdToken";
@@ -27,8 +28,13 @@ import { Sheet } from "../components/Sheet";
 import { FullPageLoader, Spinner } from "../components/Spinner";
 import { LatexEditor, type LatexEditorHandle } from "../editor/LatexEditor";
 import { Overview, ProgressRing } from "../editor/Overview";
+import { FileEditor, type FileEditorHandle } from "../editor/FileEditor";
+import { FilePreview } from "../editor/FilePreview";
+import { FileTree, filesMessage, type FilesState, type OpenTarget } from "../editor/FileTree";
+import { RETRY_DELAY_MS, SAVE_DELAY_MS, saveLabel, type SaveState } from "../editor/saving";
 import { Avatar, Share } from "../editor/Share";
 import { formatDate } from "../lib/dates";
+import { bytesOf, download, fileName } from "../lib/download";
 
 const PdfPreview = lazy(() => import("../editor/PdfPreview").then((m) => ({ default: m.PdfPreview })));
 
@@ -39,8 +45,6 @@ type Compile =
   | { state: "failed"; errors: string[]; log: string }
   | { state: "unavailable"; message: string };
 
-const SAVE_DELAY_MS = 800;
-const RETRY_DELAY_MS = 5_000;
 const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
 function stepZoom(zoom: number, step: 1 | -1): number {
@@ -76,19 +80,6 @@ function saveMessage(error: unknown): { message: string; retry: boolean } {
 function lineOf(message: string): number | null {
   const match = /^line (\d+):/.exec(message);
   return match ? Number(match[1]) : null;
-}
-
-function download(name: string, data: BlobPart, type: string) {
-  const url = URL.createObjectURL(new Blob([data], { type }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = name;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-function fileName(title: string) {
-  return title.trim().replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "document";
 }
 
 interface Opened {
@@ -159,28 +150,12 @@ export function Editor() {
   return <DocumentEditor key={page.generation} opened={page.opened} onReload={reload} />;
 }
 
-type SaveState =
-  | { state: "saved" }
-  | { state: "pending" }
-  | { state: "saving" }
-  | { state: "failed"; message: string }
-  | { state: "conflict"; currentVersion: number }
-  | { state: "locked"; message: string };
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function saveLabel(save: SaveState): string {
-  switch (save.state) {
-    case "saved":
-      return "All changes saved";
-    case "pending":
-    case "saving":
-      return "Saving…";
-    case "failed":
-      return `Not saved: ${save.message}`;
-    case "conflict":
-      return "Not saved: someone else changed this document";
-    case "locked":
-      return "Not saved";
-  }
+/** What Home hands over after importing a zip: the files it left out. */
+function importedSkipped(state: unknown): string[] {
+  const skipped = (state as { skipped?: unknown } | null)?.skipped;
+  return Array.isArray(skipped) ? skipped.filter((entry): entry is string => typeof entry === "string") : [];
 }
 
 function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => void }) {
@@ -205,7 +180,43 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
   const [insights, setInsights] = useState<Insights>(doc.insights);
   const [lastSaved, setLastSaved] = useState({ at: doc.updated_at, by: doc.updated_by, version: doc.version });
   const [members, setMembers] = useState<Member[]>([]);
-  const [sheet, setSheet] = useState<"share" | "overview" | null>(null);
+  const [sheet, setSheet] = useState<"share" | "overview" | "files" | null>(null);
+  // The project's files; main.tex is open while openId is null.
+  const [files, setFiles] = useState<FilesState>({ state: "loading" });
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [fileStatus, setFileStatus] = useState("");
+  const [showFiles, setShowFiles] = useState(true);
+  // A project PDF shown in the preview instead of the compiled output.
+  const [previewing, setPreviewing] = useState<string | null>(null);
+  const fileEditor = useRef<FileEditorHandle>(null);
+  const location = useLocation();
+  const [skipped, setSkipped] = useState(() => importedSkipped(location.state));
+
+  const refreshFiles = useCallback(async () => {
+    try {
+      const listing = await listFiles(await idToken(), workspace.id);
+      setFiles({ state: "ready", listing });
+    } catch {
+      // Keep a list already on screen; the next change or compile refreshes it.
+      setFiles((current) => (current.state === "ready" ? current : { state: "error", message: "We couldn't load the project's files." }));
+    }
+  }, [idToken, workspace.id]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const listing = await listFiles(await idToken(), workspace.id, controller.signal);
+        if (!controller.signal.aborted) setFiles({ state: "ready", listing });
+      } catch {
+        if (!controller.signal.aborted) setFiles({ state: "error", message: "We couldn't load the project's files." });
+      }
+    })();
+    return () => controller.abort();
+  }, [idToken, workspace.id]);
+
+  const listing = files.state === "ready" ? files.listing : null;
+  const openFile = openId === null ? null : (listing?.files.find((file) => file.id === openId && file.kind !== "folder") ?? null);
 
   // People with access, for the avatars and to name who saved last.
   useEffect(() => {
@@ -315,6 +326,12 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
     void flush();
   }
 
+  /** Saves main.tex now, after any save already on its way. */
+  const saveMainNow = useCallback(async () => {
+    for (let wait = 0; wait < 100 && inFlight.current; wait += 1) await sleep(50);
+    await flush();
+  }, [flush]);
+
   // Rename (owners only), a pause after the last keystroke.
   const savedTitle = useRef(workspace.title);
   useEffect(() => {
@@ -335,42 +352,100 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
     return () => clearTimeout(timer);
   }, [title, isOwner, idToken, workspace.id]);
 
-  const runCompile = useCallback(
-    async (text: string) => {
-      if (text.length > MAX_SOURCE_LENGTH) {
-        setCompile({ state: "unavailable", message: `Documents can be up to ${MAX_SOURCE_LENGTH.toLocaleString()} characters to compile.` });
-        return;
-      }
-      running.current?.abort();
-      const controller = new AbortController();
-      running.current = controller;
-      setCompile({ state: "compiling" });
-      let result: CompileResult;
-      try {
-        result = await compileLatex(await idToken(), text, controller.signal);
-      } catch (error) {
-        if (controller.signal.aborted) return;
-        setCompile({ state: "unavailable", message: compileMessage(error) });
-        return;
-      }
-      if (controller.signal.aborted) return;
-      if (result.status === "compiled" && result.pdf_base64) {
-        setPdf(pdfBytes(result.pdf_base64));
-        setCompile({ state: "compiled" });
-        setPane("pdf");
-      } else {
-        const errors = result.errors?.length ? result.errors : ["LaTeX compilation failed."];
-        setCompile({ state: "failed", errors, log: result.log ?? "" });
-      }
-    },
-    [idToken],
+  /**
+   * Saves main.tex and the open file, then compiles the whole project on the
+   * server, so \input, \includegraphics and bibliographies find their files.
+   */
+  const runCompile = useCallback(async () => {
+    if (latestSource.current.length > MAX_SOURCE_LENGTH) {
+      setCompile({ state: "unavailable", message: `Documents can be up to ${MAX_SOURCE_LENGTH.toLocaleString()} characters to compile.` });
+      return;
+    }
+    running.current?.abort();
+    const controller = new AbortController();
+    running.current = controller;
+    // A function, so each check reads the signal after an await.
+    const stale = () => controller.signal.aborted;
+    setCompile({ state: "compiling" });
+    let result: CompileResult;
+    try {
+      if (editable) await Promise.all([saveMainNow(), fileEditor.current?.flush()]);
+      if (stale()) return;
+      result = await compileProject(await idToken(), workspace.id, controller.signal);
+    } catch (error) {
+      if (stale()) return;
+      setCompile({ state: "unavailable", message: compileMessage(error) });
+      return;
+    }
+    if (stale()) return;
+    if (result.status === "compiled" && result.pdf_base64) {
+      setPdf(pdfBytes(result.pdf_base64));
+      setPreviewing(null);
+      setCompile({ state: "compiled" });
+      setPane("pdf");
+      // The compile stored a new output.pdf.
+      void refreshFiles();
+    } else {
+      const errors = result.errors?.length ? result.errors : ["LaTeX compilation failed."];
+      setCompile({ state: "failed", errors, log: result.log ?? "" });
+    }
+  }, [idToken, workspace.id, editable, saveMainNow, refreshFiles]);
+
+  async function downloadOutput() {
+    try {
+      download(`${fileName(title)}.pdf`, await bytesOf(await outputPdf(await idToken(), workspace.id)), "application/pdf");
+    } catch (error) {
+      setCompile({ state: "unavailable", message: error instanceof ApiError && error.status === 404 ? "There is no compiled PDF yet. Compile the project first." : filesMessage(error) });
+    }
+  }
+
+  function downloadPdf() {
+    // The PDF on screen is the stored output.pdf unless a project PDF is shown instead.
+    if (pdf && previewing === null) download(`${fileName(title)}.pdf`, pdf.slice().buffer, "application/pdf");
+    else void downloadOutput();
+  }
+
+  function openTarget(target: OpenTarget) {
+    setSheet(null);
+    if (target.kind === "main") {
+      setOpenId(null);
+      setPane("source");
+    } else if (target.kind === "file") {
+      setOpenId(target.file.id);
+      setPane("source");
+    } else {
+      setPane("pdf");
+      void (async () => {
+        try {
+          const bytes = await bytesOf(await outputPdf(await idToken(), workspace.id));
+          setPdf(bytes);
+          setPreviewing(null);
+        } catch (error) {
+          setCompile({ state: "unavailable", message: filesMessage(error) });
+        }
+      })();
+    }
+  }
+
+  const tree = (
+    <FileTree
+      workspaceId={workspace.id}
+      title={title}
+      files={files}
+      editable={editable}
+      openId={openFile?.id ?? null}
+      onOpen={openTarget}
+      onReload={refreshFiles}
+      onDownloadMain={() => download("main.tex", source, "application/x-tex")}
+      onDownloadOutput={() => void downloadOutput()}
+    />
   );
 
   // Open with a fresh preview, the way Overleaf does.
   const openedSource = doc.source;
   useEffect(() => {
     if (!openedSource.trim()) return;
-    const timer = setTimeout(() => void runCompile(openedSource), 0);
+    const timer = setTimeout(() => void runCompile(), 0);
     return () => {
       clearTimeout(timer);
       running.current?.abort();
@@ -409,8 +484,12 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
             <h1 className="truncate px-1.5 py-0.5 text-[15px] font-semibold">{title}</h1>
           )}
           <p className="flex min-w-0 items-center gap-1.5 px-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+            <span className="max-w-48 shrink-0 truncate font-medium text-zinc-700 dark:text-zinc-300" title="Open file">
+              {openFile?.path ?? "main.tex"}
+            </span>
+            <span aria-hidden="true">·</span>
             <span role="status" className="truncate">
-              {editable ? (titleStatus ?? saveLabel(save)) : "View only"}
+              {openFile ? fileStatus : editable ? (titleStatus ?? saveLabel(save)) : "View only"}
             </span>
             <span aria-hidden="true" className="hidden sm:inline">
               ·
@@ -418,6 +497,27 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
             <span className="hidden truncate sm:inline">Created {formatDate(workspace.created_at)}</span>
           </p>
         </div>
+
+        <button
+          type="button"
+          aria-expanded={showFiles}
+          aria-controls="editor-files"
+          onClick={() => setShowFiles(!showFiles)}
+          title="Show or hide the project's files"
+          className="hidden h-10 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-sm font-semibold hover:bg-zinc-100 md:flex dark:hover:bg-zinc-900"
+        >
+          <FilesIcon />
+          Files
+        </button>
+        <button
+          type="button"
+          aria-label="Open project files"
+          onClick={() => setSheet("files")}
+          className="flex h-10 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-sm font-semibold hover:bg-zinc-100 md:hidden dark:hover:bg-zinc-900"
+        >
+          <FilesIcon />
+          Files
+        </button>
 
         <button
           type="button"
@@ -455,15 +555,10 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
           <Button variant="secondary" className="!h-10 !w-auto" onClick={() => download(`${fileName(title)}.tex`, source, "application/x-tex")}>
             .tex
           </Button>
-          <Button
-            variant="secondary"
-            className="!h-10 !w-auto"
-            disabled={!pdf}
-            onClick={() => pdf && download(`${fileName(title)}.pdf`, pdf.slice().buffer, "application/pdf")}
-          >
+          <Button variant="secondary" className="!h-10 !w-auto" disabled={!pdf && !listing?.output} onClick={downloadPdf}>
             PDF
           </Button>
-          <Button className="!h-10 !w-auto" loading={compiling} onClick={() => void runCompile(source)} title="Compile (Ctrl+Enter)">
+          <Button className="!h-10 !w-auto" loading={compiling} onClick={() => void runCompile()} title="Compile (Ctrl+Enter)">
             {compiling ? "Compiling" : "Compile"}
           </Button>
         </div>
@@ -495,6 +590,19 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
           <Alert tone="error">{save.message}</Alert>
         </div>
       )}
+      {skipped.length > 0 && (
+        <div className="border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
+          <Alert tone="info">
+            <p>
+              Project imported. {skipped.length === 1 ? "One file was" : `${skipped.length} files were`} left out because SkoLab can't use {skipped.length === 1 ? "it" : "them"}:{" "}
+              <span className="font-mono text-xs break-all">{skipped.join(", ")}</span>
+            </p>
+            <button type="button" className="mt-1 cursor-pointer font-semibold underline underline-offset-4" onClick={() => setSkipped([])}>
+              Dismiss
+            </button>
+          </Alert>
+        </div>
+      )}
 
       <div className="flex border-b border-zinc-200 md:hidden dark:border-zinc-800" role="tablist" aria-label="Editor view">
         {(["source", "pdf"] as const).map((name) => (
@@ -511,22 +619,55 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
         ))}
       </div>
 
-      <div className="grid min-h-0 flex-1 md:grid-cols-2">
+      <div className={`grid min-h-0 flex-1 ${showFiles ? "md:grid-cols-[15rem_1fr_1fr]" : "md:grid-cols-2"}`}>
+        {showFiles && (
+          <aside id="editor-files" aria-label="Project files" className="hidden min-h-0 border-r border-zinc-200 bg-white md:block dark:border-zinc-800 dark:bg-zinc-950">
+            {sheet === "files" ? null : tree}
+          </aside>
+        )}
         <section aria-label="LaTeX source" className={`latex-editor min-h-0 border-zinc-200 md:block md:border-r dark:border-zinc-800 ${pane === "source" ? "block" : "hidden"}`}>
-          <LatexEditor
-            ref={editor}
-            initialValue={doc.source}
-            onChange={setSource}
-            onCompile={(text) => void runCompile(text)}
-            label="LaTeX source"
-            readOnly={!editable}
-          />
+          <div className="h-full min-h-0" hidden={openFile !== null}>
+            <LatexEditor
+              ref={editor}
+              initialValue={doc.source}
+              onChange={setSource}
+              onCompile={() => void runCompile()}
+              label="LaTeX source"
+              readOnly={!editable}
+            />
+          </div>
+          {openFile?.kind === "text" && (
+            <FileEditor
+              key={openFile.id}
+              ref={fileEditor}
+              workspaceId={workspace.id}
+              file={openFile}
+              editable={editable}
+              onStatus={setFileStatus}
+              onCompile={() => void runCompile()}
+              onSaved={() => void refreshFiles()}
+            />
+          )}
+          {openFile?.kind === "binary" && (
+            <FilePreview
+              key={openFile.id}
+              workspaceId={workspace.id}
+              file={openFile}
+              onShowPdf={(bytes, path) => {
+                setPdf(bytes);
+                setPreviewing(path);
+                setPane("pdf");
+              }}
+            />
+          )}
         </section>
 
         <section aria-label="PDF preview" className={`min-h-0 flex-col bg-zinc-100 md:flex dark:bg-zinc-900 ${pane === "pdf" ? "flex" : "hidden"}`}>
           <div className="flex items-center justify-between gap-2 border-b border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
             <span className="truncate">
-              {template ? (
+              {previewing ? (
+                `Showing ${previewing}`
+              ) : template ? (
                 <>
                   Template: {template.name} ({template.license})
                 </>
@@ -574,6 +715,7 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
                               type="button"
                               className="cursor-pointer text-left underline underline-offset-2"
                               onClick={() => {
+                                setOpenId(null);
                                 setPane("source");
                                 // On phones the source pane is hidden until this render lands.
                                 requestAnimationFrame(() => editor.current?.goToLine(line));
@@ -616,6 +758,11 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
         </section>
       </div>
 
+      {sheet === "files" && (
+        <Sheet title="Project files" description="Everything in this project. Open a file to edit it, or add your own." onClose={() => setSheet(null)}>
+          <div className="-mx-5 -my-5 h-[calc(100%+2.5rem)]">{tree}</div>
+        </Sheet>
+      )}
       {sheet === "overview" && (
         <Sheet title="Overview" description="How complete the manuscript is, what it holds, and its history." onClose={() => setSheet(null)}>
           <Overview
@@ -637,5 +784,13 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
         </Sheet>
       )}
     </div>
+  );
+}
+
+function FilesIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+    </svg>
   );
 }

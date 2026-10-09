@@ -35,7 +35,7 @@ checks.positive_data_acceptance.expected-statuses = ["2xx", "400", "401", "403",
 
 [[operations]]
 include-name = "PATCH /api/v1/workspaces/{id}/files/{file_id}"
-checks.positive_data_acceptance.expected-statuses = ["2xx", "400", "401", "403", "404", "409", "429", "5xx"]
+checks.positive_data_acceptance.expected-statuses = ["2xx", "400", "401", "403", "404", "409", "415", "429", "5xx"]
 
 [[operations]]
 include-name = "PUT /api/v1/workspaces/{id}/files/{file_id}"

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { ApiError } from "../api/client";
 import {
@@ -14,6 +14,8 @@ import {
   type TemplateSummary,
   type Workspace,
 } from "../api/editor";
+import { MAX_UPLOAD_BYTES } from "../api/editorTypes";
+import { importProject } from "../api/files";
 import { useAuth } from "../auth/AuthProvider";
 import { useIdToken } from "../auth/useIdToken";
 import { Alert } from "../components/Alert";
@@ -30,6 +32,22 @@ function loadMessage(error: unknown, what: string): string {
   if (error instanceof ApiError && error.code === "network") return error.message;
   if (error instanceof ApiError && error.status === 401) return "Your session expired. Sign in again.";
   return `We couldn't load ${what}.`;
+}
+
+/** Why an imported zip was refused, in words. */
+function importMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.code === "network") return error.message;
+    if (error.code === "no_main_file")
+      return "That zip has no main.tex, and no single .tex file at its top level with \\documentclass. Add a main.tex next to the other files and try again.";
+    if (error.code === "invalid_archive" || error.status === 415) return "That file isn't a zip we can read. Choose a .zip of your LaTeX project.";
+    if (error.code === "main_too_large") return "The main .tex file in that zip is too long. It can be up to 100,000 characters of UTF-8 text.";
+    if (error.code === "workspace_limit_reached") return "You have the most documents you can keep. Delete one, then import again.";
+    if (error.status === 413) return "That project is too large. A zip can be up to 12 MB, and unpack to at most 10 MB in 500 files.";
+    if (error.status === 429) return "You're creating documents too quickly. Wait a moment and try again.";
+    if (error.status === 401) return "Your session expired. Sign in again.";
+  }
+  return "We couldn't import the project. Try again.";
 }
 
 const ROLE_LABELS: Record<Workspace["role"], string> = {
@@ -51,6 +69,8 @@ export function Home() {
   const [domain, setDomain] = useState<Domain | "all">("all");
   const [starting, setStarting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const zipPicker = useRef<HTMLInputElement>(null);
   const name = user?.displayName?.trim() || fallbackName(user?.email ?? null);
   const initials = name
     .split(/\s+/)
@@ -106,6 +126,26 @@ export function Home() {
             : "We couldn't create the document. Try again.",
       );
       setStarting(null);
+    }
+  }
+
+  async function importZip(zip: File) {
+    setError(null);
+    if (!zip.name.toLowerCase().endsWith(".zip")) {
+      setError("Choose a .zip file of your LaTeX project.");
+      return;
+    }
+    if (zip.size > MAX_UPLOAD_BYTES) {
+      setError(importMessage(new ApiError(413, "body_too_large", "")));
+      return;
+    }
+    setImporting(true);
+    try {
+      const created = await importProject(await idToken(), zip);
+      void navigate(`/editor/${created.id}`, { state: { skipped: created.skipped } });
+    } catch (caught) {
+      setError(importMessage(caught));
+      setImporting(false);
     }
   }
 
@@ -175,9 +215,37 @@ export function Home() {
         </div>
 
         <section aria-labelledby="documents-heading" aria-busy={documents.state === "loading"} className="mt-10">
-          <h2 id="documents-heading" className="text-lg font-semibold">
-            Your documents
-          </h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 id="documents-heading" className="text-lg font-semibold">
+              Your documents
+            </h2>
+            <Button
+              variant="secondary"
+              className="!h-9 !w-auto"
+              loading={importing}
+              onClick={() => zipPicker.current?.click()}
+              title="Make a new document from a .zip of a LaTeX project, such as one downloaded from Overleaf"
+              icon={
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
+                </svg>
+              }
+            >
+              Upload project
+            </Button>
+            <input
+              ref={zipPicker}
+              type="file"
+              hidden
+              accept=".zip,application/zip"
+              aria-label="Choose a project .zip to upload"
+              onChange={(event) => {
+                const zip = event.target.files?.[0];
+                event.target.value = "";
+                if (zip) void importZip(zip);
+              }}
+            />
+          </div>
           {documents.state === "loading" ? (
             <p role="status" className="mt-3 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
               <Spinner /> Loading your documents…

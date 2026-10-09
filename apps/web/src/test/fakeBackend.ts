@@ -1,4 +1,24 @@
-import { characterCount, type Insights, type Invite, type LatexDocument, type Member, type Role, type Template, type Workspace } from "../api/editorTypes";
+import {
+  characterCount,
+  kindForPath,
+  MAX_FILE_BYTES,
+  MAX_PROJECT_BYTES,
+  MAX_PROJECT_ENTRIES,
+  MAX_TEXT_FILE_BYTES,
+  MAX_UPLOAD_BYTES,
+  pathProblem,
+  type FileListing,
+  type Insights,
+  type Invite,
+  type LatexDocument,
+  type Member,
+  type ProjectFile,
+  type ProjectOutput,
+  type Role,
+  type Template,
+  type Workspace,
+} from "../api/editorTypes";
+import { readZip, writeZip, type ZipEntry } from "./zip";
 
 /**
  * An in-memory stand-in for the gateway's editor endpoints (workspaces,
@@ -15,12 +35,103 @@ export interface FakeAnswer {
   headers?: Record<string, string>;
 }
 
+interface StoredFile {
+  file: ProjectFile;
+  /** Text files. */
+  text: string | null;
+  /** Binary files. */
+  bytes: Uint8Array | null;
+}
+
 interface StoredWorkspace {
   workspace: Omit<Workspace, "role">;
   members: Map<string, Role>;
   since: Map<string, string>;
   document: Omit<LatexDocument, "workspace_id" | "role" | "insights"> | null;
+  files: StoredFile[];
+  output: { bytes: Uint8Array; info: ProjectOutput } | null;
 }
+
+/** One part of a multipart body that carried a file. */
+export interface FakeUpload {
+  field: string;
+  name: string;
+  type: string;
+  bytes: Uint8Array;
+}
+
+/** A multipart/form-data body, as each test harness decodes it. */
+export interface FakeForm {
+  form: true;
+  fields: Record<string, string>;
+  files: FakeUpload[];
+  /** Bytes of the whole body. */
+  size: number;
+}
+
+export function isFakeForm(body: unknown): body is FakeForm {
+  return typeof body === "object" && body !== null && (body as { form?: unknown }).form === true;
+}
+
+/** What POST /workspaces/:id/compile hands the compiler. */
+export interface FakeCompileInput {
+  latex_source: string;
+  engine: "pdflatex";
+  files: { path: string; content_base64: string }[];
+}
+
+/** A one-page PDF, enough to stand for a compile's output. */
+export const TINY_PDF = new TextEncoder().encode(
+  "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n",
+);
+
+export function toBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
+
+export function fromBase64(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+const utf8 = (text: string) => new TextEncoder().encode(text);
+
+const CONTENT_TYPES: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", pdf: "application/pdf", eps: "application/postscript" };
+
+function contentTypeFor(path: string): string {
+  const extension = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
+  return CONTENT_TYPES[extension] ?? "text/plain; charset=utf-8";
+}
+
+function startsWith(bytes: Uint8Array, prefix: number[]): boolean {
+  return prefix.every((byte, index) => bytes[index] === byte);
+}
+
+/** The bytes look like what the extension says (PNG, JPEG, PDF, EPS). */
+function magicMatches(path: string, bytes: Uint8Array): boolean {
+  const extension = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
+  if (extension === "png") return startsWith(bytes, [0x89, 0x50, 0x4e, 0x47]);
+  if (extension === "jpg" || extension === "jpeg") return startsWith(bytes, [0xff, 0xd8, 0xff]);
+  if (extension === "pdf") return startsWith(bytes, [...utf8("%PDF-")]);
+  return startsWith(bytes, [...utf8("%!PS")]);
+}
+
+/** UTF-8 text with no control characters but tab, CR and LF; null otherwise. */
+function decodeText(bytes: Uint8Array): string | null {
+  try {
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    // eslint-disable-next-line no-control-regex
+    return /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(text) ? null : text;
+  } catch {
+    return null;
+  }
+}
+
+const lower = (path: string) => path.toLowerCase();
 
 interface StoredInvite {
   invite: Invite;
@@ -182,6 +293,294 @@ export function createFakeBackend(templates: readonly Template[]) {
     return { status: 201, body: { ...created?.invite, token } };
   }
 
+  let compiler: (input: FakeCompileInput, uid: string) => FakeAnswer = () => ({ status: 200, body: { status: "compiled", pdf_base64: toBase64(TINY_PDF), log: "" } });
+
+  const find = (stored: StoredWorkspace, path: string) => stored.files.find((entry) => lower(entry.file.path) === lower(path));
+  const sizeOf = (entry: StoredFile) => (entry.text !== null ? utf8(entry.text).length : (entry.bytes?.length ?? 0));
+
+  function listing(stored: StoredWorkspace, role: Role): FileListing {
+    const doc = stored.document;
+    const files = [...stored.files].sort((a, b) => (a.file.path < b.file.path ? -1 : a.file.path > b.file.path ? 1 : 0)).map((entry) => entry.file);
+    return {
+      workspace_id: stored.workspace.id,
+      role,
+      main: { path: "main.tex", version: doc?.version ?? 0, size: utf8(doc?.source ?? "").length, updated_at: doc?.updated_at ?? null },
+      files,
+      output: stored.output?.info ?? null,
+      usage: { bytes: stored.files.reduce((sum, entry) => sum + sizeOf(entry), 0), limit_bytes: MAX_PROJECT_BYTES, entries: stored.files.length, limit_entries: MAX_PROJECT_ENTRIES },
+    };
+  }
+
+  /** The folders a new path needs that don't exist yet, or why it can't be made. */
+  function parentsFor(stored: StoredWorkspace, path: string, ignore: readonly StoredFile[] = []): string[] | FakeAnswer {
+    const segments = path.split("/");
+    const missing: string[] = [];
+    for (let depth = 1; depth < segments.length; depth += 1) {
+      const parent = segments.slice(0, depth).join("/");
+      const existing = find(stored, parent);
+      if (!existing || ignore.includes(existing)) missing.push(parent);
+      else if (existing.file.kind !== "folder") return error(409, "file_exists", `${existing.file.path} is a file, not a folder`);
+    }
+    return missing;
+  }
+
+  function checkPath(path: unknown): FakeAnswer | null {
+    if (typeof path !== "string") return error(400, "invalid_path", "path is required");
+    const problem = pathProblem(path);
+    if (!problem) return null;
+    return error(400, problem.endsWith("is reserved for the project.") ? "reserved_path" : "invalid_path", problem);
+  }
+
+  function fits(stored: StoredWorkspace, addedBytes: number, addedEntries: number): FakeAnswer | null {
+    const now = listing(stored, "owner").usage;
+    if (now.entries + addedEntries > MAX_PROJECT_ENTRIES) return error(413, "project_full", `A project can hold up to ${MAX_PROJECT_ENTRIES} files and folders`);
+    if (now.bytes + addedBytes > MAX_PROJECT_BYTES) return error(413, "project_full", "A project can hold up to 10 MiB of files");
+    return null;
+  }
+
+  function addEntry(stored: StoredWorkspace, path: string, kind: ProjectFile["kind"], content: { text?: string; bytes?: Uint8Array }, uid: string): StoredFile {
+    const at = now();
+    const entry: StoredFile = {
+      file: { id: newId(), path, kind, size: 0, content_type: kind === "folder" ? "" : contentTypeFor(path), version: 1, created_at: at, updated_at: at, updated_by: uid },
+      text: content.text ?? null,
+      bytes: content.bytes ?? null,
+    };
+    entry.file.size = sizeOf(entry);
+    stored.files.push(entry);
+    return entry;
+  }
+
+  function withContent(entry: StoredFile) {
+    return entry.text !== null ? { ...entry.file, content: entry.text } : entry.file;
+  }
+
+  /** Checks one file's name and bytes; returns its text for a text file. */
+  function checkUpload(path: string, bytes: Uint8Array): { kind: "text" | "binary"; text?: string } | FakeAnswer {
+    const kind = kindForPath(path);
+    if (!kind) return error(415, "unsupported_file_type", `${path}: this type of file can't be added to a project`);
+    if (bytes.length > MAX_FILE_BYTES) return error(413, "file_too_large", `${path} is over 5 MiB`);
+    if (kind === "binary") return magicMatches(path, bytes) ? { kind } : error(415, "unsupported_file_type", `${path} is not the kind of file its name says`);
+    if (bytes.length > MAX_TEXT_FILE_BYTES) return error(413, "file_too_large", `${path} is over 1 MiB of text`);
+    const text = decodeText(bytes);
+    return text === null ? error(400, "invalid_text", `${path} is not UTF-8 text`) : { kind, text };
+  }
+
+  function filesRoute(stored: StoredWorkspace, role: Role, uid: string, route: string, item: string | undefined, raw: boolean, method: string, body: unknown): FakeAnswer {
+    const writer = role === "owner" || role === "editor";
+    const forbidden = () => error(403, "edit_forbidden", "You can view this project but not change it");
+
+    if (route === "archive" && method === "GET") {
+      const entries: ZipEntry[] = [{ name: "main.tex", data: utf8(stored.document?.source ?? "") }];
+      for (const entry of listing(stored, role).files.map((file) => stored.files.find((candidate) => candidate.file === file))) {
+        if (!entry) continue;
+        entries.push({ name: entry.file.kind === "folder" ? `${entry.file.path}/` : entry.file.path, data: entry.text !== null ? utf8(entry.text) : (entry.bytes ?? new Uint8Array()) });
+      }
+      if (stored.output) entries.push({ name: "output.pdf", data: stored.output.bytes });
+      const title = stored.workspace.title.replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "project";
+      return { status: 200, body: writeZip(entries), headers: { "Content-Type": "application/zip", "Content-Disposition": `attachment; filename="${title}.zip"` } };
+    }
+    if (route === "output.pdf" && method === "GET") {
+      if (!stored.output) return error(404, "not_found", "This project has not compiled yet");
+      return { status: 200, body: stored.output.bytes, headers: { "Content-Type": "application/pdf", "Content-Disposition": "attachment; filename=\"output.pdf\"" } };
+    }
+    if (route === "compile" && method === "POST") {
+      const files = [...stored.files]
+        .sort((a, b) => (a.file.path < b.file.path ? -1 : 1))
+        .filter((entry) => entry.file.kind !== "folder")
+        .map((entry) => ({ path: entry.file.path, content_base64: toBase64(entry.text !== null ? utf8(entry.text) : (entry.bytes ?? new Uint8Array())) }));
+      const answer = compiler({ latex_source: stored.document?.source ?? "", engine: "pdflatex", files }, uid);
+      const result = answer.body as { status?: unknown; pdf_base64?: unknown } | undefined;
+      if (answer.status === 200 && result?.status === "compiled" && typeof result.pdf_base64 === "string") {
+        const bytes = fromBase64(result.pdf_base64);
+        stored.output = { bytes, info: { size: bytes.length, compiled_at: now(), compiled_by: uid, status: "compiled" } };
+      }
+      return answer;
+    }
+    if (route !== "files") return error(405, "method_not_allowed", "Method not allowed");
+
+    if (!item) {
+      if (method === "GET") return { status: 200, body: listing(stored, role) };
+      if (method !== "POST") return error(405, "method_not_allowed", "Method not allowed");
+      if (!writer) return forbidden();
+      const request = body as { path?: unknown; kind?: unknown; content?: unknown } | null;
+      const invalid = checkPath(request?.path);
+      if (invalid) return invalid;
+      const path = request?.path as string;
+      if (request?.kind !== "text" && request?.kind !== "folder") return error(400, "invalid_body", "kind must be text or folder");
+      if (request.content !== undefined && (typeof request.content !== "string" || request.kind === "folder")) return error(400, "invalid_body", "content must be a string, for a text file");
+      if (find(stored, path)) return error(409, "file_exists", `${path} already exists`);
+      let text: string | undefined;
+      if (request.kind === "text") {
+        if (kindForPath(path) !== "text") return error(415, "unsupported_file_type", "A text file needs a text extension such as .tex or .bib");
+        const checked = checkUpload(path, utf8(typeof request.content === "string" ? request.content : ""));
+        if ("status" in checked) return checked;
+        text = checked.text;
+      }
+      const parents = parentsFor(stored, path);
+      if (!Array.isArray(parents)) return parents;
+      const full = fits(stored, text === undefined ? 0 : utf8(text).length, parents.length + 1);
+      if (full) return full;
+      for (const parent of parents) addEntry(stored, parent, "folder", {}, uid);
+      const created = addEntry(stored, path, request.kind, text === undefined ? {} : { text }, uid);
+      return { status: 201, body: withContent(created) };
+    }
+
+    if (item === "upload") {
+      if (method !== "POST") return error(405, "method_not_allowed", "Method not allowed");
+      if (!writer) return forbidden();
+      if (!isFakeForm(body)) return error(400, "invalid_body", "Send multipart/form-data");
+      if (body.size > MAX_UPLOAD_BYTES) return error(413, "body_too_large", "Uploads can be up to 12 MiB at once");
+      const folder = body.fields.folder ?? "";
+      const replace = body.fields.replace === "true";
+      if (folder) {
+        const invalid = checkPath(folder);
+        if (invalid) return invalid;
+      }
+      const uploads = body.files.filter((part) => part.field === "file");
+      if (uploads.length === 0) return error(400, "invalid_body", "Add at least one file");
+      const planned: { path: string; kind: "text" | "binary"; text?: string; bytes: Uint8Array; existing?: StoredFile }[] = [];
+      for (const upload of uploads) {
+        const path = folder ? `${folder}/${upload.name}` : upload.name;
+        const invalid = checkPath(path);
+        if (invalid) return invalid;
+        const checked = checkUpload(path, upload.bytes);
+        if ("status" in checked) return checked;
+        const existing = find(stored, path);
+        if (existing && (!replace || existing.file.kind !== checked.kind)) return error(409, "file_exists", `${existing.file.path} already exists`, { path: existing.file.path });
+        if (planned.some((entry) => lower(entry.path) === lower(path))) return error(409, "file_exists", `${path} is in the upload twice`);
+        planned.push({ path, kind: checked.kind, bytes: upload.bytes, ...(checked.text === undefined ? {} : { text: checked.text }), ...(existing ? { existing } : {}) });
+      }
+      const parents = folder ? parentsFor(stored, `${folder}/x`) : [];
+      if (!Array.isArray(parents)) return parents;
+      const added = planned.reduce((sum, entry) => sum + entry.bytes.length - (entry.existing ? sizeOf(entry.existing) : 0), 0);
+      const full = fits(stored, added, parents.length + planned.filter((entry) => !entry.existing).length);
+      if (full) return full;
+      for (const parent of parents) addEntry(stored, parent, "folder", {}, uid);
+      const files = planned.map((entry) => {
+        const content = entry.kind === "text" ? { text: entry.text ?? "" } : { bytes: entry.bytes };
+        if (!entry.existing) return addEntry(stored, entry.path, entry.kind, content, uid).file;
+        entry.existing.text = content.text ?? null;
+        entry.existing.bytes = content.bytes ?? null;
+        Object.assign(entry.existing.file, { size: sizeOf(entry.existing), version: entry.existing.file.version + 1, updated_at: now(), updated_by: uid });
+        return entry.existing.file;
+      });
+      return { status: 201, body: { files } };
+    }
+
+    const entry = stored.files.find((candidate) => candidate.file.id === item);
+    if (!entry) return error(404, "not_found", "No such file");
+    if (raw) {
+      if (method !== "GET") return error(405, "method_not_allowed", "Method not allowed");
+      if (entry.file.kind === "folder") return error(400, "not_a_file", "A folder has no content");
+      const image = entry.file.content_type.startsWith("image/");
+      const name = entry.file.path.slice(entry.file.path.lastIndexOf("/") + 1);
+      return {
+        status: 200,
+        body: entry.text !== null ? utf8(entry.text) : (entry.bytes ?? new Uint8Array()),
+        headers: { "Content-Type": entry.file.content_type, "X-Content-Type-Options": "nosniff", "Content-Disposition": `${image ? "inline" : "attachment"}; filename="${name}"` },
+      };
+    }
+    if (method === "GET") return { status: 200, body: withContent(entry) };
+    if (!writer) return forbidden();
+    if (method === "PUT") {
+      if (entry.file.kind !== "text") return error(400, "not_a_text_file", "Only text files can be edited");
+      const save = body as { content?: unknown; base_version?: unknown } | null;
+      if (typeof save?.content !== "string" || typeof save.base_version !== "number") return error(400, "invalid_body", "Send content and base_version");
+      const checked = checkUpload(entry.file.path, utf8(save.content));
+      if ("status" in checked) return checked;
+      if (save.base_version !== entry.file.version) return error(409, "version_conflict", "The file changed since base_version", { current_version: entry.file.version });
+      const full = fits(stored, utf8(save.content).length - sizeOf(entry), 0);
+      if (full) return full;
+      entry.text = save.content;
+      Object.assign(entry.file, { size: sizeOf(entry), version: entry.file.version + 1, updated_at: now(), updated_by: uid });
+      return { status: 200, body: withContent(entry) };
+    }
+    if (method === "PATCH") {
+      const target = (body as { path?: unknown } | null)?.path;
+      const invalid = checkPath(target);
+      if (invalid) return invalid;
+      const path = target as string;
+      const from = entry.file.path;
+      const children = entry.file.kind === "folder" ? stored.files.filter((candidate) => lower(candidate.file.path).startsWith(`${lower(from)}/`)) : [];
+      if (entry.file.kind === "folder" && lower(path).startsWith(`${lower(from)}/`)) return error(400, "invalid_path", "A folder can't move into itself");
+      if (entry.file.kind !== "folder" && kindForPath(path) !== entry.file.kind) return error(415, "unsupported_file_type", "Keep the file's type when renaming it");
+      const moving = [entry, ...children];
+      const clash = find(stored, path);
+      if (clash && clash !== entry) return error(409, "file_exists", `${clash.file.path} already exists`);
+      for (const child of children) {
+        const problem = checkPath(path + child.file.path.slice(from.length));
+        if (problem) return problem;
+      }
+      const parents = parentsFor(stored, path, moving);
+      if (!Array.isArray(parents)) return parents;
+      const full = fits(stored, 0, parents.length);
+      if (full) return full;
+      for (const parent of parents) addEntry(stored, parent, "folder", {}, uid);
+      const at = now();
+      for (const moved of moving) Object.assign(moved.file, { path: path + moved.file.path.slice(from.length), updated_at: at, updated_by: uid });
+      return { status: 200, body: entry.file };
+    }
+    if (method === "DELETE") {
+      const prefix = `${lower(entry.file.path)}/`;
+      stored.files = stored.files.filter((candidate) => candidate !== entry && !(entry.file.kind === "folder" && lower(candidate.file.path).startsWith(prefix)));
+      return { status: 204 };
+    }
+    return error(405, "method_not_allowed", "Method not allowed");
+  }
+
+  function importRoute(uid: string, body: unknown): FakeAnswer {
+    if (!isFakeForm(body)) return error(400, "invalid_body", "Send multipart/form-data");
+    const zip = body.files.find((part) => part.field === "file");
+    if (!zip) return error(400, "invalid_body", "Add the project's .zip as file");
+    if (body.size > MAX_UPLOAD_BYTES) return error(413, "body_too_large", "A project zip can be up to 12 MiB");
+    let entries: ZipEntry[];
+    try {
+      entries = readZip(zip.bytes);
+    } catch {
+      return error(400, "invalid_archive", "That isn't a zip file we can read");
+    }
+    if (entries.length > 500) return error(413, "project_full", "A project zip can hold up to 500 entries");
+    if (entries.reduce((sum, entry) => sum + entry.data.length, 0) > MAX_PROJECT_BYTES) return error(413, "project_full", "A project can unpack to at most 10 MiB");
+    const roots = entries.filter((entry) => !entry.name.includes("/") && entry.name.toLowerCase().endsWith(".tex"));
+    const main =
+      roots.find((entry) => entry.name === "main.tex") ??
+      (() => {
+        const candidates = roots.filter((entry) => (decodeText(entry.data) ?? "").includes("\\documentclass"));
+        return candidates.length === 1 ? candidates[0] : undefined;
+      })();
+    const source = main ? decodeText(main.data) : null;
+    if (!main || source === null) return error(400, "no_main_file", "The zip needs a main.tex, or one .tex file with \\documentclass at its top level");
+    const title = body.fields.title?.trim() || zip.name.replace(/\.zip$/i, "") || "Imported project";
+    const id = backend.seed(uid, title, { source });
+    const stored = workspaces.get(id);
+    if (!stored) return error(503, "unavailable", "lost");
+    const skipped: string[] = [];
+    for (const entry of entries) {
+      if (entry === main) continue;
+      const folder = entry.name.endsWith("/");
+      const path = folder ? entry.name.slice(0, -1) : entry.name;
+      const hidden = path.split("/").some((segment) => segment.startsWith(".") || segment === "__MACOSX");
+      if (hidden || pathProblem(path) || find(stored, path)) {
+        if (!folder) skipped.push(entry.name);
+        continue;
+      }
+      if (folder) {
+        const parents = parentsFor(stored, path);
+        if (Array.isArray(parents)) for (const parent of [...parents, path]) addEntry(stored, parent, "folder", {}, uid);
+        continue;
+      }
+      const checked = checkUpload(path, entry.data);
+      const parents = parentsFor(stored, path);
+      if ("status" in checked || !Array.isArray(parents) || fits(stored, entry.data.length, parents.length + 1)) {
+        skipped.push(entry.name);
+        continue;
+      }
+      for (const parent of parents) addEntry(stored, parent, "folder", {}, uid);
+      addEntry(stored, path, checked.kind, checked.kind === "text" ? { text: checked.text ?? "" } : { bytes: entry.data }, uid);
+    }
+    return { status: 201, body: { ...view(stored, "owner"), skipped } };
+  }
+
   const backend = {
     requests,
 
@@ -196,8 +595,46 @@ export function createFakeBackend(templates: readonly Template[]) {
         since: new Map([ownerUid, ...members.keys()].map((uid) => [uid, created])),
         document:
           options.source === undefined ? null : { source: options.source, template_id: options.templateId ?? null, version: 1, updated_at: now(), updated_by: ownerUid },
+        files: [],
+        output: null,
       });
       return id;
+    },
+
+    /** Adds a text file (string) or binary file (bytes) to a project, with its folders. Returns its id. */
+    addFile(id: string, path: string, content: string | Uint8Array | null, uid?: string): string {
+      const stored = workspaces.get(id);
+      if (!stored) throw new Error(`no workspace ${id}`);
+      const by = uid ?? stored.workspace.owner_id;
+      const parents = parentsFor(stored, path);
+      if (!Array.isArray(parents)) throw new Error(`can't add ${path}`);
+      for (const parent of parents) addEntry(stored, parent, "folder", {}, by);
+      if (content === null) return addEntry(stored, path, "folder", {}, by).file.id;
+      return addEntry(stored, path, typeof content === "string" ? "text" : "binary", typeof content === "string" ? { text: content } : { bytes: content }, by).file.id;
+    },
+
+    /** Someone else saves a text file (moves its version on). */
+    saveFileAs(uid: string, id: string, path: string, content: string) {
+      const entry = workspaces.get(id)?.files.find((candidate) => candidate.file.path === path);
+      if (!entry) throw new Error(`no file ${path}`);
+      entry.text = content;
+      Object.assign(entry.file, { size: utf8(content).length, version: entry.file.version + 1, updated_at: now(), updated_by: uid });
+    },
+
+    /** The project's files by path: text content, bytes, or null for a folder. */
+    files(id: string): Record<string, string | Uint8Array | null> {
+      const stored = workspaces.get(id);
+      return Object.fromEntries((stored?.files ?? []).map((entry) => [entry.file.path, entry.file.kind === "folder" ? null : (entry.text ?? entry.bytes)]));
+    },
+
+    /** The stored output.pdf, if any. */
+    output(id: string): Uint8Array | null {
+      return workspaces.get(id)?.output?.bytes ?? null;
+    },
+
+    /** What POST /workspaces/:id/compile answers (default: a compiled one-page PDF). */
+    setCompiler(next: (input: FakeCompileInput, uid: string) => FakeAnswer) {
+      compiler = next;
     },
 
     /** Someone else saves the document (moves its version on). */
@@ -333,6 +770,15 @@ export function createFakeBackend(templates: readonly Template[]) {
         target.since.set(uid, now());
         found.invite.uses += 1;
         return { status: 200, body: { workspace_id: found.workspaceId, role: found.invite.role, changed: true } };
+      }
+
+      if (path === "/api/v1/workspaces/import" && method === "POST") return importRoute(uid, request.body);
+      const project = /^\/api\/v1\/workspaces\/([^/]+)\/(files|archive|compile|output\.pdf)(?:\/([^/]+)(\/raw)?)?$/.exec(path);
+      if (project) {
+        const stored = workspaces.get(project[1] ?? "");
+        const role = stored ? roleOf(stored, uid) : null;
+        if (!stored || !role) return error(404, "not_found", "Workspace not found");
+        return filesRoute(stored, role, uid, project[2] ?? "", project[3], Boolean(project[4]), method, request.body);
       }
 
       const sharing = /^\/api\/v1\/workspaces\/([^/]+)\/(members|invites|invite-options)(?:\/([^/]+))?$/.exec(path);

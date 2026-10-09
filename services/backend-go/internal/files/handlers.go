@@ -113,6 +113,8 @@ func storeError(c *gin.Context, err error) {
 		fail(c, http.StatusBadRequest, "not_a_text_file", "Only text files can be edited")
 	case errors.Is(err, ErrInvalidMove):
 		fail(c, http.StatusBadRequest, "invalid_path", "A folder cannot move into itself, and paths must stay within the limits")
+	case errors.Is(err, ErrTypeChange):
+		fail(c, http.StatusUnsupportedMediaType, "unsupported_file_type", "A renamed file keeps its type: a text file needs a text extension, an image its own")
 	case errors.Is(err, ErrNoOutput):
 		fail(c, http.StatusNotFound, "no_output", "The project has not been compiled yet")
 	case errors.Is(err, workspace.ErrLimitReached):

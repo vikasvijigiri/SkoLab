@@ -66,6 +66,7 @@ var (
 	ErrInvalidMove   = errors.New("a folder cannot move into itself")
 	ErrUnavailable   = errors.New("file store unavailable")
 	ErrNoOutput      = errors.New("the project has not been compiled")
+	ErrTypeChange    = errors.New("a renamed file keeps its type")
 	errBadText       = errors.New("not valid text")
 	errUnsupported   = errors.New("unsupported file type")
 	errContentLooks  = errors.New("content does not match the file type")
@@ -180,6 +181,23 @@ var binaryTypes = map[string]struct {
 	"jpeg": {"image/jpeg", []byte("\xff\xd8\xff")},
 	"pdf":  {"application/pdf", []byte("%PDF-")},
 	"eps":  {"application/postscript", []byte("%!PS")},
+}
+
+// renamedType is the content type a file of this kind and content type has
+// once renamed to target: a text file may take any text extension, an image
+// or PDF only one of its own type, so stored bytes always match their name.
+func renamedType(kind, contentType, target string) (string, bool) {
+	ext := extension(target)
+	switch kind {
+	case KindFolder:
+		return contentType, true
+	case KindText:
+		t, ok := textTypes[ext]
+		return t, ok
+	default:
+		b, ok := binaryTypes[ext]
+		return contentType, ok && b.contentType == contentType
+	}
 }
 
 func extension(p string) string {

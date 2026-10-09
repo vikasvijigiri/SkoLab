@@ -219,6 +219,7 @@ func TestStoreErrorsMapToTheContract(t *testing.T) {
 		ErrFull:                      {http.StatusRequestEntityTooLarge, "project_full"},
 		ErrNotText:                   {http.StatusBadRequest, "not_a_text_file"},
 		ErrInvalidMove:               {http.StatusBadRequest, "invalid_path"},
+		ErrTypeChange:                {http.StatusUnsupportedMediaType, "unsupported_file_type"},
 		ErrNoOutput:                  {http.StatusNotFound, "no_output"},
 		workspace.ErrLimitReached:    {http.StatusForbidden, "workspace_limit_reached"},
 		workspace.ErrProfileRequired: {http.StatusConflict, "profile_required"},

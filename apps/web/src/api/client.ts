@@ -22,16 +22,18 @@ interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   token?: string | null;
   headers?: Record<string, string>;
+  /** Sent as JSON, or as multipart when it is FormData (the browser sets that Content-Type and its boundary). */
   body?: unknown;
   signal?: AbortSignal;
   /** Defaults to 15 seconds; a compile may run up to the backend's own limit. */
   timeoutMs?: number;
 }
 
-/** JSON request to the gateway. Throws ApiError for any non-2xx answer. */
-export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const headers: Record<string, string> = { Accept: "application/json", ...options.headers };
-  if (options.body !== undefined) headers["Content-Type"] = "application/json";
+/** Sends a request to the gateway and returns its 2xx answer. Throws ApiError for anything else. */
+async function send(path: string, options: RequestOptions, accept: string): Promise<Response> {
+  const headers: Record<string, string> = { Accept: accept, ...options.headers };
+  const form = options.body instanceof FormData;
+  if (options.body !== undefined && !form) headers["Content-Type"] = "application/json";
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
 
   const timeout = AbortSignal.timeout(options.timeoutMs ?? TIMEOUT_MS);
@@ -40,7 +42,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     response = await fetch(`${config.apiBaseUrl}${path}`, {
       method: options.method ?? "GET",
       headers,
-      body: options.body === undefined ? null : JSON.stringify(options.body),
+      body: options.body === undefined ? null : form ? (options.body as FormData) : JSON.stringify(options.body),
       signal: options.signal ? AbortSignal.any([options.signal, timeout]) : timeout,
       credentials: "omit",
     });
@@ -49,9 +51,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     throw new ApiError(0, "network", "We couldn't reach SkoLab. Check your connection and try again.");
   }
 
-  if (response.status === 204) return undefined as T;
-  const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
+    const payload: unknown = await response.json().catch(() => null);
     const body = (typeof payload === "object" && payload !== null ? payload : {}) as Record<string, unknown>;
     throw new ApiError(
       response.status,
@@ -60,5 +61,19 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       body,
     );
   }
+  return response;
+}
+
+/** JSON request to the gateway. Throws ApiError for any non-2xx answer. */
+export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const response = await send(path, options, "application/json");
+  if (response.status === 204) return undefined as T;
+  const payload: unknown = await response.json().catch(() => null);
   return payload as T;
+}
+
+/** A request whose answer is a file (a PDF, an image, a zip). Errors still arrive as JSON. */
+export async function apiBlob(path: string, options: RequestOptions = {}): Promise<Blob> {
+  const response = await send(path, options, "*/*");
+  return response.blob();
 }

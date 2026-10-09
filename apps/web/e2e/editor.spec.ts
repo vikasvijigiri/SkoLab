@@ -1,21 +1,23 @@
 import { readFileSync } from "node:fs";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
+import type { FakeBackend, FakeCompileInput } from "../src/test/fakeBackend";
+import { readZip, writeZip } from "../src/test/zip";
 import { expect, expectAccessible, serveBackend, test, verifyEmail } from "./fixtures";
 
 // A real pdflatex output (the AMS article template, compiled by the production image).
 const PDF = readFileSync(new URL("./assets/ams-article.pdf", import.meta.url)).toString("base64");
 
 interface CompileCall {
-  authorization: string | null;
-  body: { latex_source: string; engine: string };
+  authorization: string;
+  body: FakeCompileInput;
 }
 
-async function stubCompile(page: Page, answer: (call: number) => object = () => ({ status: "compiled", pdf_base64: PDF, log: "" })) {
+/** Answers POST /workspaces/:id/compile, which hands the compiler main.tex and every project file. */
+function stubCompile(backend: FakeBackend, answer: (call: number) => object = () => ({ status: "compiled", pdf_base64: PDF, log: "" })) {
   const calls: CompileCall[] = [];
-  await page.route("**/__api/api/v1/colab/compile", async (route) => {
-    const request = route.request();
-    calls.push({ authorization: await request.headerValue("authorization"), body: request.postDataJSON() as CompileCall["body"] });
-    await route.fulfill({ json: answer(calls.length) });
+  backend.setCompiler((input, uid) => {
+    calls.push({ authorization: `Bearer fake-token:${uid}`, body: input });
+    return { status: 200, body: answer(calls.length) };
   });
   return calls;
 }
@@ -27,7 +29,7 @@ async function signIn(page: Page) {
 }
 
 test("a journal template opens in the editor, compiles, previews and saves to the account", async ({ page, profileCalls, backend, isMobile }) => {
-  const calls = await stubCompile(page);
+  const calls = stubCompile(backend);
   await signIn(page);
   await page.getByRole("button", { name: "Mathematics" }).click();
   await page.getByRole("button", { name: "Use the AMS Journal Article (amsart) template" }).click();
@@ -67,7 +69,7 @@ test("a journal template opens in the editor, compiles, previews and saves to th
 });
 
 test("a co-author's save is not overwritten", async ({ page, profileCalls, backend, isMobile }) => {
-  await stubCompile(page);
+  stubCompile(backend);
   await signIn(page);
   await page.getByRole("button", { name: "Use the Nature template" }).click();
   await expect(page.getByRole("img", { name: "Page 1 of 1" })).toBeVisible();
@@ -86,7 +88,7 @@ test("a co-author's save is not overwritten", async ({ page, profileCalls, backe
 });
 
 test("a shared document opens read-only for a viewer", async ({ page, profileCalls, backend, isMobile }) => {
-  await stubCompile(page);
+  stubCompile(backend);
   const id = backend.seed("grace", "Grace's paper", { source: "\\documentclass{amsart}\n\\begin{document}\nShared\n\\end{document}\n", templateId: "ams-article", members: { "google-ada": "viewer" } });
   await signIn(page);
   await expect(page.getByText("Can view · created")).toBeVisible();
@@ -101,8 +103,8 @@ test("a shared document opens read-only for a viewer", async ({ page, profileCal
   expect(profileCalls.length).toBeGreaterThan(0);
 });
 
-test("compile errors point at their line", async ({ page, profileCalls, isMobile }) => {
-  await stubCompile(page, (call) =>
+test("compile errors point at their line", async ({ page, profileCalls, backend, isMobile }) => {
+  stubCompile(backend, (call) =>
     call === 1
       ? { status: "compiled", pdf_base64: PDF, log: "" }
       : { status: "error", errors: ["line 2: Undefined control sequence."], log: "./main.tex:2: Undefined control sequence." },
@@ -119,8 +121,8 @@ test("compile errors point at their line", async ({ page, profileCalls, isMobile
 });
 
 for (const scheme of ["light", "dark"] as const) {
-  test(`the home page and editor meet WCAG 2.2 AA in ${scheme} mode`, async ({ page, profileCalls }) => {
-    await stubCompile(page);
+  test(`the home page and editor meet WCAG 2.2 AA in ${scheme} mode`, async ({ page, profileCalls, backend }) => {
+    stubCompile(backend);
     await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
     await signIn(page);
     await expect(page.getByText("You're all set")).toBeVisible();
@@ -133,9 +135,9 @@ for (const scheme of ["light", "dark"] as const) {
   });
 }
 
-test("the editor fits a phone screen", async ({ page, isMobile, profileCalls }) => {
+test("the editor fits a phone screen", async ({ page, isMobile, profileCalls, backend }) => {
   test.skip(!isMobile, "phone layout only");
-  await stubCompile(page);
+  stubCompile(backend);
   await signIn(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.getByRole("button", { name: "Use the Nature template" }).click();
@@ -158,7 +160,7 @@ Magnons carry spin~\\cite{kittel}.
 `;
 
 test("the overview shows progress, and a co-author joins through an invite link", async ({ page, backend, browser, isMobile }) => {
-  await stubCompile(page);
+  stubCompile(backend);
   const id = backend.seed("google-ada", "Spin waves", { source: MANUSCRIPT, templateId: null });
   backend.setName("google-ada", "Ada Lovelace");
   await signIn(page);
@@ -185,7 +187,6 @@ test("the overview shows progress, and a co-author joins through an invite link"
   const grace = await graceContext.newPage();
   await serveBackend(grace, backend);
   await grace.route("**/__api/api/v1/users/profile/sync", (route) => route.fulfill({ json: { status: "synced", uid: "fake" } }));
-  await grace.route("**/__api/api/v1/colab/compile", (route) => route.fulfill({ json: { status: "compiled", pdf_base64: PDF, log: "" } }));
   await grace.goto("/sign-up");
   await grace.getByLabel("Full name").fill("Grace Hopper");
   await grace.getByLabel("Email").fill("grace@example.com");
@@ -206,4 +207,127 @@ test("the overview shows progress, and a co-author joins through an invite link"
   await expect(grace.getByText("All changes saved")).toBeAttached();
   expect(backend.members(id)["uid-grace@example.com"]).toBe("editor");
   await graceContext.close();
+});
+
+// A 1×1 PNG.
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+
+/** The file list: a column on wider screens, a panel opened from the header on phones. */
+async function fileList(page: Page, isMobile: boolean): Promise<Locator> {
+  if (!isMobile) return page.getByRole("complementary", { name: "Project files" });
+  const sheet = page.getByRole("dialog", { name: "Project files" });
+  if (!(await sheet.isVisible())) await page.getByRole("button", { name: "Open project files" }).click();
+  await expect(sheet).toBeVisible();
+  return sheet;
+}
+
+test("a project holds folders, figures and chapters, compiles them together and downloads as a zip", async ({ page, backend, isMobile, profileCalls }) => {
+  const calls = stubCompile(backend);
+  const id = backend.seed("google-ada", "Spin waves", { source: MANUSCRIPT });
+  await signIn(page);
+  await page.goto(`/editor/${id}`);
+  await expect(page.getByRole("img", { name: "Page 1 of 1" })).toBeVisible();
+
+  // A folder, and a figure uploaded into it.
+  let files = await fileList(page, isMobile);
+  await files.getByRole("button", { name: "New folder", exact: true }).click();
+  await files.getByLabel("New folder name").fill("figures");
+  await files.getByLabel("New folder name").press("Enter");
+  await expect(files.getByRole("button", { name: "figures", exact: true })).toBeVisible();
+  await files.getByRole("button", { name: "Actions for figures" }).click();
+  const chooser = page.waitForEvent("filechooser");
+  await files.getByRole("button", { name: "Upload here" }).click();
+  await (await chooser).setFiles({ name: "plot.png", mimeType: "image/png", buffer: PNG });
+  await expect(files.getByRole("button", { name: "plot.png", exact: true })).toBeVisible();
+  expect(backend.files(id)["figures/plot.png"]).toEqual(new Uint8Array(PNG));
+  await expectAccessible(page);
+
+  // The figure opens as a picture.
+  await files.getByRole("button", { name: "plot.png", exact: true }).click();
+  await expect(page.getByRole("img", { name: "plot.png, a figure in this project" })).toBeVisible();
+
+  // A chapter in its own file, written in the same editor.
+  files = await fileList(page, isMobile);
+  await files.getByRole("button", { name: "New file", exact: true }).click();
+  await files.getByLabel("New file name").fill("chapters/intro.tex");
+  await files.getByLabel("New file name").press("Enter");
+  const chapter = page.getByRole("textbox", { name: "Source of chapters/intro.tex" });
+  await expect(chapter).toBeVisible();
+  await expect(page.getByTitle("Open file")).toHaveText("chapters/intro.tex");
+  await chapter.click();
+  await page.keyboard.insertText("Spin waves were first described by Bloch.\n");
+  await expect.poll(() => backend.files(id)["chapters/intro.tex"]).toBe("Spin waves were first described by Bloch.\n");
+
+  // main.tex pulls the chapter in.
+  files = await fileList(page, isMobile);
+  await files.getByRole("button", { name: /^main\.tex/ }).click();
+  const main = page.getByRole("textbox", { name: "LaTeX source" });
+  await main.click();
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("Home");
+  await page.keyboard.insertText("\\input{chapters/intro}\n");
+
+  // Compile saves first, then sends the whole project.
+  const before = calls.length;
+  await page.getByRole("button", { name: "Compile", exact: true }).click();
+  await expect.poll(() => calls.length).toBe(before + 1);
+  const sent = calls.at(-1)?.body;
+  expect(sent?.latex_source).toContain("\\input{chapters/intro}\n\\end{document}");
+  expect(sent?.files.map((file) => file.path)).toEqual(["chapters/intro.tex", "figures/plot.png"]);
+  expect(backend.document(id)?.source).toContain("\\input{chapters/intro}");
+  await expect(page.getByRole("img", { name: "Page 1 of 1" })).toBeVisible();
+
+  // The stored output.pdf is listed, and the project downloads as a zip.
+  files = await fileList(page, isMobile);
+  await expect(files.getByRole("button", { name: /^output\.pdf Compiled/ })).toBeVisible();
+  expect(backend.output(id)).not.toBeNull();
+  const downloading = page.waitForEvent("download");
+  await files.getByRole("button", { name: "Download project as .zip" }).click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toBe("Spin-waves.zip");
+  const zip = readZip(new Uint8Array(readFileSync(await download.path())));
+  expect(zip.map((entry) => entry.name)).toEqual(["main.tex", "chapters/", "chapters/intro.tex", "figures/", "figures/plot.png", "output.pdf"]);
+  await expectAccessible(page);
+  expect(profileCalls.length).toBeGreaterThan(0);
+});
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`the file list meets WCAG 2.2 AA in ${scheme} mode`, async ({ page, backend, isMobile, profileCalls }) => {
+    stubCompile(backend);
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+    const id = backend.seed("google-ada", "Spin waves", { source: MANUSCRIPT });
+    backend.addFile(id, "chapters/intro.tex", "Intro");
+    backend.addFile(id, "figures/plot.png", new Uint8Array(PNG));
+    backend.addFile(id, "refs.bib", "@book{kittel}");
+    await signIn(page);
+    await page.goto(`/editor/${id}`);
+    await expect(page.getByRole("img", { name: "Page 1 of 1" })).toBeVisible();
+    const files = await fileList(page, isMobile);
+    await files.getByRole("button", { name: "Actions for chapters/intro.tex" }).click();
+    await expect(files.getByRole("button", { name: "Rename or move" })).toBeVisible();
+    await expectAccessible(page);
+    await files.getByRole("button", { name: "New file", exact: true }).click();
+    await expect(files.getByLabel("New file name")).toBeFocused();
+    await expectAccessible(page);
+    expect(profileCalls.length).toBeGreaterThan(0);
+  });
+}
+
+test("a project zip uploaded at home opens in the editor", async ({ page, backend, profileCalls }) => {
+  stubCompile(backend);
+  await signIn(page);
+  const zip = writeZip([
+    { name: "paper.tex", data: new TextEncoder().encode(MANUSCRIPT) },
+    { name: "figures/plot.png", data: new Uint8Array(PNG) },
+    { name: "notes.docx", data: new TextEncoder().encode("PK") },
+  ]);
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Upload project" }).click();
+  await (await chooser).setFiles({ name: "Spin waves.zip", mimeType: "application/zip", buffer: Buffer.from(zip) });
+  await expect(page).toHaveURL(/\/editor\/[0-9a-f-]{36}$/);
+  await expect(page.getByLabel("Document title")).toHaveValue("Spin waves");
+  await expect(page.getByText(/One file was left out/)).toContainText("notes.docx");
+  await expect(page.getByRole("img", { name: "Page 1 of 1" })).toBeVisible();
+  expect(profileCalls.length).toBeGreaterThan(0);
 });

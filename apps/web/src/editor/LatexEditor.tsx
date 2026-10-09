@@ -3,7 +3,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirro
 import { bracketMatching, foldGutter, foldKeymap, HighlightStyle, indentOnInput, StreamLanguage, syntaxHighlighting } from "@codemirror/language";
 import { stex } from "@codemirror/legacy-modes/mode/stex";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
 import {
   crosshairCursor,
   drawSelection,
@@ -88,11 +88,20 @@ interface LatexEditorProps {
   readOnly?: boolean;
 }
 
-/** A LaTeX source editor (CodeMirror 6). Uncontrolled: initialValue and readOnly are read once (remount with a key to change them). */
+function labelAttributes(label: string, readOnly: boolean) {
+  return EditorView.contentAttributes.of(readOnly ? { "aria-label": label, "aria-readonly": "true" } : { "aria-label": label });
+}
+
+/**
+ * A LaTeX source editor (CodeMirror 6). Uncontrolled: initialValue and
+ * readOnly are read once (remount with a key to change them); the label
+ * follows its prop (a file that is renamed while open).
+ */
 export const LatexEditor = forwardRef<LatexEditorHandle, LatexEditorProps>(function LatexEditor({ initialValue, onChange, onCompile, label, readOnly = false }, ref) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const callbacks = useRef({ onChange, onCompile });
+  const labelling = useRef(new Compartment());
   useEffect(() => {
     callbacks.current = { onChange, onCompile };
   });
@@ -136,7 +145,7 @@ export const LatexEditor = forwardRef<LatexEditorHandle, LatexEditorProps>(funct
           EditorView.lineWrapping,
           theme,
           EditorState.readOnly.of(readOnly),
-          EditorView.contentAttributes.of(readOnly ? { "aria-label": label, "aria-readonly": "true" } : { "aria-label": label }),
+          labelling.current.of(labelAttributes(label, readOnly)),
           keymap.of([
             { key: "Mod-Enter", run: compile, preventDefault: true },
             { key: "Mod-s", run: compile, preventDefault: true },
@@ -164,6 +173,10 @@ export const LatexEditor = forwardRef<LatexEditorHandle, LatexEditorProps>(funct
     // initialValue and readOnly are read once by design; the editor owns the text afterwards.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    view.current?.dispatch({ effects: labelling.current.reconfigure(labelAttributes(label, readOnly)) });
+  }, [label, readOnly]);
 
   useImperativeHandle(ref, () => ({
     goToLine(line: number) {

@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { TEST_TEMPLATES } from "../test/fakeBackend";
 import { renderApp, stubBackend } from "../test/renderApp";
+import { writeZip } from "../test/zip";
 
 describe("home", () => {
   it("lets the user retry a failed profile setup, and sign out", async () => {
@@ -123,5 +124,58 @@ describe("home documents and templates", () => {
     );
     await openHome();
     expect(await screen.findAllByText(/couldn't reach SkoLab/)).toHaveLength(2);
+  });
+
+  it("uploads a project zip, opens it, and lists what it left out", async () => {
+    const { backend } = stubBackend();
+    const { user } = await openHome();
+    const text = (value: string) => new TextEncoder().encode(value);
+    const zip = writeZip([
+      { name: "paper.tex", data: text("\\documentclass{article}\\begin{document}\\input{intro}\\end{document}") },
+      { name: "intro.tex", data: text("Hello") },
+      { name: "figures/", data: new Uint8Array() },
+      { name: "figures/plot.png", data: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1]) },
+      { name: "notes.docx", data: text("PK") },
+      { name: "__MACOSX/._paper.tex", data: text("x") },
+    ]);
+    await user.upload(await screen.findByLabelText("Choose a project .zip to upload"), new File([zip], "Spin waves.zip", { type: "application/zip" }));
+    expect(await screen.findByDisplayValue("Spin waves", {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getByText(/2 files were left out because SkoLab can't use them/)).toHaveTextContent("notes.docx, __MACOSX/._paper.tex");
+    const id = /\/workspaces\/([^/]+)\/files$/.exec(backend.requests.find((request) => request.url.endsWith("/files"))?.url ?? "")?.[1] ?? "";
+    expect(backend.document(id)?.source).toContain("\\input{intro}");
+    expect(Object.keys(backend.files(id)).sort()).toEqual(["figures", "figures/plot.png", "intro.tex"]);
+    await user.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(screen.queryByText(/left out/)).not.toBeInTheDocument();
+  });
+
+  it("explains a zip it can't import", async () => {
+    const { backend } = stubBackend();
+    const { user } = await openHome();
+    const picker = await screen.findByLabelText("Choose a project .zip to upload");
+    const text = (value: string) => new TextEncoder().encode(value);
+
+    // Two candidates for the main file, and no main.tex.
+    const ambiguous = writeZip([
+      { name: "a.tex", data: text("\\documentclass{article}") },
+      { name: "b.tex", data: text("\\documentclass{article}") },
+    ]);
+    await user.upload(picker, new File([ambiguous], "two.zip", { type: "application/zip" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("That zip has no main.tex");
+
+    await user.upload(picker, new File(["not a zip"], "broken.zip", { type: "application/zip" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("That file isn't a zip we can read.");
+
+    await user.upload(picker, new File(["x"], "paper.tex", { type: "application/zip" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Choose a .zip file of your LaTeX project.");
+
+    const huge = new File(["x"], "huge.zip", { type: "application/zip" });
+    Object.defineProperty(huge, "size", { value: 13 * 1024 * 1024 });
+    await user.upload(picker, huge);
+    expect(await screen.findByRole("alert")).toHaveTextContent("That project is too large.");
+
+    backend.failNext("POST", /import$/, { status: 503, body: { code: "unavailable", error: "down" } });
+    await user.upload(picker, new File([ambiguous], "again.zip", { type: "application/zip" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("We couldn't import the project. Try again.");
+    expect(backend.titles()).toEqual([]);
   });
 });

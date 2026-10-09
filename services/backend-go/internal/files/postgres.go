@@ -397,8 +397,9 @@ func (s *postgresStore) Move(ctx context.Context, workspaceID, userID, fileID, t
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck // no-op after Commit
 
-	var from, kind string
-	err = tx.QueryRow(ctx, `SELECT path, kind FROM workspace_files WHERE workspace_id = $1 AND id = $2`, workspaceID, fileID).Scan(&from, &kind)
+	var from, kind, contentType string
+	err = tx.QueryRow(ctx, `SELECT path, kind, content_type FROM workspace_files WHERE workspace_id = $1 AND id = $2`,
+		workspaceID, fileID).Scan(&from, &kind, &contentType)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return File{}, ErrNotFound
@@ -406,6 +407,10 @@ func (s *postgresStore) Move(ctx context.Context, workspaceID, userID, fileID, t
 		return File{}, unavailable(err)
 	case kind == KindFolder && within(target, from) && !strings.EqualFold(target, from):
 		return File{}, ErrInvalidMove
+	}
+	contentType, ok := renamedType(kind, contentType, target)
+	if !ok {
+		return File{}, ErrTypeChange
 	}
 	at := now()
 	if _, err := ensureFolders(ctx, tx, workspaceID, userID, target, at); err != nil {
@@ -426,9 +431,9 @@ func (s *postgresStore) Move(ctx context.Context, workspaceID, userID, fileID, t
 	}
 	var out File
 	row := tx.QueryRow(ctx, `
-		UPDATE workspace_files SET path = $3, updated_at = $4, updated_by = $5
+		UPDATE workspace_files SET path = $3, content_type = $6, updated_at = $4, updated_by = $5
 		WHERE workspace_id = $1 AND id = $2
-		RETURNING `+fileColumns, workspaceID, fileID, target, at, userID)
+		RETURNING `+fileColumns, workspaceID, fileID, target, at, userID, contentType)
 	if err := scanFile(row, &out); err != nil {
 		if uniqueViolation(err) {
 			return File{}, ErrExists
