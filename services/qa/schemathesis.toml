@@ -45,3 +45,9 @@ checks.negative_data_rejection.expected-statuses = ["400", "401", "403", "404", 
 [[operations]]
 include-name = "POST /api/v1/workspaces/import"
 checks.positive_data_acceptance.expected-statuses = ["2xx", "400", "401", "403", "409", "413", "429", "5xx"]
+
+# A new workspace has no output.pdf until its first compile: 404 no_output
+# is the documented answer, not a resource lost after creation.
+[[operations]]
+include-name = "GET /api/v1/workspaces/{id}/output.pdf"
+checks.ensure_resource_availability.enabled = false

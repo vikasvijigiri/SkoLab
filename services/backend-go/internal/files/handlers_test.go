@@ -538,3 +538,21 @@ func TestBodyErrorsReportTooLarge(t *testing.T) {
 		t.Fatal("distinct errors")
 	}
 }
+
+func TestFixedSegmentsAnswerOtherMethods405(t *testing.T) {
+	for _, route := range [][2]string{
+		{"GET", base + "/files/upload"}, {"PUT", base + "/files/upload"}, {"PATCH", base + "/files/upload"},
+		{"DELETE", base + "/files/upload"}, {"GET", "/api/v1/workspaces/import"}, {"PATCH", "/api/v1/workspaces/import"},
+	} {
+		store := &fakeStore{}
+		w := serve(t, store, nil, "alice", jsonReq(route[0], route[1], `{"content":"a","base_version":1,"path":"x.tex"}`))
+		if w.Code != http.StatusMethodNotAllowed || w.Header().Get("Allow") != "POST" || !strings.Contains(w.Body.String(), "method_not_allowed") {
+			t.Fatalf("%s %s: %d %v %s", route[0], route[1], w.Code, w.Header(), w.Body)
+		}
+	}
+	// A file's raw content is still reached past the fixed segment's sibling.
+	w := serve(t, &fakeStore{}, nil, "alice", jsonReq("GET", base+"/files/upload/raw", ""))
+	if w.Code == http.StatusMethodNotAllowed {
+		t.Fatalf("raw: %d %s", w.Code, w.Body)
+	}
+}

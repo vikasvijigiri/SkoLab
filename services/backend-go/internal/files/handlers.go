@@ -61,6 +61,21 @@ func Register(group *gin.RouterGroup, store Store, compiler Compiler) {
 	group.POST("/workspaces/:id/compile", h.compile)
 	group.GET("/workspaces/:id/output.pdf", h.output)
 	group.POST("/workspaces/import", h.importZip)
+
+	// "upload" and "import" are fixed segments where :file_id and the
+	// workspace's :id also match, so other methods would reach a handler
+	// for a file or workspace; they are answered 405 like any unknown method.
+	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodPatch, http.MethodDelete} {
+		group.Handle(method, "/workspaces/:id/files/upload", onlyPost)
+	}
+	for _, method := range []string{http.MethodGet, http.MethodPatch, http.MethodDelete} {
+		group.Handle(method, "/workspaces/import", onlyPost)
+	}
+}
+
+func onlyPost(c *gin.Context) {
+	c.Header("Allow", http.MethodPost)
+	apierror.NoMethod(c)
 }
 
 // UploadRoutes are the routes whose bodies may exceed the gateway's default
