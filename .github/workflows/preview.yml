@@ -22,8 +22,10 @@ on:
         default: "60"
         required: true
 
+# Keyed on the label too: adding any other label (say `metrics`) starts a
+# skipped run here, which must not cancel a preview that is up.
 concurrency:
-  group: preview-${{ github.head_ref || github.ref }}
+  group: preview-${{ github.head_ref || github.ref }}-${{ github.event.label.name || 'dispatch' }}
   cancel-in-progress: true
 
 permissions:
