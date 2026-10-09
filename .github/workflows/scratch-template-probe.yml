@@ -1,0 +1,40 @@
+name: scratch template probe
+
+# Temporary (removed before review): lists the journal classes and
+# templates the runtime image's TeX Live offers.
+on:
+  push:
+    branches: [claude/latex-editor-wj1lcj]
+    paths: [.github/workflows/scratch-template-probe.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: List classes and doc templates
+        run: |
+          mkdir -p scratch/results scratch/debian
+          docker run --rm -v "$PWD/scratch:/out" python:3.12-slim@sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f bash -c '
+            apt-get update -qq
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends texlive-latex-base texlive-latex-recommended \
+              texlive-fonts-recommended texlive-publishers texlive-science texlive-latex-extra lmodern >/dev/null 2>&1
+            find /usr/share/texlive/texmf-dist/tex -name "*.cls" | sed "s|/usr/share/texlive/texmf-dist/tex/||" | sort > /out/results/classes.txt
+            mkdir -p /tmp/x && cd /tmp
+            for p in texlive-publishers-doc texlive-latex-extra-doc texlive-science-doc; do apt-get download -qq $p && dpkg-deb -x ${p}_*.deb /tmp/x; done
+            find /tmp/x/usr/share/doc/texlive-doc -type f \( -name "*.tex" -o -name "*.tex.gz" -o -name "*.bib" -o -name "*.bib.gz" \) | sed "s|/tmp/x/usr/share/doc/texlive-doc/||" | sort > /out/results/doc-tex.txt
+            for d in achemso revtex oup-authoring-template nature pnas plos bmc elsarticle jpsj nwejm cmpj rsc aastex mnras ametsoc copernicus iucr; do
+              [ -d /tmp/x/usr/share/doc/texlive-doc/latex/$d ] && mkdir -p /out/debian/$d && cp -r /tmp/x/usr/share/doc/texlive-doc/latex/$d/. /out/debian/$d/ && find /out/debian/$d -name "*.gz" -exec gunzip -f {} \; ; true
+            done
+            find /out/debian -name "*.pdf" -delete
+          '
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f scratch
+          git commit -m "scratch: journal classes and templates in TeX Live 2024" && git push
