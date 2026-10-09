@@ -28,6 +28,7 @@ concurrency:
 
 permissions:
   contents: read
+  pull-requests: write # to post the preview link on the pull request
 
 jobs:
   preview:
@@ -49,7 +50,9 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      MINUTES: ${{ inputs.minutes || '60' }}
+      # A labelled pull request gets the longest preview, so the link is still
+      # up whenever its reviewer gets to it.
+      MINUTES: ${{ inputs.minutes || '240' }}
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       SKOLAB_FIREBASE_API_KEY: ${{ secrets.SKOLAB_FIREBASE_API_KEY }}
     steps:
@@ -111,6 +114,17 @@ jobs:
             echo "Sign in with email and password. The database starts empty and is discarded afterwards."
           } >> "$GITHUB_STEP_SUMMARY"
           echo "::notice title=Preview URL::$PREVIEW_URL"
+      - name: Post the link on the pull request
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          until=$(date -u -d "+$MINUTES minutes" +%H:%M)
+          body=$(jq -n --arg url "$PREVIEW_URL" --arg until "$until" --arg sha "${GITHUB_SHA::7}" \
+            '{body: "Preview is up until \($until) UTC: \($url)\n\nBuilt from `\($sha)`. Sign in with email and password; the database starts empty and is discarded afterwards."}')
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$PR/comments" -d "$body" >/dev/null
       - name: Keep the preview up
         run: |
           end=$(( $(date +%s) + MINUTES * 60 ))
