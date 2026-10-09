@@ -11,3 +11,9 @@ checks.positive_data_acceptance.expected-statuses = ["2xx", "400", "401", "403",
 [[operations]]
 include-name = "POST /api/v1/workspaces"
 checks.positive_data_acceptance.expected-statuses = ["2xx", "401", "403", "404", "409", "422", "429", "5xx"]
+
+# A save names the version it was based on; a generated base_version that
+# is not the current one is rightly refused with 409 version_conflict.
+[[operations]]
+include-name = "PUT /api/v1/workspaces/{id}/document"
+checks.positive_data_acceptance.expected-statuses = ["2xx", "401", "403", "404", "409", "429", "5xx"]

@@ -124,6 +124,37 @@ class WorkspaceMember(Base):
     )
 
 
+class WorkspaceDocument(Base):
+    """The LaTeX source of a workspace's manuscript (one main.tex per workspace).
+
+    Written by the Go gateway (internal/document). ``version`` increases by
+    one on every save; a save names the version it was based on, so two
+    editors cannot silently overwrite each other.
+    """
+
+    __tablename__ = "workspace_documents"
+
+    workspace_id = Column(
+        String(100),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    source = Column(Text, nullable=False)
+    template_id = Column(String(64), nullable=True)
+    version = Column(Integer, nullable=False, default=1)
+    updated_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_by = Column(
+        String(100),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    __table_args__ = (
+        CheckConstraint("char_length(source) <= 100000", name="chk_workspace_document_size"),
+        CheckConstraint("version >= 1", name="chk_workspace_document_version"),
+    )
+
+
 class UsageCounter(Base):
     """Fixed-window cost counter backing per-user quotas (app/core/quota.py).
 

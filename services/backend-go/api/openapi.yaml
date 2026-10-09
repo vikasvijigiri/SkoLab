@@ -9,7 +9,8 @@ info:
 
     Every error is `{"error": "<message for people>", "code": "<stable code>"}`;
     clients branch on `code`. Every response carries HSTS, nosniff and frame
-    and referrer policies, and responses under /api are never cached.
+    and referrer policies, and responses under /api are never cached, except
+    the template catalog, which a browser may keep but must revalidate (ETag).
 
     The collaboration WebSocket (`GET /ws/colab/{workspace_id}?ticket=...`)
     is not described here: open it with a ticket from
@@ -27,6 +28,7 @@ tags:
   - name: workspaces
   - name: sharing
   - name: collaboration
+  - name: editor
 
 paths:
   /gateway-health:
@@ -556,6 +558,116 @@ paths:
         "429": { $ref: "#/components/responses/TooMany" }
         "503": { $ref: "#/components/responses/Unavailable" }
 
+  /api/v1/workspaces/{id}/document:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+    get:
+      tags: [editor]
+      operationId: getDocument
+      summary: The workspace's LaTeX source (any active member)
+      description: A workspace that was never saved reads as version 0 with an empty source.
+      responses:
+        "200":
+          description: The document, with the caller's role.
+          headers:
+            ETag: { schema: { type: string, pattern: '^"v[0-9]+"$' } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    put:
+      tags: [editor]
+      operationId: saveDocument
+      summary: Save the LaTeX source (owner or editor)
+      description: |
+        base_version is the version the edit started from (0 for a document
+        never saved). If anyone saved since, nothing changes and the answer is
+        409 version_conflict with current_version. Unknown body fields are
+        refused (400 invalid_body).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DocumentSave" }
+      responses:
+        "200":
+          description: Saved; version is base_version + 1.
+          headers:
+            ETag: { schema: { type: string, pattern: '^"v[0-9]+"$' } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The document changed since base_version.
+          headers:
+            ETag: { schema: { type: string, pattern: '^"v[0-9]+"$' } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VersionConflict" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/templates:
+    get:
+      tags: [editor]
+      operationId: listTemplates
+      summary: Journal templates for the editor, without their sources
+      description: Query parameters other than domain are refused (400 unknown_parameter), and so is any parameter given more than once (400 duplicate_parameter).
+      parameters:
+        - { name: domain, in: query, required: false, schema: { $ref: "#/components/schemas/Domain" } }
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: The catalog in display order.
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [domains, templates]
+                properties:
+                  domains: { type: array, items: { $ref: "#/components/schemas/Domain" } }
+                  templates: { type: array, items: { $ref: "#/components/schemas/TemplateSummary" } }
+        "304": { description: The caller's copy (If-None-Match) is current. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooMany" }
+
+  /api/v1/templates/{template_id}:
+    parameters:
+      - { name: template_id, in: path, required: true, schema: { type: string } }
+      - $ref: "#/components/parameters/IfNoneMatch"
+    get:
+      tags: [editor]
+      operationId: getTemplate
+      summary: One template with its LaTeX source
+      responses:
+        "200":
+          description: The template.
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Template" }
+        "304": { description: The caller's copy (If-None-Match) is current. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+
   /api/v1/colab/compile:
     post:
       tags: [collaboration]
@@ -612,6 +724,12 @@ components:
       name: id
       in: path
       required: true
+      schema: { type: string }
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: An ETag from an earlier answer; 304 when it is still current.
       schema: { type: string }
 
   schemas:
@@ -696,6 +814,68 @@ components:
         owner_id: { type: string }
         role: { $ref: "#/components/schemas/Role" }
         created_at: { type: string, format: date-time }
+    Domain:
+      type: string
+      enum: [physics, chemistry, mathematics, biology]
+    TemplateId:
+      type: string
+      description: A template in the catalog (internal/templates/catalog.go; a Go test keeps this list in step).
+      enum: [aps-physical-review, aip-applied-physics, quantum, acs-jacs, aip-chemical-physics, elsevier-cas-sc, ams-article, elsevier-article, oup-journal, nature, elsevier-cas-dc]
+    TemplateSummary:
+      type: object
+      required: [id, name, domain, journals, publisher, description, class, license, source_url, size]
+      properties:
+        id: { $ref: "#/components/schemas/TemplateId" }
+        name: { type: string }
+        domain: { $ref: "#/components/schemas/Domain" }
+        journals: { type: string }
+        publisher: { type: string }
+        description: { type: string }
+        class: { type: string, description: The LaTeX document class. }
+        license: { type: string }
+        source_url: { type: string, format: uri }
+        size: { type: integer, minimum: 1, description: Bytes of LaTeX source. }
+    Template:
+      allOf:
+        - $ref: "#/components/schemas/TemplateSummary"
+        - type: object
+          required: [source]
+          properties:
+            source: { type: string, minLength: 1, maxLength: 100000 }
+    LatexSource:
+      type: string
+      maxLength: 100000
+      description: At most 100,000 characters; no control characters other than tab, newline and carriage return.
+      pattern: "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f-\\u009f]*$"
+    Document:
+      type: object
+      required: [workspace_id, source, template_id, version, updated_at, updated_by, role]
+      properties:
+        workspace_id: { type: string }
+        source: { $ref: "#/components/schemas/LatexSource" }
+        template_id: { type: [string, "null"] }
+        version: { type: integer, minimum: 0, description: 0 until the first save. }
+        updated_at: { type: [string, "null"], format: date-time }
+        updated_by: { type: [string, "null"], description: Null before the first save or once that account is deleted. }
+        role: { $ref: "#/components/schemas/Role" }
+    DocumentSave:
+      type: object
+      required: [source, base_version]
+      additionalProperties: false
+      properties:
+        source: { $ref: "#/components/schemas/LatexSource" }
+        base_version: { type: integer, minimum: 0, maximum: 2147483647 }
+        template_id:
+          description: The template the document started from; omitted or null keeps the stored one.
+          anyOf: [{ $ref: "#/components/schemas/TemplateId" }, { type: "null" }]
+    VersionConflict:
+      type: object
+      required: [error, code, current_version]
+      additionalProperties: false
+      properties:
+        error: { type: string }
+        code: { const: version_conflict }
+        current_version: { type: integer, minimum: 0 }
     InviteOptions:
       type: object
       required: [roles, expires_in_hours, max_uses, defaults]

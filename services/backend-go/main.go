@@ -30,12 +30,14 @@ import (
 	"github.com/skolab/backend-go/internal/auth"
 	"github.com/skolab/backend-go/internal/colab"
 	"github.com/skolab/backend-go/internal/db"
+	"github.com/skolab/backend-go/internal/document"
 	"github.com/skolab/backend-go/internal/health"
 	"github.com/skolab/backend-go/internal/middleware"
 	"github.com/skolab/backend-go/internal/quota"
 	"github.com/skolab/backend-go/internal/security"
 	"github.com/skolab/backend-go/internal/shared"
 	"github.com/skolab/backend-go/internal/telemetry"
+	"github.com/skolab/backend-go/internal/templates"
 	"github.com/skolab/backend-go/internal/user"
 	"github.com/skolab/backend-go/internal/websocket"
 	"github.com/skolab/backend-go/internal/workspace"
@@ -422,6 +424,16 @@ func newRouter(g gateway) *gin.Engine {
 	workspace.Register(workspacesAPI, workspace.NewPostgresStore(g.pool))
 	// Sharing: invite links (owner or editor) and member management.
 	workspace.RegisterSharing(workspacesAPI, workspace.NewPostgresSharingStore(g.pool))
+	// The workspace's LaTeX source (one main.tex), saved with optimistic
+	// versioning so two editors never overwrite each other. See internal/document.
+	document.Register(workspacesAPI, document.NewPostgresStore(g.pool), templates.Known)
+
+	// ── Editor templates (Firebase-authenticated) ─────────────────────────────
+	// Journal templates for physics, chemistry, mathematics and biology, built
+	// into the binary. See internal/templates.
+	templatesAPI := r.Group("/api/v1")
+	templatesAPI.Use(authenticated...)
+	templates.Register(templatesAPI)
 
 	// ── CoLab compile — auth + per-user quota + single-flight live in Go;
 	// the actual pdflatex run happens in cmd/colab-sandbox (COLAB_SANDBOX_URL,
