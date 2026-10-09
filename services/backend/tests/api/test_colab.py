@@ -46,7 +46,7 @@ def test_compile_reruns_until_references_settle(monkeypatch):
         timeouts.append(timeout)
         hint = "LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right."
         (Path(cwd) / "main.log").write_text(hint if len(timeouts) == 1 else "done")
-        (Path(cwd) / "main.pdf").write_bytes(b"%PDF-1.7 pass %d" % len(timeouts))
+        (Path(cwd) / "main.pdf").write_bytes(b"%%PDF-1.7 pass %d" % len(timeouts))
         return 0, "Output written", False
 
     monkeypatch.setattr(colab, "_run_bounded", fake_run)
