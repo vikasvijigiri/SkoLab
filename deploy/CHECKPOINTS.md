@@ -1,7 +1,8 @@
 # Checkpoints
 
 Known-good states of production worth returning to. Each one is an annotated
-git tag on `master`, so `git show <tag>` prints its note and the commit.
+git tag on `master`, so `git show <tag>` prints its note and the commit. A row added before
+its tag exists is created with the Create checkpoint workflow (below).
 
 | Tag | Commit | What was live and verified |
 | --- | --- | --- |
@@ -32,8 +33,8 @@ To return to the newest code afterwards, run the Release workflow from
 
 ## Adding a checkpoint
 
-Tag the merge commit on `master` once its release, smoke test and production
-e2e have passed, then add a row above:
-
-    git tag -a checkpoint-YYYY-MM-DD-<what> <commit> -m "<what was live and verified>"
-    git push origin checkpoint-YYYY-MM-DD-<what>
+Once a merge's release, smoke test and production e2e have passed: Actions >
+Create checkpoint > Run workflow, with the tag name
+(`checkpoint-YYYY-MM-DD-<what>`), the master commit and a one-line note of
+what was live and verified. The workflow refuses commits that are not on
+`master` and names that already exist. Then add a row above.
