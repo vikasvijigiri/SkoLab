@@ -1,0 +1,113 @@
+This is pdfTeX, Version 3.141592653-2.6-1.40.26 (TeX Live 2025/dev/Debian) (preloaded format=pdflatex 2026.10.9)  9 OCT 2026 07:26
+entering extended mode
+ restricted \write18 enabled.
+ %&-line parsing enabled.
+**beilstein-template.tex
+(./beilstein-template.tex
+LaTeX2e <2024-11-01> patch level 2
+L3 programming layer <2025-01-18>
+(/usr/share/texlive/texmf-dist/tex/latex/beilstein/beilstein.cls
+Document Class: beilstein 2020/08/26 v2.1 Template for submissions to the ``Bei
+lstein Journal of Nanotechnology'' (BJNANO)
+(/usr/share/texlive/texmf-dist/tex/latex/xkeyval/xkeyval.sty
+Package: xkeyval 2022/06/16 v2.9 package option processing (HA)
+
+(/usr/share/texlive/texmf-dist/tex/generic/xkeyval/xkeyval.tex
+(/usr/share/texlive/texmf-dist/tex/generic/xkeyval/xkvutils.tex
+\XKV@toks=\toks17
+\XKV@tempa@toks=\toks18
+
+(/usr/share/texlive/texmf-dist/tex/generic/xkeyval/keyval.tex))
+\XKV@depth=\count196
+File: xkeyval.tex 2014/12/03 v2.7a key=value parser (HA)
+))
+(/usr/share/texlive/texmf-dist/tex/latex/base/ifthen.sty
+Package: ifthen 2024/03/16 v1.1e Standard LaTeX ifthen package (DPC)
+)
+(/usr/share/texlive/texmf-dist/tex/latex/base/article.cls
+Document Class: article 2024/06/29 v1.4n Standard LaTeX document class
+(/usr/share/texlive/texmf-dist/tex/latex/base/size12.clo
+File: size12.clo 2024/06/29 v1.4n Standard LaTeX file (size option)
+)
+\c@part=\count197
+\c@section=\count198
+\c@subsection=\count199
+\c@subsubsection=\count266
+\c@paragraph=\count267
+\c@subparagraph=\count268
+\c@figure=\count269
+\c@table=\count270
+\abovecaptionskip=\skip49
+\belowcaptionskip=\skip50
+\bibindent=\dimen141
+)
+(/usr/share/texlive/texmf-dist/tex/generic/babel/babel.sty
+Package: babel 2025/02/14 v25.4 The multilingual framework for pdfLaTeX, LuaLaT
+eX and XeLaTeX
+\babel@savecnt=\count271
+\U@D=\dimen142
+\l@unhyphenated=\language7
+
+(/usr/share/texlive/texmf-dist/tex/generic/babel/txtbabel.def)
+\bbl@readstream=\read2
+\bbl@dirlevel=\count272
+
+(/usr/share/texlive/texmf-dist/tex/generic/babel-english/american.ldf
+Language: american 2017/06/06 v3.3r English support from the babel system
+
+(/usr/share/texlive/texmf-dist/tex/generic/babel-english/english.ldf
+Language: english 2017/06/06 v3.3r English support from the babel system
+Package babel Info: Hyphen rules for 'british' set to \l@english
+(babel)             (\language0). Reported on input line 82.
+Package babel Info: Hyphen rules for 'UKenglish' set to \l@english
+(babel)             (\language0). Reported on input line 83.
+Package babel Info: Hyphen rules for 'canadian' set to \l@english
+(babel)             (\language0). Reported on input line 102.
+Package babel Info: Hyphen rules for 'australian' set to \l@english
+(babel)             (\language0). Reported on input line 105.
+Package babel Info: Hyphen rules for 'newzealand' set to \l@english
+(babel)             (\language0). Reported on input line 108.
+)))
+(/usr/share/texlive/texmf-dist/tex/generic/babel/locale/en/babel-american.tex
+Package babel Info: Importing font and identification data for american
+(babel)             from babel-en-US.ini. Reported on input line 11.
+)
+Class beilstein Info: Language has been set to American English on input line 7
+0.
+
+(/usr/share/texlive/texmf-dist/tex/latex/base/inputenc.sty
+Package: inputenc 2024/02/08 v1.3d Input encoding file
+\inpenc@prehook=\toks19
+\inpenc@posthook=\toks20
+)
+Class beilstein Info: Input encoding has been set to utf8 on input line 76.
+
+(/usr/share/texlive/texmf-dist/tex/latex/base/fontenc.sty
+Package: fontenc 2021/04/29 v2.0v Standard LaTeX package
+)
+(/usr/share/texlive/texmf-dist/tex/latex/base/textcomp.sty
+Package: textcomp 2024/04/24 v2.1b Standard LaTeX package
+LaTeX Font Info:    Changing ? sub-encoding to TS1/0 on input line 75.
+)
+
+! LaTeX Error: File `tgheros.sty' not found.
+
+Type X to quit or <RETURN> to proceed,
+or enter new name. (Default extension: sty)
+
+Enter file name: 
+! Emergency stop.
+<read *> 
+         
+l.80 \RequirePackage
+                    [intlimits,sumlimits,namelimits,fleqn]{amsmath}^^M 
+Here is how much of TeX's memory you used:
+ 1885 strings out of 475102
+ 30856 string characters out of 5764877
+ 425813 words of memory out of 5000000
+ 24930 multiletter control sequences out of 15000+600000
+ 559899 words of font info for 38 fonts, out of 8000000 for 9000
+ 59 hyphenation exceptions out of 8191
+ 57i,0n,66p,224b,104s stack positions out of 10000i,1000n,20000p,200000b,200000s
+
+!  ==> Fatal error occurred, no output PDF file produced!

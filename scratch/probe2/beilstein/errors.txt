@@ -1,0 +1,11 @@
+93:! LaTeX Error: File `tgheros.sty' not found.
+94-
+95-Type X to quit or <RETURN> to proceed,
+96-or enter new name. (Default extension: sty)
+--
+99:! Emergency stop.
+100-<read *> 
+101-         
+102-l.80 \RequirePackage
+--
+113:!  ==> Fatal error occurred, no output PDF file produced!
