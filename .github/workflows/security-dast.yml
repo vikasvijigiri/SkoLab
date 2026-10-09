@@ -62,11 +62,13 @@ jobs:
         run: python services/loadtest/fixture.py --base-url http://127.0.0.1:8080
       - uses: ./.github/actions/qa-tools
       - name: Contract fuzzing, random exploration (Schemathesis)
+        # Every check except max_response_time is on by default; naming them
+        # with --checks all would also override the per-operation settings in
+        # schemathesis.toml (a CLI-named check wins over the config file).
         run: |
           st --config-file services/qa/schemathesis.toml run services/backend-go/api/openapi.yaml \
             --url http://127.0.0.1:8080 \
             --header "Authorization: Bearer $TOKEN" \
-            --checks all \
             --exclude-operation-id deleteAccount \
             --exclude-operation-id compileProject \
             --exclude-operation-id compile \

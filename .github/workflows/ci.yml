@@ -181,11 +181,13 @@ jobs:
           k6 run --quiet --secret-source "file=$secrets" services/observability/journey.js
           rm -f "$secrets"
       - name: Contract fuzzing against the OpenAPI spec (Schemathesis)
+        # Every check except max_response_time is on by default; naming them
+        # with --checks all would also override the per-operation settings in
+        # schemathesis.toml (a CLI-named check wins over the config file).
         run: |
           st --config-file services/qa/schemathesis.toml run services/backend-go/api/openapi.yaml \
             --url http://127.0.0.1:8080 \
             --header "Authorization: Bearer $TOKEN" \
-            --checks all \
             --exclude-operation-id deleteAccount \
             --exclude-operation-id compile \
             --exclude-operation-id compileProject \
