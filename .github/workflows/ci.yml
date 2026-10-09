@@ -165,6 +165,8 @@ jobs:
         run: bash services/qa/e2e.sh http://127.0.0.1:8080 qa-reports
       - name: Sign in the monitoring account
         run: python services/loadtest/fixture.py --base-url http://127.0.0.1:8080
+      - name: Every editor template compiles in the production image
+        run: python services/qa/templates_compile.py --base-url http://127.0.0.1:8080 --token "$TOKEN" --out qa-reports/templates
       - name: Real-time collaboration (k6 WebSocket journey)
         env:
           SKOLAB_GATEWAY_URL: http://127.0.0.1:8080
