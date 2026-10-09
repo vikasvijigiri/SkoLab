@@ -57,3 +57,38 @@
     }
   }
 }
+
+/* LaTeX editor colors (src/editor/LatexEditor.tsx); each meets 4.5:1 on its background. */
+@layer base {
+  :root {
+    --cm-bg: #ffffff;
+    --cm-fg: #18181b;
+    --cm-gutter-bg: #fafafa;
+    --cm-gutter-fg: #52525b;
+    --cm-active: #f4f4f5;
+    --cm-selection: #c7d2fe;
+    --cm-keyword: #4338ca;
+    --cm-env: #0f766e;
+    --cm-comment: #57534e;
+    --cm-bracket: #9d174d;
+    --cm-math: #9a3412;
+    --cm-atom: #1d4ed8;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --cm-bg: #09090b;
+      --cm-fg: #e4e4e7;
+      --cm-gutter-bg: #0c0c0f;
+      --cm-gutter-fg: #a1a1aa;
+      --cm-active: #18181b;
+      --cm-selection: #3730a3;
+      --cm-keyword: #a5b4fc;
+      --cm-env: #5eead4;
+      --cm-comment: #a8a29e;
+      --cm-bracket: #f9a8d4;
+      --cm-math: #fdba74;
+      --cm-atom: #93c5fd;
+    }
+  }
+}

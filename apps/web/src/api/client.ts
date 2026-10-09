@@ -20,6 +20,8 @@ interface RequestOptions {
   token?: string | null;
   body?: unknown;
   signal?: AbortSignal;
+  /** Defaults to 15 seconds; a compile may run up to the backend's own limit. */
+  timeoutMs?: number;
 }
 
 /** JSON request to the gateway. Throws ApiError for any non-2xx answer. */
@@ -28,7 +30,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
 
-  const timeout = AbortSignal.timeout(TIMEOUT_MS);
+  const timeout = AbortSignal.timeout(options.timeoutMs ?? TIMEOUT_MS);
   let response: Response;
   try {
     response = await fetch(`${config.apiBaseUrl}${path}`, {

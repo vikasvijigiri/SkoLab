@@ -1,8 +1,28 @@
 # SkoLab web app
 
-This is the browser front end. It currently covers signing in: sign-in, sign-up,
-email verification, password reset, and a signed-in landing page that creates
-the user's API profile.
+This is the browser front end: sign-in, sign-up, email verification and
+password reset, and, once signed in, a LaTeX editor with official templates.
+
+## LaTeX editor
+
+- **Home** lists the user's documents and a gallery of templates
+  (`src/editor/templates.ts`). Each template is the maintainer's own file
+  from CTAN, taken from the TeX Live release the compiler runs so class and
+  template versions match; every change from upstream is listed in the
+  file's header. CI compiles all of them through the production image
+  (`services/qa/templates_compile.py`).
+- **Editor** (`/editor/:id`): CodeMirror 6 with LaTeX highlighting and
+  completion, a pdf.js preview drawn on canvases (works on phones and under
+  the strict CSP), compile errors that jump to their line, zoom, and .tex /
+  PDF downloads. Ctrl/Cmd+Enter or Ctrl/Cmd+S compiles.
+- **Compiles** go to `POST /api/v1/colab/compile` (pdfLaTeX, one file, up to
+  three passes so references settle). They count against the user's quota.
+- **Storage:** documents are kept in this browser (`localStorage`, per
+  account) until the API has a document store; `src/editor/documents.ts` is
+  the one place that changes then.
+- CodeMirror runs inside a shadow root, where it can style itself with
+  constructed stylesheets; in the page it would need an inline `<style>`,
+  which the CSP refuses.
 
 ## Why it is built this way
 
