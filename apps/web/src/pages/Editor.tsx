@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import { ApiError } from "../api/client";
 import { compileLatex, MAX_SOURCE_LENGTH, pdfBytes, type CompileResult } from "../api/compile";
 import {
@@ -12,15 +12,23 @@ import {
   renameWorkspace,
   saveDocument,
   VersionConflictError,
+  type Insights,
   type LatexDocument,
+  type Member,
   type TemplateSummary,
   type Workspace,
 } from "../api/editor";
+import { listMembers } from "../api/sharing";
+import { useAuth } from "../auth/AuthProvider";
 import { useIdToken } from "../auth/useIdToken";
 import { Alert } from "../components/Alert";
 import { Button } from "../components/Button";
+import { Sheet } from "../components/Sheet";
 import { FullPageLoader, Spinner } from "../components/Spinner";
 import { LatexEditor, type LatexEditorHandle } from "../editor/LatexEditor";
+import { Overview, ProgressRing } from "../editor/Overview";
+import { Avatar, Share } from "../editor/Share";
+import { formatDate } from "../lib/dates";
 
 const PdfPreview = lazy(() => import("../editor/PdfPreview").then((m) => ({ default: m.PdfPreview })));
 
@@ -191,6 +199,27 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
   const [zoom, setZoom] = useState(1);
   const editor = useRef<LatexEditorHandle>(null);
   const running = useRef<AbortController | null>(null);
+  const navigate = useNavigate();
+  const me = useAuth().user?.uid ?? "";
+  // What the gateway read from the last saved source, and who saved it when.
+  const [insights, setInsights] = useState<Insights>(doc.insights);
+  const [lastSaved, setLastSaved] = useState({ at: doc.updated_at, by: doc.updated_by, version: doc.version });
+  const [members, setMembers] = useState<Member[]>([]);
+  const [sheet, setSheet] = useState<"share" | "overview" | null>(null);
+
+  // People with access, for the avatars and to name who saved last.
+  useEffect(() => {
+    let current = true;
+    void idToken()
+      .then((token) => listMembers(token, workspace.id))
+      .then(
+        (list) => current && setMembers(list),
+        () => undefined, // only decoration; the Share panel reports its own errors
+      );
+    return () => {
+      current = false;
+    };
+  }, [idToken, workspace.id]);
 
   // What the server holds: the version this copy is based on, and its text
   // (null when the server's text is not ours, after a conflict).
@@ -226,6 +255,8 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
       version.current = saved.version;
       savedSource.current = text;
       inFlight.current = false;
+      setInsights(saved.insights);
+      setLastSaved({ at: saved.updated_at, by: saved.updated_by, version: saved.version });
       // Typing during the save: save again; otherwise this is the latest.
       if (latestSource.current !== text) flushAgain.current();
       else setSave({ state: "saved" });
@@ -352,43 +383,87 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
   return (
     <div className="flex h-dvh flex-col">
       <title>{`${title.trim() || "Untitled"} · SkoLab`}</title>
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-950">
+      <header className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-zinc-200 bg-white px-2 py-2 sm:px-3 dark:border-zinc-800 dark:bg-zinc-950">
         <Link
           to="/"
-          className="rounded-md px-2 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-950"
+          className="grid size-10 shrink-0 place-items-center rounded-lg text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
           aria-label="Back to your documents"
+          title="Your documents"
         >
-          ← Documents
+          <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
         </Link>
-        {isOwner ? (
-          <label className="min-w-32 flex-1">
-            <span className="sr-only">Document title</span>
-            <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              maxLength={255}
-              className="w-full min-w-0 truncate rounded-md border border-transparent bg-transparent px-2 py-1.5 text-sm font-semibold hover:border-zinc-300 focus:border-brand-500 dark:hover:border-zinc-700"
-            />
-          </label>
-        ) : (
-          <h1 className="min-w-0 flex-1 truncate px-2 py-1.5 text-sm font-semibold">{title}</h1>
-        )}
-        <span className="hidden text-xs text-zinc-600 sm:inline dark:text-zinc-400" role="status">
-          {editable ? (titleStatus ?? saveLabel(save)) : "View only"}
-        </span>
+        <div className="min-w-32 flex-1">
+          {isOwner ? (
+            <label className="block">
+              <span className="sr-only">Document title</span>
+              <input
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                maxLength={255}
+                className="w-full min-w-0 truncate rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-[15px] font-semibold hover:border-zinc-300 focus:border-brand-500 dark:hover:border-zinc-700"
+              />
+            </label>
+          ) : (
+            <h1 className="truncate px-1.5 py-0.5 text-[15px] font-semibold">{title}</h1>
+          )}
+          <p className="flex min-w-0 items-center gap-1.5 px-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+            <span role="status" className="truncate">
+              {editable ? (titleStatus ?? saveLabel(save)) : "View only"}
+            </span>
+            <span aria-hidden="true" className="hidden sm:inline">
+              ·
+            </span>
+            <span className="hidden truncate sm:inline">Created {formatDate(workspace.created_at)}</span>
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setSheet("overview")}
+          aria-label={`Progress ${insights.progress.percent}%. Open the overview`}
+          title="Progress, contents and details"
+          className="flex h-10 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-sm font-semibold tabular-nums hover:bg-zinc-100 dark:hover:bg-zinc-900"
+        >
+          <ProgressRing percent={insights.progress.percent} size={22} stroke={3} />
+          {insights.progress.percent}%
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSheet("share")}
+          title="Invite co-authors and manage access"
+          className="flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 bg-white pr-3 pl-1.5 text-sm font-semibold shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+        >
+          {members.length > 0 ? (
+            <span className="flex -space-x-2">
+              {members.slice(0, 3).map((member) => (
+                <Avatar key={member.user_id} id={member.user_id} name={member.display_name || "?"} className="size-7 text-[11px] ring-2 ring-white dark:ring-zinc-900" />
+              ))}
+            </span>
+          ) : (
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="ml-1 size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM19 8v6M22 11h-6" />
+            </svg>
+          )}
+          Share
+          {members.length > 3 && <span className="text-xs font-medium text-zinc-500">+{members.length - 3}</span>}
+        </button>
+
         <div className="flex items-center gap-2">
-          <Button variant="secondary" className="!h-9 !w-auto" onClick={() => download(`${fileName(title)}.tex`, source, "application/x-tex")}>
+          <Button variant="secondary" className="!h-10 !w-auto" onClick={() => download(`${fileName(title)}.tex`, source, "application/x-tex")}>
             .tex
           </Button>
           <Button
             variant="secondary"
-            className="!h-9 !w-auto"
+            className="!h-10 !w-auto"
             disabled={!pdf}
             onClick={() => pdf && download(`${fileName(title)}.pdf`, pdf.slice().buffer, "application/pdf")}
           >
             PDF
           </Button>
-          <Button className="!h-9 !w-auto" loading={compiling} onClick={() => void runCompile(source)} title="Compile (Ctrl+Enter)">
+          <Button className="!h-10 !w-auto" loading={compiling} onClick={() => void runCompile(source)} title="Compile (Ctrl+Enter)">
             {compiling ? "Compiling" : "Compile"}
           </Button>
         </div>
@@ -540,6 +615,27 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
           </div>
         </section>
       </div>
+
+      {sheet === "overview" && (
+        <Sheet title="Overview" description="How complete the manuscript is, what it holds, and its history." onClose={() => setSheet(null)}>
+          <Overview
+            insights={insights}
+            details={{
+              createdAt: workspace.created_at,
+              updatedAt: lastSaved.at,
+              updatedBy: lastSaved.by ? (lastSaved.by === me ? "you" : (members.find((member) => member.user_id === lastSaved.by)?.display_name ?? "a co-author")) : null,
+              version: lastSaved.version,
+              template: template?.name ?? null,
+              role: doc.role,
+            }}
+          />
+        </Sheet>
+      )}
+      {sheet === "share" && (
+        <Sheet title="Share" description={`Invite co-authors to “${title.trim() || "Untitled"}” and choose what they can do.`} onClose={() => setSheet(null)}>
+          <Share workspaceId={workspace.id} role={doc.role} me={me} onMembers={setMembers} onLeft={() => void navigate("/", { replace: true })} />
+        </Sheet>
+      )}
     </div>
   );
 }

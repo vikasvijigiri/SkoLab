@@ -15,23 +15,12 @@ const TEMPLATES = TEST_TEMPLATES.map((template) => ({
 }));
 
 export const test = base.extend<{ profileCalls: ProfileCall[]; backend: FakeBackend }>({
-  /** The editor endpoints (workspaces, templates, documents), served in memory. */
+  /** The editor and sharing endpoints (workspaces, templates, documents, invites), served in memory. */
   backend: [
     async ({ page }, provide) => {
-    const backend = createFakeBackend(TEMPLATES);
-    await page.route(/\/__api\/api\/v1\/(workspaces|templates)/, async (route) => {
-      const request = route.request();
-      const url = new URL(request.url());
-      const answer = backend.handle({
-        method: request.method(),
-        url: url.pathname.replace(/^\/__api/, "") + url.search,
-        headers: request.headers(),
-        body: request.postData() ? (request.postDataJSON() as unknown) : null,
-      });
-      if (!answer) return route.fallback();
-      await route.fulfill({ status: answer.status, ...(answer.headers ? { headers: answer.headers } : {}), ...(answer.status === 204 ? {} : { json: answer.body }) });
-    });
-    await provide(backend);
+      const backend = createFakeBackend(TEMPLATES);
+      await serveBackend(page, backend);
+      await provide(backend);
     },
     // Every signed-in page reads documents and templates.
     { auto: true },
@@ -55,6 +44,22 @@ export const test = base.extend<{ profileCalls: ProfileCall[]; backend: FakeBack
 });
 
 export { expect };
+
+/** Answers the editor and sharing endpoints for page from backend (one backend can serve several browsers). */
+export async function serveBackend(page: Page, backend: FakeBackend) {
+  await page.route(/\/__api\/api\/v1\/(workspaces|templates|invites)/, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const answer = backend.handle({
+      method: request.method(),
+      url: url.pathname.replace(/^\/__api/, "") + url.search,
+      headers: request.headers(),
+      body: request.postData() ? (request.postDataJSON() as unknown) : null,
+    });
+    if (!answer) return route.fallback();
+    await route.fulfill({ status: answer.status, ...(answer.headers ? { headers: answer.headers } : {}), ...(answer.status === 204 ? {} : { json: answer.body }) });
+  });
+}
 
 /** WCAG 2.2 AA, in the current color scheme. */
 export async function expectAccessible(page: Page) {

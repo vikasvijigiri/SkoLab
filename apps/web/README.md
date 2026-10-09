@@ -27,8 +27,21 @@ password reset, and, once signed in, a LaTeX editor with official templates.
   stops and asks whether to load their version or keep this one, so nobody
   overwrites anyone silently. Owners and editors write and owners rename;
   commenters and viewers get a read-only editor.
+- **Progress and overview:** every document answer carries `insights`, the
+  gateway's reading of the source (`internal/manuscript`): words, sections,
+  figures, tables, equations, citations, references, citations with no
+  reference, and a progress percentage over eight submission checks. The
+  header shows the percentage; it opens an overview with the checklist,
+  the counts, and when the document was created and last saved, by whom.
+- **Sharing** (`src/editor/Share.tsx`, `src/api/sharing.ts`): owners and
+  editors create invite links (access, lifetime, how many people); the
+  owner changes roles and removes people; anyone else may leave. A link is
+  `/invite#inv_…`: the token sits in the fragment, which browsers never
+  send to a server, and the invite page keeps it in sessionStorage while
+  its holder signs in, then takes it out of the address bar.
 - **Tests** run against `src/test/fakeBackend.ts`, an in-memory copy of the
-  gateway's editor endpoints shared by the unit tests and the browser tests.
+  gateway's editor and sharing endpoints shared by the unit tests and the
+  browser tests.
 - CodeMirror runs inside a shadow root, where it can style itself with
   constructed stylesheets; in the page it would need an inline `<style>`,
   which the CSP refuses.

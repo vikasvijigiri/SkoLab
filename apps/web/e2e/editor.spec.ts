@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import type { Page } from "@playwright/test";
-import { expect, expectAccessible, test } from "./fixtures";
+import { expect, expectAccessible, serveBackend, test, verifyEmail } from "./fixtures";
 
 // A real pdflatex output (the AMS article template, compiled by the production image).
 const PDF = readFileSync(new URL("./assets/ams-article.pdf", import.meta.url)).toString("base64");
@@ -142,4 +142,68 @@ test("the editor fits a phone screen", async ({ page, isMobile, profileCalls }) 
   await expect(page.getByRole("img", { name: "Page 1 of 1" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(profileCalls.length).toBeGreaterThan(0);
+});
+
+const MANUSCRIPT = `\\documentclass{article}
+\\title{Spin waves in thin films}
+\\author{Ada Lovelace}
+\\begin{document}
+\\maketitle
+\\section{Introduction}
+Magnons carry spin~\\cite{kittel}.
+\\begin{thebibliography}{1}
+\\bibitem{kittel} C. Kittel, Introduction to Solid State Physics.
+\\end{thebibliography}
+\\end{document}
+`;
+
+test("the overview shows progress, and a co-author joins through an invite link", async ({ page, backend, browser, isMobile }) => {
+  await stubCompile(page);
+  const id = backend.seed("google-ada", "Spin waves", { source: MANUSCRIPT, templateId: null });
+  backend.setName("google-ada", "Ada Lovelace");
+  await signIn(page);
+  await page.goto(`/editor/${id}`);
+
+  await page.getByRole("button", { name: /^Progress \d+%/ }).click();
+  const overview = page.getByRole("dialog", { name: "Overview" });
+  await expect(overview.getByRole("heading", { name: "Progress" })).toBeVisible();
+  await expect(overview.getByText("Every citation has a reference")).toBeVisible();
+  await expectAccessible(page);
+  await page.keyboard.press("Escape");
+  await expect(overview).toBeHidden();
+
+  await page.getByRole("button", { name: /Share/ }).click();
+  const share = page.getByRole("dialog", { name: "Share" });
+  await expect(share.getByText("Ada Lovelace")).toBeVisible();
+  await share.getByRole("button", { name: "Create invite link" }).click();
+  const link = await share.getByLabel("Send this link to your co-author").inputValue();
+  expect(link).toMatch(/\/invite#inv_/);
+  await expectAccessible(page);
+
+  // Grace opens the link in her own browser, already signed in.
+  const graceContext = await browser.newContext(isMobile ? { viewport: { width: 412, height: 839 }, isMobile: true, hasTouch: true } : {});
+  const grace = await graceContext.newPage();
+  await serveBackend(grace, backend);
+  await grace.route("**/__api/api/v1/users/profile/sync", (route) => route.fulfill({ json: { status: "synced", uid: "fake" } }));
+  await grace.route("**/__api/api/v1/colab/compile", (route) => route.fulfill({ json: { status: "compiled", pdf_base64: PDF, log: "" } }));
+  await grace.goto("/sign-up");
+  await grace.getByLabel("Full name").fill("Grace Hopper");
+  await grace.getByLabel("Email").fill("grace@example.com");
+  await grace.getByLabel("Password", { exact: true }).fill("correct horse 42");
+  await grace.getByRole("button", { name: "Create account" }).click();
+  await verifyEmail(grace, "grace@example.com");
+  await grace.getByRole("button", { name: "I've verified my email" }).click();
+  await expect(grace.getByRole("heading", { name: "Welcome, Grace Hopper" })).toBeVisible();
+
+  await grace.goto(link);
+  await expect(grace.getByRole("heading", { name: "Spin waves" })).toBeVisible();
+  await expect(grace).toHaveURL("/invite"); // the token left the address bar
+  await expectAccessible(grace);
+  await grace.getByRole("button", { name: "Open the document" }).click();
+  await expect(grace).toHaveURL(`/editor/${id}`);
+  // Editors see the title (only owners rename) and can save.
+  await expect(grace.getByRole("heading", { name: "Spin waves" })).toBeVisible();
+  await expect(grace.getByText("All changes saved")).toBeAttached();
+  expect(backend.members(id)["uid-grace@example.com"]).toBe("editor");
+  await graceContext.close();
 });

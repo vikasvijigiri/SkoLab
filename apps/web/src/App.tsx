@@ -5,6 +5,7 @@ import { FullPageLoader } from "./components/Spinner";
 import type { AuthService } from "./auth/types";
 import { ForgotPassword } from "./pages/ForgotPassword";
 import { Home } from "./pages/Home";
+import { Invite } from "./pages/Invite";
 import { NotFound } from "./pages/NotFound";
 import { SignIn } from "./pages/SignIn";
 import { SignUp } from "./pages/SignUp";
@@ -24,6 +25,8 @@ export const routes: RouteObject[] = [
     ],
   },
   { element: <RequireUnverified />, children: [{ path: "/verify-email", element: <VerifyEmail /> }] },
+  // Guards itself: the invite token must be kept before any sign-in redirect.
+  { path: "/invite", element: <Invite /> },
   {
     element: <RequireAccount />,
     children: [
