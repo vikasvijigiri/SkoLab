@@ -15,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/skolab/backend-go/internal/apierror"
 	"github.com/skolab/backend-go/internal/workspace"
 )
 
@@ -539,20 +540,48 @@ func TestBodyErrorsReportTooLarge(t *testing.T) {
 	}
 }
 
-func TestFixedSegmentsAnswerOtherMethods405(t *testing.T) {
+func TestPostOnlyPaths(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.HandleMethodNotAllowed = true
+	r.NoMethod(apierror.NoMethod)
+	r.Use(PostOnly())
+	r.Use(func(c *gin.Context) { // stands in for CORS answering preflights
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
+		}
+	})
+	group := r.Group("/api/v1", func(c *gin.Context) { c.Set("user_id", "alice") })
+	// The sibling routes the fixed segments collide with in the gateway.
+	group.PATCH("/workspaces/:id", func(c *gin.Context) { c.Status(http.StatusTeapot) })
+	Register(group, &fakeStore{}, &fakeCompiler{})
+	do := func(method, path string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, jsonReq(method, path, `{"content":"a","base_version":1,"path":"x.tex","title":"t"}`))
+		return w
+	}
 	for _, route := range [][2]string{
 		{"GET", base + "/files/upload"}, {"PUT", base + "/files/upload"}, {"PATCH", base + "/files/upload"},
 		{"DELETE", base + "/files/upload"}, {"GET", "/api/v1/workspaces/import"}, {"PATCH", "/api/v1/workspaces/import"},
 	} {
-		store := &fakeStore{}
-		w := serve(t, store, nil, "alice", jsonReq(route[0], route[1], `{"content":"a","base_version":1,"path":"x.tex"}`))
+		w := do(route[0], route[1])
 		if w.Code != http.StatusMethodNotAllowed || w.Header().Get("Allow") != "POST" || !strings.Contains(w.Body.String(), "method_not_allowed") {
 			t.Fatalf("%s %s: %d %v %s", route[0], route[1], w.Code, w.Header(), w.Body)
 		}
 	}
-	// A file's raw content is still reached past the fixed segment's sibling.
-	w := serve(t, &fakeStore{}, nil, "alice", jsonReq("GET", base+"/files/upload/raw", ""))
-	if w.Code == http.StatusMethodNotAllowed {
+	for _, p := range []string{base + "/files/upload", "/api/v1/workspaces/import"} {
+		if w := do("OPTIONS", p); w.Code != http.StatusNoContent || w.Header().Get("Allow") != "POST" {
+			t.Fatalf("OPTIONS %s: %d %v", p, w.Code, w.Header())
+		}
+		if w := do("POST", p); w.Code == http.StatusMethodNotAllowed || w.Header().Get("Allow") != "" {
+			t.Fatalf("POST %s: %d %v", p, w.Code, w.Header())
+		}
+	}
+	// Neighbouring paths are left alone.
+	if w := do("PATCH", "/api/v1/workspaces/ws-1"); w.Code != http.StatusTeapot {
+		t.Fatalf("workspace PATCH: %d", w.Code)
+	}
+	if w := do("GET", base+"/files/upload/raw"); w.Code == http.StatusMethodNotAllowed {
 		t.Fatalf("raw: %d %s", w.Code, w.Body)
 	}
 }

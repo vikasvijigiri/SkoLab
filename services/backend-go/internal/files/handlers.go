@@ -61,21 +61,41 @@ func Register(group *gin.RouterGroup, store Store, compiler Compiler) {
 	group.POST("/workspaces/:id/compile", h.compile)
 	group.GET("/workspaces/:id/output.pdf", h.output)
 	group.POST("/workspaces/import", h.importZip)
+}
 
-	// "upload" and "import" are fixed segments where :file_id and the
-	// workspace's :id also match, so other methods would reach a handler
-	// for a file or workspace; they are answered 405 like any unknown method.
-	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodPatch, http.MethodDelete} {
-		group.Handle(method, "/workspaces/:id/files/upload", onlyPost)
-	}
-	for _, method := range []string{http.MethodGet, http.MethodPatch, http.MethodDelete} {
-		group.Handle(method, "/workspaces/import", onlyPost)
+// PostOnly answers the upload and import paths for any method but POST.
+// "upload" and "import" are fixed segments where a file's :file_id and a
+// workspace's :id also match, so without it a PATCH or PUT would reach a
+// file or workspace handler, and Gin would list those handlers' methods in
+// Allow. Register it globally, before CORS answers preflights.
+func PostOnly() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !postOnlyPath(c.Request.URL.Path) {
+			c.Next()
+			return
+		}
+		if c.Request.Method == http.MethodPost {
+			c.Next()
+			return
+		}
+		c.Header("Allow", http.MethodPost)
+		if c.Request.Method == http.MethodOptions {
+			c.Next() // CORS answers the preflight
+			return
+		}
+		apierror.NoMethod(c)
 	}
 }
 
-func onlyPost(c *gin.Context) {
-	c.Header("Allow", http.MethodPost)
-	apierror.NoMethod(c)
+func postOnlyPath(p string) bool {
+	parts := strings.Split(strings.TrimSuffix(p, "/"), "/")
+	switch {
+	case len(parts) == 5: // "", api, v1, workspaces, import
+		return parts[1] == "api" && parts[2] == "v1" && parts[3] == "workspaces" && parts[4] == "import"
+	case len(parts) == 7: // "", api, v1, workspaces, :id, files, upload
+		return parts[1] == "api" && parts[2] == "v1" && parts[3] == "workspaces" && parts[5] == "files" && parts[6] == "upload"
+	}
+	return false
 }
 
 // UploadRoutes are the routes whose bodies may exceed the gateway's default

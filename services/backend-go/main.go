@@ -333,6 +333,7 @@ func newRouter(g gateway) *gin.Engine {
 	r.Use(middleware.ValidPath())
 	r.Use(middleware.ValidQuery())
 	r.Use(middleware.Gzip())
+	r.Use(files.PostOnly())
 	r.Use(middleware.CORS())
 
 	// ── Rate limiting: 120 req/s per IP, burst of 30 ─────────────────────────

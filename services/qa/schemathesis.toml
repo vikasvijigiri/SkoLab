@@ -51,3 +51,9 @@ checks.positive_data_acceptance.expected-statuses = ["2xx", "400", "401", "403",
 [[operations]]
 include-name = "GET /api/v1/workspaces/{id}/output.pdf"
 checks.ensure_resource_availability.enabled = false
+
+# A folder has no bytes of its own: 400 not_a_file, which an id alone
+# cannot tell apart from a file's.
+[[operations]]
+include-name = "GET /api/v1/workspaces/{id}/files/{file_id}/raw"
+checks.positive_data_acceptance.expected-statuses = ["2xx", "400", "401", "403", "404", "409", "429", "5xx"]
