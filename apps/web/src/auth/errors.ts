@@ -19,6 +19,7 @@ const firebaseCodes: Record<string, AuthErrorCode> = {
   "auth/popup-blocked": "popup-blocked",
   "auth/account-exists-with-different-credential": "account-exists-with-different-credential",
   "auth/requires-recent-login": "requires-recent-login",
+  "auth/unauthorized-domain": "unauthorized-domain",
 };
 
 /** Maps any thrown value from the Firebase SDK onto an AuthError. */
@@ -46,6 +47,7 @@ const messages: Record<AuthErrorCode, string> = {
   "account-exists-with-different-credential":
     "This email already has an account with a different sign-in method. Sign in with your password.",
   "requires-recent-login": "For your security, sign in again to continue.",
+  "unauthorized-domain": "Google sign-in isn't available on this address. Use your email and password instead.",
   unknown: "Something went wrong. Please try again.",
 };
 
