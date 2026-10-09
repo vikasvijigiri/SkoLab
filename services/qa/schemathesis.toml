@@ -20,3 +20,28 @@ checks.positive_data_acceptance.expected-statuses = ["2xx", "401", "403", "404",
 # A source over 100,000 characters is refused with the documented 413
 # document_too_large, which the fuzzer's default rejection list leaves out.
 checks.negative_data_rejection.expected-statuses = ["400", "401", "403", "404", "405", "406", "409", "413", "415", "422", "428", "429", "5xx"]
+
+# Project files: a schema-valid path can still be refused by rules a schema
+# cannot express (reserved main.tex/output.pdf, a text file needs a known
+# extension: 415), an existing path is 409, and generated uploads and .zip
+# archives are not real files (400 invalid_archive, 415 unsupported_file_type).
+[[operations]]
+include-name = "POST /api/v1/workspaces/{id}/files"
+checks.positive_data_acceptance.expected-statuses = ["2xx", "400", "401", "403", "404", "409", "413", "415", "429", "5xx"]
+
+[[operations]]
+include-name = "POST /api/v1/workspaces/{id}/files/upload"
+checks.positive_data_acceptance.expected-statuses = ["2xx", "400", "401", "403", "404", "409", "413", "415", "429", "5xx"]
+
+[[operations]]
+include-name = "PATCH /api/v1/workspaces/{id}/files/{file_id}"
+checks.positive_data_acceptance.expected-statuses = ["2xx", "400", "401", "403", "404", "409", "429", "5xx"]
+
+[[operations]]
+include-name = "PUT /api/v1/workspaces/{id}/files/{file_id}"
+checks.positive_data_acceptance.expected-statuses = ["2xx", "400", "401", "403", "404", "409", "413", "429", "5xx"]
+checks.negative_data_rejection.expected-statuses = ["400", "401", "403", "404", "405", "406", "409", "413", "415", "422", "428", "429", "5xx"]
+
+[[operations]]
+include-name = "POST /api/v1/workspaces/import"
+checks.positive_data_acceptance.expected-statuses = ["2xx", "400", "401", "403", "409", "413", "429", "5xx"]

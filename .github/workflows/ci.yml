@@ -188,6 +188,7 @@ jobs:
             --checks all \
             --exclude-operation-id deleteAccount \
             --exclude-operation-id compile \
+            --exclude-operation-id compileProject \
             --exclude-operation-id sentryAlertHook \
             --max-examples 25 \
             --generation-deterministic \

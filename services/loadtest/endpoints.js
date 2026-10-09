@@ -18,6 +18,9 @@ const uid = __ENV.USER_ID;
 const minutes = Number(__ENV.MINUTES || 3);
 const scale = Number(__ENV.SCALE || 1);
 const conflicts = new Counter('document_version_conflicts');
+// The same fixtures the Hurl scenarios upload and import.
+const dotPng = open('../qa/hurl/fixtures/dot.png', 'b');
+const projectZip = open('../qa/hurl/fixtures/project.zip', 'b');
 
 const auth = () => ({ Authorization: `Bearer ${__ENV.TOKEN}`, 'Content-Type': 'application/json' });
 const req = (method, path, name, body, extra = {}) =>
@@ -26,6 +29,15 @@ const req = (method, path, name, body, extra = {}) =>
     tags: { name },
     responseCallback: http.expectedStatuses({ min: 200, max: 499 }),
   });
+
+// A multipart request: k6 sets the boundary, so no JSON Content-Type.
+const upload = (path, name, fields) =>
+  http.request('POST', `${base}${path}`, fields, {
+    headers: { Authorization: `Bearer ${__ENV.TOKEN}` },
+    tags: { name },
+    responseCallback: http.expectedStatuses({ min: 200, max: 499 }),
+  });
+const unique = () => `${__VU}-${__ITER}-${Date.now()}`;
 
 // name -> [requests per second, function]
 const endpoints = {
@@ -45,6 +57,15 @@ const endpoints = {
   invites_list: [2, (d) => ok(req('GET', `/api/v1/workspaces/${d.ws}/invites`, 'GET /api/v1/workspaces/:id/invites'), 200)],
   invite_lifecycle: [1, inviteLifecycle],
   ticket: [3, (d) => ok(req('POST', `/api/v1/ws/colab/${d.ws}/tickets`, 'POST /api/v1/ws/colab/:workspace_id/tickets'), 201)],
+  files_list: [5, (d) => ok(req('GET', `/api/v1/workspaces/${d.proj}/files`, 'GET /api/v1/workspaces/:id/files'), 200)],
+  file_get: [5, (d) => ok(req('GET', `/api/v1/workspaces/${d.proj}/files/${d.textFile}`, 'GET /api/v1/workspaces/:id/files/:file_id'), 200)],
+  file_raw: [5, (d) => ok(req('GET', `/api/v1/workspaces/${d.proj}/files/${d.image}/raw`, 'GET /api/v1/workspaces/:id/files/:file_id/raw'), 200)],
+  file_save: [3, saveFile],
+  file_lifecycle: [2, fileLifecycle],
+  file_upload: [2, uploadLifecycle],
+  archive: [2, (d) => ok(req('GET', `/api/v1/workspaces/${d.proj}/archive`, 'GET /api/v1/workspaces/:id/archive'), 200)],
+  output_pdf: [2, (d) => ok(req('GET', `/api/v1/workspaces/${d.proj}/output.pdf`, 'GET /api/v1/workspaces/:id/output.pdf'), 200)],
+  import_project: [1, importProject],
   profile_sync: [2, () => ok(req('POST', '/api/v1/users/profile/sync', 'POST /api/v1/users/profile/sync', { uid, name: 'SkoLab monitoring' }), 200)],
   liveness: [2, () => ok(http.get(`${base}/gateway-health`, { tags: { name: 'GET /gateway-health' } }), 200)],
   readiness: [2, () => ok(http.get(`${base}/readyz`, { tags: { name: 'GET /readyz' } }), 200)],
@@ -73,6 +94,11 @@ const URLS = [
   'POST /api/v1/workspaces/:id/invites', 'POST /api/v1/invites/preview', 'POST /api/v1/invites/accept',
   'DELETE /api/v1/workspaces/:id/invites/:invite_id', 'POST /api/v1/ws/colab/:workspace_id/tickets',
   'POST /api/v1/users/profile/sync', 'POST /api/v1/colab/compile', 'GET /gateway-health', 'GET /readyz',
+  'GET /api/v1/workspaces/:id/files', 'POST /api/v1/workspaces/:id/files', 'POST /api/v1/workspaces/:id/files/upload',
+  'GET /api/v1/workspaces/:id/files/:file_id', 'GET /api/v1/workspaces/:id/files/:file_id/raw',
+  'PUT /api/v1/workspaces/:id/files/:file_id', 'PATCH /api/v1/workspaces/:id/files/:file_id',
+  'DELETE /api/v1/workspaces/:id/files/:file_id', 'GET /api/v1/workspaces/:id/archive',
+  'POST /api/v1/workspaces/:id/compile', 'GET /api/v1/workspaces/:id/output.pdf', 'POST /api/v1/workspaces/import',
 ];
 const gates = {
   'GET /api/v1/templates': 'p(95)<150',
@@ -80,6 +106,11 @@ const gates = {
   'GET /api/v1/workspaces/:id/document': 'p(95)<250',
   'PUT /api/v1/workspaces/:id/document': 'p(95)<400',
   'POST /api/v1/colab/compile': 'p(95)<15000',
+  'POST /api/v1/workspaces/:id/compile': 'p(95)<15000',
+  'GET /api/v1/workspaces/:id/files': 'p(95)<250',
+  'PUT /api/v1/workspaces/:id/files/:file_id': 'p(95)<400',
+  'POST /api/v1/workspaces/:id/files/upload': 'p(95)<1000',
+  'GET /api/v1/workspaces/:id/archive': 'p(95)<1000',
 };
 const thresholds = { checks: ['rate>0.99'], http_req_failed: ['rate<0.01'] };
 for (const url of URLS) {
@@ -126,8 +157,44 @@ function inviteLifecycle(d) {
   ok(req('DELETE', `/api/v1/workspaces/${d.ws}/invites/${invite.id}`, 'DELETE /api/v1/workspaces/:id/invites/:invite_id'), 204);
 }
 
+function saveFile(d) {
+  const current = req('GET', `/api/v1/workspaces/${d.proj}/files/${d.textFile}`, 'GET /api/v1/workspaces/:id/files/:file_id');
+  if (!ok(current, 200)) return;
+  const res = req('PUT', `/api/v1/workspaces/${d.proj}/files/${d.textFile}`, 'PUT /api/v1/workspaces/:id/files/:file_id',
+    { content: `The introduction, k6 edit ${Date.now()}.`, base_version: current.json('version') });
+  if (res.status === 409) conflicts.add(1);
+  check(res, { 'saved or conflict': (r) => r.status === 200 || r.status === 409 });
+}
+
+function fileLifecycle(d) {
+  const created = req('POST', `/api/v1/workspaces/${d.proj}/files`, 'POST /api/v1/workspaces/:id/files',
+    { path: `scratch/${unique()}.tex`, kind: 'text', content: 'Scratch.' });
+  if (!ok(created, 201)) return;
+  const id = created.json('id');
+  ok(req('PATCH', `/api/v1/workspaces/${d.proj}/files/${id}`, 'PATCH /api/v1/workspaces/:id/files/:file_id', { path: `moved/${unique()}.tex` }), 200);
+  ok(req('DELETE', `/api/v1/workspaces/${d.proj}/files/${id}`, 'DELETE /api/v1/workspaces/:id/files/:file_id'), 204);
+}
+
+function uploadLifecycle(d) {
+  const res = upload(`/api/v1/workspaces/${d.proj}/files/upload`, 'POST /api/v1/workspaces/:id/files/upload',
+    { folder: 'uploads', file: http.file(dotPng, `${unique()}.png`, 'image/png') });
+  if (!ok(res, 201)) return;
+  ok(req('DELETE', `/api/v1/workspaces/${d.proj}/files/${res.json('files.0.id')}`, 'DELETE /api/v1/workspaces/:id/files/:file_id'), 204);
+}
+
+function importProject() {
+  const res = upload('/api/v1/workspaces/import', 'POST /api/v1/workspaces/import',
+    { title: 'k6 imported project', file: http.file(projectZip, 'project.zip', 'application/zip') });
+  if (!ok(res, 201)) return;
+  ok(req('DELETE', `/api/v1/workspaces/${res.json('id')}`, 'DELETE /api/v1/workspaces/:id'), 204);
+}
+
+// One compile at a time per user: the single-file and whole-project
+// compiles take turns.
 export function compile(d) {
-  const res = req('POST', '/api/v1/colab/compile', 'POST /api/v1/colab/compile', { latex_source: d.compileSource, engine: 'pdflatex' });
+  const res = __ITER % 2 === 0
+    ? req('POST', '/api/v1/colab/compile', 'POST /api/v1/colab/compile', { latex_source: d.compileSource, engine: 'pdflatex' })
+    : req('POST', `/api/v1/workspaces/${d.proj}/compile`, 'POST /api/v1/workspaces/:id/compile', {});
   check(res, { 'compiled': (r) => r.status === 200 && r.json('status') === 'compiled' });
 }
 
@@ -144,11 +211,23 @@ export function setup() {
   }
   const replayed = req('POST', '/api/v1/workspaces', 'setup', { title: 'k6 replayed' }, { 'Idempotency-Key': `k6-${uid}` }).json('id');
   const compileSource = '\\documentclass{article}\\begin{document}Hello from the load test, $e^{i\\pi}+1=0$.\\end{document}';
-  return { templates, source, ws, docs, replayed, compileSource };
+  // A multi-file project: \input, an image and a BibTeX bibliography.
+  const proj = req('POST', '/api/v1/workspaces', 'setup', { title: 'k6 project' }).json('id');
+  req('PUT', `/api/v1/workspaces/${proj}/document`, 'setup', {
+    source: '\\documentclass{article}\\usepackage{graphicx}\\begin{document}\\input{chapters/intro}\n' +
+      '\\includegraphics[width=1cm]{figures/dot.png} \\cite{knuth1984}\\bibliographystyle{plain}\\bibliography{refs}\\end{document}\n',
+    base_version: 0,
+  });
+  const textFile = req('POST', `/api/v1/workspaces/${proj}/files`, 'setup', { path: 'chapters/intro.tex', kind: 'text', content: 'The introduction.' }).json('id');
+  req('POST', `/api/v1/workspaces/${proj}/files`, 'setup', { path: 'refs.bib', kind: 'text', content: '@book{knuth1984, author={Donald Knuth}, title={The TeXbook}, publisher={Addison-Wesley}, year={1984}}\n' });
+  const image = upload(`/api/v1/workspaces/${proj}/files/upload`, 'setup', { folder: 'figures', file: http.file(dotPng, 'dot.png', 'image/png') }).json('files.0.id');
+  const compiled = req('POST', `/api/v1/workspaces/${proj}/compile`, 'setup', {});
+  if (compiled.json('status') !== 'compiled') throw new Error(`project compile failed: ${compiled.body}`);
+  return { templates, source, ws, docs, replayed, compileSource, proj, textFile, image };
 }
 
 export function teardown(d) {
-  for (const id of [d.ws, d.replayed, ...d.docs]) {
+  for (const id of [d.ws, d.replayed, d.proj, ...d.docs]) {
     ok(req('DELETE', `/api/v1/workspaces/${id}`, 'DELETE /api/v1/workspaces/:id'), 204);
   }
 }

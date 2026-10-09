@@ -31,6 +31,7 @@ import (
 	"github.com/skolab/backend-go/internal/colab"
 	"github.com/skolab/backend-go/internal/db"
 	"github.com/skolab/backend-go/internal/document"
+	"github.com/skolab/backend-go/internal/files"
 	"github.com/skolab/backend-go/internal/health"
 	"github.com/skolab/backend-go/internal/middleware"
 	"github.com/skolab/backend-go/internal/quota"
@@ -324,7 +325,11 @@ func newRouter(g gateway) *gin.Engine {
 	r.Use(requestID())
 	r.Use(requestLogger())
 	r.Use(middleware.SecurityHeaders())
-	r.Use(middleware.BodyLimit(middleware.MaxBodyBytes))
+	uploads := map[string]int64{}
+	for _, route := range files.UploadRoutes {
+		uploads[route] = files.MaxUploadBytes
+	}
+	r.Use(middleware.BodyLimit(middleware.MaxBodyBytes, uploads))
 	r.Use(middleware.ValidPath())
 	r.Use(middleware.ValidQuery())
 	r.Use(middleware.Gzip())
@@ -427,6 +432,11 @@ func newRouter(g gateway) *gin.Engine {
 	// The workspace's LaTeX source (one main.tex), saved with optimistic
 	// versioning so two editors never overwrite each other. See internal/document.
 	document.Register(workspacesAPI, document.NewPostgresStore(g.pool), templates.Known)
+	// Everything else in the project: folders, more .tex and .bib files,
+	// uploaded images, the last compiled PDF, .zip download and import, and
+	// compiling the whole project. See internal/files.
+	compiler := colab.NewService(g.pool, &http.Client{Transport: g.transport}, g.python)
+	files.Register(workspacesAPI, files.NewPostgresStore(g.pool), compiler)
 
 	// ── Editor templates (Firebase-authenticated) ─────────────────────────────
 	// Journal templates for physics, chemistry, mathematics and biology, built

@@ -37,11 +37,15 @@ func unavailable(err error) error {
 	return errors.Join(ErrUnavailable, err)
 }
 
-type querier interface {
+// Querier is a pool or a transaction.
+type Querier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-func callerRole(ctx context.Context, q querier, workspaceID, userID string) (string, error) {
+// CallerRole is userID's role in workspaceID (owner, editor, commenter or
+// viewer), or ErrNotFound when they cannot see it. internal/files authorizes
+// with it too, so both packages follow one rule.
+func CallerRole(ctx context.Context, q Querier, workspaceID, userID string) (string, error) {
 	var r string
 	err := q.QueryRow(ctx, role, userID, workspaceID).Scan(&r)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -69,7 +73,7 @@ func (s *postgresStore) Get(ctx context.Context, workspaceID, userID string) (Do
 	}
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
-	r, err := callerRole(ctx, s.pool, workspaceID, userID)
+	r, err := CallerRole(ctx, s.pool, workspaceID, userID)
 	if err != nil {
 		return Document{}, err
 	}
@@ -96,7 +100,7 @@ func (s *postgresStore) Save(ctx context.Context, workspaceID, userID, source st
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck // no-op after Commit
 
-	r, err := callerRole(ctx, tx, workspaceID, userID)
+	r, err := CallerRole(ctx, tx, workspaceID, userID)
 	if err != nil {
 		return Document{}, err
 	}

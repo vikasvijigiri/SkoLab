@@ -8,6 +8,7 @@ def utcnow():
 import re
 from sqlalchemy import (
     BigInteger,
+    LargeBinary,
     Column,
     String,
     Integer,
@@ -152,6 +153,70 @@ class WorkspaceDocument(Base):
     __table_args__ = (
         CheckConstraint("char_length(source) <= 100000", name="chk_workspace_document_size"),
         CheckConstraint("version >= 1", name="chk_workspace_document_version"),
+    )
+
+
+class WorkspaceFile(Base):
+    """A file or folder in a workspace's project, beside its main.tex.
+
+    Written by the Go gateway (internal/files). A text file keeps ``content``,
+    an uploaded image or PDF keeps ``data``; a folder keeps neither. Paths are
+    unique per workspace ignoring case, so a project unpacks the same on every
+    file system.
+    """
+
+    __tablename__ = "workspace_files"
+
+    id = Column(String(36), primary_key=True)
+    workspace_id = Column(
+        String(100),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    path = Column(String(200), nullable=False)
+    kind = Column(String(10), nullable=False)
+    content = Column(Text, nullable=True)
+    data = Column(LargeBinary, nullable=True)
+    size = Column(Integer, nullable=False, default=0)
+    content_type = Column(String(100), nullable=False, default="")
+    version = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_by = Column(
+        String(100),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    __table_args__ = (
+        CheckConstraint("kind IN ('folder', 'text', 'binary')", name="chk_workspace_file_kind"),
+        CheckConstraint("size >= 0 AND size <= 5242880", name="chk_workspace_file_size"),
+        CheckConstraint("version >= 1", name="chk_workspace_file_version"),
+        Index("uq_workspace_files_path", "workspace_id", text("lower(path)"), unique=True),
+    )
+
+
+class WorkspaceOutput(Base):
+    """The last PDF compiled from a workspace's project (Go gateway, internal/files)."""
+
+    __tablename__ = "workspace_outputs"
+
+    workspace_id = Column(
+        String(100),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    pdf = Column(LargeBinary, nullable=False)
+    size = Column(Integer, nullable=False)
+    compiled_at = Column(DateTime, default=utcnow, nullable=False)
+    compiled_by = Column(
+        String(100),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    __table_args__ = (
+        CheckConstraint("size >= 0 AND size <= 8388608", name="chk_workspace_output_size"),
     )
 
 

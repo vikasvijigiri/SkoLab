@@ -38,8 +38,17 @@ const MaxBodyBytes = 1 << 20
 // them. A declared Content-Length is refused up front; a body without one
 // (chunked) is cut off at the limit, so a handler sees a read error and
 // answers 400 instead of buffering an unbounded body.
-func BodyLimit(limit int64) gin.HandlerFunc {
+//
+// larger raises the limit for the routes it names (Gin route patterns, such
+// as a file upload) to the size given.
+func BodyLimit(limit int64, larger ...map[string]int64) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		limit := limit
+		for _, routes := range larger {
+			if l, ok := routes[c.FullPath()]; ok {
+				limit = l
+			}
+		}
 		if c.Request.ContentLength > limit {
 			apierror.Abort(c, http.StatusRequestEntityTooLarge, "body_too_large", "Request body is too large")
 			return

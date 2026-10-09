@@ -68,6 +68,7 @@ jobs:
             --header "Authorization: Bearer $TOKEN" \
             --checks all \
             --exclude-operation-id deleteAccount \
+            --exclude-operation-id compileProject \
             --exclude-operation-id compile \
             --exclude-operation-id sentryAlertHook \
             --max-examples 300 \

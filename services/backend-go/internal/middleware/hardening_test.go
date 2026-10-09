@@ -79,6 +79,28 @@ func TestBodyLimit(t *testing.T) {
 	}
 }
 
+func TestBodyLimitRaisedForNamedRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(BodyLimit(16, map[string]int64{"/upload/:id": 64}))
+	ok := func(c *gin.Context) {
+		if _, err := io.ReadAll(c.Request.Body); err != nil {
+			c.AbortWithStatus(http.StatusBadRequest)
+			return
+		}
+		c.Status(http.StatusOK)
+	}
+	r.POST("/upload/:id", ok)
+	r.POST("/other", ok)
+	for path, want := range map[string]int{"/upload/7": http.StatusOK, "/other": http.StatusRequestEntityTooLarge} {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, path, strings.NewReader(strings.Repeat("x", 40))))
+		if w.Code != want {
+			t.Fatalf("%s: %d, want %d", path, w.Code, want)
+		}
+	}
+}
+
 func TestRequestIDValid(t *testing.T) {
 	for id, want := range map[string]bool{
 		"3f2b9c1e-7a4d-4e0b-9a51-0c3e1d2f4a5b": true,
