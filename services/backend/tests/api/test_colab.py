@@ -38,6 +38,57 @@ def test_compile_returns_bounded_pdf(monkeypatch):
     assert base64.b64decode(result.pdf_base64 or "") == b"%PDF-1.7 test"
 
 
+def test_compile_reruns_until_references_settle(monkeypatch):
+    monkeypatch.setattr(colab.shutil, "which", lambda _: "pdflatex")
+    timeouts = []
+
+    def fake_run(command, cwd, env, timeout):
+        timeouts.append(timeout)
+        hint = "LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right."
+        (Path(cwd) / "main.log").write_text(hint if len(timeouts) == 1 else "done")
+        (Path(cwd) / "main.pdf").write_bytes(b"%PDF-1.7 pass %d" % len(timeouts))
+        return 0, "Output written", False
+
+    monkeypatch.setattr(colab, "_run_bounded", fake_run)
+    result = colab._compile_source(r"\documentclass{article}\begin{document}\ref{x}\end{document}")
+    assert result.status == "compiled"
+    assert base64.b64decode(result.pdf_base64 or "") == b"%PDF-1.7 pass 2"
+    assert len(timeouts) == 2
+    # Both passes share one budget.
+    assert timeouts[1] <= timeouts[0] <= colab._COMPILE_TIMEOUT_SECONDS
+
+
+def test_compile_stops_after_the_last_allowed_pass(monkeypatch):
+    monkeypatch.setattr(colab.shutil, "which", lambda _: "pdflatex")
+    passes = []
+
+    def fake_run(command, cwd, env, timeout):
+        passes.append(timeout)
+        (Path(cwd) / "main.log").write_text("Package rerunfilecheck Warning: (rerunfilecheck) Rerun to get outlines right")
+        (Path(cwd) / "main.pdf").write_bytes(b"%PDF-1.7")
+        return 0, "", False
+
+    monkeypatch.setattr(colab, "_run_bounded", fake_run)
+    assert colab._compile_source(_DOC % "Hi").status == "compiled"
+    assert len(passes) == colab._MAX_PASSES
+
+
+def test_compile_does_not_rerun_a_failed_pass(monkeypatch):
+    monkeypatch.setattr(colab.shutil, "which", lambda _: "pdflatex")
+    passes = []
+
+    def fake_run(command, cwd, env, timeout):
+        passes.append(timeout)
+        (Path(cwd) / "main.log").write_text("Rerun to get cross-references right")
+        return 1, "./main.tex:3: Undefined control sequence.", False
+
+    monkeypatch.setattr(colab, "_run_bounded", fake_run)
+    result = colab._compile_source(_DOC % "Hi")
+    assert result.status == "error"
+    assert result.errors == ["line 3: Undefined control sequence."]
+    assert len(passes) == 1
+
+
 async def test_compile_route_requires_firebase_auth(client):
     response = await client.post(
         "/api/v1/colab/compile",

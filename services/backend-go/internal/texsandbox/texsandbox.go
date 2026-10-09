@@ -33,6 +33,10 @@ const (
 	MaxPDFBytes    = 8 * 1024 * 1024
 	CompileTimeout = 20 * time.Second
 	logTailBytes   = 20_000
+	// Cross-references, citations and tables of contents settle on a later
+	// pass (what latexmk does); every pass shares the one CompileTimeout.
+	maxPasses      = 3
+	rerunScanBytes = 64 * 1024
 )
 
 // Result mirrors services/backend/app/schemas/colab.py's CompileResponse.
@@ -50,6 +54,9 @@ var (
 	)
 	forbiddenPipe = regexp.MustCompile(`\\(?:input|openin|openout)\s*\{?\s*\|`)
 	errorLine     = regexp.MustCompile(`^(.*?):(\d+):\s*(.*)$`)
+	rerunHint     = regexp.MustCompile(
+		`Rerun to get|Rerun LaTeX|Please rerun LaTeX|Label\(s\) may have changed|\(rerunfilecheck\)\s+Rerun`,
+	)
 )
 
 // FindForbidden returns the first disallowed construct in source, or "".
@@ -123,9 +130,22 @@ func Compile(ctx context.Context, engine, workDir, source string) Result {
 		"-halt-on-error", "-file-line-error", "main.tex",
 	})
 
-	returncode, tail, timedOut, err := runBounded(ctx, command, workDir, sandboxEnv(workDir))
-	if err != nil {
-		return Result{Status: "error", Errors: []string{"internal error running compiler"}}
+	ctx, cancel := context.WithTimeout(ctx, CompileTimeout)
+	defer cancel()
+	var (
+		returncode int
+		tail       string
+		timedOut   bool
+	)
+	for pass := 0; pass < maxPasses; pass++ {
+		var err error
+		returncode, tail, timedOut, err = runBounded(ctx, command, workDir, sandboxEnv(workDir))
+		if err != nil {
+			return Result{Status: "error", Errors: []string{"internal error running compiler"}}
+		}
+		if timedOut || returncode != 0 || !needsRerun(workDir) {
+			break
+		}
 	}
 	log := scrubPaths(tail, workDir)
 
@@ -155,6 +175,12 @@ func Compile(ctx context.Context, engine, workDir, source string) Result {
 		return Result{Status: "error", Log: log, Errors: []string{"internal error reading compiled PDF"}}
 	}
 	return Result{Status: "compiled", PDFBase64: base64.StdEncoding.EncodeToString(pdfBytes), Log: log}
+}
+
+// needsRerun reports whether pdflatex's own log asks for another pass.
+func needsRerun(workDir string) bool {
+	tail, err := tailFile(filepath.Join(workDir, "main.log"), rerunScanBytes)
+	return err == nil && rerunHint.MatchString(tail)
 }
 
 func parseErrors(log string) []string {

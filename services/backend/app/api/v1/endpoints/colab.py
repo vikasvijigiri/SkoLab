@@ -45,6 +45,14 @@ router = APIRouter()
 
 _MAX_PDF_BYTES = 8 * 1024 * 1024
 _COMPILE_TIMEOUT_SECONDS = 20
+# Cross-references, citations and tables of contents settle on a later pass
+# (what latexmk does). All passes share the one time budget above.
+_MAX_PASSES = 3
+_RERUN_HINT = re.compile(
+    rb"Rerun to get|Rerun LaTeX|Please rerun LaTeX|Label\(s\) may have changed|"
+    rb"\(rerunfilecheck\)\s+Rerun"
+)
+_RERUN_SCAN_BYTES = 64 * 1024
 _LOG_TAIL_CHARS = 20_000
 _ERROR_LINE = re.compile(r"^(.*?):(\d+):\s*(.*)$")
 
@@ -179,6 +187,17 @@ def _compile_source(source: str) -> CompileResponse:
         _slots.release()
 
 
+def _needs_rerun(work_dir: Path) -> bool:
+    """Whether pdflatex's own log asks for another pass (read from its tail)."""
+    try:
+        with open(work_dir / "main.log", "rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            fh.seek(max(0, fh.tell() - _RERUN_SCAN_BYTES))
+            return _RERUN_HINT.search(fh.read()) is not None
+    except OSError:
+        return False
+
+
 def _compile_in_sandbox(engine: str, source: str) -> CompileResponse:
     with tempfile.TemporaryDirectory(prefix="skolab-tex-") as raw_dir:
         work_dir = Path(raw_dir)
@@ -193,9 +212,16 @@ def _compile_in_sandbox(engine: str, source: str) -> CompileResponse:
                 "main.tex",
             ]
         )
-        returncode, tail, timed_out = _run_bounded(
-            command, work_dir, _sandbox_env(work_dir), _COMPILE_TIMEOUT_SECONDS
-        )
+        deadline = time.monotonic() + _COMPILE_TIMEOUT_SECONDS
+        for _ in range(_MAX_PASSES):
+            returncode, tail, timed_out = _run_bounded(
+                command,
+                work_dir,
+                _sandbox_env(work_dir),
+                max(deadline - time.monotonic(), 0.1),
+            )
+            if timed_out or returncode != 0 or not _needs_rerun(work_dir):
+                break
         # Never hand the client our filesystem layout.
         log = tail.replace(str(work_dir), ".").replace(raw_dir, ".")
 

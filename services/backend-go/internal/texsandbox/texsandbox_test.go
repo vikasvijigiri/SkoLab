@@ -227,3 +227,23 @@ func TestRealRunawaySourceIsKilledAtTheTimeout(t *testing.T) {
 		t.Fatalf("compile ran %v past its %v timeout — process group not killed?", elapsed, CompileTimeout)
 	}
 }
+
+func TestNeedsRerunReadsTheEnginesOwnHint(t *testing.T) {
+	dir := t.TempDir()
+	if needsRerun(dir) {
+		t.Fatal("no log yet: no rerun")
+	}
+	cases := map[string]bool{
+		"LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.":                                            true,
+		"Package rerunfilecheck Warning: File `main.out' has changed.\n(rerunfilecheck)                Rerun to get outlines right": true,
+		"Output written on main.pdf (1 page, 1234 bytes).":                                                                          false,
+	}
+	for log, want := range cases {
+		if err := os.WriteFile(filepath.Join(dir, "main.log"), []byte(log), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if got := needsRerun(dir); got != want {
+			t.Errorf("needsRerun(%q) = %v, want %v", log, got, want)
+		}
+	}
+}
