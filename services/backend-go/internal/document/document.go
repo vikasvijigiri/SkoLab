@@ -131,9 +131,26 @@ func (h handlers) get(c *gin.Context) {
 }
 
 type saveRequest struct {
-	Source      *string `json:"source"`
-	BaseVersion *int    `json:"base_version"`
-	TemplateID  *string `json:"template_id"`
+	Source      *string         `json:"source"`
+	BaseVersion json.RawMessage `json:"base_version"`
+	TemplateID  *string         `json:"template_id"`
+}
+
+// baseVersion reads base_version the way JSON Schema's "integer" does:
+// any number with no fractional part, so 344 and 344.0 are the same value.
+// A string ("1") or null is not a number and is refused.
+func baseVersion(raw json.RawMessage) (int, bool) {
+	if len(raw) == 0 || (raw[0] != '-' && (raw[0] < '0' || raw[0] > '9')) {
+		return 0, false
+	}
+	f, err := strconv.ParseFloat(string(raw), 64)
+	if err != nil || f != math.Trunc(f) {
+		return 0, false
+	}
+	if f < 0 || f > math.MaxInt32 {
+		return -1, true
+	}
+	return int(f), true
 }
 
 // validSource allows what a .tex file holds: any printable text plus tab,
@@ -162,11 +179,12 @@ func (h handlers) put(c *gin.Context) {
 		fail(c, http.StatusBadRequest, "invalid_body", "Request body must be JSON with source and base_version")
 		return
 	}
+	version, integral := baseVersion(req.BaseVersion)
 	switch {
-	case req.Source == nil || req.BaseVersion == nil:
+	case req.Source == nil || !integral:
 		fail(c, http.StatusBadRequest, "invalid_body", "Request body must be JSON with source and base_version")
 		return
-	case *req.BaseVersion < 0 || *req.BaseVersion > math.MaxInt32: // workspace_documents.version is INTEGER
+	case version < 0: // out of 0..MaxInt32: workspace_documents.version is INTEGER
 		fail(c, http.StatusBadRequest, "invalid_base_version", "base_version must be between 0 and 2147483647")
 		return
 	case utf8.RuneCountInString(*req.Source) > MaxSourceRunes:
@@ -183,7 +201,7 @@ func (h handlers) put(c *gin.Context) {
 			return
 		}
 	}
-	doc, err := h.store.Save(c.Request.Context(), c.Param("id"), uid, *req.Source, req.TemplateID, *req.BaseVersion)
+	doc, err := h.store.Save(c.Request.Context(), c.Param("id"), uid, *req.Source, req.TemplateID, version)
 	if err != nil {
 		storeError(c, err)
 		return

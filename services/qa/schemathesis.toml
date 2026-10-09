@@ -17,3 +17,6 @@ checks.positive_data_acceptance.expected-statuses = ["2xx", "401", "403", "404",
 [[operations]]
 include-name = "PUT /api/v1/workspaces/{id}/document"
 checks.positive_data_acceptance.expected-statuses = ["2xx", "401", "403", "404", "409", "429", "5xx"]
+# A source over 100,000 characters is refused with the documented 413
+# document_too_large, which the fuzzer's default rejection list leaves out.
+checks.negative_data_rejection.expected-statuses = ["400", "401", "403", "404", "405", "406", "409", "413", "415", "422", "428", "429", "5xx"]

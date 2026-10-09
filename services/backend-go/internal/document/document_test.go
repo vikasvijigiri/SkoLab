@@ -94,6 +94,15 @@ func TestPutSavesAsTheCallerFromTheToken(t *testing.T) {
 	}
 }
 
+// JSON Schema counts 344.0 as the integer 344, so the API must too.
+func TestPutAcceptsAnIntegralVersionWrittenWithAFraction(t *testing.T) {
+	store := &fakeStore{}
+	w := serve(t, store, "alice", http.MethodPut, path, `{"source":"x","base_version":2.0}`)
+	if w.Code != http.StatusOK || len(store.saved) != 1 || store.saved[0] != "ws-1|alice|2|-" {
+		t.Fatalf("%d %s %v", w.Code, w.Body, store.saved)
+	}
+}
+
 func TestPutRefusesBadBodiesBeforeTouchingTheStore(t *testing.T) {
 	cases := []struct {
 		name, body string
@@ -108,6 +117,9 @@ func TestPutRefusesBadBodiesBeforeTouchingTheStore(t *testing.T) {
 		{"negative version", `{"source":"x","base_version":-1}`, 400, "invalid_base_version"},
 		{"version past INTEGER", `{"source":"x","base_version":2147483648}`, 400, "invalid_base_version"},
 		{"fractional version", `{"source":"x","base_version":1.5}`, 400, "invalid_body"},
+		{"version as a string", `{"source":"x","base_version":"1"}`, 400, "invalid_body"},
+		{"null version", `{"source":"x","base_version":null}`, 400, "invalid_body"},
+		{"huge version", `{"source":"x","base_version":1e400}`, 400, "invalid_body"},
 		{"nul byte", `{"source":"a\u0000b","base_version":0}`, 400, "invalid_source"},
 		{"bell character", `{"source":"a\u0007b","base_version":0}`, 400, "invalid_source"},
 		{"unknown template", `{"source":"x","base_version":0,"template_id":"nope"}`, 400, "unknown_template"},
