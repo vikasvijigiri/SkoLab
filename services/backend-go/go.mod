@@ -1,6 +1,6 @@
 module github.com/skolab/backend-go
 
-go 1.26.8
+go 1.26.9
 
 require (
 	firebase.google.com/go/v4 v4.21.0

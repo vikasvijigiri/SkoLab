@@ -11,7 +11,7 @@
 # ── Gateway binary ────────────────────────────────────────────────────────
 # Keep in step with services/backend-go/go.mod. CGO off: the binary is
 # static, so this Alpine-built binary runs on the Debian runtime below.
-FROM golang:1.26-alpine@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c AS gateway
+FROM golang:1.26-alpine@sha256:c95332c2af86b6d89b91bd0500f4b9529ccbd090a0d1855c6d1ceaa142ae8615 AS gateway
 WORKDIR /src
 ENV GOTOOLCHAIN=local CGO_ENABLED=0
 COPY services/backend-go/go.mod services/backend-go/go.sum ./
