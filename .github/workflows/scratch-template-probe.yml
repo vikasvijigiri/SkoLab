@@ -57,4 +57,4 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f scratch
-          git commit -m "scratch: candidate journal templates compiled" && git push
+          git commit -m "scratch: candidate journal templates compiled" && for i in 1 2 3; do git pull --rebase -q origin "$GITHUB_REF_NAME" && git push && break; sleep 5; done
