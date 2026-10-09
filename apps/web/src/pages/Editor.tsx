@@ -361,7 +361,7 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
           ← Documents
         </Link>
         {isOwner ? (
-          <label className="min-w-0 flex-1">
+          <label className="min-w-32 flex-1">
             <span className="sr-only">Document title</span>
             <input
               value={title}
