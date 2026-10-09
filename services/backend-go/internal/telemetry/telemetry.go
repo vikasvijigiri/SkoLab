@@ -25,7 +25,9 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-var boundaries = []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120}
+// Most API answers take a few milliseconds, so the low end is finer: a
+// quantile is only as sharp as the bucket it falls in.
+var boundaries = []float64{0.001, 0.0025, 0.005, 0.0075, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120}
 var propagator = propagation.TraceContext{}
 
 type Telemetry struct {

@@ -14,6 +14,7 @@ summary, and prints the JSON between markers so it can be read from the log.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import math
 import os
@@ -155,8 +156,10 @@ def main() -> int:
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
             summary.write(md)
+    # Base64, because the runner masks every line of multi-line secrets, and
+    # a service-account JSON's "{" and "}" lines would blank out the braces.
     print("ENDPOINT-REPORT-JSON-BEGIN")
-    print(json.dumps(report, separators=(",", ":")))
+    print(base64.b64encode(json.dumps(report, separators=(",", ":")).encode()).decode())
     print("ENDPOINT-REPORT-JSON-END")
     if not report["server"]:
         print("::error::Prometheus has no skolab_http_requests_total samples; did the API export?")
