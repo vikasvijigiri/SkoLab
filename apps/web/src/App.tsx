@@ -1,14 +1,19 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { createBrowserRouter, createMemoryRouter, RouterProvider, type RouteObject } from "react-router";
 import { AuthProvider } from "./auth/AuthProvider";
+import { FullPageLoader } from "./components/Spinner";
 import type { AuthService } from "./auth/types";
 import { ForgotPassword } from "./pages/ForgotPassword";
 import { Home } from "./pages/Home";
+import { Invite } from "./pages/Invite";
 import { NotFound } from "./pages/NotFound";
 import { SignIn } from "./pages/SignIn";
 import { SignUp } from "./pages/SignUp";
 import { VerifyEmail } from "./pages/VerifyEmail";
 import { GuestOnly, RequireAccount, RequireUnverified } from "./routes";
+
+// The editor (CodeMirror, pdf.js) loads only when a document is opened.
+const Editor = lazy(() => import("./pages/Editor").then((m) => ({ default: m.Editor })));
 
 export const routes: RouteObject[] = [
   {
@@ -20,7 +25,22 @@ export const routes: RouteObject[] = [
     ],
   },
   { element: <RequireUnverified />, children: [{ path: "/verify-email", element: <VerifyEmail /> }] },
-  { element: <RequireAccount />, children: [{ path: "/", element: <Home /> }] },
+  // Guards itself: the invite token must be kept before any sign-in redirect.
+  { path: "/invite", element: <Invite /> },
+  {
+    element: <RequireAccount />,
+    children: [
+      { path: "/", element: <Home /> },
+      {
+        path: "/editor/:id",
+        element: (
+          <Suspense fallback={<FullPageLoader label="Opening the editor" />}>
+            <Editor />
+          </Suspense>
+        ),
+      },
+    ],
+  },
   { path: "*", element: <NotFound /> },
 ];
 

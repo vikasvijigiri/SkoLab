@@ -33,7 +33,9 @@ import (
 	"github.com/skolab/backend-go/internal/texsandbox"
 )
 
-const maxRequestBytes = 1024 * 1024 // Includes UTF-8 and JSON escapes for 100,000 characters.
+// maxRequestBytes fits 100,000 characters of source with UTF-8 and JSON
+// escapes (1 MiB), the project files as base64, and their JSON framing.
+const maxRequestBytes = 1024*1024 + (texsandbox.MaxFilesBytes+2)/3*4 + texsandbox.MaxFiles*512
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
@@ -116,8 +118,9 @@ func newMux(engine string, slots texsandbox.Slots, token string) *http.ServeMux 
 }
 
 type compileRequest struct {
-	LatexSource string `json:"latex_source"`
-	Engine      string `json:"engine"`
+	LatexSource string                `json:"latex_source"`
+	Engine      string                `json:"engine"`
+	Files       []texsandbox.WireFile `json:"files"`
 }
 
 func compileHandler(engine string, slots texsandbox.Slots, token string) http.HandlerFunc {
@@ -147,6 +150,11 @@ func compileHandler(engine string, slots texsandbox.Slots, token string) http.Ha
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		files, err := texsandbox.DecodeFiles(req.Files)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 
 		const admissionWait = 5 * time.Second
 		if err := slots.AcquireContext(r.Context(), admissionWait); err != nil {
@@ -169,9 +177,9 @@ func compileHandler(engine string, slots texsandbox.Slots, token string) http.Ha
 		defer os.RemoveAll(dir)
 
 		started := time.Now()
-		result := texsandbox.Compile(r.Context(), engine, dir, req.LatexSource)
+		result := texsandbox.Compile(r.Context(), engine, dir, req.LatexSource, files)
 		slog.Info("compile", "status", result.Status, "ms", time.Since(started).Milliseconds(),
-			"src_bytes", len(req.LatexSource))
+			"src_bytes", len(req.LatexSource), "files", len(files))
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(result)

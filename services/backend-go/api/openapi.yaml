@@ -9,7 +9,8 @@ info:
 
     Every error is `{"error": "<message for people>", "code": "<stable code>"}`;
     clients branch on `code`. Every response carries HSTS, nosniff and frame
-    and referrer policies, and responses under /api are never cached.
+    and referrer policies, and responses under /api are never cached, except
+    the template catalog, which a browser may keep but must revalidate (ETag).
 
     The collaboration WebSocket (`GET /ws/colab/{workspace_id}?ticket=...`)
     is not described here: open it with a ticket from
@@ -27,6 +28,7 @@ tags:
   - name: workspaces
   - name: sharing
   - name: collaboration
+  - name: editor
 
 paths:
   /gateway-health:
@@ -556,6 +558,452 @@ paths:
         "429": { $ref: "#/components/responses/TooMany" }
         "503": { $ref: "#/components/responses/Unavailable" }
 
+  /api/v1/workspaces/{id}/document:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+    get:
+      tags: [editor]
+      operationId: getDocument
+      summary: The workspace's LaTeX source (any active member)
+      description: A workspace that was never saved reads as version 0 with an empty source.
+      responses:
+        "200":
+          description: The document, with the caller's role and its insights.
+          headers:
+            ETag: { schema: { type: string, pattern: '^"v[0-9]+"$' } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    put:
+      tags: [editor]
+      operationId: saveDocument
+      summary: Save the LaTeX source (owner or editor)
+      description: |
+        base_version is the version the edit started from (0 for a document
+        never saved). If anyone saved since, nothing changes and the answer is
+        409 version_conflict with current_version. Unknown body fields are
+        refused (400 invalid_body).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DocumentSave" }
+      responses:
+        "200":
+          description: Saved; version is base_version + 1.
+          headers:
+            ETag: { schema: { type: string, pattern: '^"v[0-9]+"$' } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The document changed since base_version.
+          headers:
+            ETag: { schema: { type: string, pattern: '^"v[0-9]+"$' } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VersionConflict" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/workspaces/{id}/files:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+    get:
+      tags: [editor]
+      operationId: listFiles
+      summary: The project's files and folders, main.tex and the last compiled PDF (any active member)
+      responses:
+        "200":
+          description: The project at a glance, files sorted by path.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FileListing" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    post:
+      tags: [editor]
+      operationId: createFile
+      summary: Create a text file or a folder (owner or editor)
+      description: |
+        Folders above the path are created as needed. Paths are relative,
+        "/"-separated, unique ignoring case, at most 5 folders deep; main.tex
+        and output.pdf at the top are reserved. A project holds at most 10 MiB
+        in 200 entries (413 project_full).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FileCreate" }
+      responses:
+        "201":
+          description: Created. A text file comes with its content.
+          headers:
+            ETag: { schema: { type: string, pattern: '^"v[0-9]+"$' } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectFile" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "415": { $ref: "#/components/responses/Unsupported" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/workspaces/{id}/files/upload:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+    post:
+      tags: [editor]
+      operationId: uploadFiles
+      summary: Upload files into the project (owner or editor)
+      description: |
+        One or more `file` parts (at most 5 MiB each, 12 MiB in all). Text
+        files (.tex .bib .bst .cls .sty .txt .md .csv and other TeX files) must
+        be UTF-8; images and PDFs (.png .jpg .jpeg .pdf .eps) must look like
+        what their extension says (415 unsupported_file_type). `folder` puts
+        them in a folder; `replace=true` overwrites files with the same path
+        (409 file_exists otherwise).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: array
+                  items: { type: string, format: binary }
+                folder: { type: string, maxLength: 200 }
+                replace: { type: string, enum: ["true", "false"] }
+      responses:
+        "201":
+          description: Stored, in upload order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [files]
+                properties:
+                  files: { type: array, items: { $ref: "#/components/schemas/ProjectFile" } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "415": { $ref: "#/components/responses/Unsupported" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/workspaces/{id}/files/{file_id}:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+      - $ref: "#/components/parameters/FileId"
+    get:
+      tags: [editor]
+      operationId: getFile
+      summary: One file or folder; a text file comes with its content (any active member)
+      responses:
+        "200":
+          description: The file.
+          headers:
+            ETag: { schema: { type: string, pattern: '^"v[0-9]+"$' } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectFile" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    put:
+      tags: [editor]
+      operationId: saveFile
+      summary: Save a text file (owner or editor)
+      description: Like saving the document, base_version must be the current version, else 409 version_conflict.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FileSave" }
+      responses:
+        "200":
+          description: Saved; version is base_version + 1.
+          headers:
+            ETag: { schema: { type: string, pattern: '^"v[0-9]+"$' } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectFile" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The file changed since base_version.
+          headers:
+            ETag: { schema: { type: string, pattern: '^"v[0-9]+"$' } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VersionConflict" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    patch:
+      tags: [editor]
+      operationId: moveFile
+      summary: Rename or move a file or folder; a folder takes its contents along, a file keeps its type (owner or editor)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              additionalProperties: false
+              properties:
+                path: { $ref: "#/components/schemas/FilePath" }
+      responses:
+        "200":
+          description: Moved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectFile" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "415": { $ref: "#/components/responses/Unsupported" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    delete:
+      tags: [editor]
+      operationId: deleteFile
+      summary: Delete a file, or a folder with everything in it (owner or editor)
+      responses:
+        "204": { description: Deleted. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/workspaces/{id}/files/{file_id}/raw:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+      - $ref: "#/components/parameters/FileId"
+    get:
+      tags: [editor]
+      operationId: getFileRaw
+      summary: A file's bytes (any active member)
+      description: |
+        Served with its type, nosniff and a sandboxing Content-Security-Policy.
+        PNG and JPEG images are inline; everything else is an attachment.
+        A folder is 400 not_a_file.
+      responses:
+        "200":
+          description: The file.
+          headers:
+            Content-Disposition: { schema: { type: string } }
+          content:
+            text/x-tex: { schema: { type: string } }
+            text/x-bibtex: { schema: { type: string } }
+            text/plain: { schema: { type: string } }
+            text/markdown: { schema: { type: string } }
+            text/csv: { schema: { type: string } }
+            image/png: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            application/pdf: { schema: { type: string, format: binary } }
+            application/postscript: { schema: { type: string, format: binary } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/workspaces/{id}/archive:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+    get:
+      tags: [editor]
+      operationId: downloadProject
+      summary: The whole project as a .zip (any active member)
+      description: main.tex, every file and folder, and output.pdf when the project has been compiled.
+      responses:
+        "200":
+          description: The archive, named after the workspace.
+          headers:
+            Content-Disposition: { schema: { type: string } }
+          content:
+            application/zip: { schema: { type: string, format: binary } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/workspaces/{id}/compile:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+    post:
+      tags: [editor]
+      operationId: compileProject
+      summary: Compile the saved project, main.tex with every file (any active member; charges the compile quota)
+      description: |
+        Same pipeline and answer as POST /api/v1/colab/compile, so \input,
+        \include, \includegraphics and bibliographies (BibTeX) can use the
+        project's files. A PDF it produces is kept as the project's output.pdf.
+      responses:
+        "200":
+          description: The compile ran; `status` says whether it produced a PDF.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompileResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "502":
+          description: The compile backend failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/workspaces/{id}/output.pdf:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+    get:
+      tags: [editor]
+      operationId: getOutputPdf
+      summary: The PDF the last successful compile produced (any active member)
+      responses:
+        "200":
+          description: The PDF, named after the workspace.
+          headers:
+            Content-Disposition: { schema: { type: string } }
+          content:
+            application/pdf: { schema: { type: string, format: binary } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/workspaces/import:
+    post:
+      tags: [workspaces]
+      operationId: importProject
+      summary: Create a workspace from a .zip of a LaTeX project
+      description: |
+        main.tex at the top of the archive becomes the document, or else the
+        only top-level .tex file with \documentclass (400 no_main_file).
+        A single folder holding everything is unwrapped. Hidden files,
+        __MACOSX and unsupported files are skipped and listed in `skipped`.
+        At most 12 MiB, 500 entries, and what fits a project (413 project_full).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                title: { $ref: "#/components/schemas/Title" }
+      responses:
+        "201":
+          description: Created, with the caller as owner.
+          headers:
+            Location: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportedWorkspace" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/templates:
+    get:
+      tags: [editor]
+      operationId: listTemplates
+      summary: Journal templates for the editor, without their sources
+      description: Query parameters other than domain are refused (400 unknown_parameter), and so is any parameter given more than once (400 duplicate_parameter).
+      parameters:
+        - { name: domain, in: query, required: false, schema: { $ref: "#/components/schemas/Domain" } }
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: The catalog in display order.
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [domains, templates]
+                properties:
+                  domains: { type: array, items: { $ref: "#/components/schemas/Domain" } }
+                  templates: { type: array, items: { $ref: "#/components/schemas/TemplateSummary" } }
+        "304": { description: The caller's copy (If-None-Match) is current. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooMany" }
+
+  /api/v1/templates/{template_id}:
+    parameters:
+      - { name: template_id, in: path, required: true, schema: { type: string } }
+      - $ref: "#/components/parameters/IfNoneMatch"
+    get:
+      tags: [editor]
+      operationId: getTemplate
+      summary: One template with its LaTeX source
+      responses:
+        "200":
+          description: The template.
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Template" }
+        "304": { description: The caller's copy (If-None-Match) is current. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+
   /api/v1/colab/compile:
     post:
       tags: [collaboration]
@@ -576,14 +1024,7 @@ paths:
           description: The compile ran; `status` says whether it produced a PDF.
           content:
             application/json:
-              schema:
-                type: object
-                required: [status]
-                properties:
-                  status: { type: string, enum: [compiled, error, timeout] }
-                  pdf_base64: { type: [string, "null"] }
-                  log: { type: string }
-                  errors: { type: array, items: { type: string } }
+              schema: { $ref: "#/components/schemas/CompileResult" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -612,6 +1053,17 @@ components:
       name: id
       in: path
       required: true
+      schema: { type: string }
+    FileId:
+      name: file_id
+      in: path
+      required: true
+      schema: { type: string }
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: An ETag from an earlier answer; 304 when it is still current.
       schema: { type: string }
 
   schemas:
@@ -696,6 +1148,107 @@ components:
         owner_id: { type: string }
         role: { $ref: "#/components/schemas/Role" }
         created_at: { type: string, format: date-time }
+    Domain:
+      type: string
+      enum: [physics, chemistry, mathematics, biology]
+    TemplateId:
+      type: string
+      description: A template in the catalog (internal/templates/catalog.go; a Go test keeps this list in step).
+      enum: [aps-physical-review, aip-applied-physics, quantum, acs-jacs, aip-chemical-physics, elsevier-cas-sc, ams-article, elsevier-article, oup-journal, nature, elsevier-cas-dc]
+    TemplateSummary:
+      type: object
+      required: [id, name, domain, journals, publisher, description, class, license, source_url, size]
+      properties:
+        id: { $ref: "#/components/schemas/TemplateId" }
+        name: { type: string }
+        domain: { $ref: "#/components/schemas/Domain" }
+        journals: { type: string }
+        publisher: { type: string }
+        description: { type: string }
+        class: { type: string, description: The LaTeX document class. }
+        license: { type: string }
+        source_url: { type: string, format: uri }
+        size: { type: integer, minimum: 1, description: Bytes of LaTeX source. }
+    Template:
+      allOf:
+        - $ref: "#/components/schemas/TemplateSummary"
+        - type: object
+          required: [source]
+          properties:
+            source: { type: string, minLength: 1, maxLength: 100000 }
+    LatexSource:
+      type: string
+      maxLength: 100000
+      description: At most 100,000 characters; no control characters other than tab, newline and carriage return.
+      pattern: "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f-\\u009f]*$"
+    Document:
+      type: object
+      required: [workspace_id, source, template_id, version, updated_at, updated_by, role, insights]
+      properties:
+        workspace_id: { type: string }
+        source: { $ref: "#/components/schemas/LatexSource" }
+        template_id: { type: [string, "null"] }
+        version: { type: integer, minimum: 0, description: 0 until the first save. }
+        updated_at: { type: [string, "null"], format: date-time }
+        updated_by: { type: [string, "null"], description: Null before the first save or once that account is deleted. }
+        role: { $ref: "#/components/schemas/Role" }
+        insights: { $ref: "#/components/schemas/ManuscriptInsights" }
+    ManuscriptInsights:
+      type: object
+      description: >-
+        A reading of the source (not a compile): how long it is, what it
+        contains, and which parts a submission needs are in place. Progress is
+        the share of the checks met, with partial credit for length.
+      required: [stats, progress, unresolved_citations]
+      properties:
+        stats:
+          type: object
+          required: [words, sections, figures, tables, equations, citations, references]
+          properties:
+            words: { type: integer, minimum: 0, description: Running text of the body, without math, floats or the bibliography. }
+            sections: { type: integer, minimum: 0 }
+            figures: { type: integer, minimum: 0 }
+            tables: { type: integer, minimum: 0 }
+            equations: { type: integer, minimum: 0 }
+            citations: { type: integer, minimum: 0, description: Distinct keys cited. }
+            references: { type: integer, minimum: 0, description: "\\bibitem entries." }
+        progress:
+          type: object
+          required: [percent, checks]
+          properties:
+            percent: { type: integer, minimum: 0, maximum: 100 }
+            checks:
+              type: array
+              items:
+                type: object
+                required: [id, label, done]
+                properties:
+                  id: { type: string, enum: [title, authors, abstract, introduction, conclusion, references, citations, length] }
+                  label: { type: string }
+                  done: { type: boolean }
+        unresolved_citations:
+          type: array
+          maxItems: 20
+          description: Cited keys with no matching bibitem entry, sorted.
+          items: { type: string }
+    DocumentSave:
+      type: object
+      required: [source, base_version]
+      additionalProperties: false
+      properties:
+        source: { $ref: "#/components/schemas/LatexSource" }
+        base_version: { type: integer, minimum: 0, maximum: 2147483647 }
+        template_id:
+          description: The template the document started from; omitted or null keeps the stored one.
+          anyOf: [{ $ref: "#/components/schemas/TemplateId" }, { type: "null" }]
+    VersionConflict:
+      type: object
+      required: [error, code, current_version]
+      additionalProperties: false
+      properties:
+        error: { type: string }
+        code: { const: version_conflict }
+        current_version: { type: integer, minimum: 0 }
     InviteOptions:
       type: object
       required: [roles, expires_in_hours, max_uses, defaults]
@@ -752,6 +1305,89 @@ components:
         role: { $ref: "#/components/schemas/Role" }
         since: { type: string, format: date-time }
 
+    FilePath:
+      type: string
+      minLength: 1
+      maxLength: 200
+      pattern: '^[A-Za-z0-9 _,()+-][A-Za-z0-9 _.,()+-]*(/[A-Za-z0-9 _,()+-][A-Za-z0-9 _.,()+-]*){0,5}$'
+      description: Relative, "/"-separated; no part starts with a dot; main.tex and output.pdf at the top are reserved.
+    ProjectFile:
+      type: object
+      required: [id, path, kind, size, content_type, version, created_at, updated_at, updated_by]
+      properties:
+        id: { type: string, format: uuid }
+        path: { type: string }
+        kind: { type: string, enum: [folder, text, binary] }
+        size: { type: integer, minimum: 0, maximum: 5242880 }
+        content_type: { type: string }
+        version: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        updated_by: { type: [string, "null"] }
+        content: { type: string, description: A text file's content, when asked for. }
+    FileListing:
+      type: object
+      required: [workspace_id, role, main, files, output, usage]
+      properties:
+        workspace_id: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        main:
+          type: object
+          required: [path, version, size, updated_at]
+          properties:
+            path: { const: main.tex }
+            version: { type: integer, minimum: 0 }
+            size: { type: integer, minimum: 0 }
+            updated_at: { type: [string, "null"], format: date-time }
+        files: { type: array, maxItems: 200, items: { $ref: "#/components/schemas/ProjectFile" } }
+        output:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [size, compiled_at, compiled_by, status]
+              properties:
+                size: { type: integer, minimum: 0 }
+                compiled_at: { type: string, format: date-time }
+                compiled_by: { type: [string, "null"] }
+                status: { const: compiled }
+        usage:
+          type: object
+          required: [bytes, limit_bytes, entries, limit_entries]
+          properties:
+            bytes: { type: integer, minimum: 0 }
+            limit_bytes: { const: 10485760 }
+            entries: { type: integer, minimum: 0 }
+            limit_entries: { const: 200 }
+    FileCreate:
+      type: object
+      required: [path, kind]
+      additionalProperties: false
+      properties:
+        path: { $ref: "#/components/schemas/FilePath" }
+        kind: { type: string, enum: [text, folder] }
+        content: { type: string, maxLength: 1048576, description: A text file's initial content (not for a folder). }
+    FileSave:
+      type: object
+      required: [content, base_version]
+      additionalProperties: false
+      properties:
+        content: { type: string, maxLength: 1048576 }
+        base_version: { type: integer, minimum: 1, maximum: 2147483647 }
+    CompileResult:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [compiled, error, timeout] }
+        pdf_base64: { type: [string, "null"] }
+        log: { type: string }
+        errors: { type: array, items: { type: string } }
+    ImportedWorkspace:
+      allOf:
+        - $ref: "#/components/schemas/Workspace"
+        - type: object
+          required: [skipped]
+          properties:
+            skipped: { type: array, items: { type: string }, description: Archive entries left out (hidden, unsupported, duplicate). }
   responses:
     BadRequest:
       description: The request is malformed or outside the contract.
@@ -774,7 +1410,10 @@ components:
       description: The request conflicts with current state (e.g. owner changes, profile not synced).
       content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     TooLarge:
-      description: Request body over 1 MiB.
+      description: Request body over 1 MiB (12 MiB for uploads and imports), or a project or file over its limit.
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Unsupported:
+      description: A file type the project cannot hold, or content that does not match its extension.
       content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     TooMany:
       description: Rate limited or quota spent; see Retry-After.

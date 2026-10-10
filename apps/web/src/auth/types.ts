@@ -21,6 +21,7 @@ export type AuthErrorCode =
   | "popup-blocked"
   | "account-exists-with-different-credential"
   | "requires-recent-login"
+  | "unauthorized-domain"
   | "unknown";
 
 export class AuthError extends Error {

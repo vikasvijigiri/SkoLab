@@ -44,7 +44,15 @@ export default defineConfig(({ command, mode }) => {
       coverage: {
         provider: "v8",
         include: ["src/**/*.{ts,tsx}"],
-        exclude: ["src/**/*.test.{ts,tsx}", "src/test/**", "src/main.tsx", "src/auth/firebaseAuth.ts", "src/vite-env.d.ts"],
+        exclude: [
+          "src/**/*.test.{ts,tsx}",
+          "src/test/**",
+          "src/main.tsx",
+          "src/auth/firebaseAuth.ts",
+          "src/vite-env.d.ts",
+          // pdf.js renders to canvas, which jsdom lacks; e2e/editor.spec.ts covers it in Chromium.
+          "src/editor/PdfPreview.tsx",
+        ],
         thresholds: { lines: 85, functions: 85, branches: 80, statements: 85 },
       },
     },
