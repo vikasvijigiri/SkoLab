@@ -11,6 +11,7 @@ does not).
 import argparse
 import datetime as dt
 import json
+import math
 import os
 import urllib.error
 import urllib.parse
@@ -19,6 +20,10 @@ import urllib.request
 SERVICES = ("skolab-gateway", "skolab-backend-py")
 TRACES_UID = "grafanacloud-traces"
 METRICS_UID = "grafanacloud-prom"
+LATENCY = ("histogram_quantile({q}, sum by (le, service_name, http_route, http_request_method) "
+           "(increase(skolab_http_request_duration_seconds_bucket[{w}s])))")
+TOTALS = ("sum by (service_name, http_route, http_request_method, http_response_status_code) "
+          "(increase(skolab_http_requests_total[{w}s]))")
 COUNTS = ("sum by (service_name, http_route, http_request_method, http_response_status_code) "
           "(increase(skolab_http_requests_total[5m])) > 0")
 # Background traffic that would otherwise bury user requests.
@@ -64,17 +69,60 @@ def counts(fetch, start: int, end: int) -> list[str]:
     return sorted(lines)
 
 
+def instant(fetch, query: str, end: int) -> list[dict]:
+    return fetch(f"/api/datasources/proxy/uid/{METRICS_UID}/api/v1/query",
+                 {"query": query, "time": end}).get("data", {}).get("result", [])
+
+
+def health(fetch, start: int, end: int) -> list[str]:
+    """One row per route over the whole window: requests, 4xx, 5xx and latency."""
+    window = end - start
+    routes: dict[tuple, dict] = {}
+    for series in instant(fetch, TOTALS.format(w=window), end):
+        m, n = series["metric"], round(float(series["value"][1]))
+        row = routes.setdefault((m.get("service_name", "?"), m.get("http_request_method", "?"), m.get("http_route", "?")),
+                                {"requests": 0, "4xx": 0, "5xx": 0})
+        row["requests"] += n
+        code = m.get("http_response_status_code", "")
+        if code[:1] in ("4", "5"):
+            row[code[0] + "xx"] += n
+    for q in ("0.5", "0.95", "0.99"):
+        for series in instant(fetch, LATENCY.format(q=q, w=window), end):
+            m, v = series["metric"], float(series["value"][1])
+            key = (m.get("service_name", "?"), m.get("http_request_method", "?"), m.get("http_route", "?"))
+            if key in routes and not math.isnan(v):  # NaN when a route had no requests
+                routes[key]["p" + q[2:].ljust(2, "0")] = v * 1000
+    lines = ["| Service | Route | Requests | 4xx | 5xx | p50 ms | p95 ms | p99 ms |", "|---|---|---|---|---|---|---|---|"]
+    for (service, method, route), r in sorted(routes.items(), key=lambda kv: -kv[1]["requests"]):
+        if r["requests"]:
+            ms = [f"{r[k]:.0f}" if k in r else "-" for k in ("p50", "p95", "p99")]
+            lines.append(f"| {service} | {method} {route} | {r['requests']} | {r['4xx']} | {r['5xx']} | {' | '.join(ms)} |")
+    return lines if len(lines) > 2 else ["- no requests"]
+
+
+def section(build) -> list[str]:
+    """Runs one part of the report; a failing data source is reported, not fatal."""
+    try:
+        return build()
+    except urllib.error.HTTPError as error:
+        source = error.url.split("?")[0].split("/uid/")[-1]
+        return [f"- unavailable: Grafana answered {error.code} for {source}"]
+
+
+def service_traces(fetch, service: str, start: int, end: int, show_noise: bool) -> list[str]:
+    rows = traces(fetch, service, start, end)
+    hidden = [r for r in rows if r[1] in NOISE]
+    shown = rows if show_noise else [r for r in rows if r[1] not in NOISE]
+    out = [f"{len(rows)} traces ({len(hidden)} background hidden)" if not show_noise else f"{len(rows)} traces", ""]
+    return out + ([f"- {t} {name} {ms} ms trace {trace_id}" for t, name, ms, trace_id in shown] or ["- none"])
+
+
 def report(fetch, start: int, end: int, show_noise: bool = False) -> str:
     out = [f"# Production telemetry {clock(start)} to {clock(end)} UTC", ""]
+    out += ["## Health per route", ""] + section(lambda: health(fetch, start, end)) + [""]
     for service in SERVICES:
-        rows = traces(fetch, service, start, end)
-        hidden = [r for r in rows if r[1] in NOISE]
-        shown = rows if show_noise else [r for r in rows if r[1] not in NOISE]
-        out += [f"## {service}: {len(rows)} traces ({len(hidden)} background hidden)" if not show_noise
-                else f"## {service}: {len(rows)} traces", ""]
-        out += [f"- {t} {name} {ms} ms trace {trace_id}" for t, name, ms, trace_id in shown] or ["- none"]
-        out.append("")
-    out += ["## Requests per 5 minutes", ""] + (counts(fetch, start, end) or ["- none"])
+        out += [f"## {service} traces", ""] + section(lambda s=service: service_traces(fetch, s, start, end, show_noise)) + [""]
+    out += ["## Requests per 5 minutes", ""] + (section(lambda: counts(fetch, start, end)) or ["- none"])
     return "\n".join(out) + "\n"
 
 
@@ -88,10 +136,10 @@ def main() -> None:
     if not 0 < end - start <= 24 * 3600:
         raise SystemExit("--end must be after --start, at most 24 hours later")
     grafana = Grafana(os.environ["GRAFANA_URL"], os.environ["GRAFANA_TOKEN"])
-    try:
-        print(report(grafana.get, start, end, args.show_noise), end="")
-    except urllib.error.HTTPError as error:
-        raise SystemExit(f"Grafana answered {error.code} for {error.url.split('?')[0]}") from None
+    text = report(grafana.get, start, end, args.show_noise)
+    print(text, end="")
+    if "- unavailable:" in text:
+        raise SystemExit("Some Grafana data sources did not answer; see the report above")
 
 
 if __name__ == "__main__":
