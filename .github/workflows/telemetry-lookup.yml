@@ -47,6 +47,9 @@ jobs:
           if [ -z "$GRAFANA_URL" ] || [ -z "$GRAFANA_TOKEN" ]; then
             echo "::error::GRAFANA_URL and GRAFANA_TOKEN repository secrets are required"; exit 1
           fi
+          # Grafana's own health, so a failing data source can be told apart
+          # from a stack that is down; its body is a version string, no secrets.
+          echo "Grafana /api/health: $(curl -sS --max-time 20 -w ' (HTTP %{http_code})' "$GRAFANA_URL/api/health" | tr -d '\n')"
           END="${END:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
           SPAN="${{ github.event_name == 'pull_request' && '24 hours' || '30 minutes' }}"
           START="${START:-$(date -u -d "$END -$SPAN" +%Y-%m-%dT%H:%M:%SZ)}"
