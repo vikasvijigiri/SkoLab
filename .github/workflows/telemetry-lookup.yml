@@ -36,6 +36,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Query Grafana Cloud
+        # On a pull request this is a live smoke run against production
+        # telemetry; a Grafana outage is reported in the run, not a PR blocker.
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         env:
           GRAFANA_URL: ${{ secrets.GRAFANA_URL }}
           GRAFANA_TOKEN: ${{ secrets.GRAFANA_TOKEN }}

@@ -117,8 +117,11 @@ def service_traces(fetch, service: str, start: int, end: int, show_noise: bool) 
     return out + ([f"- {t} {name} {ms} ms trace {trace_id}" for t, name, ms, trace_id in shown] or ["- none"])
 
 
+def day(seconds: float) -> str:
+    return dt.datetime.fromtimestamp(seconds, dt.timezone.utc).strftime("%Y-%m-%d %H:%M")
+
+
 def report(fetch, start: int, end: int, show_noise: bool = False) -> str:
-    day = lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%Y-%m-%d %H:%M")
     out = [f"# Production telemetry {day(start)} to {day(end)} UTC", ""]
     out += ["## Health per route", ""] + section(lambda: health(fetch, start, end)) + [""]
     for service in SERVICES:
