@@ -7,11 +7,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/skolab/backend-go/internal/vitals"
 	"github.com/skolab/backend-go/internal/websocket"
 )
 
@@ -221,5 +223,50 @@ func TestSentryHookIsUnavailableUntilConfigured(t *testing.T) {
 	w := serve(r, http.MethodPost, "/hooks/sentry")
 	if w.Code != http.StatusServiceUnavailable || decode(t, w)["code"] != "not_configured" {
 		t.Fatalf("got %d %s, want 503 not_configured", w.Code, w.Body)
+	}
+}
+
+type vitalsMemory struct {
+	mu    sync.Mutex
+	count int
+}
+
+func (m *vitalsMemory) RecordVital(context.Context, vitals.Sample) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.count++
+}
+
+// Web Vitals reach the recorder without signing in, and one address can't
+// flood the endpoint past its own limit.
+func TestVitalsArePublicAndHaveTheirOwnLimit(t *testing.T) {
+	t.Setenv("RATE_LIMIT_VITALS_RPS", "")
+	t.Setenv("RATE_LIMIT_VITALS_BURST", "3")
+	memory := &vitalsMemory{}
+	r, _ := testRouter(t, gateway{vitals: memory})
+	send := func(addr string) int {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/vitals", strings.NewReader(`{"page":"/sign-in","metrics":[{"name":"LCP","value":800},{"name":"CLS","value":0}]}`))
+		req.Header.Set("Content-Type", "text/plain;charset=UTF-8")
+		req.RemoteAddr = addr
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w.Code
+	}
+	for i := 0; i < 3; i++ {
+		if code := send("203.0.113.9:1000"); code != http.StatusNoContent {
+			t.Fatalf("report %d: status %d", i, code)
+		}
+	}
+	if code := send("203.0.113.9:1000"); code != http.StatusTooManyRequests {
+		t.Fatalf("over the limit: status %d", code)
+	}
+	if code := send("198.51.100.4:1000"); code != http.StatusNoContent {
+		t.Fatalf("another address: status %d", code)
+	}
+	if memory.count != 8 {
+		t.Fatalf("recorded %d samples, want 8", memory.count)
+	}
+	if w := serve(r, http.MethodGet, "/api/v1/vitals"); w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("GET: status %d", w.Code)
 	}
 }

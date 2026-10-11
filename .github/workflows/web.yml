@@ -54,12 +54,26 @@ jobs:
             echo "::error::The in-memory test identity provider leaked into the production bundle"
             exit 1
           fi
+      - name: Bundle size within performance-budget.json
+        run: npm run check:bundle
       - name: Install Chromium for browser tests
         run: npx playwright install --with-deps chromium
       - name: Browser tests (journeys, keyboard, phone layout, WCAG 2.2 AA under the production CSP)
         run: npm run e2e
         env:
           CI: "true"
+      - name: Page speed (Lighthouse, mobile, median of 3 runs per page)
+        env:
+          # The pages' own API calls (Web Vitals reports) stay on the local
+          # server Lighthouse uses, never production.
+          VITE_API_BASE_URL: http://127.0.0.1:4180/__api
+          VITE_FIREBASE_API_KEY: ci-placeholder
+          VITE_FIREBASE_AUTH_DOMAIN: ci-placeholder.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: ci-placeholder
+          VITE_FIREBASE_APP_ID: ci-placeholder
+        run: |
+          npm run build
+          npm run lighthouse
       - name: Browser test report
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7

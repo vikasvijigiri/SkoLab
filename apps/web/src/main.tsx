@@ -2,7 +2,12 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { createAuthService } from "./auth/createAuth";
+import { config } from "./config";
+import { startVitals } from "./lib/vitals";
 import "./index.css";
+
+// Real-user page speed, measured from the very start of the load.
+if (config.apiBaseUrl) startVitals({ apiBaseUrl: config.apiBaseUrl });
 
 const container = document.getElementById("root");
 if (!container) throw new Error("index.html is missing #root");

@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/skolab/backend-go/internal/vitals"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
@@ -34,7 +35,15 @@ type Telemetry struct {
 	requests metric.Int64Counter
 	duration metric.Float64Histogram
 	active   metric.Int64UpDownCounter
+	vital    metric.Float64Histogram // web page timings from real visitors
+	shift    metric.Float64Histogram // web layout shift (CLS) from real visitors
 }
+
+// Web Vitals buckets include Google's "good" and "poor" thresholds, so the
+// share of visits in each band reads straight off the histogram: LCP 2.5/4 s,
+// INP 0.2/0.5 s, FCP 1.8/3 s, TTFB 0.8/1.8 s; CLS 0.1/0.25.
+var vitalBoundaries = []float64{0.05, 0.1, 0.2, 0.3, 0.5, 0.8, 1, 1.8, 2.5, 3, 4, 6, 10, 20}
+var shiftBoundaries = []float64{0.01, 0.05, 0.1, 0.15, 0.25, 0.5, 1}
 
 func ExportEnabled() bool {
 	return !strings.EqualFold(os.Getenv("OTEL_SDK_DISABLED"), "true") && (os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" || os.Getenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT") != "" || os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") != "")
@@ -103,7 +112,24 @@ func newWithProviders(tp *sdktrace.TracerProvider, mp *sdkmetric.MeterProvider) 
 	if t.active, err = meter.Int64UpDownCounter("skolab.http.active_requests", metric.WithUnit("{request}")); err != nil {
 		return nil, err
 	}
+	web := mp.Meter("skolab.web")
+	if t.vital, err = web.Float64Histogram("skolab.web.vital.duration", metric.WithUnit("s"), metric.WithDescription("Core Web Vitals timings (LCP, INP, FCP, TTFB) reported by visitors' browsers"), metric.WithExplicitBucketBoundaries(vitalBoundaries...)); err != nil {
+		return nil, err
+	}
+	if t.shift, err = web.Float64Histogram("skolab.web.vital.cls", metric.WithUnit("1"), metric.WithDescription("Cumulative Layout Shift reported by visitors' browsers"), metric.WithExplicitBucketBoundaries(shiftBoundaries...)); err != nil {
+		return nil, err
+	}
 	return t, nil
+}
+
+// RecordVital stores one visitor measurement (see internal/vitals).
+func (t *Telemetry) RecordVital(ctx context.Context, s vitals.Sample) {
+	page := attribute.String("page", s.Page)
+	if s.Name == "CLS" {
+		t.shift.Record(ctx, s.Value, metric.WithAttributes(page))
+		return
+	}
+	t.vital.Record(ctx, s.Value, metric.WithAttributes(attribute.String("name", s.Name), page))
 }
 
 func (t *Telemetry) Shutdown(ctx context.Context) error {
