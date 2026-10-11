@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { ApiError } from "../api/client";
 import { MAX_SOURCE_LENGTH, pdfBytes, type CompileResult } from "../api/compile";
@@ -18,7 +18,7 @@ import {
   type TemplateSummary,
   type Workspace,
 } from "../api/editor";
-import { compileProject, listFiles, outputPdf } from "../api/files";
+import { compileProject, listFiles, outputPdf, uploadFiles } from "../api/files";
 import { listMembers } from "../api/sharing";
 import { useAuth } from "../auth/AuthProvider";
 import { useIdToken } from "../auth/useIdToken";
@@ -26,7 +26,18 @@ import { Alert } from "../components/Alert";
 import { Button } from "../components/Button";
 import { Sheet } from "../components/Sheet";
 import { FullPageLoader, Spinner } from "../components/Spinner";
-import { LatexEditor, type LatexEditorHandle } from "../editor/LatexEditor";
+import { CommandBar, Keys, type Command } from "../editor/CommandBar";
+import { LatexEditor, type CursorInfo, type EditorAction, type LatexEditorHandle } from "../editor/LatexEditor";
+import type { Destination, ProblemCounts } from "../editor/latex/extensions";
+import { macrosIn } from "../editor/latex/math";
+import { headingAt, outline as readOutline } from "../editor/latex/scan";
+import { SNIPPETS } from "../editor/latex/snippets";
+import { MathPreview } from "../editor/MathPreview";
+import { OutlinePanel } from "../editor/OutlinePanel";
+import { useProjectIndex } from "../editor/projectIndex";
+import { isMac } from "../editor/shortcuts";
+import { ShortcutList } from "../editor/ShortcutSheet";
+import { StatusBar } from "../editor/StatusBar";
 import { Overview, ProgressRing } from "../editor/Overview";
 import { FileEditor, type FileEditorHandle } from "../editor/FileEditor";
 import { FilePreview } from "../editor/FilePreview";
@@ -35,6 +46,8 @@ import { RETRY_DELAY_MS, SAVE_DELAY_MS, saveLabel, type SaveState } from "../edi
 import { Avatar, Share } from "../editor/Share";
 import { formatDate } from "../lib/dates";
 import { bytesOf, download, fileName } from "../lib/download";
+import { isBoolean, oneOf, useSetting } from "../lib/storage";
+import { savedTheme, setTheme, type Theme } from "../lib/theme";
 
 const PdfPreview = lazy(() => import("../editor/PdfPreview").then((m) => ({ default: m.PdfPreview })));
 
@@ -74,6 +87,40 @@ function saveMessage(error: unknown): { message: string; retry: boolean } {
     if (error.status === 429) return { message: "Saving too often. We'll try again in a moment.", retry: true };
   }
   return { message: "SkoLab couldn't save just now. We'll keep trying.", retry: true };
+}
+
+type Layout = "split" | "source" | "pdf";
+const isLayout = oneOf<Layout>("split", "source", "pdf");
+const isSide = oneOf<"files" | "outline">("files", "outline");
+const isRatio = (value: unknown): value is number => typeof value === "number" && value >= 0.2 && value <= 0.8;
+const AUTO_COMPILE_DELAY_MS = 2500;
+const NO_ERRORS: string[] = [];
+
+/** Wide screens have the sidebar; phones get sheets. Browsers without matchMedia (tests) count as wide. */
+function wide(): boolean {
+  try {
+    return window.matchMedia("(min-width: 768px)").matches;
+  } catch {
+    return true;
+  }
+}
+
+/** Whether a key press is typing into a field (the source editor included), where plain keys like ? are text. */
+function typing(event: KeyboardEvent): boolean {
+  const target = event.composedPath()[0];
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || target.getAttribute("contenteditable") === "true" || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT";
+}
+
+/** A name for an uploaded image that no project file has yet: "plot.png", "plot-2.png", or "pasted-20261011-0930.png". */
+function freeName(file: File, taken: Set<string>): string {
+  const extension = /\.[a-z0-9]+$/i.exec(file.name)?.[0]?.toLowerCase() ?? (file.type === "application/pdf" ? ".pdf" : file.type === "image/jpeg" ? ".jpg" : ".png");
+  let base = file.name.replace(/\.[a-z0-9]+$/i, "").replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "");
+  if (!base || /^image$/i.test(base)) base = `pasted-${new Date().toISOString().slice(0, 16).replace(/[-:]/g, "").replace("T", "-")}`;
+  let name = `${base}${extension}`;
+  for (let n = 2; taken.has(`figures/${name}`.toLowerCase()); n += 1) name = `${base}-${n}${extension}`;
+  taken.add(`figures/${name}`.toLowerCase());
+  return name;
 }
 
 /** Error lines from the compiler look like "line 12: Undefined control sequence." */
@@ -180,7 +227,7 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
   const [insights, setInsights] = useState<Insights>(doc.insights);
   const [lastSaved, setLastSaved] = useState({ at: doc.updated_at, by: doc.updated_by, version: doc.version });
   const [members, setMembers] = useState<Member[]>([]);
-  const [sheet, setSheet] = useState<"share" | "overview" | "files" | null>(null);
+  const [sheet, setSheet] = useState<"share" | "overview" | "files" | "outline" | "shortcuts" | null>(null);
   // The project's files; main.tex is open while openId is null.
   const [files, setFiles] = useState<FilesState>({ state: "loading" });
   const [openId, setOpenId] = useState<string | null>(null);
@@ -191,6 +238,19 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
   const fileEditor = useRef<FileEditorHandle>(null);
   const location = useLocation();
   const [skipped, setSkipped] = useState(() => importedSkipped(location.state));
+  // Remembered per paper: the layout and where the divider sits; per browser: the sidebar tab and auto-compile.
+  const [layout, setLayout] = useSetting<Layout>(`skolab.layout.${workspace.id}`, "split", isLayout);
+  const [ratio, setRatio] = useSetting<number>(`skolab.split.${workspace.id}`, 0.5, isRatio);
+  const [dragRatio, setDragRatio] = useState<number | null>(null);
+  const [side, setSide] = useSetting<"files" | "outline">("skolab.sidebar", "files", isSide);
+  const [autoCompile, setAutoCompile] = useSetting<boolean>("skolab.autoCompile", false, isBoolean);
+  const [theme, setThemeState] = useState<Theme>(savedTheme);
+  const [focusMode, setFocusMode] = useState(false);
+  const [palette, setPalette] = useState(false);
+  const [cursor, setCursor] = useState<CursorInfo | null>(null);
+  const [problems, setProblems] = useState<ProblemCounts>({ errors: 0, warnings: 0 });
+  const [notice, setNotice] = useState<string | null>(null);
+  const panes = useRef<HTMLDivElement>(null);
 
   const refreshFiles = useCallback(async () => {
     try {
@@ -455,116 +515,412 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
   const compiling = compile.state === "compiling";
   const titleStatus = titleSave === "failed" ? "Title not saved" : titleSave === "saving" ? "Saving title…" : null;
 
+  // What the editor knows beyond main.tex, and what it reads from it as you type.
+  const compileErrors = compile.state === "failed" ? compile.errors : NO_ERRORS;
+  const index = useProjectIndex(idToken, workspace.id, listing, compileErrors);
+  const typed = useDeferredValue(source);
+  const outline = useMemo(() => readOutline(typed), [typed]);
+  const macros = useMemo(() => macrosIn(typed), [typed]);
+  const line = cursor?.line ?? 1;
+  const section = headingAt(outline.headings, line)?.title ?? null;
+
+  const showMain = useCallback((at?: number) => {
+    setOpenId(null);
+    setPane("source");
+    // On phones the source pane is hidden until this render lands.
+    requestAnimationFrame(() => (at ? editor.current?.goToLine(at) : editor.current?.focus()));
+  }, []);
+
+  /** Ctrl-click and F12 on something outside main.tex: open the file that holds it. */
+  const followElsewhere = useCallback(
+    (destination: Destination): boolean => {
+      const all = listing?.files ?? [];
+      let path: string | undefined;
+      if (destination.kind === "label") path = index.labels.find((label) => label.key === destination.key)?.file;
+      else if (destination.kind === "cite") path = index.bib.find((entry) => entry.key === destination.key)?.file ?? undefined;
+      else {
+        const name = destination.path.replace(/^\.\//, "");
+        const extensions = destination.reference === "graphics" ? ["", ".pdf", ".png", ".jpg", ".jpeg"] : destination.reference === "bibliography" ? ["", ".bib"] : ["", ".tex"];
+        path = extensions.map((extension) => name + extension).find((candidate) => all.some((file) => file.path === candidate));
+      }
+      const file = path ? all.find((entry) => entry.path === path && entry.kind !== "folder") : undefined;
+      if (!file) {
+        setNotice(destination.kind === "file" ? `There is no ${destination.path} in the project.` : destination.kind === "cite" ? `No bibliography entry “${destination.key}” was found.` : `No \\label{${destination.key}} was found in the project.`);
+        return false;
+      }
+      setOpenId(file.id);
+      setPane("source");
+      setNotice(`Opened ${file.path}`);
+      return true;
+    },
+    [listing, index],
+  );
+
+  /** Dropped or pasted images go to figures/ under names no file has yet. */
+  const uploadImages = useCallback(
+    async (images: File[]): Promise<string[]> => {
+      const taken = new Set((listing?.files ?? []).map((file) => file.path.toLowerCase()));
+      const named = images.map((image) => new File([image], freeName(image, taken), { type: image.type }));
+      setNotice(named.length === 1 ? `Uploading ${named[0]?.name ?? "the image"}…` : `Uploading ${named.length} images…`);
+      try {
+        const uploaded = await uploadFiles(await idToken(), workspace.id, named, { folder: "figures" });
+        void refreshFiles();
+        setNotice(uploaded.length === 1 ? `Added ${uploaded[0]?.path ?? "the image"} as a figure` : `Added ${uploaded.length} figures`);
+        return uploaded.map((file) => file.path);
+      } catch (error) {
+        setNotice(filesMessage(error));
+        return [];
+      }
+    },
+    [listing, idToken, workspace.id, refreshFiles],
+  );
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  /** An editor action from the command bar: on main.tex, in view. */
+  const act = useCallback((action: EditorAction | { snippet: string }) => {
+    setOpenId(null);
+    setPane("source");
+    requestAnimationFrame(() => {
+      if (typeof action === "string") editor.current?.run(action);
+      else editor.current?.insertSnippet(action.snippet);
+    });
+  }, []);
+
+  const changeLayout = useCallback(
+    (next: Layout) => {
+      setLayout(next);
+      setPane(next === "pdf" ? "pdf" : "source");
+    },
+    [setLayout],
+  );
+
+  const showOutline = useCallback(() => {
+    if (wide()) {
+      setShowFiles(true);
+      setSide("outline");
+    } else {
+      setSheet("outline");
+    }
+  }, [setSide]);
+
+  // Compile a moment after typing stops, when the reader asked for it.
+  const compiledSource = useRef(doc.source);
+  useEffect(() => {
+    if (!autoCompile || !editable || source === compiledSource.current) return;
+    const timer = setTimeout(() => {
+      compiledSource.current = latestSource.current;
+      void runCompile();
+    }, AUTO_COMPILE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [source, autoCompile, editable, runCompile]);
+
+  // Shortcuts that work anywhere on the page. The source editor handles its own first.
+  const modal = palette || sheet !== null;
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || modal) return;
+      const mod = isMac ? event.metaKey : event.ctrlKey;
+      const key = event.key.toLowerCase();
+      if (mod && !event.altKey && !event.shiftKey && key === "k") {
+        event.preventDefault();
+        setPalette(true);
+      } else if (mod && !event.altKey && key === ".") {
+        event.preventDefault();
+        setFocusMode((on) => !on);
+      } else if (mod && event.shiftKey && !event.altKey && key === "o") {
+        event.preventDefault();
+        showOutline();
+      } else if (event.altKey && !mod && !event.shiftKey && /^Digit[123]$/.test(event.code)) {
+        event.preventDefault();
+        changeLayout((["split", "source", "pdf"] as const)[Number(event.code.slice(5)) - 1] ?? "split");
+      } else if (event.key === "Escape" && focusMode) {
+        event.preventDefault();
+        setFocusMode(false);
+      } else if (event.key === "?" && !mod && !typing(event)) {
+        event.preventDefault();
+        setSheet("shortcuts");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [modal, focusMode, changeLayout, showOutline]);
+
+  function pickCommand(command: Command) {
+    setPalette(false);
+    // After the bar has gone, so whatever the command opens takes the focus.
+    requestAnimationFrame(() => {
+      editor.current?.focus();
+      command.run();
+    });
+  }
+
+  function closePalette() {
+    setPalette(false);
+    requestAnimationFrame(() => editor.current?.focus());
+  }
+
+  function chooseTheme(next: Theme) {
+    setTheme(next);
+    setThemeState(next);
+  }
+
+  const commands: Command[] = [
+    { id: "compile", title: "Compile", group: "Actions", keys: "Mod+Enter", keywords: "build pdf run", run: () => void runCompile() },
+    { id: "download-tex", title: "Download main.tex", group: "Actions", keywords: "save export source", run: () => download(`${fileName(title)}.tex`, source, "application/x-tex") },
+    ...(pdf || listing?.output ? [{ id: "download-pdf", title: "Download the PDF", group: "Actions", keywords: "export save", run: downloadPdf }] : []),
+    { id: "share", title: "Share and invite co-authors", group: "Actions", keywords: "collaborate members access", run: () => setSheet("share") },
+    { id: "overview", title: "Overview: progress and contents", group: "Actions", keywords: "stats insights checklist", run: () => setSheet("overview") },
+    { id: "shortcuts", title: "Keyboard shortcuts", group: "Actions", keys: "?", keywords: "help keys", run: () => setSheet("shortcuts") },
+    ...(editable
+      ? [
+          { id: "bold", title: "Bold", group: "Format", keys: "Mod+B", keywords: "textbf strong", run: () => act("bold") },
+          { id: "italic", title: "Italic", group: "Format", keys: "Mod+I", keywords: "textit emphasis", run: () => act("italic") },
+          { id: "math", title: "Inline math", group: "Format", keys: "Mod+M", keywords: "dollar equation", run: () => act("math") },
+          { id: "display-math", title: "Display math", group: "Format", keys: "Mod+Shift+M", keywords: "equation block", run: () => act("display-math") },
+          { id: "comment", title: "Comment or uncomment lines", group: "Format", keys: "Mod+/", keywords: "percent hide", run: () => act("comment") },
+          { id: "cite", title: "Cite from your bibliography", group: "Insert", keys: "Mod+Shift+L", keywords: "citation reference bib", run: () => act("cite") },
+          ...SNIPPETS.filter((item) => item.name !== "cite").map((item) => ({
+            id: `insert-${item.name}`,
+            title: `Insert ${item.title.toLowerCase()}`,
+            group: "Insert",
+            note: `/${item.name}`,
+            keywords: `${item.aliases.join(" ")} ${item.detail}`,
+            run: () => act({ snippet: item.name }),
+          })),
+        ]
+      : []),
+    ...outline.headings.map((heading) => ({ id: `heading-${heading.from}`, title: heading.title, group: "Go to section", note: `line ${heading.line}`, keywords: "section heading jump", run: () => showMain(heading.line) })),
+    ...outline.floats.map((item, number) => ({
+      id: `float-${item.from}`,
+      title: item.caption || item.label || `${item.kind === "table" ? "Table" : "Figure"} ${number + 1}`,
+      group: item.kind === "table" ? "Go to table" : "Go to figure",
+      note: `line ${item.line}`,
+      run: () => showMain(item.line),
+    })),
+    { id: "next-problem", title: "Go to the next problem", group: "Go to", keys: "F8", keywords: "error warning lint", run: () => act("next-problem") },
+    { id: "follow", title: "Go to what's under the cursor", group: "Go to", keys: "F12", keywords: "definition label citation file", run: () => act("follow") },
+    { id: "open-main", title: "main.tex", group: "Files", keywords: "open file", run: () => showMain() },
+    ...(listing?.files ?? [])
+      .filter((file) => file.kind !== "folder")
+      .map((file) => ({ id: `file-${file.id}`, title: file.path, group: "Files", keywords: "open file", run: () => openTarget({ kind: "file", file }) })),
+    { id: "layout-split", title: "Layout: source and PDF", group: "View", keys: "Alt+1", run: () => changeLayout("split") },
+    { id: "layout-source", title: "Layout: source only", group: "View", keys: "Alt+2", run: () => changeLayout("source") },
+    { id: "layout-pdf", title: "Layout: PDF only", group: "View", keys: "Alt+3", run: () => changeLayout("pdf") },
+    { id: "focus", title: focusMode ? "Leave focus mode" : "Focus mode", group: "View", keys: "Mod+.", keywords: "zen distraction free", run: () => setFocusMode(!focusMode) },
+    { id: "outline", title: "Show the outline", group: "View", keys: "Mod+Shift+O", keywords: "sections structure toc", run: showOutline },
+    { id: "files", title: showFiles ? "Hide the sidebar" : "Show the sidebar", group: "View", keywords: "files panel", run: () => setShowFiles(!showFiles) },
+    ...(editable ? [{ id: "auto-compile", title: autoCompile ? "Turn auto-compile off" : "Turn auto-compile on", group: "View", keywords: "automatic live", run: () => setAutoCompile(!autoCompile) }] : []),
+    { id: "zoom-in", title: "Zoom the PDF in", group: "View", run: () => setZoom((value) => stepZoom(value, 1)) },
+    { id: "zoom-out", title: "Zoom the PDF out", group: "View", run: () => setZoom((value) => stepZoom(value, -1)) },
+    ...(["light", "dark", "system"] as const)
+      .filter((option) => option !== theme)
+      .map((option) => ({ id: `theme-${option}`, title: option === "system" ? "Theme: match the device" : `Theme: ${option}`, group: "View", keywords: "dark mode colour color appearance", run: () => chooseTheme(option) })),
+  ];
+
+  // The divider between source and PDF: drag it, or focus it and use the arrow keys.
+  const shownRatio = dragRatio ?? ratio;
+  function dragDivider(event: ReactPointerEvent<HTMLDivElement>) {
+    const box = panes.current?.getBoundingClientRect();
+    if (!box || box.width === 0) return;
+    const handle = event.currentTarget;
+    handle.setPointerCapture(event.pointerId);
+    let latest = ratio;
+    const move = (moved: PointerEvent) => {
+      latest = Math.min(0.8, Math.max(0.2, (moved.clientX - box.left) / box.width));
+      setDragRatio(latest);
+    };
+    const end = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", end);
+      handle.removeEventListener("pointercancel", end);
+      setDragRatio(null);
+      setRatio(latest);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", end);
+    handle.addEventListener("pointercancel", end);
+  }
+
+  const sidebar = (
+    <div className="flex h-full min-h-0 flex-col">
+      <div role="tablist" aria-label="Sidebar" className="flex shrink-0 gap-1 border-b border-zinc-200 p-1.5 dark:border-zinc-800">
+        {(["files", "outline"] as const).map((name) => (
+          <button
+            key={name}
+            type="button"
+            role="tab"
+            aria-selected={side === name}
+            onClick={() => setSide(name)}
+            className={`h-7 flex-1 cursor-pointer rounded-md text-xs font-semibold transition-colors ${side === name ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100" : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"}`}
+          >
+            {name === "files" ? "Project" : "Outline"}
+          </button>
+        ))}
+      </div>
+      <div className="min-h-0 flex-1">{side === "files" ? (sheet === "files" ? null : tree) : <OutlinePanel outline={outline} line={line} onJump={showMain} />}</div>
+    </div>
+  );
+
+  const layoutButtons = (
+    <div role="group" aria-label="Layout" className="hidden items-center rounded-lg bg-zinc-100 p-0.5 lg:flex dark:bg-zinc-900">
+      {(
+        [
+          ["split", "Source and PDF", "Alt+1"],
+          ["source", "Source only", "Alt+2"],
+          ["pdf", "PDF only", "Alt+3"],
+        ] as const
+      ).map(([name, label, keys]) => (
+        <button
+          key={name}
+          type="button"
+          aria-label={label}
+          aria-pressed={layout === name}
+          title={`${label} (${keys.replace("Alt", isMac ? "⌥" : "Alt")})`}
+          onClick={() => changeLayout(name)}
+          className={`grid size-8 cursor-pointer place-items-center rounded-md transition-colors ${layout === name ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-white" : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"}`}
+        >
+          <LayoutIcon layout={name} />
+        </button>
+      ))}
+    </div>
+  );
+
+  const sourceVisible = focusMode || layout !== "pdf";
+  const pdfVisible = !focusMode && layout !== "source";
+
   return (
-    <div className="flex h-dvh flex-col">
+    <div className={`flex h-dvh flex-col ${dragRatio !== null ? "cursor-col-resize select-none" : ""}`}>
       <title>{`${title.trim() || "Untitled"} · SkoLab`}</title>
-      <header className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-zinc-200 bg-white px-2 py-2 sm:px-3 dark:border-zinc-800 dark:bg-zinc-950">
-        <Link
-          to="/"
-          className="grid size-10 shrink-0 place-items-center rounded-lg text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
-          aria-label="Back to your documents"
-          title="Your documents"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </Link>
-        <div className="min-w-32 flex-1">
-          {isOwner ? (
-            <label className="block">
-              <span className="sr-only">Document title</span>
-              <input
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                maxLength={255}
-                className="w-full min-w-0 truncate rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-[15px] font-semibold hover:border-zinc-300 focus:border-brand-500 dark:hover:border-zinc-700"
-              />
-            </label>
-          ) : (
-            <h1 className="truncate px-1.5 py-0.5 text-[15px] font-semibold">{title}</h1>
-          )}
-          <p className="flex min-w-0 items-center gap-1.5 px-1.5 text-xs text-zinc-500 dark:text-zinc-400">
-            <span className="max-w-48 shrink-0 truncate font-medium text-zinc-700 dark:text-zinc-300" title="Open file">
-              {openFile?.path ?? "main.tex"}
-            </span>
-            <span aria-hidden="true">·</span>
-            <span role="status" className="truncate">
-              {openFile ? fileStatus : editable ? (titleStatus ?? saveLabel(save)) : "View only"}
-            </span>
-            <span aria-hidden="true" className="hidden sm:inline">
-              ·
-            </span>
-            <span className="hidden truncate sm:inline">Created {formatDate(workspace.created_at)}</span>
-          </p>
-        </div>
-
-        <button
-          type="button"
-          aria-expanded={showFiles}
-          aria-controls="editor-files"
-          onClick={() => setShowFiles(!showFiles)}
-          title="Show or hide the project's files"
-          className="hidden h-10 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-sm font-semibold hover:bg-zinc-100 md:flex dark:hover:bg-zinc-900"
-        >
-          <FilesIcon />
-          Files
-        </button>
-        <button
-          type="button"
-          aria-label="Open project files"
-          onClick={() => setSheet("files")}
-          className="flex h-10 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-sm font-semibold hover:bg-zinc-100 md:hidden dark:hover:bg-zinc-900"
-        >
-          <FilesIcon />
-          Files
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setSheet("overview")}
-          aria-label={`Progress ${insights.progress.percent}%. Open the overview`}
-          title="Progress, contents and details"
-          className="flex h-10 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-sm font-semibold tabular-nums hover:bg-zinc-100 dark:hover:bg-zinc-900"
-        >
-          <ProgressRing percent={insights.progress.percent} size={22} stroke={3} />
-          {insights.progress.percent}%
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setSheet("share")}
-          title="Invite co-authors and manage access"
-          className="flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 bg-white pr-3 pl-1.5 text-sm font-semibold shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
-        >
-          {members.length > 0 ? (
-            <span className="flex -space-x-2">
-              {members.slice(0, 3).map((member) => (
-                <Avatar key={member.user_id} id={member.user_id} name={member.display_name || "?"} className="size-7 text-[11px] ring-2 ring-white dark:ring-zinc-900" />
-              ))}
-            </span>
-          ) : (
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="ml-1 size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM19 8v6M22 11h-6" />
+      {!focusMode && (
+        <header className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-zinc-200/80 bg-white/85 px-2 py-1.5 backdrop-blur-md sm:px-3 dark:border-zinc-800/80 dark:bg-zinc-950/85">
+          <Link
+            to="/"
+            className="grid size-9 shrink-0 place-items-center rounded-lg text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
+            aria-label="Back to your documents"
+            title="Your documents"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 18l-6-6 6-6" />
             </svg>
-          )}
-          Share
-          {members.length > 3 && <span className="text-xs font-medium text-zinc-500">+{members.length - 3}</span>}
-        </button>
+          </Link>
+          <div className="min-w-32 flex-1 md:max-w-xs lg:max-w-sm">
+            {isOwner ? (
+              <label className="block">
+                <span className="sr-only">Document title</span>
+                <input
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  maxLength={255}
+                  className="w-full min-w-0 truncate rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-[15px] font-semibold tracking-tight hover:border-zinc-300 focus:border-brand-500 dark:hover:border-zinc-700"
+                />
+              </label>
+            ) : (
+              <h1 className="truncate px-1.5 py-0.5 text-[15px] font-semibold tracking-tight">{title}</h1>
+            )}
+            <p className="flex min-w-0 items-center gap-1.5 px-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+              <span className="max-w-48 shrink-0 truncate font-medium text-zinc-700 dark:text-zinc-300" title="Open file">
+                {openFile?.path ?? "main.tex"}
+              </span>
+              <span aria-hidden="true">·</span>
+              <span role="status" className="truncate">
+                {openFile ? fileStatus : editable ? (titleStatus ?? saveLabel(save)) : "View only"}
+              </span>
+              <span aria-hidden="true" className="hidden xl:inline">
+                ·
+              </span>
+              <span className="hidden truncate xl:inline">Created {formatDate(workspace.created_at)}</span>
+            </p>
+          </div>
 
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" className="!h-10 !w-auto" onClick={() => download(`${fileName(title)}.tex`, source, "application/x-tex")}>
-            .tex
-          </Button>
-          <Button variant="secondary" className="!h-10 !w-auto" disabled={!pdf && !listing?.output} onClick={downloadPdf}>
-            PDF
-          </Button>
-          <Button className="!h-10 !w-auto" loading={compiling} onClick={() => void runCompile()} title="Compile (Ctrl+Enter)">
-            {compiling ? "Compiling" : "Compile"}
-          </Button>
-        </div>
-      </header>
+          <button
+            type="button"
+            onClick={() => setPalette(true)}
+            aria-label="Search or run a command"
+            aria-keyshortcuts={isMac ? "Meta+K" : "Control+K"}
+            className="order-last flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-sm text-zinc-500 transition-colors hover:border-zinc-300 hover:bg-white sm:order-none sm:w-auto sm:min-w-56 sm:flex-1 md:max-w-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <span className="flex-1 truncate text-left">Search or run a command…</span>
+            <Keys keys="Mod+K" className="hidden sm:inline-flex" />
+          </button>
 
-      {!editable && (
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+            {layoutButtons}
+            <button
+              type="button"
+              aria-expanded={showFiles}
+              aria-controls="editor-files"
+              onClick={() => setShowFiles(!showFiles)}
+              title="Show or hide the sidebar: project files and outline"
+              className="hidden h-9 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-sm font-semibold hover:bg-zinc-100 md:flex dark:hover:bg-zinc-900"
+            >
+              <FilesIcon />
+              Files
+            </button>
+            <button
+              type="button"
+              aria-label="Open project files"
+              onClick={() => setSheet("files")}
+              className="flex h-9 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-sm font-semibold hover:bg-zinc-100 md:hidden dark:hover:bg-zinc-900"
+            >
+              <FilesIcon />
+              Files
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSheet("overview")}
+              aria-label={`Progress ${insights.progress.percent}%. Open the overview`}
+              title="Progress, contents and details"
+              className="flex h-9 cursor-pointer items-center gap-2 rounded-lg px-2 text-sm font-semibold tabular-nums hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            >
+              <ProgressRing percent={insights.progress.percent} size={22} stroke={3} />
+              {insights.progress.percent}%
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSheet("share")}
+              title="Invite co-authors and manage access"
+              className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 bg-white pr-3 pl-1.5 text-sm font-semibold shadow-xs hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+            >
+              {members.length > 0 ? (
+                <span className="flex -space-x-2">
+                  {members.slice(0, 3).map((member) => (
+                    <Avatar key={member.user_id} id={member.user_id} name={member.display_name || "?"} className="size-6 text-[10px] ring-2 ring-white dark:ring-zinc-900" />
+                  ))}
+                </span>
+              ) : (
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="ml-1 size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM19 8v6M22 11h-6" />
+                </svg>
+              )}
+              Share
+              {members.length > 3 && <span className="text-xs font-medium text-zinc-500">+{members.length - 3}</span>}
+            </button>
+
+            <Button variant="secondary" className="!h-9 !w-auto" onClick={() => download(`${fileName(title)}.tex`, source, "application/x-tex")}>
+              .tex
+            </Button>
+            <Button variant="secondary" className="!h-9 !w-auto" disabled={!pdf && !listing?.output} onClick={downloadPdf}>
+              PDF
+            </Button>
+            <Button className="!h-9 !w-auto" loading={compiling} onClick={() => void runCompile()} title={`Compile (${isMac ? "⌘" : "Ctrl"}+Enter)`}>
+              {compiling ? "Compiling" : "Compile"}
+            </Button>
+          </div>
+        </header>
+      )}
+
+      {!editable && !focusMode && (
         <div className="border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
           <Alert tone="info">You can read and compile this document. Ask its owner for edit access to change it.</Alert>
         </div>
@@ -590,7 +946,7 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
           <Alert tone="error">{save.message}</Alert>
         </div>
       )}
-      {skipped.length > 0 && (
+      {skipped.length > 0 && !focusMode && (
         <div className="border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
           <Alert tone="info">
             <p>
@@ -604,163 +960,259 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
         </div>
       )}
 
-      <div className="flex border-b border-zinc-200 md:hidden dark:border-zinc-800" role="tablist" aria-label="Editor view">
-        {(["source", "pdf"] as const).map((name) => (
-          <button
-            key={name}
-            type="button"
-            role="tab"
-            aria-selected={pane === name}
-            onClick={() => setPane(name)}
-            className={`flex-1 cursor-pointer py-2.5 text-sm font-semibold ${pane === name ? "border-b-2 border-brand-600 text-brand-700 dark:text-brand-300" : "text-zinc-600 dark:text-zinc-400"}`}
-          >
-            {name === "source" ? "Source" : "PDF"}
-          </button>
-        ))}
-      </div>
+      {!focusMode && (
+        <div className="flex border-b border-zinc-200 md:hidden dark:border-zinc-800" role="tablist" aria-label="Editor view">
+          {(["source", "pdf"] as const).map((name) => (
+            <button
+              key={name}
+              type="button"
+              role="tab"
+              aria-selected={pane === name}
+              onClick={() => setPane(name)}
+              className={`flex-1 cursor-pointer py-2.5 text-sm font-semibold ${pane === name ? "border-b-2 border-brand-600 text-brand-700 dark:text-brand-300" : "text-zinc-600 dark:text-zinc-400"}`}
+            >
+              {name === "source" ? "Source" : "PDF"}
+            </button>
+          ))}
+        </div>
+      )}
 
-      <div className={`grid min-h-0 flex-1 ${showFiles ? "md:grid-cols-[15rem_1fr_1fr]" : "md:grid-cols-2"}`}>
-        {showFiles && (
-          <aside id="editor-files" aria-label="Project files" className="hidden min-h-0 border-r border-zinc-200 bg-white md:block dark:border-zinc-800 dark:bg-zinc-950">
-            {sheet === "files" ? null : tree}
+      <div className="flex min-h-0 flex-1">
+        {showFiles && !focusMode && (
+          <aside id="editor-files" aria-label="Project files and outline" className="hidden w-60 shrink-0 animate-fade border-r border-zinc-200 bg-white md:block dark:border-zinc-800 dark:bg-zinc-950">
+            {sidebar}
           </aside>
         )}
-        <section aria-label="LaTeX source" className={`latex-editor min-h-0 border-zinc-200 md:block md:border-r dark:border-zinc-800 ${pane === "source" ? "block" : "hidden"}`}>
-          <div className="h-full min-h-0" hidden={openFile !== null}>
-            <LatexEditor
-              ref={editor}
-              initialValue={doc.source}
-              onChange={setSource}
-              onCompile={() => void runCompile()}
-              label="LaTeX source"
-              readOnly={!editable}
-            />
-          </div>
-          {openFile?.kind === "text" && (
-            <FileEditor
-              key={openFile.id}
-              ref={fileEditor}
-              workspaceId={workspace.id}
-              file={openFile}
-              editable={editable}
-              onStatus={setFileStatus}
-              onCompile={() => void runCompile()}
-              onSaved={() => void refreshFiles()}
-            />
-          )}
-          {openFile?.kind === "binary" && (
-            <FilePreview
-              key={openFile.id}
-              workspaceId={workspace.id}
-              file={openFile}
-              onShowPdf={(bytes, path) => {
-                setPdf(bytes);
-                setPreviewing(path);
-                setPane("pdf");
-              }}
-            />
-          )}
-        </section>
-
-        <section aria-label="PDF preview" className={`min-h-0 flex-col bg-zinc-100 md:flex dark:bg-zinc-900 ${pane === "pdf" ? "flex" : "hidden"}`}>
-          <div className="flex items-center justify-between gap-2 border-b border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
-            <span className="truncate">
-              {previewing ? (
-                `Showing ${previewing}`
-              ) : template ? (
-                <>
-                  Template: {template.name} ({template.license})
-                </>
-              ) : (
-                "Blank document"
-              )}
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                aria-label="Zoom out"
-                disabled={zoom === stepZoom(zoom, -1)}
-                onClick={() => setZoom(stepZoom(zoom, -1))}
-                className="cursor-pointer rounded px-2 py-1 font-semibold hover:bg-zinc-200 disabled:opacity-40 dark:hover:bg-zinc-800"
-              >
-                −
-              </button>
-              <span aria-live="polite">{Math.round(zoom * 100)}%</span>
-              <button
-                type="button"
-                aria-label="Zoom in"
-                disabled={zoom === stepZoom(zoom, 1)}
-                onClick={() => setZoom(stepZoom(zoom, 1))}
-                className="cursor-pointer rounded px-2 py-1 font-semibold hover:bg-zinc-200 disabled:opacity-40 dark:hover:bg-zinc-800"
-              >
-                +
-              </button>
+        <div
+          ref={panes}
+          className="flex min-w-0 flex-1"
+          // Where the divider sits, read by the source pane's width on wide screens.
+          style={{ "--split": `${(pdfVisible && sourceVisible ? shownRatio : 1) * 100}%` } as React.CSSProperties}
+        >
+          <section
+            aria-label="LaTeX source"
+            className={`latex-editor relative min-h-0 w-full min-w-0 md:w-auto md:shrink-0 md:basis-(--split) ${pane === "source" || focusMode ? "block" : "hidden"} ${sourceVisible ? "md:block" : "md:hidden"} ${pdfVisible ? "" : "md:flex-1"}`}
+          >
+            <div className="h-full min-h-0" hidden={openFile !== null}>
+              <LatexEditor
+                ref={editor}
+                initialValue={doc.source}
+                onChange={setSource}
+                onCompile={() => void runCompile()}
+                label="LaTeX source"
+                readOnly={!editable}
+                index={index}
+                focusMode={focusMode}
+                onCursor={setCursor}
+                onProblems={setProblems}
+                onNavigate={followElsewhere}
+                {...(editable ? { onImages: uploadImages } : {})}
+              />
             </div>
-          </div>
+            {openFile?.kind === "text" && (
+              <FileEditor
+                key={openFile.id}
+                ref={fileEditor}
+                workspaceId={workspace.id}
+                file={openFile}
+                editable={editable}
+                onStatus={setFileStatus}
+                onCompile={() => void runCompile()}
+                onSaved={() => void refreshFiles()}
+              />
+            )}
+            {openFile?.kind === "binary" && (
+              <FilePreview
+                key={openFile.id}
+                workspaceId={workspace.id}
+                file={openFile}
+                onShowPdf={(bytes, path) => {
+                  setPdf(bytes);
+                  setPreviewing(path);
+                  setPane("pdf");
+                }}
+              />
+            )}
+          </section>
 
-          {/* Scrollable, so keyboard users must be able to reach it (WCAG 2.1.1). */}
-          {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
-          <div className="min-h-0 flex-1 overflow-auto" role="region" aria-label="PDF pages" tabIndex={0}>
-            {compile.state === "failed" && (
-              <div className="space-y-2 p-3">
-                <Alert tone="error">
-                  <p className="font-semibold">Compilation failed{pdf ? "; showing the last good PDF" : ""}.</p>
-                  <ul className="mt-1 space-y-1">
-                    {compile.errors.map((message, index) => {
-                      const line = lineOf(message);
-                      return (
-                        <li key={index}>
-                          {line ? (
-                            <button
-                              type="button"
-                              className="cursor-pointer text-left underline underline-offset-2"
-                              onClick={() => {
-                                setOpenId(null);
-                                setPane("source");
-                                // On phones the source pane is hidden until this render lands.
-                                requestAnimationFrame(() => editor.current?.goToLine(line));
-                              }}
-                            >
-                              {message}
-                            </button>
-                          ) : (
-                            message
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </Alert>
-                {compile.log && (
-                  <details className="rounded-lg border border-zinc-200 bg-white text-xs dark:border-zinc-800 dark:bg-zinc-950">
-                    <summary className="cursor-pointer px-3 py-2 font-semibold">Compiler log</summary>
-                    <pre className="max-h-72 overflow-auto px-3 pb-3 whitespace-pre-wrap">{compile.log}</pre>
-                  </details>
+          {pdfVisible && sourceVisible && (
+            // A focusable separator is a widget (WAI-ARIA "window splitter"): arrows move it.
+            // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize the source and PDF panes"
+              aria-valuemin={20}
+              aria-valuemax={80}
+              aria-valuenow={Math.round(shownRatio * 100)}
+              // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+              tabIndex={0}
+              onPointerDown={dragDivider}
+              onDoubleClick={() => setRatio(0.5)}
+              onKeyDown={(event) => {
+                const step = event.key === "ArrowLeft" ? -0.05 : event.key === "ArrowRight" ? 0.05 : 0;
+                if (step) {
+                  event.preventDefault();
+                  setRatio(Math.min(0.8, Math.max(0.2, Math.round((ratio + step) * 20) / 20)));
+                } else if (event.key === "Home" || event.key === "End") {
+                  event.preventDefault();
+                  setRatio(event.key === "Home" ? 0.2 : 0.8);
+                }
+              }}
+              title="Drag to resize; double-click to reset"
+              className="group relative z-10 -mx-1 hidden w-2 shrink-0 cursor-col-resize touch-none md:block"
+            >
+              <span aria-hidden="true" className={`absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-zinc-200 transition-all group-hover:w-1 group-hover:bg-brand-500/60 dark:bg-zinc-800 ${dragRatio !== null ? "w-1 bg-brand-500/70" : ""}`} />
+            </div>
+          )}
+
+          <section aria-label="PDF preview" className={`min-h-0 min-w-0 flex-1 flex-col bg-zinc-100 dark:bg-zinc-900 ${pane === "pdf" && !focusMode ? "flex" : "hidden"} ${pdfVisible ? "md:flex" : "md:hidden"}`}>
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
+              <span className="truncate">
+                {previewing ? (
+                  `Showing ${previewing}`
+                ) : template ? (
+                  <>
+                    Template: {template.name} ({template.license})
+                  </>
+                ) : (
+                  "Blank document"
                 )}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  aria-label="Zoom out"
+                  disabled={zoom === stepZoom(zoom, -1)}
+                  onClick={() => setZoom(stepZoom(zoom, -1))}
+                  className="cursor-pointer rounded px-2 py-1 font-semibold hover:bg-zinc-200 disabled:opacity-40 dark:hover:bg-zinc-800"
+                >
+                  −
+                </button>
+                <span aria-live="polite">{Math.round(zoom * 100)}%</span>
+                <button
+                  type="button"
+                  aria-label="Zoom in"
+                  disabled={zoom === stepZoom(zoom, 1)}
+                  onClick={() => setZoom(stepZoom(zoom, 1))}
+                  className="cursor-pointer rounded px-2 py-1 font-semibold hover:bg-zinc-200 disabled:opacity-40 dark:hover:bg-zinc-800"
+                >
+                  +
+                </button>
               </div>
-            )}
-            {compile.state === "unavailable" && (
-              <div className="p-3">
-                <Alert tone="error">{compile.message}</Alert>
-              </div>
-            )}
-            {compiling && !pdf && (
-              <div role="status" className="flex items-center justify-center gap-2 p-10 text-sm text-zinc-600 dark:text-zinc-300">
-                <Spinner /> Compiling with pdfLaTeX…
-              </div>
-            )}
-            {pdf && (
-              <Suspense fallback={<Spinner className="mx-auto mt-10 size-6" />}>
-                <PdfPreview pdf={pdf} zoom={zoom} />
-              </Suspense>
-            )}
-          </div>
-        </section>
+            </div>
+
+            {/* Scrollable, so keyboard users must be able to reach it (WCAG 2.1.1). */}
+            {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+            <div className="min-h-0 flex-1 overflow-auto" role="region" aria-label="PDF pages" tabIndex={0}>
+              {compile.state === "failed" && (
+                <div className="space-y-2 p-3">
+                  <Alert tone="error">
+                    <p className="font-semibold">Compilation failed{pdf ? "; showing the last good PDF" : ""}.</p>
+                    <p className="text-xs opacity-80">Errors are underlined in the source too; press F8 to step through them.</p>
+                    <ul className="mt-1 space-y-1">
+                      {compile.errors.map((message, index) => {
+                        const at = lineOf(message);
+                        return (
+                          <li key={index}>
+                            {at ? (
+                              <button type="button" className="cursor-pointer text-left underline underline-offset-2" onClick={() => showMain(at)}>
+                                {message}
+                              </button>
+                            ) : (
+                              message
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </Alert>
+                  {compile.log && (
+                    <details className="rounded-lg border border-zinc-200 bg-white text-xs dark:border-zinc-800 dark:bg-zinc-950">
+                      <summary className="cursor-pointer px-3 py-2 font-semibold">Compiler log</summary>
+                      <pre className="max-h-72 overflow-auto px-3 pb-3 whitespace-pre-wrap">{compile.log}</pre>
+                    </details>
+                  )}
+                </div>
+              )}
+              {compile.state === "unavailable" && (
+                <div className="p-3">
+                  <Alert tone="error">{compile.message}</Alert>
+                </div>
+              )}
+              {compiling && !pdf && (
+                <div role="status" className="flex items-center justify-center gap-2 p-10 text-sm text-zinc-600 dark:text-zinc-300">
+                  <Spinner /> Compiling with pdfLaTeX…
+                </div>
+              )}
+              {pdf && (
+                <Suspense fallback={<Spinner className="mx-auto mt-10 size-6" />}>
+                  <PdfPreview pdf={pdf} zoom={zoom} />
+                </Suspense>
+              )}
+            </div>
+          </section>
+        </div>
       </div>
 
+      {focusMode ? (
+        <div className="pointer-events-none fixed inset-x-0 top-3 z-20 flex justify-center">
+          <div className="pointer-events-auto flex animate-fade items-center gap-3 rounded-full border border-zinc-200 bg-white/90 py-1 pr-1 pl-4 text-xs text-zinc-600 shadow-lg backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/90 dark:text-zinc-300">
+            <span className="tabular-nums">{insights.stats.words.toLocaleString()} words</span>
+            {section && <span className="max-w-48 truncate">{section}</span>}
+            <span role="status">{editable ? saveLabel(save) : "View only"}</span>
+            <button type="button" onClick={() => setFocusMode(false)} className="flex h-7 cursor-pointer items-center gap-1.5 rounded-full bg-zinc-900 px-3 font-semibold text-white hover:bg-zinc-700 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200">
+              Leave focus <Keys keys="Esc" className="opacity-80" />
+            </button>
+          </div>
+        </div>
+      ) : (
+        <StatusBar
+          words={insights.stats.words}
+          section={section}
+          problems={problems}
+          line={line}
+          column={cursor?.column ?? 1}
+          autoCompile={autoCompile}
+          editable={editable}
+          onNextProblem={() => act("next-problem")}
+          onAutoCompile={setAutoCompile}
+          onCommands={() => setPalette(true)}
+          onShortcuts={() => setSheet("shortcuts")}
+        />
+      )}
+
+      {openFile === null && <MathPreview cursor={cursor} macros={macros} />}
+
+      {notice && (
+        <div role="status" className="fixed bottom-12 left-1/2 z-40 -translate-x-1/2 animate-enter rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-lg dark:bg-white dark:text-zinc-900">
+          {notice}
+        </div>
+      )}
+
+      {palette && <CommandBar commands={commands} onPick={pickCommand} onClose={closePalette} />}
       {sheet === "files" && (
         <Sheet title="Project files" description="Everything in this project. Open a file to edit it, or add your own." onClose={() => setSheet(null)}>
           <div className="-mx-5 -my-5 h-[calc(100%+2.5rem)]">{tree}</div>
+        </Sheet>
+      )}
+      {sheet === "outline" && (
+        <Sheet title="Outline" description="Sections with their word counts, then figures and tables." onClose={() => setSheet(null)}>
+          <div className="-mx-5 -my-5">
+            <OutlinePanel
+              outline={outline}
+              line={line}
+              onJump={(at) => {
+                setSheet(null);
+                showMain(at);
+              }}
+            />
+          </div>
+        </Sheet>
+      )}
+      {sheet === "shortcuts" && (
+        <Sheet title="Keyboard shortcuts" description="Everything also lives in the command bar." onClose={() => setSheet(null)}>
+          <ShortcutList />
         </Sheet>
       )}
       {sheet === "overview" && (
@@ -784,6 +1236,17 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
         </Sheet>
       )}
     </div>
+  );
+}
+
+function LayoutIcon({ layout }: { layout: Layout }) {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <rect x="2.5" y="3.5" width="15" height="13" rx="2" />
+      {layout === "split" && <path d="M10 3.5v13" />}
+      {layout === "source" && <path d="M5.5 7.5h6M5.5 10h8M5.5 12.5h5" strokeLinecap="round" />}
+      {layout === "pdf" && <path d="M7 6.5h6v7H7z" />}
+    </svg>
   );
 }
 

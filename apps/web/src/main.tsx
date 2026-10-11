@@ -3,6 +3,10 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { createAuthService } from "./auth/createAuth";
 import "./index.css";
+import { applyTheme, savedTheme } from "./lib/theme";
+
+// Before the first paint, so a chosen theme never flashes the other one.
+applyTheme(savedTheme());
 
 const container = document.getElementById("root");
 if (!container) throw new Error("index.html is missing #root");

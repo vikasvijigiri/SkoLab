@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+/* Dark follows the device unless the reader picked a theme (src/lib/theme.ts sets data-theme on <html>). */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+}
+
 @theme {
   --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
     sans-serif;
@@ -49,6 +61,14 @@
     color-scheme: light dark;
   }
 
+  :root[data-theme="light"] {
+    color-scheme: light;
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+  }
+
   html {
     -webkit-text-size-adjust: 100%;
     text-rendering: optimizeLegibility;
@@ -78,9 +98,9 @@
   :root {
     --cm-bg: #ffffff;
     --cm-fg: #18181b;
-    --cm-gutter-bg: #fafafa;
-    --cm-gutter-fg: #52525b;
-    --cm-active: #f4f4f5;
+    --cm-gutter-bg: #ffffff;
+    --cm-gutter-fg: #5f5f6a;
+    --cm-active: #f6f6fb;
     --cm-selection: #c7d2fe;
     --cm-keyword: #4338ca;
     --cm-env: #0f766e;
@@ -88,15 +108,38 @@
     --cm-bracket: #9d174d;
     --cm-math: #9a3412;
     --cm-atom: #1d4ed8;
+    --cm-tooltip-bg: #ffffff;
+    --cm-tooltip-border: #e4e4e7;
+    --cm-accent: #4f46e5;
+    --cm-accent-fg: #ffffff;
+  }
+
+  :root[data-theme="dark"] {
+    --cm-bg: #0b0b0f;
+    --cm-fg: #e4e4e7;
+    --cm-gutter-bg: #0b0b0f;
+    --cm-gutter-fg: #a1a1aa;
+    --cm-active: #15151c;
+    --cm-selection: #3730a3;
+    --cm-keyword: #a5b4fc;
+    --cm-env: #5eead4;
+    --cm-comment: #a8a29e;
+    --cm-bracket: #f9a8d4;
+    --cm-math: #fdba74;
+    --cm-atom: #93c5fd;
+    --cm-tooltip-bg: #18181b;
+    --cm-tooltip-border: #3f3f46;
+    --cm-accent: #6366f1;
+    --cm-accent-fg: #ffffff;
   }
 
   @media (prefers-color-scheme: dark) {
-    :root {
-      --cm-bg: #09090b;
+    :root:not([data-theme="light"]) {
+      --cm-bg: #0b0b0f;
       --cm-fg: #e4e4e7;
-      --cm-gutter-bg: #0c0c0f;
+      --cm-gutter-bg: #0b0b0f;
       --cm-gutter-fg: #a1a1aa;
-      --cm-active: #18181b;
+      --cm-active: #15151c;
       --cm-selection: #3730a3;
       --cm-keyword: #a5b4fc;
       --cm-env: #5eead4;
@@ -104,6 +147,10 @@
       --cm-bracket: #f9a8d4;
       --cm-math: #fdba74;
       --cm-atom: #93c5fd;
+      --cm-tooltip-bg: #18181b;
+      --cm-tooltip-border: #3f3f46;
+      --cm-accent: #6366f1;
+      --cm-accent-fg: #ffffff;
     }
   }
 }

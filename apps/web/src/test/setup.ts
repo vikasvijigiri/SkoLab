@@ -15,5 +15,8 @@ missing(Document.prototype, "execCommand", () => false);
 
 afterEach(() => {
   cleanup();
+  // Editor preferences (layout, sidebar, theme) are remembered per browser; each test starts fresh.
+  localStorage.clear();
+  delete document.documentElement.dataset.theme;
   resetTemplateCache();
 });

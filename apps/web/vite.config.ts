@@ -35,7 +35,8 @@ export default defineConfig(({ command, mode }) => {
     // The e2e build calls a stubbed API on its own origin, so it needs no
     // production hosts; everything else in the policy is enforced as shipped.
     preview: { port: 4173, strictPort: true, headers: securityHeaders },
-    build: { target: "es2022", sourcemap: true },
+    // Fonts stay files: the CSP's font-src 'self' refuses data: URLs, which Vite would inline small ones as.
+    build: { target: "es2022", sourcemap: true, assetsInlineLimit: (file: string) => (/\.(?:woff2?|ttf|otf)$/i.test(file) ? false : undefined) },
     test: {
       environment: "jsdom",
       setupFiles: ["./src/test/setup.ts"],
