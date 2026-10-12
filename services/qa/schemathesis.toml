@@ -57,3 +57,9 @@ checks.ensure_resource_availability.enabled = false
 [[operations]]
 include-name = "GET /api/v1/workspaces/{id}/files/{file_id}/raw"
 checks.positive_data_acceptance.expected-statuses = ["2xx", "400", "401", "403", "404", "409", "429", "5xx"]
+
+# Web Vitals have their own tight per-address limit (burst 20), which the
+# fuzzer's many generated reports from one address rightly run into.
+[[operations]]
+include-name = "POST /api/v1/vitals"
+checks.positive_data_acceptance.expected-statuses = ["2xx", "429"]

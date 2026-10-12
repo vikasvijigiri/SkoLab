@@ -107,6 +107,37 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "503": { $ref: "#/components/responses/Unavailable" }
 
+  /api/v1/vitals:
+    post:
+      tags: [health]
+      operationId: reportWebVitals
+      summary: Core Web Vitals from a visitor's browser (real-user page speed)
+      description: >-
+        Sent by the web app after a page loads and when it is hidden. Public,
+        because sign-in pages are measured too, and carries no user or session
+        identifier. Timings are milliseconds; CLS is unitless. Pages outside
+        the app's own routes are counted as "other". Browsers send it with
+        navigator.sendBeacon as text/plain (no CORS preflight); the body is the
+        same JSON. Limited to 1 report per second per address (burst 20) on
+        top of the global limit.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VitalsReport" }
+      responses:
+        "204": { description: Recorded. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "415":
+          description: The body is not application/json or text/plain.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
   /api/v1/users/profile/sync:
     post:
       tags: [users]
@@ -509,7 +540,7 @@ paths:
               type: object
               required: [user_id]
               properties:
-                user_id: { type: string, pattern: "\\S", description: "An active editor of this workspace." }
+                user_id: { type: string, pattern: "^[^\\u0000]*[^\\u0000\\s][^\\u0000]*$", description: "An active editor of this workspace. Not blank; no NUL characters." }
       responses:
         "200":
           description: Transferred.
@@ -1067,6 +1098,30 @@ components:
       schema: { type: string }
 
   schemas:
+    VitalsReport:
+      type: object
+      required: [page, metrics]
+      additionalProperties: false
+      properties:
+        page: { type: string, maxLength: 100, description: "The route's first path segment, e.g. /sign-in; anything else counts as other." }
+        metrics:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            oneOf:
+              - type: object
+                required: [name, value]
+                additionalProperties: false
+                properties:
+                  name: { type: string, enum: [LCP, INP, FCP, TTFB] }
+                  value: { type: number, minimum: 0, maximum: 60000, description: Milliseconds. }
+              - type: object
+                required: [name, value]
+                additionalProperties: false
+                properties:
+                  name: { type: string, const: CLS }
+                  value: { type: number, minimum: 0, maximum: 100 }
     Error:
       type: object
       required: [error, code]

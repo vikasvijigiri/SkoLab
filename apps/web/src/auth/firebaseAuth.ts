@@ -54,7 +54,9 @@ export function createFirebaseAuth(config: FirebaseWebConfig): AuthService {
   const auth = initializeAuth(app, {
     // IndexedDB first; local storage where IndexedDB is unavailable.
     persistence: [indexedDBLocalPersistence, browserLocalPersistence],
-    popupRedirectResolver: browserPopupRedirectResolver,
+    // No popupRedirectResolver here: given at startup it loads Google's
+    // iframe script (apis.google.com) before the first screen can render.
+    // The Google calls below pass it, and it is warmed up once idle.
   });
   auth.useDeviceLanguage();
 
@@ -64,8 +66,12 @@ export function createFirebaseAuth(config: FirebaseWebConfig): AuthService {
     listeners.forEach((listener) => listener(user));
   };
   onAuthStateChanged(auth, emit);
-  // Completes a Google sign-in that fell back to a full-page redirect.
-  getRedirectResult(auth).catch(() => undefined);
+  // Once the page is idle: completes a Google sign-in that fell back to a
+  // full-page redirect, and loads Google's helper, so the Google button's
+  // popup opens straight from the click (a late popup can be blocked).
+  const warmUp = () => void getRedirectResult(auth, browserPopupRedirectResolver).catch(() => undefined);
+  if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(warmUp, { timeout: 2000 });
+  else setTimeout(warmUp, 1000);
 
   const google = new GoogleAuthProvider();
   google.setCustomParameters({ prompt: "select_account" });
@@ -111,10 +117,10 @@ export function createFirebaseAuth(config: FirebaseWebConfig): AuthService {
     signInWithGoogle: () =>
       run(async () => {
         try {
-          return toUser((await signInWithPopup(auth, google)).user);
+          return toUser((await signInWithPopup(auth, google, browserPopupRedirectResolver)).user);
         } catch (error) {
           if ((error as { code?: unknown }).code !== "auth/popup-blocked") throw error;
-          await signInWithRedirect(auth, google);
+          await signInWithRedirect(auth, google, browserPopupRedirectResolver);
           return null;
         }
       }),

@@ -40,6 +40,7 @@ import (
 	"github.com/skolab/backend-go/internal/telemetry"
 	"github.com/skolab/backend-go/internal/templates"
 	"github.com/skolab/backend-go/internal/user"
+	"github.com/skolab/backend-go/internal/vitals"
 	"github.com/skolab/backend-go/internal/websocket"
 	"github.com/skolab/backend-go/internal/workspace"
 	"go.opentelemetry.io/otel/trace"
@@ -209,6 +210,7 @@ func run(ctx context.Context, addr string, listening func(net.Addr)) error {
 		python:    pythonBackendURL,
 		telemetry: otel.Middleware(),
 		transport: otel.Transport(nil),
+		vitals:    otel,
 		sentry: alerts.Relay{
 			Secret: os.Getenv("SENTRY_WEBHOOK_SECRET"),
 			Slack:  alerts.SlackWebhook(os.Getenv("SLACK_ALERT_WEBHOOK_URL")),
@@ -295,8 +297,14 @@ type gateway struct {
 	python    string
 	telemetry gin.HandlerFunc // nil: no tracing
 	transport http.RoundTripper
-	sentry    alerts.Relay // unconfigured: /hooks/sentry answers 503
+	sentry    alerts.Relay    // unconfigured: /hooks/sentry answers 503
+	vitals    vitals.Recorder // nil: web vitals are accepted and dropped
 }
+
+// dropVitals is the recorder when telemetry is off (tests).
+type dropVitals struct{}
+
+func (dropVitals) RecordVital(context.Context, vitals.Sample) {}
 
 // newRouter wires middleware and every route.
 func newRouter(g gateway) *gin.Engine {
@@ -395,6 +403,15 @@ func newRouter(g gateway) *gin.Engine {
 	// authenticated by Sentry's HMAC signature, not a Firebase token.
 	r.POST("/hooks/sentry", g.sentry.Handler())
 	// Metrics push over OTLP. The former /observability scrape endpoint is retired.
+	// Core Web Vitals from visitors' browsers (real-user monitoring). Public,
+	// since sign-in pages are measured too, so it has its own tighter per-IP
+	// limit on top of the global one: a page sends one or two reports.
+	recorder := g.vitals
+	if recorder == nil {
+		recorder = dropVitals{}
+	}
+	vitalsLimit := middleware.NewRateLimiter(envLimit("RATE_LIMIT_VITALS_RPS", 1), envBurst("RATE_LIMIT_VITALS_BURST", 20)).Share(g.limits, "vitals")
+	r.POST("/api/v1/vitals", vitalsLimit.Limit(), vitals.Handler(recorder))
 
 	// ── WebSockets ────────────────────────────────────────────────────────────
 	// Browsers obtain a single-use ticket from the Firebase-authenticated HTTPS

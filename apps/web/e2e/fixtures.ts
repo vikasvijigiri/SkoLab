@@ -14,7 +14,7 @@ const TEMPLATES = TEST_TEMPLATES.map((template) => ({
   source: readFileSync(new URL(`../../../services/backend-go/internal/templates/files/${template.id}.tex`, import.meta.url), "utf8"),
 }));
 
-export const test = base.extend<{ profileCalls: ProfileCall[]; backend: FakeBackend }>({
+export const test = base.extend<{ profileCalls: ProfileCall[]; backend: FakeBackend; vitals: unknown[] }>({
   /** The editor and sharing endpoints (workspaces, templates, documents, invites), served in memory. */
   backend: [
     async ({ page }, provide) => {
@@ -23,6 +23,18 @@ export const test = base.extend<{ profileCalls: ProfileCall[]; backend: FakeBack
       await provide(backend);
     },
     // Every signed-in page reads documents and templates.
+    { auto: true },
+  ],
+  // Every page reports its Core Web Vitals; tests that care read them here.
+  vitals: [
+    async ({ page }, provide) => {
+      const reports: unknown[] = [];
+      await page.route("**/__api/api/v1/vitals", async (route) => {
+        reports.push(JSON.parse(route.request().postData() ?? "null"));
+        await route.fulfill({ status: 204 });
+      });
+      await provide(reports);
+    },
     { auto: true },
   ],
   profileCalls: async ({ page }, provide) => {

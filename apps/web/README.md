@@ -108,8 +108,20 @@ npm run dev                  # http://localhost:3000; the API allows this origin
 | `npm test` | Unit and component tests (Vitest). Fails below 85% line coverage |
 | `npm run e2e` | Builds with the in-memory provider and runs Playwright: journeys, keyboard, phone layout and axe |
 | `npm run check:headers` | Checks that the Render blueprints serve the tested security headers |
+| `npm run check:bundle` | After a build: fails when the gzipped bundle outgrows `performance-budget.json` |
+| `npm run lighthouse` | After a build: Lighthouse (mobile, slow 4G) on the public pages, median of 3 runs, against the thresholds in `performance-budget.json` |
 
-CI runs all of these in `.github/workflows/web.yml`.
+CI runs all of these in `.github/workflows/web.yml`. Raise a budget only on
+purpose, in the pull request that needs it, and say why.
+
+## Page speed from real visitors
+
+`src/lib/vitals.ts` reports each visit's Core Web Vitals (LCP, INP, CLS, FCP,
+TTFB) to `POST /api/v1/vitals` with `sendBeacon`. Only the page's first path
+segment and the five numbers are sent: no user, session or full URL. The
+gateway records them as `skolab_web_vital_duration_seconds` and
+`skolab_web_vital_cls`, shown as p75 per page (Google's measure) in the
+"Real-user page speed" row of the backend Grafana dashboard.
 
 ## Going live (one-time, in the consoles)
 

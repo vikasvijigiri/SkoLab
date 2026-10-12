@@ -16,7 +16,9 @@
     "test": "vitest run --coverage",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "check:headers": "node scripts/check-headers.mjs"
+    "check:headers": "node scripts/check-headers.mjs",
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "lighthouse": "node scripts/lighthouse.mjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "6.20.3",
@@ -34,7 +36,8 @@
     "pdfjs-dist": "6.3.289",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "react-router": "7.18.4"
+    "react-router": "7.18.4",
+    "web-vitals": "6.2.2"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
@@ -54,6 +57,7 @@
     "eslint-plugin-react-hooks": "7.1.1",
     "globals": "17.13.0",
     "jsdom": "29.1.1",
+    "lighthouse": "13.5.0",
     "playwright-core": "1.56.1",
     "tailwindcss": "4.3.3",
     "typescript": "6.0.3",
