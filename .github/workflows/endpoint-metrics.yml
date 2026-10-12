@@ -1,0 +1,153 @@
+name: Endpoint metrics
+
+# Per-URL metrics for a branch, the way production measures them: the
+# production API image on CI staging exports OpenTelemetry to a Collector,
+# Prometheus scrapes it, and Grafana shows it. k6 drives every URL at a
+# steady rate (services/loadtest/endpoints.js); the report
+# (services/observability/endpoint_report.py) lands in the run summary and
+# the `endpoint-metrics` artifact, with a Grafana dashboard screenshot.
+# Never touches production. Run it by adding the `metrics` label to a pull
+# request, or (once on master) from Actions > Endpoint metrics.
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: Minutes of load
+        default: "3"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: endpoint-metrics-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  metrics:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'metrics'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: skolab
+          POSTGRES_DB: skolab
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      MINUTES: ${{ inputs.minutes || '3' }}
+      SKOLAB_FIREBASE_API_KEY: ${{ secrets.SKOLAB_FIREBASE_API_KEY }}
+      SKOLAB_SYNTHETIC_EMAIL: ${{ secrets.SKOLAB_SYNTHETIC_EMAIL }}
+      SKOLAB_SYNTHETIC_PASSWORD: ${{ secrets.SKOLAB_SYNTHETIC_PASSWORD }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+      - name: Check inputs
+        run: |
+          case "$MINUTES" in ''|*[!0-9]*) echo "::error::minutes must be a number"; exit 1;; esac
+          if [ "$MINUTES" -lt 1 ] || [ "$MINUTES" -gt 15 ]; then echo "::error::minutes must be 1-15"; exit 1; fi
+      - name: Start the Collector, Prometheus and Grafana
+        run: |
+          obs="$PWD/services/observability/ci"
+          docker run -d --name otel-collector --network host -v "$obs/otel-collector.yaml:/etc/otelcol/config.yaml:ro" \
+            otel/opentelemetry-collector-contrib:0.161.0@sha256:fd328de2552466ad78385e1b1289c3f2402b1c45f265b252aab1955b42845ac1 \
+            --config /etc/otelcol/config.yaml
+          docker run -d --name prometheus --network host -v "$obs/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+            prom/prometheus:v3.13.3@sha256:6976aa8a60fec930796ce5772b8d12da7a318a5daa8d40d69c5c7819a05eeed7 \
+            --config.file=/etc/prometheus/prometheus.yml --web.listen-address=127.0.0.1:9090
+          docker run -d --name grafana --network host \
+            -e GF_SERVER_HTTP_ADDR=127.0.0.1 -e GF_AUTH_ANONYMOUS_ENABLED=true -e GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer \
+            -e GF_AUTH_DISABLE_LOGIN_FORM=true -e GF_ANALYTICS_REPORTING_ENABLED=false -e GF_NEWS_NEWS_FEED_ENABLED=false \
+            -v "$obs/grafana/provisioning:/etc/grafana/provisioning:ro" -v "$obs/grafana/dashboards:/var/lib/grafana/dashboards:ro" \
+            grafana/grafana:12.4.11@sha256:3ea272e5cab64a4a62240c682e2c62433b25614d956d44c299a10cb6994f6f2e
+          for _ in $(seq 1 60); do
+            curl -fs http://127.0.0.1:9090/-/ready >/dev/null && curl -fs http://127.0.0.1:3000/api/health >/dev/null && exit 0
+            sleep 2
+          done
+          docker logs otel-collector 2>&1 | tail -n 50; docker logs prometheus 2>&1 | tail -n 50; docker logs grafana 2>&1 | tail -n 50
+          exit 1
+      - uses: ./.github/actions/staging
+        with:
+          firebase-service-account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          # Export every trace and metric to the local Collector, and lift the
+          # limits that would (correctly) throttle one test account.
+          extra-env: |
+            OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
+            OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+            OTEL_TRACES_SAMPLER_ARG=1
+            RATE_LIMIT_USER_RPS=100000
+            RATE_LIMIT_USER_BURST=100000
+            RATE_LIMIT_IP_RPS=100000
+            RATE_LIMIT_IP_BURST=100000
+            USER_QUOTA_ENABLED=false
+      - name: Install pinned k6
+        run: |
+          curl --fail --location --retry 3 --output k6.tar.gz https://github.com/grafana/k6/releases/download/v2.3.0/k6-v2.3.0-linux-amd64.tar.gz
+          curl --fail --location --retry 3 --output checksums.txt https://github.com/grafana/k6/releases/download/v2.3.0/k6-v2.3.0-checksums.txt
+          awk '$2 == "k6-v2.3.0-linux-amd64.tar.gz" {print $1 "  k6.tar.gz"}' checksums.txt > selected-checksum.txt
+          test -s selected-checksum.txt
+          sha256sum --check selected-checksum.txt
+          tar -xzf k6.tar.gz
+          echo "$PWD/k6-v2.3.0-linux-amd64" >> "$GITHUB_PATH"
+      - name: Sign in the monitoring account
+        run: python services/loadtest/fixture.py --base-url http://127.0.0.1:8080
+      - name: Drive every URL
+        run: |
+          mkdir -p qa-reports/metrics
+          echo "LOAD_START=$(date +%s)" >> "$GITHUB_ENV"
+          status=0
+          SUMMARY_JSON=qa-reports/metrics/k6-summary.json k6 run --quiet services/loadtest/endpoints.js || status=$?
+          echo "LOAD_END=$(date +%s)" >> "$GITHUB_ENV"
+          echo "K6_STATUS=$status" >> "$GITHUB_ENV"
+      - name: Wait for the last metric export
+        # The SDKs push every 30 seconds; Prometheus scrapes every 5.
+        run: sleep 45
+      - name: Per-URL report from Prometheus
+        run: |
+          python services/observability/endpoint_report.py --prometheus http://127.0.0.1:9090 \
+            --start "$LOAD_START" --end "$LOAD_END" --k6 qa-reports/metrics/k6-summary.json --out qa-reports/metrics
+      - name: Grafana dashboard screenshot
+        run: |
+          cd "$RUNNER_TEMP" && npm install --no-save --no-audit --no-fund playwright-core@1.55.0 >/dev/null
+          cat > shot.mjs <<'JS'
+          import { chromium } from 'playwright-core';
+          const [, , url, out] = process.argv;
+          const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome' });
+          const page = await browser.newPage({ viewport: { width: 1600, height: 2000 }, deviceScaleFactor: 1 });
+          await page.goto(url, { waitUntil: 'networkidle' });
+          await page.waitForTimeout(5000);
+          await page.screenshot({ path: out, fullPage: true });
+          await browser.close();
+          JS
+          from=$(( (LOAD_START - 30) * 1000 )); to=$(( (LOAD_END + 45) * 1000 ))
+          for service in skolab-gateway skolab-backend-py; do
+            node shot.mjs "http://127.0.0.1:3000/d/skolab-ci-endpoints?orgId=1&from=$from&to=$to&var-service=$service&kiosk" \
+              "$GITHUB_WORKSPACE/qa-reports/metrics/grafana-$service.png"
+          done
+      - name: k6 thresholds
+        run: |
+          if [ "$K6_STATUS" != 0 ]; then echo "::error::k6 thresholds or checks failed (exit $K6_STATUS); see the report"; exit 1; fi
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: endpoint-metrics
+          path: qa-reports/metrics
+          if-no-files-found: ignore
+      - name: Logs
+        if: failure()
+        run: |
+          docker logs skolab-api 2>&1 | tail -n 150 || true
+          docker logs otel-collector 2>&1 | tail -n 50 || true

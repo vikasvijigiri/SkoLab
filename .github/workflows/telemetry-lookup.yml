@@ -3,7 +3,10 @@ name: Telemetry lookup
 # "Did my request reach production?" Lists the backend's traces and request
 # counts from Grafana Cloud for a time window. Actions > Telemetry lookup >
 # Run workflow, with UTC start and end; leave both empty for the last 30
-# minutes. Read-only: it only queries Grafana with the existing secrets.
+# minutes (a pull request changing the lookup checks the last 24 hours). The
+# report opens with each route's requests, 4xx, 5xx and p50/p95/p99 over the
+# window; a Grafana data source that does not answer fails the run.
+# Read-only: it only queries Grafana with the existing secrets.
 on:
   workflow_dispatch:
     inputs:
@@ -33,6 +36,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Query Grafana Cloud
+        # On a pull request this is a live smoke run against production
+        # telemetry; a Grafana outage is reported in the run, not a PR blocker.
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         env:
           GRAFANA_URL: ${{ secrets.GRAFANA_URL }}
           GRAFANA_TOKEN: ${{ secrets.GRAFANA_TOKEN }}
@@ -40,10 +46,16 @@ jobs:
           END: ${{ inputs.end }}
           SHOW_NOISE: ${{ inputs.show_noise && '--show-noise' || '' }}
         run: |
+          set -o pipefail
           if [ -z "$GRAFANA_URL" ] || [ -z "$GRAFANA_TOKEN" ]; then
             echo "::error::GRAFANA_URL and GRAFANA_TOKEN repository secrets are required"; exit 1
           fi
+          # Grafana's own health, so a failing data source can be told apart
+          # from a stack that is down; its body is a version string, no secrets.
+          echo "Grafana /api/health: $(curl -sS --max-time 20 -w ' (HTTP %{http_code})' "$GRAFANA_URL/api/health" | tr -d '\n')"
           END="${END:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
-          START="${START:-$(date -u -d "$END -30 minutes" +%Y-%m-%dT%H:%M:%SZ)}"
-          python services/observability/telemetry_lookup.py --start "$START" --end "$END" $SHOW_NOISE | tee report.md
+          SPAN="${{ github.event_name == 'pull_request' && '24 hours' || '30 minutes' }}"
+          START="${START:-$(date -u -d "$END -$SPAN" +%Y-%m-%dT%H:%M:%SZ)}"
+          python services/observability/telemetry_lookup.py --start "$START" --end "$END" $SHOW_NOISE | tee report.md || status=$?
           cat report.md >> "$GITHUB_STEP_SUMMARY"
+          exit "${status:-0}"

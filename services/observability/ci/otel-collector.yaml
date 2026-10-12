@@ -1,0 +1,48 @@
+# OpenTelemetry Collector for CI endpoint metrics (.github/workflows/
+# endpoint-metrics.yml). The API's two processes push OTLP here exactly as
+# they push to Grafana Cloud in production; Prometheus scrapes the result.
+#
+#   metrics  -> prometheus exporter (:8889)
+#   traces   -> spanmetrics connector (per-span RED metrics) -> same exporter
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 127.0.0.1:4318
+
+processors:
+  batch:
+    timeout: 1s
+
+connectors:
+  spanmetrics:
+    histogram:
+      explicit:
+        buckets: [2ms, 5ms, 10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2.5s, 5s, 10s, 30s]
+    dimensions:
+      - name: http.route
+      - name: http.request.method
+      - name: http.response.status_code
+    metrics_flush_interval: 5s
+
+exporters:
+  prometheus:
+    endpoint: 127.0.0.1:8889
+    resource_to_telemetry_conversion:
+      enabled: true
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp, spanmetrics]
+      processors: [batch]
+      exporters: [prometheus]
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [spanmetrics, debug]
+  telemetry:
+    metrics:
+      level: none

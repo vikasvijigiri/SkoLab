@@ -33,8 +33,10 @@ describe("sign in", () => {
     await user.click(screen.getByRole("button", { name: "Sign in" }));
     expect(await screen.findByRole("heading", { name: "Welcome, Grace Hopper" })).toBeInTheDocument();
     expect(await screen.findByText(/You're all set/)).toBeInTheDocument();
-    expect(api).toHaveBeenCalledTimes(1);
-    const init = api.mock.calls[0]?.[1];
+    // Home also loads documents and templates; the profile sync is the call that matters here.
+    const profileCalls = api.mock.calls.filter(([url]) => url.endsWith("/users/profile/sync"));
+    expect(profileCalls).toHaveLength(1);
+    const init = profileCalls[0]?.[1];
     expect(JSON.parse(init?.body as string)).toEqual({ uid: "uid-grace@example.com", name: "Grace Hopper" });
   });
 

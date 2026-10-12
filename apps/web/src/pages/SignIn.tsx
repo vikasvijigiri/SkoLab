@@ -7,6 +7,7 @@ import { Alert } from "../components/Alert";
 import { AuthLayout, linkClass } from "../components/AuthLayout";
 import { Button } from "../components/Button";
 import { Divider } from "../components/Divider";
+import { config } from "../config";
 import { GoogleButton } from "../components/GoogleButton";
 import { PasswordField } from "../components/PasswordField";
 import { TextField } from "../components/TextField";
@@ -69,8 +70,12 @@ export function SignIn() {
         </>
       }
     >
-      <GoogleButton onClick={() => void onGoogle()} loading={pending === "google"} disabled={pending !== null} />
-      <Divider label="or" />
+      {config.googleSignIn ? (
+        <>
+          <GoogleButton onClick={() => void onGoogle()} loading={pending === "google"} disabled={pending !== null} />
+          <Divider label="or" />
+        </>
+      ) : null}
       <form noValidate onSubmit={(event) => void onSubmit(event)} className="space-y-5" aria-describedby={failure ? "sign-in-error" : undefined}>
         {failure ? (
           <Alert tone="error" id="sign-in-error">

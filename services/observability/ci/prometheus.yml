@@ -1,0 +1,10 @@
+# Prometheus for CI endpoint metrics: scrapes the OpenTelemetry Collector's
+# exporter every 5 seconds. See otel-collector.yaml.
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+scrape_configs:
+  - job_name: otel-collector
+    honor_labels: true
+    static_configs:
+      - targets: ["127.0.0.1:8889"]

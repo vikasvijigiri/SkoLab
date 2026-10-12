@@ -57,7 +57,31 @@ func (s *postgresStore) Create(ctx context.Context, ownerID, title, requestID st
 	}
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
-	tx, err := s.pool.Begin(ctx)
+	return create(ctx, s.pool, ownerID, title, requestID, maxPerUser, nil)
+}
+
+// Filler adds content to a workspace inside the transaction that creates it.
+type Filler func(ctx context.Context, tx pgx.Tx, ws Workspace) error
+
+// CreateFilled creates a workspace the way POST /workspaces does (the
+// per-owner cap, the owner's membership) and runs fill in the same
+// transaction, so an imported project appears whole or not at all. An error
+// from fill is returned as is.
+func CreateFilled(ctx context.Context, pool *pgxpool.Pool, ownerID, title string, maxPerUser int, timeout time.Duration, fill Filler) (Workspace, error) {
+	if pool == nil {
+		return Workspace{}, ErrUnavailable
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	ws, _, err := create(ctx, pool, ownerID, title, "", maxPerUser, fill)
+	return ws, err
+}
+
+// MaxPerUser is the per-owner workspace cap in force.
+func MaxPerUser() int { return maxPerUser() }
+
+func create(ctx context.Context, pool *pgxpool.Pool, ownerID, title, requestID string, maxPerUser int, fill Filler) (Workspace, bool, error) {
+	tx, err := pool.Begin(ctx)
 	if err != nil {
 		return Workspace{}, false, unavailable(err)
 	}
@@ -107,6 +131,11 @@ func (s *postgresStore) Create(ctx context.Context, ownerID, title, requestID st
 		`INSERT INTO workspace_members (workspace_id, user_id, role, status, created_at) VALUES ($1, $2, 'owner', 'active', $3)`,
 		ws.ID, ownerID, ws.CreatedAt); err != nil {
 		return Workspace{}, false, unavailable(err)
+	}
+	if fill != nil {
+		if err := fill(ctx, tx, ws); err != nil {
+			return Workspace{}, false, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return Workspace{}, false, unavailable(err)

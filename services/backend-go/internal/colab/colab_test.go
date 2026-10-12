@@ -319,3 +319,81 @@ func TestFailedBackendCallsAreRefunded(t *testing.T) {
 		t.Fatalf("compiles that ran must stay charged: %d", w.Code)
 	}
 }
+
+func TestProjectFilesAreValidatedBeforeAnyQuotaIsSpent(t *testing.T) {
+	var got string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		body, _ := io.ReadAll(req.Body)
+		got = string(body)
+		_, _ = w.Write([]byte(`{"status":"compiled"}`))
+	}))
+	defer upstream.Close()
+	r := newTestRouter(t, "project-user", upstream.URL, "http://unused")
+
+	for _, files := range []string{
+		`[{"path":"../x.tex","content_base64":""}]`,
+		`[{"path":"/etc/x","content_base64":""}]`,
+		`[{"path":".hidden","content_base64":""}]`,
+		`[{"path":"a//b","content_base64":""}]`,
+		`[{"path":"main.tex","content_base64":""}]`,
+		`[{"path":"a/b/c/d/e/f/g.tex","content_base64":""}]`,
+		`[{"path":"a.tex","content_base64":"not base64"}]`,
+		`[{"path":"a.tex"},{"path":"A.tex"}]`,
+		`[{"path":"a.bin","content_base64":"` + strings.Repeat("A", 14*1024*1024) + `"}]`,
+		`[` + strings.Repeat(`{"path":"a.tex"},`, 200) + `{"path":"b.tex"}]`,
+	} {
+		w := doCompile(r, `{"latex_source":"x","files":`+files+`}`)
+		if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), `"invalid_files"`) {
+			t.Fatalf("%.60s: %d %s", files, w.Code, w.Body)
+		}
+	}
+	if got != "" {
+		t.Fatal("an invalid project reached the backend")
+	}
+	valid := `{"latex_source":"x","files":[{"path":"chapters/one.tex","content_base64":"aGk="}]}`
+	for i := 0; i < 2; i++ { // the whole budget is still there
+		if w := doCompile(r, valid); w.Code != http.StatusOK {
+			t.Fatalf("valid project %d: %d %s", i+1, w.Code, w.Body)
+		}
+	}
+	if got != valid {
+		t.Fatalf("backend got %s", got)
+	}
+}
+
+// The project compile route reuses Service.Run and writes its own success
+// response.
+func TestServiceRunReturnsTheBackendBodyToItsCaller(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if strings.Contains(req.URL.Path, "fail") {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = w.Write([]byte(`{"status":"compiled","pdf_base64":"JVBERi0="}`))
+	}))
+	defer upstream.Close()
+	newTestRouter(t, "", upstream.URL, "http://unused") // environment only
+	gin.SetMode(gin.TestMode)
+
+	run := func(sandbox, body string) (*httptest.ResponseRecorder, []byte, bool) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/w/compile", nil)
+		s := NewService(nil, http.DefaultClient, "http://unused")
+		s.sandboxURL = sandbox
+		out, ok := s.Run(c, "service-user-"+strconv.FormatInt(time.Now().UnixNano(), 36), []byte(body))
+		return w, out, ok
+	}
+	w, out, ok := run(upstream.URL, `{"latex_source":"x"}`)
+	if !ok || string(out) != `{"status":"compiled","pdf_base64":"JVBERi0="}` || w.Body.Len() != 0 {
+		t.Fatalf("success: ok=%v out=%s written=%s", ok, out, w.Body)
+	}
+	w, out, ok = run(upstream.URL+"/fail", `{"latex_source":"x"}`)
+	if ok || out != nil || w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "compile_busy") {
+		t.Fatalf("backend failure: ok=%v out=%s %d %s", ok, out, w.Code, w.Body)
+	}
+	w, _, ok = run(upstream.URL, `{}`)
+	if ok || w.Code != http.StatusBadRequest {
+		t.Fatalf("invalid body: ok=%v %d", ok, w.Code)
+	}
+}

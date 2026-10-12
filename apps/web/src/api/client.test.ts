@@ -20,6 +20,16 @@ describe("apiRequest", () => {
     const error = await apiRequest("/x").catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
     expect(error).toMatchObject({ status: 403, code: "email_unverified", message: "Verify your email" });
+
+    vi.stubGlobal("fetch", () => Promise.resolve(Response.json({ code: "version_conflict", error: "moved on", current_version: 4 }, { status: 409 })));
+    await expect(apiRequest("/x", { method: "PUT", body: {} })).rejects.toMatchObject({ status: 409, details: { current_version: 4 } });
+  });
+
+  it("sends extra headers", async () => {
+    const fetchMock = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(() => Promise.resolve(Response.json({})));
+    vi.stubGlobal("fetch", fetchMock);
+    await apiRequest("/x", { method: "POST", body: {}, headers: { "Idempotency-Key": "k1" } });
+    expect(new Headers(fetchMock.mock.calls[0]?.[1].headers).get("Idempotency-Key")).toBe("k1");
   });
 
   it("copes with a non-JSON error and a 204", async () => {

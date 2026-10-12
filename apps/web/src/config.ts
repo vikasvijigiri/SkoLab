@@ -15,4 +15,6 @@ export const config = {
     projectId: env.VITE_FIREBASE_PROJECT_ID ?? "",
     appId: env.VITE_FIREBASE_APP_ID ?? "",
   } satisfies FirebaseWebConfig,
+  // Google sign-in works only on domains listed in Firebase; previews turn it off.
+  googleSignIn: env.VITE_GOOGLE_SIGN_IN !== "off",
 };

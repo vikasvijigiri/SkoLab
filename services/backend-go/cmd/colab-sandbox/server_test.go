@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -101,5 +102,24 @@ func TestSettings(t *testing.T) {
 	t.Setenv("COLAB_MAX_CONCURRENT_COMPILES", "many")
 	if _, _, n, _ := settings(); n != 2 {
 		t.Fatalf("an invalid limit must fall back to 2, got %d", n)
+	}
+}
+
+func TestCompilesAMultiFileProject(t *testing.T) {
+	engine, err := exec.LookPath("pdflatex")
+	if err != nil {
+		t.Skip("pdflatex not installed (the gateway CI job installs it)")
+	}
+	chapter := base64.StdEncoding.EncodeToString([]byte(`\section{One}\message{CHAPTER-READ}`))
+	body := `{"latex_source":"\\documentclass{article}\\begin{document}\\input{chapters/one}\\end{document}",` +
+		`"files":[{"path":"chapters/one.tex","content_base64":"` + chapter + `"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/compile", strings.NewReader(body))
+	req.Header.Set("X-Internal-Token", "test-secret")
+	w := httptest.NewRecorder()
+	newMux(engine, texsandbox.NewSlots(1), "test-secret").ServeHTTP(w, req)
+	var result struct{ Status, Log string }
+	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &result) != nil || result.Status != "compiled" ||
+		!strings.Contains(result.Log, "CHAPTER-READ") {
+		t.Fatalf("got %d %.500s, want a compiled PDF that read the chapter", w.Code, w.Body)
 	}
 }

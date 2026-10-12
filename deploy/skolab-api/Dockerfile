@@ -32,10 +32,21 @@ WORKDIR /app
 
 # TeX for CoLab compiles (a bounded, sandboxed subprocess; see
 # services/backend/app/api/v1/endpoints/colab.py) and util-linux for prlimit.
+# The editor's templates (apps/web/src/editor/templates) need the publisher
+# classes (IEEEtran, elsarticle, REVTeX), Beamer, moderncv, tufte-latex and
+# the common paper packages (booktabs, siunitx, algorithms, tikz, mwe...);
+# CI compiles every template in this image. texlive-fonts-extra (~1.9 GB)
+# is deliberately left out. Adds ~450 MB to the image.
 # Apply available security fixes to packages inherited from the base image.
 RUN apt-get update && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends \
     texlive-latex-base \
+    texlive-latex-recommended \
+    texlive-fonts-recommended \
+    lmodern \
+    texlive-publishers \
+    texlive-science \
+    texlive-latex-extra \
     util-linux \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -g 10001 schoolab \

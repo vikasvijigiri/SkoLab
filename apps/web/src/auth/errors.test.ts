@@ -11,6 +11,7 @@ describe("toAuthError", () => {
     ["auth/too-many-requests", "too-many-requests"],
     ["auth/popup-closed-by-user", "popup-closed"],
     ["auth/network-request-failed", "network"],
+    ["auth/unauthorized-domain", "unauthorized-domain"],
     ["auth/something-new", "unknown"],
   ])("maps %s to %s", (code, expected) => expect(toAuthError({ code }).code).toBe(expected));
 
@@ -27,5 +28,9 @@ describe("messageFor", () => {
     const wrongPassword = messageFor({ code: "auth/wrong-password" });
     expect(messageFor({ code: "auth/user-not-found" })).toBe(wrongPassword);
     expect(wrongPassword).not.toMatch(/no account|not found|doesn't exist/i);
+  });
+
+  it("points to email and password when Google sign-in isn't allowed on this address", () => {
+    expect(messageFor({ code: "auth/unauthorized-domain" })).toMatch(/email and password/);
   });
 });

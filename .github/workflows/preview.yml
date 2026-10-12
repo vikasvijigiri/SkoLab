@@ -1,0 +1,144 @@
+name: Preview
+
+# A temporary, separate deployment of one branch's whole stack, to try a
+# feature before it merges: add the `preview` label to its pull request (or,
+# once this file is on master, Actions > Preview > Run workflow and pick the
+# branch), then open the link printed in the run summary. It runs the exact
+# production API image (deploy/skolab-api) on a fresh, empty Postgres, the
+# web app built from the same branch, and real Firebase sign-in. Nothing it
+# does reaches production data, Render or the production site.
+#
+# The link is a Cloudflare quick tunnel (random *.trycloudflare.com address,
+# no account) and lives for `minutes`, then everything is thrown away.
+# Sign in with email and password: Google sign-in works only on domains
+# listed in Firebase, which a random preview address is not.
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: How long the preview stays up (minutes, at most 240)
+        default: "60"
+        required: true
+
+# Keyed on the label too: adding any other label (say `metrics`) starts a
+# skipped run here, which must not cancel a preview that is up.
+concurrency:
+  group: preview-${{ github.head_ref || github.ref }}-${{ github.event.label.name || 'dispatch' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write # to post the preview link on the pull request
+
+jobs:
+  preview:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'preview'
+    runs-on: ubuntu-latest
+    timeout-minutes: 270
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: skolab
+          POSTGRES_DB: skolab
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # A labelled pull request gets the longest preview, so the link is still
+      # up whenever its reviewer gets to it.
+      MINUTES: ${{ inputs.minutes || '240' }}
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      SKOLAB_FIREBASE_API_KEY: ${{ secrets.SKOLAB_FIREBASE_API_KEY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Check inputs and secrets
+        run: |
+          case "$MINUTES" in ''|*[!0-9]*) echo "::error::minutes must be a number"; exit 1;; esac
+          if [ "$MINUTES" -lt 1 ] || [ "$MINUTES" -gt 240 ]; then echo "::error::minutes must be 1-240"; exit 1; fi
+          for key in FIREBASE_SERVICE_ACCOUNT SKOLAB_FIREBASE_API_KEY; do
+            if [ -z "${!key}" ]; then echo "::error::Repository secret $key is not set"; exit 1; fi
+          done
+      - uses: ./.github/actions/staging
+        with:
+          firebase-service-account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      - name: Open the tunnel
+        run: |
+          docker run -d --name tunnel --network host \
+            cloudflare/cloudflared:2026.9.1@sha256:b269e8abd07a5bf6f3f4be65d5050b2174eca89c56a0241a8ff32a16aec454e4 \
+            tunnel --no-autoupdate --url http://127.0.0.1:4180
+          for _ in $(seq 1 60); do
+            url=$(docker logs tunnel 2>&1 | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | head -n 1 || true)
+            [ -n "$url" ] && break
+            sleep 2
+          done
+          if [ -z "$url" ]; then echo "::error::the tunnel did not start"; docker logs tunnel 2>&1 | tail -n 40; exit 1; fi
+          echo "PREVIEW_URL=$url" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Build the web app for the preview address
+        working-directory: apps/web
+        run: |
+          project=$(printf '%s' "$FIREBASE_SERVICE_ACCOUNT" | jq -r .project_id)
+          npm ci
+          # The app calls the API on its own origin; the preview server forwards it.
+          VITE_API_BASE_URL="$PREVIEW_URL" \
+          VITE_FIREBASE_API_KEY="$SKOLAB_FIREBASE_API_KEY" \
+          VITE_FIREBASE_AUTH_DOMAIN="$project.firebaseapp.com" \
+          VITE_FIREBASE_PROJECT_ID="$project" \
+          VITE_FIREBASE_APP_ID="${{ vars.SKOLAB_FIREBASE_APP_ID || 'preview' }}" \
+          VITE_GOOGLE_SIGN_IN=off \
+            npm run build
+      - name: Serve
+        working-directory: apps/web
+        run: |
+          nohup node scripts/preview-server.mjs --port 4180 --api http://127.0.0.1:8080 > "$RUNNER_TEMP/preview.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            curl -fs "$PREVIEW_URL/gateway-health" >/dev/null && curl -fs "$PREVIEW_URL/" >/dev/null && break
+            sleep 2
+          done
+          curl -fsS "$PREVIEW_URL/gateway-health"
+          {
+            echo "## Preview is up"
+            echo
+            echo "**$PREVIEW_URL**"
+            echo
+            echo "Branch \`${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}\` at \`${GITHUB_SHA::7}\`, for $MINUTES minutes from $(date -u +%H:%M) UTC."
+            echo "Sign in with email and password. The database starts empty and is discarded afterwards."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=Preview URL::$PREVIEW_URL"
+      - name: Post the link on the pull request
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          until=$(date -u -d "+$MINUTES minutes" +%H:%M)
+          body=$(jq -n --arg url "$PREVIEW_URL" --arg until "$until" --arg sha "${GITHUB_SHA::7}" \
+            '{body: "Preview is up until \($until) UTC: \($url)\n\nBuilt from `\($sha)`. Sign in with email and password; the database starts empty and is discarded afterwards."}')
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$PR/comments" -d "$body" >/dev/null
+      - name: Keep the preview up
+        run: |
+          end=$(( $(date +%s) + MINUTES * 60 ))
+          while [ "$(date +%s)" -lt "$end" ]; do
+            if ! docker inspect -f '{{.State.Running}}' skolab-api | grep -q true; then
+              echo "::error::the API container stopped"; docker logs skolab-api 2>&1 | tail -n 100; exit 1
+            fi
+            sleep 30
+          done
+      - name: Logs
+        if: always()
+        run: |
+          tail -n 50 "$RUNNER_TEMP/preview.log" || true
+          docker logs skolab-api 2>&1 | tail -n 200 || true

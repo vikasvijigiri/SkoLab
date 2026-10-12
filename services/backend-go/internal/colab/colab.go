@@ -33,6 +33,7 @@ import (
 	"github.com/skolab/backend-go/internal/apierror"
 	"github.com/skolab/backend-go/internal/quota"
 	"github.com/skolab/backend-go/internal/shared"
+	"github.com/skolab/backend-go/internal/texsandbox"
 )
 
 const (
@@ -118,97 +119,128 @@ func (a *activeUsers) finish(uid string) {
 	a.mu.Unlock()
 }
 
-// Handler returns the gin handler for POST /api/v1/colab/compile. pythonURL
-// is the existing Python backend base URL, used only as the fallback path
-// when COLAB_SANDBOX_URL is unset.
-func Handler(pool *pgxpool.Pool, httpClient *http.Client, pythonURL string) gin.HandlerFunc {
-	sandboxURL := SandboxURL()
-	internalToken := os.Getenv("INTERNAL_API_TOKEN")
+// Service runs gateway-side compiles: request validation, the per-user
+// single-flight slot, the quota charge (refunded when the backend never
+// compiled) and the call to whichever backend is configured. The
+// /colab/compile handler and the project compile route share it.
+type Service struct {
+	pool          *pgxpool.Pool
+	httpClient    *http.Client
+	pythonURL     string
+	sandboxURL    string
+	internalToken string
+}
 
+// NewService reads the backend configuration once. pythonURL is the
+// existing Python backend base URL, used only as the fallback path when
+// COLAB_SANDBOX_URL is unset.
+func NewService(pool *pgxpool.Pool, httpClient *http.Client, pythonURL string) *Service {
+	return &Service{
+		pool:          pool,
+		httpClient:    httpClient,
+		pythonURL:     pythonURL,
+		sandboxURL:    SandboxURL(),
+		internalToken: os.Getenv("INTERNAL_API_TOKEN"),
+	}
+}
+
+// Handler returns the gin handler for POST /api/v1/colab/compile.
+func Handler(pool *pgxpool.Pool, httpClient *http.Client, pythonURL string) gin.HandlerFunc {
+	s := NewService(pool, httpClient, pythonURL)
 	return func(c *gin.Context) {
 		uid := c.GetString("user_id")
 		if uid == "" {
 			apierror.Abort(c, http.StatusUnauthorized, "unauthenticated", "Authentication is required")
 			return
 		}
-
-		// Validate first: a malformed request is refused with 400 before it
-		// takes the single-flight slot or spends any quota.
 		body, readErr := io.ReadAll(c.Request.Body)
 		if readErr != nil {
 			apierror.Abort(c, http.StatusBadRequest, "invalid_body", "Could not read the request body")
 			return
 		}
-		if code, message := validateRequest(body); code != "" {
-			apierror.Abort(c, http.StatusBadRequest, code, message)
-			return
+		if respBody, ok := s.Run(c, uid, body); ok {
+			c.Data(http.StatusOK, "application/json", respBody)
 		}
-
-		release, ok, lockErr := start(c.Request.Context(), uid)
-		if lockErr != nil {
-			c.Header("Retry-After", strconv.Itoa(retryAfterSeconds))
-			apierror.Abort(c, http.StatusServiceUnavailable, "compile_unavailable", "The compile service is temporarily unavailable")
-			return
-		}
-		if !ok {
-			c.Header("Retry-After", strconv.Itoa(retryAfterSeconds))
-			apierror.Abort(c, http.StatusTooManyRequests, "compile_in_progress", "You already have a compile in progress")
-			return
-		}
-		defer release()
-
-		receipt, _, _, err := quota.Charge(c.Request.Context(), pool, uid, compileQuotaCost)
-		if err != nil {
-			if exc, ok := quota.AsExceeded(err); ok {
-				c.Header("Retry-After", strconv.Itoa(int(exc.RetryAfter.Seconds())+1))
-				apierror.Abort(c, http.StatusTooManyRequests, "quota_exceeded", "Your "+exc.Window+" usage budget is spent. Try again later")
-				return
-			}
-			slog.Error("colab: quota check failed", "err", err)
-			if shared.Required() {
-				c.Header("Retry-After", strconv.Itoa(retryAfterSeconds))
-				apierror.Abort(c, http.StatusServiceUnavailable, "compile_unavailable", "The compile service is temporarily unavailable")
-				return
-			}
-			// Availability over strict accounting (quota.Consume itself
-			// already falls back to a local counter on a Postgres error) —
-			// reaching this branch means even that failed, so degrade to
-			// "allow" rather than lock every user out on an infra fault.
-		}
-
-		var status int
-		var header http.Header
-		var respBody []byte
-		var upstreamErr error
-		if sandboxURL != "" {
-			status, header, respBody, upstreamErr = callSandbox(c.Request.Context(), httpClient, sandboxURL, internalToken, body)
-		} else {
-			status, header, respBody, upstreamErr = callPython(c.Request.Context(), httpClient, pythonURL, internalToken, c.Request.Header, body)
-		}
-		if upstreamErr != nil || status >= 400 {
-			// The caller never got the compile they paid for: unreachable,
-			// busy, or failing backend. A compile that ran (even one whose
-			// LaTeX failed or timed out, answered 200) stays charged.
-			// Detached context: the refund must survive a client disconnect.
-			receipt.Refund(context.WithoutCancel(c.Request.Context()), pool)
-		}
-		if upstreamErr != nil {
-			slog.Error("colab: compile backend unreachable", "err", upstreamErr, "sandbox", sandboxURL != "")
-			c.Header("Retry-After", strconv.Itoa(retryAfterSeconds))
-			apierror.Abort(c, http.StatusServiceUnavailable, "compile_unavailable", "The compile service is temporarily unavailable")
-			return
-		}
-		if status >= 400 {
-			upstreamError(c, status, header)
-			return
-		}
-		c.Data(status, "application/json", respBody)
 	}
 }
 
+// Run validates body (the /colab/compile request: latex_source, engine,
+// files), takes uid's compile slot, charges the quota and calls the compile
+// backend. On a 200 from the backend it returns that JSON body and ok=true.
+// Otherwise it has already written the gateway error response to c and
+// returns ok=false.
+func (s *Service) Run(c *gin.Context, uid string, body []byte) (respBody []byte, ok bool) {
+	// Validate first: a malformed request is refused with 400 before it
+	// takes the single-flight slot or spends any quota.
+	if code, message := validateRequest(body); code != "" {
+		apierror.Abort(c, http.StatusBadRequest, code, message)
+		return nil, false
+	}
+
+	release, started, lockErr := start(c.Request.Context(), uid)
+	if lockErr != nil {
+		c.Header("Retry-After", strconv.Itoa(retryAfterSeconds))
+		apierror.Abort(c, http.StatusServiceUnavailable, "compile_unavailable", "The compile service is temporarily unavailable")
+		return nil, false
+	}
+	if !started {
+		c.Header("Retry-After", strconv.Itoa(retryAfterSeconds))
+		apierror.Abort(c, http.StatusTooManyRequests, "compile_in_progress", "You already have a compile in progress")
+		return nil, false
+	}
+	defer release()
+
+	receipt, _, _, err := quota.Charge(c.Request.Context(), s.pool, uid, compileQuotaCost)
+	if err != nil {
+		if exc, isExceeded := quota.AsExceeded(err); isExceeded {
+			c.Header("Retry-After", strconv.Itoa(int(exc.RetryAfter.Seconds())+1))
+			apierror.Abort(c, http.StatusTooManyRequests, "quota_exceeded", "Your "+exc.Window+" usage budget is spent. Try again later")
+			return nil, false
+		}
+		slog.Error("colab: quota check failed", "err", err)
+		if shared.Required() {
+			c.Header("Retry-After", strconv.Itoa(retryAfterSeconds))
+			apierror.Abort(c, http.StatusServiceUnavailable, "compile_unavailable", "The compile service is temporarily unavailable")
+			return nil, false
+		}
+		// Availability over strict accounting (quota.Consume itself
+		// already falls back to a local counter on a Postgres error) —
+		// reaching this branch means even that failed, so degrade to
+		// "allow" rather than lock every user out on an infra fault.
+	}
+
+	var status int
+	var header http.Header
+	var upstreamErr error
+	if s.sandboxURL != "" {
+		status, header, respBody, upstreamErr = callSandbox(c.Request.Context(), s.httpClient, s.sandboxURL, s.internalToken, body)
+	} else {
+		status, header, respBody, upstreamErr = callPython(c.Request.Context(), s.httpClient, s.pythonURL, s.internalToken, c.Request.Header, body)
+	}
+	if upstreamErr != nil || status != http.StatusOK {
+		// The caller never got the compile they paid for: unreachable,
+		// busy, or failing backend. A compile that ran (even one whose
+		// LaTeX failed or timed out, answered 200) stays charged.
+		// Detached context: the refund must survive a client disconnect.
+		receipt.Refund(context.WithoutCancel(c.Request.Context()), s.pool)
+	}
+	if upstreamErr != nil {
+		slog.Error("colab: compile backend unreachable", "err", upstreamErr, "sandbox", s.sandboxURL != "")
+		c.Header("Retry-After", strconv.Itoa(retryAfterSeconds))
+		apierror.Abort(c, http.StatusServiceUnavailable, "compile_unavailable", "The compile service is temporarily unavailable")
+		return nil, false
+	}
+	if status != http.StatusOK {
+		upstreamError(c, status, header)
+		return nil, false
+	}
+	return respBody, true
+}
+
 type compileRequest struct {
-	LatexSource *string `json:"latex_source"`
-	Engine      string  `json:"engine"`
+	LatexSource *string               `json:"latex_source"`
+	Engine      string                `json:"engine"`
+	Files       []texsandbox.WireFile `json:"files"`
 }
 
 // validateRequest applies the compile contract (same limits as the
@@ -228,6 +260,9 @@ func validateRequest(body []byte) (string, string) {
 		return "invalid_source", "latex_source must be at most 100,000 characters"
 	case req.Engine != "" && req.Engine != "pdflatex":
 		return "invalid_engine", "engine must be pdflatex"
+	}
+	if _, err := texsandbox.DecodeFiles(req.Files); err != nil {
+		return "invalid_files", "files: " + err.Error()
 	}
 	return "", ""
 }
@@ -288,6 +323,8 @@ func callPython(ctx context.Context, client *http.Client, baseURL, token string,
 	return doWithTimeout(client, req)
 }
 
+// doWithTimeout sends req (up to ~15 MiB: source plus base64 project files)
+// and reads a bounded response.
 func doWithTimeout(client *http.Client, req *http.Request) (int, http.Header, []byte, error) {
 	ctx, cancel := context.WithTimeout(req.Context(), sandboxCallTimeout)
 	defer cancel()

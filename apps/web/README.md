@@ -1,8 +1,70 @@
 # SkoLab web app
 
-This is the browser front end. It currently covers signing in: sign-in, sign-up,
-email verification, password reset, and a signed-in landing page that creates
-the user's API profile.
+This is the browser front end: sign-in, sign-up, email verification and
+password reset, and, once signed in, a LaTeX editor with official templates.
+
+## LaTeX editor
+
+- **Home** lists the user's documents (their workspaces, own and shared)
+  and the journal templates for physics, chemistry, mathematics and
+  biology, read from `GET /api/v1/templates`. The gateway is the single
+  source of templates (`services/backend-go/internal/templates`); each is
+  the publisher's or class author's own file from the TeX Live release the
+  compiler runs, with every change from upstream listed in its header. CI
+  compiles all of them through the production image
+  (`services/qa/templates_compile.py`). "Use template" creates a workspace
+  and saves the template as its first document version.
+- **Editor** (`/editor/:id`): CodeMirror 6 with LaTeX highlighting and
+  completion, a pdf.js preview drawn on canvases (works on phones and under
+  the strict CSP), compile errors that jump to their line, zoom, and .tex /
+  PDF downloads. Ctrl/Cmd+Enter or Ctrl/Cmd+S compiles.
+- **Compiles** go to `POST /api/v1/workspaces/{id}/compile`: the Compile
+  button (and Ctrl/Cmd+Enter) first saves main.tex and the open file, then
+  the server compiles main.tex with every file of the project (pdfLaTeX, up
+  to three passes, BibTeX when the document has a bibliography), so
+  `\input`, `\include`, `\includegraphics` and `.bib` files work. They
+  count against the user's quota. A successful compile is stored as the
+  project's `output.pdf`, which the PDF button downloads.
+- **Project files** (`src/editor/FileTree.tsx`, `src/api/files.ts`), the
+  way Overleaf has them: a file list beside the editor (a column on wider
+  screens, a panel from the header's Files button on phones) with main.tex
+  first, folders, `.tex`/`.bib`/`.sty` and other text files, PNG, JPEG, PDF
+  and EPS figures, and the last `output.pdf`. Owners and editors create
+  files and folders, upload (also by dropping files from the computer onto
+  the list or a folder), rename and move (type a path with folders) and
+  delete; everyone downloads single files or the whole project as a .zip.
+  Other text files open in the same code editor and save as you type, with
+  the same conflict check as main.tex; images show a preview. Limits follow
+  the API: 5 MB a file (1 MB of text), 10 MB and 200 entries a project.
+  Home's "Upload project" makes a new document from a .zip of a LaTeX
+  project (`POST /api/v1/workspaces/import`) and says which files it left
+  out.
+- **Storage:** each workspace's main.tex is its document in the API
+  (`GET`/`PUT /api/v1/workspaces/{id}/document`, `src/api/editor.ts`). The
+  editor saves a short pause after typing, naming the version it started
+  from; if a co-author saved in between, the API answers 409 and the editor
+  stops and asks whether to load their version or keep this one, so nobody
+  overwrites anyone silently. Owners and editors write and owners rename;
+  commenters and viewers get a read-only editor.
+- **Progress and overview:** every document answer carries `insights`, the
+  gateway's reading of the source (`internal/manuscript`): words, sections,
+  figures, tables, equations, citations, references, citations with no
+  reference, and a progress percentage over eight submission checks. The
+  header shows the percentage; it opens an overview with the checklist,
+  the counts, and when the document was created and last saved, by whom.
+- **Sharing** (`src/editor/Share.tsx`, `src/api/sharing.ts`): owners and
+  editors create invite links (access, lifetime, how many people); the
+  owner changes roles and removes people; anyone else may leave. A link is
+  `/invite#inv_…`: the token sits in the fragment, which browsers never
+  send to a server, and the invite page keeps it in sessionStorage while
+  its holder signs in, then takes it out of the address bar.
+- **Tests** run against `src/test/fakeBackend.ts`, an in-memory copy of the
+  gateway's editor, sharing and project file endpoints (with a small
+  stored-zip writer and reader in `src/test/zip.ts` for archives and
+  imports) shared by the unit tests and the browser tests.
+- CodeMirror runs inside a shadow root, where it can style itself with
+  constructed stylesheets; in the page it would need an inline `<style>`,
+  which the CSP refuses.
 
 ## Why it is built this way
 

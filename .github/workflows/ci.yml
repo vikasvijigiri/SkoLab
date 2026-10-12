@@ -165,6 +165,8 @@ jobs:
         run: bash services/qa/e2e.sh http://127.0.0.1:8080 qa-reports
       - name: Sign in the monitoring account
         run: python services/loadtest/fixture.py --base-url http://127.0.0.1:8080
+      - name: Every editor template compiles in the production image
+        run: python services/qa/templates_compile.py --base-url http://127.0.0.1:8080 --token "$TOKEN" --out qa-reports/templates
       - name: Real-time collaboration (k6 WebSocket journey)
         env:
           SKOLAB_GATEWAY_URL: http://127.0.0.1:8080
@@ -179,13 +181,16 @@ jobs:
           k6 run --quiet --secret-source "file=$secrets" services/observability/journey.js
           rm -f "$secrets"
       - name: Contract fuzzing against the OpenAPI spec (Schemathesis)
+        # Every check except max_response_time is on by default; naming them
+        # with --checks all would also override the per-operation settings in
+        # schemathesis.toml (a CLI-named check wins over the config file).
         run: |
           st --config-file services/qa/schemathesis.toml run services/backend-go/api/openapi.yaml \
             --url http://127.0.0.1:8080 \
             --header "Authorization: Bearer $TOKEN" \
-            --checks all \
             --exclude-operation-id deleteAccount \
             --exclude-operation-id compile \
+            --exclude-operation-id compileProject \
             --exclude-operation-id sentryAlertHook \
             --max-examples 25 \
             --generation-deterministic \
