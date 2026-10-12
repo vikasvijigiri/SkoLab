@@ -6,7 +6,19 @@ export interface ProfileCall {
   body: unknown;
 }
 
-export const test = base.extend<{ profileCalls: ProfileCall[] }>({
+export const test = base.extend<{ profileCalls: ProfileCall[]; vitals: unknown[] }>({
+  // Every page reports its Core Web Vitals; tests that care read them here.
+  vitals: [
+    async ({ page }, provide) => {
+      const reports: unknown[] = [];
+      await page.route("**/__api/api/v1/vitals", async (route) => {
+        reports.push(JSON.parse(route.request().postData() ?? "null"));
+        await route.fulfill({ status: 204 });
+      });
+      await provide(reports);
+    },
+    { auto: true },
+  ],
   profileCalls: async ({ page }, provide) => {
     const calls: ProfileCall[] = [];
     await page.route("**/__api/api/v1/users/profile/sync", async (route) => {

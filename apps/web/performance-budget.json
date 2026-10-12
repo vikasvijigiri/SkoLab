@@ -1,0 +1,21 @@
+{
+  "//": "Size budgets for the production build, gzip-compressed kB, checked by scripts/check-bundle.mjs in CI. Raise one only on purpose, in the same pull request that needs it, and say why.",
+  "initialJs": 125,
+  "initialCss": 15,
+  "largestLazyJs": 180,
+  "largestWorker": 450,
+  "totalJs": 950,
+  "lighthouse": {
+    "pages": [
+      "/sign-in",
+      "/sign-up",
+      "/forgot-password"
+    ],
+    "minPerformance": 90,
+    "minAccessibility": 95,
+    "minBestPractices": 95,
+    "maxLcpMs": 2500,
+    "maxTbtMs": 200,
+    "maxCls": 0.1
+  }
+}

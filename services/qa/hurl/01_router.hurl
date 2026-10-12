@@ -24,6 +24,31 @@ jsonpath "$.status" == "ready"
 jsonpath "$.database" == "healthy"
 jsonpath "$.python" == "healthy"
 
+# Web Vitals from visitors' browsers: public, sent as text/plain by
+# sendBeacon; out-of-range or unknown metrics are refused.
+POST {{base}}/api/v1/vitals
+Content-Type: text/plain;charset=UTF-8
+```
+{"page":"/sign-in","metrics":[{"name":"LCP","value":1830.4},{"name":"CLS","value":0.02},{"name":"TTFB","value":95}]}
+```
+HTTP 204
+
+POST {{base}}/api/v1/vitals
+Content-Type: application/json
+{"page":"/sign-in","metrics":[{"name":"LCP","value":-5}]}
+HTTP 400
+[Asserts]
+jsonpath "$.code" == "invalid_vitals"
+
+POST {{base}}/api/v1/vitals
+Content-Type: application/x-www-form-urlencoded
+```
+page=/
+```
+HTTP 415
+[Asserts]
+jsonpath "$.code" == "unsupported_media_type"
+
 # Unknown path: JSON 404 in the standard error body.
 GET {{base}}/no-such-endpoint
 HTTP 404

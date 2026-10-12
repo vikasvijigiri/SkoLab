@@ -18,6 +18,8 @@ import (
 	metricspb "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
 	tracespb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/skolab/backend-go/internal/vitals"
 )
 
 func setup(t *testing.T) (*Telemetry, *metric.ManualReader, *tracetest.InMemoryExporter) {
@@ -212,5 +214,51 @@ func TestRealOTLPDelivery(t *testing.T) {
 	}
 	if len(traces.ResourceSpans) != 1 || len(traces.ResourceSpans[0].ScopeSpans[0].Spans) != 1 {
 		t.Fatal("trace delivery duplicated or lost")
+	}
+}
+
+func TestWebVitalsUseBoundedLabelsAndSeconds(t *testing.T) {
+	tel, reader, _ := setup(t)
+	ctx := context.Background()
+	tel.RecordVital(ctx, vitals.Sample{Name: "LCP", Page: "/sign-in", Value: 1.2})
+	tel.RecordVital(ctx, vitals.Sample{Name: "LCP", Page: "/sign-in", Value: 3.1})
+	tel.RecordVital(ctx, vitals.Sample{Name: "INP", Page: "/", Value: 0.09})
+	tel.RecordVital(ctx, vitals.Sample{Name: "CLS", Page: "/", Value: 0.02})
+	var data metricdata.ResourceMetrics
+	if err := reader.Collect(ctx, &data); err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]uint64{}
+	for _, scope := range data.ScopeMetrics {
+		for _, m := range scope.Metrics {
+			if m.Name != "skolab.web.vital.duration" && m.Name != "skolab.web.vital.cls" {
+				continue
+			}
+			for _, p := range m.Data.(metricdata.Histogram[float64]).DataPoints {
+				seen[m.Name+" "+p.Attributes.Encoded(attribute.DefaultEncoder())] += p.Count
+			}
+		}
+	}
+	want := map[string]uint64{
+		"skolab.web.vital.duration name=LCP,page=/sign-in": 2,
+		"skolab.web.vital.duration name=INP,page=/":        1,
+		"skolab.web.vital.cls page=/":                      1,
+	}
+	if len(seen) != len(want) {
+		t.Fatalf("series %v", seen)
+	}
+	for k, v := range want {
+		if seen[k] != v {
+			t.Fatalf("series %q: got %d, want %d (all: %v)", k, seen[k], v, seen)
+		}
+	}
+	for _, threshold := range []float64{0.1, 0.2, 0.5, 0.8, 1.8, 2.5, 3, 4} {
+		found := false
+		for _, b := range vitalBoundaries {
+			found = found || b == threshold
+		}
+		if !found {
+			t.Fatalf("bucket boundaries miss the Web Vitals threshold %v", threshold)
+		}
 	}
 }
