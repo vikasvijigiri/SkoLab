@@ -30,7 +30,7 @@ HTTP 201
 [Captures]
 intro: jsonpath "$.id"
 [Asserts]
-header "ETag" == "\"v1\""
+header "ETag" matches "^(W/)?\"v1\"$"
 jsonpath "$.kind" == "text"
 jsonpath "$.version" == 1
 jsonpath "$.size" == 17
@@ -134,7 +134,7 @@ Authorization: Bearer {{owner_token}}
 {"content": "The introduction, revised.", "base_version": 1}
 HTTP 200
 [Asserts]
-header "ETag" == "\"v2\""
+header "ETag" matches "^(W/)?\"v2\"$"
 jsonpath "$.version" == 2
 
 PUT {{base}}/api/v1/workspaces/{{ws}}/files/{{intro}}
