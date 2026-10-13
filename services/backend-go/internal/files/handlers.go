@@ -334,8 +334,11 @@ func readUpload(c *gin.Context) (files []NewFile, replace bool, ok bool) {
 			}
 			if part.FormName() == "folder" {
 				folder = strings.Trim(string(value), "/")
+			} else if v := string(value); v == "true" || v == "false" {
+				replace = v == "true"
 			} else {
-				replace = string(value) == "true"
+				fail(c, http.StatusBadRequest, "invalid_body", `replace must be "true" or "false"`)
+				return nil, false, false
 			}
 		default:
 			fail(c, http.StatusBadRequest, "invalid_body", "Unexpected form field "+strconv.Quote(part.FormName()))

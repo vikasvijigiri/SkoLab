@@ -331,6 +331,7 @@ func TestUploadRefusals(t *testing.T) {
 		"nameless file":   {[]part{{"file", "", "x"}}, "invalid_body"},
 		"bad folder":      {[]part{{"folder", "", "../up"}, {"file", "a.tex", "x"}}, "invalid_path"},
 		"long folder":     {[]part{{"folder", "", strings.Repeat("a", 300)}, {"file", "a.tex", "x"}}, "invalid_body"},
+		"bad replace":     {[]part{{"replace", "", "yes"}, {"file", "a.tex", "x"}}, "invalid_body"},
 		"wrong content":   {[]part{{"file", "a.png", "<svg/>"}}, "unsupported_file_type"},
 		"unsupported":     {[]part{{"file", "a.docx", "PK"}}, "unsupported_file_type"},
 		"reserved":        {[]part{{"file", "main.tex", "x"}}, "reserved_path"},
