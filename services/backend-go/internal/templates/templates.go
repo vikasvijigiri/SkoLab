@@ -114,13 +114,14 @@ func fresh(c *gin.Context) bool {
 	return false
 }
 
-// matches compares If-None-Match the way RFC 9110 asks: weakly, over a
-// comma-separated list, with "*" matching anything. Render's edge compresses
-// responses and so marks the ETag weak (W/"..."); a browser sends that back.
+// matches compares If-None-Match weakly over a comma-separated list, as
+// RFC 9110 asks: Render's edge compresses responses and so marks the ETag
+// weak (W/"..."), and a browser sends that back. "*" is not honoured: no
+// client of ours sends it, and a 304 for it would hide the catalog.
 func matches(header, tag string) bool {
 	for _, candidate := range strings.Split(header, ",") {
 		candidate = strings.TrimPrefix(strings.TrimSpace(candidate), "W/")
-		if candidate == "*" || candidate == tag {
+		if candidate == tag {
 			return true
 		}
 	}
