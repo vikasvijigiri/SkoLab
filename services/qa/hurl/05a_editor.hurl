@@ -84,7 +84,7 @@ GET {{base}}/api/v1/workspaces/{{ws}}/document
 Authorization: Bearer {{owner_token}}
 HTTP 200
 [Asserts]
-header "ETag" == "\"v0\""
+header "ETag" matches "^(W/)?\"v0\"$"
 header "Cache-Control" == "no-store"
 jsonpath "$.version" == 0
 jsonpath "$.source" == ""
@@ -96,7 +96,7 @@ Authorization: Bearer {{owner_token}}
 {"source": "\\documentclass{revtex4-2}\n\\begin{document}\nFirst draft.\n\\end{document}\n", "base_version": 0, "template_id": "aps-physical-review"}
 HTTP 200
 [Asserts]
-header "ETag" == "\"v1\""
+header "ETag" matches "^(W/)?\"v1\"$"
 jsonpath "$.version" == 1
 jsonpath "$.template_id" == "aps-physical-review"
 jsonpath "$.updated_by" == "{{owner_uid}}"
@@ -114,7 +114,7 @@ Authorization: Bearer {{owner_token}}
 {"source": "overwrite", "base_version": 0}
 HTTP 409
 [Asserts]
-header "ETag" == "\"v1\""
+header "ETag" matches "^(W/)?\"v1\"$"
 jsonpath "$.code" == "version_conflict"
 jsonpath "$.current_version" == 1
 

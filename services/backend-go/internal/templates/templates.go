@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/skolab/backend-go/internal/apierror"
@@ -106,9 +107,23 @@ func Register(group *gin.RouterGroup) {
 func fresh(c *gin.Context) bool {
 	c.Header("ETag", etag)
 	c.Header("Cache-Control", "private, no-cache")
-	if c.GetHeader("If-None-Match") == etag {
+	if matches(c.GetHeader("If-None-Match"), etag) {
 		c.Status(http.StatusNotModified)
 		return true
+	}
+	return false
+}
+
+// matches compares If-None-Match weakly over a comma-separated list, as
+// RFC 9110 asks: Render's edge compresses responses and so marks the ETag
+// weak (W/"..."), and a browser sends that back. "*" is not honoured: no
+// client of ours sends it, and a 304 for it would hide the catalog.
+func matches(header, tag string) bool {
+	for _, candidate := range strings.Split(header, ",") {
+		candidate = strings.TrimPrefix(strings.TrimSpace(candidate), "W/")
+		if candidate == tag {
+			return true
+		}
 	}
 	return false
 }

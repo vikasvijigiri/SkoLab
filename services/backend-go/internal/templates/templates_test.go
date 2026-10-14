@@ -166,6 +166,14 @@ func TestMatchingETagIs304WithoutABody(t *testing.T) {
 	if again.Code != http.StatusNotModified || again.Body.Len() != 0 {
 		t.Fatalf("%d %q", again.Code, again.Body)
 	}
+	for _, header := range []string{"W/" + first.Header().Get("ETag"), `"old", ` + first.Header().Get("ETag")} {
+		if w := serve(t, http.MethodGet, "/api/v1/templates/nature", map[string]string{"If-None-Match": header}); w.Code != http.StatusNotModified {
+			t.Errorf("%s: %d", header, w.Code)
+		}
+	}
+	if w := serve(t, http.MethodGet, "/api/v1/templates", map[string]string{"If-None-Match": "*"}); w.Code != http.StatusOK {
+		t.Errorf("*: %d", w.Code)
+	}
 	stale := serve(t, http.MethodGet, "/api/v1/templates", map[string]string{"If-None-Match": `"old"`})
 	if stale.Code != http.StatusOK {
 		t.Fatalf("stale etag: %d", stale.Code)
