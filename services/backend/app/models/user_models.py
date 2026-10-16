@@ -230,8 +230,11 @@ class WorkspaceActivity(Base):
     actor_id = Column(String(100), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     subject_id = Column(String(100), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     role = Column(String(20), nullable=True)
-    count = Column(Integer, nullable=False, default=1)
-    occurred_at = Column(DateTime, default=utcnow, nullable=False)
+    # Server defaults too: the Go gateway writes rows with plain SQL.
+    count = Column(Integer, nullable=False, default=1, server_default=text("1"))
+    occurred_at = Column(
+        DateTime, default=utcnow, nullable=False, server_default=text("(now() AT TIME ZONE 'utc')")
+    )
 
     __table_args__ = (
         CheckConstraint(
