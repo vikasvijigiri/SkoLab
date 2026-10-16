@@ -60,7 +60,23 @@ class API:
             if allow_missing and exc.code == 404:
                 return None
             # Never print server response bodies: they can echo scripts/secrets.
-            raise RuntimeError(f"{method} {path}: HTTP {exc.code}") from None
+            # A refusal's own short message is safe and says what to fix.
+            raise RuntimeError(f"{method} {path}: HTTP {exc.code}{refusal_reason(exc, self.token)}") from None
+
+
+def refusal_reason(exc: urllib.error.HTTPError, token: str) -> str:
+    """The message field of a 4xx JSON answer, redacted and cut short; "" otherwise."""
+    if not 400 <= exc.code < 500:
+        return ""
+    try:
+        body = json.loads(exc.read(4096) or b"{}")
+    except (ValueError, OSError):
+        return ""
+    if not isinstance(body, dict):
+        return ""
+    message = next((body[key] for key in ("msg", "message", "error", "err") if isinstance(body.get(key), str)), "")
+    message = re.sub(r"[A-Za-z0-9_\-]{32,}", "[redacted]", message.replace(token, "[redacted]") if token else message)
+    return f" ({message[:200]})" if message.strip() else ""
 
 
 def check_definitions(probes: list[int], journey_probe: int | None = None):
@@ -123,7 +139,10 @@ def reconcile_check(api: API, definition: dict, existing: list[dict]):
     body = dict(definition)
     if matches:
         body["id"] = matches[0]["id"]
-    validation = api.call("POST", "/api/v1/check/validate", body)
+    try:
+        validation = api.call("POST", "/api/v1/check/validate", body)
+    except RuntimeError as exc:
+        raise RuntimeError(f"{definition['job']}: {exc}") from None
     if not validation["valid"]:
         fields = [item.get("field", "check") for item in validation.get("findings", [])]
         raise RuntimeError(f"Check validation failed: {definition['job']}: {fields}")

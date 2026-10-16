@@ -85,6 +85,28 @@ class ProvisionTests(unittest.TestCase):
         self.assertTrue(all(rule["noDataState"] == "OK" and rule["data"][0]["datasourceUid"] == "usage-uid" for rule in rules))
         self.assertIn("> bool 8000", rules[0]["data"][0]["model"]["expr"])
 
+    def test_refusals_name_their_reason_without_secrets(self):
+        import io
+        import urllib.error
+        def refusal(code, body):
+            return urllib.error.HTTPError("https://x", code, "", {}, io.BytesIO(body))
+        token = "glsa_" + "a" * 40
+        self.assertEqual(provision.refusal_reason(refusal(422, b'{"msg":"invalid frequency"}'), token), " (invalid frequency)")
+        leaked = provision.refusal_reason(refusal(422, ('{"error":"bad token ' + token + ' and ' + "b" * 40 + '"}').encode()), token)
+        self.assertNotIn(token, leaked)
+        self.assertNotIn("b" * 40, leaked)
+        self.assertEqual(provision.refusal_reason(refusal(500, b'{"msg":"boom"}'), token), "")
+        self.assertEqual(provision.refusal_reason(refusal(422, b"not json"), token), "")
+        self.assertEqual(provision.refusal_reason(refusal(422, b'["x"]'), token), "")
+
+    def test_validation_refusal_names_the_check(self):
+        class Refusing(FakeAPI):
+            def call(self, method, path, body=None):
+                raise RuntimeError("POST /api/v1/check/validate: HTTP 422 (bad)")
+        definition = provision.check_definitions([1, 2])[0]
+        with self.assertRaisesRegex(RuntimeError, r"^skolab-gateway-availability: .*HTTP 422 \(bad\)"):
+            provision.reconcile_check(Refusing(), definition, [])
+
     def test_local_env_does_not_override_injected_secrets(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"GRAFANA_TOKEN": "injected"}):
             path = Path(directory) / ".env"
