@@ -155,7 +155,7 @@ func TestUnzipProjectFindsMainAndUnwrapsASingleFolder(t *testing.T) {
 		"__MACOSX/paper-main/._fig.png": "junk",
 		"paper-main/notes.docx":         "PK",
 		"paper-main/build.log":          "log",
-	}))
+	}), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,23 +175,24 @@ func TestUnzipProjectFindsMainAndUnwrapsASingleFolder(t *testing.T) {
 }
 
 func TestUnzipProjectPrefersMainTexAndRefusesAmbiguity(t *testing.T) {
-	p, err := unzipProject(zipOf(t, map[string]string{"main.tex": "A", "other.tex": `\documentclass{x}`}))
+	p, err := unzipProject(zipOf(t, map[string]string{"main.tex": "A", "other.tex": `\documentclass{x}`}), "")
 	if err != nil || p.Main != "A" || len(p.Files) != 1 || p.Files[0].Path != "other.tex" {
 		t.Fatalf("%+v %v", p, err)
 	}
-	if _, err := unzipProject(zipOf(t, map[string]string{"a.tex": `\documentclass{x}`, "b.tex": `\documentclass{y}`})); !errors.Is(err, errNoMain) {
+	var choose *mainChoiceError
+	if _, err := unzipProject(zipOf(t, map[string]string{"a.tex": `\documentclass{x}`, "b.tex": `\documentclass{y}`}), ""); !errors.As(err, &choose) || !reflect.DeepEqual(choose.Candidates, []string{"a.tex", "b.tex"}) {
+		t.Fatalf("two documents and no choice: %v", err)
+	}
+	if _, err := unzipProject(zipOf(t, map[string]string{"sub/main.tex": "x", "readme.md": "x"}), ""); !errors.Is(err, errNoMain) {
 		t.Fatal(err)
 	}
-	if _, err := unzipProject(zipOf(t, map[string]string{"sub/main.tex": "x", "readme.md": "x"})); !errors.Is(err, errNoMain) {
+	if _, err := unzipProject(zipOf(t, map[string]string{"main.tex": strings.Repeat("a", maxMainRunes+1)}), ""); !errors.Is(err, errMainLarge) {
 		t.Fatal(err)
 	}
-	if _, err := unzipProject(zipOf(t, map[string]string{"main.tex": strings.Repeat("a", maxMainRunes+1)})); !errors.Is(err, errMainLarge) {
+	if _, err := unzipProject([]byte("not a zip"), ""); !errors.Is(err, errNotZip) {
 		t.Fatal(err)
 	}
-	if _, err := unzipProject([]byte("not a zip")); !errors.Is(err, errNotZip) {
-		t.Fatal(err)
-	}
-	p, err = unzipProject(zipOf(t, map[string]string{"main.tex": "x", "Refs.bib": "a", "refs.bib": "b"}))
+	p, err = unzipProject(zipOf(t, map[string]string{"main.tex": "x", "Refs.bib": "a", "refs.bib": "b"}), "")
 	if err != nil || len(p.Files) != 1 || len(p.Skipped) != 1 {
 		t.Fatalf("a case-insensitive duplicate is skipped: %+v %v", p, err)
 	}
@@ -202,19 +203,19 @@ func TestUnzipProjectBoundsWhatItUnpacks(t *testing.T) {
 	for i := 0; i <= maxZipEntries; i++ {
 		entries[strings.Repeat("d", 1+i/26)+string(rune('a'+i%26))+".txt"] = ""
 	}
-	if _, err := unzipProject(zipOf(t, entries)); !errors.Is(err, errZipTooLarge) {
+	if _, err := unzipProject(zipOf(t, entries), ""); !errors.Is(err, errZipTooLarge) {
 		t.Fatalf("too many entries: %v", err)
 	}
 	// Compresses to almost nothing, unpacks past the budget.
 	bomb := map[string]string{"main.tex": "x", "a.txt": strings.Repeat("a", maxZipBytes/2+1), "b.txt": strings.Repeat("b", maxZipBytes/2+1)}
-	if _, err := unzipProject(zipOf(t, bomb)); !errors.Is(err, errZipTooLarge) {
+	if _, err := unzipProject(zipOf(t, bomb), ""); !errors.Is(err, errZipTooLarge) {
 		t.Fatalf("zip bomb: %v", err)
 	}
 	full := map[string]string{"main.tex": "x"}
 	for i := 0; i <= MaxEntries; i++ {
 		full[strings.Repeat("e", 1+i/26)+string(rune('a'+i%26))+".txt"] = ""
 	}
-	if _, err := unzipProject(zipOf(t, full)); !errors.Is(err, errImportFull) {
+	if _, err := unzipProject(zipOf(t, full), ""); !errors.Is(err, errImportFull) {
 		t.Fatalf("more entries than a project holds: %v", err)
 	}
 }
@@ -244,5 +245,37 @@ func TestImportTitleAndDownloadName(t *testing.T) {
 	}
 	if got := downloadName(strings.Repeat("a", 200)); len(got) != 80 {
 		t.Fatalf("%d", len(got))
+	}
+}
+
+func TestUnzipProjectChoosesTheMainFile(t *testing.T) {
+	two := map[string]string{
+		"paper.tex":     `\documentclass{article}\begin{document}P\end{document}`,
+		"slides.tex":    `\documentclass{beamer}\begin{document}S\end{document}`,
+		"preamble.tex":  `\documentclass{article}`,
+		"sub/other.tex": `\documentclass{article}\begin{document}O\end{document}`,
+	}
+	var choose *mainChoiceError
+	if _, err := unzipProject(zipOf(t, two), ""); !errors.As(err, &choose) || !reflect.DeepEqual(choose.Candidates, []string{"paper.tex", "slides.tex"}) {
+		t.Fatalf("only complete top-level documents are offered: %v", err)
+	}
+	p, err := unzipProject(zipOf(t, two), "slides.tex")
+	if err != nil || !strings.Contains(p.Main, "beamer") {
+		t.Fatalf("the chosen file is the document: %+v %v", p, err)
+	}
+	for _, f := range p.Files {
+		if f.Path == "slides.tex" {
+			t.Fatal("the chosen file is not also a project file")
+		}
+	}
+	for _, bad := range []string{"missing.tex", "sub/other.tex", "Paper.tex"} {
+		if _, err := unzipProject(zipOf(t, two), bad); !errors.Is(err, errBadMain) {
+			t.Fatalf("%s: %v", bad, err)
+		}
+	}
+	// One file that declares a class and begins a document beats one that only declares a class.
+	p, err = unzipProject(zipOf(t, map[string]string{"thesis.tex": two["paper.tex"], "preamble.tex": two["preamble.tex"]}), "")
+	if err != nil || !strings.Contains(p.Main, "P") {
+		t.Fatalf("%+v %v", p, err)
 	}
 }

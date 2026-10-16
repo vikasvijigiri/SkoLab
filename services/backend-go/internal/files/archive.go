@@ -14,6 +14,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/skolab/backend-go/internal/apierror"
 )
 
 const (
@@ -28,6 +30,7 @@ var (
 	errNotZip      = errors.New("not a zip archive")
 	errZipTooLarge = errors.New("archive unpacks too large")
 	errNoMain      = errors.New("no main file")
+	errBadMain     = errors.New("chosen main file is not a top-level .tex file")
 	errMainLarge   = errors.New("main file too large")
 	errImportFull  = errors.New("project too large")
 )
@@ -153,9 +156,17 @@ func commonRoot(entries []zipEntry) string {
 	return root
 }
 
-// unzipProject turns a .zip into main.tex and the project's other files:
-// main.tex at the top, or else the only top-level .tex with \documentclass.
-func unzipProject(archive []byte) (imported, error) {
+// mainChoiceError is an archive with several top-level .tex files that could
+// each be the document: the importer must name one (the form's main field).
+type mainChoiceError struct{ Candidates []string }
+
+func (e *mainChoiceError) Error() string { return "choose the main file" }
+
+// unzipProject turns a .zip into main.tex and the project's other files.
+// The document is choice when given (a top-level .tex file), else main.tex at
+// the top, else the only top-level .tex with \documentclass -- narrowed to
+// those that also \begin{document} when several declare a class.
+func unzipProject(archive []byte, choice string) (imported, error) {
 	entries, err := readZip(archive)
 	if err != nil {
 		return imported{}, err
@@ -169,9 +180,16 @@ func unzipProject(archive []byte) (imported, error) {
 
 	var out imported
 	mainIndex := -1
-	var candidates []int
+	var candidates, complete []int
 	for i, e := range entries {
-		if e.folder || strings.Contains(e.name, "/") || extension(e.name) != "tex" {
+		if e.folder || strings.Contains(e.name, "/") || extension(e.name) != "tex" || skippable(e.name) {
+			continue
+		}
+		if choice != "" {
+			if e.name == choice {
+				mainIndex = i
+				break
+			}
 			continue
 		}
 		if strings.EqualFold(e.name, MainPath) {
@@ -180,12 +198,29 @@ func unzipProject(archive []byte) (imported, error) {
 		}
 		if bytes.Contains(e.data, []byte(`\documentclass`)) {
 			candidates = append(candidates, i)
+			if bytes.Contains(e.data, []byte(`\begin{document}`)) {
+				complete = append(complete, i)
+			}
 		}
 	}
-	if mainIndex < 0 && len(candidates) == 1 {
+	switch {
+	case mainIndex >= 0:
+	case choice != "":
+		return imported{}, errBadMain
+	case len(candidates) == 1:
 		mainIndex = candidates[0]
-	}
-	if mainIndex < 0 {
+	case len(complete) == 1:
+		mainIndex = complete[0]
+	case len(candidates) > 1:
+		if len(complete) > 1 {
+			candidates = complete
+		}
+		names := make([]string, len(candidates))
+		for n, i := range candidates {
+			names[n] = entries[i].name
+		}
+		return imported{}, &mainChoiceError{Candidates: names}
+	default:
 		return imported{}, errNoMain
 	}
 	main := string(bytes.TrimPrefix(entries[mainIndex].data, []byte("\xef\xbb\xbf")))
@@ -234,7 +269,14 @@ func unzipProject(archive []byte) (imported, error) {
 }
 
 func importError(c *gin.Context, err error) {
+	var choose *mainChoiceError
 	switch {
+	case errors.As(err, &choose):
+		apierror.AbortWith(c, http.StatusBadRequest, "main_file_ambiguous",
+			"Several .tex files could be the main file; send the one to use as main",
+			gin.H{"candidates": choose.Candidates})
+	case errors.Is(err, errBadMain):
+		fail(c, http.StatusBadRequest, "invalid_main_file", "main must name a .tex file at the top of the project")
 	case errors.Is(err, errNoMain):
 		fail(c, http.StatusBadRequest, "no_main_file",
 			"Put main.tex at the top of the .zip, or a single .tex file with \\documentclass")

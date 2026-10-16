@@ -631,7 +631,7 @@ func (h handlers) importZip(c *gin.Context) {
 		return
 	}
 	var archive []byte
-	var name, title string
+	var name, title, choice string
 	for {
 		part, err := reader.NextPart()
 		if errors.Is(err, io.EOF) {
@@ -660,6 +660,13 @@ func (h handlers) importZip(c *gin.Context) {
 				return
 			}
 			title = string(value)
+		case "main":
+			value, tooLarge, err := readPart(part, 1024)
+			if err != nil || tooLarge || len(value) == 0 {
+				fail(c, http.StatusBadRequest, "invalid_main_file", "main must name a .tex file at the top of the project")
+				return
+			}
+			choice = string(value)
 		default:
 			fail(c, http.StatusBadRequest, "invalid_body", "Unexpected form field "+strconv.Quote(part.FormName()))
 			return
@@ -669,7 +676,7 @@ func (h handlers) importZip(c *gin.Context) {
 		fail(c, http.StatusBadRequest, "invalid_body", "Upload a .zip with multipart/form-data in a file part")
 		return
 	}
-	project, err := unzipProject(archive)
+	project, err := unzipProject(archive, choice)
 	if err != nil {
 		importError(c, err)
 		return

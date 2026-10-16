@@ -541,13 +541,27 @@ export function createFakeBackend(templates: readonly Template[]) {
     }
     if (entries.length > 500) return error(413, "project_full", "A project zip can hold up to 500 entries");
     if (entries.reduce((sum, entry) => sum + entry.data.length, 0) > MAX_PROJECT_BYTES) return error(413, "project_full", "A project can unpack to at most 10 MiB");
-    const roots = entries.filter((entry) => !entry.name.includes("/") && entry.name.toLowerCase().endsWith(".tex"));
-    const main =
-      roots.find((entry) => entry.name === "main.tex") ??
-      (() => {
+    // As the gateway chooses: the named main, else main.tex, else the one root
+    // .tex with \documentclass (narrowed to those that \begin{document}).
+    const roots = entries.filter((entry) => !entry.name.includes("/") && entry.name.toLowerCase().endsWith(".tex") && !entry.name.startsWith("."));
+    const chosen = body.fields.main;
+    let main: ZipEntry | undefined;
+    if (chosen !== undefined) {
+      main = roots.find((entry) => entry.name === chosen);
+      if (!main) return error(400, "invalid_main_file", "main must name a .tex file at the top of the project");
+    } else {
+      main = roots.find((entry) => entry.name.toLowerCase() === "main.tex");
+      if (!main) {
         const candidates = roots.filter((entry) => (decodeText(entry.data) ?? "").includes("\\documentclass"));
-        return candidates.length === 1 ? candidates[0] : undefined;
-      })();
+        const complete = candidates.filter((entry) => (decodeText(entry.data) ?? "").includes("\\begin{document}"));
+        if (candidates.length === 1) main = candidates[0];
+        else if (complete.length === 1) main = complete[0];
+        else if (candidates.length > 1) {
+          const offered = complete.length > 1 ? complete : candidates;
+          return error(400, "main_file_ambiguous", "Several .tex files could be the main file", { candidates: offered.map((entry) => entry.name) });
+        }
+      }
+    }
     const source = main ? decodeText(main.data) : null;
     if (!main || source === null) return error(400, "no_main_file", "The zip needs a main.tex, or one .tex file with \\documentclass at its top level");
     const title = body.fields.title?.trim() || zip.name.replace(/\.zip$/i, "") || "Imported project";

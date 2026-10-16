@@ -38,7 +38,7 @@ func FuzzUnzipProject(f *testing.F) {
 	f.Add(fuzzZip(f, map[string]string{"MAIN.TEX": "\xef\xbb\xbf" + doc, "main.tex/": "", "x\x00.tex": "x"}))
 	f.Add([]byte("PK\x03\x04 not really a zip"))
 	f.Fuzz(func(t *testing.T, archive []byte) {
-		out, err := unzipProject(archive)
+		out, err := unzipProject(archive, "")
 		if err != nil {
 			return
 		}

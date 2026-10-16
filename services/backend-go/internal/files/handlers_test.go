@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -494,6 +495,30 @@ func TestImportCreatesAWorkspaceFromAZip(t *testing.T) {
 	w = serve(t, store, nil, "alice", multipartReq(t, "/api/v1/workspaces/import", part{"title", "", "Named"}, part{"file", "x.zip", string(archive)}))
 	if decoded(t, w)["title"] != "Named" {
 		t.Fatalf("%s", w.Body)
+	}
+}
+
+func TestImportAsksWhichMainFileThenUsesTheChoice(t *testing.T) {
+	archive := string(zipOf(t, map[string]string{
+		"paper.tex":  `\documentclass{article}\begin{document}P\end{document}`,
+		"slides.tex": `\documentclass{beamer}\begin{document}S\end{document}`,
+	}))
+	store := &fakeStore{}
+	w := serve(t, store, nil, "alice", multipartReq(t, "/api/v1/workspaces/import", part{"file", "a.zip", archive}))
+	got := decoded(t, w)
+	if w.Code != http.StatusBadRequest || got["code"] != "main_file_ambiguous" || !reflect.DeepEqual(got["candidates"], []any{"paper.tex", "slides.tex"}) || store.imported != nil {
+		t.Fatalf("%d %v", w.Code, got)
+	}
+	w = serve(t, store, nil, "alice", multipartReq(t, "/api/v1/workspaces/import", part{"main", "", "slides.tex"}, part{"file", "a.zip", archive}))
+	if w.Code != http.StatusCreated || !strings.Contains(store.imported.Main, "beamer") {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	for _, bad := range []string{"", "missing.tex", strings.Repeat("a", 2000)} {
+		store := &fakeStore{}
+		w := serve(t, store, nil, "alice", multipartReq(t, "/api/v1/workspaces/import", part{"main", "", bad}, part{"file", "a.zip", archive}))
+		if decoded(t, w)["code"] != "invalid_main_file" || store.imported != nil {
+			t.Fatalf("%q: %s", bad, w.Body)
+		}
 	}
 }
 

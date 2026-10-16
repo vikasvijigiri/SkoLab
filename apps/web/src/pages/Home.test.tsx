@@ -148,25 +148,21 @@ describe("home documents and templates", () => {
     expect(screen.queryByText(/left out/)).not.toBeInTheDocument();
   });
 
-  it("explains a zip it can't import", async () => {
+  it("explains a project it can't import", async () => {
     const { backend } = stubBackend();
     const { user } = await openHome();
     const picker = await screen.findByLabelText("Choose a project .zip to upload");
     const text = (value: string) => new TextEncoder().encode(value);
 
-    // Two candidates for the main file, and no main.tex.
-    const ambiguous = writeZip([
-      { name: "a.tex", data: text("\\documentclass{article}") },
-      { name: "b.tex", data: text("\\documentclass{article}") },
-    ]);
-    await user.upload(picker, new File([ambiguous], "two.zip", { type: "application/zip" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("That zip has no main.tex");
-
     await user.upload(picker, new File(["not a zip"], "broken.zip", { type: "application/zip" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("That file isn't a zip we can read.");
 
-    await user.upload(picker, new File(["x"], "paper.tex", { type: "application/zip" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Choose a .zip file of your LaTeX project.");
+    // No document class anywhere: nothing can be the main file.
+    await user.upload(screen.getByLabelText("Choose .tex files to upload"), new File(["x"], "notes.tex"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("We couldn't find the main file");
+
+    await user.upload(screen.getByLabelText("Choose .tex files to upload"), new File(["x"], "notes.txt"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("There's no .tex file in what you picked.");
 
     const huge = new File(["x"], "huge.zip", { type: "application/zip" });
     Object.defineProperty(huge, "size", { value: 13 * 1024 * 1024 });
@@ -174,8 +170,73 @@ describe("home documents and templates", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("That project is too large.");
 
     backend.failNext("POST", /import$/, { status: 503, body: { code: "unavailable", error: "down" } });
-    await user.upload(picker, new File([ambiguous], "again.zip", { type: "application/zip" }));
+    await user.upload(picker, new File([writeZip([{ name: "main.tex", data: text("x") }])], "again.zip", { type: "application/zip" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("We couldn't import the project. Try again.");
     expect(backend.titles()).toEqual([]);
+  });
+
+  it("offers the three ways in from the Upload project menu", async () => {
+    stubBackend();
+    const { user } = await openHome();
+    await user.click(await screen.findByRole("button", { name: "Upload project" }));
+    const menu = screen.getByRole("menu", { name: "Upload a project" });
+    expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
+      ".zip archiveFrom Overleaf, GitHub or anywhere else",
+      "FolderA project folder on your computer",
+      ".tex filesOne or more, with their .bib and figures",
+    ]);
+    expect(screen.getByLabelText("Choose a project folder to upload")).toHaveAttribute("webkitdirectory");
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("uploads a whole folder, leaving out build output and version control", async () => {
+    const { backend } = stubBackend();
+    const { user } = await openHome();
+    const inFolder = (path: string, content: BlobPart) => {
+      const file = new File([content], path.split("/").pop() ?? path);
+      Object.defineProperty(file, "webkitRelativePath", { value: path });
+      return file;
+    };
+    await user.upload(await screen.findByLabelText("Choose a project folder to upload"), [
+      inFolder("Thesis/main.tex", "\\documentclass{book}\\begin{document}\\input{sections/intro}\\end{document}"),
+      inFolder("Thesis/sections/intro.tex", "Hello"),
+      inFolder("Thesis/figs/a.png", new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1])),
+      inFolder("Thesis/main.aux", "aux"),
+      inFolder("Thesis/main.pdf", "%PDF-1.4"),
+      inFolder("Thesis/.git/config", "git"),
+      inFolder("Thesis/notes.docx", "PK"),
+    ]);
+    expect(await screen.findByDisplayValue("Thesis", {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getByText(/One file was left out/)).toHaveTextContent("notes.docx");
+    const id = /\/workspaces\/([^/]+)\/files$/.exec(backend.requests.find((request) => request.url.endsWith("/files"))?.url ?? "")?.[1] ?? "";
+    expect(backend.document(id)?.source).toContain("\\input{sections/intro}");
+    expect(Object.keys(backend.files(id)).sort()).toEqual(["figs", "figs/a.png", "sections", "sections/intro.tex"]);
+  });
+
+  it("uploads a lone .tex file under its own name", async () => {
+    const { backend } = stubBackend();
+    const { user } = await openHome();
+    await user.upload(await screen.findByLabelText("Choose .tex files to upload"), new File(["\\documentclass{article}\\begin{document}Hi\\end{document}"], "Paper draft.tex"));
+    expect(await screen.findByDisplayValue("Paper draft", {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(backend.titles()).toEqual(["Paper draft"]);
+  });
+
+  it("asks which file is the main document when several could be", async () => {
+    const { backend } = stubBackend();
+    const { user } = await openHome();
+    await user.upload(await screen.findByLabelText("Choose .tex files to upload"), [
+      new File(["\\documentclass{article}\\begin{document}Paper\\end{document}"], "paper.tex"),
+      new File(["\\documentclass{beamer}\\begin{document}Talk\\end{document}"], "slides.tex"),
+      new File(["\\usepackage{amsmath}"], "preamble.tex"),
+    ]);
+    const sheet = await screen.findByRole("dialog", { name: "Which file is the main document?" });
+    expect(within(sheet).getAllByRole("button").map((button) => button.textContent)).toContain("slides.tex");
+    expect(backend.titles()).toEqual([]);
+    await user.click(within(sheet).getByRole("button", { name: "slides.tex" }));
+    expect(await screen.findByDisplayValue("slides", {}, { timeout: 5000 })).toBeInTheDocument();
+    const id = /\/workspaces\/([^/]+)\/files$/.exec(backend.requests.find((request) => request.url.endsWith("/files"))?.url ?? "")?.[1] ?? "";
+    expect(backend.document(id)?.source).toContain("beamer");
+    expect(Object.keys(backend.files(id)).sort()).toEqual(["paper.tex", "preamble.tex"]);
   });
 });
