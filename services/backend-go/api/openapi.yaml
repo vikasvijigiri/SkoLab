@@ -29,6 +29,7 @@ tags:
   - name: sharing
   - name: collaboration
   - name: editor
+  - name: activity
 
 paths:
   /gateway-health:
@@ -997,6 +998,56 @@ paths:
         "429": { $ref: "#/components/responses/TooMany" }
         "503": { $ref: "#/components/responses/Unavailable" }
 
+  /api/v1/activity:
+    get:
+      tags: [activity]
+      operationId: listActivity
+      summary: What co-authors did in the caller's workspaces, newest first
+      description: |
+        Events in workspaces the caller owns or is an active member of (from
+        when they joined), plus events about the caller wherever they happened
+        (removed, role changed, made owner). The caller's own actions are left
+        out; so is anything older than 90 days. A person's saves to one document
+        within ten minutes are one event whose `count` grows. `unread` counts
+        events after `seen_at`, at most 100. Query parameters other than
+        page_size and page_token are refused (400 unknown_parameter), and so is
+        any parameter given more than once (400 duplicate_parameter).
+      parameters:
+        - { name: page_size, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
+        - { name: page_token, in: query, required: false, description: next_page_token from the previous page., schema: { type: string, minLength: 1, maxLength: 200 } }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActivityPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/activity/seen:
+    post:
+      tags: [activity]
+      operationId: markActivitySeen
+      summary: Everything in the caller's activity up to now is read
+      description: Moves the caller's catch-up point to now, never backwards. No request body. A caller without a profile yet has nothing to mark (seen_at null).
+      responses:
+        "200":
+          description: Caught up.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [seen_at, unread]
+                additionalProperties: false
+                properties:
+                  seen_at: { type: [string, "null"], format: date-time }
+                  unread: { const: 0 }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
   /api/v1/templates:
     get:
       tags: [editor]
@@ -1142,6 +1193,43 @@ components:
       properties:
         error: { type: string, description: For people; wording may change. }
         code: { type: string, pattern: "^[a-z_]+$", description: Stable; branch on this. }
+    ActivityPerson:
+      type: [object, "null"]
+      description: Null when the account has since been deleted.
+      required: [id, display_name]
+      additionalProperties: false
+      properties:
+        id: { type: string }
+        display_name: { type: string }
+    ActivityItem:
+      type: object
+      required: [id, kind, workspace, actor, subject, role, count, occurred_at, unread]
+      additionalProperties: false
+      properties:
+        id: { type: string, pattern: "^[0-9]+$" }
+        kind: { type: string, enum: [document_edited, member_joined, member_left, member_removed, role_changed, ownership_transferred] }
+        workspace:
+          type: object
+          required: [id, title]
+          additionalProperties: false
+          properties:
+            id: { type: string }
+            title: { type: string }
+        actor: { $ref: "#/components/schemas/ActivityPerson" }
+        subject: { $ref: "#/components/schemas/ActivityPerson" }
+        role: { type: [string, "null"], enum: [owner, editor, commenter, viewer, null] }
+        count: { type: integer, minimum: 1, description: Saves merged into a document_edited event; 1 otherwise. }
+        occurred_at: { type: string, format: date-time }
+        unread: { type: boolean }
+    ActivityPage:
+      type: object
+      required: [items, unread, seen_at, next_page_token]
+      additionalProperties: false
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ActivityItem" } }
+        unread: { type: integer, minimum: 0, maximum: 100 }
+        seen_at: { type: [string, "null"], format: date-time }
+        next_page_token: { type: string, description: Empty on the last page. }
     MainFileAmbiguous:
       type: object
       required: [error, code, candidates]

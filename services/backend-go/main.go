@@ -25,6 +25,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/skolab/backend-go/internal/activity"
 	"github.com/skolab/backend-go/internal/alerts"
 	"github.com/skolab/backend-go/internal/apierror"
 	"github.com/skolab/backend-go/internal/auth"
@@ -160,6 +161,10 @@ func run(ctx context.Context, addr string, listening func(net.Addr)) error {
 	}
 	if err := otel.ObserveRuntime(); err != nil {
 		slog.Warn("runtime metrics unavailable", "err", err)
+	}
+	// Activity feed events written, by kind.
+	if err := activity.UseMeter(otel.Metrics.Meter("skolab.activity")); err != nil {
+		slog.Warn("activity metrics unavailable", "err", err)
 	}
 	// Security decisions: counted for dashboards/alerts; account-level
 	// actions also land in the durable security_audit_log table.
@@ -455,6 +460,10 @@ func newRouter(g gateway) *gin.Engine {
 	// compiling the whole project. See internal/files.
 	compiler := colab.NewService(g.pool, &http.Client{Transport: g.transport}, g.python)
 	files.Register(workspacesAPI, files.NewPostgresStore(g.pool), compiler)
+	// What co-authors did: saves, joins, role changes, ownership; the web
+	// app's notifications. Events are written by the stores above, in the
+	// same transaction as each change. See internal/activity.
+	activity.Register(workspacesAPI, activity.NewPostgresStore(g.pool))
 
 	// ── Editor templates (Firebase-authenticated) ─────────────────────────────
 	// Journal templates for physics, chemistry, mathematics and biology, built
