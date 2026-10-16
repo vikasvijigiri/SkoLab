@@ -88,7 +88,8 @@ func New(ctx context.Context) (*Telemetry, error) {
 			if err != nil {
 				return nil, err
 			}
-			metricOpts = append(metricOpts, sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter, sdkmetric.WithInterval(30*time.Second), sdkmetric.WithTimeout(5*time.Second))))
+			// One point a minute: Grafana Cloud counts faster pushes as extra active series.
+			metricOpts = append(metricOpts, sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter, sdkmetric.WithInterval(time.Minute), sdkmetric.WithTimeout(5*time.Second))))
 		}
 		if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" || os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") != "" {
 			exporter, err := otlptracehttp.New(ctx, otlptracehttp.WithTimeout(5*time.Second))

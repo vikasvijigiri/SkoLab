@@ -9,7 +9,8 @@ jobs are rejected. It never replaces the stack's global notification policy or
 other teams' checks. Grafana's built-in per-check alerts are disabled to avoid
 duplicate availability notifications.
 
-Availability checks run every minute from Mumbai and Oregon. Go checks HTTP 200
+Availability checks run every three minutes from Mumbai and Oregon (kept
+inside Grafana Cloud's free tier; see "Free-tier budget" below). Go checks HTTP 200
 and `status=online`. Python checks HTTP 200, `status=ready`, and healthy database
 and cache. Both require HTTPS and reject redirects. The complete backend journey
 runs every 30 minutes from Mumbai only: fresh Firebase login, identity sync,
@@ -297,3 +298,27 @@ path for each service; do not add a scrape of the same instruments alongside OTL
 References: [Grafana OTLP setup](https://grafana.com/docs/grafana-cloud/send-data/otlp/send-data-otlp/),
 [Render metrics streams](https://render.com/docs/metrics-streams),
 [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/).
+
+## Free-tier budget
+
+Everything here must fit Grafana Cloud's free tier: 100,000 synthetic API test
+executions, 10,000 active metric series and 50 GB of traces a month. One
+execution is one check in one probe location per started minute of run time;
+scripted (k6) checks count as API tests.
+
+| Source | Monthly use (31 days) |
+| --- | --- |
+| 2 availability checks × 2 probes, every 3 min | 59,520 executions |
+| Complete journey, 1 probe, every 30 min | 1,488 executions |
+| Journey verification on each deploy (allowance) | 200 executions |
+| **Total** | **61,208 of 100,000 (61%)** |
+
+`provision.py --apply` computes this from `checks.json` plus any other checks in
+the account and refuses to change anything above 80% of the free allowance, so
+a faster check or a third probe fails the deploy instead of the account. The
+gateway and Python service push metrics once a minute (faster pushes count as
+extra series). Two warning alerts, read from Grafana Cloud's own
+`grafanacloud-usage` data source, fire before metric series pass 8,000 or the
+month's projected traces pass 40 GB; the fix is lower trace sampling
+(`OTEL_TRACES_SAMPLER_ARG`) or fewer metric attributes. Logs are not shipped
+to Grafana. Load tests run k6 on GitHub's runners, not Grafana Cloud k6.

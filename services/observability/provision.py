@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import math
 import os
 import re
 import sys
@@ -107,11 +108,12 @@ def alert_rule(uid, title, expr, datasource, receiver, duration="3m", severity="
     }
 
 
-def availability_expression(job: str) -> str:
-    # Alert only after neither location has succeeded for three minutes.
-    # Missing data gets its own signal rather than masquerading as healthy.
-    return (f'max(max_over_time(probe_success{{job="{job}"}}[3m])) < bool 1 '
-            f'or absent_over_time(probe_success{{job="{job}"}}[5m])')
+def availability_expression(job: str, frequency_ms: int) -> str:
+    # Alert only after neither location has succeeded in two runs of the
+    # check. Missing data gets its own signal rather than masquerading as healthy.
+    window, silence = 2 * frequency_ms // 60_000, 4 * frequency_ms // 60_000
+    return (f'max(max_over_time(probe_success{{job="{job}"}}[{window}m])) < bool 1 '
+            f'or absent_over_time(probe_success{{job="{job}"}}[{silence}m])')
 
 
 def reconcile_check(api: API, definition: dict, existing: list[dict]):
@@ -152,6 +154,64 @@ def choose_probes(items: list[dict], names: list[str]) -> list[int]:
     if len(result) != 2 or len(set(result)) != 2:
         raise ValueError("Availability requires two distinct public probes")
     return result
+
+
+# Grafana Cloud's free tier, which this stack must stay inside. Synthetic
+# Monitoring counts one API test execution per check, per probe location, per
+# started minute of run time (scripted k6 checks are API tests too). Applying
+# refuses anything planned past BUDGET_SHARE of a limit, so headroom is left
+# for ad-hoc runs and checks added by hand.
+FREE_API_EXECUTIONS = 100_000
+FREE_ACTIVE_SERIES = 10_000
+FREE_TRACES_BYTES = 50 * 10**9
+BUDGET_SHARE = 0.8
+MONTH_MINUTES = 31 * 24 * 60  # the longest month
+ADHOC_RUNS_PER_MONTH = 200  # one journey verification per deploy, generously
+USAGE_DATASOURCE = "grafanacloud-usage"
+
+
+def monthly_executions(check: dict) -> int:
+    """API test executions a check uses in the longest month."""
+    if not check.get("enabled", True):
+        return 0
+    runs = MONTH_MINUTES * 60_000 / check["frequency"]
+    minutes_per_run = max(1, math.ceil(check["timeout"] / 60_000))
+    return math.ceil(runs * minutes_per_run * len(check["probes"]))
+
+
+def check_budget(definitions: list[dict], existing: list[dict], retired: list[str], journey: bool) -> int:
+    """Monthly executions once these definitions are applied, counting checks
+    in the account this file does not manage; raises past the budget."""
+    managed = {item["job"] for item in definitions} | set(retired)
+    others = [item for item in existing if item["job"] not in managed]
+    total = sum(monthly_executions(item) for item in [*definitions, *others]) + (ADHOC_RUNS_PER_MONTH if journey else 0)
+    budget = int(FREE_API_EXECUTIONS * BUDGET_SHARE)
+    if total > budget:
+        names = ", ".join(f"{item['job']}={monthly_executions(item):,}" for item in [*definitions, *others])
+        raise RuntimeError(f"Synthetic checks would use {total:,} executions a month, over the {budget:,} budget "
+                           f"({BUDGET_SHARE:.0%} of the free {FREE_API_EXECUTIONS:,}): {names}")
+    print(f"Synthetic monitoring budget: {total:,} of {FREE_API_EXECUTIONS:,} free executions a month ({total / FREE_API_EXECUTIONS:.0%})")
+    return total
+
+
+def usage_rules(datasource: str, receiver: str) -> list[dict]:
+    """Warnings before the free tier's metrics and traces allowances run out,
+    from Grafana Cloud's own usage data source."""
+    series = int(FREE_ACTIVE_SERIES * BUDGET_SHARE)
+    # Average ingest over the last day, projected over a month.
+    traces = f"sum(avg_over_time(grafanacloud_traces_instance_bytes_received_per_second[1d])) * {MONTH_MINUTES * 60}"
+    rules = [
+        alert_rule("skolab-free-tier-series", f"Grafana free tier: active metric series above {series:,}",
+                   f"max(grafanacloud_instance_active_series) > bool {series}", datasource, receiver,
+                   duration="30m", severity="warning", no_data="OK"),
+        alert_rule("skolab-free-tier-traces", "Grafana free tier: traces on course to pass 40 GB this month",
+                   f"({traces}) > bool {int(FREE_TRACES_BYTES * BUDGET_SHARE)}", datasource, receiver,
+                   duration="1h", severity="warning", no_data="OK"),
+    ]
+    for rule in rules:
+        rule["annotations"]["description"] = ("Grafana Cloud's free tier is close to its limit. Lower the OTLP trace sampling "
+            "(OTEL_TRACES_SAMPLER_ARG on skolab-api) or drop high-cardinality metric attributes before data is refused.")
+    return rules
 
 
 MONITOR_WORKSPACE_TITLE = "SkoLab monitoring (automated, do not use)"
@@ -346,15 +406,22 @@ def apply(journey: bool, names: list[str], existing_secrets: bool = False):
         provision_secrets(grafana, settings["stackId"])
     existing = sm.call("GET", "/api/v1/check")
     definitions = check_definitions(probes, probes[0] if journey else None)
+    config = json.loads((ROOT / "checks.json").read_text())
+    # Before anything runs or changes: the free tier's executions are a hard limit.
+    check_budget(definitions, existing, config.get("retired_jobs", []), journey)
     if journey and not verify_adhoc(grafana, sm, settings, definitions[-1], probes[0]):
         # Never schedule a journey that fails: it would page every 30 minutes.
         raise RuntimeError("Journey failed its ad-hoc run on a Grafana probe; not scheduling it")
     for definition in definitions:
         reconcile_check(sm, definition, existing)
-    config = json.loads((ROOT / "checks.json").read_text())
     retire_checks(sm, grafana, config.get("retired_jobs", []), existing)
-    rules = [alert_rule(item["job"], item.get("title", item["service"] + " unavailable"), availability_expression(item["job"]), datasource, receiver)
+    rules = [alert_rule(item["job"], item.get("title", item["service"] + " unavailable"), availability_expression(item["job"], config["availability_frequency_ms"]), datasource, receiver)
              for item in config["availability"]]
+    usage = [item["uid"] for item in datasources if item["name"] == USAGE_DATASOURCE]
+    if usage:
+        rules.extend(usage_rules(usage[0], receiver))
+    else:
+        print(f"::notice::No {USAGE_DATASOURCE} data source; free-tier usage alerts not configured")
     if journey:
         rules.append(alert_rule("skolab-journey-failed", "SkoLab complete journey failed",
             'min(last_over_time(probe_success{job="skolab-complete-journey"}[35m])) < bool 1', datasource, receiver, duration="2m"))
