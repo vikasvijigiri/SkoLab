@@ -121,6 +121,23 @@ class ProvisionTests(unittest.TestCase):
                     api.call("GET", "/x")
             self.assertEqual(isinstance(caught.exception, provision.GrafanaRefused), code == 422)
 
+    def test_over_quota_account_drops_only_our_checks_that_shrink(self):
+        api = FakeAPI()
+        definitions = provision.check_definitions([1, 2], 1)
+        every_minute = [dict(item, id=n, frequency=60_000) for n, item in enumerate(definitions[:2], 1)]
+        journey = dict(definitions[2], id=3)
+        stranger = {"job": "someone-elses", "id": 9, "frequency": 60_000, "timeout": 10_000, "probes": [1], "enabled": True}
+        remaining = provision.shrink_first(api, definitions, [*every_minute, journey, stranger])
+        self.assertEqual([call[1] for call in api.calls], ["/api/v1/check/1", "/api/v1/check/2"])
+        self.assertEqual([item["id"] for item in remaining], [3, 9])
+
+    def test_within_quota_nothing_is_deleted(self):
+        api = FakeAPI()
+        definitions = provision.check_definitions([1, 2], 1)
+        current = [dict(item, id=n) for n, item in enumerate(definitions, 1)]
+        self.assertEqual(provision.shrink_first(api, definitions, current), current)
+        self.assertEqual(api.calls, [])
+
     def test_validation_refusal_names_the_check(self):
         class Refusing(FakeAPI):
             def call(self, method, path, body=None):

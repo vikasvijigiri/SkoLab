@@ -244,6 +244,25 @@ def check_budget(definitions: list[dict], existing: list[dict], retired: list[st
     return total
 
 
+def shrink_first(sm, definitions: list[dict], existing: list[dict]) -> list[dict]:
+    """While the account is over its execution quota, Grafana refuses every
+    check change, even one that lowers usage ("check executions quota
+    exceeded"). Delete our own checks that this deploy makes cheaper, so they
+    are recreated right after under their stable job names (which alerts and
+    dashboards key on). Returns the checks that remain."""
+    if sum(monthly_executions(item) for item in existing) <= FREE_API_EXECUTIONS:
+        return existing
+    planned = {item["job"]: monthly_executions(item) for item in definitions}
+    remaining = []
+    for item in existing:
+        if item["job"] in planned and monthly_executions(item) > planned[item["job"]]:
+            sm.call("DELETE", f"/api/v1/check/{item['id']}")
+            print(f"Over the free quota: removed {item['job']} to recreate it at {planned[item['job']]:,} executions a month")
+        else:
+            remaining.append(item)
+    return remaining
+
+
 def usage_rules(datasource: str, receiver: str) -> list[dict]:
     """Warnings before the free tier's metrics and traces allowances run out,
     from Grafana Cloud's own usage data source."""
@@ -462,9 +481,12 @@ def apply(journey: bool, names: list[str], existing_secrets: bool = False):
     if journey and not verify_adhoc(grafana, sm, settings, definitions[-1], probes[0]):
         # Never schedule a journey that fails: it would page every 30 minutes.
         raise RuntimeError("Journey failed its ad-hoc run on a Grafana probe; not scheduling it")
+    # Retired checks go first: what they use counts against the quota too.
+    retire_checks(sm, grafana, config.get("retired_jobs", []), existing)
+    existing = [item for item in existing if item["job"] not in config.get("retired_jobs", [])]
+    existing = shrink_first(sm, definitions, existing)
     for definition in definitions:
         reconcile_check(sm, definition, existing)
-    retire_checks(sm, grafana, config.get("retired_jobs", []), existing)
     rules = [alert_rule(item["job"], item.get("title", item["service"] + " unavailable"), availability_expression(item["job"], config["availability_frequency_ms"]), datasource, receiver)
              for item in config["availability"]]
     usage = [item["uid"] for item in datasources if item["name"] == USAGE_DATASOURCE]
