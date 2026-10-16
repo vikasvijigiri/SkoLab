@@ -53,6 +53,38 @@ class ProvisionTests(unittest.TestCase):
         daily_runs = 86400000 / journey["frequency"] * len(journey["probes"])
         self.assertLess(daily_runs * 8, 600)  # Go and Python each consume four units.
 
+    def test_planned_checks_fit_the_free_tier_with_headroom(self):
+        definitions = provision.check_definitions([1, 2], 1)
+        total = provision.check_budget(definitions, [], [], journey=True)
+        self.assertLessEqual(total, provision.FREE_API_EXECUTIONS * provision.BUDGET_SHARE)
+
+    def test_budget_counts_unmanaged_checks_and_refuses_overruns(self):
+        definitions = provision.check_definitions([1, 2], 1)
+        stray = {"job": "someone-elses", "frequency": 60_000, "timeout": 10_000, "probes": [1], "enabled": True}
+        with self.assertRaisesRegex(RuntimeError, "someone-elses"):
+            provision.check_budget(definitions, [stray], [], journey=True)
+        # Retired and disabled checks cost nothing; ours are counted once, not twice.
+        retired = dict(stray, job="old")
+        disabled = dict(stray, job="off", enabled=False)
+        ours = dict(definitions[0], id=7)
+        self.assertEqual(provision.check_budget(definitions, [retired, disabled, ours], ["old"], journey=True),
+                         provision.check_budget(definitions, [], [], journey=True))
+
+    def test_executions_count_probes_and_started_minutes(self):
+        check = {"frequency": 300_000, "timeout": 90_000, "probes": [1, 2]}
+        runs = provision.MONTH_MINUTES / 5
+        self.assertEqual(provision.monthly_executions(check), runs * 2 * 2)
+
+    def test_alert_windows_follow_the_check_frequency(self):
+        self.assertIn("[6m]", provision.availability_expression("x", 180_000))
+        self.assertIn("[12m]", provision.availability_expression("x", 180_000))
+
+    def test_usage_alerts_warn_before_the_free_limits(self):
+        rules = provision.usage_rules("usage-uid", "oncall")
+        self.assertEqual([rule["labels"]["severity"] for rule in rules], ["warning", "warning"])
+        self.assertTrue(all(rule["noDataState"] == "OK" and rule["data"][0]["datasourceUid"] == "usage-uid" for rule in rules))
+        self.assertIn("> bool 8000", rules[0]["data"][0]["model"]["expr"])
+
     def test_local_env_does_not_override_injected_secrets(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"GRAFANA_TOKEN": "injected"}):
             path = Path(directory) / ".env"
