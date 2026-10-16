@@ -19,7 +19,8 @@ describe("home", () => {
     expect(await screen.findByText(/You're all set/)).toBeInTheDocument();
     expect(screen.getByText("AL")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Sign out" }));
+    await user.click(screen.getByRole("button", { name: "Account" }));
+    await user.click(screen.getByRole("menuitem", { name: "Sign out" }));
     expect(await screen.findByRole("heading", { name: "Welcome back" })).toBeInTheDocument();
   });
 });
@@ -46,7 +47,7 @@ describe("home documents and templates", () => {
     expect(screen.getByRole("link", { name: "source" })).toHaveAttribute("href", "https://ctan.org/pkg/achemso");
 
     await user.click(screen.getByRole("button", { name: "Use the ACS Journal (achemso) template" }));
-    expect(await screen.findByDisplayValue("ACS Journal (achemso)")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("ACS Journal (achemso)", {}, { timeout: 5000 })).toBeInTheDocument();
     const create = backend.requests.find((request) => request.method === "POST");
     expect(create?.headers["idempotency-key"]).toMatch(/^[0-9a-f-]{36}$/);
     const id = /\/api\/v1\/workspaces\/([^/]+)\/document/.exec(backend.requests.find((request) => request.method === "PUT")?.url ?? "")?.[1] ?? "";

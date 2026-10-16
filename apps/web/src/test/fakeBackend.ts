@@ -1,3 +1,4 @@
+import type { ActivityItem } from "../api/editorTypes";
 import {
   characterCount,
   kindForPath,
@@ -200,6 +201,9 @@ function summary(template: Template) {
 
 export function createFakeBackend(templates: readonly Template[]) {
   const workspaces = new Map<string, StoredWorkspace>();
+  // Each reader's activity feed, newest first, and where they caught up.
+  const activity = new Map<string, { items: ActivityItem[]; seenAt: string | null }>();
+  let activityIds = 0;
   const replays = new Map<string, string>();
   const invites = new Map<string, StoredInvite>();
   const names = new Map<string, string>();
@@ -708,6 +712,21 @@ export function createFakeBackend(templates: readonly Template[]) {
       return workspaces.get(id)?.document ?? null;
     },
 
+    /** Puts an event in uid's activity feed (newest first) and returns its id. */
+    addActivity(uid: string, item: Partial<ActivityItem> & Pick<ActivityItem, "kind" | "workspace">): string {
+      const feed = activity.get(uid) ?? { items: [], seenAt: null };
+      activityIds += 1;
+      const id = String(activityIds);
+      feed.items.unshift({ id, actor: null, subject: null, role: null, count: 1, occurred_at: now(), unread: true, ...item });
+      activity.set(uid, feed);
+      return id;
+    },
+
+    /** When uid last caught up with their feed. */
+    activitySeenAt(uid: string): string | null {
+      return activity.get(uid)?.seenAt ?? null;
+    },
+
     titles(): string[] {
       return [...workspaces.values()].map((stored) => stored.workspace.title);
     },
@@ -722,7 +741,7 @@ export function createFakeBackend(templates: readonly Template[]) {
       const url = new URL(request.url, "http://fake");
       const path = url.pathname;
       const method = request.method.toUpperCase();
-      const editorPath = /^\/api\/v1\/(workspaces|templates|invites)(\/|$)/.test(path);
+      const editorPath = /^\/api\/v1\/(workspaces|templates|invites|activity)(\/|$)/.test(path);
       if (!editorPath) return null;
       requests.push(request);
 
@@ -732,6 +751,22 @@ export function createFakeBackend(templates: readonly Template[]) {
       const auth = request.headers.authorization ?? request.headers.Authorization ?? "";
       const uid = /^Bearer fake-token:(.+)$/.exec(auth)?.[1];
       if (!uid) return error(401, "token_missing", "Sign in");
+
+      if (path === "/api/v1/activity" && method === "GET") {
+        const feed = activity.get(uid) ?? { items: [], seenAt: null };
+        const size = Number(url.searchParams.get("page_size") ?? 20);
+        const start = Number(url.searchParams.get("page_token") ?? 0);
+        const unread = (item: ActivityItem) => feed.seenAt === null || item.occurred_at > feed.seenAt;
+        const items = feed.items.slice(start, start + size).map((item) => ({ ...item, unread: unread(item) }));
+        const next = start + size < feed.items.length ? String(start + size) : "";
+        return { status: 200, body: { items, unread: Math.min(100, feed.items.filter(unread).length), seen_at: feed.seenAt, next_page_token: next } };
+      }
+      if (path === "/api/v1/activity/seen" && method === "POST") {
+        const feed = activity.get(uid) ?? { items: [], seenAt: null };
+        feed.seenAt = now();
+        activity.set(uid, feed);
+        return { status: 200, body: { seen_at: feed.seenAt, unread: 0 } };
+      }
 
       if (path === "/api/v1/templates" && method === "GET") {
         const domain = url.searchParams.get("domain");

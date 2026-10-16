@@ -25,7 +25,8 @@ test("a new user signs up, verifies, signs out and signs back in", async ({ page
   await page.reload();
   await expect(page.getByRole("heading", { name: "Welcome, Grace Hopper" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByRole("button", { name: "Account" }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page).toHaveURL("/sign-in");
   await page.getByLabel("Email").fill("grace@example.com");
   await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
