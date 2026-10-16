@@ -322,12 +322,31 @@ test("a project zip uploaded at home opens in the editor", async ({ page, backen
     { name: "figures/plot.png", data: new Uint8Array(PNG) },
     { name: "notes.docx", data: new TextEncoder().encode("PK") },
   ]);
-  const chooser = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: "Upload project" }).click();
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("menuitem", { name: /^\.zip archive/ }).click();
   await (await chooser).setFiles({ name: "Spin waves.zip", mimeType: "application/zip", buffer: Buffer.from(zip) });
   await expect(page).toHaveURL(/\/editor\/[0-9a-f-]{36}$/);
   await expect(page.getByLabel("Document title")).toHaveValue("Spin waves");
   await expect(page.getByText(/One file was left out/)).toContainText("notes.docx");
   await expect(page.getByRole("img", { name: "Page 1 of 1" })).toBeVisible();
   expect(profileCalls.length).toBeGreaterThan(0);
+});
+
+test("loose .tex files upload in the browser, asking which one is the main document", async ({ page, backend }) => {
+  stubCompile(backend);
+  await signIn(page);
+  await page.getByRole("button", { name: "Upload project" }).click();
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("menuitem", { name: /^\.tex files/ }).click();
+  await (await chooser).setFiles([
+    { name: "paper.tex", mimeType: "text/x-tex", buffer: Buffer.from(MANUSCRIPT) },
+    { name: "talk.tex", mimeType: "text/x-tex", buffer: Buffer.from(MANUSCRIPT) },
+    { name: "plot.png", mimeType: "image/png", buffer: Buffer.from(PNG) },
+  ]);
+  const dialog = page.getByRole("dialog", { name: "Which file is the main document?" });
+  await dialog.getByRole("button", { name: "paper.tex" }).click();
+  await expect(page).toHaveURL(/\/editor\/[0-9a-f-]{36}$/);
+  await expect(page.getByLabel("Document title")).toHaveValue("paper");
+  await expect(page.getByRole("img", { name: "Page 1 of 1" })).toBeVisible();
 });
