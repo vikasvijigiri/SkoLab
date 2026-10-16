@@ -953,8 +953,13 @@ paths:
       operationId: importProject
       summary: Create a workspace from a .zip of a LaTeX project
       description: |
-        main.tex at the top of the archive becomes the document, or else the
-        only top-level .tex file with \documentclass (400 no_main_file).
+        The document is the top-level .tex file named in `main`; else main.tex
+        at the top of the archive; else the only top-level .tex file with
+        \documentclass, or the only one that also has \begin{document}.
+        Several candidates and no `main`: 400 main_file_ambiguous, listing
+        them in `candidates` so the client can ask which to use and retry.
+        None: 400 no_main_file. A `main` that names no top-level .tex file:
+        400 invalid_main_file.
         A single folder holding everything is unwrapped. Hidden files,
         __MACOSX and unsupported files are skipped and listed in `skipped`.
         At most 12 MiB, 500 entries, and what fits a project (413 project_full).
@@ -968,6 +973,7 @@ paths:
               properties:
                 file: { type: string, format: binary }
                 title: { $ref: "#/components/schemas/Title" }
+                main: { type: string, minLength: 1, maxLength: 1024, description: "A top-level .tex file in the archive to use as the document." }
       responses:
         "201":
           description: Created, with the caller as owner.
@@ -976,7 +982,14 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ImportedWorkspace" }
-        "400": { $ref: "#/components/responses/BadRequest" }
+        "400":
+          description: The archive or form was refused; main_file_ambiguous lists the candidates.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: "#/components/schemas/Error" }
+                  - { $ref: "#/components/schemas/MainFileAmbiguous" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
@@ -1129,6 +1142,17 @@ components:
       properties:
         error: { type: string, description: For people; wording may change. }
         code: { type: string, pattern: "^[a-z_]+$", description: Stable; branch on this. }
+    MainFileAmbiguous:
+      type: object
+      required: [error, code, candidates]
+      additionalProperties: false
+      properties:
+        error: { type: string }
+        code: { const: main_file_ambiguous }
+        candidates:
+          type: array
+          minItems: 2
+          items: { type: string }
     SharedWorkspacesConflict:
       type: object
       required: [error, code, workspaces]

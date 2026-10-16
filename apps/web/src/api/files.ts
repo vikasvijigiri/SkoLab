@@ -87,11 +87,16 @@ export function outputPdf(token: string, workspaceId: string, signal?: AbortSign
   return apiBlob(`${workspacePath(workspaceId)}/output.pdf`, { token, timeoutMs: LONG_MS, ...withSignal(signal) });
 }
 
-/** Makes a new workspace from a .zip of a LaTeX project. */
-export async function importProject(token: string, zip: File, title?: string): Promise<ImportedWorkspace> {
+/**
+ * Makes a new workspace from a .zip of a LaTeX project. main names the
+ * top-level .tex file to use as the document, after the route answered
+ * main_file_ambiguous with its candidates.
+ */
+export async function importProject(token: string, zip: File, options: { title?: string; main?: string } = {}): Promise<ImportedWorkspace> {
   const form = new FormData();
   form.append("file", zip, zip.name);
-  if (title) form.append("title", title);
+  if (options.title) form.append("title", options.title);
+  if (options.main) form.append("main", options.main);
   const created = await apiRequest<ImportedWorkspace>("/api/v1/workspaces/import", { method: "POST", token, body: form, timeoutMs: LONG_MS });
   return { ...created, skipped: Array.isArray(created.skipped) ? created.skipped : [] };
 }

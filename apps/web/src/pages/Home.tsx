@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import { ApiError } from "../api/client";
 import {
@@ -21,7 +21,9 @@ import { useIdToken } from "../auth/useIdToken";
 import { Alert } from "../components/Alert";
 import { Button } from "../components/Button";
 import { Logo } from "../components/Logo";
+import { Sheet } from "../components/Sheet";
 import { Spinner } from "../components/Spinner";
+import { droppedFiles, packProject, pickedFiles, type PackedProject, type PickedFile } from "../lib/projectUpload";
 import { fallbackName } from "../lib/validation";
 
 const createdFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
@@ -34,21 +36,37 @@ function loadMessage(error: unknown, what: string): string {
   return `We couldn't load ${what}.`;
 }
 
-/** Why an imported zip was refused, in words. */
+/** Why an upload was refused, in words. */
 function importMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code === "network") return error.message;
+    if (error.code === "no_tex_file") return "There's no .tex file in what you picked. Upload a .zip, a project folder, or .tex files.";
     if (error.code === "no_main_file")
-      return "That zip has no main.tex, and no single .tex file at its top level with \\documentclass. Add a main.tex next to the other files and try again.";
+      return "We couldn't find the main file: there's no main.tex, and no .tex file at the top of the project with \\documentclass. Add one and try again.";
+    if (error.code === "invalid_main_file") return "That main file isn't at the top of the project. Upload the project again.";
     if (error.code === "invalid_archive" || error.status === 415) return "That file isn't a zip we can read. Choose a .zip of your LaTeX project.";
-    if (error.code === "main_too_large") return "The main .tex file in that zip is too long. It can be up to 100,000 characters of UTF-8 text.";
+    if (error.code === "main_too_large") return "The main .tex file is too long. It can be up to 100,000 characters of UTF-8 text.";
     if (error.code === "workspace_limit_reached") return "You have the most documents you can keep. Delete one, then import again.";
-    if (error.status === 413) return "That project is too large. A zip can be up to 12 MB, and unpack to at most 10 MB in 500 files.";
+    if (error.status === 413) return "That project is too large. It can be up to 12 MB, and unpack to at most 10 MB in 200 files and folders.";
     if (error.status === 429) return "You're creating documents too quickly. Wait a moment and try again.";
     if (error.status === 401) return "Your session expired. Sign in again.";
   }
   return "We couldn't import the project. Try again.";
 }
+
+/** The ways in, each its own picker: a zip, a folder, or loose files. */
+const UPLOADS = [
+  { kind: "zip", title: ".zip archive", detail: "From Overleaf, GitHub or anywhere else" },
+  { kind: "folder", title: "Folder", detail: "A project folder on your computer" },
+  { kind: "files", title: ".tex files", detail: "One or more, with their .bib and figures" },
+] as const;
+type UploadKind = (typeof UPLOADS)[number]["kind"];
+
+/** A packed upload waiting for the reader to say which .tex file is the document. */
+type Choosing = PackedProject & { candidates: string[] };
+
+/** Whether a drag carries files (not text or a link). */
+const carriesFiles = (event: DragEvent<HTMLElement>) => Array.from(event.dataTransfer.types).includes("Files");
 
 const ROLE_LABELS: Record<Workspace["role"], string> = {
   owner: "Owner",
@@ -70,7 +88,11 @@ export function Home() {
   const [starting, setStarting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
-  const zipPicker = useRef<HTMLInputElement>(null);
+  const [uploadMenu, setUploadMenu] = useState(false);
+  const [choosing, setChoosing] = useState<Choosing | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const pickers = useRef<Partial<Record<UploadKind, HTMLInputElement | null>>>({});
+  const menuBox = useRef<HTMLDivElement>(null);
   const name = user?.displayName?.trim() || fallbackName(user?.email ?? null);
   const initials = name
     .split(/\s+/)
@@ -129,24 +151,71 @@ export function Home() {
     }
   }
 
-  async function importZip(zip: File) {
-    setError(null);
-    if (!zip.name.toLowerCase().endsWith(".zip")) {
-      setError("Choose a .zip file of your LaTeX project.");
-      return;
-    }
-    if (zip.size > MAX_UPLOAD_BYTES) {
-      setError(importMessage(new ApiError(413, "body_too_large", "")));
-      return;
-    }
+  // The upload menu closes on Escape or a click elsewhere.
+  useEffect(() => {
+    if (!uploadMenu) return;
+    const away = (event: PointerEvent) => {
+      if (!menuBox.current?.contains(event.target as Node)) setUploadMenu(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setUploadMenu(false);
+    };
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [uploadMenu]);
+
+  /** Sends a packed project; asks which file is main when the project has several. */
+  async function sendProject(packed: PackedProject, main?: string) {
     setImporting(true);
     try {
-      const created = await importProject(await idToken(), zip);
-      void navigate(`/editor/${created.id}`, { state: { skipped: created.skipped } });
+      // Loose files have no folder to name the document after; the chosen main file does.
+      const title = packed.title ?? main?.replace(/\.tex$/i, "");
+      const created = await importProject(await idToken(), packed.archive, { ...(title ? { title } : {}), ...(main ? { main } : {}) });
+      void navigate(`/editor/${created.id}`, { state: { skipped: [...packed.skipped, ...created.skipped] } });
+    } catch (caught) {
+      const candidates = caught instanceof ApiError && caught.code === "main_file_ambiguous" ? caught.details.candidates : null;
+      if (Array.isArray(candidates) && candidates.every((name) => typeof name === "string")) setChoosing({ ...packed, candidates });
+      else setError(importMessage(caught));
+      setImporting(false);
+    }
+  }
+
+  /** A .zip, a folder or loose files, picked or dropped: packed into one archive and imported. */
+  async function importPicked(picked: PickedFile[]) {
+    setError(null);
+    setUploadMenu(false);
+    if (picked.length === 0) return;
+    setImporting(true);
+    let packed: PackedProject;
+    try {
+      packed = await packProject(picked);
     } catch (caught) {
       setError(importMessage(caught));
       setImporting(false);
+      return;
     }
+    if (packed.archive.size > MAX_UPLOAD_BYTES) {
+      setError(importMessage(new ApiError(413, "body_too_large", "")));
+      setImporting(false);
+      return;
+    }
+    await sendProject(packed);
+  }
+
+  function chooseMain(main: string) {
+    const pending = choosing;
+    setChoosing(null);
+    if (pending) void sendProject(pending, main);
+  }
+
+  function pickerChanged(input: HTMLInputElement) {
+    const picked = pickedFiles(input.files ?? []);
+    input.value = "";
+    void importPicked(picked);
   }
 
   async function remove(doc: Workspace) {
@@ -169,8 +238,57 @@ export function Home() {
   const shown = domain === "all" ? catalog : catalog.filter((template) => template.domain === domain);
 
   return (
-    <div className="min-h-dvh">
+    // A drop target for projects; the Upload project menu is the keyboard and touch way in.
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    <div
+      className="min-h-dvh"
+      onDragOver={(event) => {
+        if (!carriesFiles(event) || importing) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+        setDragging(true);
+      }}
+      onDragLeave={(event) => {
+        // Only when the drag leaves the window, not when it crosses into a child.
+        if (event.relatedTarget === null) setDragging(false);
+      }}
+      onDrop={(event) => {
+        if (!carriesFiles(event)) return;
+        event.preventDefault();
+        setDragging(false);
+        if (importing) return;
+        // Read the transfer now: the browser empties it once this handler returns.
+        void droppedFiles(event.dataTransfer).then(importPicked);
+      }}
+    >
       <title>Home · SkoLab</title>
+      {dragging && (
+        <div aria-hidden="true" className="pointer-events-none fixed inset-3 z-50 grid animate-fade place-items-center rounded-2xl border-2 border-dashed border-brand-500 bg-brand-50/85 backdrop-blur-sm dark:bg-brand-950/80">
+          <div className="text-center">
+            <p className="text-lg font-semibold text-brand-800 dark:text-brand-100">Drop to start a project</p>
+            <p className="mt-1 text-sm text-brand-700 dark:text-brand-300">A .zip, a project folder, or .tex files with their figures</p>
+          </div>
+        </div>
+      )}
+      {choosing && (
+        <Sheet title="Which file is the main document?" description="Several .tex files in this project start a document. Pick the one to compile." onClose={() => setChoosing(null)}>
+          <ul className="space-y-2">
+            {choosing.candidates.map((name, n) => (
+              <li key={name}>
+                <button
+                  type="button"
+                  {...(n === 0 ? { "data-autofocus": true } : {})}
+                  onClick={() => chooseMain(name)}
+                  className="flex w-full cursor-pointer items-center gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-left font-mono text-sm hover:border-brand-500 hover:bg-brand-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+                >
+                  <TexIcon />
+                  {name}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Sheet>
+      )}
       <header className="border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
           <Logo className="text-zinc-900 dark:text-white" />
@@ -219,31 +337,72 @@ export function Home() {
             <h2 id="documents-heading" className="text-lg font-semibold">
               Your documents
             </h2>
-            <Button
-              variant="secondary"
-              className="!h-9 !w-auto"
-              loading={importing}
-              onClick={() => zipPicker.current?.click()}
-              title="Make a new document from a .zip of a LaTeX project, such as one downloaded from Overleaf"
-              icon={
-                <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
-                </svg>
-              }
-            >
-              Upload project
-            </Button>
+            <div ref={menuBox} className="relative">
+              <Button
+                variant="secondary"
+                className="!h-9 !w-auto"
+                loading={importing}
+                aria-haspopup="menu"
+                aria-expanded={uploadMenu}
+                onClick={() => setUploadMenu(!uploadMenu)}
+                title="Start a document from a LaTeX project: a .zip (such as one downloaded from Overleaf), a folder, or .tex files. Or drop them on this page."
+                icon={
+                  <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
+                  </svg>
+                }
+              >
+                Upload project
+              </Button>
+              {uploadMenu && (
+                <div role="menu" aria-label="Upload a project" className="absolute right-0 z-20 mt-1.5 w-72 animate-fade rounded-xl border border-zinc-200 bg-white p-1.5 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                  {UPLOADS.map((item) => (
+                    <button
+                      key={item.kind}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => pickers.current[item.kind]?.click()}
+                      className="block w-full cursor-pointer rounded-lg px-3 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    >
+                      <span className="block text-sm font-semibold">{item.title}</span>
+                      <span className="block text-xs text-zinc-600 dark:text-zinc-400">{item.detail}</span>
+                    </button>
+                  ))}
+                  <p className="border-t border-zinc-200 px-3 pt-2 pb-1 text-xs text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">Or drop any of these on this page.</p>
+                </div>
+              )}
+            </div>
             <input
-              ref={zipPicker}
+              ref={(input) => {
+                pickers.current.zip = input;
+              }}
               type="file"
               hidden
               accept=".zip,application/zip"
               aria-label="Choose a project .zip to upload"
-              onChange={(event) => {
-                const zip = event.target.files?.[0];
-                event.target.value = "";
-                if (zip) void importZip(zip);
+              onChange={(event) => pickerChanged(event.target)}
+            />
+            <input
+              ref={(input) => {
+                pickers.current.folder = input;
+                // Not in React's types; every current browser supports picking a folder.
+                input?.setAttribute("webkitdirectory", "");
               }}
+              type="file"
+              hidden
+              multiple
+              aria-label="Choose a project folder to upload"
+              onChange={(event) => pickerChanged(event.target)}
+            />
+            <input
+              ref={(input) => {
+                pickers.current.files = input;
+              }}
+              type="file"
+              hidden
+              multiple
+              aria-label="Choose .tex files to upload"
+              onChange={(event) => pickerChanged(event.target)}
             />
           </div>
           {documents.state === "loading" ? (
@@ -359,5 +518,14 @@ export function Home() {
         </section>
       </main>
     </div>
+  );
+}
+
+function TexIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4 shrink-0 text-brand-600 dark:text-brand-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5" />
+    </svg>
   );
 }

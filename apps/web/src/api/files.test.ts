@@ -133,7 +133,7 @@ describe("project files API (against the fake backend)", () => {
       { name: ".hidden/x.tex", data: text("x") },
       { name: "output.pdf", data: text("%PDF-1.4") },
     ]);
-    const created = await importProject(ADA, new File([zip], "book.zip"), "My book");
+    const created = await importProject(ADA, new File([zip], "book.zip"), { title: "My book" });
     expect(created).toMatchObject({ title: "My book", role: "owner", skipped: [".hidden/x.tex", "output.pdf"] });
     expect(backend.document(created.id)?.source).toBe("\\documentclass{book}");
     expect(Object.keys(backend.files(created.id))).toEqual(["other.tex"]);
