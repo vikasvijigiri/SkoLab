@@ -1206,7 +1206,10 @@ components:
       description: 1-255 characters after trimming, no control characters.
       minLength: 1
       maxLength: 255
-      pattern: "^[^\\u0000-\\u001f\\u007f-\\u009f\\s][^\\u0000-\\u001f\\u007f-\\u009f]*$"
+      # The first character is neither a control character nor any space Go's
+      # strings.TrimSpace removes (Unicode White_Space, spelled out: generators
+      # disagree on what \s covers).
+      pattern: "^[^\\u0000-\\u0020\\u007f-\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000][^\\u0000-\\u001f\\u007f-\\u009f]*$"
     Title:
       type: object
       required: [title]
