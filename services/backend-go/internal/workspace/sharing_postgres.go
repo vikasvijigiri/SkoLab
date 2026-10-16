@@ -13,6 +13,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/skolab/backend-go/internal/activity"
 )
 
 var (
@@ -279,6 +281,7 @@ func (s *postgresSharing) AcceptInvite(ctx context.Context, token, callerID stri
 	var current, status string
 	err = tx.QueryRow(ctx, `SELECT role, status FROM workspace_members WHERE workspace_id = $1 AND user_id = $2 FOR UPDATE`,
 		workspaceID, callerID).Scan(&current, &status)
+	wasActive := err == nil && status == "active"
 	switch {
 	case err == nil && status == "active" && rank[current] >= rank[role]:
 		return Membership{WorkspaceID: workspaceID, Role: current}, nil
@@ -297,6 +300,14 @@ func (s *postgresSharing) AcceptInvite(ctx context.Context, token, callerID stri
 		return Membership{}, unavailable(err)
 	}
 	if _, err := tx.Exec(ctx, `UPDATE workspace_invites SET uses = uses + 1 WHERE id = $1`, inviteID); err != nil {
+		return Membership{}, unavailable(err)
+	}
+	// A member already in who redeems a stronger link changed role; anyone else joined.
+	event := activity.Event{Kind: activity.MemberJoined, WorkspaceID: workspaceID, ActorID: callerID, Role: role}
+	if wasActive {
+		event = activity.Event{Kind: activity.RoleChanged, WorkspaceID: workspaceID, ActorID: callerID, SubjectID: callerID, Role: role}
+	}
+	if err := activity.Record(ctx, tx, event); err != nil {
 		return Membership{}, unavailable(err)
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -383,6 +394,9 @@ func (s *postgresSharing) ChangeRole(ctx context.Context, workspaceID, callerID,
 			return unavailable(err)
 		}
 	}
+	if err := activity.Record(ctx, tx, activity.Event{Kind: activity.RoleChanged, WorkspaceID: workspaceID, ActorID: callerID, SubjectID: targetID, Role: role}); err != nil {
+		return unavailable(err)
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return unavailable(err)
 	}
@@ -429,6 +443,13 @@ func (s *postgresSharing) RemoveMember(ctx context.Context, workspaceID, callerI
 	}
 	// A departed member's links leave with them.
 	if _, err := tx.Exec(ctx, revokeLinksBy, workspaceID, targetID, time.Now().UTC()); err != nil {
+		return unavailable(err)
+	}
+	event := activity.Event{Kind: activity.MemberRemoved, WorkspaceID: workspaceID, ActorID: callerID, SubjectID: targetID}
+	if targetID == callerID {
+		event = activity.Event{Kind: activity.MemberLeft, WorkspaceID: workspaceID, ActorID: callerID}
+	}
+	if err := activity.Record(ctx, tx, event); err != nil {
 		return unavailable(err)
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -510,6 +531,9 @@ func (s *postgresSharing) TransferOwnership(ctx context.Context, workspaceID, ca
 		if _, err := tx.Exec(ctx, stmt.sql, stmt.args...); err != nil {
 			return unavailable(err)
 		}
+	}
+	if err := activity.Record(ctx, tx, activity.Event{Kind: activity.OwnershipTransferred, WorkspaceID: workspaceID, ActorID: callerID, SubjectID: targetID, Role: "owner"}); err != nil {
+		return unavailable(err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return unavailable(err)

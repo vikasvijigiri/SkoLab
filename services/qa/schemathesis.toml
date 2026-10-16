@@ -6,6 +6,11 @@
 include-name = "GET /api/v1/workspaces"
 checks.positive_data_acceptance.expected-statuses = ["2xx", "400", "401", "403", "404", "409", "429", "5xx"]
 
+# The activity feed's page_token is opaque in the same way.
+[[operations]]
+include-name = "GET /api/v1/activity"
+checks.positive_data_acceptance.expected-statuses = ["2xx", "400", "401", "403", "404", "409", "429", "5xx"]
+
 # Reusing an Idempotency-Key with a different body is refused (422) by
 # design; the fuzzer reuses keys across generated bodies.
 [[operations]]

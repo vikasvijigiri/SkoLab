@@ -7,6 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/skolab/backend-go/internal/activity"
 )
 
 const queryTimeout = 3 * time.Second
@@ -135,6 +137,10 @@ func (s *postgresStore) Save(ctx context.Context, workspaceID, userID, source st
 		return Document{}, &ConflictError{Current: current}
 	}
 	if err != nil {
+		return Document{}, unavailable(err)
+	}
+	// Co-authors see the save in their activity feed; it commits with it.
+	if err := activity.Record(ctx, tx, activity.Event{Kind: activity.DocumentEdited, WorkspaceID: workspaceID, ActorID: userID, At: now}); err != nil {
 		return Document{}, unavailable(err)
 	}
 	if err := tx.Commit(ctx); err != nil {

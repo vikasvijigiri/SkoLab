@@ -41,6 +41,9 @@ class User(Base):
     phone = Column(String(50), nullable=True)
     research_focus = Column(Text, nullable=True)
     created_at = Column(DateTime, default=utcnow)
+    # Where the reader last caught up with their activity feed (Go gateway,
+    # internal/activity); NULL until they first open it.
+    activity_seen_at = Column(DateTime, nullable=True)
 
     @validates("email")
     def validate_user_email(self, key, address):
@@ -193,6 +196,63 @@ class WorkspaceFile(Base):
         CheckConstraint("size >= 0 AND size <= 5242880", name="chk_workspace_file_size"),
         CheckConstraint("version >= 1", name="chk_workspace_file_version"),
         Index("uq_workspace_files_path", "workspace_id", text("lower(path)"), unique=True),
+    )
+
+
+ACTIVITY_KINDS = (
+    "document_edited",
+    "member_joined",
+    "member_left",
+    "member_removed",
+    "role_changed",
+    "ownership_transferred",
+)
+
+
+class WorkspaceActivity(Base):
+    """What co-authors did in a workspace, for the activity feed.
+
+    Written by the Go gateway (internal/activity) in the same transaction as
+    the change. Saves by one person within ten minutes share a row, counted in
+    ``count``. ``subject_id`` is who an event is about (the member removed,
+    the new owner).
+    """
+
+    __tablename__ = "workspace_activity"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    workspace_id = Column(
+        String(100),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    kind = Column(String(32), nullable=False)
+    actor_id = Column(String(100), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    subject_id = Column(String(100), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    role = Column(String(20), nullable=True)
+    # Server defaults too: the Go gateway writes rows with plain SQL.
+    count = Column(Integer, nullable=False, default=1, server_default=text("1"))
+    occurred_at = Column(
+        DateTime, default=utcnow, nullable=False, server_default=text("(now() AT TIME ZONE 'utc')")
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN (" + ", ".join(f"'{kind}'" for kind in ACTIVITY_KINDS) + ")",
+            name="chk_workspace_activity_kind",
+        ),
+        CheckConstraint("count >= 1", name="chk_workspace_activity_count"),
+        CheckConstraint(
+            "role IS NULL OR role IN ('owner', 'editor', 'commenter', 'viewer')",
+            name="chk_workspace_activity_role",
+        ),
+        Index("ix_workspace_activity_workspace", "workspace_id", "occurred_at"),
+        Index(
+            "ix_workspace_activity_subject",
+            "subject_id",
+            "occurred_at",
+            postgresql_where=text("subject_id IS NOT NULL"),
+        ),
     )
 
 
