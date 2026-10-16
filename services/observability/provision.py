@@ -61,22 +61,53 @@ class API:
                 return None
             # Never print server response bodies: they can echo scripts/secrets.
             # A refusal's own short message is safe and says what to fix.
-            raise RuntimeError(f"{method} {path}: HTTP {exc.code}{refusal_reason(exc, self.token)}") from None
+            error = GrafanaRefused if 400 <= exc.code < 500 else RuntimeError
+            raise error(f"{method} {path}: HTTP {exc.code}{refusal_reason(exc, self.token)}") from None
+
+
+class GrafanaRefused(RuntimeError):
+    """Grafana answered 4xx: our configuration (or token) is wrong for the
+    stack, not production being down. The deploy reports it without failing
+    the release, so it cannot hold back unrelated deploys."""
+
+
+def _redact_refusal(text: str, token: str) -> str:
+    if token:
+        text = text.replace(token, "[redacted]")
+    return re.sub(r"[A-Za-z0-9_\-]{32,}", "[redacted]", text)
+
+
+def _summary(value, depth: int = 0):
+    """A JSON answer's shape and short strings: enough to say what was refused."""
+    if isinstance(value, dict) and depth < 3:
+        return {key: _summary(item, depth + 1) for key, item in list(value.items())[:12]}
+    if isinstance(value, list) and depth < 3:
+        return [_summary(item, depth + 1) for item in value[:5]]
+    if isinstance(value, str):
+        return value[:160]
+    return value if isinstance(value, (int, float, bool)) or value is None else type(value).__name__
 
 
 def refusal_reason(exc: urllib.error.HTTPError, token: str) -> str:
-    """The message field of a 4xx JSON answer, redacted and cut short; "" otherwise."""
+    """What a 4xx JSON answer says, redacted and cut short; "" otherwise.
+
+    Grafana's message field when there is one, else the answer's shape (keys,
+    numbers, short strings). Long token-like strings and the token are redacted.
+    """
     if not 400 <= exc.code < 500:
         return ""
     try:
-        body = json.loads(exc.read(4096) or b"{}")
+        raw = exc.read(8192)
+        body = json.loads(raw or b"{}")
     except (ValueError, OSError):
         return ""
-    if not isinstance(body, dict):
+    if isinstance(body, dict):
+        message = next((body[key] for key in ("msg", "message", "error", "err") if isinstance(body.get(key), str) and body[key].strip()), "")
+        if message:
+            return f" ({_redact_refusal(message, token)[:200]})"
+    if not body:
         return ""
-    message = next((body[key] for key in ("msg", "message", "error", "err") if isinstance(body.get(key), str)), "")
-    message = re.sub(r"[A-Za-z0-9_\-]{32,}", "[redacted]", message.replace(token, "[redacted]") if token else message)
-    return f" ({message[:200]})" if message.strip() else ""
+    return f" ({_redact_refusal(json.dumps(_summary(body), separators=(',', ':')), token)[:400]})"
 
 
 def check_definitions(probes: list[int], journey_probe: int | None = None):
@@ -142,7 +173,7 @@ def reconcile_check(api: API, definition: dict, existing: list[dict]):
     try:
         validation = api.call("POST", "/api/v1/check/validate", body)
     except RuntimeError as exc:
-        raise RuntimeError(f"{definition['job']}: {exc}") from None
+        raise type(exc)(f"{definition['job']}: {exc}") from None
     if not validation["valid"]:
         fields = [item.get("field", "check") for item in validation.get("findings", [])]
         raise RuntimeError(f"Check validation failed: {definition['job']}: {fields}")
@@ -536,6 +567,11 @@ def main():
 if __name__ == "__main__":
     try:
         main()
+    except GrafanaRefused as exc:
+        # Exit 3: Grafana refused our configuration; the workflow reports it
+        # (annotation, Slack) without failing the release. See observability-deploy.yml.
+        print(f"Monitoring setup refused by Grafana: {exc}", file=sys.stderr)
+        sys.exit(3)
     except (ValueError, RuntimeError, urllib.error.URLError, KeyError) as exc:
         print(f"Monitoring setup failed: {exc}", file=sys.stderr)
         sys.exit(1)
