@@ -66,6 +66,8 @@ const endpoints = {
   archive: [2, (d) => ok(req('GET', `/api/v1/workspaces/${d.proj}/archive`, 'GET /api/v1/workspaces/:id/archive'), 200)],
   output_pdf: [2, (d) => ok(req('GET', `/api/v1/workspaces/${d.proj}/output.pdf`, 'GET /api/v1/workspaces/:id/output.pdf'), 200)],
   import_project: [1, importProject],
+  activity_feed: [5, () => ok(req('GET', '/api/v1/activity?page_size=20', 'GET /api/v1/activity'), 200)],
+  activity_seen: [2, () => ok(req('POST', '/api/v1/activity/seen', 'POST /api/v1/activity/seen'), 200)],
   profile_sync: [2, () => ok(req('POST', '/api/v1/users/profile/sync', 'POST /api/v1/users/profile/sync', { uid, name: 'SkoLab monitoring' }), 200)],
   liveness: [2, () => ok(http.get(`${base}/gateway-health`, { tags: { name: 'GET /gateway-health' } }), 200)],
   readiness: [2, () => ok(http.get(`${base}/readyz`, { tags: { name: 'GET /readyz' } }), 200)],
@@ -99,6 +101,7 @@ const URLS = [
   'PUT /api/v1/workspaces/:id/files/:file_id', 'PATCH /api/v1/workspaces/:id/files/:file_id',
   'DELETE /api/v1/workspaces/:id/files/:file_id', 'GET /api/v1/workspaces/:id/archive',
   'POST /api/v1/workspaces/:id/compile', 'GET /api/v1/workspaces/:id/output.pdf', 'POST /api/v1/workspaces/import',
+  'GET /api/v1/activity', 'POST /api/v1/activity/seen',
 ];
 const gates = {
   'GET /api/v1/templates': 'p(95)<150',
@@ -111,6 +114,9 @@ const gates = {
   'PUT /api/v1/workspaces/:id/files/:file_id': 'p(95)<400',
   'POST /api/v1/workspaces/:id/files/upload': 'p(95)<1000',
   'GET /api/v1/workspaces/:id/archive': 'p(95)<1000',
+  // The notifications bell polls the feed; catching up is one row update.
+  'GET /api/v1/activity': 'p(95)<250',
+  'POST /api/v1/activity/seen': 'p(95)<150',
 };
 const thresholds = { checks: ['rate>0.99'], http_req_failed: ['rate<0.01'] };
 for (const url of URLS) {
