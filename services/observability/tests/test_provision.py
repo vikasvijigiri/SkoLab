@@ -97,7 +97,29 @@ class ProvisionTests(unittest.TestCase):
         self.assertNotIn("b" * 40, leaked)
         self.assertEqual(provision.refusal_reason(refusal(500, b'{"msg":"boom"}'), token), "")
         self.assertEqual(provision.refusal_reason(refusal(422, b"not json"), token), "")
-        self.assertEqual(provision.refusal_reason(refusal(422, b'["x"]'), token), "")
+        self.assertEqual(provision.refusal_reason(refusal(422, b'["x"]'), token), ' (["x"])')
+
+    def test_refusal_without_a_message_reports_the_answer_shape(self):
+        import io
+        import urllib.error
+        token = "glsa_" + "a" * 40
+        body = b'{"code":422,"errors":[{"field":"frequency","detail":"not allowed on this plan"}],"secret":"' + b"c" * 40 + b'"}'
+        reason = provision.refusal_reason(urllib.error.HTTPError("https://x", 422, "", {}, io.BytesIO(body)), token)
+        self.assertIn('"field":"frequency"', reason)
+        self.assertIn("not allowed on this plan", reason)
+        self.assertNotIn("c" * 40, reason)
+        self.assertLessEqual(len(reason), 404)
+
+    def test_grafana_4xx_is_a_refusal_and_5xx_is_a_failure(self):
+        import io
+        import urllib.error
+        api = provision.API("https://grafana.example", "t")
+        for code, kind in ((422, provision.GrafanaRefused), (503, RuntimeError)):
+            error = urllib.error.HTTPError("https://x", code, "", {}, io.BytesIO(b"{}"))
+            with patch.object(provision.urllib.request, "urlopen", side_effect=error):
+                with self.assertRaises(kind) as caught:
+                    api.call("GET", "/x")
+            self.assertEqual(isinstance(caught.exception, provision.GrafanaRefused), code == 422)
 
     def test_validation_refusal_names_the_check(self):
         class Refusing(FakeAPI):

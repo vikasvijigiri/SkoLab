@@ -66,11 +66,36 @@ jobs:
              && [ -n "$SKOLAB_SYNTHETIC_PASSWORD" ]; then
             # Runs the journey once on a Grafana probe first; a failing journey
             # is never scheduled, and this step fails so the merge is visibly red.
-            python services/observability/provision.py --apply --journey
+            args="--apply --journey"
           else
             echo "::notice::Journey fixtures are not configured; deploying availability checks only"
-            python services/observability/provision.py --apply
+            args="--apply"
           fi
+          status=0
+          python services/observability/provision.py $args 2> provision.err || status=$?
+          cat provision.err >&2
+          if [ "$status" -eq 3 ]; then
+            # Grafana refused our configuration (HTTP 4xx). Production is fine and
+            # the checks already in Grafana keep running, so this must not hold
+            # back the release or the web app's checks-gated Render deploy.
+            # Say so loudly instead: an annotation, the run summary and Slack.
+            reason=$(tail -n 1 provision.err)
+            echo "::warning title=Grafana refused the monitoring update::$reason"
+            {
+              echo "### Grafana refused the monitoring update"
+              echo
+              echo "$reason"
+              echo
+              echo "The checks already in Grafana keep running. Fix the definition in services/observability/ and merge again."
+            } >> "$GITHUB_STEP_SUMMARY"
+            if [ -n "$SLACK_ALERT_WEBHOOK_URL" ]; then
+              python -c 'import json, sys; print(json.dumps({"text": ":warning: Grafana refused the SkoLab monitoring update (production unaffected; existing checks keep running): " + sys.argv[1][:500]}))' "$reason" \
+                | curl --fail --silent --show-error --max-time 10 -H 'Content-Type: application/json' --data @- "$SLACK_ALERT_WEBHOOK_URL" > /dev/null \
+                || echo "::warning::Could not post the refusal to Slack"
+            fi
+            exit 0
+          fi
+          exit "$status"
       - name: End-to-end notification test
         if: ${{ inputs.test_alert }}
         run: python services/observability/provision.py --test-alert
