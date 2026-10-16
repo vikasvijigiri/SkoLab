@@ -28,20 +28,17 @@ import {
   FlaskIcon,
   FolderIcon,
   GridIcon,
-  MoonIcon,
   SigmaIcon,
-  SignOutIcon,
   SparkIcon,
-  SunIcon,
   TrashIcon,
   UploadIcon,
   ZipIcon,
 } from "../components/Icons";
-import { Logo } from "../components/Logo";
+import { AppHeader, type NewKind } from "../components/AppHeader";
 import { Sheet } from "../components/Sheet";
 import { Spinner } from "../components/Spinner";
+import type { Command } from "../editor/CommandBar";
 import { droppedFiles, packProject, pickedFiles, type PackedProject, type PickedFile } from "../lib/projectUpload";
-import { savedTheme, setTheme } from "../lib/theme";
 import { fallbackName } from "../lib/validation";
 
 const createdFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
@@ -111,7 +108,7 @@ export function Home() {
   const [dragging, setDragging] = useState(false);
   const pickers = useRef<Partial<Record<UploadKind, HTMLInputElement | null>>>({});
   const menuBox = useRef<HTMLDivElement>(null);
-  const [dark, setDark] = useState(isDark);
+  const [creating, setCreating] = useState(false);
   const name = user?.displayName?.trim() || fallbackName(user?.email ?? null);
   const initials = name
     .split(/\s+/)
@@ -144,6 +141,35 @@ export function Home() {
     setDocuments({ state: "loading" });
     setTemplates({ state: "loading" });
     setReloads((count) => count + 1);
+  }
+
+  /** A new empty article, opened in the editor. */
+  async function startBlank() {
+    setCreating(true);
+    setError(null);
+    let workspace: Workspace | null = null;
+    try {
+      const token = await idToken();
+      workspace = await createWorkspace(token, "Untitled document", crypto.randomUUID());
+      await saveDocument(token, workspace.id, { source: BLANK_DOCUMENT, base_version: 0 });
+      void navigate(`/editor/${workspace.id}`);
+    } catch (caught) {
+      if (workspace) void idToken().then((token) => deleteWorkspace(token, workspace?.id ?? "")).catch(() => undefined);
+      setError(
+        caught instanceof ApiError && caught.status === 429
+          ? "You're creating documents too quickly. Wait a moment and try again."
+          : caught instanceof ApiError && caught.code === "network"
+            ? caught.message
+            : "We couldn't create the document. Try again.",
+      );
+      setCreating(false);
+    }
+  }
+
+  function startNew(kind: NewKind) {
+    if (kind === "blank") void startBlank();
+    else if (kind === "template") document.getElementById("templates-heading")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    else pickers.current[kind]?.click();
   }
 
   async function start(template: TemplateSummary) {
@@ -225,11 +251,6 @@ export function Home() {
     await sendProject(packed);
   }
 
-  function toggleTheme() {
-    setTheme(dark ? "light" : "dark");
-    setDark(!dark);
-  }
-
   function chooseMain(main: string) {
     const pending = choosing;
     setChoosing(null);
@@ -260,6 +281,24 @@ export function Home() {
 
   const catalog = templates.state === "ready" ? templates.items : [];
   const shown = domain === "all" ? catalog : catalog.filter((template) => template.domain === domain);
+  const searchCommands: Command[] = [
+    ...(documents.state === "ready" ? documents.items : []).map((doc) => ({
+      id: `doc-${doc.id}`,
+      title: doc.title,
+      group: "Documents",
+      note: ROLE_LABELS[doc.role],
+      keywords: "open document paper",
+      run: () => void navigate(`/editor/${doc.id}`),
+    })),
+    ...catalog.map((template) => ({
+      id: `template-${template.id}`,
+      title: `New from ${template.name}`,
+      group: "Templates",
+      note: DOMAIN_LABELS[template.domain],
+      keywords: `${template.journals} ${template.publisher} ${template.class} template journal`,
+      run: () => void start(template),
+    })),
+  ];
   const count = (key: Domain | "all") => (key === "all" ? catalog.length : catalog.filter((template) => template.domain === key).length);
 
   return (
@@ -318,40 +357,21 @@ export function Home() {
         </Sheet>
       )}
 
-      <header className="sticky top-0 z-30 border-b border-zinc-200/70 bg-white/75 backdrop-blur-lg dark:border-zinc-800/70 dark:bg-zinc-950/75">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
-          <Logo className="text-zinc-900 dark:text-white" />
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <button
-              type="button"
-              onClick={toggleTheme}
-              aria-label={dark ? "Switch to the light theme" : "Switch to the dark theme"}
-              title={dark ? "Light theme" : "Dark theme"}
-              className="grid size-10 cursor-pointer place-items-center rounded-full text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-            >
-              {dark ? <SunIcon /> : <MoonIcon />}
-            </button>
-            <span className="hidden items-center gap-2.5 rounded-full border border-zinc-200 bg-white py-1 pr-3.5 pl-1 sm:flex dark:border-zinc-800 dark:bg-zinc-900">
-              <span aria-hidden="true" className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-violet-600 text-xs font-semibold text-white">
-                {initials}
-              </span>
-              <span className="max-w-40 truncate text-sm font-medium">{name}</span>
-            </span>
-            <button
-              type="button"
-              disabled={signingOut}
-              onClick={() => {
-                setSigningOut(true);
-                void service.signOut();
-              }}
-              className="flex h-10 cursor-pointer items-center gap-2 rounded-full px-3.5 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-60 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            >
-              {signingOut ? <Spinner /> : <SignOutIcon className="size-4" />}
-              Sign out
-            </button>
-          </div>
-        </div>
-      </header>
+      <AppHeader
+        name={name}
+        email={user?.email ?? ""}
+        initials={initials}
+        me={user?.uid ?? ""}
+        token={idToken}
+        commands={searchCommands}
+        creating={creating}
+        onNew={startNew}
+        signingOut={signingOut}
+        onSignOut={() => {
+          setSigningOut(true);
+          void service.signOut();
+        }}
+      />
 
       <main id="main" className="mx-auto max-w-6xl px-4 pt-8 pb-16 sm:px-6">
         <section aria-labelledby="welcome-heading" className="relative z-10 animate-enter rounded-3xl bg-gradient-to-br from-brand-600 via-indigo-600 to-violet-700 px-6 py-8 text-white shadow-xl shadow-brand-900/15 sm:px-10 sm:py-10">
@@ -684,13 +704,19 @@ const DOMAIN_LOOK: Record<Domain, { Icon: (props: { className?: string | undefin
   biology: { Icon: DnaIcon, bar: "from-rose-400 to-pink-500", tile: "bg-rose-50 text-rose-600 dark:bg-rose-950 dark:text-rose-300", text: "text-rose-700 dark:text-rose-300" },
 };
 
-/** Whether the page is dark now: the reader's choice, else the device's. */
-function isDark(): boolean {
-  const theme = savedTheme();
-  if (theme !== "system") return theme === "dark";
-  try {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches;
-  } catch {
-    return false;
-  }
-}
+/** What "Blank document" starts from: a plain article that compiles. */
+const BLANK_DOCUMENT = `\\documentclass[11pt]{article}
+\\usepackage[utf8]{inputenc}
+\\usepackage{amsmath,amssymb,graphicx,hyperref}
+
+\\title{Untitled document}
+\\author{}
+\\date{\\today}
+
+\\begin{document}
+\\maketitle
+
+\\section{Introduction}
+
+\\end{document}
+`;

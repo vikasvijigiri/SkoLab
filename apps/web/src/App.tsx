@@ -4,7 +4,6 @@ import { AuthProvider } from "./auth/AuthProvider";
 import { FullPageLoader } from "./components/Spinner";
 import type { AuthService } from "./auth/types";
 import { ForgotPassword } from "./pages/ForgotPassword";
-import { Home } from "./pages/Home";
 import { Invite } from "./pages/Invite";
 import { NotFound } from "./pages/NotFound";
 import { SignIn } from "./pages/SignIn";
@@ -12,8 +11,11 @@ import { SignUp } from "./pages/SignUp";
 import { VerifyEmail } from "./pages/VerifyEmail";
 import { GuestOnly, RequireAccount, RequireUnverified } from "./routes";
 
-// The editor (CodeMirror, pdf.js) loads only when a document is opened.
+// The editor (CodeMirror, pdf.js) loads only when a document is opened, and
+// Home (documents, templates, header) only once someone is signed in, so the
+// sign-in pages stay small.
 const Editor = lazy(() => import("./pages/Editor").then((m) => ({ default: m.Editor })));
+const Home = lazy(() => import("./pages/Home").then((m) => ({ default: m.Home })));
 
 export const routes: RouteObject[] = [
   {
@@ -30,7 +32,14 @@ export const routes: RouteObject[] = [
   {
     element: <RequireAccount />,
     children: [
-      { path: "/", element: <Home /> },
+      {
+        path: "/",
+        element: (
+          <Suspense fallback={<FullPageLoader label="Loading your documents" />}>
+            <Home />
+          </Suspense>
+        ),
+      },
       {
         path: "/editor/:id",
         element: (

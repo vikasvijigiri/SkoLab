@@ -244,3 +244,33 @@ export function formatBytes(bytes: number): string {
   const megabytes = bytes / (1024 * 1024);
   return `${megabytes >= 10 ? Math.round(megabytes).toLocaleString() : (Math.round(megabytes * 10) / 10).toLocaleString()} MB`;
 }
+
+/** The activity feed (src/api/activity.ts). */
+export type ActivityKind = "document_edited" | "member_joined" | "member_left" | "member_removed" | "role_changed" | "ownership_transferred";
+
+export interface ActivityPerson {
+  id: string;
+  display_name: string;
+}
+
+export interface ActivityItem {
+  id: string;
+  kind: ActivityKind;
+  workspace: { id: string; title: string };
+  /** Null once the account is deleted. */
+  actor: ActivityPerson | null;
+  subject: ActivityPerson | null;
+  role: Role | null;
+  /** Saves merged into one document_edited event; 1 otherwise. */
+  count: number;
+  occurred_at: string;
+  unread: boolean;
+}
+
+export interface ActivityPage {
+  items: ActivityItem[];
+  /** At most 100. */
+  unread: number;
+  seen_at: string | null;
+  next_page_token: string;
+}
