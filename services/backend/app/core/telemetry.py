@@ -86,10 +86,12 @@ class Telemetry:
             if os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT") or os.getenv(
                 "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"
             ):
+                # One point a minute: Grafana Cloud counts faster pushes as
+                # extra active series against the free tier.
                 readers.append(
                     PeriodicExportingMetricReader(
                         OTLPMetricExporter(timeout=5),
-                        export_interval_millis=30000,
+                        export_interval_millis=60000,
                         export_timeout_millis=5000,
                     )
                 )
