@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type DragEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent, type ReactElement } from "react";
 import { Link, useNavigate } from "react-router";
 import { ApiError } from "../api/client";
 import {
@@ -19,11 +19,29 @@ import { importProject } from "../api/files";
 import { useAuth } from "../auth/AuthProvider";
 import { useIdToken } from "../auth/useIdToken";
 import { Alert } from "../components/Alert";
-import { Button } from "../components/Button";
+import {
+  ArrowRightIcon,
+  AtomIcon,
+  DnaIcon,
+  ExternalIcon,
+  FileTextIcon,
+  FlaskIcon,
+  FolderIcon,
+  GridIcon,
+  MoonIcon,
+  SigmaIcon,
+  SignOutIcon,
+  SparkIcon,
+  SunIcon,
+  TrashIcon,
+  UploadIcon,
+  ZipIcon,
+} from "../components/Icons";
 import { Logo } from "../components/Logo";
 import { Sheet } from "../components/Sheet";
 import { Spinner } from "../components/Spinner";
 import { droppedFiles, packProject, pickedFiles, type PackedProject, type PickedFile } from "../lib/projectUpload";
+import { savedTheme, setTheme } from "../lib/theme";
 import { fallbackName } from "../lib/validation";
 
 const createdFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
@@ -93,6 +111,7 @@ export function Home() {
   const [dragging, setDragging] = useState(false);
   const pickers = useRef<Partial<Record<UploadKind, HTMLInputElement | null>>>({});
   const menuBox = useRef<HTMLDivElement>(null);
+  const [dark, setDark] = useState(isDark);
   const name = user?.displayName?.trim() || fallbackName(user?.email ?? null);
   const initials = name
     .split(/\s+/)
@@ -206,6 +225,11 @@ export function Home() {
     await sendProject(packed);
   }
 
+  function toggleTheme() {
+    setTheme(dark ? "light" : "dark");
+    setDark(!dark);
+  }
+
   function chooseMain(main: string) {
     const pending = choosing;
     setChoosing(null);
@@ -236,6 +260,7 @@ export function Home() {
 
   const catalog = templates.state === "ready" ? templates.items : [];
   const shown = domain === "all" ? catalog : catalog.filter((template) => template.domain === domain);
+  const count = (key: Domain | "all") => (key === "all" ? catalog.length : catalog.filter((template) => template.domain === key).length);
 
   return (
     // A drop target for projects; the Upload project menu is the keyboard and touch way in.
@@ -263,154 +288,228 @@ export function Home() {
     >
       <title>Home · SkoLab</title>
       {dragging && (
-        <div aria-hidden="true" className="pointer-events-none fixed inset-3 z-50 grid animate-fade place-items-center rounded-2xl border-2 border-dashed border-brand-500 bg-brand-50/85 backdrop-blur-sm dark:bg-brand-950/80">
+        <div aria-hidden="true" className="pointer-events-none fixed inset-3 z-50 grid animate-fade place-items-center rounded-3xl border-2 border-dashed border-brand-500 bg-brand-50/90 backdrop-blur-sm dark:bg-brand-950/85">
           <div className="text-center">
-            <p className="text-lg font-semibold text-brand-800 dark:text-brand-100">Drop to start a project</p>
-            <p className="mt-1 text-sm text-brand-700 dark:text-brand-300">A .zip, a project folder, or .tex files with their figures</p>
+            <span className="mx-auto grid size-16 place-items-center rounded-2xl bg-brand-600 text-white shadow-lg shadow-brand-600/30">
+              <UploadIcon className="size-8" />
+            </span>
+            <p className="mt-4 text-xl font-semibold text-brand-900 dark:text-brand-50">Drop to start a project</p>
+            <p className="mt-1 text-[15px] text-brand-700 dark:text-brand-200">A .zip, a project folder, or .tex files with their figures</p>
           </div>
         </div>
       )}
       {choosing && (
         <Sheet title="Which file is the main document?" description="Several .tex files in this project start a document. Pick the one to compile." onClose={() => setChoosing(null)}>
           <ul className="space-y-2">
-            {choosing.candidates.map((name, n) => (
-              <li key={name}>
+            {choosing.candidates.map((candidate, n) => (
+              <li key={candidate}>
                 <button
                   type="button"
                   {...(n === 0 ? { "data-autofocus": true } : {})}
-                  onClick={() => chooseMain(name)}
-                  className="flex w-full cursor-pointer items-center gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-left font-mono text-sm hover:border-brand-500 hover:bg-brand-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+                  onClick={() => chooseMain(candidate)}
+                  className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-left font-mono text-sm transition-colors hover:border-brand-500 hover:bg-brand-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
                 >
-                  <TexIcon />
-                  {name}
+                  <FileTextIcon className="size-5 text-brand-600 dark:text-brand-400" />
+                  {candidate}
                 </button>
               </li>
             ))}
           </ul>
         </Sheet>
       )}
-      <header className="border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
+
+      <header className="sticky top-0 z-30 border-b border-zinc-200/70 bg-white/75 backdrop-blur-lg dark:border-zinc-800/70 dark:bg-zinc-950/75">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
           <Logo className="text-zinc-900 dark:text-white" />
-          <div className="w-28">
-            <Button
-              variant="secondary"
-              loading={signingOut}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label={dark ? "Switch to the light theme" : "Switch to the dark theme"}
+              title={dark ? "Light theme" : "Dark theme"}
+              className="grid size-10 cursor-pointer place-items-center rounded-full text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+            >
+              {dark ? <SunIcon /> : <MoonIcon />}
+            </button>
+            <span className="hidden items-center gap-2.5 rounded-full border border-zinc-200 bg-white py-1 pr-3.5 pl-1 sm:flex dark:border-zinc-800 dark:bg-zinc-900">
+              <span aria-hidden="true" className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-violet-600 text-xs font-semibold text-white">
+                {initials}
+              </span>
+              <span className="max-w-40 truncate text-sm font-medium">{name}</span>
+            </span>
+            <button
+              type="button"
+              disabled={signingOut}
               onClick={() => {
                 setSigningOut(true);
                 void service.signOut();
               }}
+              className="flex h-10 cursor-pointer items-center gap-2 rounded-full px-3.5 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-60 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
+              {signingOut ? <Spinner /> : <SignOutIcon className="size-4" />}
               Sign out
-            </Button>
+            </button>
           </div>
         </div>
       </header>
-      <main id="main" className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-        <div className="flex animate-enter items-center gap-4">
-          <span aria-hidden="true" className="grid size-14 place-items-center rounded-full bg-brand-100 text-lg font-semibold text-brand-800 dark:bg-brand-900 dark:text-brand-100">
-            {initials}
-          </span>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Welcome, {name}</h1>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">{user?.email}</p>
-          </div>
-        </div>
-        <div className="mt-6 max-w-xl space-y-3">
-          {profile === "error" ? (
-            <Alert tone="error">
-              We couldn't finish setting up your account.{" "}
-              <button type="button" onClick={retryProfileSync} className="cursor-pointer font-semibold underline underline-offset-4">
-                Try again
-              </button>
-            </Alert>
-          ) : profile === "synced" ? (
-            <Alert tone="success">You're all set. Pick a journal template below to start writing.</Alert>
-          ) : (
-            <Alert tone="info">Setting up your account…</Alert>
-          )}
-          {error && <Alert tone="error">{error}</Alert>}
-        </div>
 
-        <section aria-labelledby="documents-heading" aria-busy={documents.state === "loading"} className="mt-10">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 id="documents-heading" className="text-lg font-semibold">
-              Your documents
-            </h2>
-            <div ref={menuBox} className="relative">
-              <Button
-                variant="secondary"
-                className="!h-9 !w-auto"
-                loading={importing}
-                aria-haspopup="menu"
-                aria-expanded={uploadMenu}
-                onClick={() => setUploadMenu(!uploadMenu)}
-                title="Start a document from a LaTeX project: a .zip (such as one downloaded from Overleaf), a folder, or .tex files. Or drop them on this page."
-                icon={
-                  <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
-                  </svg>
-                }
-              >
-                Upload project
-              </Button>
-              {uploadMenu && (
-                <div role="menu" aria-label="Upload a project" className="absolute right-0 z-20 mt-1.5 w-72 animate-fade rounded-xl border border-zinc-200 bg-white p-1.5 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-                  {UPLOADS.map((item) => (
-                    <button
-                      key={item.kind}
-                      type="button"
-                      role="menuitem"
-                      onClick={() => pickers.current[item.kind]?.click()}
-                      className="block w-full cursor-pointer rounded-lg px-3 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                    >
-                      <span className="block text-sm font-semibold">{item.title}</span>
-                      <span className="block text-xs text-zinc-600 dark:text-zinc-400">{item.detail}</span>
-                    </button>
-                  ))}
-                  <p className="border-t border-zinc-200 px-3 pt-2 pb-1 text-xs text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">Or drop any of these on this page.</p>
-                </div>
-              )}
+      <main id="main" className="mx-auto max-w-6xl px-4 pt-8 pb-16 sm:px-6">
+        <section aria-labelledby="welcome-heading" className="relative z-10 animate-enter rounded-3xl bg-gradient-to-br from-brand-600 via-indigo-600 to-violet-700 px-6 py-8 text-white shadow-xl shadow-brand-900/15 sm:px-10 sm:py-10">
+          {/* Decoration: soft light and a faint grid, clipped to the panel (the upload menu is not). */}
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-3xl">
+            <div className="absolute -top-24 -right-16 size-72 rounded-full bg-white/15 blur-3xl" />
+            <div className="absolute -bottom-28 left-1/3 size-72 rounded-full bg-fuchsia-400/20 blur-3xl" />
+          </div>
+          <svg aria-hidden="true" className="pointer-events-none absolute inset-0 size-full rounded-3xl opacity-[0.07]">
+            <defs>
+              <pattern id="home-grid" width="28" height="28" patternUnits="userSpaceOnUse">
+                <path d="M28 0H0V28" fill="none" stroke="white" strokeWidth="1" />
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#home-grid)" />
+          </svg>
+
+          <div className="relative flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex items-start gap-4">
+              <div>
+                <p className="text-sm font-medium text-brand-100">{greeting()}</p>
+                <h1 id="welcome-heading" className="mt-0.5 text-3xl font-semibold tracking-tight sm:text-4xl">
+                  Welcome, {name}
+                </h1>
+                <p className="mt-2 max-w-lg text-[15px] leading-relaxed text-brand-50/90">
+                  {profile === "synced"
+                    ? "You're all set. Start from a journal template, or bring a project you already have."
+                    : profile === "error"
+                      ? "Your account isn't fully set up yet."
+                      : "Setting up your account…"}
+                </p>
+                <p className="mt-1 text-sm text-brand-100/80">{user?.email}</p>
+              </div>
             </div>
-            <input
-              ref={(input) => {
-                pickers.current.zip = input;
-              }}
-              type="file"
-              hidden
-              accept=".zip,application/zip"
-              aria-label="Choose a project .zip to upload"
-              onChange={(event) => pickerChanged(event.target)}
-            />
-            <input
-              ref={(input) => {
-                pickers.current.folder = input;
-                // Not in React's types; every current browser supports picking a folder.
-                input?.setAttribute("webkitdirectory", "");
-              }}
-              type="file"
-              hidden
-              multiple
-              aria-label="Choose a project folder to upload"
-              onChange={(event) => pickerChanged(event.target)}
-            />
-            <input
-              ref={(input) => {
-                pickers.current.files = input;
-              }}
-              type="file"
-              hidden
-              multiple
-              aria-label="Choose .tex files to upload"
-              onChange={(event) => pickerChanged(event.target)}
-            />
+
+            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center lg:flex-col lg:items-stretch xl:flex-row xl:items-center">
+              <div ref={menuBox} className="relative">
+                <button
+                  type="button"
+                  disabled={importing}
+                  aria-haspopup="menu"
+                  aria-expanded={uploadMenu}
+                  onClick={() => setUploadMenu(!uploadMenu)}
+                  title="Start a document from a LaTeX project: a .zip (such as one downloaded from Overleaf), a folder, or .tex files. Or drop them on this page."
+                  className="flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-white px-5 text-[15px] font-semibold text-brand-700 shadow-lg shadow-brand-950/20 transition hover:-translate-y-px hover:bg-brand-50 disabled:cursor-wait disabled:opacity-80 sm:w-auto"
+                >
+                  {importing ? <Spinner /> : <UploadIcon className="size-[18px]" />}
+                  Upload project
+                </button>
+                {uploadMenu && (
+                  <div
+                    role="menu"
+                    aria-label="Upload a project"
+                    className="absolute right-0 z-20 mt-2 w-80 max-w-[calc(100vw-2rem)] animate-fade rounded-2xl border border-zinc-200 bg-white p-2 text-zinc-900 shadow-2xl shadow-zinc-900/15 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                  >
+                    {UPLOADS.map((item) => (
+                      <button
+                        key={item.kind}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => pickers.current[item.kind]?.click()}
+                        className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                      >
+                        <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-950 dark:text-brand-300">
+                          {item.kind === "zip" ? <ZipIcon /> : item.kind === "folder" ? <FolderIcon /> : <FileTextIcon />}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold">{item.title}</span>
+                          <span className="block text-xs text-zinc-600 dark:text-zinc-400">{item.detail}</span>
+                        </span>
+                      </button>
+                    ))}
+                    <p className="mt-1 border-t border-zinc-200 px-3 pt-2.5 pb-1 text-xs text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">Or drop any of these on this page.</p>
+                  </div>
+                )}
+              </div>
+              <a
+                href="#templates-heading"
+                className="flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-[15px] font-semibold text-white ring-1 ring-white/35 transition hover:bg-white/10"
+              >
+                <GridIcon className="size-[18px]" />
+                Browse templates
+              </a>
+            </div>
+          </div>
+          <p className="relative mt-6 hidden items-center gap-2 text-xs text-brand-100/80 sm:flex">
+            <SparkIcon className="size-4" />
+            Tip: drop a .zip, a folder or .tex files anywhere on this page to import a project, Overleaf style.
+          </p>
+        </section>
+
+        <input
+          ref={(input) => {
+            pickers.current.zip = input;
+          }}
+          type="file"
+          hidden
+          accept=".zip,application/zip"
+          aria-label="Choose a project .zip to upload"
+          onChange={(event) => pickerChanged(event.target)}
+        />
+        <input
+          ref={(input) => {
+            pickers.current.folder = input;
+            // Not in React's types; every current browser supports picking a folder.
+            input?.setAttribute("webkitdirectory", "");
+          }}
+          type="file"
+          hidden
+          multiple
+          aria-label="Choose a project folder to upload"
+          onChange={(event) => pickerChanged(event.target)}
+        />
+        <input
+          ref={(input) => {
+            pickers.current.files = input;
+          }}
+          type="file"
+          hidden
+          multiple
+          aria-label="Choose .tex files to upload"
+          onChange={(event) => pickerChanged(event.target)}
+        />
+
+        {(profile === "error" || error) && (
+          <div className="mt-6 max-w-2xl space-y-3">
+            {profile === "error" && (
+              <Alert tone="error">
+                We couldn't finish setting up your account.{" "}
+                <button type="button" onClick={retryProfileSync} className="cursor-pointer font-semibold underline underline-offset-4">
+                  Try again
+                </button>
+              </Alert>
+            )}
+            {error && <Alert tone="error">{error}</Alert>}
+          </div>
+        )}
+
+        <section aria-labelledby="documents-heading" aria-busy={documents.state === "loading"} className="mt-12">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h2 id="documents-heading" className="text-xl font-semibold tracking-tight">
+                Your documents
+              </h2>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Documents are saved to your SkoLab account and open on any device.</p>
+            </div>
+            {documents.state === "ready" && documents.items.length > 0 && (
+              <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-semibold text-zinc-600 tabular-nums dark:bg-zinc-800 dark:text-zinc-300">
+                {documents.items.length} {documents.items.length === 1 ? "document" : "documents"}
+              </span>
+            )}
           </div>
           {documents.state === "loading" ? (
-            <p role="status" className="mt-3 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+            <p role="status" className="mt-4 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
               <Spinner /> Loading your documents…
             </p>
           ) : documents.state === "error" ? (
-            <div className="mt-3 max-w-xl">
+            <div className="mt-4 max-w-xl">
               <Alert tone="error">
                 {documents.message}{" "}
                 <button type="button" onClick={retry} className="cursor-pointer font-semibold underline underline-offset-4">
@@ -419,16 +518,30 @@ export function Home() {
               </Alert>
             </div>
           ) : documents.items.length === 0 ? (
-            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">No documents yet. Start one from a template below.</p>
+            <div className="mt-4 flex flex-col items-center rounded-2xl border-2 border-dashed border-zinc-300 bg-white/60 px-6 py-8 text-center dark:border-zinc-700 dark:bg-zinc-900/40">
+              <span aria-hidden="true" className="grid size-14 place-items-center rounded-2xl bg-brand-50 text-brand-600 dark:bg-brand-950 dark:text-brand-300">
+                <FileTextIcon className="size-7" />
+              </span>
+              <p className="mt-4 text-[15px] font-semibold">No documents yet. Start one from a template below.</p>
+              <p className="mt-1 max-w-md text-sm text-zinc-600 dark:text-zinc-400">Or drop a .zip, a project folder, or .tex files right here to bring an existing project in.</p>
+            </div>
           ) : (
-            <ul className="mt-3 divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
+            <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {documents.items.map((doc) => (
-                <li key={doc.id} className="flex items-center gap-3 px-4 py-3">
+                <li
+                  key={doc.id}
+                  className="group relative flex items-start gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-xs transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-brand-700"
+                >
+                  <span aria-hidden="true" className="grid size-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand-50 to-violet-100 text-brand-600 dark:from-brand-950 dark:to-violet-950 dark:text-brand-300">
+                    <FileTextIcon className="size-[22px]" />
+                  </span>
                   <div className="min-w-0 flex-1">
-                    <Link to={`/editor/${doc.id}`} className="block truncate font-medium text-brand-700 hover:underline dark:text-brand-300">
+                    {/* The whole card opens the document; the link's box stretches over it. */}
+                    <Link to={`/editor/${doc.id}`} className="block truncate text-[15px] font-semibold text-zinc-900 after:absolute after:inset-0 after:rounded-2xl hover:text-brand-700 dark:text-zinc-100 dark:hover:text-brand-300">
                       {doc.title}
                     </Link>
-                    <p className="truncate text-xs text-zinc-600 dark:text-zinc-400">
+                    <p className="mt-1 flex items-center gap-1.5 truncate text-xs text-zinc-600 dark:text-zinc-400">
+                      <span className={`inline-block size-1.5 rounded-full ${doc.role === "owner" ? "bg-emerald-500" : doc.role === "editor" ? "bg-sky-500" : "bg-zinc-400"}`} aria-hidden="true" />
                       {ROLE_LABELS[doc.role]} · created {createdFormat.format(new Date(doc.created_at))}
                     </p>
                   </div>
@@ -437,50 +550,60 @@ export function Home() {
                       type="button"
                       onClick={() => void remove(doc)}
                       aria-label={`Delete ${doc.title}`}
-                      className="cursor-pointer rounded-md px-2 py-1 text-sm text-zinc-600 hover:bg-red-50 hover:text-red-700 dark:text-zinc-400 dark:hover:bg-red-950 dark:hover:text-red-300"
+                      title="Delete"
+                      className="relative z-10 grid size-9 shrink-0 cursor-pointer place-items-center rounded-lg text-zinc-400 transition hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 dark:hover:bg-red-950 dark:hover:text-red-300"
                     >
-                      Delete
+                      <TrashIcon className="size-[18px]" />
                     </button>
                   )}
                 </li>
               ))}
             </ul>
           )}
-          <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">Documents are saved to your SkoLab account and open on any device.</p>
         </section>
 
-        <section aria-labelledby="templates-heading" aria-busy={templates.state === "loading"} className="mt-10">
-          <div className="flex flex-wrap items-end justify-between gap-3">
+        <section aria-labelledby="templates-heading" aria-busy={templates.state === "loading"} className="mt-14 scroll-mt-24">
+          <div className="flex flex-col gap-4">
             <div>
-              <h2 id="templates-heading" className="text-lg font-semibold">
+              <h2 id="templates-heading" className="scroll-mt-24 text-xl font-semibold tracking-tight">
                 Start from a journal template
               </h2>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">The publishers' own LaTeX templates, unchanged apart from what each file's header lists.</p>
+              <p className="mt-1 max-w-xl text-sm text-zinc-600 dark:text-zinc-400">The publishers' own LaTeX templates, unchanged apart from what each file's header lists.</p>
             </div>
-            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter templates by field">
-              {(["all", ...DOMAINS] as const).map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  aria-pressed={domain === key}
-                  onClick={() => setDomain(key)}
-                  className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold ${
-                    domain === key
-                      ? "border-brand-600 bg-brand-600 text-white"
-                      : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                  }`}
-                >
-                  {key === "all" ? "All" : DOMAIN_LABELS[key]}
-                </button>
-              ))}
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Filter templates by field">
+              {(["all", ...DOMAINS] as const).map((key) => {
+                const on = domain === key;
+                const look = key === "all" ? null : DOMAIN_LOOK[key];
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setDomain(key)}
+                    className={`flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-3.5 text-sm font-semibold transition-colors ${
+                      on
+                        ? "border-transparent bg-zinc-900 text-white shadow-sm dark:bg-white dark:text-zinc-900"
+                        : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    }`}
+                  >
+                    {look ? <look.Icon className={`size-4 ${on ? "" : look.text}`} /> : <GridIcon className="size-4" />}
+                    {key === "all" ? "All" : DOMAIN_LABELS[key]}
+                    {templates.state === "ready" && (
+                      <span aria-hidden="true" className={`text-xs tabular-nums ${on ? "opacity-70" : "text-zinc-400"}`}>
+                        {count(key)}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
           {templates.state === "loading" ? (
-            <p role="status" className="mt-4 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+            <p role="status" className="mt-5 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
               <Spinner /> Loading templates…
             </p>
           ) : templates.state === "error" ? (
-            <div className="mt-4 max-w-xl">
+            <div className="mt-5 max-w-xl">
               <Alert tone="error">
                 {templates.message}{" "}
                 <button type="button" onClick={retry} className="cursor-pointer font-semibold underline underline-offset-4">
@@ -489,30 +612,56 @@ export function Home() {
               </Alert>
             </div>
           ) : (
-            <ul className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {shown.map((template) => (
-                <li key={template.id} className="flex flex-col rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                  <p className="text-xs font-semibold tracking-wide text-brand-700 uppercase dark:text-brand-300">{DOMAIN_LABELS[template.domain]}</p>
-                  <h3 className="mt-1 font-semibold">{template.name}</h3>
-                  <p className="mt-0.5 text-xs font-medium text-zinc-700 dark:text-zinc-300">{template.journals}</p>
-                  <p className="mt-2 flex-1 text-sm text-zinc-600 dark:text-zinc-400">{template.description}</p>
-                  <p className="mt-3 text-xs text-zinc-600 dark:text-zinc-400">
-                    {template.publisher} · <code>{template.class}</code> · {template.license} ·{" "}
-                    <a href={template.source_url} target="_blank" rel="noreferrer" className="underline underline-offset-2">
-                      source
-                    </a>
-                  </p>
-                  <Button
-                    className="mt-3 !h-9"
-                    loading={starting === template.id}
-                    disabled={starting !== null}
-                    onClick={() => void start(template)}
-                    aria-label={`Use the ${template.name} template`}
+            <ul className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {shown.map((template) => {
+                const look = DOMAIN_LOOK[template.domain];
+                return (
+                  <li
+                    key={template.id}
+                    className="group flex flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xs transition hover:-translate-y-0.5 hover:shadow-lg dark:border-zinc-800 dark:bg-zinc-900"
                   >
-                    Use template
-                  </Button>
-                </li>
-              ))}
+                    <div aria-hidden="true" className={`h-1.5 bg-gradient-to-r ${look.bar}`} />
+                    <div className="flex flex-1 flex-col p-5">
+                      <div className="flex items-center gap-2.5">
+                        <span aria-hidden="true" className={`grid size-9 place-items-center rounded-lg ${look.tile}`}>
+                          <look.Icon className="size-5" />
+                        </span>
+                        <p className={`text-xs font-bold tracking-wider uppercase ${look.text}`}>{DOMAIN_LABELS[template.domain]}</p>
+                        <a
+                          href={template.source_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-brand-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-brand-300"
+                        >
+                          source
+                          <ExternalIcon className="size-3.5" />
+                        </a>
+                      </div>
+                      <h3 className="mt-3 text-lg leading-snug font-semibold tracking-tight">{template.name}</h3>
+                      <p className="mt-1 line-clamp-2 text-[13px] font-medium text-zinc-700 dark:text-zinc-300" title={template.journals}>
+                        {template.journals}
+                      </p>
+                      <p className="mt-3 flex-1 text-[15px] leading-relaxed text-zinc-600 dark:text-zinc-400">{template.description}</p>
+                      <div className="mt-4 flex flex-wrap items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+                        <span className="truncate">{template.publisher}</span>
+                        <code className="rounded-md bg-zinc-100 px-1.5 py-0.5 font-mono text-[11px] text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">{template.class}</code>
+                        <span className="rounded-md border border-zinc-200 px-1.5 py-0.5 text-[11px] font-medium dark:border-zinc-700">{template.license}</span>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={starting !== null}
+                        onClick={() => void start(template)}
+                        aria-label={`Use the ${template.name} template`}
+                        className="mt-5 flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-brand-50 text-[15px] font-semibold text-brand-700 ring-1 ring-brand-200 transition group-hover:bg-brand-600 group-hover:text-white group-hover:ring-brand-600 hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-brand-950 dark:text-brand-200 dark:ring-brand-800 dark:group-hover:bg-brand-500 dark:group-hover:text-white"
+                      >
+                        {starting === template.id ? <Spinner /> : null}
+                        Use template
+                        {starting !== template.id && <ArrowRightIcon className="size-4 transition-transform group-hover:translate-x-0.5" />}
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
@@ -521,11 +670,27 @@ export function Home() {
   );
 }
 
-function TexIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4 shrink-0 text-brand-600 dark:text-brand-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
-      <path d="M14 3v5h5" />
-    </svg>
-  );
+/** Morning, afternoon or evening, by the reader's clock. */
+function greeting(): string {
+  const hour = new Date().getHours();
+  return hour < 5 ? "Working late" : hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+}
+
+/** Each field's colour and icon: on its filter, its cards' accent bar and their icon tile. */
+const DOMAIN_LOOK: Record<Domain, { Icon: (props: { className?: string | undefined }) => ReactElement; bar: string; tile: string; text: string }> = {
+  physics: { Icon: AtomIcon, bar: "from-sky-400 to-indigo-500", tile: "bg-sky-50 text-sky-600 dark:bg-sky-950 dark:text-sky-300", text: "text-sky-700 dark:text-sky-300" },
+  chemistry: { Icon: FlaskIcon, bar: "from-emerald-400 to-teal-500", tile: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-300", text: "text-emerald-700 dark:text-emerald-300" },
+  mathematics: { Icon: SigmaIcon, bar: "from-amber-400 to-orange-500", tile: "bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-300", text: "text-amber-700 dark:text-amber-300" },
+  biology: { Icon: DnaIcon, bar: "from-rose-400 to-pink-500", tile: "bg-rose-50 text-rose-600 dark:bg-rose-950 dark:text-rose-300", text: "text-rose-700 dark:text-rose-300" },
+};
+
+/** Whether the page is dark now: the reader's choice, else the device's. */
+function isDark(): boolean {
+  const theme = savedTheme();
+  if (theme !== "system") return theme === "dark";
+  try {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  } catch {
+    return false;
+  }
 }
