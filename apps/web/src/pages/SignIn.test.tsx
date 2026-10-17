@@ -31,8 +31,8 @@ describe("sign in", () => {
     await user.type(await screen.findByLabelText("Email"), " grace@example.com ");
     await user.type(screen.getByLabelText("Password"), "correct horse 42");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
-    expect(await screen.findByRole("heading", { name: "Welcome, Grace Hopper" })).toBeInTheDocument();
-    expect(await screen.findByText(/You're all set/)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Your documents" })).toBeInTheDocument();
+    await waitFor(() => expect(api.mock.calls.some(([url]) => url.endsWith("/users/profile/sync"))).toBe(true));
     // Home also loads documents and templates; the profile sync is the call that matters here.
     const profileCalls = api.mock.calls.filter(([url]) => url.endsWith("/users/profile/sync"));
     expect(profileCalls).toHaveLength(1);
@@ -63,7 +63,7 @@ describe("sign in", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("blocked the Google sign-in window");
 
     await user.click(screen.getByRole("button", { name: "Continue with Google" }));
-    expect(await screen.findByRole("heading", { name: "Welcome, Ada Lovelace" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Your documents" })).toBeInTheDocument();
   });
 
   it("carries the typed email to the reset page", async () => {

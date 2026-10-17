@@ -1286,7 +1286,7 @@ paths:
   /api/v1/templates/{template_id}/preview.jpg:
     parameters:
       - { name: template_id, in: path, required: true, schema: { type: string } }
-      - { name: v, in: query, required: false, schema: { type: string }, description: The version in the template's preview URL; other parameters are refused. }
+      - { name: v, in: query, required: false, schema: { type: string, pattern: "^[0-9a-f]{16}$" }, description: The version in the template's preview URL; other parameters are refused. }
       - $ref: "#/components/parameters/IfNoneMatch"
     get:
       tags: [editor]

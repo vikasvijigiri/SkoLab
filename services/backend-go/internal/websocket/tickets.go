@@ -122,7 +122,8 @@ func IssueTicket(authorizer WorkspaceAuthorizer, tickets WorkspaceTicketStore) g
 		workspaceID := strings.TrimSpace(c.Param("workspace_id"))
 		userID := strings.TrimSpace(c.GetString("user_id"))
 		if workspaceID == "" {
-			apierror.Abort(c, http.StatusBadRequest, "invalid_workspace", "workspace_id is required")
+			// No one can see a blank id: the same 404 as any unknown workspace.
+			apierror.Abort(c, http.StatusNotFound, "not_found", "Workspace not found")
 			return
 		}
 		if userID == "" {

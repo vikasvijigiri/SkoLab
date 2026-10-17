@@ -155,3 +155,18 @@ func TestPostgresWorkspaceTicketStore_FailsClosedWithoutDatabase(t *testing.T) {
 		t.Fatalf("Consume error = %v, want ErrWorkspaceTicketUnavailable", err)
 	}
 }
+
+func TestIssueTicket_BlankWorkspaceIsNotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tickets := &staticTicketStore{issuedTicket: "must-not-be-issued"}
+	r := gin.New()
+	r.POST("/api/v1/ws/colab/:workspace_id/tickets", func(c *gin.Context) {
+		c.Set("user_id", "researcher")
+		IssueTicket(staticWorkspaceAuthorizer{allowed: true}, tickets)(c)
+	})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/ws/colab/%0B/tickets", nil))
+	if w.Code != http.StatusNotFound || tickets.issuedFor != "" {
+		t.Fatalf("status = %d, issued for %q", w.Code, tickets.issuedFor)
+	}
+}

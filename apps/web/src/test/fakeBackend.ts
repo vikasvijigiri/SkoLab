@@ -18,6 +18,7 @@ import {
   type Role,
   type Template,
   type Workspace,
+  type WorkspaceCard,
 } from "../api/editorTypes";
 import { readZip, writeZip, type ZipEntry } from "./zip";
 
@@ -80,6 +81,9 @@ export interface FakeCompileInput {
   engine: "pdflatex";
   files: { path: string; content_base64: string }[];
 }
+
+/** The start of a JPEG: what the fake answers for every preview picture. */
+export const TINY_JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9]);
 
 /** A one-page PDF, enough to stand for a compile's output. */
 export const TINY_PDF = new TextEncoder().encode(
@@ -244,6 +248,30 @@ export function createFakeBackend(templates: readonly Template[]) {
     return { ...stored.workspace, role };
   }
 
+  /** A workspace as the documents page lists it (internal/workspace summarize). */
+  function cardView(stored: StoredWorkspace, role: Role): WorkspaceCard {
+    const person = (id: string) => ({ id, display_name: names.get(id) ?? id });
+    const owner = stored.workspace.owner_id;
+    const members = [...stored.members.entries()].filter(([id]) => id !== owner);
+    const authors = [{ ...person(owner), role: "owner" as Role }, ...members.map(([id, memberRole]) => ({ ...person(id), role: memberRole }))];
+    const edits = [
+      ...(stored.document?.updated_at ? [{ at: stored.document.updated_at, by: stored.document.updated_by }] : []),
+      ...stored.files.map((entry) => ({ at: entry.file.updated_at, by: entry.file.updated_by })),
+    ].sort((a, b) => (a.at < b.at ? 1 : -1));
+    const latest = edits[0];
+    const insights = fakeInsights(stored.document?.source ?? "");
+    return {
+      ...view(stored, role),
+      authors: authors.slice(0, 8),
+      authors_total: authors.length,
+      updated_at: latest?.at ?? null,
+      updated_by: latest?.by ? person(latest.by) : null,
+      words: insights.stats.words,
+      progress: insights.progress.percent,
+      compiled_at: stored.output?.info.compiled_at ?? null,
+    };
+  }
+
   function documentView(stored: StoredWorkspace, role: Role): LatexDocument {
     const doc = stored.document ?? { source: "", template_id: null, version: 0, updated_at: null, updated_by: null };
     return { workspace_id: stored.workspace.id, ...doc, role, insights: fakeInsights(doc.source) };
@@ -396,6 +424,10 @@ export function createFakeBackend(templates: readonly Template[]) {
       if (stored.output) entries.push({ name: "output.pdf", data: stored.output.bytes });
       const title = stored.workspace.title.replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "project";
       return { status: 200, body: writeZip(entries), headers: { "Content-Type": "application/zip", "Content-Disposition": `attachment; filename="${title}.zip"` } };
+    }
+    if (route === "preview.jpg" && method === "GET") {
+      if (!stored.output) return error(404, "no_output", "The project has not been compiled yet");
+      return { status: 200, body: TINY_JPEG, headers: { "Content-Type": "image/jpeg" } };
     }
     if (route === "output.pdf" && method === "GET") {
       if (!stored.output) return error(404, "not_found", "This project has not compiled yet");
@@ -659,6 +691,12 @@ export function createFakeBackend(templates: readonly Template[]) {
       return Object.fromEntries((stored?.files ?? []).map((entry) => [entry.file.path, entry.file.kind === "folder" ? null : (entry.text ?? entry.bytes)]));
     },
 
+    /** As if the project had just compiled: it now has an output.pdf (and so a preview). */
+    compiled(id: string) {
+      const stored = workspaces.get(id);
+      if (stored) stored.output = { bytes: TINY_PDF, info: { size: TINY_PDF.length, compiled_at: now(), compiled_by: stored.workspace.owner_id, status: "compiled" } };
+    },
+
     /** The stored output.pdf, if any. */
     output(id: string): Uint8Array | null {
       return workspaces.get(id)?.output?.bytes ?? null;
@@ -856,6 +894,12 @@ export function createFakeBackend(templates: readonly Template[]) {
         const list = templates.filter((template) => !domain || template.domain === domain).map(summary);
         return { status: 200, body: { templates: list } };
       }
+      const templatePreview = /^\/api\/v1\/templates\/([^/]+)\/preview\.jpg$/.exec(path);
+      if (templatePreview && method === "GET") {
+        return templates.some((entry) => entry.id === templatePreview[1])
+          ? { status: 200, body: TINY_JPEG, headers: { "Content-Type": "image/jpeg" } }
+          : error(404, "not_found", "No template with this id");
+      }
       const templateMatch = /^\/api\/v1\/templates\/([^/]+)$/.exec(path);
       if (templateMatch && method === "GET") {
         const template = templates.find((entry) => entry.id === templateMatch[1]);
@@ -866,7 +910,7 @@ export function createFakeBackend(templates: readonly Template[]) {
         const mine = [...workspaces.values()]
           .map((stored) => ({ stored, role: roleOf(stored, uid) }))
           .filter((entry): entry is { stored: StoredWorkspace; role: Role } => entry.role !== null)
-          .map(({ stored, role }) => view(stored, role))
+          .map(({ stored, role }) => cardView(stored, role))
           .reverse();
         return { status: 200, body: { workspaces: mine, next_page_token: "" } };
       }
@@ -905,7 +949,7 @@ export function createFakeBackend(templates: readonly Template[]) {
       }
 
       if (path === "/api/v1/workspaces/import" && method === "POST") return importRoute(uid, request.body);
-      const project = /^\/api\/v1\/workspaces\/([^/]+)\/(files|archive|compile|output\.pdf)(?:\/([^/]+)(\/raw)?)?$/.exec(path);
+      const project = /^\/api\/v1\/workspaces\/([^/]+)\/(files|archive|compile|output\.pdf|preview\.jpg)(?:\/([^/]+)(\/raw)?)?$/.exec(path);
       if (project) {
         const stored = workspaces.get(project[1] ?? "");
         const role = stored ? roleOf(stored, uid) : null;
@@ -973,6 +1017,7 @@ export type FakeBackend = ReturnType<typeof createFakeBackend>;
 export const TEST_TEMPLATES: Template[] = [
   {
     id: "aps-physical-review",
+    preview: "/api/v1/templates/aps-physical-review/preview.jpg?v=test",
     name: "APS Physical Review (REVTeX 4.2)",
     domain: "physics",
     journals: "Physical Review Letters, Physical Review A–E, X",
@@ -986,6 +1031,7 @@ export const TEST_TEMPLATES: Template[] = [
   },
   {
     id: "acs-jacs",
+    preview: "/api/v1/templates/acs-jacs/preview.jpg?v=test",
     name: "ACS Journal (achemso)",
     domain: "chemistry",
     journals: "Journal of the American Chemical Society",
@@ -999,6 +1045,7 @@ export const TEST_TEMPLATES: Template[] = [
   },
   {
     id: "ams-article",
+    preview: "/api/v1/templates/ams-article/preview.jpg?v=test",
     name: "AMS Journal Article (amsart)",
     domain: "mathematics",
     journals: "Journal of the AMS, Transactions of the AMS",
@@ -1012,6 +1059,7 @@ export const TEST_TEMPLATES: Template[] = [
   },
   {
     id: "nature",
+    preview: "/api/v1/templates/nature/preview.jpg?v=test",
     name: "Nature",
     domain: "biology",
     journals: "Nature",

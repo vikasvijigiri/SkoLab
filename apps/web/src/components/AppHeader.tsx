@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, NavLink } from "react-router";
 import type { Command } from "../editor/CommandBar";
 import { savedTheme, setTheme, type Theme } from "../lib/theme";
 import { ChevronDownIcon, FileTextIcon, FolderIcon, GridIcon, HelpIcon, KeyboardIcon, MonitorIcon, MoonIcon, PlusIcon, SearchIcon, SignOutIcon, SunIcon, ZipIcon } from "./Icons";
@@ -18,10 +18,10 @@ const HELP_URL = "https://github.com/vikasvijigiri/SkoLab/issues";
 
 export type NewKind = "blank" | "template" | "zip" | "folder" | "files";
 
-/** The page sections the header's navigation points at, by element id. */
-const SECTIONS = [
-  { id: "documents-heading", label: "Documents" },
-  { id: "templates-heading", label: "Templates" },
+/** The signed-in pages, each its own address. */
+const PAGES = [
+  { to: "/documents", label: "Documents" },
+  { to: "/templates", label: "Templates" },
 ] as const;
 
 /**
@@ -58,30 +58,12 @@ export function AppHeader({
   const [palette, setPalette] = useState(false);
   const [shortcuts, setShortcuts] = useState(false);
   const [theme, setThemeState] = useState<Theme>(savedTheme);
-  const [section, setSection] = useState<string>(SECTIONS[0].id);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 4);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  // The section in view is the current one (aria-current on its link).
-  useEffect(() => {
-    if (typeof IntersectionObserver === "undefined") return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-        if (visible) setSection(visible.target.id);
-      },
-      { rootMargin: "-20% 0px -60% 0px" },
-    );
-    for (const { id } of SECTIONS) {
-      const element = document.getElementById(id);
-      if (element) observer.observe(element);
-    }
-    return () => observer.disconnect();
   }, []);
 
   // Ctrl K / ⌘K anywhere; ? for the shortcuts unless typing.
@@ -138,23 +120,26 @@ export function AppHeader({
           scrolled ? "border-zinc-200/80 shadow-[0_1px_12px_-6px_rgb(0_0_0/0.12)] dark:border-zinc-800/80" : "border-transparent"
         }`}
       >
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-4 sm:gap-3 sm:px-6">
-          <Link to="/" aria-label="SkoLab home" className="shrink-0 rounded-lg">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-2 px-4 sm:gap-x-3 sm:px-6 md:h-14 md:flex-nowrap">
+          <Link to="/documents" aria-label="SkoLab home" className="flex h-14 shrink-0 items-center rounded-lg">
             <Logo className="text-zinc-900 dark:text-white" />
           </Link>
 
-          <nav aria-label="Sections" className="ml-2 hidden items-center gap-1 md:flex">
-            {SECTIONS.map(({ id, label }) => (
-              <a
-                key={id}
-                href={`#${id}`}
-                aria-current={section === id ? "location" : undefined}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                  section === id ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white" : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
-                }`}
+          {/* Beside the logo on wider screens; on a phone, a row of its own under the bar. */}
+          <nav aria-label="Pages" className="order-last -mx-1 grid w-full grid-cols-2 gap-1 pb-2 md:order-none md:mx-0 md:ml-2 md:flex md:w-auto md:pb-0">
+            {PAGES.map(({ to, label }) => (
+              // NavLink marks the current page (aria-current="page").
+              <NavLink
+                key={to}
+                to={to}
+                className={({ isActive }) =>
+                  `rounded-lg px-3 py-1.5 text-center text-sm font-medium transition-colors ${
+                    isActive ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white" : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
+                  }`
+                }
               >
                 {label}
-              </a>
+              </NavLink>
             ))}
           </nav>
 

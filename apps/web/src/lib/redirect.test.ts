@@ -19,6 +19,8 @@ describe("safeNext", () => {
 describe("signInPath", () => {
   it("only adds next when it leads somewhere", () => {
     expect(signInPath("/")).toBe("/sign-in");
+    expect(signInPath("/documents")).toBe("/sign-in");
+    expect(signInPath("/templates")).toBe("/sign-in?next=%2Ftemplates");
     expect(signInPath("/workspaces/1?x=1")).toBe("/sign-in?next=%2Fworkspaces%2F1%3Fx%3D1");
   });
 });

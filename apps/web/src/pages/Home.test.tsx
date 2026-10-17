@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { forgetPreviews } from "../components/PreviewImage";
 import { TEST_TEMPLATES } from "../test/fakeBackend";
 import { renderApp, stubBackend } from "../test/renderApp";
 import { writeZip } from "../test/zip";
@@ -16,7 +17,7 @@ describe("home", () => {
     });
     expect(await screen.findByRole("alert")).toHaveTextContent("couldn't finish setting up");
     await user.click(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByText(/You're all set/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText(/couldn't finish setting up/)).not.toBeInTheDocument());
     expect(screen.getByText("AL")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Account" }));
@@ -28,23 +29,32 @@ describe("home", () => {
 describe("home documents and templates", () => {
   const ADA = "google-ada";
 
-  async function openHome() {
-    return renderApp("/", async (auth) => {
+  async function openHome(path = "/") {
+    return renderApp(path, async (auth) => {
       await auth.signInWithGoogle();
     });
+  }
+
+  /** Object URLs for preview pictures, which jsdom does not make. */
+  function stubObjectUrls() {
+    forgetPreviews();
+    const made: Blob[] = [];
+    vi.spyOn(URL, "createObjectURL").mockImplementation((blob) => `blob:test/${made.push(blob as Blob)}`);
+    return made;
   }
 
   it("starts a document from a template and opens it in the editor", async () => {
     const { backend } = stubBackend(() => Response.json({ status: "error", errors: ["x"] }));
     const { user } = await openHome();
-    expect(await screen.findByText("No documents yet. Start one from a template below.")).toBeInTheDocument();
+    expect(await screen.findByText("No documents yet")).toBeInTheDocument();
+    await user.click(screen.getByRole("link", { name: "Choose a template" }));
     expect(await screen.findAllByRole("button", { name: /^Use the / })).toHaveLength(TEST_TEMPLATES.length);
 
     await user.click(screen.getByRole("button", { name: "Chemistry" }));
     expect(screen.getByRole("button", { name: "Chemistry" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getAllByRole("button", { name: /^Use the / })).toHaveLength(1);
     expect(screen.getByText("Journal of the American Chemical Society")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "source" })).toHaveAttribute("href", "https://ctan.org/pkg/achemso");
+    expect(screen.getByRole("link", { name: "The ACS Journal (achemso) template's source" })).toHaveAttribute("href", "https://ctan.org/pkg/achemso");
 
     await user.click(screen.getByRole("button", { name: "Use the ACS Journal (achemso) template" }));
     expect(await screen.findByDisplayValue("ACS Journal (achemso)", {}, { timeout: 5000 })).toBeInTheDocument();
@@ -65,7 +75,7 @@ describe("home documents and templates", () => {
     const links = await screen.findAllByRole("link", { name: /Old notes|Thesis|Grace/ });
     expect(links.map((link) => link.textContent)).toEqual(["Thesis", "Grace's paper", "Old notes"]);
     const shared = links[1]?.closest("li");
-    expect(shared && within(shared).getByText(/Can view · created/)).toBeInTheDocument();
+    expect(shared && within(shared).getByText("Can view")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Delete Grace's paper" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Delete Old notes" }));
@@ -99,16 +109,18 @@ describe("home documents and templates", () => {
     backend.failNext("GET", /^\/api\/v1\/templates$/, { status: 503, body: { code: "unavailable", error: "down" } });
     const { user } = await openHome();
     expect(await screen.findByText(/We couldn't load your documents/)).toBeInTheDocument();
-    expect(screen.getByText(/We couldn't load the templates/)).toBeInTheDocument();
-    await user.click(screen.getAllByRole("button", { name: "Retry" })[0] as HTMLElement);
-    expect(await screen.findByText("No documents yet. Start one from a template below.")).toBeInTheDocument();
+    await user.click(screen.getByRole("link", { name: "Templates" }));
+    expect(await screen.findByText(/We couldn't load the templates/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findAllByRole("button", { name: /^Use the / })).toHaveLength(TEST_TEMPLATES.length);
+    await user.click(screen.getByRole("link", { name: "Documents" }));
+    expect(await screen.findByText("No documents yet")).toBeInTheDocument();
   });
 
   it("explains a start that failed, and removes the half-made document", async () => {
     const { backend } = stubBackend();
     backend.failNext("PUT", /document$/, { status: 503, body: { code: "unavailable", error: "down" } });
-    const { user } = await openHome();
+    const { user } = await openHome("/templates");
     await user.click(await screen.findByRole("button", { name: "Use the Nature template" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("We couldn't create the document. Try again.");
     await waitFor(() => expect(backend.titles()).toEqual([]));
@@ -123,8 +135,10 @@ describe("home documents and templates", () => {
       "fetch",
       vi.fn((url: string) => (url.includes("/profile/") ? Promise.resolve(Response.json({ status: "synced", uid: "x" })) : Promise.reject(new TypeError("Failed to fetch")))),
     );
-    await openHome();
-    expect(await screen.findAllByText(/couldn't reach SkoLab/)).toHaveLength(2);
+    const { user } = await openHome();
+    expect(await screen.findAllByText(/couldn't reach SkoLab/)).toHaveLength(1);
+    await user.click(screen.getByRole("link", { name: "Templates" }));
+    expect(await screen.findAllByText(/couldn't reach SkoLab/)).toHaveLength(1);
   });
 
   it("uploads a project zip, opens it, and lists what it left out", async () => {
@@ -176,19 +190,88 @@ describe("home documents and templates", () => {
     expect(backend.titles()).toEqual([]);
   });
 
-  it("offers the three ways in from the Upload project menu", async () => {
+  it("offers every way in from the one New menu, on either page", async () => {
     stubBackend();
-    const { user } = await openHome();
-    await user.click(await screen.findByRole("button", { name: "Upload project" }));
-    const menu = screen.getByRole("menu", { name: "Upload a project" });
+    const { user } = await openHome("/templates");
+    await screen.findByRole("heading", { name: "Journal templates" });
+    // No second set of start buttons on the page: New is the one place.
+    expect(screen.queryByRole("button", { name: "Upload project" })).not.toBeInTheDocument();
+    const picker = screen.getByLabelText("Choose a project folder to upload");
+    expect(picker).toHaveAttribute("webkitdirectory");
+    const opened = vi.spyOn(picker, "click");
+    await user.click(screen.getByRole("button", { name: "New" }));
+    const menu = screen.getByRole("menu", { name: "Create a document" });
     expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
-      ".zip archiveFrom Overleaf, GitHub or anywhere else",
-      "FolderA project folder on your computer",
-      ".tex filesOne or more, with their .bib and figures",
+      expect.stringContaining("Blank document"),
+      expect.stringContaining("From a journal template"),
+      expect.stringContaining("Upload a .zip"),
+      expect.stringContaining("Upload a folder"),
+      expect.stringContaining("Upload .tex files"),
     ]);
-    expect(screen.getByLabelText("Choose a project folder to upload")).toHaveAttribute("webkitdirectory");
-    await user.keyboard("{Escape}");
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    await user.click(within(menu).getByRole("menuitem", { name: /Upload a folder/ }));
+    expect(opened).toHaveBeenCalledOnce();
+
+    await user.click(screen.getByRole("link", { name: "Documents" }));
+    await user.click(await screen.findByRole("button", { name: "New" }));
+    await user.click(within(screen.getByRole("menu", { name: "Create a document" })).getByRole("menuitem", { name: /From a journal template/ }));
+    expect(await screen.findByRole("heading", { name: "Journal templates" })).toBeInTheDocument();
+  });
+
+  it("shows each document's first page, authors, last edit, words and progress", async () => {
+    const { backend } = stubBackend();
+    const made = stubObjectUrls();
+    backend.setName(ADA, "Ada Lovelace");
+    backend.setName("grace", "Grace Hopper");
+    backend.setName("alan", "Alan Turing");
+    const source = String.raw`\documentclass{article}\title{Engines}\begin{document}\section{Introduction}One two three four five.\end{document}`;
+    const paper = backend.seed(ADA, "Analytical engines", { source, members: { grace: "editor", alan: "viewer" } });
+    backend.compiled(paper);
+    backend.seed(ADA, "Fresh draft", { source: "" });
+    const { user } = await openHome();
+
+    const card = (await screen.findByRole("link", { name: "Analytical engines" })).closest("li") as HTMLElement;
+    expect(await within(card).findByRole("img", { name: "First page of Analytical engines" })).toHaveAttribute("src", "blob:test/1");
+    expect(made).toHaveLength(1);
+    const asked = backend.requests.filter((request) => request.url.includes("/preview.jpg"));
+    expect(asked).toHaveLength(1);
+    expect(asked[0]?.url).toContain(`/api/v1/workspaces/${paper}/preview.jpg?at=`);
+    expect(asked[0]?.headers.authorization ?? asked[0]?.headers.Authorization).toBe(`Bearer fake-token:${ADA}`);
+
+    expect(within(card).getByText("Ada Lovelace, Grace Hopper and 1 other")).toBeInTheDocument();
+    expect(within(card).getByText(/^Edited/)).toHaveTextContent(/by Ada Lovelace$/);
+    expect(within(card).getByText(/^\d+ words$/)).toBeInTheDocument();
+    expect(within(card).getByRole("progressbar", { name: "Manuscript progress" })).toHaveAttribute("aria-valuenow", expect.stringMatching(/^\d+$/));
+
+    // Never compiled: no request, and the card says how to get a picture.
+    const fresh = screen.getByRole("link", { name: "Fresh draft" }).closest("li") as HTMLElement;
+    expect(within(fresh).getByText("Compile to see the first page")).toBeInTheDocument();
+    expect(within(fresh).queryByRole("img")).not.toBeInTheDocument();
+
+    // Going to Templates and back shows the kept picture without asking again.
+    await user.click(screen.getByRole("link", { name: "Templates" }));
+    expect(await screen.findAllByRole("img", { name: /^First page of the .* template$/ })).toHaveLength(TEST_TEMPLATES.length);
+    await user.click(screen.getByRole("link", { name: "Documents" }));
+    expect(await screen.findByRole("img", { name: "First page of Analytical engines" })).toBeInTheDocument();
+    expect(backend.requests.filter((request) => request.url.includes("/workspaces/") && request.url.includes("/preview.jpg"))).toHaveLength(1);
+  });
+
+  it("falls back to a drawing when a preview cannot be fetched", async () => {
+    const { backend } = stubBackend();
+    stubObjectUrls();
+    const paper = backend.seed(ADA, "Broken picture", { source: "x" });
+    backend.compiled(paper);
+    backend.failNext("GET", /preview\.jpg$/, { status: 404, body: { code: "no_preview", error: "none" } });
+    await openHome();
+    const card = (await screen.findByRole("link", { name: "Broken picture" })).closest("li") as HTMLElement;
+    expect(await within(card).findByText("Preview unavailable")).toBeInTheDocument();
+    expect(within(card).queryByRole("img")).not.toBeInTheDocument();
+  });
+
+  it("keeps the template filter in the address", async () => {
+    stubBackend();
+    await openHome("/templates?field=mathematics");
+    expect(await screen.findByRole("button", { name: "Mathematics" })).toHaveAttribute("aria-pressed", "true");
+    expect(await screen.findAllByRole("button", { name: /^Use the / })).toHaveLength(TEST_TEMPLATES.filter((template) => template.domain === "mathematics").length);
   });
 
   it("uploads a whole folder, leaving out build output and version control", async () => {

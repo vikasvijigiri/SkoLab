@@ -15,7 +15,8 @@ describe("route guards", () => {
       await withAccount(auth);
       await auth.signInWithEmail("grace@example.com", "correct horse 42");
     });
-    expect(await screen.findByRole("heading", { name: "Welcome, Grace Hopper" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Your documents" })).toBeInTheDocument();
+    expect(screen.getByText(/, Grace Hopper$/)).toBeInTheDocument();
   });
 
   it("routes unverified accounts to verification, and verification away from everyone else", async () => {

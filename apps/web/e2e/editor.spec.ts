@@ -25,12 +25,13 @@ function stubCompile(backend: FakeBackend, answer: (call: number) => object = ()
 async function signIn(page: Page) {
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "Continue with Google" }).click();
-  await expect(page.getByRole("heading", { name: "Welcome, Ada Lovelace" })).toBeVisible();
+  await expect(page.getByText(/, Ada Lovelace$/)).toBeVisible();
 }
 
 test("a journal template opens in the editor, compiles, previews and saves to the account", async ({ page, profileCalls, backend, isMobile }) => {
   const calls = stubCompile(backend);
   await signIn(page);
+  await page.getByRole("link", { name: "Templates" }).click();
   await page.getByRole("button", { name: "Mathematics" }).click();
   await page.getByRole("button", { name: "Use the AMS Journal Article (amsart) template" }).click();
 
@@ -71,6 +72,7 @@ test("a journal template opens in the editor, compiles, previews and saves to th
 test("a co-author's save is not overwritten", async ({ page, profileCalls, backend, isMobile }) => {
   stubCompile(backend);
   await signIn(page);
+  await page.getByRole("link", { name: "Templates" }).click();
   await page.getByRole("button", { name: "Use the Nature template" }).click();
   await expect(page.getByRole("img", { name: "Page 1 of 1" })).toBeVisible();
   const id = new URL(page.url()).pathname.split("/").pop() ?? "";
@@ -91,7 +93,7 @@ test("a shared document opens read-only for a viewer", async ({ page, profileCal
   stubCompile(backend);
   const id = backend.seed("grace", "Grace's paper", { source: "\\documentclass{amsart}\n\\begin{document}\nShared\n\\end{document}\n", templateId: "ams-article", members: { "google-ada": "viewer" } });
   await signIn(page);
-  await expect(page.getByText("Can view · created")).toBeVisible();
+  await expect(page.getByText("Can view", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Grace's paper" }).click();
   await expect(page.getByRole("heading", { name: "Grace's paper" })).toBeVisible();
   await expect(page.getByText(/Ask its owner for edit access/)).toBeVisible();
@@ -110,6 +112,7 @@ test("compile errors point at their line", async ({ page, profileCalls, backend,
       : { status: "error", errors: ["line 2: Undefined control sequence."], log: "./main.tex:2: Undefined control sequence." },
   );
   await signIn(page);
+  await page.getByRole("link", { name: "Templates" }).click();
   await page.getByRole("button", { name: "Use the ACS Journal (achemso) template" }).click();
   await expect(page.getByRole("img", { name: "Page 1 of 1" })).toBeVisible();
   await page.getByRole("button", { name: "Compile", exact: true }).click();
@@ -125,7 +128,10 @@ for (const scheme of ["light", "dark"] as const) {
     stubCompile(backend);
     await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
     await signIn(page);
-    await expect(page.getByText("You're all set")).toBeVisible();
+    await expect.poll(() => profileCalls.length).toBeGreaterThan(0);
+    await expect(page.getByRole("heading", { name: "Your documents" })).toBeVisible();
+    await expectAccessible(page);
+    await page.getByRole("link", { name: "Templates" }).click();
     await expect(page.getByRole("button", { name: /^Use the / })).toHaveCount(4);
     await expectAccessible(page);
     await page.getByRole("button", { name: "Use the APS Physical Review (REVTeX 4.2) template" }).click();
@@ -139,6 +145,8 @@ test("the editor fits a phone screen", async ({ page, isMobile, profileCalls, ba
   test.skip(!isMobile, "phone layout only");
   stubCompile(backend);
   await signIn(page);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole("link", { name: "Templates" }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.getByRole("button", { name: "Use the Nature template" }).click();
   await expect(page.getByRole("img", { name: "Page 1 of 1" })).toBeVisible();
@@ -194,7 +202,7 @@ test("the overview shows progress, and a co-author joins through an invite link"
   await grace.getByRole("button", { name: "Create account" }).click();
   await verifyEmail(grace, "grace@example.com");
   await grace.getByRole("button", { name: "I've verified my email" }).click();
-  await expect(grace.getByRole("heading", { name: "Welcome, Grace Hopper" })).toBeVisible();
+  await expect(grace.getByText(/, Grace Hopper$/)).toBeVisible();
 
   await grace.goto(link);
   await expect(grace.getByRole("heading", { name: "Spin waves" })).toBeVisible();
@@ -322,9 +330,9 @@ test("a project zip uploaded at home opens in the editor", async ({ page, backen
     { name: "figures/plot.png", data: new Uint8Array(PNG) },
     { name: "notes.docx", data: new TextEncoder().encode("PK") },
   ]);
-  await page.getByRole("button", { name: "Upload project" }).click();
+  await page.getByRole("button", { name: "New" }).click();
   const chooser = page.waitForEvent("filechooser");
-  await page.getByRole("menuitem", { name: /^\.zip archive/ }).click();
+  await page.getByRole("menuitem", { name: /Upload a \.zip/ }).click();
   await (await chooser).setFiles({ name: "Spin waves.zip", mimeType: "application/zip", buffer: Buffer.from(zip) });
   await expect(page).toHaveURL(/\/editor\/[0-9a-f-]{36}$/);
   await expect(page.getByLabel("Document title")).toHaveValue("Spin waves");
@@ -336,9 +344,9 @@ test("a project zip uploaded at home opens in the editor", async ({ page, backen
 test("loose .tex files upload in the browser, asking which one is the main document", async ({ page, backend }) => {
   stubCompile(backend);
   await signIn(page);
-  await page.getByRole("button", { name: "Upload project" }).click();
+  await page.getByRole("button", { name: "New" }).click();
   const chooser = page.waitForEvent("filechooser");
-  await page.getByRole("menuitem", { name: /^\.tex files/ }).click();
+  await page.getByRole("menuitem", { name: /Upload \.tex files/ }).click();
   await (await chooser).setFiles([
     { name: "paper.tex", mimeType: "text/x-tex", buffer: Buffer.from(MANUSCRIPT) },
     { name: "talk.tex", mimeType: "text/x-tex", buffer: Buffer.from(MANUSCRIPT) },

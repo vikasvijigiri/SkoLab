@@ -13,6 +13,28 @@ export interface Workspace {
   created_at: string;
 }
 
+/** Someone named on a document card. */
+export interface Person {
+  id: string;
+  display_name: string;
+  role?: Role;
+}
+
+/** A workspace as the documents page lists it, with what its card shows. */
+export interface WorkspaceCard extends Workspace {
+  /** The owner, then active members in the order they joined (at most 8). */
+  authors: Person[];
+  authors_total: number;
+  /** The latest edit to main.tex or any project file; null before the first. */
+  updated_at: string | null;
+  updated_by: Person | null;
+  words: number;
+  /** 0-100, from the manuscript checklist. */
+  progress: number;
+  /** When set, the first page is at /workspaces/{id}/preview.jpg. */
+  compiled_at: string | null;
+}
+
 export const DOMAINS = ["physics", "chemistry", "mathematics", "biology"] as const;
 export type Domain = (typeof DOMAINS)[number];
 
@@ -37,6 +59,8 @@ export interface TemplateSummary {
   source_url: string;
   /** Bytes of LaTeX source. */
   size: number;
+  /** The compiled first page: an API path to a JPEG that never changes. */
+  preview: string;
 }
 
 export interface Template extends TemplateSummary {
