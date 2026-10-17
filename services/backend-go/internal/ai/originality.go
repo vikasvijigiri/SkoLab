@@ -20,13 +20,19 @@ import (
 
 const (
 	shingleSize = 5
-	// A sentence counts as matched when this share of its five-word runs
+	// A sentence counts as copied when this share of its five-word runs
 	// appears in one work.
 	matchThreshold = 0.5
-	minWords       = 30 // below this there is too little prose to judge
-	probeWords     = 10 // words of a sentence sent as a search query
-	minProbeWords  = 12 // sentences shorter than this make poor queries
-	minMatchWords  = 8  // sentences shorter than this are not scored
+	// A sentence counts as edited from a work (words swapped or reordered
+	// here and there) when both hold for that work: this share of its
+	// three-word runs appears, and this share of its content words.
+	editedRuns      = 0.3
+	editedContent   = 0.7
+	minContentWords = 6
+	minWords        = 30 // below this there is too little prose to judge
+	probeWords      = 10 // words of a sentence sent as a search query
+	minProbeWords   = 12 // sentences shorter than this make poor queries
+	minMatchWords   = 8  // sentences shorter than this are not scored
 )
 
 // Work is one search hit: a published work and the text compared against.
@@ -62,7 +68,8 @@ type Source struct {
 // Match is a sentence of the document found in a source.
 type Match struct {
 	Sentence string  `json:"sentence"`
-	Overlap  float64 `json:"overlap"` // share of the sentence's five-word runs found, 0..1
+	Kind     string  `json:"kind"`    // copied (word for word) or edited (lightly reworded)
+	Overlap  float64 `json:"overlap"` // copied: share of its five-word runs found; edited: share of its content words found
 	SourceID string  `json:"source_id"`
 	Excerpt  string  `json:"excerpt"` // the source's words around the match
 }
@@ -124,13 +131,15 @@ func Check(ctx context.Context, latex string, search Searcher, maxProbes int) (R
 	type candidate struct {
 		work     Work
 		words    []string
-		shingles map[string]int // shingle -> index of its first word
+		shingles map[string]int // five-word run -> index of its first word
+		triples  map[string]int // three-word run -> index of its first word
+		content  map[string]bool
 	}
 	candidates := make([]candidate, 0, len(order))
 	for _, id := range order {
 		w := works[id]
 		words := tokens(w.Title + ". " + w.Abstract)
-		candidates = append(candidates, candidate{w, words, shingles(words)})
+		candidates = append(candidates, candidate{w, words, runs(words, shingleSize), runs(words, 3), contentWords(words)})
 	}
 
 	sources := map[string]*Source{}
@@ -138,29 +147,48 @@ func Check(ctx context.Context, latex string, search Searcher, maxProbes int) (R
 		if len(s.words) < minMatchWords {
 			continue
 		}
-		mine := shingles(s.words)
-		best, bestShare, bestAt := -1, 0.0, 0
-		for i, c := range candidates {
+		mine, mineTriples, mineContent := runs(s.words, shingleSize), runs(s.words, 3), contentWords(s.words)
+		share := func(set map[string]int, in map[string]int) (float64, int) {
 			shared, first := 0, -1
-			for sh := range mine {
-				if at, ok := c.shingles[sh]; ok {
+			for key := range set {
+				if at, ok := in[key]; ok {
 					shared++
 					if first < 0 || at < first {
 						first = at
 					}
 				}
 			}
-			if share := float64(shared) / float64(len(mine)); share > bestShare {
-				best, bestShare, bestAt = i, share, first
+			return float64(shared) / float64(max(len(set), 1)), first
+		}
+		best, bestShare, bestAt, kind := -1, 0.0, 0, ""
+		for i, c := range candidates {
+			if v, at := share(mine, c.shingles); v >= matchThreshold && (kind != "copied" || v > bestShare) {
+				best, bestShare, bestAt, kind = i, v, at, "copied"
 			}
 		}
-		if best < 0 || bestShare < matchThreshold {
+		if kind == "" && len(mineContent) >= minContentWords {
+			for i, c := range candidates {
+				triple, at := share(mineTriples, c.triples)
+				found := 0
+				for w := range mineContent {
+					if c.content[w] {
+						found++
+					}
+				}
+				words := float64(found) / float64(len(mineContent))
+				if triple >= editedRuns && words >= editedContent && words > bestShare {
+					best, bestShare, bestAt, kind = i, words, at, "edited"
+				}
+			}
+		}
+		if best < 0 {
 			continue
 		}
 		c := candidates[best]
 		result.MatchedWords += len(s.words)
 		result.Matches = append(result.Matches, Match{
 			Sentence: s.text,
+			Kind:     kind,
 			Overlap:  math.Round(bestShare*100) / 100,
 			SourceID: c.work.ID,
 			Excerpt:  excerpt(c.words, bestAt, len(s.words)),
@@ -240,6 +268,46 @@ func query(words []string) string {
 		}
 	}
 	return strings.Join(words[best:best+probeWords], " ")
+}
+
+// stopwords are left out of content words: they say nothing about wording.
+var stopwords = map[string]bool{
+	"about": true, "above": true, "after": true, "again": true, "also": true, "been": true, "being": true, "both": true,
+	"does": true, "each": true, "from": true, "have": true, "here": true, "into": true, "more": true, "most": true,
+	"much": true, "only": true, "other": true, "over": true, "same": true, "some": true, "such": true, "than": true,
+	"that": true, "their": true, "them": true, "then": true, "there": true, "these": true, "they": true, "this": true,
+	"those": true, "through": true, "under": true, "very": true, "were": true, "what": true, "when": true, "where": true,
+	"which": true, "while": true, "with": true, "would": true, "your": true, "will": true, "shall": true, "should": true,
+	"could": true, "between": true, "within": true, "using": true, "used": true, "show": true, "shows": true, "shown": true,
+}
+
+// contentWords are the words of four or more letters that carry meaning.
+func contentWords(words []string) map[string]bool {
+	out := map[string]bool{}
+	for _, w := range words {
+		if len([]rune(w)) >= 4 && !stopwords[w] {
+			out[w] = true
+		}
+	}
+	return out
+}
+
+// runs maps every n-word run of words to where it first starts.
+func runs(words []string, n int) map[string]int {
+	out := map[string]int{}
+	if len(words) < n {
+		if len(words) > 0 {
+			out[strings.Join(words, " ")] = 0
+		}
+		return out
+	}
+	for i := 0; i+n <= len(words); i++ {
+		key := strings.Join(words[i:i+n], " ")
+		if _, seen := out[key]; !seen {
+			out[key] = i
+		}
+	}
+	return out
 }
 
 func shingles(words []string) map[string]int {

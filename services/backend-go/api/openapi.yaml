@@ -1382,10 +1382,11 @@ components:
         words: { type: integer, minimum: 1 }
     OriginalityMatch:
       type: object
-      required: [sentence, overlap, source_id, excerpt]
+      required: [sentence, kind, overlap, source_id, excerpt]
       properties:
         sentence: { type: string }
-        overlap: { type: number, minimum: 0, maximum: 1 }
+        kind: { type: string, enum: [copied, edited], description: "copied: word for word (five-word runs); edited: lightly reworded (three-word runs and content words)." }
+        overlap: { type: number, minimum: 0, maximum: 1, description: "copied: share of the sentence's five-word runs found; edited: share of its content words found." }
         source_id: { type: string }
         excerpt: { type: string }
     OriginalityResult:
