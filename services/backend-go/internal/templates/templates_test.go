@@ -240,7 +240,10 @@ func TestPreviewRefusals(t *testing.T) {
 		"/api/v1/templates/nope/preview.jpg":              http.StatusNotFound,
 		"/api/v1/templates/nature/preview.jpg?x=1":        http.StatusBadRequest,
 		"/api/v1/templates/nature/preview.jpg?v=1&v=2":    http.StatusBadRequest,
-		"/api/v1/templates/nature/preview.jpg?v=anything": http.StatusOK,
+		"/api/v1/templates/nature/preview.jpg?v=anything":         http.StatusBadRequest,
+		"/api/v1/templates/nature/preview.jpg?v=0123456789ABCDEF": http.StatusBadRequest,
+		"/api/v1/templates/nature/preview.jpg?v=0123456789abcdef": http.StatusOK,
+		"/api/v1/templates/nature/preview.jpg":                    http.StatusOK,
 	} {
 		if got := serve(t, "GET", path, nil); got.Code != want {
 			t.Errorf("%s: %d", path, got.Code)

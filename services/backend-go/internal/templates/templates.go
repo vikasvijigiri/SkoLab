@@ -131,6 +131,21 @@ func Register(group *gin.RouterGroup) {
 // preview answers a template's preview image. The path carries the image's
 // version (?v=), so a browser may keep it for a year; any other parameter is
 // refused, as everywhere in the API.
+// isVersion reports whether v has the shape of a preview version (16
+// lower-case hex digits). Any such version gets the current picture, so an
+// old link still shows the template.
+func isVersion(v string) bool {
+	if len(v) != 16 {
+		return false
+	}
+	for _, r := range v {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
 func preview(c *gin.Context) {
 	for name, values := range c.Request.URL.Query() {
 		if name != "v" {
@@ -139,6 +154,10 @@ func preview(c *gin.Context) {
 		}
 		if len(values) > 1 {
 			apierror.Abort(c, http.StatusBadRequest, "duplicate_parameter", "Query parameter given more than once: "+name)
+			return
+		}
+		if !isVersion(values[0]) {
+			apierror.Abort(c, http.StatusBadRequest, "invalid_version", "v is the 16-hex version from the preview URL")
 			return
 		}
 	}
