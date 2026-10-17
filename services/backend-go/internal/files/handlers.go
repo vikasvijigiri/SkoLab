@@ -224,9 +224,11 @@ func (h handlers) list(c *gin.Context) {
 }
 
 type createRequest struct {
-	Path    *string `json:"path"`
-	Kind    string  `json:"kind"`
-	Content *string `json:"content"`
+	Path *string `json:"path"`
+	Kind string  `json:"kind"`
+	// Raw, so an explicit null is told apart from no content at all: the
+	// spec allows a string or nothing, and null is refused, not guessed at.
+	Content json.RawMessage `json:"content"`
 }
 
 func (h handlers) create(c *gin.Context) {
@@ -241,7 +243,16 @@ func (h handlers) create(c *gin.Context) {
 		}
 		return
 	}
-	if req.Path == nil || (req.Kind != KindText && req.Kind != KindFolder) || (req.Kind == KindFolder && req.Content != nil) {
+	var content *string
+	if len(req.Content) > 0 {
+		var text string
+		if err := json.Unmarshal(req.Content, &text); err != nil || string(req.Content) == "null" {
+			fail(c, http.StatusBadRequest, "invalid_body", "content must be a string")
+			return
+		}
+		content = &text
+	}
+	if req.Path == nil || (req.Kind != KindText && req.Kind != KindFolder) || (req.Kind == KindFolder && content != nil) {
 		fail(c, http.StatusBadRequest, "invalid_body", `Request body must be JSON with path and kind ("text" or "folder")`)
 		return
 	}
@@ -253,12 +264,12 @@ func (h handlers) create(c *gin.Context) {
 		}
 		f = NewFile{Path: *req.Path, Kind: KindFolder}
 	} else {
-		content := ""
-		if req.Content != nil {
-			content = *req.Content
+		text := ""
+		if content != nil {
+			text = *content
 		}
 		var err error
-		if f, err = newText(*req.Path, content); err != nil {
+		if f, err = newText(*req.Path, text); err != nil {
 			fileError(c, err)
 			return
 		}
