@@ -9,13 +9,15 @@ import { NotFound } from "./pages/NotFound";
 import { SignIn } from "./pages/SignIn";
 import { SignUp } from "./pages/SignUp";
 import { VerifyEmail } from "./pages/VerifyEmail";
-import { GuestOnly, RequireAccount, RequireUnverified } from "./routes";
+import { GuestOnly, RequireAccount, RequireUnverified, ToDocuments } from "./routes";
 
 // The editor (CodeMirror, pdf.js) loads only when a document is opened, and
-// Home (documents, templates, header) only once someone is signed in, so the
+// the signed-in shell and its pages only once someone is signed in, so the
 // sign-in pages stay small.
 const Editor = lazy(() => import("./pages/Editor").then((m) => ({ default: m.Editor })));
 const Home = lazy(() => import("./pages/Home").then((m) => ({ default: m.Home })));
+const Documents = lazy(() => import("./pages/Documents").then((m) => ({ default: m.Documents })));
+const Templates = lazy(() => import("./pages/Templates").then((m) => ({ default: m.Templates })));
 
 export const routes: RouteObject[] = [
   {
@@ -32,13 +34,33 @@ export const routes: RouteObject[] = [
   {
     element: <RequireAccount />,
     children: [
+      { path: "/", element: <ToDocuments /> },
       {
-        path: "/",
+        // Documents and Templates are pages of their own inside one shell
+        // (header, uploads, search), which loads what both need once.
         element: (
           <Suspense fallback={<FullPageLoader label="Loading your documents" />}>
             <Home />
           </Suspense>
         ),
+        children: [
+          {
+            path: "/documents",
+            element: (
+              <Suspense fallback={null}>
+                <Documents />
+              </Suspense>
+            ),
+          },
+          {
+            path: "/templates",
+            element: (
+              <Suspense fallback={null}>
+                <Templates />
+              </Suspense>
+            ),
+          },
+        ],
       },
       {
         path: "/editor/:id",

@@ -8,19 +8,29 @@ async function openHome() {
   const view = await renderApp("/", async (auth) => {
     await auth.signInWithGoogle();
   });
-  await screen.findByRole("heading", { name: /Welcome/ });
+  await screen.findByRole("heading", { name: "Your documents" });
   return view;
 }
 
 describe("app header", () => {
-  it("has a skip link, section navigation and a home link", async () => {
+  it("has a skip link, page navigation and a home link", async () => {
     stubBackend();
-    await openHome();
+    const { user } = await openHome();
     expect(screen.getByRole("link", { name: "Skip to content" })).toHaveAttribute("href", "#main");
-    expect(screen.getByRole("link", { name: "SkoLab home" })).toHaveAttribute("href", "/");
-    const nav = screen.getByRole("navigation", { name: "Sections" });
-    expect(within(nav).getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual(["#documents-heading", "#templates-heading"]);
-    expect(within(nav).getByRole("link", { name: "Documents" })).toHaveAttribute("aria-current", "location");
+    expect(screen.getByRole("link", { name: "SkoLab home" })).toHaveAttribute("href", "/documents");
+    const nav = screen.getByRole("navigation", { name: "Pages" });
+    expect(within(nav).getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual(["/documents", "/templates"]);
+    expect(within(nav).getByRole("link", { name: "Documents" })).toHaveAttribute("aria-current", "page");
+
+    // Each is a page of its own: one heading, the other page's content gone.
+    await user.click(within(nav).getByRole("link", { name: "Templates" }));
+    expect(await screen.findByRole("heading", { level: 1, name: "Journal templates" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Your documents" })).not.toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "Templates" })).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getByRole("link", { name: "Documents" })).not.toHaveAttribute("aria-current");
+    await user.click(screen.getByRole("link", { name: "SkoLab home" }));
+    expect(await screen.findByRole("heading", { level: 1, name: "Your documents" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Journal templates" })).not.toBeInTheDocument();
   });
 
   it("shows unread activity, marks it read when opened, and links to the document", async () => {

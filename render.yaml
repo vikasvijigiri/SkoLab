@@ -118,7 +118,7 @@ services:
     headers:
       - path: /*
         name: Content-Security-Policy
-        value: "default-src 'self'; script-src 'self' https://apis.google.com; style-src 'self'; img-src 'self' data: https://*.googleusercontent.com; font-src 'self'; connect-src 'self' https://skolab-api.onrender.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com; frame-src https://*.firebaseapp.com https://accounts.google.com; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+        value: "default-src 'self'; script-src 'self' https://apis.google.com; style-src 'self'; img-src 'self' data: blob: https://*.googleusercontent.com; font-src 'self'; connect-src 'self' https://skolab-api.onrender.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com; frame-src https://*.firebaseapp.com https://accounts.google.com; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
       - path: /*
         name: Strict-Transport-Security
         value: "max-age=63072000; includeSubDomains"

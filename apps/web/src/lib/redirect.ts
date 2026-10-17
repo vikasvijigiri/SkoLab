@@ -15,7 +15,10 @@ export function safeNext(raw: string | null | undefined): string {
   }
 }
 
+/** Where "/" leads once signed in: no ?next= is needed to come back to it. */
+export const isHome = (path: string) => path === "/" || path === "/documents";
+
 /** Builds a sign-in link that returns to path afterwards. */
 export function signInPath(next: string): string {
-  return next === "/" ? "/sign-in" : `/sign-in?next=${encodeURIComponent(next)}`;
+  return isHome(next) ? "/sign-in" : `/sign-in?next=${encodeURIComponent(next)}`;
 }

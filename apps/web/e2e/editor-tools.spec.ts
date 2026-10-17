@@ -24,7 +24,7 @@ async function openPaper(page: Page, backend: FakeBackend, files: Record<string,
   for (const [path, content] of Object.entries(files)) backend.addFile(id, path, content);
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "Continue with Google" }).click();
-  await expect(page.getByRole("heading", { name: /^Welcome/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your documents" })).toBeVisible();
   await page.goto(`/editor/${id}`);
   await expect(page.getByRole("img", { name: "Page 1 of 1" })).toBeVisible();
   return { id, source: page.getByRole("textbox", { name: "LaTeX source" }) };

@@ -2,7 +2,7 @@ import { Navigate, Outlet, useLocation, useSearchParams } from "react-router";
 import { useAuth } from "./auth/AuthProvider";
 import { needsVerification } from "./auth/types";
 import { FullPageLoader } from "./components/Spinner";
-import { safeNext, signInPath } from "./lib/redirect";
+import { isHome, safeNext, signInPath } from "./lib/redirect";
 
 /** Signed-out pages. A signed-in visitor goes where they were headed. */
 export function GuestOnly() {
@@ -24,8 +24,14 @@ export function RequireAccount() {
   if (status === "loading") return <FullPageLoader />;
   const here = location.pathname + location.search + location.hash;
   if (!user) return <Navigate to={signInPath(here)} replace />;
-  if (needsVerification(user)) return <Navigate to={`/verify-email${here === "/" ? "" : `?next=${encodeURIComponent(here)}`}`} replace />;
+  if (needsVerification(user)) return <Navigate to={`/verify-email${isHome(here) ? "" : `?next=${encodeURIComponent(here)}`}`} replace />;
   return <Outlet />;
+}
+
+/** "/" is the documents page; a query or fragment comes along. */
+export function ToDocuments() {
+  const { search, hash } = useLocation();
+  return <Navigate to={{ pathname: "/documents", search, hash }} replace />;
 }
 
 /** The verify-email step: only for signed-in, unverified password accounts. */

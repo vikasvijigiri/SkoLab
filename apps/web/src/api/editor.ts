@@ -1,5 +1,5 @@
-import { apiRequest, ApiError } from "./client";
-import type { LatexDocument, Template, TemplateSummary, Workspace } from "./editorTypes";
+import { apiBlob, apiRequest, ApiError } from "./client";
+import type { LatexDocument, Template, TemplateSummary, Workspace, WorkspaceCard } from "./editorTypes";
 
 /**
  * The editor's API: workspaces (one LaTeX document each), the journal
@@ -15,13 +15,13 @@ function unexpected() {
 }
 
 /** The workspaces the caller owns or belongs to, newest first. Follows pages up to 500. */
-export async function listWorkspaces(token: string, signal?: AbortSignal): Promise<Workspace[]> {
-  const all: Workspace[] = [];
+export async function listWorkspaces(token: string, signal?: AbortSignal): Promise<WorkspaceCard[]> {
+  const all: WorkspaceCard[] = [];
   let pageToken = "";
   for (let page = 0; page < 5; page += 1) {
     const query = new URLSearchParams({ page_size: "100" });
     if (pageToken) query.set("page_token", pageToken);
-    const answer = await apiRequest<{ workspaces: Workspace[]; next_page_token: string }>(`/api/v1/workspaces?${query.toString()}`, {
+    const answer = await apiRequest<{ workspaces: WorkspaceCard[]; next_page_token: string }>(`/api/v1/workspaces?${query.toString()}`, {
       token,
       ...(signal ? { signal } : {}),
     });
@@ -31,6 +31,16 @@ export async function listWorkspaces(token: string, signal?: AbortSignal): Promi
     if (!pageToken) break;
   }
   return all;
+}
+
+/** A document's first page; the compile time keeps each picture's cache entry its own. */
+export function documentPreviewPath(card: Pick<WorkspaceCard, "id" | "compiled_at">): string | null {
+  return card.compiled_at ? `/api/v1/workspaces/${encodeURIComponent(card.id)}/preview.jpg?at=${encodeURIComponent(card.compiled_at)}` : null;
+}
+
+/** A preview picture (a document's or a template's) from an API path. */
+export function previewImage(token: string, path: string, signal?: AbortSignal): Promise<Blob> {
+  return apiBlob(path, { token, ...(signal ? { signal } : {}) });
 }
 
 export function getWorkspace(token: string, id: string, signal?: AbortSignal): Promise<Workspace> {

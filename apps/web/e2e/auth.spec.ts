@@ -16,14 +16,14 @@ test("a new user signs up, verifies, signs out and signs back in", async ({ page
 
   await verifyEmail(page, "grace@example.com");
   await page.getByRole("button", { name: "I've verified my email" }).click();
-  await expect(page.getByRole("heading", { name: "Welcome, Grace Hopper" })).toBeVisible();
-  await expect(page.getByText("You're all set")).toBeVisible();
+  await expect(page.getByText(/, Grace Hopper$/)).toBeVisible();
+  await expect.poll(() => profileCalls.length).toBeGreaterThan(0);
   expect(profileCalls).toEqual([
     { authorization: "Bearer fake-token:uid-grace@example.com", body: { uid: "uid-grace@example.com", name: "Grace Hopper" } },
   ]);
 
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Welcome, Grace Hopper" })).toBeVisible();
+  await expect(page.getByText(/, Grace Hopper$/)).toBeVisible();
 
   await page.getByRole("button", { name: "Account" }).click();
   await page.getByRole("menuitem", { name: "Sign out" }).click();
@@ -31,15 +31,15 @@ test("a new user signs up, verifies, signs out and signs back in", async ({ page
   await page.getByLabel("Email").fill("grace@example.com");
   await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
   await page.getByLabel("Password", { exact: true }).press("Enter");
-  await expect(page.getByRole("heading", { name: "Welcome, Grace Hopper" })).toBeVisible();
+  await expect(page.getByText(/, Grace Hopper$/)).toBeVisible();
 });
 
 test("a deep link survives signing in", async ({ page, profileCalls }) => {
-  await page.goto("/?tab=recent");
-  await expect(page).toHaveURL("/sign-in?next=%2F%3Ftab%3Drecent");
+  await page.goto("/templates?field=physics");
+  await expect(page).toHaveURL("/sign-in?next=%2Ftemplates%3Ffield%3Dphysics");
   await page.getByRole("button", { name: "Continue with Google" }).click();
-  await expect(page).toHaveURL("/?tab=recent");
-  await expect(page.getByRole("heading", { name: "Welcome, Ada Lovelace" })).toBeVisible();
+  await expect(page).toHaveURL("/templates?field=physics");
+  await expect(page.getByRole("button", { name: "Physics" })).toHaveAttribute("aria-pressed", "true");
   await expect.poll(() => profileCalls.length).toBe(1);
 });
 
@@ -111,7 +111,7 @@ for (const scheme of ["light", "dark"] as const) {
 
     await verifyEmail(page, `grace-${scheme}@example.com`);
     await page.getByRole("button", { name: "I've verified my email" }).click();
-    await expect(page.getByText("You're all set")).toBeVisible();
+    await expect.poll(() => profileCalls.length).toBeGreaterThan(0);
     await expectAccessible(page);
     expect(profileCalls).toHaveLength(1);
   });
