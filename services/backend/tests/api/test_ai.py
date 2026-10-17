@@ -234,3 +234,76 @@ class TestRoute:
                 "/api/v1/ai/improve", json=bad, headers=headers
             )
             assert response.status_code == 422, bad
+
+
+@pytest.fixture(autouse=True)
+def _fresh_replacements():
+    llm._replacements.clear()
+    yield
+    llm._replacements.clear()
+
+
+def _missing(code="model_not_found", status=404):
+    return httpx.Response(
+        status,
+        json={
+            "error": {"message": "gone", "type": "invalid_request_error", "code": code}
+        },
+    )
+
+
+def _models(*ids):
+    return httpx.Response(
+        200,
+        json={
+            "data": [{"id": i, "active": True} for i in ids]
+            + [{"id": "retired-one", "active": False}]
+        },
+    )
+
+
+async def test_a_retired_model_is_replaced_by_the_best_available_and_remembered():
+    seen: list[httpx.Request] = []
+    async with _client(
+        _missing(),
+        _models(
+            "whisper-large-v3", "qwen/qwen3-32b", "openai/gpt-oss-120b", "retired-one"
+        ),
+        _chat('{"edits": []}', model="openai/gpt-oss-120b"),
+        _chat('{"edits": []}', model="openai/gpt-oss-120b"),
+        seen=seen,
+    ) as client:
+        first = await llm.improve("Text.", "clarity", client=client)
+        second = await llm.improve("Text.", "clarity", client=client)
+    assert first.model == second.model == "openai/gpt-oss-120b"
+    assert [r.method for r in seen] == ["POST", "GET", "POST", "POST"]
+    assert json.loads(seen[2].content)["model"] == "openai/gpt-oss-120b"
+    assert json.loads(seen[3].content)["model"] == "openai/gpt-oss-120b"
+
+
+async def test_a_decommissioned_answer_also_switches_models():
+    async with _client(
+        _missing("model_decommissioned", 400),
+        _models("llama-3.1-8b-instant"),
+        _chat('{"edits": []}'),
+    ) as client:
+        await llm.improve("Text.", "clarity", client=client)
+    assert llm._replacements[llm.DEFAULT_MODEL] == "llama-3.1-8b-instant"
+
+
+async def test_without_a_usable_model_the_assistant_is_unavailable():
+    async with _client(_missing(), _models("whisper-large-v3")) as client:
+        with pytest.raises(llm.LLMUnavailable):
+            await llm.improve("Text.", "clarity", client=client)
+    async with _client(_missing(), httpx.Response(500)) as client:
+        with pytest.raises(llm.LLMUnavailable):
+            await llm.improve("Text.", "clarity", client=client)
+    assert llm._replacements == {}
+
+
+async def test_an_ordinary_bad_request_does_not_switch_models():
+    seen: list[httpx.Request] = []
+    async with _client(_missing("invalid_value", 400), seen=seen) as client:
+        with pytest.raises(llm.LLMUnavailable):
+            await llm.improve("Text.", "clarity", client=client)
+    assert [r.method for r in seen] == ["POST"]
