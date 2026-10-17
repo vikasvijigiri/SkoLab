@@ -8,7 +8,10 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/skolab/backend-go/internal/manuscript"
 )
 
 // Integration tests against the real schema. CI provides TEST_DATABASE_URL
@@ -22,7 +25,13 @@ func testPool(t *testing.T) *pgxpool.Pool {
 		}
 		t.Skip("TEST_DATABASE_URL not set")
 	}
-	pool, err := pgxpool.New(context.Background(), url)
+	config, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// As in production (internal/db), where the pooler forbids prepared statements.
+	config.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
+	pool, err := pgxpool.NewWithConfig(context.Background(), config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,5 +218,80 @@ func TestPostgres_DatabaseRefusesOversizedSource(t *testing.T) {
 		"INSERT INTO workspace_documents (workspace_id, source, version, updated_at) VALUES ($1, $2, 1, now())", ws, string(big))
 	if err == nil {
 		t.Fatal("the CHECK constraint must refuse a source over 100,000 characters")
+	}
+}
+
+const statsSource = `\documentclass{article}
+\title{On Cards}
+\begin{document}
+\maketitle
+\begin{abstract}A short abstract about cards.\end{abstract}
+\section{Introduction}
+Documents show their facts before they are opened.
+\end{document}
+`
+
+func storedStats(t *testing.T, pool *pgxpool.Pool, ws string) (words, progress, version int) {
+	t.Helper()
+	if err := pool.QueryRow(context.Background(), "SELECT words, progress, stats_version FROM workspace_documents WHERE workspace_id = $1", ws).
+		Scan(&words, &progress, &version); err != nil {
+		t.Fatal(err)
+	}
+	return
+}
+
+func TestPostgres_SavesKeepTheDocumentsStats(t *testing.T) {
+	pool := testPool(t)
+	store, ctx := NewPostgresStore(pool), context.Background()
+	owner := newUser(t, pool)
+	ws := newWorkspace(t, pool, owner, nil)
+	want := manuscript.Analyze(statsSource)
+	if want.Stats.Words == 0 {
+		t.Fatal("the sample has words")
+	}
+
+	if _, err := store.Save(ctx, ws, owner, statsSource, nil, 0); err != nil {
+		t.Fatal(err)
+	}
+	if w, p, v := storedStats(t, pool, ws); w != want.Stats.Words || p != want.Progress.Percent || v != StatsVersion {
+		t.Fatalf("insert kept %d %d %d", w, p, v)
+	}
+	if _, err := store.Save(ctx, ws, owner, "", nil, 1); err != nil {
+		t.Fatal(err)
+	}
+	if w, _, v := storedStats(t, pool, ws); w != 0 || v != StatsVersion {
+		t.Fatalf("update kept %d %d", w, v)
+	}
+}
+
+func TestPostgres_BackfillFillsInOlderDocumentsOnce(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	owner := newUser(t, pool)
+	ws := newWorkspace(t, pool, owner, nil)
+	// As saved before stats were kept.
+	if _, err := pool.Exec(ctx, "INSERT INTO workspace_documents (workspace_id, source, version, updated_at, words, progress, stats_version) VALUES ($1, $2, 1, now(), 0, 0, 0)", ws, statsSource); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := Backfill(ctx, pool, 1)
+	if err != nil || updated < 1 {
+		t.Fatalf("%d %v", updated, err)
+	}
+	want := manuscript.Analyze(statsSource)
+	if w, p, v := storedStats(t, pool, ws); w != want.Stats.Words || p != want.Progress.Percent || v != StatsVersion {
+		t.Fatalf("backfilled %d %d %d", w, p, v)
+	}
+	// Other packages' tests share the database, so only this row is checked.
+	if _, err := pool.Exec(ctx, "UPDATE workspace_documents SET words = 7 WHERE workspace_id = $1", ws); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Backfill(ctx, pool, 10); err != nil {
+		t.Fatal(err)
+	}
+	if w, _, _ := storedStats(t, pool, ws); w != 7 {
+		t.Fatal("a current row is not recomputed")
+	}
+	if _, err := Backfill(ctx, nil, 10); !errors.Is(err, ErrUnavailable) {
+		t.Fatal(err)
 	}
 }

@@ -7,8 +7,10 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/skolab/backend-go/internal/workspace"
@@ -25,7 +27,13 @@ func testPool(t *testing.T) *pgxpool.Pool {
 		}
 		t.Skip("TEST_DATABASE_URL not set")
 	}
-	pool, err := pgxpool.New(context.Background(), url)
+	config, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// As in production (internal/db), where the pooler forbids prepared statements.
+	config.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
+	pool, err := pgxpool.NewWithConfig(context.Background(), config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -393,6 +401,48 @@ func TestPostgres_BundleOutputAndListing(t *testing.T) {
 	}
 }
 
+func TestPostgres_PreviewIsKeptUntilTheNextCompile(t *testing.T) {
+	pool := testPool(t)
+	store, ctx := NewPostgresStore(pool), context.Background()
+	owner, viewer, outsider := newUser(t, pool), newUser(t, pool), newUser(t, pool)
+	ws := newWorkspace(t, pool, owner, map[string]string{viewer: "viewer"})
+
+	if _, err := store.Preview(ctx, ws, viewer); !errors.Is(err, ErrNoOutput) {
+		t.Fatal(err)
+	}
+	first, err := store.SaveOutput(ctx, ws, owner, pdfBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := store.Preview(ctx, ws, viewer)
+	if err != nil || p.Image != nil || string(p.PDF) != string(pdfBytes) || !p.CompiledAt.Equal(first.CompiledAt) {
+		t.Fatalf("%+v %v", p, err)
+	}
+	if err := store.SavePreview(ctx, ws, p.CompiledAt, []byte("JPEG")); err != nil {
+		t.Fatal(err)
+	}
+	p, err = store.Preview(ctx, ws, viewer)
+	if err != nil || string(p.Image) != "JPEG" || p.PDF != nil {
+		t.Fatalf("the kept image is served without the PDF: %+v %v", p, err)
+	}
+
+	// A new compile clears it, and a render of the old one is not kept.
+	time.Sleep(2 * time.Millisecond)
+	if _, err := store.SaveOutput(ctx, ws, owner, pdfBytes); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SavePreview(ctx, ws, first.CompiledAt, []byte("STALE")); err != nil {
+		t.Fatal(err)
+	}
+	p, err = store.Preview(ctx, ws, owner)
+	if err != nil || p.Image != nil || p.PDF == nil || p.CompiledAt.Equal(first.CompiledAt) {
+		t.Fatalf("%+v %v", p, err)
+	}
+	if _, err := store.Preview(ctx, ws, outsider); !errors.Is(err, ErrNotFound) {
+		t.Fatal(err)
+	}
+}
+
 func TestPostgres_ImportCreatesEverythingOrNothing(t *testing.T) {
 	pool := testPool(t)
 	store, ctx := NewPostgresStore(pool), context.Background()
@@ -442,6 +492,12 @@ func TestPostgres_NilPoolIsUnavailable(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, _, err := store.Output(ctx, "w", "u"); !errors.Is(err, ErrUnavailable) {
+		t.Fatal(err)
+	}
+	if _, err := store.Preview(ctx, "w", "u"); !errors.Is(err, ErrUnavailable) {
+		t.Fatal(err)
+	}
+	if err := store.SavePreview(ctx, "w", time.Time{}, nil); !errors.Is(err, ErrUnavailable) {
 		t.Fatal(err)
 	}
 	if _, err := store.Import(ctx, "u", "t", "m", nil); !errors.Is(err, workspace.ErrUnavailable) {

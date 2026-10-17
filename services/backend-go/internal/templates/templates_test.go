@@ -212,3 +212,44 @@ func TestTheContractListsExactlyTheCatalogIDs(t *testing.T) {
 		t.Fatalf("contract lists %v, catalog has %v", got, want)
 	}
 }
+
+func TestEveryTemplateHasAPreviewTheListPointsAt(t *testing.T) {
+	w := serve(t, "GET", "/api/v1/templates", nil)
+	var body listBody
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	for _, tpl := range body.Templates {
+		if !strings.HasPrefix(tpl.Preview, "/api/v1/templates/"+tpl.ID+"/preview.jpg?v=") {
+			t.Fatalf("%s: preview %q", tpl.ID, tpl.Preview)
+		}
+		got := serve(t, "GET", tpl.Preview, nil)
+		if got.Code != http.StatusOK || got.Header().Get("Content-Type") != "image/jpeg" || got.Body.Len() < 1000 ||
+			!strings.HasPrefix(got.Body.String(), "\xff\xd8") || !strings.Contains(got.Header().Get("Cache-Control"), "immutable") {
+			t.Fatalf("%s: %d %s %d bytes", tpl.ID, got.Code, got.Header().Get("Content-Type"), got.Body.Len())
+		}
+		etag := got.Header().Get("ETag")
+		if again := serve(t, "GET", tpl.Preview, map[string]string{"If-None-Match": "W/" + etag}); again.Code != http.StatusNotModified {
+			t.Fatalf("%s: revalidation %d", tpl.ID, again.Code)
+		}
+	}
+}
+
+func TestPreviewRefusals(t *testing.T) {
+	for path, want := range map[string]int{
+		"/api/v1/templates/nope/preview.jpg":              http.StatusNotFound,
+		"/api/v1/templates/nature/preview.jpg?x=1":        http.StatusBadRequest,
+		"/api/v1/templates/nature/preview.jpg?v=1&v=2":    http.StatusBadRequest,
+		"/api/v1/templates/nature/preview.jpg?v=anything": http.StatusOK,
+	} {
+		if got := serve(t, "GET", path, nil); got.Code != want {
+			t.Errorf("%s: %d", path, got.Code)
+		}
+	}
+	if load([]Template{{ID: "no-preview", file: "nature.tex", Domain: "biology"}}) == nil {
+		t.Error("a template without a preview must not load")
+	}
+	if err := load(catalog); err != nil {
+		t.Fatal(err)
+	}
+}

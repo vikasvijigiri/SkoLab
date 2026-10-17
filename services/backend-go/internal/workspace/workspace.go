@@ -54,6 +54,35 @@ type Workspace struct {
 	OwnerID   string    `json:"owner_id"`
 	Role      string    `json:"role"` // the caller's role: owner, editor, commenter or viewer
 	CreatedAt time.Time `json:"created_at"`
+	// Summary is filled in only by List, for the documents page; elsewhere
+	// it is nil and none of its fields appear.
+	*Summary
+}
+
+// MaxAuthors is how many authors a summary names; AuthorsTotal counts all.
+const MaxAuthors = 8
+
+// Summary is what a document card shows before the document is opened.
+type Summary struct {
+	// Authors are the owner, then active members in the order they joined.
+	Authors      []Person `json:"authors"`
+	AuthorsTotal int      `json:"authors_total"`
+	// UpdatedAt and UpdatedBy are the latest edit to main.tex or any project
+	// file; nil before the first one.
+	UpdatedAt *time.Time `json:"updated_at"`
+	UpdatedBy *Person    `json:"updated_by"`
+	Words     int        `json:"words"`
+	Progress  int        `json:"progress"`
+	// CompiledAt is when the kept PDF was made; when set, the first page is
+	// at GET /workspaces/{id}/preview.jpg.
+	CompiledAt *time.Time `json:"compiled_at"`
+}
+
+// Person names a user on a summary.
+type Person struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+	Role        string `json:"role,omitempty"`
 }
 
 // Cursor is the keyset position after the last item of a page.

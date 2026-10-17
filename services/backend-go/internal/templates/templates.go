@@ -4,6 +4,7 @@
 //
 //	GET /api/v1/templates               the catalog (no sources), ?domain= filters
 //	GET /api/v1/templates/:id           one template with its LaTeX source
+//	GET /api/v1/templates/:id/preview.jpg  a page of it as compiled, for the gallery
 //
 // Every template is the publisher's or class author's own, taken from the
 // TeX Live release the compiler runs (so class and template versions match)
@@ -28,6 +29,14 @@ import (
 //go:embed files/*.tex
 var files embed.FS
 
+// Previews are a page of each template as the production compiler renders
+// it: the first page, or the fullest of the first three when the first is a
+// near-empty skeleton (services/qa/template_previews.py makes them from the
+// PDFs CI compiles). Every template must have one.
+//
+//go:embed previews/*.jpg
+var previews embed.FS
+
 // Domains lists the subject areas in display order.
 var Domains = []string{"physics", "chemistry", "mathematics", "biology"}
 
@@ -42,8 +51,11 @@ type Template struct {
 	License     string `json:"license"`
 	SourceURL   string `json:"source_url"`
 	Size        int    `json:"size"` // bytes of source
-	Source      string `json:"source,omitempty"`
-	file        string
+	// Preview is the path of its preview image, versioned by content so a
+	// browser may keep it for good.
+	Preview string `json:"preview"`
+	Source  string `json:"source,omitempty"`
+	file    string
 }
 
 var (
@@ -51,7 +63,13 @@ var (
 	byID   = map[string]Template{}
 	etag   string
 	listed []Template // all, without sources
+	images = map[string]image{}
 )
+
+type image struct {
+	data []byte
+	tag  string
+}
 
 func init() {
 	if err := load(catalog); err != nil {
@@ -61,7 +79,7 @@ func init() {
 
 func load(entries []Template) error {
 	sum := sha256.New()
-	all, listed, byID = nil, nil, map[string]Template{}
+	all, listed, byID, images = nil, nil, map[string]Template{}, map[string]image{}
 	for _, t := range entries {
 		raw, err := files.ReadFile("files/" + t.file)
 		if err != nil {
@@ -73,6 +91,14 @@ func load(entries []Template) error {
 		if !slices.Contains(Domains, t.Domain) {
 			return fmt.Errorf("template %s: unknown domain %q", t.ID, t.Domain)
 		}
+		picture, err := previews.ReadFile("previews/" + t.ID + ".jpg")
+		if err != nil {
+			return fmt.Errorf("template %s has no preview: %w", t.ID, err)
+		}
+		digest := sha256.Sum256(picture)
+		version := hex.EncodeToString(digest[:])[:16]
+		images[t.ID] = image{data: picture, tag: `"` + version + `"`}
+		t.Preview = "/api/v1/templates/" + t.ID + "/preview.jpg?v=" + version
 		t.Source, t.Size = string(raw), len(raw)
 		sum.Write([]byte(t.ID))
 		sum.Write(raw)
@@ -99,6 +125,35 @@ func All() []Template { return slices.Clone(all) }
 func Register(group *gin.RouterGroup) {
 	group.GET("/templates", list)
 	group.GET("/templates/:id", get)
+	group.GET("/templates/:id/preview.jpg", preview)
+}
+
+// preview answers a template's preview image. The path carries the image's
+// version (?v=), so a browser may keep it for a year; any other parameter is
+// refused, as everywhere in the API.
+func preview(c *gin.Context) {
+	for name, values := range c.Request.URL.Query() {
+		if name != "v" {
+			apierror.Abort(c, http.StatusBadRequest, "unknown_parameter", "Unknown query parameter: "+name)
+			return
+		}
+		if len(values) > 1 {
+			apierror.Abort(c, http.StatusBadRequest, "duplicate_parameter", "Query parameter given more than once: "+name)
+			return
+		}
+	}
+	picture, ok := images[c.Param("id")]
+	if !ok {
+		apierror.Abort(c, http.StatusNotFound, "not_found", "No template with this id")
+		return
+	}
+	c.Header("ETag", picture.tag)
+	c.Header("Cache-Control", "private, max-age=31536000, immutable")
+	if matches(c.GetHeader("If-None-Match"), picture.tag) {
+		c.Status(http.StatusNotModified)
+		return
+	}
+	c.Data(http.StatusOK, "image/jpeg", picture.data)
 }
 
 // fresh answers 304 when the client already holds this catalog. Unlike

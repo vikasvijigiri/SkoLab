@@ -9,9 +9,61 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/skolab/backend-go/internal/activity"
+	"github.com/skolab/backend-go/internal/manuscript"
 )
 
 const queryTimeout = 3 * time.Second
+
+// StatsVersion is how a document's stored word count and progress are
+// worked out now (internal/manuscript); rows kept with an older version, or
+// saved before they were kept, are recomputed by Backfill.
+const StatsVersion = 1
+
+// Backfill brings stored stats up to StatsVersion, a batch at a time, and
+// answers how many documents it updated. Saves keep them current after that.
+func Backfill(ctx context.Context, pool *pgxpool.Pool, batch int) (int, error) {
+	if pool == nil {
+		return 0, ErrUnavailable
+	}
+	done := 0
+	for {
+		rows, err := pool.Query(ctx, `SELECT workspace_id, source FROM workspace_documents WHERE stats_version < $1 LIMIT $2`, StatsVersion, batch)
+		if err != nil {
+			return done, unavailable(err)
+		}
+		type pending struct{ id, source string }
+		var page []pending
+		for rows.Next() {
+			var p pending
+			if err := rows.Scan(&p.id, &p.source); err != nil {
+				rows.Close()
+				return done, unavailable(err)
+			}
+			page = append(page, p)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return done, unavailable(err)
+		}
+		if len(page) == 0 {
+			return done, nil
+		}
+		before := done
+		for _, p := range page {
+			stats := manuscript.Analyze(p.source)
+			tag, err := pool.Exec(ctx, `UPDATE workspace_documents SET words = $2, progress = $3, stats_version = $4 WHERE workspace_id = $1 AND stats_version < $4`,
+				p.id, stats.Stats.Words, stats.Progress.Percent, StatsVersion)
+			if err != nil {
+				return done, unavailable(err)
+			}
+			done += int(tag.RowsAffected())
+		}
+		if done == before {
+			// Nothing this page could be written: stop rather than spin.
+			return done, nil
+		}
+	}
+}
 
 type postgresStore struct {
 	pool *pgxpool.Pool
@@ -111,21 +163,24 @@ func (s *postgresStore) Save(ctx context.Context, workspaceID, userID, source st
 	}
 	doc := Document{WorkspaceID: workspaceID, Role: r}
 	now := time.Now().UTC().Truncate(time.Microsecond)
+	// Kept with the source for the documents page, so listing never re-reads it.
+	stats := manuscript.Analyze(source)
+	words, progress := stats.Stats.Words, stats.Progress.Percent
 	var row pgx.Row
 	if baseVersion == 0 {
 		// The first save creates the row; a concurrent first save loses.
 		row = tx.QueryRow(ctx, `
-			INSERT INTO workspace_documents (workspace_id, source, template_id, version, updated_at, updated_by)
-			VALUES ($1, $2, $3, 1, $4, $5)
+			INSERT INTO workspace_documents (workspace_id, source, template_id, version, updated_at, updated_by, words, progress, stats_version)
+			VALUES ($1, $2, $3, 1, $4, $5, $6, $7, $8)
 			ON CONFLICT (workspace_id) DO NOTHING
-			RETURNING `+columns, workspaceID, source, templateID, now, userID)
+			RETURNING `+columns, workspaceID, source, templateID, now, userID, words, progress, StatsVersion)
 	} else {
 		row = tx.QueryRow(ctx, `
 			UPDATE workspace_documents
 			SET source = $2, template_id = COALESCE($3, template_id), version = version + 1,
-			    updated_at = $4, updated_by = $5
+			    updated_at = $4, updated_by = $5, words = $7, progress = $8, stats_version = $9
 			WHERE workspace_id = $1 AND version = $6
-			RETURNING `+columns, workspaceID, source, templateID, now, userID, baseVersion)
+			RETURNING `+columns, workspaceID, source, templateID, now, userID, baseVersion, words, progress, StatsVersion)
 	}
 	err = scan(row, &doc)
 	if errors.Is(err, pgx.ErrNoRows) {

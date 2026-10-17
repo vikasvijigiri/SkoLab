@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/skolab/backend-go/internal/apierror"
+	"github.com/skolab/backend-go/internal/preview"
 	"github.com/skolab/backend-go/internal/security"
 	"github.com/skolab/backend-go/internal/workspace"
 )
@@ -36,6 +37,11 @@ type Store interface {
 	SaveOutput(ctx context.Context, workspaceID, userID string, pdf []byte) (Output, error)
 	// Output returns the workspace title and its kept PDF, or ErrNoOutput.
 	Output(ctx context.Context, workspaceID, userID string) (string, []byte, error)
+	// Preview returns the kept preview, or the PDF to make it from, or
+	// ErrNoOutput. SavePreview keeps an image for the compile made at
+	// compiledAt, and keeps nothing once a newer compile replaced it.
+	Preview(ctx context.Context, workspaceID, userID string) (Preview, error)
+	SavePreview(ctx context.Context, workspaceID string, compiledAt time.Time, image []byte) error
 	Import(ctx context.Context, userID, title, main string, files []NewFile) (workspace.Workspace, error)
 }
 
@@ -60,6 +66,7 @@ func Register(group *gin.RouterGroup, store Store, compiler Compiler) {
 	group.GET("/workspaces/:id/archive", h.archive)
 	group.POST("/workspaces/:id/compile", h.compile)
 	group.GET("/workspaces/:id/output.pdf", h.output)
+	group.GET("/workspaces/:id/preview.jpg", h.preview)
 	group.POST("/workspaces/import", h.importZip)
 }
 
@@ -575,6 +582,56 @@ func (h handlers) output(c *gin.Context) {
 	}
 	attachment(c, title, ".pdf")
 	c.Data(http.StatusOK, "application/pdf", pdf)
+}
+
+// renderPreview is preview.Render; tests replace it.
+var renderPreview = preview.Render
+
+// preview answers the first page of the last compiled PDF as a JPEG, for
+// document cards. It is rendered the first time it is asked for after a
+// compile and kept until the next compile. The ETag names that compile, so
+// a card revalidates cheaply and changes as soon as the document does.
+func (h handlers) preview(c *gin.Context) {
+	uid, ok := caller(c)
+	if !ok {
+		return
+	}
+	p, err := h.store.Preview(c.Request.Context(), c.Param("id"), uid)
+	if err != nil {
+		storeError(c, err)
+		return
+	}
+	tag := `"c` + strconv.FormatInt(p.CompiledAt.UnixMicro(), 36) + `"`
+	if matches(c.GetHeader("If-None-Match"), tag) {
+		c.Header("ETag", tag)
+		c.Header("Cache-Control", "private, no-cache")
+		c.Status(http.StatusNotModified)
+		return
+	}
+	image := p.Image
+	if image == nil {
+		image, err = renderPreview(c.Request.Context(), p.PDF)
+		if err != nil {
+			fail(c, http.StatusNotFound, "no_preview", "No picture could be made of this document's first page")
+			return
+		}
+		// Kept for the next card; a failed write only costs a re-render.
+		_ = h.store.SavePreview(context.WithoutCancel(c.Request.Context()), c.Param("id"), p.CompiledAt, image)
+	}
+	c.Header("ETag", tag)
+	c.Header("Cache-Control", "private, no-cache")
+	c.Data(http.StatusOK, "image/jpeg", image)
+}
+
+// matches compares If-None-Match weakly over a comma-separated list (RFC
+// 9110): Render's edge may mark the ETag weak, and a browser sends that back.
+func matches(header, tag string) bool {
+	for _, candidate := range strings.Split(header, ",") {
+		if strings.TrimPrefix(strings.TrimSpace(candidate), "W/") == tag {
+			return true
+		}
+	}
+	return false
 }
 
 type compileFile struct {
