@@ -319,6 +319,8 @@ export interface OriginalitySource {
 
 export interface OriginalityMatch {
   sentence: string;
+  /** copied: word for word; edited: lightly reworded. Older reports have none (copied). */
+  kind?: "copied" | "edited";
   /** Share of the sentence's five-word runs found in the source, 0..1. */
   overlap: number;
   source_id: string;

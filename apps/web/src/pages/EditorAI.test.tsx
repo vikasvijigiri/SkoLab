@@ -1,7 +1,7 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { EditorView } from "@codemirror/view";
-import { locate } from "../editor/AIPanel";
+import { documentPassages, locate } from "../editor/AIPanel";
 import type { FakeBackend } from "../test/fakeBackend";
 import { renderApp, stubBackend } from "../test/renderApp";
 
@@ -112,8 +112,8 @@ describe("AI writing assistant", () => {
     place(SOURCE.indexOf("We measured") + 3);
     await user.click(screen.getByRole("button", { name: "AI" }));
     const sheet = screen.getByRole("dialog", { name: "AI writing assistant" });
-    await user.click(within(sheet).getByRole("button", { name: /Academic tone/ }));
-    expect(await within(sheet).findByRole("alert")).toHaveTextContent("You've used today's allowance");
+    expect(await within(sheet).findByText("You've used today's allowance. It resets at midnight UTC.")).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: /Academic tone/ })).toBeDisabled();
 
     // A blank line has no paragraph.
     place(SOURCE.indexOf("Second paragraph") - 1);
@@ -171,6 +171,28 @@ describe("AI writing assistant", () => {
     expect(await within(sheet).findByRole("region", { name: "Earlier checks" }, { timeout: 5000 }).catch(() => within(sheet).getByLabelText("Earlier checks"))).toBeInTheDocument();
   });
 
+  it("improves the whole document in parts and applies across them", async () => {
+    const { user } = await open();
+    await user.click(screen.getByRole("button", { name: "AI" }));
+    const sheet = screen.getByRole("dialog", { name: "AI writing assistant" });
+    await user.click(within(sheet).getByRole("button", { name: "Whole document" }));
+    expect(within(sheet).getByText(/All of main.tex's prose, in 1 part/)).toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: /Grammar/ }));
+    await user.click(await within(sheet).findByRole("button", { name: "Accept all" }));
+    expect(source()).toContain(String.raw`We measured the field at $T<T_c$ and the results \cite{k} were clear.`);
+    expect(source()).toContain(String.raw`\section{Introduction}`);
+  });
+
+  it("refuses a whole document that needs more uses than are left", async () => {
+    backend.setAI("improve", { left: 0 });
+    const { user } = await open();
+    await user.click(screen.getByRole("button", { name: "AI" }));
+    const sheet = screen.getByRole("dialog", { name: "AI writing assistant" });
+    await user.click(within(sheet).getByRole("button", { name: "Whole document" }));
+    expect(await within(sheet).findByText("You've used today's allowance. It resets at midnight UTC.")).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: /Grammar/ })).toBeDisabled();
+  });
+
   it("opens from the command palette", async () => {
     const { user } = await open();
     await user.keyboard("{Control>}k{/Control}");
@@ -187,5 +209,39 @@ describe("locate", () => {
     const at = locate(latex, "We measured the field at today.");
     expect(at && latex.slice(at[0], at[1])).toBe("We \\emph{measured} the\nfield at $T$ today");
     expect(locate(latex, "Nothing like this here at all")).toBeNull();
+  });
+});
+
+describe("documentPassages", () => {
+  it("takes the body's paragraphs, skips structure and short lines, and packs them", () => {
+    const text = [
+      String.raw`\documentclass{article}`,
+      String.raw`\title{Not prose}`,
+      String.raw`\begin{document}`,
+      String.raw`\section{Introduction}`,
+      "First paragraph has quite a few words in it today.",
+      "% a comment line",
+      "Second paragraph also has more than six real words here.",
+      "",
+      "Short one.",
+      String.raw`\begin{equation} a+b \end{equation}`,
+      "Third paragraph of prose follows with enough words to count.",
+      String.raw`\end{document}`,
+    ].join("\n");
+    const parts = documentPassages(text);
+    expect(parts).toHaveLength(1);
+    const part = parts[0];
+    expect(part?.text.startsWith("First paragraph")).toBe(true);
+    expect(part?.text.endsWith("enough words to count.")).toBe(true);
+    expect(text.slice(part?.from, part?.to)).toBe(part?.text);
+    expect(part?.text).not.toContain("Not prose");
+  });
+
+  it("splits long documents into parts of at most 3,500 characters", () => {
+    const paragraph = "This sentence is ordinary prose for the test. ".repeat(20);
+    const text = String.raw`\begin{document}` + "\n" + Array.from({ length: 6 }, () => paragraph).join("\n\n") + "\n" + String.raw`\end{document}`;
+    const parts = documentPassages(text);
+    expect(parts.length).toBeGreaterThan(1);
+    for (const part of parts) expect(part.text.length).toBeLessThanOrEqual(3500);
   });
 });

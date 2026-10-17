@@ -92,6 +92,8 @@ export interface CursorInfo {
   math: MathSpan | null;
   /** Viewport coordinates under the math (or the cursor), for placing a preview. */
   anchor: { left: number; top: number; bottom: number } | null;
+  /** A non-empty selection and where it starts on screen (for a toolbar above it). */
+  selection: { from: number; to: number; left: number; top: number; bottom: number } | null;
 }
 
 /** Actions the page runs on the editor: from the command bar, menus and the outline. */
@@ -184,16 +186,21 @@ export const LatexEditor = forwardRef<LatexEditorHandle, LatexEditorProps>(funct
     let counts: ProblemCounts = { errors: 0, warnings: 0 };
     const report = (target: EditorView) => {
       const math = mathAtCursor(target.state);
-      const head = target.state.selection.main.head;
+      const range = target.state.selection.main;
+      const head = range.head;
       const line = target.state.doc.lineAt(head);
       target.requestMeasure({
         key: "skolab-cursor",
         read: (measured) => {
           const start = measured.coordsAtPos(math ? math.from : head);
           const end = math ? (measured.coordsAtPos(math.to, -1) ?? start) : start;
-          return start && end ? { left: start.left, top: Math.min(start.top, end.top), bottom: Math.max(start.bottom, end.bottom) } : null;
+          const anchor = start && end ? { left: start.left, top: Math.min(start.top, end.top), bottom: Math.max(start.bottom, end.bottom) } : null;
+          const first = range.empty ? null : measured.coordsAtPos(range.from);
+          const last = range.empty ? null : (measured.coordsAtPos(range.to, -1) ?? first);
+          const selection = first && last ? { from: range.from, to: range.to, left: first.left, top: Math.min(first.top, last.top), bottom: Math.max(first.bottom, last.bottom) } : null;
+          return { anchor, selection };
         },
-        write: (anchor) => callbacks.current.onCursor?.({ line: line.number, column: head - line.from + 1, focused: target.hasFocus, math, anchor }),
+        write: ({ anchor, selection }) => callbacks.current.onCursor?.({ line: line.number, column: head - line.from + 1, focused: target.hasFocus, math, anchor, selection }),
       });
     };
     const images = async (target: EditorView, files: File[], pos: number) => {

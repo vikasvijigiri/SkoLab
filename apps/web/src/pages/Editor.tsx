@@ -42,6 +42,8 @@ import { Overview, ProgressRing } from "../editor/Overview";
 import { FileEditor, type FileEditorHandle } from "../editor/FileEditor";
 import { FilePreview } from "../editor/FilePreview";
 import { AIPanel } from "../editor/AIPanel";
+import { SelectionToolbar } from "../editor/SelectionToolbar";
+import type { ImproveGoal } from "../api/editorTypes";
 import { SparkIcon } from "../components/Icons";
 import { FileTree, filesMessage, type FilesState, type OpenTarget } from "../editor/FileTree";
 import { RETRY_DELAY_MS, SAVE_DELAY_MS, saveLabel, type SaveState } from "../editor/saving";
@@ -231,6 +233,8 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
   const [members, setMembers] = useState<Member[]>([]);
   const [sheet, setSheet] = useState<"share" | "overview" | "files" | "outline" | "shortcuts" | "ai" | null>(null);
   const [aiTab, setAiTab] = useState<"improve" | "originality">("improve");
+  // A goal picked on the selection toolbar, run as soon as the panel opens.
+  const [aiGoal, setAiGoal] = useState<ImproveGoal | undefined>(undefined);
   // The project's files; main.tex is open while openId is null.
   const [files, setFiles] = useState<FilesState>({ state: "loading" });
   const [openId, setOpenId] = useState<string | null>(null);
@@ -1219,6 +1223,21 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
       )}
 
       {openFile === null && <MathPreview cursor={cursor} macros={macros} />}
+      {openFile === null && editable && sheet === null && !palette && (
+        <SelectionToolbar
+          cursor={cursor}
+          onOpen={() => {
+            setAiTab("improve");
+            setAiGoal(undefined);
+            setSheet("ai");
+          }}
+          onPick={(goal) => {
+            setAiTab("improve");
+            setAiGoal(goal);
+            setSheet("ai");
+          }}
+        />
+      )}
 
       {notice && (
         <div role="status" className="fixed bottom-12 left-1/2 z-40 -translate-x-1/2 animate-enter rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-lg dark:bg-white dark:text-zinc-900">
@@ -1267,8 +1286,15 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
         </Sheet>
       )}
       {sheet === "ai" && (
-        <Sheet title="AI writing assistant" description="Suggestions you approve one by one, and an originality check against published work." onClose={() => setSheet(null)}>
-          <AIPanel workspaceId={workspace.id} editable={editable} token={idToken} editor={() => editor.current} initialTab={aiTab} onShowInDocument={() => setSheet(null)} />
+        <Sheet
+          title="AI writing assistant"
+          description="Suggestions you approve one by one, and an originality check against published work."
+          onClose={() => {
+            setSheet(null);
+            setAiGoal(undefined);
+          }}
+        >
+          <AIPanel workspaceId={workspace.id} editable={editable} token={idToken} editor={() => editor.current} initialTab={aiTab} initialGoal={aiGoal} onShowInDocument={() => setSheet(null)} />
         </Sheet>
       )}
       {sheet === "share" && (
