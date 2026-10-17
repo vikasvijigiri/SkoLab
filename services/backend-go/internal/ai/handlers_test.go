@@ -148,7 +148,6 @@ type harness struct {
 	reports   *memReports
 	budgets   *memBudgets
 	model     *fakeModel
-	done      sync.WaitGroup
 	works     []Work
 	searchErr error
 }
