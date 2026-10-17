@@ -30,6 +30,7 @@ tags:
   - name: collaboration
   - name: editor
   - name: activity
+  - name: ai
 
 paths:
   /gateway-health:
@@ -1048,6 +1049,161 @@ paths:
         "429": { $ref: "#/components/responses/TooMany" }
         "503": { $ref: "#/components/responses/Unavailable" }
 
+  /api/v1/ai/status:
+    get:
+      tags: [ai]
+      operationId: aiStatus
+      summary: Which AI features are available to the caller, and how many uses are left today
+      description: Each feature has a daily allowance per person, and both share a daily budget set below the providers' free tiers; left_today is the smaller of the two (for originality, in whole checks).
+      responses:
+        "200":
+          description: Today's availability.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [improve, originality]
+                additionalProperties: false
+                properties:
+                  improve: { $ref: "#/components/schemas/AIFeature" }
+                  originality: { $ref: "#/components/schemas/AIFeature" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooMany" }
+
+  /api/v1/workspaces/{id}/ai/improve:
+    post:
+      tags: [ai]
+      operationId: improvePassage
+      summary: Suggested edits for a passage of the document (owner or editor)
+      description: |
+        Math, citations, references, labels, URLs, comments and commands are
+        masked before the model sees the passage, and every edit it proposes
+        is verified (it quotes the passage exactly, keeps them all intact and
+        braces balanced) before it is returned; the rest are dropped. start
+        and end are UTF-16 offsets into the text sent. One use of the daily
+        allowance (429 ai_daily_limit; 429 ai_capacity when SkoLab's shared
+        budget is spent); provider failures are refunded.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text, goal]
+              additionalProperties: false
+              properties:
+                text: { type: string, minLength: 1, maxLength: 4000, pattern: "^[^\\u0000]*[^\\u0000-\\u0020\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000][^\\u0000]*$", description: "The selected passage (LaTeX), at most 4,000 characters: not blank (any Unicode space counts as blank), no NUL." }
+                goal: { type: string, enum: [clarity, concise, academic, grammar, flow] }
+      responses:
+        "200":
+          description: Verified suggestions, in text order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [goal, suggestions, model, left_today]
+                additionalProperties: false
+                properties:
+                  goal: { type: string, enum: [clarity, concise, academic, grammar, flow] }
+                  suggestions: { type: array, items: { $ref: "#/components/schemas/AISuggestion" } }
+                  model: { type: string }
+                  left_today: { type: integer, minimum: 0 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "422":
+          description: The passage has no prose to improve (nothing_to_improve).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "502":
+          description: The model's answer was unusable (ai_failed); the use is refunded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/workspaces/{id}/ai/originality:
+    post:
+      tags: [ai]
+      operationId: startOriginalityCheck
+      summary: Start an originality check of the document (owner or editor)
+      description: |
+        Queues a background check of the document's prose (main.tex and its
+        other .tex files) against OpenAlex: distinctive sentences are searched
+        and every sentence's wording is compared with the titles and abstracts
+        found. A check already queued or running is answered as it is, with no
+        use charged. Poll the Location until status is done or failed.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "202":
+          description: Queued (or already under way).
+          headers:
+            Location: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [report, left_today]
+                additionalProperties: false
+                properties:
+                  report: { $ref: "#/components/schemas/OriginalityReport" }
+                  left_today: { type: integer, minimum: 0 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    get:
+      tags: [ai]
+      operationId: listOriginalityChecks
+      summary: The document's ten most recent originality checks (any member)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reports]
+                additionalProperties: false
+                properties:
+                  reports: { type: array, items: { $ref: "#/components/schemas/OriginalityReport" } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/workspaces/{id}/ai/originality/{report_id}:
+    get:
+      tags: [ai]
+      operationId: getOriginalityCheck
+      summary: One originality check (any member)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: report_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OriginalityReport" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
   /api/v1/templates:
     get:
       tags: [editor]
@@ -1193,6 +1349,71 @@ components:
       properties:
         error: { type: string, description: For people; wording may change. }
         code: { type: string, pattern: "^[a-z_]+$", description: Stable; branch on this. }
+    AIFeature:
+      type: object
+      required: [available, daily_limit, left_today]
+      additionalProperties: false
+      properties:
+        available: { type: boolean }
+        daily_limit: { type: integer, minimum: 0 }
+        left_today: { type: integer, minimum: 0 }
+    AISuggestion:
+      type: object
+      required: [id, original, replacement, reason, category, start, end]
+      additionalProperties: false
+      properties:
+        id: { type: string }
+        original: { type: string }
+        replacement: { type: string }
+        reason: { type: string }
+        category: { type: string, enum: [clarity, concision, tone, grammar, flow, word_choice] }
+        start: { type: integer, minimum: 0, description: UTF-16 offset of original in the text sent. }
+        end: { type: integer, minimum: 0 }
+    OriginalitySource:
+      type: object
+      required: [id, title, url, sentences, words]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        year: { type: integer }
+        url: { type: string }
+        doi: { type: string }
+        sentences: { type: integer, minimum: 1 }
+        words: { type: integer, minimum: 1 }
+    OriginalityMatch:
+      type: object
+      required: [sentence, overlap, source_id, excerpt]
+      properties:
+        sentence: { type: string }
+        overlap: { type: number, minimum: 0, maximum: 1 }
+        source_id: { type: string }
+        excerpt: { type: string }
+    OriginalityResult:
+      type: object
+      required: [score, words, matched_words, sentences, probes, sources_checked, partial, matches, sources]
+      properties:
+        score: { type: number, minimum: 0, maximum: 100, description: Percent of the document's words in matched sentences. }
+        words: { type: integer }
+        matched_words: { type: integer }
+        sentences: { type: integer }
+        probes: { type: integer, description: Searches made. }
+        sources_checked: { type: integer }
+        partial: { type: boolean, description: True when the day's search budget ran out during the check. }
+        matches: { type: array, items: { $ref: "#/components/schemas/OriginalityMatch" } }
+        sources: { type: array, items: { $ref: "#/components/schemas/OriginalitySource" } }
+    OriginalityReport:
+      type: object
+      required: [id, workspace_id, status, document_version, score, result, error, created_at, finished_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string }
+        status: { type: string, enum: [queued, running, done, failed] }
+        document_version: { type: integer, minimum: 0 }
+        score: { type: [number, "null"] }
+        result: { oneOf: [{ $ref: "#/components/schemas/OriginalityResult" }, { type: "null" }] }
+        error: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
     ActivityPerson:
       type: [object, "null"]
       description: Null when the account has since been deleted.

@@ -12,6 +12,7 @@ from sqlalchemy import (
     Column,
     String,
     Integer,
+    Float,
     DateTime,
     ForeignKey,
     Text,
@@ -20,6 +21,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import validates
 from app.db.database import Base
 from app.db.encrypted_type import EncryptedString
@@ -253,6 +255,35 @@ class WorkspaceActivity(Base):
             "occurred_at",
             postgresql_where=text("subject_id IS NOT NULL"),
         ),
+    )
+
+
+class OriginalityReport(Base):
+    """One AI originality check of a workspace (Go gateway, internal/ai).
+
+    Queued, run in the background against OpenAlex, then done (score and
+    ``result``: matched sentences and their sources) or failed (``error``).
+    Server defaults throughout: the gateway writes rows with plain SQL.
+    """
+
+    __tablename__ = "originality_reports"
+
+    id = Column(String(36), primary_key=True)
+    workspace_id = Column(String(100), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    requested_by = Column(String(100), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String(16), nullable=False, default="queued", server_default="queued")
+    document_version = Column(Integer, nullable=False, default=0, server_default="0")
+    score = Column(Float, nullable=True)
+    result = Column(JSONB, nullable=True)
+    error = Column(String(200), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utcnow, server_default=text("(now() AT TIME ZONE 'utc')"))
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("status IN ('queued', 'running', 'done', 'failed')", name="chk_originality_report_status"),
+        CheckConstraint("score IS NULL OR (score >= 0 AND score <= 100)", name="chk_originality_report_score"),
+        Index("ix_originality_reports_workspace", "workspace_id", "created_at"),
     )
 
 
