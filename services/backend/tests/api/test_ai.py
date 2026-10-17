@@ -159,9 +159,15 @@ async def test_at_most_twelve_edits_are_kept():
 @pytest.mark.usefixtures("client")
 class TestRoute:
     async def test_only_the_gateway_may_call(self, client, monkeypatch):
-        from app.core.config import settings
+        from types import SimpleNamespace
 
-        monkeypatch.setattr(settings, "internal_api_token", "gateway-secret")
+        from app.api import dependencies
+
+        monkeypatch.setattr(
+            dependencies,
+            "settings",
+            SimpleNamespace(internal_api_token="gateway-secret"),
+        )
         response = await client.post(
             "/api/v1/ai/improve", json={"text": "Hi.", "goal": "clarity"}
         )
@@ -174,10 +180,16 @@ class TestRoute:
         assert response.status_code == 403
 
     async def test_answers_map_to_statuses(self, client, monkeypatch):
-        from app.core.config import settings
+        from types import SimpleNamespace
+
+        from app.api import dependencies
         from app.schemas.ai import ImproveResponse
 
-        monkeypatch.setattr(settings, "internal_api_token", "gateway-secret")
+        monkeypatch.setattr(
+            dependencies,
+            "settings",
+            SimpleNamespace(internal_api_token="gateway-secret"),
+        )
         headers = {"X-Internal-Token": "gateway-secret"}
 
         async def ok(text, goal):

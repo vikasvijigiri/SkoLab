@@ -71,7 +71,15 @@ checks.positive_data_acceptance.expected-statuses = ["2xx", "429"]
 
 # AI improver: a passage over 4,000 characters is refused with the documented
 # 413 passage_too_long, which the default rejection list leaves out. Staging
-# has no model key, so accepted requests answer 503 ai_unconfigured.
+# has no model key by design (fuzzing must never spend the free daily
+# budgets), so accepted requests answer the documented 503 ai_unconfigured.
 [[operations]]
 include-name = "POST /api/v1/workspaces/{id}/ai/improve"
+checks.not_a_server_error.enabled = false
 checks.negative_data_rejection.expected-statuses = ["400", "401", "403", "404", "405", "406", "409", "413", "415", "422", "428", "429", "5xx"]
+
+# Originality check: staging has no OpenAlex key by design, so an accepted
+# request answers the documented 503 ai_unconfigured.
+[[operations]]
+include-name = "POST /api/v1/workspaces/{id}/ai/originality"
+checks.not_a_server_error.enabled = false
