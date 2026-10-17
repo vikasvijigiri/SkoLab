@@ -25,7 +25,21 @@ from app.schemas.ai import CATEGORIES, Edit, Goal, ImproveResponse
 logger = logging.getLogger("skolab.ai")
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODELS_URL = "https://api.groq.com/openai/v1/models"
 DEFAULT_MODEL = "llama-3.3-70b-versatile"
+# When the configured model is retired (the provider answers "model not
+# found"), the first of these the key can use takes over, best first.
+PREFERRED_MODELS = (
+    "llama-3.3-70b-versatile",
+    "openai/gpt-oss-120b",
+    "meta-llama/llama-4-maverick-17b-128e-instruct",
+    "meta-llama/llama-4-scout-17b-16e-instruct",
+    "qwen/qwen3-32b",
+    "openai/gpt-oss-20b",
+    "llama-3.1-8b-instant",
+)
+# The configured model -> the one serving in its place, once resolved.
+_replacements: dict[str, str] = {}
 TIMEOUT = httpx.Timeout(25.0, connect=5.0)
 MAX_EDITS = 12
 
@@ -111,32 +125,21 @@ async def improve(
     own = client is None
     http = client or httpx.AsyncClient()
     started = time.monotonic()
+    model = _replacements.get(cfg.model, cfg.model)
     try:
-        response: httpx.Response | None = None
-        # One retry for a transient failure, well inside the gateway's own timeout.
-        for attempt in range(2):
-            try:
-                response = await http.post(
-                    GROQ_URL,
-                    json=payload,
-                    headers={"Authorization": f"Bearer {cfg.key}"},
-                    timeout=TIMEOUT,
+        response = await _send(http, cfg, {**payload, "model": model})
+        if _model_missing(response):
+            replacement = await _replacement(http, cfg, exclude=model)
+            if replacement is None:
+                logger.error(
+                    "ai: model %s is not served and no listed model is available", model
                 )
-            except httpx.TimeoutException as exc:
-                raise LLMUnavailable(
-                    "The writing assistant took too long to answer"
-                ) from exc
-            except httpx.HTTPError as exc:
-                if attempt == 0:
-                    await asyncio.sleep(0.5)
-                    continue
-                raise LLMUnavailable("The writing assistant is unreachable") from exc
-            if response.status_code in (500, 502, 503, 504) and attempt == 0:
-                await asyncio.sleep(0.5)
-                continue
-            break
-        if response is None:  # pragma: no cover - the loop always assigns or raises
-            raise LLMUnavailable("The writing assistant is unreachable")
+                raise LLMUnavailable("The writing assistant is not configured")
+            logger.warning(
+                "ai: model %s is not served; using %s instead", model, replacement
+            )
+            _replacements[cfg.model] = model = replacement
+            response = await _send(http, cfg, {**payload, "model": model})
         if response.status_code == 429:
             raise LLMUnavailable(
                 "The writing assistant is busy",
@@ -151,15 +154,80 @@ async def improve(
         if response.status_code >= 400:
             logger.warning("ai: model provider error (status %s)", response.status_code)
             raise LLMUnavailable("The writing assistant failed; try again")
-        return _parse(response.json(), cfg.model)
+        return _parse(response.json(), model)
     finally:
         logger.info(
-            "ai: improve call took %d ms (goal %s)",
+            "ai: improve call took %d ms (goal %s, model %s)",
             round((time.monotonic() - started) * 1000),
             goal,
+            model,
         )
         if own:
             await http.aclose()
+
+
+async def _send(http: httpx.AsyncClient, cfg: Config, payload: dict) -> httpx.Response:
+    """POSTs payload, retrying once a connection failure or a 5xx."""
+    response: httpx.Response | None = None
+    for attempt in range(2):
+        try:
+            response = await http.post(
+                GROQ_URL,
+                json=payload,
+                headers={"Authorization": f"Bearer {cfg.key}"},
+                timeout=TIMEOUT,
+            )
+        except httpx.TimeoutException as exc:
+            raise LLMUnavailable(
+                "The writing assistant took too long to answer"
+            ) from exc
+        except httpx.HTTPError as exc:
+            if attempt == 0:
+                await asyncio.sleep(0.5)
+                continue
+            raise LLMUnavailable("The writing assistant is unreachable") from exc
+        if response.status_code in (500, 502, 503, 504) and attempt == 0:
+            await asyncio.sleep(0.5)
+            continue
+        break
+    if response is None:  # pragma: no cover - the loop always assigns or raises
+        raise LLMUnavailable("The writing assistant is unreachable")
+    return response
+
+
+def _model_missing(response: httpx.Response) -> bool:
+    """The provider no longer serves the model asked for (404, or a 400 that
+    says the model was decommissioned)."""
+    if response.status_code not in (400, 404):
+        return False
+    try:
+        error = response.json().get("error") or {}
+    except ValueError:
+        return response.status_code == 404
+    code = str(error.get("code", "")) if isinstance(error, dict) else ""
+    return response.status_code == 404 or "model" in code
+
+
+async def _replacement(
+    http: httpx.AsyncClient, cfg: Config, *, exclude: str
+) -> str | None:
+    """The best listed model the key can use now, other than exclude."""
+    try:
+        response = await http.get(
+            GROQ_MODELS_URL,
+            headers={"Authorization": f"Bearer {cfg.key}"},
+            timeout=TIMEOUT,
+        )
+        data = response.json().get("data", []) if response.status_code == 200 else []
+    except (httpx.HTTPError, ValueError):
+        return None
+    available = {
+        m.get("id") for m in data if isinstance(m, dict) and m.get("active", True)
+    }
+    for candidate in (cfg.model, *PREFERRED_MODELS):
+        if candidate != exclude and candidate in available:
+            return candidate
+    return None
 
 
 def _parse(body: dict, model: str) -> ImproveResponse:
