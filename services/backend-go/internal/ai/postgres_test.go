@@ -81,7 +81,7 @@ func TestPostgres_RolesAndSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	for path, content := range map[string]string{"sections/b.tex": "SECOND", "A.tex": "FIRST", "refs.bib": "BIB"} {
-		if _, err := pool.Exec(ctx, "INSERT INTO workspace_files (id, workspace_id, path, kind, content, size, updated_at) VALUES ($1, $2, $3, 'text', $4, 1, now())", uuid.NewString(), ws, path, content); err != nil {
+		if _, err := pool.Exec(ctx, "INSERT INTO workspace_files (id, workspace_id, path, kind, content, size, content_type, version, created_at, updated_at) VALUES ($1, $2, $3, 'text', $4, 1, 'text/plain', 1, now(), now())", uuid.NewString(), ws, path, content); err != nil {
 			t.Fatal(err)
 		}
 	}
