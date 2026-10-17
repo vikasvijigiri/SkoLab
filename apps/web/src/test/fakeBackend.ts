@@ -1,4 +1,4 @@
-import type { ActivityItem } from "../api/editorTypes";
+import type { ActivityItem, ImproveGoal, OriginalityReport, OriginalityResult, Suggestion } from "../api/editorTypes";
 import {
   characterCount,
   kindForPath,
@@ -204,6 +204,20 @@ export function createFakeBackend(templates: readonly Template[]) {
   // Each reader's activity feed, newest first, and where they caught up.
   const activity = new Map<string, { items: ActivityItem[]; seenAt: string | null }>();
   let activityIds = 0;
+  // AI: what the improver suggests (by default, "teh" -> "the"), what a
+  // check finds, today's uses per person, and the reports per workspace.
+  let improver: (text: string, goal: ImproveGoal) => Suggestion[] = (text) => {
+    const out: Suggestion[] = [];
+    for (let at = text.indexOf("teh"); at >= 0; at = text.indexOf("teh", at + 3)) {
+      out.push({ id: `s${out.length + 1}`, original: "teh", replacement: "the", reason: "Spelling", category: "grammar", start: at, end: at + 3 });
+    }
+    return out;
+  };
+  let originalityResult: OriginalityResult = { score: 0, words: 120, matched_words: 0, sentences: 6, probes: 3, sources_checked: 12, partial: false, matches: [], sources: [] };
+  const aiUsed = new Map<string, number>();
+  const aiLimits = { improve: 30, originality: 5 };
+  const aiAvailable = { improve: true, originality: true };
+  const reports = new Map<string, OriginalityReport[]>();
   const replays = new Map<string, string>();
   const invites = new Map<string, StoredInvite>();
   const names = new Map<string, string>();
@@ -722,6 +736,22 @@ export function createFakeBackend(templates: readonly Template[]) {
       return id;
     },
 
+    /** What the AI improver answers from now on. */
+    setImprover(fn: (text: string, goal: ImproveGoal) => Suggestion[]) {
+      improver = fn;
+    },
+
+    /** What originality checks find from now on. */
+    setOriginality(result: OriginalityResult) {
+      originalityResult = result;
+    },
+
+    /** Turns an AI feature off, or sets how many uses are left today. */
+    setAI(feature: "improve" | "originality", options: { available?: boolean; left?: number }) {
+      if (options.available !== undefined) aiAvailable[feature] = options.available;
+      if (options.left !== undefined) aiLimits[feature] = options.left;
+    },
+
     /** When uid last caught up with their feed. */
     activitySeenAt(uid: string): string | null {
       return activity.get(uid)?.seenAt ?? null;
@@ -741,7 +771,7 @@ export function createFakeBackend(templates: readonly Template[]) {
       const url = new URL(request.url, "http://fake");
       const path = url.pathname;
       const method = request.method.toUpperCase();
-      const editorPath = /^\/api\/v1\/(workspaces|templates|invites|activity)(\/|$)/.test(path);
+      const editorPath = /^\/api\/v1\/(workspaces|templates|invites|activity|ai)(\/|$)/.test(path);
       if (!editorPath) return null;
       requests.push(request);
 
@@ -751,6 +781,59 @@ export function createFakeBackend(templates: readonly Template[]) {
       const auth = request.headers.authorization ?? request.headers.Authorization ?? "";
       const uid = /^Bearer fake-token:(.+)$/.exec(auth)?.[1];
       if (!uid) return error(401, "token_missing", "Sign in");
+
+      if (path === "/api/v1/ai/status" && method === "GET") {
+        const feature = (name: "improve" | "originality") => ({
+          available: aiAvailable[name],
+          daily_limit: aiLimits[name],
+          left_today: aiAvailable[name] ? Math.max(0, aiLimits[name] - (aiUsed.get(`${uid}:${name}`) ?? 0)) : 0,
+        });
+        return { status: 200, body: { improve: feature("improve"), originality: feature("originality") } };
+      }
+      const ai = /^\/api\/v1\/workspaces\/([^/]+)\/ai\/(improve|originality)(?:\/([^/]+))?$/.exec(path);
+      if (ai) {
+        const stored = workspaces.get(ai[1] ?? "");
+        const role = stored ? roleOf(stored, uid) : null;
+        if (!stored || !role) return error(404, "not_found", "Workspace not found");
+        const writer = role === "owner" || role === "editor";
+        const spend = (name: "improve" | "originality"): FakeAnswer | null => {
+          const key = `${uid}:${name}`;
+          if (!aiAvailable[name]) return error(503, "ai_unconfigured", "Not set up");
+          if ((aiUsed.get(key) ?? 0) >= aiLimits[name]) return error(429, "ai_daily_limit", "Daily limit reached");
+          aiUsed.set(key, (aiUsed.get(key) ?? 0) + 1);
+          return null;
+        };
+        const left = (name: "improve" | "originality") => Math.max(0, aiLimits[name] - (aiUsed.get(`${uid}:${name}`) ?? 0));
+        if (ai[2] === "improve" && method === "POST") {
+          if (!writer) return error(403, "edit_forbidden", "Only the owner and editors");
+          const body = request.body as { text?: unknown; goal?: unknown } | null;
+          if (typeof body?.text !== "string" || !body.text.trim() || typeof body.goal !== "string") return error(400, "invalid_body", "text and goal");
+          if (body.text.length > 4000) return error(413, "passage_too_long", "Too long");
+          const refused = spend("improve");
+          if (refused) return refused;
+          return { status: 200, body: { goal: body.goal, suggestions: improver(body.text, body.goal as ImproveGoal), model: "fake-model", left_today: left("improve") } };
+        }
+        const list = reports.get(stored.workspace.id) ?? [];
+        if (ai[2] === "originality" && !ai[3] && method === "POST") {
+          if (!writer) return error(403, "edit_forbidden", "Only the owner and editors");
+          const busy = list.find((r) => r.status === "queued" || r.status === "running");
+          if (busy) return { status: 202, body: { report: busy, left_today: left("originality") } };
+          const refused = spend("originality");
+          if (refused) return refused;
+          const report: OriginalityReport = { id: newId(), workspace_id: stored.workspace.id, status: "running", document_version: stored.document?.version ?? 0, score: null, result: null, error: null, created_at: now(), finished_at: null };
+          reports.set(stored.workspace.id, [report, ...list]);
+          return { status: 202, body: { report, left_today: left("originality") } };
+        }
+        if (ai[2] === "originality" && !ai[3] && method === "GET") return { status: 200, body: { reports: list } };
+        if (ai[2] === "originality" && ai[3] && method === "GET") {
+          const report = list.find((r) => r.id === ai[3]);
+          if (!report) return error(404, "not_found", "Report not found");
+          // A running check finishes the first time someone asks.
+          if (report.status === "running") Object.assign(report, { status: "done", score: originalityResult.score, result: originalityResult, finished_at: now() });
+          return { status: 200, body: report };
+        }
+        return error(405, "method_not_allowed", "Method not allowed");
+      }
 
       if (path === "/api/v1/activity" && method === "GET") {
         const feed = activity.get(uid) ?? { items: [], seenAt: null };
