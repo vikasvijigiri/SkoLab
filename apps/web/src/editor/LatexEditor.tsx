@@ -97,6 +97,9 @@ export interface CursorInfo {
 /** Actions the page runs on the editor: from the command bar, menus and the outline. */
 export type EditorAction = "bold" | "italic" | "math" | "display-math" | "comment" | "cite" | "next-problem" | "follow";
 
+/** Lines that are document structure, not prose. */
+const STRUCTURE = /^\\(?:begin|end|(?:sub)*section|chapter|paragraph|part|title|author|date|maketitle|documentclass|usepackage|label|caption|item|bibliography|bibliographystyle|input|include|newcommand|renewcommand)\b/;
+
 export interface LatexEditorHandle {
   /** Moves the cursor to a 1-based line and scrolls it into view. */
   goToLine(line: number): void;
@@ -107,6 +110,17 @@ export interface LatexEditorHandle {
   insertSnippet(name: string): boolean;
   /** Inserts figure blocks for images already in the project, at the cursor. */
   insertFigures(paths: readonly string[]): void;
+  /**
+   * The passage to work on: the selection, or else the paragraph around the
+   * cursor (lines between blank lines). Offsets are document positions.
+   */
+  passage(): { from: number; to: number; text: string } | null;
+  /** Replaces from..to with text, only if it still holds expected; answers whether it did. */
+  replace(from: number, to: number, expected: string, text: string): boolean;
+  /** Selects from..to and scrolls it into view. */
+  select(from: number, to: number): void;
+  /** The whole document as it stands. */
+  text(): string;
 }
 
 interface LatexEditorProps {
@@ -339,6 +353,42 @@ export const LatexEditor = forwardRef<LatexEditorHandle, LatexEditorProps>(funct
       if (!editor) return;
       editor.focus();
       insertFigures(editor, editor.state.selection.main.head, paths);
+    },
+    passage() {
+      const editor = view.current;
+      if (!editor) return null;
+      const { state } = editor;
+      const range = state.selection.main;
+      if (!range.empty) return { from: range.from, to: range.to, text: state.sliceDoc(range.from, range.to) };
+      // A paragraph ends at a blank line, a comment, or a line of structure.
+      const blank = (n: number) => {
+        const line = state.doc.line(n).text.trim();
+        return line === "" || line.startsWith("%") || STRUCTURE.test(line);
+      };
+      let first = state.doc.lineAt(range.head).number;
+      let last = first;
+      if (blank(first)) return null;
+      while (first > 1 && !blank(first - 1)) first -= 1;
+      while (last < state.doc.lines && !blank(last + 1)) last += 1;
+      const from = state.doc.line(first).from;
+      const to = state.doc.line(last).to;
+      return { from, to, text: state.sliceDoc(from, to) };
+    },
+    replace(from, to, expected, text) {
+      const editor = view.current;
+      if (!editor || from < 0 || to > editor.state.doc.length || editor.state.sliceDoc(from, to) !== expected) return false;
+      editor.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from, head: from + text.length }, scrollIntoView: true, userEvent: "input.ai" });
+      return true;
+    },
+    select(from, to) {
+      const editor = view.current;
+      if (!editor) return;
+      const end = Math.min(to, editor.state.doc.length);
+      editor.dispatch({ selection: { anchor: Math.min(from, end), head: end }, effects: EditorView.scrollIntoView(from, { y: "center" }) });
+      editor.focus();
+    },
+    text() {
+      return view.current?.state.doc.toString() ?? "";
     },
   }));
 

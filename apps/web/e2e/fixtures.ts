@@ -59,7 +59,7 @@ export { expect };
 
 /** Answers the editor and sharing endpoints for page from backend (one backend can serve several browsers). */
 export async function serveBackend(page: Page, backend: FakeBackend) {
-  await page.route(/\/__api\/api\/v1\/(workspaces|templates|invites|activity)/, async (route) => {
+  await page.route(/\/__api\/api\/v1\/(workspaces|templates|invites|activity|ai)/, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const headers = request.headers();

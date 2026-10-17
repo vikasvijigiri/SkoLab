@@ -274,3 +274,78 @@ export interface ActivityPage {
   seen_at: string | null;
   next_page_token: string;
 }
+
+/** AI writing analytics (src/api/ai.ts). */
+export interface AIFeature {
+  available: boolean;
+  daily_limit: number;
+  left_today: number;
+}
+
+export interface AIStatus {
+  improve: AIFeature;
+  originality: AIFeature;
+}
+
+export type ImproveGoal = "clarity" | "concise" | "academic" | "grammar" | "flow";
+
+export interface Suggestion {
+  id: string;
+  original: string;
+  replacement: string;
+  reason: string;
+  category: "clarity" | "concision" | "tone" | "grammar" | "flow" | "word_choice";
+  /** UTF-16 offsets into the text sent. */
+  start: number;
+  end: number;
+}
+
+export interface ImproveResult {
+  goal: ImproveGoal;
+  suggestions: Suggestion[];
+  model: string;
+  left_today: number;
+}
+
+export interface OriginalitySource {
+  id: string;
+  title: string;
+  year?: number;
+  url: string;
+  doi?: string;
+  sentences: number;
+  words: number;
+}
+
+export interface OriginalityMatch {
+  sentence: string;
+  /** Share of the sentence's five-word runs found in the source, 0..1. */
+  overlap: number;
+  source_id: string;
+  excerpt: string;
+}
+
+export interface OriginalityResult {
+  /** Percent of the document's words in matched sentences. */
+  score: number;
+  words: number;
+  matched_words: number;
+  sentences: number;
+  probes: number;
+  sources_checked: number;
+  partial: boolean;
+  matches: OriginalityMatch[];
+  sources: OriginalitySource[];
+}
+
+export interface OriginalityReport {
+  id: string;
+  workspace_id: string;
+  status: "queued" | "running" | "done" | "failed";
+  document_version: number;
+  score: number | null;
+  result: OriginalityResult | null;
+  error: string | null;
+  created_at: string;
+  finished_at: string | null;
+}

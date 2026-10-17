@@ -41,6 +41,8 @@ import { StatusBar } from "../editor/StatusBar";
 import { Overview, ProgressRing } from "../editor/Overview";
 import { FileEditor, type FileEditorHandle } from "../editor/FileEditor";
 import { FilePreview } from "../editor/FilePreview";
+import { AIPanel } from "../editor/AIPanel";
+import { SparkIcon } from "../components/Icons";
 import { FileTree, filesMessage, type FilesState, type OpenTarget } from "../editor/FileTree";
 import { RETRY_DELAY_MS, SAVE_DELAY_MS, saveLabel, type SaveState } from "../editor/saving";
 import { Avatar, Share } from "../editor/Share";
@@ -227,7 +229,8 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
   const [insights, setInsights] = useState<Insights>(doc.insights);
   const [lastSaved, setLastSaved] = useState({ at: doc.updated_at, by: doc.updated_by, version: doc.version });
   const [members, setMembers] = useState<Member[]>([]);
-  const [sheet, setSheet] = useState<"share" | "overview" | "files" | "outline" | "shortcuts" | null>(null);
+  const [sheet, setSheet] = useState<"share" | "overview" | "files" | "outline" | "shortcuts" | "ai" | null>(null);
+  const [aiTab, setAiTab] = useState<"improve" | "originality">("improve");
   // The project's files; main.tex is open while openId is null.
   const [files, setFiles] = useState<FilesState>({ state: "loading" });
   const [openId, setOpenId] = useState<string | null>(null);
@@ -674,6 +677,26 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
     { id: "download-tex", title: "Download main.tex", group: "Actions", keywords: "save export source", run: () => download(`${fileName(title)}.tex`, source, "application/x-tex") },
     ...(pdf || listing?.output ? [{ id: "download-pdf", title: "Download the PDF", group: "Actions", keywords: "export save", run: downloadPdf }] : []),
     { id: "share", title: "Share and invite co-authors", group: "Actions", keywords: "collaborate members access", run: () => setSheet("share") },
+    {
+      id: "ai-improve",
+      title: "Improve writing with AI",
+      group: "AI",
+      keywords: "assistant grammar clarity concise academic tone flow rewrite polish",
+      run: () => {
+        setAiTab("improve");
+        setSheet("ai");
+      },
+    },
+    {
+      id: "ai-originality",
+      title: "Check originality",
+      group: "AI",
+      keywords: "plagiarism similarity overlap sources openalex",
+      run: () => {
+        setAiTab("originality");
+        setSheet("ai");
+      },
+    },
     { id: "overview", title: "Overview: progress and contents", group: "Actions", keywords: "stats insights checklist", run: () => setSheet("overview") },
     { id: "shortcuts", title: "Keyboard shortcuts", group: "Actions", keys: "?", keywords: "help keys", run: () => setSheet("shortcuts") },
     ...(editable
@@ -873,6 +896,19 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
             >
               <FilesIcon />
               Files
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setAiTab("improve");
+                setSheet("ai");
+              }}
+              title="AI writing assistant: improve a passage, or check originality"
+              className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg bg-gradient-to-r from-brand-600 to-violet-600 px-3 text-sm font-semibold text-white shadow-sm shadow-brand-600/30 transition hover:from-brand-700 hover:to-violet-700"
+            >
+              <SparkIcon className="size-4" />
+              AI
             </button>
 
             <button
@@ -1228,6 +1264,11 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
               role: doc.role,
             }}
           />
+        </Sheet>
+      )}
+      {sheet === "ai" && (
+        <Sheet title="AI writing assistant" description="Suggestions you approve one by one, and an originality check against published work." onClose={() => setSheet(null)}>
+          <AIPanel workspaceId={workspace.id} editable={editable} token={idToken} editor={() => editor.current} initialTab={aiTab} onShowInDocument={() => setSheet(null)} />
         </Sheet>
       )}
       {sheet === "share" && (
