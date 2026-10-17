@@ -1620,7 +1620,7 @@ components:
                 - type: "null"
             words: { type: integer, minimum: 0 }
             progress: { type: integer, minimum: 0, maximum: 100 }
-            compiled_at: { type: [string, "null"], format: date-time, description: When set, the first page is at /api/v1/workspaces/{id}/preview.jpg. }
+            compiled_at: { type: [string, "null"], format: date-time, description: "When set, the first page is at /api/v1/workspaces/{id}/preview.jpg." }
     Domain:
       type: string
       enum: [physics, chemistry, mathematics, biology]
