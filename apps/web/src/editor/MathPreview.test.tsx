@@ -4,7 +4,7 @@ import type { CursorInfo } from "./LatexEditor";
 import { MathPreview } from "./MathPreview";
 
 function cursor(tex: string, overrides: Partial<CursorInfo> = {}): CursorInfo {
-  return { line: 1, column: 1, focused: true, math: { from: 0, to: tex.length + 2, tex, display: false }, anchor: { left: 40, top: 100, bottom: 120 }, ...overrides };
+  return { line: 1, column: 1, focused: true, math: { from: 0, to: tex.length + 2, tex, display: false }, anchor: { left: 40, top: 100, bottom: 120 }, selection: null, ...overrides };
 }
 
 describe("math preview", () => {
