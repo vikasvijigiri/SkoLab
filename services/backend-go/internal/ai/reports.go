@@ -474,7 +474,9 @@ func (s *postgresReports) Finish(ctx context.Context, id string, result Result) 
 	if err != nil {
 		return err
 	}
-	return s.exec(ctx, `UPDATE originality_reports SET status = 'done', score = $2, result = $3, finished_at = $4 WHERE id = $1`, id, result.Score, raw, now())
+	// As text: with the production pool's QueryExecModeExec, Postgres is not
+	// asked for parameter types, and a []byte would be sent as bytea.
+	return s.exec(ctx, `UPDATE originality_reports SET status = 'done', score = $2, result = $3::jsonb, finished_at = $4 WHERE id = $1`, id, result.Score, string(raw), now())
 }
 
 func (s *postgresReports) Fail(ctx context.Context, id, reason string) error {

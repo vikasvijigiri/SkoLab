@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
@@ -27,7 +28,14 @@ func testPool(t *testing.T) *pgxpool.Pool {
 		}
 		t.Skip("TEST_DATABASE_URL not set")
 	}
-	pool, err := pgxpool.New(context.Background(), url)
+	config, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The production pool's mode (internal/db): no statement description,
+	// so parameter types are not known up front. Writes must hold up there.
+	config.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
+	pool, err := pgxpool.NewWithConfig(context.Background(), config)
 	if err != nil {
 		t.Fatal(err)
 	}
