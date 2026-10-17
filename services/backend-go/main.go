@@ -26,6 +26,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/skolab/backend-go/internal/activity"
+	"github.com/skolab/backend-go/internal/ai"
 	"github.com/skolab/backend-go/internal/alerts"
 	"github.com/skolab/backend-go/internal/apierror"
 	"github.com/skolab/backend-go/internal/auth"
@@ -161,6 +162,9 @@ func run(ctx context.Context, addr string, listening func(net.Addr)) error {
 	}
 	if err := otel.ObserveRuntime(); err != nil {
 		slog.Warn("runtime metrics unavailable", "err", err)
+	}
+	if err := ai.UseMeter(otel.Metrics.Meter("skolab.ai")); err != nil {
+		slog.Warn("ai metrics unavailable", "err", err)
 	}
 	// Activity feed events written, by kind.
 	if err := activity.UseMeter(otel.Metrics.Meter("skolab.activity")); err != nil {
@@ -464,6 +468,28 @@ func newRouter(g gateway) *gin.Engine {
 	// app's notifications. Events are written by the stores above, in the
 	// same transaction as each change. See internal/activity.
 	activity.Register(workspacesAPI, activity.NewPostgresStore(g.pool))
+	// AI writing analytics: the improver (Python calls the model; the
+	// gateway masks and verifies every edit) and the originality check
+	// (OpenAlex, in the background). Daily allowances per person and per
+	// provider keep it inside the providers' free tiers. See internal/ai.
+	aiConfig := ai.FromEnv()
+	aiBudgets := ai.LedgerBudgets{Pool: g.pool}
+	aiReports := ai.NewPostgresReports(g.pool)
+	aiClient := &http.Client{Transport: g.transport}
+	if n, err := aiReports.Interrupted(context.Background(), 5*time.Minute); err == nil && n > 0 {
+		slog.Warn("ai: originality checks interrupted by a restart were marked failed", "count", n)
+	}
+	ai.Register(workspacesAPI, ai.Deps{
+		Pool:      g.pool,
+		Client:    aiClient,
+		PythonURL: g.python,
+		Token:     os.Getenv("INTERNAL_API_TOKEN"),
+		Config:    aiConfig,
+		Reports:   aiReports,
+		Budgets:   aiBudgets,
+		Runner: ai.NewRunner(aiReports, ai.BudgetedSearch(aiBudgets, aiConfig.SearchDaily,
+			ai.OpenAlex{Key: aiConfig.OpenAlexKey, Client: aiClient}), aiConfig.MaxProbes, 2),
+	})
 
 	// ── Editor templates (Firebase-authenticated) ─────────────────────────────
 	// Journal templates for physics, chemistry, mathematics and biology, built

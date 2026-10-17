@@ -258,3 +258,40 @@ func AsExceeded(err error) (*Exceeded, bool) {
 	ok := errors.As(err, &e)
 	return e, ok
 }
+
+// Allowance charges cost to a named daily allowance (key, e.g.
+// "ai:u:<uid>:improve" or "ai:g:groq") limited to limit per UTC day, in the
+// same usage_counters ledger as the unit quota. It answers what is left, or
+// *Exceeded once the day's allowance is spent (nothing is kept charged then).
+// The Receipt refunds a charge whose work never happened.
+func Allowance(ctx context.Context, pool *pgxpool.Pool, key string, cost, limit int) (Receipt, int, error) {
+	now := time.Now()
+	bucket, end := windowBucket(now, daySeconds)
+	full := fmt.Sprintf("%s:d:%d", key, bucket)
+	used, local, err := incr(ctx, pool, full, cost, end, now)
+	if err != nil {
+		return Receipt{}, 0, err
+	}
+	receipt := Receipt{cost: cost, entries: []charged{{full, local}}}
+	if used > limit {
+		receipt.Refund(ctx, pool)
+		return Receipt{}, 0, &Exceeded{"daily", limit, time.Until(end)}
+	}
+	return receipt, limit - used, nil
+}
+
+// Used is how much of a named daily allowance is spent today, without
+// charging it (0 when nothing is recorded or the ledger is unreachable).
+func Used(ctx context.Context, pool *pgxpool.Pool, key string) int {
+	if pool == nil {
+		return 0
+	}
+	bucket, _ := windowBucket(time.Now(), daySeconds)
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	var count int
+	if err := pool.QueryRow(ctx, `SELECT count FROM usage_counters WHERE bucket_key = $1`, fmt.Sprintf("%s:d:%d", key, bucket)).Scan(&count); err != nil {
+		return 0
+	}
+	return count
+}
