@@ -1,0 +1,35 @@
+name: AI live check
+
+# The AI writing analytics against the real providers, in production: the
+# monitoring account asks for suggestions on a passage with planted errors
+# and runs an originality check on a paragraph copied from a well-known
+# abstract (services/qa/ai_live.py). One model call and at most ten
+# searches, inside the daily budgets. Run by hand (Actions > AI live check)
+# after a deploy that touches the AI services, and weekly.
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '17 6 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-live-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SKOLAB_FIREBASE_API_KEY: ${{ secrets.SKOLAB_FIREBASE_API_KEY }}
+      SKOLAB_SYNTHETIC_EMAIL: ${{ secrets.SKOLAB_SYNTHETIC_EMAIL }}
+      SKOLAB_SYNTHETIC_PASSWORD: ${{ secrets.SKOLAB_SYNTHETIC_PASSWORD }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+      - name: Improver and originality check against production
+        run: python services/qa/ai_live.py --base-url https://skolab-api.onrender.com
