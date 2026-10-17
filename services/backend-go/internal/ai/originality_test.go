@@ -280,3 +280,34 @@ func TestBudgetedSearchChargesEachSearchAndStopsAtTheLimit(t *testing.T) {
 func exceeded(limit int) error {
 	return &quota.Exceeded{Window: "daily", Limit: limit, RetryAfter: time.Hour}
 }
+
+func TestCheckCatchesLightlyEditedTextButNotTheSameTopic(t *testing.T) {
+	source := "Proteins are essential to life, and understanding their structure can facilitate a mechanistic understanding of their function. Structural coverage is bottlenecked by the months to years of painstaking effort required to determine a single protein structure."
+	edited := "Proteins are vital to life, and knowing their structure can facilitate a mechanistic understanding of how they function. Structural coverage is limited by the months to years of painstaking work needed to determine one protein structure."
+	sameField := "We trained a compact graph network on twenty thousand experimentally solved protein structures from our own crystallography pipeline. Its predicted residue contacts agreed with the deposited coordinates for most small soluble domains we tested."
+	search := func(context.Context, string) ([]Work, error) {
+		return []Work{{ID: "W1", Title: "Highly accurate protein structure prediction", Abstract: source}}, nil
+	}
+	got, err := Check(context.Background(), texDocument(edited), search, 3)
+	if err != nil || len(got.Matches) != 2 || got.Score != 100 {
+		t.Fatalf("edited: %+v %v", got, err)
+	}
+	for _, m := range got.Matches {
+		if m.Kind != "edited" || m.Overlap < 0.7 || m.SourceID != "W1" {
+			t.Fatalf("%+v", m)
+		}
+	}
+	if got, err := Check(context.Background(), texDocument(sameField), search, 3); err != nil || len(got.Matches) != 0 {
+		t.Fatalf("same topic, own words: %+v %v", got, err)
+	}
+	if got, _ := Check(context.Background(), texDocument(source), search, 3); len(got.Matches) != 2 || got.Matches[0].Kind != "copied" {
+		t.Fatalf("copied: %+v", got.Matches)
+	}
+}
+
+func TestContentWordsSkipShortAndCommonWords(t *testing.T) {
+	got := contentWords(tokens("We show that the protein structures were very stable, with them."))
+	if len(got) != 3 || !got["protein"] || !got["structures"] || !got["stable"] {
+		t.Fatalf("%v", got)
+	}
+}
