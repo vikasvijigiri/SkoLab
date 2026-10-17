@@ -173,7 +173,105 @@ func (s *postgresStore) List(ctx context.Context, userID string, after *Cursor, 
 	if err := rows.Err(); err != nil {
 		return nil, unavailable(err)
 	}
+	rows.Close()
+	if err := summarize(ctx, s.pool, items); err != nil {
+		return nil, unavailable(err)
+	}
 	return items, nil
+}
+
+// summarize fills in each listed workspace's Summary with two queries for
+// the whole page, whatever its size.
+func summarize(ctx context.Context, pool *pgxpool.Pool, items []Workspace) error {
+	if len(items) == 0 {
+		return nil
+	}
+	ids := make([]string, len(items))
+	byID := make(map[string]*Summary, len(items))
+	for i := range items {
+		ids[i] = items[i].ID
+		items[i].Summary = &Summary{Authors: []Person{}}
+		byID[items[i].ID] = items[i].Summary
+	}
+
+	rows, err := pool.Query(ctx, `
+		SELECT w.id, COALESCE(d.words, 0), COALESCE(d.progress, 0), o.compiled_at, e.edited_at, e.editor, u.display_name
+		FROM workspaces w
+		LEFT JOIN workspace_documents d ON d.workspace_id = w.id
+		LEFT JOIN workspace_outputs o ON o.workspace_id = w.id
+		LEFT JOIN LATERAL (
+			SELECT edited_at, editor FROM (
+				SELECT d.updated_at AS edited_at, d.updated_by AS editor WHERE d.workspace_id IS NOT NULL
+				UNION ALL
+				(SELECT f.updated_at, f.updated_by FROM workspace_files f WHERE f.workspace_id = w.id ORDER BY f.updated_at DESC LIMIT 1)
+			) edits ORDER BY edited_at DESC LIMIT 1
+		) e ON true
+		LEFT JOIN users u ON u.id = e.editor
+		WHERE w.id = ANY($1)`, ids)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var id string
+		var words, progress int
+		var compiled, at *time.Time
+		var by, name *string
+		if err := rows.Scan(&id, &words, &progress, &compiled, &at, &by, &name); err != nil {
+			rows.Close()
+			return err
+		}
+		s := byID[id]
+		s.Words, s.Progress = words, progress
+		if compiled != nil {
+			t := compiled.UTC()
+			s.CompiledAt = &t
+		}
+		if at != nil {
+			t := at.UTC()
+			s.UpdatedAt = &t
+		}
+		if by != nil {
+			s.UpdatedBy = &Person{ID: *by}
+			if name != nil {
+				s.UpdatedBy.DisplayName = *name
+			}
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	rows, err = pool.Query(ctx, `
+		SELECT workspace_id, user_id, display_name, role, total FROM (
+			SELECT a.workspace_id, a.user_id, u.display_name, a.role,
+			       row_number() OVER (PARTITION BY a.workspace_id ORDER BY a.rank, a.joined, a.user_id) AS n,
+			       count(*) OVER (PARTITION BY a.workspace_id) AS total
+			FROM (
+				SELECT w.id AS workspace_id, w.owner_id AS user_id, 'owner' AS role, 0 AS rank, w.created_at AS joined
+				FROM workspaces w WHERE w.id = ANY($1)
+				UNION ALL
+				SELECT m.workspace_id, m.user_id, m.role, 1, m.created_at
+				FROM workspace_members m JOIN workspaces w ON w.id = m.workspace_id
+				WHERE m.workspace_id = ANY($1) AND m.status = 'active' AND m.user_id <> w.owner_id
+			) a JOIN users u ON u.id = a.user_id
+		) ranked WHERE n <= $2 ORDER BY workspace_id, n`, ids, MaxAuthors)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var p Person
+		var total int
+		if err := rows.Scan(&id, &p.ID, &p.DisplayName, &p.Role, &total); err != nil {
+			return err
+		}
+		s := byID[id]
+		s.Authors = append(s.Authors, p)
+		s.AuthorsTotal = total
+	}
+	return rows.Err()
 }
 
 func (s *postgresStore) Get(ctx context.Context, id, userID string) (Workspace, error) {

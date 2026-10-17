@@ -154,6 +154,11 @@ class WorkspaceDocument(Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # Kept by every save (internal/manuscript) for the documents page;
+    # stats_version marks rows filled in by the gateway's one-time backfill.
+    words = Column(Integer, nullable=False, default=0, server_default="0")
+    progress = Column(Integer, nullable=False, default=0, server_default="0")
+    stats_version = Column(Integer, nullable=False, default=0, server_default="0")
 
     __table_args__ = (
         CheckConstraint("char_length(source) <= 100000", name="chk_workspace_document_size"),
@@ -299,6 +304,9 @@ class WorkspaceOutput(Base):
     )
     pdf = Column(LargeBinary, nullable=False)
     size = Column(Integer, nullable=False)
+    # A small JPEG of the PDF's first page (internal/preview), made on first
+    # request and cleared by every new compile.
+    preview = Column(LargeBinary, nullable=True)
     compiled_at = Column(DateTime, default=utcnow, nullable=False)
     compiled_by = Column(
         String(100),

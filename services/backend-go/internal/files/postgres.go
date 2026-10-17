@@ -544,7 +544,7 @@ func (s *postgresStore) SaveOutput(ctx context.Context, workspaceID, userID stri
 	if _, err := s.pool.Exec(ctx, `
 		INSERT INTO workspace_outputs (workspace_id, pdf, size, compiled_at, compiled_by) VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (workspace_id) DO UPDATE SET pdf = EXCLUDED.pdf, size = EXCLUDED.size,
-		       compiled_at = EXCLUDED.compiled_at, compiled_by = EXCLUDED.compiled_by`,
+		       compiled_at = EXCLUDED.compiled_at, compiled_by = EXCLUDED.compiled_by, preview = NULL`,
 		workspaceID, pdf, len(pdf), out.CompiledAt, userID); err != nil {
 		return Output{}, unavailable(err)
 	}
@@ -571,6 +571,40 @@ func (s *postgresStore) Output(ctx context.Context, workspaceID, userID string) 
 		return title, nil, ErrNoOutput
 	}
 	return title, pdf, nil
+}
+
+func (s *postgresStore) Preview(ctx context.Context, workspaceID, userID string) (Preview, error) {
+	if s.pool == nil {
+		return Preview{}, ErrUnavailable
+	}
+	ctx, cancel := context.WithTimeout(ctx, bulkTimeout)
+	defer cancel()
+	if _, err := role(ctx, s.pool, workspaceID, userID); err != nil {
+		return Preview{}, err
+	}
+	var p Preview
+	// The PDF is read only while there is no image to answer with.
+	err := s.pool.QueryRow(ctx, `SELECT compiled_at, preview, CASE WHEN preview IS NULL THEN pdf END FROM workspace_outputs WHERE workspace_id = $1`, workspaceID).
+		Scan(&p.CompiledAt, &p.Image, &p.PDF)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return Preview{}, ErrNoOutput
+	case err != nil:
+		return Preview{}, unavailable(err)
+	}
+	return p, nil
+}
+
+func (s *postgresStore) SavePreview(ctx context.Context, workspaceID string, compiledAt time.Time, image []byte) error {
+	if s.pool == nil {
+		return ErrUnavailable
+	}
+	ctx, cancel := context.WithTimeout(ctx, bulkTimeout)
+	defer cancel()
+	if _, err := s.pool.Exec(ctx, `UPDATE workspace_outputs SET preview = $3 WHERE workspace_id = $1 AND compiled_at = $2`, workspaceID, compiledAt, image); err != nil {
+		return unavailable(err)
+	}
+	return nil
 }
 
 func (s *postgresStore) Import(ctx context.Context, userID, title, main string, files []NewFile) (workspace.Workspace, error) {

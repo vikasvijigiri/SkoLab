@@ -150,6 +150,17 @@ func run(ctx context.Context, addr string, listening func(net.Addr)) error {
 	cleanupCtx, stopCleanup := context.WithCancel(context.Background())
 	defer stopCleanup()
 	go maintain(cleanupCtx, db.Pool, time.Minute)
+	// Word counts and progress for documents saved before they were kept;
+	// once done, every save keeps them.
+	if db.Pool != nil {
+		go func() {
+			if n, err := document.Backfill(cleanupCtx, db.Pool, 100); err != nil && cleanupCtx.Err() == nil {
+				slog.Warn("document stats backfill incomplete", "updated", n)
+			} else if n > 0 {
+				slog.Info("document stats backfilled", "updated", n)
+			}
+		}()
+	}
 	// Saturation signals (pool usage, goroutines, heap) beside the RED metrics.
 	// Pool stats are read at export time; nil while the pool is down.
 	if err := otel.ObserveDBPool(func() telemetry.PoolStats {

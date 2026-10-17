@@ -103,6 +103,14 @@ type Main struct {
 	UpdatedAt *time.Time `json:"updated_at"`
 }
 
+// Preview is the first page of a project's last compiled PDF: Image once it
+// has been rendered, otherwise the PDF to render it from.
+type Preview struct {
+	CompiledAt time.Time
+	Image      []byte
+	PDF        []byte
+}
+
 // Output describes the PDF the last successful compile produced.
 type Output struct {
 	Size       int       `json:"size"`

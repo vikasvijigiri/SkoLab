@@ -48,6 +48,7 @@ RUN apt-get update && apt-get upgrade -y --no-install-recommends \
     texlive-science \
     texlive-latex-extra \
     util-linux \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -g 10001 schoolab \
     && useradd -u 10001 -g schoolab -s /bin/bash -m schoolab

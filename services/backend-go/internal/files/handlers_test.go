@@ -32,6 +32,8 @@ type fakeStore struct {
 	bundle   Bundle
 	output   []byte
 	imported *imported
+	preview  Preview
+	kept     []byte
 }
 
 var at = time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
@@ -131,6 +133,17 @@ func (s *fakeStore) Output(_ context.Context, _, _ string) (string, []byte, erro
 		return "", nil, s.err
 	}
 	return "My Paper", pdfBytes, nil
+}
+
+func (s *fakeStore) Preview(_ context.Context, _, _ string) (Preview, error) {
+	return s.preview, s.err
+}
+
+func (s *fakeStore) SavePreview(_ context.Context, _ string, compiledAt time.Time, image []byte) error {
+	if compiledAt.Equal(s.preview.CompiledAt) {
+		s.kept = image
+	}
+	return nil
 }
 
 func (s *fakeStore) Import(_ context.Context, uid, title, main string, files []NewFile) (workspace.Workspace, error) {
@@ -612,5 +625,81 @@ func TestPostOnlyPaths(t *testing.T) {
 	}
 	if w := do("GET", base+"/files/upload/raw"); w.Code == http.StatusMethodNotAllowed {
 		t.Fatalf("raw: %d %s", w.Code, w.Body)
+	}
+}
+
+func TestPreviewRendersOnceAndRevalidatesByCompile(t *testing.T) {
+	jpeg := []byte{0xff, 0xd8, 0xff, 0xe0, 1, 2, 3}
+	renders := 0
+	saved := renderPreview
+	t.Cleanup(func() { renderPreview = saved })
+	renderPreview = func(_ context.Context, pdf []byte) ([]byte, error) {
+		renders++
+		if !bytes.Equal(pdf, pdfBytes) {
+			t.Fatalf("rendered %q", pdf)
+		}
+		return jpeg, nil
+	}
+	store := &fakeStore{preview: Preview{CompiledAt: at, PDF: pdfBytes}}
+	w := serve(t, store, nil, "alice", jsonReq("GET", base+"/preview.jpg", ""))
+	tag := w.Header().Get("ETag")
+	if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "image/jpeg" || !bytes.Equal(w.Body.Bytes(), jpeg) || tag == "" ||
+		w.Header().Get("Cache-Control") != "private, no-cache" {
+		t.Fatalf("%d %v", w.Code, w.Header())
+	}
+	if renders != 1 || !bytes.Equal(store.kept, jpeg) {
+		t.Fatalf("renders %d, kept %v", renders, store.kept)
+	}
+
+	// Kept: served without rendering again.
+	store.preview = Preview{CompiledAt: at, Image: jpeg}
+	if w := serve(t, store, nil, "alice", jsonReq("GET", base+"/preview.jpg", "")); w.Code != http.StatusOK || renders != 1 {
+		t.Fatalf("%d, renders %d", w.Code, renders)
+	}
+
+	// The same compile revalidates, weakly or not; a newer one does not.
+	for _, header := range []string{tag, "W/" + tag, `"x", ` + tag} {
+		req := jsonReq("GET", base+"/preview.jpg", "")
+		req.Header.Set("If-None-Match", header)
+		if w := serve(t, store, nil, "alice", req); w.Code != http.StatusNotModified || w.Body.Len() != 0 {
+			t.Fatalf("%s: %d", header, w.Code)
+		}
+	}
+	store.preview.CompiledAt = at.Add(time.Second)
+	req := jsonReq("GET", base+"/preview.jpg", "")
+	req.Header.Set("If-None-Match", tag)
+	if w := serve(t, store, nil, "alice", req); w.Code != http.StatusOK || w.Header().Get("ETag") == tag {
+		t.Fatalf("%d %s", w.Code, w.Header().Get("ETag"))
+	}
+}
+
+func TestPreviewRefusals(t *testing.T) {
+	saved := renderPreview
+	t.Cleanup(func() { renderPreview = saved })
+	renderPreview = func(context.Context, []byte) ([]byte, error) { return nil, errors.New("cannot") }
+
+	cases := []struct {
+		store *fakeStore
+		user  string
+		code  int
+		error string
+	}{
+		{&fakeStore{preview: Preview{CompiledAt: at, PDF: pdfBytes}}, "", http.StatusUnauthorized, ""},
+		{&fakeStore{err: ErrNotFound}, "alice", http.StatusNotFound, "not_found"},
+		{&fakeStore{err: ErrNoOutput}, "alice", http.StatusNotFound, "no_output"},
+		{&fakeStore{err: ErrUnavailable}, "alice", http.StatusServiceUnavailable, "unavailable"},
+		{&fakeStore{preview: Preview{CompiledAt: at, PDF: pdfBytes}}, "alice", http.StatusNotFound, "no_preview"},
+	}
+	for _, tc := range cases {
+		w := serve(t, tc.store, nil, tc.user, jsonReq("GET", base+"/preview.jpg", ""))
+		if w.Code != tc.code || w.Header().Get("ETag") != "" {
+			t.Fatalf("%+v: %d %v", tc, w.Code, w.Header())
+		}
+		if tc.error != "" && decoded(t, w)["code"] != tc.error {
+			t.Fatalf("%+v: %s", tc, w.Body)
+		}
+		if tc.store.kept != nil {
+			t.Fatal("kept a failed render")
+		}
 	}
 }

@@ -253,7 +253,7 @@ paths:
                 type: object
                 required: [workspaces, next_page_token]
                 properties:
-                  workspaces: { type: array, items: { $ref: "#/components/schemas/Workspace" } }
+                  workspaces: { type: array, items: { $ref: "#/components/schemas/WorkspaceCard" } }
                   next_page_token: { type: string, description: Empty on the last page. }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -949,6 +949,34 @@ paths:
         "429": { $ref: "#/components/responses/TooMany" }
         "503": { $ref: "#/components/responses/Unavailable" }
 
+  /api/v1/workspaces/{id}/preview.jpg:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+      - $ref: "#/components/parameters/IfNoneMatch"
+    get:
+      tags: [editor]
+      operationId: getDocumentPreview
+      summary: The first page of the last compiled PDF as a JPEG (any active member)
+      description: |
+        480 pixels wide, for document cards. Rendered the first time it is
+        asked for after a compile and kept until the next compile; the ETag
+        names that compile. 404 no_output before the first compile, 404
+        no_preview when the page could not be rendered.
+      responses:
+        "200":
+          description: The picture.
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+        "304": { description: The caller's copy (If-None-Match) is current. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
   /api/v1/workspaces/import:
     post:
       tags: [workspaces]
@@ -1255,6 +1283,30 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/TooMany" }
 
+  /api/v1/templates/{template_id}/preview.jpg:
+    parameters:
+      - { name: template_id, in: path, required: true, schema: { type: string } }
+      - { name: v, in: query, required: false, schema: { type: string }, description: The version in the template's preview URL; other parameters are refused. }
+      - $ref: "#/components/parameters/IfNoneMatch"
+    get:
+      tags: [editor]
+      operationId: getTemplatePreview
+      summary: The template's compiled first page as a JPEG
+      description: Use the `preview` URL from the catalog; it changes whenever the picture does, so the answer may be cached for good.
+      responses:
+        "200":
+          description: The picture.
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+        "304": { description: The caller's copy (If-None-Match) is current. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+
   /api/v1/colab/compile:
     post:
       tags: [collaboration]
@@ -1540,6 +1592,35 @@ components:
         owner_id: { type: string }
         role: { $ref: "#/components/schemas/Role" }
         created_at: { type: string, format: date-time }
+    Person:
+      type: object
+      required: [id, display_name]
+      properties:
+        id: { type: string }
+        display_name: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+    WorkspaceCard:
+      description: A workspace as the documents page lists it, with what its card shows.
+      allOf:
+        - $ref: "#/components/schemas/Workspace"
+        - type: object
+          required: [authors, authors_total, updated_at, updated_by, words, progress, compiled_at]
+          properties:
+            authors:
+              type: array
+              maxItems: 8
+              description: The owner, then active members in the order they joined.
+              items: { $ref: "#/components/schemas/Person" }
+            authors_total: { type: integer, minimum: 1 }
+            updated_at: { type: [string, "null"], format: date-time, description: The latest edit to main.tex or any project file. }
+            updated_by:
+              description: Who made that edit; null before the first one or once their account is gone.
+              oneOf:
+                - $ref: "#/components/schemas/Person"
+                - type: "null"
+            words: { type: integer, minimum: 0 }
+            progress: { type: integer, minimum: 0, maximum: 100 }
+            compiled_at: { type: [string, "null"], format: date-time, description: When set, the first page is at /api/v1/workspaces/{id}/preview.jpg. }
     Domain:
       type: string
       enum: [physics, chemistry, mathematics, biology]
@@ -1549,7 +1630,7 @@ components:
       enum: [aps-physical-review, aip-applied-physics, quantum, acs-jacs, aip-chemical-physics, elsevier-cas-sc, ams-article, elsevier-article, oup-journal, nature, elsevier-cas-dc]
     TemplateSummary:
       type: object
-      required: [id, name, domain, journals, publisher, description, class, license, source_url, size]
+      required: [id, name, domain, journals, publisher, description, class, license, source_url, size, preview]
       properties:
         id: { $ref: "#/components/schemas/TemplateId" }
         name: { type: string }
@@ -1561,6 +1642,7 @@ components:
         license: { type: string }
         source_url: { type: string, format: uri }
         size: { type: integer, minimum: 1, description: Bytes of LaTeX source. }
+        preview: { type: string, description: "The compiled first page: /api/v1/templates/{id}/preview.jpg?v=<version>." }
     Template:
       allOf:
         - $ref: "#/components/schemas/TemplateSummary"
