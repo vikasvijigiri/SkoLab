@@ -1,7 +1,8 @@
 {
   "//": "Size budgets for the production build, gzip-compressed kB, checked by scripts/check-bundle.mjs in CI. Raise one only on purpose, in the same pull request that needs it, and say why.",
+  "//initialCss": "16 since the AI selection toolbar (#67): Tailwind emits one stylesheet for every route, so the editor and AI panels add to it; it was 15.1 kB.",
   "initialJs": 125,
-  "initialCss": 15,
+  "initialCss": 16,
   "largestLazyJs": 180,
   "largestWorker": 450,
   "totalJs": 950,
