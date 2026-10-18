@@ -156,6 +156,8 @@ describe("home documents and templates", () => {
     await user.upload(await screen.findByLabelText("Choose a project .zip to upload"), new File([zip], "Spin waves.zip", { type: "application/zip" }));
     expect(await screen.findByDisplayValue("Spin waves", {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByText(/2 files were left out because SkoLab can't use them/)).toHaveTextContent("notes.docx, __MACOSX/._paper.tex");
+    // The editor lists the project's files once it opens; that request names the new project.
+    await waitFor(() => expect(backend.requests.some((request) => request.url.endsWith("/files"))).toBe(true));
     const id = /\/workspaces\/([^/]+)\/files$/.exec(backend.requests.find((request) => request.url.endsWith("/files"))?.url ?? "")?.[1] ?? "";
     expect(backend.document(id)?.source).toContain("\\input{intro}");
     expect(Object.keys(backend.files(id)).sort()).toEqual(["figures", "figures/plot.png", "intro.tex"]);
@@ -293,6 +295,8 @@ describe("home documents and templates", () => {
     ]);
     expect(await screen.findByDisplayValue("Thesis", {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByText(/One file was left out/)).toHaveTextContent("notes.docx");
+    // The editor lists the project's files once it opens; that request names the new project.
+    await waitFor(() => expect(backend.requests.some((request) => request.url.endsWith("/files"))).toBe(true));
     const id = /\/workspaces\/([^/]+)\/files$/.exec(backend.requests.find((request) => request.url.endsWith("/files"))?.url ?? "")?.[1] ?? "";
     expect(backend.document(id)?.source).toContain("\\input{sections/intro}");
     expect(Object.keys(backend.files(id)).sort()).toEqual(["figs", "figs/a.png", "sections", "sections/intro.tex"]);
@@ -319,6 +323,8 @@ describe("home documents and templates", () => {
     expect(backend.titles()).toEqual([]);
     await user.click(within(sheet).getByRole("button", { name: "slides.tex" }));
     expect(await screen.findByDisplayValue("slides", {}, { timeout: 5000 })).toBeInTheDocument();
+    // The editor lists the project's files once it opens; that request names the new project.
+    await waitFor(() => expect(backend.requests.some((request) => request.url.endsWith("/files"))).toBe(true));
     const id = /\/workspaces\/([^/]+)\/files$/.exec(backend.requests.find((request) => request.url.endsWith("/files"))?.url ?? "")?.[1] ?? "";
     expect(backend.document(id)?.source).toContain("beamer");
     expect(Object.keys(backend.files(id)).sort()).toEqual(["paper.tex", "preamble.tex"]);
