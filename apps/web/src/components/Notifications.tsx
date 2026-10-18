@@ -178,7 +178,7 @@ export function Notifications({ token, me }: { token: () => Promise<string>; me:
                   <BellIcon className="size-6" />
                 </span>
                 <p className="mt-3 text-sm font-semibold">You're all caught up</p>
-                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">When co-authors edit or join your documents, you'll see it here.</p>
+                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">When co-authors edit or join your projects, you'll see it here.</p>
               </div>
             ) : (
               <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">

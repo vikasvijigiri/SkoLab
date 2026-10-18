@@ -29,7 +29,7 @@ export function Templates() {
         Journal templates
       </h1>
       <p className="mt-1.5 max-w-2xl text-[15px] text-zinc-600 dark:text-zinc-400">
-        The publishers' own LaTeX templates, shown as they compile. Pick one to start a document; you can change everything after.
+        The publishers' own LaTeX templates, shown as they compile. Pick one to start a project; you can change everything after.
       </p>
 
       <div className="mt-6 flex flex-wrap gap-2" role="group" aria-label="Filter templates by field">

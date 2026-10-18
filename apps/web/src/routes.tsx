@@ -28,10 +28,10 @@ export function RequireAccount() {
   return <Outlet />;
 }
 
-/** "/" is the documents page; a query or fragment comes along. */
-export function ToDocuments() {
+/** "/" (and the old "/documents") is the projects page; a query or fragment comes along. */
+export function ToProjects() {
   const { search, hash } = useLocation();
-  return <Navigate to={{ pathname: "/documents", search, hash }} replace />;
+  return <Navigate to={{ pathname: "/projects", search, hash }} replace />;
 }
 
 /** The verify-email step: only for signed-in, unverified password accounts. */

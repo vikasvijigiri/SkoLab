@@ -22,7 +22,7 @@ describe("verify email", () => {
 
     auth.verify("grace@example.com");
     await user.click(screen.getByRole("button", { name: "I've verified my email" }));
-    expect(await screen.findByRole("heading", { name: "Your documents" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Your projects" })).toBeInTheDocument();
   });
 
   it("notices verification when the tab regains focus", async () => {
@@ -31,7 +31,7 @@ describe("verify email", () => {
     await screen.findByRole("heading", { name: "Verify your email" });
     auth.verify("grace@example.com");
     fireEvent.focus(window);
-    expect(await screen.findByRole("heading", { name: "Your documents" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Your projects" })).toBeInTheDocument();
   });
 
   it("limits resends with a countdown", async () => {

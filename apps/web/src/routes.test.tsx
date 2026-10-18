@@ -15,8 +15,19 @@ describe("route guards", () => {
       await withAccount(auth);
       await auth.signInWithEmail("grace@example.com", "correct horse 42");
     });
-    expect(await screen.findByRole("heading", { name: "Your documents" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Your projects" })).toBeInTheDocument();
     expect(screen.getByText(/, Grace Hopper$/)).toBeInTheDocument();
+  });
+
+  it("sends / and the old /documents to the projects page", async () => {
+    stubApi();
+    for (const path of ["/", "/documents"]) {
+      const { unmount } = await renderApp(path, async (auth) => {
+        await auth.signInWithGoogle();
+      });
+      expect(await screen.findByRole("heading", { name: "Your projects" })).toBeInTheDocument();
+      unmount();
+    }
   });
 
   it("routes unverified accounts to verification, and verification away from everyone else", async () => {

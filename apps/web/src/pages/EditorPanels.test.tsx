@@ -128,7 +128,7 @@ describe("editor overview and sharing", () => {
 
     await user.click(within(sheet).getByRole("button", { name: "Leave" }));
     await user.click(within(sheet).getByRole("button", { name: "Leave this document?" }));
-    expect(await screen.findByRole("heading", { name: "Your documents" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Your projects" })).toBeInTheDocument();
     expect(backend.members(id)[ADA]).toBeUndefined();
   });
 

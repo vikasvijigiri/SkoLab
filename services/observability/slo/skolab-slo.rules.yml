@@ -193,42 +193,42 @@ groups:
         labels: {slo: gateway-availability, job: skolab-gateway}
       - record: slo:sli_error:ratio_rate5m
         expr: |-
-          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*",http_response_status_code=~"5.."}[5m]))
+          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*",http_response_status_code=~"5.."}[5m]))
           /
-          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*"}[5m]))
+          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*"}[5m]))
         labels: {slo: gateway-availability}
       - record: slo:sli_error:ratio_rate30m
         expr: |-
-          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*",http_response_status_code=~"5.."}[30m]))
+          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*",http_response_status_code=~"5.."}[30m]))
           /
-          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*"}[30m]))
+          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*"}[30m]))
         labels: {slo: gateway-availability}
       - record: slo:sli_error:ratio_rate1h
         expr: |-
-          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*",http_response_status_code=~"5.."}[1h]))
+          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*",http_response_status_code=~"5.."}[1h]))
           /
-          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*"}[1h]))
+          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*"}[1h]))
         labels: {slo: gateway-availability}
       - record: slo:sli_error:ratio_rate6h
         expr: |-
-          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*",http_response_status_code=~"5.."}[6h]))
+          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*",http_response_status_code=~"5.."}[6h]))
           /
-          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*"}[6h]))
+          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*"}[6h]))
         labels: {slo: gateway-availability}
       - record: slo:sli_error:ratio_rate3d
         expr: |-
-          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*",http_response_status_code=~"5.."}[3d]))
+          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*",http_response_status_code=~"5.."}[3d]))
           /
-          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*"}[3d]))
+          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*"}[3d]))
         labels: {slo: gateway-availability}
       - record: slo:sli_requests:increase1h
-        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*"}[1h]))
+        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*"}[1h]))
         labels: {slo: gateway-availability}
       - record: slo:sli_requests:increase6h
-        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*"}[6h]))
+        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*"}[6h]))
         labels: {slo: gateway-availability}
       - record: slo:sli_requests:increase3d
-        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*"}[3d]))
+        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*"}[3d]))
         labels: {slo: gateway-availability}
       - alert: SLOBurnRateGatewayAvailability
         expr: |-
@@ -281,51 +281,51 @@ groups:
       - record: slo:sli_error:ratio_rate5m
         expr: |-
           1 - (
-            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*",le=~"1|1\\.0"}[5m]))
+            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*",le=~"1|1\\.0"}[5m]))
           /
-            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*"}[5m]))
+            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*"}[5m]))
           )
         labels: {slo: gateway-latency}
       - record: slo:sli_error:ratio_rate30m
         expr: |-
           1 - (
-            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*",le=~"1|1\\.0"}[30m]))
+            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*",le=~"1|1\\.0"}[30m]))
           /
-            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*"}[30m]))
+            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*"}[30m]))
           )
         labels: {slo: gateway-latency}
       - record: slo:sli_error:ratio_rate1h
         expr: |-
           1 - (
-            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*",le=~"1|1\\.0"}[1h]))
+            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*",le=~"1|1\\.0"}[1h]))
           /
-            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*"}[1h]))
+            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*"}[1h]))
           )
         labels: {slo: gateway-latency}
       - record: slo:sli_error:ratio_rate6h
         expr: |-
           1 - (
-            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*",le=~"1|1\\.0"}[6h]))
+            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*",le=~"1|1\\.0"}[6h]))
           /
-            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*"}[6h]))
+            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*"}[6h]))
           )
         labels: {slo: gateway-latency}
       - record: slo:sli_error:ratio_rate3d
         expr: |-
           1 - (
-            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*",le=~"1|1\\.0"}[3d]))
+            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*",le=~"1|1\\.0"}[3d]))
           /
-            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*"}[3d]))
+            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*"}[3d]))
           )
         labels: {slo: gateway-latency}
       - record: slo:sli_requests:increase1h
-        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*"}[1h]))
+        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*"}[1h]))
         labels: {slo: gateway-latency}
       - record: slo:sli_requests:increase6h
-        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*"}[6h]))
+        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*"}[6h]))
         labels: {slo: gateway-latency}
       - record: slo:sli_requests:increase3d
-        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/ws/.*"}[3d]))
+        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route!~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile|/api/v1/workspaces/:id/ai/improve|/ws/.*"}[3d]))
         labels: {slo: gateway-latency}
       - alert: SLOBurnRateGatewayLatency
         expr: |-
@@ -377,42 +377,42 @@ groups:
         labels: {slo: compile-availability, job: skolab-gateway}
       - record: slo:sli_error:ratio_rate5m
         expr: |-
-          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile",http_response_status_code=~"5.."}[5m]))
+          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile",http_response_status_code=~"5.."}[5m]))
           /
-          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile"}[5m]))
+          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile"}[5m]))
         labels: {slo: compile-availability}
       - record: slo:sli_error:ratio_rate30m
         expr: |-
-          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile",http_response_status_code=~"5.."}[30m]))
+          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile",http_response_status_code=~"5.."}[30m]))
           /
-          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile"}[30m]))
+          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile"}[30m]))
         labels: {slo: compile-availability}
       - record: slo:sli_error:ratio_rate1h
         expr: |-
-          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile",http_response_status_code=~"5.."}[1h]))
+          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile",http_response_status_code=~"5.."}[1h]))
           /
-          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile"}[1h]))
+          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile"}[1h]))
         labels: {slo: compile-availability}
       - record: slo:sli_error:ratio_rate6h
         expr: |-
-          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile",http_response_status_code=~"5.."}[6h]))
+          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile",http_response_status_code=~"5.."}[6h]))
           /
-          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile"}[6h]))
+          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile"}[6h]))
         labels: {slo: compile-availability}
       - record: slo:sli_error:ratio_rate3d
         expr: |-
-          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile",http_response_status_code=~"5.."}[3d]))
+          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile",http_response_status_code=~"5.."}[3d]))
           /
-          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile"}[3d]))
+          sum by (job) (rate(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile"}[3d]))
         labels: {slo: compile-availability}
       - record: slo:sli_requests:increase1h
-        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile"}[1h]))
+        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile"}[1h]))
         labels: {slo: compile-availability}
       - record: slo:sli_requests:increase6h
-        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile"}[6h]))
+        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile"}[6h]))
         labels: {slo: compile-availability}
       - record: slo:sli_requests:increase3d
-        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile"}[3d]))
+        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile"}[3d]))
         labels: {slo: compile-availability}
       - alert: SLOBurnRateCompileAvailability
         expr: |-
@@ -465,51 +465,51 @@ groups:
       - record: slo:sli_error:ratio_rate5m
         expr: |-
           1 - (
-            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile",le=~"10|10\\.0"}[5m]))
+            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile",le=~"10|10\\.0"}[5m]))
           /
-            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile"}[5m]))
+            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile"}[5m]))
           )
         labels: {slo: compile-latency}
       - record: slo:sli_error:ratio_rate30m
         expr: |-
           1 - (
-            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile",le=~"10|10\\.0"}[30m]))
+            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile",le=~"10|10\\.0"}[30m]))
           /
-            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile"}[30m]))
+            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile"}[30m]))
           )
         labels: {slo: compile-latency}
       - record: slo:sli_error:ratio_rate1h
         expr: |-
           1 - (
-            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile",le=~"10|10\\.0"}[1h]))
+            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile",le=~"10|10\\.0"}[1h]))
           /
-            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile"}[1h]))
+            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile"}[1h]))
           )
         labels: {slo: compile-latency}
       - record: slo:sli_error:ratio_rate6h
         expr: |-
           1 - (
-            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile",le=~"10|10\\.0"}[6h]))
+            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile",le=~"10|10\\.0"}[6h]))
           /
-            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile"}[6h]))
+            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile"}[6h]))
           )
         labels: {slo: compile-latency}
       - record: slo:sli_error:ratio_rate3d
         expr: |-
           1 - (
-            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile",le=~"10|10\\.0"}[3d]))
+            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile",le=~"10|10\\.0"}[3d]))
           /
-            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile"}[3d]))
+            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile"}[3d]))
           )
         labels: {slo: compile-latency}
       - record: slo:sli_requests:increase1h
-        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile"}[1h]))
+        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile"}[1h]))
         labels: {slo: compile-latency}
       - record: slo:sli_requests:increase6h
-        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile"}[6h]))
+        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile"}[6h]))
         labels: {slo: compile-latency}
       - record: slo:sli_requests:increase3d
-        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/colab/compile"}[3d]))
+        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route=~"/api/v1/colab/compile|/api/v1/workspaces/:id/compile"}[3d]))
         labels: {slo: compile-latency}
       - alert: SLOBurnRateCompileLatency
         expr: |-
@@ -553,3 +553,100 @@ groups:
           summary: "compile-latency: burning error budget 1x too fast (10% of the 30d budget in 3d)"
           description: "SLO: 95% of LaTeX compiles that complete within 10s. Error ratio over 3d is {{ $value | humanizePercentage }} (budget allows 5.00%)."
           runbook_url: "https://github.com/vikasvijigiri/SkoLab/blob/master/services/observability/slo/RUNBOOK.md#compile-latency"
+  - name: slo-ai-improve-latency
+    interval: 1m
+    rules:
+      - record: slo:objective:ratio
+        expr: vector(0.95)
+        labels: {slo: ai-improve-latency, job: skolab-gateway}
+      - record: slo:sli_error:ratio_rate5m
+        expr: |-
+          1 - (
+            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/workspaces/:id/ai/improve",le=~"10|10\\.0"}[5m]))
+          /
+            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/workspaces/:id/ai/improve"}[5m]))
+          )
+        labels: {slo: ai-improve-latency}
+      - record: slo:sli_error:ratio_rate30m
+        expr: |-
+          1 - (
+            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/workspaces/:id/ai/improve",le=~"10|10\\.0"}[30m]))
+          /
+            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/workspaces/:id/ai/improve"}[30m]))
+          )
+        labels: {slo: ai-improve-latency}
+      - record: slo:sli_error:ratio_rate1h
+        expr: |-
+          1 - (
+            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/workspaces/:id/ai/improve",le=~"10|10\\.0"}[1h]))
+          /
+            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/workspaces/:id/ai/improve"}[1h]))
+          )
+        labels: {slo: ai-improve-latency}
+      - record: slo:sli_error:ratio_rate6h
+        expr: |-
+          1 - (
+            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/workspaces/:id/ai/improve",le=~"10|10\\.0"}[6h]))
+          /
+            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/workspaces/:id/ai/improve"}[6h]))
+          )
+        labels: {slo: ai-improve-latency}
+      - record: slo:sli_error:ratio_rate3d
+        expr: |-
+          1 - (
+            sum by (job) (rate(skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/workspaces/:id/ai/improve",le=~"10|10\\.0"}[3d]))
+          /
+            sum by (job) (rate(skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/workspaces/:id/ai/improve"}[3d]))
+          )
+        labels: {slo: ai-improve-latency}
+      - record: slo:sli_requests:increase1h
+        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/workspaces/:id/ai/improve"}[1h]))
+        labels: {slo: ai-improve-latency}
+      - record: slo:sli_requests:increase6h
+        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/workspaces/:id/ai/improve"}[6h]))
+        labels: {slo: ai-improve-latency}
+      - record: slo:sli_requests:increase3d
+        expr: sum by (job) (increase(skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/workspaces/:id/ai/improve"}[3d]))
+        labels: {slo: ai-improve-latency}
+      - alert: SLOBurnRateAiImproveLatency
+        expr: |-
+          slo:sli_error:ratio_rate1h{slo="ai-improve-latency"} > 0.72
+          and slo:sli_error:ratio_rate5m{slo="ai-improve-latency"} > 0.72
+          and slo:sli_requests:increase1h{slo="ai-improve-latency"} >= 50
+        for: 2m
+        labels:
+          severity: page
+          slo: ai-improve-latency
+          window: 1h
+        annotations:
+          summary: "ai-improve-latency: burning error budget 14.4x too fast (2% of the 30d budget in 1h)"
+          description: "SLO: 95% of AI improver suggestions that arrive within 10s. Error ratio over 1h is {{ $value | humanizePercentage }} (budget allows 5.00%)."
+          runbook_url: "https://github.com/vikasvijigiri/SkoLab/blob/master/services/observability/slo/RUNBOOK.md#ai-improve-latency"
+      - alert: SLOBurnRateAiImproveLatency
+        expr: |-
+          slo:sli_error:ratio_rate6h{slo="ai-improve-latency"} > 0.3
+          and slo:sli_error:ratio_rate30m{slo="ai-improve-latency"} > 0.3
+          and slo:sli_requests:increase6h{slo="ai-improve-latency"} >= 50
+        for: 2m
+        labels:
+          severity: page
+          slo: ai-improve-latency
+          window: 6h
+        annotations:
+          summary: "ai-improve-latency: burning error budget 6x too fast (5% of the 30d budget in 6h)"
+          description: "SLO: 95% of AI improver suggestions that arrive within 10s. Error ratio over 6h is {{ $value | humanizePercentage }} (budget allows 5.00%)."
+          runbook_url: "https://github.com/vikasvijigiri/SkoLab/blob/master/services/observability/slo/RUNBOOK.md#ai-improve-latency"
+      - alert: SLOBurnRateAiImproveLatency
+        expr: |-
+          slo:sli_error:ratio_rate3d{slo="ai-improve-latency"} > 0.05
+          and slo:sli_error:ratio_rate6h{slo="ai-improve-latency"} > 0.05
+          and slo:sli_requests:increase3d{slo="ai-improve-latency"} >= 50
+        for: 30m
+        labels:
+          severity: ticket
+          slo: ai-improve-latency
+          window: 3d
+        annotations:
+          summary: "ai-improve-latency: burning error budget 1x too fast (10% of the 30d budget in 3d)"
+          description: "SLO: 95% of AI improver suggestions that arrive within 10s. Error ratio over 3d is {{ $value | humanizePercentage }} (budget allows 5.00%)."
+          runbook_url: "https://github.com/vikasvijigiri/SkoLab/blob/master/services/observability/slo/RUNBOOK.md#ai-improve-latency"

@@ -35,9 +35,16 @@ RUNBOOK = (
 )
 
 COMPILE = "/api/v1/colab/compile"
+# Both compiles: a single source, and a whole project from its files. Each
+# waits on the sandbox (up to 25s), so neither belongs in the 1s gateway SLO.
+COMPILES = f"{COMPILE}|/api/v1/workspaces/:id/compile"
+# The AI improver waits on the model (up to 30s); it has its own SLO. The
+# originality check runs in the background, so its routes answer at once
+# and stay in the gateway SLO.
+AI_IMPROVE = "/api/v1/workspaces/:id/ai/improve"
 # Long-lived or separately-budgeted routes. WebSocket upgrades are excluded
 # because their "duration" is the socket's lifetime, not a response time.
-GATEWAY_EXCLUDED = f"{COMPILE}|/ws/.*"
+GATEWAY_EXCLUDED = f"{COMPILES}|{AI_IMPROVE}|/ws/.*"
 
 # name, job, routes (PromQL label matcher), objective %, latency threshold (s)
 SLOS = [
@@ -74,7 +81,7 @@ SLOS = [
     {
         "slo": "compile-availability",
         "job": "skolab-gateway",
-        "routes": f'http_route="{COMPILE}"',
+        "routes": f'http_route=~"{COMPILES}"',
         "objective": 99.0,
         "summary": "LaTeX compiles that do not fail with a 5xx",
     },
@@ -84,10 +91,22 @@ SLOS = [
     {
         "slo": "compile-latency",
         "job": "skolab-gateway",
-        "routes": f'http_route="{COMPILE}"',
+        "routes": f'http_route=~"{COMPILES}"',
         "objective": 95.0,
         "threshold": 10,
         "summary": "LaTeX compiles that complete within 10s",
+    },
+    # One SLO for the improver: a suggestion that fails (a 5xx, or slower
+    # than 10s) is equally useless to the writer. A model typically answers
+    # in 2-3s; 429 (daily allowance used up) is the documented answer, not
+    # an error.
+    {
+        "slo": "ai-improve-latency",
+        "job": "skolab-gateway",
+        "routes": f'http_route="{AI_IMPROVE}"',
+        "objective": 95.0,
+        "threshold": 10,
+        "summary": "AI improver suggestions that arrive within 10s",
     },
 ]
 

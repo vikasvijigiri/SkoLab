@@ -20,7 +20,7 @@ export type NewKind = "blank" | "template" | "zip" | "folder" | "files";
 
 /** The signed-in pages, each its own address. */
 const PAGES = [
-  { to: "/documents", label: "Documents" },
+  { to: "/projects", label: "Projects" },
   { to: "/templates", label: "Templates" },
 ] as const;
 
@@ -89,7 +89,7 @@ export function AppHeader({
   }
 
   const actions: Command[] = [
-    { id: "new-blank", title: "New blank document", group: "Create", keywords: "create start empty article", run: () => onNew("blank") },
+    { id: "new-blank", title: "New blank project", group: "Create", keywords: "create start empty article", run: () => onNew("blank") },
     { id: "new-zip", title: "Upload a .zip project", group: "Create", keywords: "import overleaf archive", run: () => onNew("zip") },
     { id: "new-folder", title: "Upload a project folder", group: "Create", keywords: "import directory", run: () => onNew("folder") },
     { id: "new-files", title: "Upload .tex files", group: "Create", keywords: "import latex bib", run: () => onNew("files") },
@@ -121,7 +121,7 @@ export function AppHeader({
         }`}
       >
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-2 px-4 sm:gap-x-3 sm:px-6 md:h-14 md:flex-nowrap">
-          <Link to="/documents" aria-label="SkoLab home" className="flex h-14 shrink-0 items-center rounded-lg">
+          <Link to="/projects" aria-label="SkoLab home" className="flex h-14 shrink-0 items-center rounded-lg">
             <Logo className="text-zinc-900 dark:text-white" />
           </Link>
 
@@ -166,7 +166,7 @@ export function AppHeader({
 
             <MenuButton
               label="New"
-              menuLabel="Create a document"
+              menuLabel="Create a project"
               width="sm:w-72"
               className="flex h-9 cursor-pointer items-center gap-1.5 rounded-xl bg-brand-600 px-2.5 text-sm font-semibold text-white shadow-sm shadow-brand-600/30 transition hover:bg-brand-700 disabled:opacity-60 sm:px-3.5"
               button={
@@ -179,7 +179,7 @@ export function AppHeader({
             >
               {(close) => (
                 <>
-                  <MenuItem icon={<FileTextIcon className="size-4" />} title="Blank document" detail="An empty article to start writing" onSelect={() => { close(); onNew("blank"); }} />
+                  <MenuItem icon={<FileTextIcon className="size-4" />} title="Blank project" detail="An empty article to start writing" onSelect={() => { close(); onNew("blank"); }} />
                   <MenuItem icon={<GridIcon className="size-4" />} title="From a journal template" detail="APS, ACS, AMS, Nature and more" onSelect={() => { close(); onNew("template"); }} />
                   <MenuSeparator />
                   <MenuItem icon={<ZipIcon className="size-4" />} title="Upload a .zip" detail="From Overleaf, GitHub or anywhere" onSelect={() => { close(); onNew("zip"); }} />
@@ -264,7 +264,7 @@ export function AppHeader({
         <Suspense fallback={null}>
           <CommandBar
             commands={actions}
-            placeholder="Search documents, templates and actions…"
+            placeholder="Search projects, templates and actions…"
             onClose={() => setPalette(false)}
             onPick={(command) => {
               setPalette(false);
@@ -278,7 +278,7 @@ export function AppHeader({
           <dl className="space-y-2.5 text-sm">
             {(
               [
-                [`${MOD} K`, "Search documents, templates and actions"],
+                [`${MOD} K`, "Search projects, templates and actions"],
                 ["?", "Show these shortcuts"],
                 ["Esc", "Close a menu, panel or dialog"],
                 ["↑ ↓", "Move through a menu or search results"],

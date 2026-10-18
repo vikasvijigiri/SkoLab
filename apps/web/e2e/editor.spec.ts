@@ -64,7 +64,7 @@ test("a journal template opens in the editor, compiles, previews and saves to th
   await page.reload();
   if (isMobile) await page.getByRole("tab", { name: "Source" }).click();
   await expect(page.getByText("% edited in the browser test")).toBeVisible();
-  await page.getByRole("link", { name: "Back to your documents" }).click();
+  await page.getByRole("link", { name: "Back to your projects" }).click();
   await expect(page.getByRole("link", { name: "AMS Journal Article (amsart)" })).toBeVisible();
   expect(profileCalls.length).toBeGreaterThan(0);
 });
@@ -129,7 +129,7 @@ for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
     await signIn(page);
     await expect.poll(() => profileCalls.length).toBeGreaterThan(0);
-    await expect(page.getByRole("heading", { name: "Your documents" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Your projects" })).toBeVisible();
     await expectAccessible(page);
     await page.getByRole("link", { name: "Templates" }).click();
     await expect(page.getByRole("button", { name: /^Use the / })).toHaveCount(4);

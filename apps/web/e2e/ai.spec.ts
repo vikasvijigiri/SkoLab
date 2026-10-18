@@ -16,7 +16,7 @@ test("selecting text offers AI improvements that apply in place", async ({ page,
   const id = backend.seed("google-ada", "Spin waves", { source: SOURCE, templateId: null });
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "Continue with Google" }).click();
-  await page.getByRole("heading", { name: "Your documents" }).waitFor();
+  await page.getByRole("heading", { name: "Your projects" }).waitFor();
   await page.goto(`/editor/${id}`);
   const line = page.locator(".cm-line", { hasText: "We measured" });
   await line.waitFor();
