@@ -23,6 +23,7 @@ import argparse
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -218,6 +219,9 @@ def apply(grafana: API, email: str | None) -> None:
     print(f"Dashboard: {os.environ['GRAFANA_URL'].rstrip('/')}{result['url']}")
 
 
+VERIFY_WAIT_SECONDS = 240
+
+
 def verify(grafana: API) -> int:
     datasource = prometheus_uid(grafana)
     query = "count by (slo) (slo:objective:ratio)"
@@ -225,8 +229,15 @@ def verify(grafana: API) -> int:
         f"/api/datasources/proxy/uid/{datasource}/api/v1/query?"
         + urllib.parse.urlencode({"query": query})
     )
-    found = {r["metric"]["slo"] for r in grafana.call("GET", url)["data"]["result"]}
     expected = {s["slo"] for s in generate.SLOS}
+    # A group added by --apply moments ago records its first sample after one
+    # evaluation interval (1m) plus ingestion; wait for it rather than fail.
+    deadline = time.monotonic() + VERIFY_WAIT_SECONDS
+    while True:
+        found = {r["metric"]["slo"] for r in grafana.call("GET", url)["data"]["result"]}
+        if found >= expected or time.monotonic() >= deadline:
+            break
+        time.sleep(15)
     print(f"Recorded SLOs present: {len(found & expected)}/{len(expected)}")
     rules = grafana.call("GET", "/api/v1/provisioning/alert-rules")
     ours = [r for r in rules if r["uid"].startswith("slo-") and r["folderUID"] == FOLDER]
