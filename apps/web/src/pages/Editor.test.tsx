@@ -248,7 +248,7 @@ describe("editor", () => {
     await openEditor(doc.id);
     expect(await screen.findByRole("heading", { name: "Document not found" })).toBeInTheDocument();
     expect(screen.getByText(/isn't shared with you/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Back to your documents" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: "Back to your projects" })).toHaveAttribute("href", "/");
   });
 
   it("offers a retry when the document can't be loaded", async () => {

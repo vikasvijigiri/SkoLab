@@ -145,3 +145,55 @@ tests:
               summary: "compile-availability: burning error budget 1x too fast (10% of the 30d budget in 3d)"
               description: "SLO: 99% of LaTeX compiles that do not fail with a 5xx. Error ratio over 3d is 20% (budget allows 1.00%)."
               runbook_url: https://github.com/vikasvijigiri/SkoLab/blob/master/services/observability/slo/RUNBOOK.md#compile-availability
+
+  # Slow by design: a project compile and the AI improver take seconds. They
+  # do not burn the 1s gateway budget; the project compile counts toward the
+  # compile SLO (within 10s, so healthy), and an improver slower than 10s
+  # burns its own budget.
+  - interval: 1m
+    input_series:
+      - series: 'skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/users/profile/sync",le="1"}'
+        values: '0+600x90'
+      - series: 'skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/users/profile/sync"}'
+        values: '0+600x90'
+      - series: 'skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/users/profile/sync",http_response_status_code="200"}'
+        values: '0+600x90'
+      - series: 'skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/workspaces/:id/compile",le="1"}'
+        values: '0+0x90'
+      - series: 'skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/workspaces/:id/compile",le="10"}'
+        values: '0+600x90'
+      - series: 'skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/workspaces/:id/compile"}'
+        values: '0+600x90'
+      - series: 'skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/workspaces/:id/compile",http_response_status_code="200"}'
+        values: '0+600x90'
+      - series: 'skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/workspaces/:id/ai/improve",le="1"}'
+        values: '0+0x90'
+      - series: 'skolab_http_request_duration_seconds_bucket{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/workspaces/:id/ai/improve",le="10"}'
+        values: '0+0x90'
+      - series: 'skolab_http_request_duration_seconds_count{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/workspaces/:id/ai/improve"}'
+        values: '0+600x90'
+      - series: 'skolab_http_requests_total{job="skolab-gateway",deployment_environment_name="production",http_route="/api/v1/workspaces/:id/ai/improve",http_response_status_code="200"}'
+        values: '0+600x90'
+    promql_expr_test:
+      - expr: slo:sli_error:ratio_rate1h{slo="gateway-latency"}
+        eval_time: 60m
+        exp_samples:
+          - labels: 'slo:sli_error:ratio_rate1h{job="skolab-gateway",slo="gateway-latency"}'
+            value: 0
+      - expr: slo:sli_error:ratio_rate1h{slo="compile-latency"}
+        eval_time: 60m
+        exp_samples:
+          - labels: 'slo:sli_error:ratio_rate1h{job="skolab-gateway",slo="compile-latency"}'
+            value: 0
+      - expr: slo:sli_error:ratio_rate1h{slo="ai-improve-latency"}
+        eval_time: 60m
+        exp_samples:
+          - labels: 'slo:sli_error:ratio_rate1h{job="skolab-gateway",slo="ai-improve-latency"}'
+            value: 1
+    alert_rule_test:
+      - eval_time: 60m
+        alertname: SLOBurnRateGatewayLatency
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: SLOBurnRateCompileLatency
+        exp_alerts: []

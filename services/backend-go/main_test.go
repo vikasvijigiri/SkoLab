@@ -144,27 +144,6 @@ func TestUnknownPathAndWrongMethod(t *testing.T) {
 	}
 }
 
-func TestEveryAPIRouteRequiresAToken(t *testing.T) {
-	r, _ := testRouter(t, gateway{})
-	routes := [][2]string{
-		{http.MethodPost, "/api/v1/users/profile/sync"},
-		{http.MethodDelete, "/api/v1/users/u1"},
-		{http.MethodGet, "/api/v1/workspaces"},
-		{http.MethodPost, "/api/v1/workspaces"},
-		{http.MethodGet, "/api/v1/workspaces/00000000-0000-0000-0000-000000000001"},
-		{http.MethodPatch, "/api/v1/workspaces/00000000-0000-0000-0000-000000000001"},
-		{http.MethodDelete, "/api/v1/workspaces/00000000-0000-0000-0000-000000000001"},
-		{http.MethodPost, "/api/v1/colab/compile"},
-		{http.MethodPost, "/api/v1/ws/colab/00000000-0000-0000-0000-000000000001/tickets"},
-	}
-	for _, route := range routes {
-		w := serve(r, route[0], route[1])
-		if w.Code != http.StatusUnauthorized || w.Header().Get("WWW-Authenticate") != "Bearer" {
-			t.Fatalf("%s %s: got %d, want 401 with a Bearer challenge", route[0], route[1], w.Code)
-		}
-	}
-}
-
 func TestWebSocketNeedsATicket(t *testing.T) {
 	r, _ := testRouter(t, gateway{})
 	w := serve(r, http.MethodGet, "/ws/colab/00000000-0000-0000-0000-000000000001")

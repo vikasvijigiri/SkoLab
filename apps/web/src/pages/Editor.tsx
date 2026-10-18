@@ -193,7 +193,7 @@ export function Editor() {
           </div>
         )}
         <Link to="/" className="mt-6 inline-block font-semibold text-brand-700 underline underline-offset-4 dark:text-brand-300">
-          Back to your documents
+          Back to your projects
         </Link>
       </main>
     );
@@ -828,8 +828,8 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
           <Link
             to="/"
             className="grid size-9 shrink-0 place-items-center rounded-lg text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
-            aria-label="Back to your documents"
-            title="Your documents"
+            aria-label="Back to your projects"
+            title="Your projects"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M15 18l-6-6 6-6" />
@@ -1116,7 +1116,7 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
                     Template: {template.name} ({template.license})
                   </>
                 ) : (
-                  "Blank document"
+                  "Blank project"
                 )}
               </span>
               <div className="flex items-center gap-1">

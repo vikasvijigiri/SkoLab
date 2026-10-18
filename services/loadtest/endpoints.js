@@ -68,6 +68,22 @@ const endpoints = {
   import_project: [1, importProject],
   activity_feed: [5, () => ok(req('GET', '/api/v1/activity?page_size=20', 'GET /api/v1/activity'), 200)],
   activity_seen: [2, () => ok(req('POST', '/api/v1/activity/seen', 'POST /api/v1/activity/seen'), 200)],
+  // Cards on the Projects and Templates pages: the compiled first pages.
+  template_preview: [10, (d) => ok(req('GET', pick(d.previews), 'GET /api/v1/templates/:id/preview.jpg'), 200)],
+  template_preview_cached: [5, (d) => ok(req('GET', d.previews[0], 'GET /api/v1/templates/:id/preview.jpg', undefined, { 'If-None-Match': d.previewTag }), 304)],
+  project_preview: [5, (d) => ok(req('GET', `/api/v1/workspaces/${d.proj}/preview.jpg`, 'GET /api/v1/workspaces/:id/preview.jpg'), 200)],
+  project_preview_none: [2, (d) => ok(req('GET', `/api/v1/workspaces/${d.ws}/preview.jpg`, 'GET /api/v1/workspaces/:id/preview.jpg'), 404)],
+  // AI: what the editor asks without spending a model or OpenAlex call
+  // (staging has no model key by design). The improver runs up to its
+  // validation, which every request passes through.
+  ai_status: [3, () => ok(req('GET', '/api/v1/ai/status', 'GET /api/v1/ai/status'), 200)],
+  ai_reports: [3, (d) => ok(req('GET', `/api/v1/workspaces/${d.proj}/ai/originality`, 'GET /api/v1/workspaces/:id/ai/originality'), 200)],
+  ai_report_missing: [1, (d) => ok(req('GET', `/api/v1/workspaces/${d.proj}/ai/originality/00000000-0000-4000-8000-000000000000`, 'GET /api/v1/workspaces/:id/ai/originality/:report'), 404)],
+  ai_improve_refused: [2, (d) => ok(req('POST', `/api/v1/workspaces/${d.proj}/ai/improve`, 'POST /api/v1/workspaces/:id/ai/improve', { text: 'Teh results is good.', goal: 'poetry' }), 400)],
+  // Real-user page speed, as the web app's beacon sends it (public; its own
+  // per-address limit of 1 per second allows exactly this rate).
+  vitals: [1, () => ok(http.post(`${base}/api/v1/vitals`, JSON.stringify({ page: '/projects', metrics: [{ name: 'LCP', value: 900 }, { name: 'CLS', value: 0.01 }] }),
+    { headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, tags: { name: 'POST /api/v1/vitals' }, responseCallback: http.expectedStatuses({ min: 200, max: 499 }) }), 204)],
   profile_sync: [2, () => ok(req('POST', '/api/v1/users/profile/sync', 'POST /api/v1/users/profile/sync', { uid, name: 'SkoLab monitoring' }), 200)],
   liveness: [2, () => ok(http.get(`${base}/gateway-health`, { tags: { name: 'GET /gateway-health' } }), 200)],
   readiness: [2, () => ok(http.get(`${base}/readyz`, { tags: { name: 'GET /readyz' } }), 200)],
@@ -102,6 +118,9 @@ const URLS = [
   'DELETE /api/v1/workspaces/:id/files/:file_id', 'GET /api/v1/workspaces/:id/archive',
   'POST /api/v1/workspaces/:id/compile', 'GET /api/v1/workspaces/:id/output.pdf', 'POST /api/v1/workspaces/import',
   'GET /api/v1/activity', 'POST /api/v1/activity/seen',
+  'GET /api/v1/templates/:id/preview.jpg', 'GET /api/v1/workspaces/:id/preview.jpg',
+  'GET /api/v1/ai/status', 'GET /api/v1/workspaces/:id/ai/originality', 'GET /api/v1/workspaces/:id/ai/originality/:report',
+  'POST /api/v1/workspaces/:id/ai/improve', 'POST /api/v1/vitals',
 ];
 const gates = {
   'GET /api/v1/templates': 'p(95)<150',
@@ -117,6 +136,13 @@ const gates = {
   // The notifications bell polls the feed; catching up is one row update.
   'GET /api/v1/activity': 'p(95)<250',
   'POST /api/v1/activity/seen': 'p(95)<150',
+  // A template picture is embedded in the binary; a project's is rendered
+  // once per compile (pdftoppm) and then read from Postgres.
+  'GET /api/v1/templates/:id/preview.jpg': 'p(95)<150',
+  'GET /api/v1/workspaces/:id/preview.jpg': 'p(95)<400',
+  'GET /api/v1/workspaces': 'p(95)<300',
+  'GET /api/v1/ai/status': 'p(95)<200',
+  'GET /api/v1/workspaces/:id/ai/originality': 'p(95)<250',
 };
 const thresholds = { checks: ['rate>0.99'], http_req_failed: ['rate<0.01'] };
 for (const url of URLS) {
@@ -206,7 +232,10 @@ export function compile(d) {
 
 export function setup() {
   if (!__ENV.TOKEN || !uid) throw new Error('TOKEN and USER_ID are required');
-  const templates = req('GET', '/api/v1/templates', 'setup').json('templates').map((t) => t.id);
+  const catalog = req('GET', '/api/v1/templates', 'setup').json('templates');
+  const templates = catalog.map((t) => t.id);
+  const previews = catalog.map((t) => t.preview);
+  const previewTag = req('GET', previews[0], 'setup').headers.Etag;
   const source = req('GET', '/api/v1/templates/ams-article', 'setup').json('source');
   const ws = req('POST', '/api/v1/workspaces', 'setup', { title: 'k6 metrics workspace' }).json('id');
   const docs = [];
@@ -229,7 +258,10 @@ export function setup() {
   const image = upload(`/api/v1/workspaces/${proj}/files/upload`, 'setup', { folder: 'figures', file: http.file(dotPng, 'dot.png', 'image/png') }).json('files.0.id');
   const compiled = req('POST', `/api/v1/workspaces/${proj}/compile`, 'setup', {});
   if (compiled.json('status') !== 'compiled') throw new Error(`project compile failed: ${compiled.body}`);
-  return { templates, source, ws, docs, replayed, compileSource, proj, textFile, image };
+  // The project's card picture is made on first request; render it once here
+  // so the load measures what most card views get.
+  if (req('GET', `/api/v1/workspaces/${proj}/preview.jpg`, 'setup').status !== 200) throw new Error('project preview failed');
+  return { templates, previews, previewTag, source, ws, docs, replayed, compileSource, proj, textFile, image };
 }
 
 export function teardown(d) {

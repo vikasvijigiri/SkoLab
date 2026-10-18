@@ -52,31 +52,31 @@ function byRecent(a: WorkspaceCard, b: WorkspaceCard): number {
   return Date.parse(b.updated_at ?? b.created_at) - Date.parse(a.updated_at ?? a.created_at);
 }
 
-/** Your documents, each as a card with its first page and its facts. */
-export function Documents() {
-  const { name, documents, retry, upload, importing } = useShell();
-  const items = documents.state === "ready" ? [...documents.items].sort(byRecent) : [];
+/** Your projects, each as a card with its first page and its facts. */
+export function Projects() {
+  const { name, projects, retry, upload, importing } = useShell();
+  const items = projects.state === "ready" ? [...projects.items].sort(byRecent) : [];
 
   return (
-    <section aria-labelledby="documents-heading" aria-busy={documents.state === "loading"} className="animate-enter">
-      <title>Documents · SkoLab</title>
+    <section aria-labelledby="projects-heading" aria-busy={projects.state === "loading"} className="animate-enter">
+      <title>Projects · SkoLab</title>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
             {greeting()}, {name}
           </p>
-          <h1 id="documents-heading" className="mt-0.5 text-3xl font-semibold tracking-tight">
-            Your documents
+          <h1 id="projects-heading" className="mt-0.5 text-3xl font-semibold tracking-tight">
+            Your projects
           </h1>
         </div>
-        {documents.state === "ready" && items.length > 0 && (
+        {projects.state === "ready" && items.length > 0 && (
           <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm font-semibold text-zinc-600 tabular-nums dark:bg-zinc-800 dark:text-zinc-300">
-            {items.length} {items.length === 1 ? "document" : "documents"}
+            {items.length} {items.length === 1 ? "project" : "projects"}
           </span>
         )}
       </div>
 
-      {documents.state === "loading" ? (
+      {projects.state === "loading" ? (
         <ul aria-hidden="true" className="mt-6 grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((n) => (
             <li key={n} className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
@@ -88,13 +88,13 @@ export function Documents() {
             </li>
           ))}
           <li className="sr-only" role="status">
-            <Spinner /> Loading your documents…
+            <Spinner /> Loading your projects…
           </li>
         </ul>
-      ) : documents.state === "error" ? (
+      ) : projects.state === "error" ? (
         <div className="mt-6 max-w-xl">
           <Alert tone="error">
-            {documents.message}{" "}
+            {projects.message}{" "}
             <button type="button" onClick={retry} className="cursor-pointer font-semibold underline underline-offset-4">
               Retry
             </button>
@@ -105,7 +105,7 @@ export function Documents() {
           <span aria-hidden="true" className="grid size-16 place-items-center rounded-2xl bg-brand-50 text-brand-600 dark:bg-brand-950 dark:text-brand-300">
             <FileTextIcon className="size-8" />
           </span>
-          <p className="mt-5 text-lg font-semibold">No documents yet</p>
+          <p className="mt-5 text-lg font-semibold">No projects yet</p>
           <p className="mt-1 max-w-md text-[15px] text-zinc-600 dark:text-zinc-400">
             Start from a journal template, or bring a project you already have. You can also drop a .zip, a folder or .tex files on this page.
           </p>
@@ -131,7 +131,7 @@ export function Documents() {
       ) : (
         <ul className="mt-6 grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
           {items.map((doc) => (
-            <DocumentCard key={doc.id} doc={doc} />
+            <ProjectCard key={doc.id} doc={doc} />
           ))}
         </ul>
       )}
@@ -139,7 +139,7 @@ export function Documents() {
   );
 }
 
-function DocumentCard({ doc }: { doc: WorkspaceCard }) {
+function ProjectCard({ doc }: { doc: WorkspaceCard }) {
   const { token, remove } = useShell();
   const authors = doc.authors;
   const total = doc.authors_total;

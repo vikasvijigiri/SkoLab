@@ -9,14 +9,14 @@ import { NotFound } from "./pages/NotFound";
 import { SignIn } from "./pages/SignIn";
 import { SignUp } from "./pages/SignUp";
 import { VerifyEmail } from "./pages/VerifyEmail";
-import { GuestOnly, RequireAccount, RequireUnverified, ToDocuments } from "./routes";
+import { GuestOnly, RequireAccount, RequireUnverified, ToProjects } from "./routes";
 
 // The editor (CodeMirror, pdf.js) loads only when a document is opened, and
 // the signed-in shell and its pages only once someone is signed in, so the
 // sign-in pages stay small.
 const Editor = lazy(() => import("./pages/Editor").then((m) => ({ default: m.Editor })));
 const Home = lazy(() => import("./pages/Home").then((m) => ({ default: m.Home })));
-const Documents = lazy(() => import("./pages/Documents").then((m) => ({ default: m.Documents })));
+const Projects = lazy(() => import("./pages/Projects").then((m) => ({ default: m.Projects })));
 const Templates = lazy(() => import("./pages/Templates").then((m) => ({ default: m.Templates })));
 
 export const routes: RouteObject[] = [
@@ -34,21 +34,23 @@ export const routes: RouteObject[] = [
   {
     element: <RequireAccount />,
     children: [
-      { path: "/", element: <ToDocuments /> },
+      { path: "/", element: <ToProjects /> },
+      // The page's first name: old links and bookmarks still arrive.
+      { path: "/documents", element: <ToProjects /> },
       {
-        // Documents and Templates are pages of their own inside one shell
+        // Projects and Templates are pages of their own inside one shell
         // (header, uploads, search), which loads what both need once.
         element: (
-          <Suspense fallback={<FullPageLoader label="Loading your documents" />}>
+          <Suspense fallback={<FullPageLoader label="Loading your projects" />}>
             <Home />
           </Suspense>
         ),
         children: [
           {
-            path: "/documents",
+            path: "/projects",
             element: (
               <Suspense fallback={null}>
-                <Documents />
+                <Projects />
               </Suspense>
             ),
           },

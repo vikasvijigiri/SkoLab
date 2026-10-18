@@ -8,7 +8,7 @@ async function openHome() {
   const view = await renderApp("/", async (auth) => {
     await auth.signInWithGoogle();
   });
-  await screen.findByRole("heading", { name: "Your documents" });
+  await screen.findByRole("heading", { name: "Your projects" });
   return view;
 }
 
@@ -17,19 +17,19 @@ describe("app header", () => {
     stubBackend();
     const { user } = await openHome();
     expect(screen.getByRole("link", { name: "Skip to content" })).toHaveAttribute("href", "#main");
-    expect(screen.getByRole("link", { name: "SkoLab home" })).toHaveAttribute("href", "/documents");
+    expect(screen.getByRole("link", { name: "SkoLab home" })).toHaveAttribute("href", "/projects");
     const nav = screen.getByRole("navigation", { name: "Pages" });
-    expect(within(nav).getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual(["/documents", "/templates"]);
-    expect(within(nav).getByRole("link", { name: "Documents" })).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual(["/projects", "/templates"]);
+    expect(within(nav).getByRole("link", { name: "Projects" })).toHaveAttribute("aria-current", "page");
 
     // Each is a page of its own: one heading, the other page's content gone.
     await user.click(within(nav).getByRole("link", { name: "Templates" }));
     expect(await screen.findByRole("heading", { level: 1, name: "Journal templates" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Your documents" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Your projects" })).not.toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "Templates" })).toHaveAttribute("aria-current", "page");
-    expect(within(nav).getByRole("link", { name: "Documents" })).not.toHaveAttribute("aria-current");
+    expect(within(nav).getByRole("link", { name: "Projects" })).not.toHaveAttribute("aria-current");
     await user.click(screen.getByRole("link", { name: "SkoLab home" }));
-    expect(await screen.findByRole("heading", { level: 1, name: "Your documents" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Your projects" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Journal templates" })).not.toBeInTheDocument();
   });
 
@@ -103,12 +103,12 @@ describe("app header", () => {
     const { backend } = stubBackend();
     const { user } = await openHome();
     await user.click(screen.getByRole("button", { name: "New" }));
-    const menu = screen.getByRole("menu", { name: "Create a document" });
+    const menu = screen.getByRole("menu", { name: "Create a project" });
     expect(within(menu).getAllByRole("menuitem")).toHaveLength(5);
     expect(within(menu).getAllByRole("menuitem")[0]).toHaveFocus();
-    await user.click(within(menu).getByRole("menuitem", { name: /Blank document/ }));
-    expect(await screen.findByDisplayValue("Untitled document", {}, { timeout: 5000 })).toBeInTheDocument();
-    expect(backend.titles()).toEqual(["Untitled document"]);
+    await user.click(within(menu).getByRole("menuitem", { name: /Blank project/ }));
+    expect(await screen.findByDisplayValue("Untitled project", {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(backend.titles()).toEqual(["Untitled project"]);
     const id = backend.requests.map((request) => /\/workspaces\/([^/]+)\/document$/.exec(request.url)?.[1]).find(Boolean) ?? "";
     expect(backend.document(id)?.source).toContain("\\documentclass[11pt]{article}");
   });
@@ -160,6 +160,6 @@ describe("app header", () => {
     const { user } = await openHome();
     await user.keyboard("?");
     const sheet = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
-    expect(within(sheet).getByText("Search documents, templates and actions")).toBeInTheDocument();
+    expect(within(sheet).getByText("Search projects, templates and actions")).toBeInTheDocument();
   });
 });

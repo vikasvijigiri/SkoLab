@@ -42,18 +42,18 @@ function importMessage(error: unknown): string {
     if (error.code === "invalid_main_file") return "That main file isn't at the top of the project. Upload the project again.";
     if (error.code === "invalid_archive" || error.status === 415) return "That file isn't a zip we can read. Choose a .zip of your LaTeX project.";
     if (error.code === "main_too_large") return "The main .tex file is too long. It can be up to 100,000 characters of UTF-8 text.";
-    if (error.code === "workspace_limit_reached") return "You have the most documents you can keep. Delete one, then import again.";
+    if (error.code === "workspace_limit_reached") return "You have the most projects you can keep. Delete one, then import again.";
     if (error.status === 413) return "That project is too large. It can be up to 12 MB, and unpack to at most 10 MB in 200 files and folders.";
-    if (error.status === 429) return "You're creating documents too quickly. Wait a moment and try again.";
+    if (error.status === 429) return "You're creating projects too quickly. Wait a moment and try again.";
     if (error.status === 401) return "Your session expired. Sign in again.";
   }
   return "We couldn't import the project. Try again.";
 }
 
 function createMessage(error: unknown): string {
-  if (error instanceof ApiError && error.status === 429) return "You're creating documents too quickly. Wait a moment and try again.";
+  if (error instanceof ApiError && error.status === 429) return "You're creating projects too quickly. Wait a moment and try again.";
   if (error instanceof ApiError && error.code === "network") return error.message;
-  return "We couldn't create the document. Try again.";
+  return "We couldn't create the project. Try again.";
 }
 
 /** A packed upload waiting for the reader to say which .tex file is the document. */
@@ -70,16 +70,16 @@ export const ROLE_LABELS: Record<Workspace["role"], string> = {
 };
 
 /**
- * The signed-in shell around the Documents and Templates pages: the header,
+ * The signed-in shell around the Projects and Templates pages: the header,
  * the ways to start a document (blank, template, upload or drop), and the
- * documents and templates, loaded once for both pages and for search.
+ * projects and templates, loaded once for both pages and for search.
  */
 export function Home() {
   const { user, profile, service, retryProfileSync } = useAuth();
   const idToken = useIdToken();
   const navigate = useNavigate();
   const [signingOut, setSigningOut] = useState(false);
-  const [documents, setDocuments] = useState<Load<WorkspaceCard>>({ state: "loading" });
+  const [projects, setProjects] = useState<Load<WorkspaceCard>>({ state: "loading" });
   const [templates, setTemplates] = useState<Load<TemplateSummary>>({ state: "loading" });
   const [reloads, setReloads] = useState(0);
   const [starting, setStarting] = useState<string | null>(null);
@@ -103,13 +103,13 @@ export function Home() {
       try {
         token = await idToken();
       } catch (caught) {
-        setDocuments({ state: "error", message: loadMessage(caught, "your documents") });
+        setProjects({ state: "error", message: loadMessage(caught, "your projects") });
         setTemplates({ state: "error", message: loadMessage(caught, "the templates") });
         return;
       }
       const [docs, catalog] = await Promise.allSettled([listWorkspaces(token, controller.signal), listTemplates(token)]);
       if (controller.signal.aborted) return;
-      setDocuments(docs.status === "fulfilled" ? { state: "ready", items: docs.value } : { state: "error", message: loadMessage(docs.reason, "your documents") });
+      setProjects(docs.status === "fulfilled" ? { state: "ready", items: docs.value } : { state: "error", message: loadMessage(docs.reason, "your projects") });
       setTemplates(
         catalog.status === "fulfilled" ? { state: "ready", items: catalog.value } : { state: "error", message: loadMessage(catalog.reason, "the templates") },
       );
@@ -118,7 +118,7 @@ export function Home() {
   }, [idToken, reloads]);
 
   const retry = useCallback(() => {
-    setDocuments({ state: "loading" });
+    setProjects({ state: "loading" });
     setTemplates({ state: "loading" });
     setReloads((count) => count + 1);
   }, []);
@@ -130,7 +130,7 @@ export function Home() {
     let workspace: Workspace | null = null;
     try {
       const token = await idToken();
-      workspace = await createWorkspace(token, "Untitled document", crypto.randomUUID());
+      workspace = await createWorkspace(token, "Untitled project", crypto.randomUUID());
       await saveDocument(token, workspace.id, { source: BLANK_DOCUMENT, base_version: 0 });
       void navigate(`/editor/${workspace.id}`);
     } catch (caught) {
@@ -216,7 +216,7 @@ export function Home() {
   async function remove(doc: WorkspaceCard) {
     if (!window.confirm(`Delete "${doc.title}" for everyone it's shared with? This can't be undone.`)) return;
     setError(null);
-    const drop = () => setDocuments((current) => (current.state === "ready" ? { state: "ready", items: current.items.filter((item) => item.id !== doc.id) } : current));
+    const drop = () => setProjects((current) => (current.state === "ready" ? { state: "ready", items: current.items.filter((item) => item.id !== doc.id) } : current));
     try {
       await deleteWorkspace(await idToken(), doc.id);
       drop();
@@ -229,12 +229,12 @@ export function Home() {
 
   const catalog = templates.state === "ready" ? templates.items : [];
   const searchCommands: Command[] = [
-    ...(documents.state === "ready" ? documents.items : []).map((doc) => ({
+    ...(projects.state === "ready" ? projects.items : []).map((doc) => ({
       id: `doc-${doc.id}`,
       title: doc.title,
-      group: "Documents",
+      group: "Projects",
       note: ROLE_LABELS[doc.role],
-      keywords: `open document paper ${doc.authors.map((author) => author.display_name).join(" ")}`,
+      keywords: `open project document paper ${doc.authors.map((author) => author.display_name).join(" ")}`,
       run: () => void navigate(`/editor/${doc.id}`),
     })),
     ...catalog.map((template) => ({
@@ -250,7 +250,7 @@ export function Home() {
   const shell: Shell = {
     name,
     token: idToken,
-    documents,
+    projects,
     templates,
     retry,
     creating,
@@ -391,12 +391,12 @@ export function Home() {
   );
 }
 
-/** What "Blank document" starts from: a plain article that compiles. */
+/** What "Blank project" starts from: a plain article that compiles. */
 const BLANK_DOCUMENT = `\\documentclass[11pt]{article}
 \\usepackage[utf8]{inputenc}
 \\usepackage{amsmath,amssymb,graphicx,hyperref}
 
-\\title{Untitled document}
+\\title{Untitled project}
 \\author{}
 \\date{\\today}
 

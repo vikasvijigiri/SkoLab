@@ -9,7 +9,7 @@ export type UploadKind = "zip" | "folder" | "files";
 export interface Shell {
   name: string;
   token: () => Promise<string>;
-  documents: Load<WorkspaceCard>;
+  projects: Load<WorkspaceCard>;
   templates: Load<TemplateSummary>;
   retry: () => void;
   /** A blank document is being made. */

@@ -152,7 +152,7 @@ function Message({ title, children }: { title: string; children: string }) {
       <h1 className="text-xl font-semibold">{title}</h1>
       <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{children}</p>
       <Link to="/" className="mt-6 inline-block font-semibold text-brand-700 underline underline-offset-4 dark:text-brand-300">
-        Go to your documents
+        Go to your projects
       </Link>
     </main>
   );

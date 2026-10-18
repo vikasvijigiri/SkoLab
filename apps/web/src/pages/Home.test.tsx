@@ -46,7 +46,7 @@ describe("home documents and templates", () => {
   it("starts a document from a template and opens it in the editor", async () => {
     const { backend } = stubBackend(() => Response.json({ status: "error", errors: ["x"] }));
     const { user } = await openHome();
-    expect(await screen.findByText("No documents yet")).toBeInTheDocument();
+    expect(await screen.findByText("No projects yet")).toBeInTheDocument();
     await user.click(screen.getByRole("link", { name: "Choose a template" }));
     expect(await screen.findAllByRole("button", { name: /^Use the / })).toHaveLength(TEST_TEMPLATES.length);
 
@@ -65,7 +65,7 @@ describe("home documents and templates", () => {
     expect(backend.document(id)?.source).toContain("{achemso}");
   });
 
-  it("lists your documents and shared ones; only owners can delete", async () => {
+  it("lists your projects and shared ones; only owners can delete", async () => {
     const { backend } = stubBackend();
     backend.seed(ADA, "Old notes", { source: "a" });
     backend.seed("grace", "Grace's paper", { source: "b", members: { [ADA]: "viewer" } });
@@ -108,13 +108,13 @@ describe("home documents and templates", () => {
     backend.failNext("GET", /^\/api\/v1\/workspaces$/, { status: 503, body: { code: "unavailable", error: "down" } });
     backend.failNext("GET", /^\/api\/v1\/templates$/, { status: 503, body: { code: "unavailable", error: "down" } });
     const { user } = await openHome();
-    expect(await screen.findByText(/We couldn't load your documents/)).toBeInTheDocument();
+    expect(await screen.findByText(/We couldn't load your projects/)).toBeInTheDocument();
     await user.click(screen.getByRole("link", { name: "Templates" }));
     expect(await screen.findByText(/We couldn't load the templates/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findAllByRole("button", { name: /^Use the / })).toHaveLength(TEST_TEMPLATES.length);
-    await user.click(screen.getByRole("link", { name: "Documents" }));
-    expect(await screen.findByText("No documents yet")).toBeInTheDocument();
+    await user.click(screen.getByRole("link", { name: "Projects" }));
+    expect(await screen.findByText("No projects yet")).toBeInTheDocument();
   });
 
   it("explains a start that failed, and removes the half-made document", async () => {
@@ -122,12 +122,12 @@ describe("home documents and templates", () => {
     backend.failNext("PUT", /document$/, { status: 503, body: { code: "unavailable", error: "down" } });
     const { user } = await openHome("/templates");
     await user.click(await screen.findByRole("button", { name: "Use the Nature template" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("We couldn't create the document. Try again.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("We couldn't create the project. Try again.");
     await waitFor(() => expect(backend.titles()).toEqual([]));
 
     backend.failNext("POST", /workspaces$/, { status: 429, body: { code: "rate_limited", error: "slow down" } });
     await user.click(screen.getByRole("button", { name: "Use the Nature template" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("creating documents too quickly");
+    expect(await screen.findByRole("alert")).toHaveTextContent("creating projects too quickly");
   });
 
   it("says when it can't reach SkoLab", async () => {
@@ -156,6 +156,8 @@ describe("home documents and templates", () => {
     await user.upload(await screen.findByLabelText("Choose a project .zip to upload"), new File([zip], "Spin waves.zip", { type: "application/zip" }));
     expect(await screen.findByDisplayValue("Spin waves", {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByText(/2 files were left out because SkoLab can't use them/)).toHaveTextContent("notes.docx, __MACOSX/._paper.tex");
+    // The editor lists the project's files once it opens; that request names the new project.
+    await waitFor(() => expect(backend.requests.some((request) => request.url.endsWith("/files"))).toBe(true));
     const id = /\/workspaces\/([^/]+)\/files$/.exec(backend.requests.find((request) => request.url.endsWith("/files"))?.url ?? "")?.[1] ?? "";
     expect(backend.document(id)?.source).toContain("\\input{intro}");
     expect(Object.keys(backend.files(id)).sort()).toEqual(["figures", "figures/plot.png", "intro.tex"]);
@@ -200,9 +202,9 @@ describe("home documents and templates", () => {
     expect(picker).toHaveAttribute("webkitdirectory");
     const opened = vi.spyOn(picker, "click");
     await user.click(screen.getByRole("button", { name: "New" }));
-    const menu = screen.getByRole("menu", { name: "Create a document" });
+    const menu = screen.getByRole("menu", { name: "Create a project" });
     expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
-      expect.stringContaining("Blank document"),
+      expect.stringContaining("Blank project"),
       expect.stringContaining("From a journal template"),
       expect.stringContaining("Upload a .zip"),
       expect.stringContaining("Upload a folder"),
@@ -211,9 +213,9 @@ describe("home documents and templates", () => {
     await user.click(within(menu).getByRole("menuitem", { name: /Upload a folder/ }));
     expect(opened).toHaveBeenCalledOnce();
 
-    await user.click(screen.getByRole("link", { name: "Documents" }));
+    await user.click(screen.getByRole("link", { name: "Projects" }));
     await user.click(await screen.findByRole("button", { name: "New" }));
-    await user.click(within(screen.getByRole("menu", { name: "Create a document" })).getByRole("menuitem", { name: /From a journal template/ }));
+    await user.click(within(screen.getByRole("menu", { name: "Create a project" })).getByRole("menuitem", { name: /From a journal template/ }));
     expect(await screen.findByRole("heading", { name: "Journal templates" })).toBeInTheDocument();
   });
 
@@ -250,7 +252,7 @@ describe("home documents and templates", () => {
     // Going to Templates and back shows the kept picture without asking again.
     await user.click(screen.getByRole("link", { name: "Templates" }));
     expect(await screen.findAllByRole("img", { name: /^First page of the .* template$/ })).toHaveLength(TEST_TEMPLATES.length);
-    await user.click(screen.getByRole("link", { name: "Documents" }));
+    await user.click(screen.getByRole("link", { name: "Projects" }));
     expect(await screen.findByRole("img", { name: "First page of Analytical engines" })).toBeInTheDocument();
     expect(backend.requests.filter((request) => request.url.includes("/workspaces/") && request.url.includes("/preview.jpg"))).toHaveLength(1);
   });
@@ -293,6 +295,8 @@ describe("home documents and templates", () => {
     ]);
     expect(await screen.findByDisplayValue("Thesis", {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByText(/One file was left out/)).toHaveTextContent("notes.docx");
+    // The editor lists the project's files once it opens; that request names the new project.
+    await waitFor(() => expect(backend.requests.some((request) => request.url.endsWith("/files"))).toBe(true));
     const id = /\/workspaces\/([^/]+)\/files$/.exec(backend.requests.find((request) => request.url.endsWith("/files"))?.url ?? "")?.[1] ?? "";
     expect(backend.document(id)?.source).toContain("\\input{sections/intro}");
     expect(Object.keys(backend.files(id)).sort()).toEqual(["figs", "figs/a.png", "sections", "sections/intro.tex"]);
@@ -319,6 +323,8 @@ describe("home documents and templates", () => {
     expect(backend.titles()).toEqual([]);
     await user.click(within(sheet).getByRole("button", { name: "slides.tex" }));
     expect(await screen.findByDisplayValue("slides", {}, { timeout: 5000 })).toBeInTheDocument();
+    // The editor lists the project's files once it opens; that request names the new project.
+    await waitFor(() => expect(backend.requests.some((request) => request.url.endsWith("/files"))).toBe(true));
     const id = /\/workspaces\/([^/]+)\/files$/.exec(backend.requests.find((request) => request.url.endsWith("/files"))?.url ?? "")?.[1] ?? "";
     expect(backend.document(id)?.source).toContain("beamer");
     expect(Object.keys(backend.files(id)).sort()).toEqual(["paper.tex", "preamble.tex"]);

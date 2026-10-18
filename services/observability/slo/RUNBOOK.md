@@ -105,3 +105,22 @@ More than 5% of compiles take longer than 10s. Look for one user compiling
 very large documents (traces show the duration; the quota should cap their
 volume) or for CPU starvation on a shared free-tier instance. Moving compile
 to its own container (`docs/deploy/colab-sandbox.md`) is the structural fix.
+
+Both compiles count: a single source (`POST /api/v1/colab/compile`) and a
+whole project (`POST /api/v1/workspaces/:id/compile`). Neither is in the
+gateway SLOs.
+
+## ai-improve-latency
+
+More than 5% of AI improver requests (`POST /api/v1/workspaces/:id/ai/improve`)
+fail with a 5xx or take longer than 10s. The gateway masks the passage,
+Python calls the model (Groq) and the gateway verifies every edit; the model
+call dominates and is capped at 30s.
+
+- Traces: the outgoing `HTTP POST` span to Python shows the model's time.
+- A retired or overloaded model: Python falls back to the best available
+  model automatically; `ai_live.py` (weekly workflow) checks this end to end.
+- Daily allowances answer 429, which is expected and counted as fast.
+
+The originality check runs in the background, so its routes answer at once
+and stay in the gateway SLOs.

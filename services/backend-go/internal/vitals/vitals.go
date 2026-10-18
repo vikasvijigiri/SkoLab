@@ -60,7 +60,8 @@ var limits = map[string]struct {
 // reported as "other" rather than rejected, so a new page still counts.
 var pages = map[string]bool{
 	"/": true, "/sign-in": true, "/sign-up": true, "/forgot-password": true,
-	"/verify-email": true, "/editor": true, "/invite": true,
+	"/verify-email": true, "/editor": true, "/invite": true, "/projects": true,
+	"/templates": true,
 }
 
 type report struct {
