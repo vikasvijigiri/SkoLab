@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Spinner } from "../components/Spinner";
+import { PdfViewer } from "./pdfViewer";
 
 type PdfJs = typeof import("pdfjs-dist/legacy/build/pdf.mjs");
 
@@ -25,12 +26,16 @@ interface PdfPreviewProps {
 }
 
 /**
- * Renders every page of a PDF to canvases (pdf.js), the way Overleaf does, so
- * the preview works the same on phones and under a strict CSP (no plugin, no
- * frames).
+ * Renders a PDF to canvases with pdf.js, the way Overleaf does, so the
+ * preview works the same on phones and under a strict CSP (no plugin, no
+ * frames). Zoom is answered at once (see PdfViewer); a new PDF replaces the
+ * old one only when the pages in view are drawn, at the same scroll position.
  */
 export function PdfPreview({ pdf, zoom }: PdfPreviewProps) {
   const container = useRef<HTMLDivElement>(null);
+  const viewer = useRef<PdfViewer | null>(null);
+  // Read by the PDF effect without making zoom one of its dependencies.
+  const zoomNow = useRef(zoom);
   const [state, setState] = useState<"rendering" | "done" | "failed">("rendering");
   const [pages, setPages] = useState(0);
 
@@ -40,8 +45,13 @@ export function PdfPreview({ pdf, zoom }: PdfPreviewProps) {
     let cancelled = false;
     // A function, so each check reads the current value after an await.
     const stale = () => cancelled;
+    let opened: PdfViewer | null = null;
     let destroy: (() => Promise<void>) | null = null;
-    setState("rendering");
+    // A recompile keeps the reader where they were.
+    const previous = viewer.current;
+    const scroller = host.closest<HTMLElement>("[data-pdf-scroll]");
+    const keep = previous && scroller ? scroller.scrollTop : null;
+    if (!previous) setState("rendering");
 
     (async () => {
       const lib = await loadPdfJs();
@@ -50,29 +60,11 @@ export function PdfPreview({ pdf, zoom }: PdfPreviewProps) {
       destroy = () => task.destroy();
       const doc = await task.promise;
       if (stale()) return;
-      const width = host.clientWidth || 600;
-      const ratio = window.devicePixelRatio || 1;
-      const canvases: HTMLCanvasElement[] = [];
-      for (let number = 1; number <= doc.numPages; number += 1) {
-        const page = await doc.getPage(number);
-        if (stale()) return;
-        const base = page.getViewport({ scale: 1 });
-        const scale = ((width - 32) / base.width) * zoom;
-        const viewport = page.getViewport({ scale: scale * ratio });
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.floor(viewport.width);
-        canvas.height = Math.floor(viewport.height);
-        canvas.style.width = `${Math.floor(viewport.width / ratio)}px`;
-        canvas.style.height = `${Math.floor(viewport.height / ratio)}px`;
-        canvas.className = "mx-auto mb-4 block bg-white shadow-md ring-1 ring-zinc-900/10";
-        canvas.setAttribute("role", "img");
-        canvas.setAttribute("aria-label", `Page ${number} of ${doc.numPages}`);
-        await page.render({ canvas, viewport }).promise;
-        canvases.push(canvas);
-      }
+      opened = new PdfViewer(host, doc, () => task.destroy());
+      await opened.open(zoomNow.current, keep);
       if (stale()) return;
-      host.replaceChildren(...canvases);
-      setPages(doc.numPages);
+      viewer.current = opened;
+      setPages(opened.numPages);
       setState("done");
     })().catch((error: unknown) => {
       if (stale()) return;
@@ -82,9 +74,18 @@ export function PdfPreview({ pdf, zoom }: PdfPreviewProps) {
 
     return () => {
       cancelled = true;
-      void destroy?.();
+      // The old pages stay on screen until the next PDF's replace them.
+      if (opened) opened.close();
+      else void destroy?.();
+      if (viewer.current === opened) viewer.current = null;
     };
-  }, [pdf, zoom]);
+  }, [pdf]);
+
+  // Instant: page boxes resize now, sharp drawing follows.
+  useEffect(() => {
+    zoomNow.current = zoom;
+    viewer.current?.setZoom(zoom);
+  }, [zoom]);
 
   return (
     <div className="relative">
@@ -98,7 +99,7 @@ export function PdfPreview({ pdf, zoom }: PdfPreviewProps) {
           The PDF compiled, but this browser couldn't display it. Use Download PDF instead.
         </p>
       )}
-      <div ref={container} data-testid="pdf-pages" data-pages={pages} className="px-4 py-4" />
+      <div ref={container} data-testid="pdf-pages" data-pages={pages} className="min-w-fit px-4 py-4" />
     </div>
   );
 }

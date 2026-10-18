@@ -1144,7 +1144,7 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
 
             {/* Scrollable, so keyboard users must be able to reach it (WCAG 2.1.1). */}
             {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
-            <div className="min-h-0 flex-1 overflow-auto" role="region" aria-label="PDF pages" tabIndex={0}>
+            <div className="min-h-0 flex-1 overflow-auto" role="region" aria-label="PDF pages" tabIndex={0} data-pdf-scroll>
               {compile.state === "failed" && (
                 <div className="space-y-2 p-3">
                   <Alert tone="error">

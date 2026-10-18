@@ -242,3 +242,41 @@ test("phones reach every tool through the command bar button", async ({ page, ba
   await expect(page.getByRole("tab", { name: "Source" })).toHaveAttribute("aria-selected", "true");
   expect(profileCalls.length).toBeGreaterThan(0);
 });
+
+test("zoom answers at once, then redraws sharply without parsing the PDF again", async ({ page, backend, isMobile, profileCalls }) => {
+  test.skip(isMobile, "the zoom buttons are on the desktop PDF pane");
+  await openPaper(page, backend);
+  const box = page.getByRole("img", { name: "Page 1 of 1" });
+  const before = await box.evaluate((element) => ({ width: element.getBoundingClientRect().width, canvas: element.querySelector("canvas")?.width ?? 0 }));
+  const fetches: string[] = [];
+  page.on("request", (request) => {
+    if (/output\.pdf|compile/.test(request.url())) fetches.push(request.url());
+  });
+
+  // The click and the new size in the same moment: no waiting on pdf.js.
+  const resized = await page.evaluate(async () => {
+    const pageBox = document.querySelector<HTMLElement>('[role="img"][aria-label="Page 1 of 1"]');
+    const button = document.querySelector<HTMLButtonElement>('button[aria-label="Zoom in"]');
+    if (!pageBox || !button) return -1;
+    const start = performance.now();
+    const width = pageBox.getBoundingClientRect().width;
+    button.click();
+    while (pageBox.getBoundingClientRect().width === width) {
+      if (performance.now() - start > 2000) return -1;
+      await new Promise(requestAnimationFrame);
+    }
+    return performance.now() - start;
+  });
+  expect(resized).toBeGreaterThanOrEqual(0);
+  expect(resized).toBeLessThan(150);
+  await expect(page.getByText("125%")).toBeVisible();
+  const after = await box.evaluate((element) => element.getBoundingClientRect().width);
+  expect(after / before.width).toBeCloseTo(1.25, 1);
+
+  // Then the drawing itself is redone at the new size, sharp.
+  await expect.poll(() => box.evaluate((element) => element.querySelector("canvas")?.width ?? 0)).toBeGreaterThan(before.canvas * 1.2);
+  expect(fetches).toEqual([]);
+  // No "Rendering preview" spinner for a zoom.
+  await expect(page.getByText("Rendering preview…")).toHaveCount(0);
+  expect(profileCalls.length).toBeGreaterThan(0);
+});
