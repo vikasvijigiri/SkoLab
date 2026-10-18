@@ -45,14 +45,14 @@ GET {{base}}/api/v1/workspaces?page_size=100
 Authorization: Bearer {{member_token}}
 HTTP 200
 [Asserts]
-jsonpath "$.workspaces[?(@.id == '{{card}}')].authors_total" nth 0 == 2
-jsonpath "$.workspaces[?(@.id == '{{card}}')].authors[0].role" nth 0 == "owner"
-jsonpath "$.workspaces[?(@.id == '{{card}}')].authors[0].display_name" nth 0 == "QA owner"
-jsonpath "$.workspaces[?(@.id == '{{card}}')].authors[1].display_name" nth 0 == "QA member"
-jsonpath "$.workspaces[?(@.id == '{{card}}')].role" nth 0 == "viewer"
-jsonpath "$.workspaces[?(@.id == '{{card}}')].words" nth 0 == 0
-jsonpath "$.workspaces[?(@.id == '{{card}}')].updated_at" nth 0 == null
-jsonpath "$.workspaces[?(@.id == '{{card}}')].compiled_at" nth 0 == null
+jsonpath "$.workspaces[?(@.id == '{{card}}')].authors_total" == 2
+jsonpath "$.workspaces[?(@.id == '{{card}}')].authors[0].role" == "owner"
+jsonpath "$.workspaces[?(@.id == '{{card}}')].authors[0].display_name" == "QA owner"
+jsonpath "$.workspaces[?(@.id == '{{card}}')].authors[1].display_name" == "QA member"
+jsonpath "$.workspaces[?(@.id == '{{card}}')].role" == "viewer"
+jsonpath "$.workspaces[?(@.id == '{{card}}')].words" == 0
+jsonpath "$.workspaces[?(@.id == '{{card}}')].updated_at" == null
+jsonpath "$.workspaces[?(@.id == '{{card}}')].compiled_at" == null
 
 # No compile yet: no first page.
 GET {{base}}/api/v1/workspaces/{{card}}/preview.jpg
@@ -73,10 +73,10 @@ GET {{base}}/api/v1/workspaces?page_size=100
 Authorization: Bearer {{member_token}}
 HTTP 200
 [Asserts]
-jsonpath "$.workspaces[?(@.id == '{{card}}')].words" nth 0 > 10
-jsonpath "$.workspaces[?(@.id == '{{card}}')].progress" nth 0 > 0
-jsonpath "$.workspaces[?(@.id == '{{card}}')].updated_at" nth 0 isIsoDate
-jsonpath "$.workspaces[?(@.id == '{{card}}')].updated_by.display_name" nth 0 == "QA owner"
+jsonpath "$.workspaces[?(@.id == '{{card}}')].words" > 10
+jsonpath "$.workspaces[?(@.id == '{{card}}')].progress" > 0
+jsonpath "$.workspaces[?(@.id == '{{card}}')].updated_at" isIsoDate
+jsonpath "$.workspaces[?(@.id == '{{card}}')].updated_by.display_name" == "QA owner"
 
 # The co-author hears about it.
 GET {{base}}/api/v1/activity?page_size=50
@@ -123,7 +123,7 @@ GET {{base}}/api/v1/workspaces?page_size=100
 Authorization: Bearer {{owner_token}}
 HTTP 200
 [Asserts]
-jsonpath "$.workspaces[?(@.id == '{{card}}')].compiled_at" nth 0 isIsoDate
+jsonpath "$.workspaces[?(@.id == '{{card}}')].compiled_at" isIsoDate
 
 # Without a token, or for someone else's project: nothing.
 GET {{base}}/api/v1/workspaces/{{card}}/preview.jpg
@@ -134,10 +134,10 @@ GET {{base}}/api/v1/templates
 Authorization: Bearer {{owner_token}}
 HTTP 200
 [Captures]
-nature_preview: jsonpath "$.templates[?(@.id == 'nature')].preview" nth 0
+nature_preview: jsonpath "$.templates[?(@.id == 'nature')].preview"
 [Asserts]
 jsonpath "$.templates[*].preview" count >= 8
-jsonpath "$.templates[?(@.id == 'nature')].preview" nth 0 matches "^/api/v1/templates/nature/preview\\.jpg\\?v=[0-9a-f]{16}$"
+jsonpath "$.templates[?(@.id == 'nature')].preview" matches "^/api/v1/templates/nature/preview\\.jpg\\?v=[0-9a-f]{16}$"
 
 GET {{base}}{{nature_preview}}
 Authorization: Bearer {{owner_token}}
