@@ -128,7 +128,7 @@ describe("AI writing assistant", () => {
     const sheet = screen.getByRole("dialog", { name: "AI writing assistant" });
     expect(within(sheet).getByText(/Only the owner and editors/)).toBeInTheDocument();
     await user.click(within(sheet).getByRole("tab", { name: "Originality" }));
-    expect(within(sheet).queryByRole("button", { name: /Run originality check/ })).not.toBeInTheDocument();
+    expect(within(sheet).queryByRole("button", { name: /Check similarity and AI writing/ })).not.toBeInTheDocument();
   });
 
   it("runs an originality check, shows matches by source and jumps to them", async () => {
@@ -148,7 +148,7 @@ describe("AI writing assistant", () => {
     const sheet = screen.getByRole("dialog", { name: "AI writing assistant" });
     await user.click(within(sheet).getByRole("tab", { name: "Originality" }));
     expect(await within(sheet).findByText("No checks yet")).toBeInTheDocument();
-    await user.click(within(sheet).getByRole("button", { name: /Run originality check/ }));
+    await user.click(within(sheet).getByRole("button", { name: /Check similarity and AI writing/ }));
     expect(await within(sheet).findByText("Some overlap", {}, { timeout: 5000 })).toBeInTheDocument();
     expect(within(sheet).getByText("18.5%")).toBeInTheDocument();
     expect(within(sheet).getByRole("link", { name: /Magnons at low temperature/ })).toHaveAttribute("href", "https://doi.org/10.1/m");
@@ -160,13 +160,86 @@ describe("AI writing assistant", () => {
     expect(view().state.sliceDoc(selection.from, selection.to)).toMatch(/^We measured teh field at \$T<T_c\$ and teh results/);
   });
 
+  it("reports similarity by kind of source, the AI-writing estimate and what was searched", async () => {
+    backend.setOriginality({
+      score: 30,
+      words: 400,
+      matched_words: 120,
+      sentences: 20,
+      probes: 10,
+      sources_checked: 54,
+      partial: false,
+      matches: [
+        { sentence: "We measured teh field at and teh results were clear.", kind: "copied", overlap: 1, source_id: "web:https://example.org/p", excerpt: "we measured the field" },
+        { sentence: "Another sentence.", kind: "edited", overlap: 0.8, source_id: "core:7", excerpt: "another sentence" },
+      ],
+      sources: [
+        { id: "web:https://example.org/p", title: "A course page", url: "https://example.org/p", database: "web", sentences: 1, words: 80 },
+        { id: "core:7", title: "A thesis", url: "https://core.ac.uk/works/7", database: "full_text", sentences: 1, words: 40 },
+      ],
+      by_database: { web: 20, full_text: 10 },
+      coverage: [
+        { source: "openalex", database: "publications", searches: 10, works: 50, status: "searched" },
+        { source: "core", database: "full_text", searches: 0, works: 0, status: "unconfigured" },
+        { source: "arxiv", database: "preprints", searches: 2, works: 0, status: "partial" },
+      ],
+      writing: {
+        score: 45,
+        words: 400,
+        threshold: 0.95,
+        model: "test classifier",
+        passages: [
+          { text: "We measured teh field at and teh results were clear. More words follow here.", words: 200, probability: 0.99, likely: true },
+          { text: "Our own words.", words: 200, probability: 0.2, likely: false },
+        ],
+      },
+      writing_status: "ok",
+    });
+    const { user } = await open();
+    await user.click(screen.getByRole("button", { name: "AI" }));
+    const sheet = screen.getByRole("dialog", { name: "AI writing assistant" });
+    await user.click(within(sheet).getByRole("tab", { name: "Originality" }));
+    expect(within(sheet).getByText(/Searches OpenAlex, Europe PMC, arXiv and The web/)).toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: /Check similarity and AI writing/ }));
+
+    const similarity = await within(sheet).findByRole("region", { name: "Similarity" }, { timeout: 5000 });
+    expect(within(similarity).getByText("30%")).toBeInTheDocument();
+    expect(within(similarity).getByText("High overlap")).toBeInTheDocument();
+    const ai = within(sheet).getByRole("region", { name: "AI-written" });
+    expect(within(ai).getByText("45%")).toBeInTheDocument();
+    expect(within(ai).getByText("Much of the text reads as AI-written")).toBeInTheDocument();
+
+    const where = within(sheet).getByRole("region", { name: "Where the similar text was found" });
+    expect(where).toHaveTextContent("Web 20%");
+    expect(where).toHaveTextContent("Open-access full texts 10%");
+    expect(within(sheet).getByRole("link", { name: /A course page/ }).closest("li")).toHaveTextContent("Web");
+
+    expect(within(sheet).getByRole("heading", { name: "1 passage reads as likely AI-written" })).toBeInTheDocument();
+    expect(within(sheet).getByText(/99% likely AI-written/)).toBeInTheDocument();
+    expect(within(sheet).getByText(/never as proof/)).toBeInTheDocument();
+
+    await user.click(within(sheet).getByText("What was searched"));
+    expect(within(sheet).getByText("Not set up")).toBeInTheDocument();
+    expect(within(sheet).getByText("Partly searched")).toBeInTheDocument();
+  });
+
+  it("says why there is no AI-writing estimate", async () => {
+    backend.setOriginality({ score: 0, words: 90, matched_words: 0, sentences: 4, probes: 2, sources_checked: 9, partial: false, matches: [], sources: [], writing: null, writing_status: "too_short" });
+    const { user } = await open();
+    await user.click(screen.getByRole("button", { name: "AI" }));
+    const sheet = screen.getByRole("dialog", { name: "AI writing assistant" });
+    await user.click(within(sheet).getByRole("tab", { name: "Originality" }));
+    await user.click(within(sheet).getByRole("button", { name: /Check similarity and AI writing/ }));
+    expect(await within(sheet).findByText(/needs at least 150 words/, {}, { timeout: 5000 })).toBeInTheDocument();
+  });
+
   it("reports a clean document and keeps earlier checks", async () => {
     const { user } = await open();
     await user.click(screen.getByRole("button", { name: "AI" }));
     const sheet = screen.getByRole("dialog", { name: "AI writing assistant" });
     await user.click(within(sheet).getByRole("tab", { name: "Originality" }));
-    await user.click(await within(sheet).findByRole("button", { name: /Run originality check/ }));
-    expect(await within(sheet).findByText("No sentence matched a published title or abstract.", {}, { timeout: 5000 })).toBeInTheDocument();
+    await user.click(await within(sheet).findByRole("button", { name: /Check similarity and AI writing/ }));
+    expect(await within(sheet).findByText("No sentence was found in the sources searched.", {}, { timeout: 5000 })).toBeInTheDocument();
     await user.click(within(sheet).getByRole("button", { name: /Check again/ }));
     expect(await within(sheet).findByRole("region", { name: "Earlier checks" }, { timeout: 5000 }).catch(() => within(sheet).getByLabelText("Earlier checks"))).toBeInTheDocument();
   });

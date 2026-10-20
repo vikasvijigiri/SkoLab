@@ -826,7 +826,18 @@ export function createFakeBackend(templates: readonly Template[]) {
           daily_limit: aiLimits[name],
           left_today: aiAvailable[name] ? Math.max(0, aiLimits[name] - (aiUsed.get(`${uid}:${name}`) ?? 0)) : 0,
         });
-        return { status: 200, body: { improve: feature("improve"), originality: feature("originality") } };
+        // As production runs today: the keyless sources and the keys it has.
+        const sources = (
+          [
+            ["openalex", "publications", true],
+            ["semantic_scholar", "full_text", false],
+            ["core", "full_text", false],
+            ["europe_pmc", "full_text", true],
+            ["arxiv", "preprints", true],
+            ["web", "web", true],
+          ] as const
+        ).map(([source, database, configured]) => ({ source, database, configured }));
+        return { status: 200, body: { improve: feature("improve"), originality: { ...feature("originality"), sources, writing_estimate: true } } };
       }
       const ai = /^\/api\/v1\/workspaces\/([^/]+)\/ai\/(improve|originality)(?:\/([^/]+))?$/.exec(path);
       if (ai) {

@@ -1094,7 +1094,26 @@ paths:
                 additionalProperties: false
                 properties:
                   improve: { $ref: "#/components/schemas/AIFeature" }
-                  originality: { $ref: "#/components/schemas/AIFeature" }
+                  originality:
+                    type: object
+                    required: [available, daily_limit, left_today, sources, writing_estimate]
+                    properties:
+                      available: { type: boolean }
+                      daily_limit: { type: integer, minimum: 0 }
+                      left_today: { type: integer, minimum: 0 }
+                      sources:
+                        type: array
+                        description: What a check searches on this server; a source without its key is not configured.
+                        items:
+                          type: object
+                          required: [source, database, configured]
+                          additionalProperties: false
+                          properties:
+                            source: { type: string, enum: [openalex, semantic_scholar, core, europe_pmc, arxiv, web] }
+                            database: { $ref: "#/components/schemas/OriginalityDatabase" }
+                            configured: { type: boolean }
+                      writing_estimate: { type: boolean, description: Reports include the AI-writing estimate. }
+                    additionalProperties: false
         "401": { $ref: "#/components/responses/Unauthorized" }
         "429": { $ref: "#/components/responses/TooMany" }
 
@@ -1430,6 +1449,7 @@ components:
         year: { type: integer }
         url: { type: string }
         doi: { type: string }
+        database: { $ref: "#/components/schemas/OriginalityDatabase" }
         sentences: { type: integer, minimum: 1 }
         words: { type: integer, minimum: 1 }
     OriginalityMatch:
@@ -1454,6 +1474,49 @@ components:
         partial: { type: boolean, description: True when the day's search budget ran out during the check. }
         matches: { type: array, items: { $ref: "#/components/schemas/OriginalityMatch" } }
         sources: { type: array, items: { $ref: "#/components/schemas/OriginalitySource" } }
+        by_database:
+          type: object
+          description: The score's share from each kind of source (percent of the document's words); a sentence counts once, toward the source it matched best. Absent on reports made before sources were broken down.
+          additionalProperties: { type: number, minimum: 0, maximum: 100 }
+        coverage:
+          type: array
+          description: Every source and what it was asked, so a report says what it could and could not see.
+          items: { $ref: "#/components/schemas/OriginalityCoverage" }
+        writing:
+          description: The AI-writing estimate, or null (writing_status says why).
+          oneOf: [{ $ref: "#/components/schemas/AIWriting" }, { type: "null" }]
+        writing_status: { type: string, enum: [ok, too_short, unavailable, off] }
+    OriginalityCoverage:
+      type: object
+      required: [source, database, searches, works, status]
+      properties:
+        source: { type: string, enum: [openalex, semantic_scholar, core, europe_pmc, arxiv, web] }
+        database: { $ref: "#/components/schemas/OriginalityDatabase" }
+        searches: { type: integer, minimum: 0 }
+        works: { type: integer, minimum: 0 }
+        status: { type: string, enum: [searched, partial, unavailable, unconfigured] }
+    OriginalityDatabase:
+      type: string
+      enum: [publications, full_text, preprints, web]
+      description: "publications: journals, conferences and books (titles and abstracts); full_text: open-access full texts; preprints: arXiv; web: the open web."
+    AIWriting:
+      type: object
+      required: [score, words, passages, threshold, model]
+      properties:
+        score: { type: number, minimum: 0, maximum: 100, description: Percent of the scored words in passages judged likely AI-written (probability at or above threshold). A model's estimate, not proof. }
+        words: { type: integer, minimum: 0 }
+        threshold: { type: number, minimum: 0, maximum: 1 }
+        model: { type: string }
+        passages:
+          type: array
+          items:
+            type: object
+            required: [text, words, probability, likely]
+            properties:
+              text: { type: string }
+              words: { type: integer, minimum: 0 }
+              probability: { type: number, minimum: 0, maximum: 1 }
+              likely: { type: boolean }
     OriginalityReport:
       type: object
       required: [id, workspace_id, status, document_version, score, result, error, created_at, finished_at]

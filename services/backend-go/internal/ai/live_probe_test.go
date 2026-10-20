@@ -39,3 +39,36 @@ func TestLiveOriginality(t *testing.T) {
 		}
 	}
 }
+
+// Every configured source together, as production runs them (go test -tags
+// live -run LiveSources). Keys come from the environment (OPENALEX_API_KEY,
+// TAVILY_API_KEY, SEMANTIC_SCHOLAR_API_KEY, CORE_API_KEY); budgets are not
+// charged.
+func TestLiveSources(t *testing.T) {
+	cases := []struct{ name, text string }{
+		// Wikipedia, "Photoelectric effect": only the web has it.
+		{"web page", "The photoelectric effect is the emission of electrons from a material caused by electromagnetic radiation such as ultraviolet light. Electrons emitted in this manner are called photoelectrons. The phenomenon is studied in condensed matter physics, solid state, and quantum chemistry to draw inferences about the properties of atoms, molecules and solids."},
+		// AlphaFold (Nature 2021, open access): a sentence of the main text, not the abstract.
+		{"full text", "The AlphaFold network directly predicts the 3D coordinates of all heavy atoms for a given protein using the primary amino acid sequence and aligned sequences of homologues as inputs. We then describe the details of the network in the sections that follow, and we report on its accuracy for proteins that were withheld."},
+		// Attention Is All You Need (arXiv 1706.03762), the abstract.
+		{"preprint abstract", "The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder. The best performing models also connect the encoder and decoder through an attention mechanism. We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely."},
+		{"original prose", "Our group built a small optical bench from salvaged parts during the spring semester and measured its drift every morning for three weeks. The basement room was unheated, so we logged the temperature beside each reading. The drift tracked the temperature closely, which suggests a simple correction for future runs."},
+	}
+	cfg := FromEnv()
+	providers := Sources(cfg, &http.Client{Timeout: 30 * time.Second})
+	for _, c := range cases {
+		f := NewFanout(nil, providers)
+		started := time.Now()
+		r, err := Check(context.Background(), `\begin{document}`+c.text+`\end{document}`, f.Search, 4)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		t.Logf("%s: score %.1f%% %v in %v", c.name, r.Score, r.ByDatabase, time.Since(started).Round(time.Second))
+		for _, cov := range f.Coverage() {
+			t.Logf("   %-17s %-12s searches %d, works %d", cov.Source, cov.Status, cov.Searches, cov.Works)
+		}
+		for _, s := range r.Sources {
+			t.Logf("   source [%s] %.70s (%s)", s.Database, s.Title, s.URL)
+		}
+	}
+}

@@ -12,8 +12,14 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.dependencies import require_gateway
-from app.schemas.ai import ImproveRequest, ImproveResponse
-from app.services import llm
+from app.schemas.ai import (
+    DetectRequest,
+    DetectResponse,
+    ImproveRequest,
+    ImproveResponse,
+    WarmResponse,
+)
+from app.services import detector, llm
 
 router = APIRouter()
 
@@ -36,3 +42,27 @@ async def improve(request: ImproveRequest) -> ImproveResponse:
             status_code=502,
             detail="The writing assistant gave an unusable answer; try again",
         ) from exc
+
+
+@router.post(
+    "/ai/detect",
+    response_model=DetectResponse,
+    dependencies=[Depends(require_gateway)],
+)
+async def detect(request: DetectRequest) -> DetectResponse:
+    """AI-writing probabilities for the originality report's passages."""
+    try:
+        probabilities, model = await detector.score(request.passages)
+    except detector.DetectorUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return DetectResponse(probabilities=probabilities, model=model)
+
+
+@router.post(
+    "/ai/detect/warm",
+    response_model=WarmResponse,
+    dependencies=[Depends(require_gateway)],
+)
+async def warm() -> WarmResponse:
+    """Wakes the detector while a check searches its sources."""
+    return WarmResponse(awake=await detector.warm())
