@@ -157,7 +157,6 @@ AsyncSessionLocal = async_sessionmaker(
     class_=AsyncSession,
 )
 
-
 # ── Declarative base ──────────────────────────────────────────────────────────
 class Base(DeclarativeBase):
     """Base class for every ORM model."""
@@ -252,3 +251,4 @@ async def init_db() -> None:
                 await conn.execute(text(statement))
             except Exception as e:
                 print(f"[init_db] Note: could not apply {statement!r}: {e}", flush=True)
+

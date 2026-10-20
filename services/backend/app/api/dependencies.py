@@ -297,9 +297,7 @@ def require_gateway(x_internal_token: Optional[str] = Header(default=None)) -> N
     expected = settings.internal_api_token
     if not expected:
         return
-    if not x_internal_token or not hmac.compare_digest(
-        x_internal_token.encode(), expected.encode()
-    ):
+    if not x_internal_token or not hmac.compare_digest(x_internal_token.encode(), expected.encode()):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This endpoint is only reachable through the API gateway.",

@@ -332,9 +332,7 @@ def _compile_in_sandbox(
             return CompileResponse(
                 status="timeout",
                 log=log,
-                errors=[
-                    f"Compilation exceeded the {_COMPILE_TIMEOUT_SECONDS} second limit."
-                ],
+                errors=[f"Compilation exceeded the {_COMPILE_TIMEOUT_SECONDS} second limit."],
             )
 
         pdf_path = work_dir / "main.pdf"

@@ -21,9 +21,7 @@ class EncryptedString(TypeDecorator):
             # Verify if the key is valid Fernet key (must be 32 URL-safe base64-encoded bytes)
             self.fernet = Fernet(key)
         except (ValueError, TypeError) as e:
-            raise ValueError(
-                "DATABASE_ENCRYPTION_KEY must be a valid Fernet key"
-            ) from e
+            raise ValueError("DATABASE_ENCRYPTION_KEY must be a valid Fernet key") from e
 
     def process_bind_param(self, value, dialect):
         if value is None:
