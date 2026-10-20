@@ -11,12 +11,14 @@ import (
 )
 
 // The originality check compares a document's prose with the scholarly
-// record: it picks the document's most distinctive sentences, asks a search
-// index for works about them, then measures, for every sentence, how much of
-// its wording (runs of five words) appears in a found work's title or
-// abstract. It finds copied and lightly edited text, not paraphrase, and
-// only against what the index holds (abstracts, not full texts); reports say
-// so rather than claiming more.
+// record and the web: it picks the document's most distinctive sentences,
+// searches every configured source for them (sources.go: publications'
+// abstracts, open-access full texts, preprints, web pages), then measures,
+// for every sentence, how much of its wording (runs of five words) appears
+// in a found work's text. Sources that find an exact phrase in a full text
+// they do not return count that phrase as found. It finds copied and lightly
+// edited text, not paraphrase, and only in what the sources can see;
+// reports list what was searched rather than claiming more.
 
 const (
 	shingleSize = 5
@@ -42,7 +44,11 @@ type Work struct {
 	Title    string
 	Year     int
 	URL      string
-	Abstract string
+	Abstract string // the text compared: an abstract, a full-text passage, a full text or a page
+	Database string // DatabasePublications, DatabaseFullText, DatabasePreprints or DatabaseWeb
+	// Phrase is the query when the source matched it as an exact phrase in
+	// the work's full text (which Abstract may not hold).
+	Phrase string
 }
 
 // Searcher finds works related to a query. ErrBudget means no more searches
@@ -61,6 +67,7 @@ type Source struct {
 	Year      int    `json:"year,omitempty"`
 	URL       string `json:"url"`
 	DOI       string `json:"doi,omitempty"`
+	Database  string `json:"database"`
 	Sentences int    `json:"sentences"`
 	Words     int    `json:"words"`
 }
@@ -85,6 +92,17 @@ type Result struct {
 	Partial        bool     `json:"partial"` // stopped early: the day's search budget ran out
 	Matches        []Match  `json:"matches"`
 	Sources        []Source `json:"sources"`
+	// ByDatabase is the score's share from each kind of source: percent of
+	// the document's words matched there (a sentence counts once, toward the
+	// source it matched best).
+	ByDatabase map[string]float64 `json:"by_database"`
+	// Coverage is every source and what it was asked (set by the runner).
+	Coverage []Coverage `json:"coverage"`
+	// Writing is the AI-writing estimate, when it could be made.
+	Writing *Writing `json:"writing"`
+	// WritingStatus says why Writing is missing: too_short, unavailable or
+	// off (not run on this server); ok when it is there.
+	WritingStatus string `json:"writing_status"`
 }
 
 type sentence struct {
@@ -102,10 +120,11 @@ func Check(ctx context.Context, latex string, search Searcher, maxProbes int) (R
 	if total < minWords {
 		return Result{}, ErrTooShort
 	}
-	result := Result{Words: total, Sentences: len(sentences), Matches: []Match{}, Sources: []Source{}}
+	result := Result{Words: total, Sentences: len(sentences), Matches: []Match{}, Sources: []Source{}, ByDatabase: map[string]float64{}, Coverage: []Coverage{}}
 
 	works := map[string]Work{}
 	var order []string
+	probed := map[string]bool{} // queries searched
 	for _, probe := range probes(sentences, maxProbes) {
 		if err := ctx.Err(); err != nil {
 			return Result{}, err
@@ -119,11 +138,33 @@ func Check(ctx context.Context, latex string, search Searcher, maxProbes int) (R
 			return Result{}, err
 		}
 		result.Probes++
+		probed[query(probe.words)] = true
 		for _, w := range found {
-			if _, seen := works[w.ID]; !seen && w.ID != "" {
-				works[w.ID] = w
-				order = append(order, w.ID)
+			if w.ID == "" {
+				continue
 			}
+			// One paper found in several sources is one work: keep the
+			// longest text, and any exact-phrase evidence.
+			key := w.ID
+			if w.DOI != "" {
+				key = "doi:" + strings.ToLower(w.DOI)
+			}
+			seen, ok := works[key]
+			if !ok {
+				works[key] = w
+				order = append(order, key)
+				continue
+			}
+			if len(w.Abstract) > len(seen.Abstract) {
+				phrase := seen.Phrase
+				seen = w
+				if seen.Phrase == "" {
+					seen.Phrase = phrase
+				}
+			} else if seen.Phrase == "" {
+				seen.Phrase = w.Phrase
+			}
+			works[key] = seen
 		}
 	}
 	result.SourcesChecked = len(order)
@@ -143,6 +184,7 @@ func Check(ctx context.Context, latex string, search Searcher, maxProbes int) (R
 	}
 
 	sources := map[string]*Source{}
+	byDatabase := map[string]int{}
 	for _, s := range sentences {
 		if len(s.words) < minMatchWords {
 			continue
@@ -182,24 +224,46 @@ func Check(ctx context.Context, latex string, search Searcher, maxProbes int) (R
 			}
 		}
 		if best < 0 {
+			// A full-text source found this sentence's exact searched phrase
+			// in a work it does not show: that phrase is the evidence.
+			if q := query(s.words); probed[q] {
+				for i, c := range candidates {
+					if c.work.Phrase == q {
+						qw := strings.Fields(q)
+						best, bestShare, kind = i, math.Min(1, float64(len(qw))/float64(len(s.words))), "copied"
+						bestAt = -1
+						break
+					}
+				}
+			}
+		}
+		if best < 0 {
 			continue
 		}
 		c := candidates[best]
+		quote := excerpt(c.words, bestAt, len(s.words))
+		if bestAt < 0 {
+			quote = "… " + query(s.words) + " …"
+		}
 		result.MatchedWords += len(s.words)
 		result.Matches = append(result.Matches, Match{
 			Sentence: s.text,
 			Kind:     kind,
 			Overlap:  math.Round(bestShare*100) / 100,
 			SourceID: c.work.ID,
-			Excerpt:  excerpt(c.words, bestAt, len(s.words)),
+			Excerpt:  quote,
 		})
 		src := sources[c.work.ID]
 		if src == nil {
-			src = &Source{ID: c.work.ID, Title: c.work.Title, Year: c.work.Year, URL: c.work.URL, DOI: c.work.DOI}
+			src = &Source{ID: c.work.ID, Title: c.work.Title, Year: c.work.Year, URL: c.work.URL, DOI: c.work.DOI, Database: c.work.Database}
 			sources[c.work.ID] = src
 		}
 		src.Sentences++
 		src.Words += len(s.words)
+		byDatabase[c.work.Database] += len(s.words)
+	}
+	for database, words := range byDatabase {
+		result.ByDatabase[database] = math.Round(1000*float64(words)/float64(total)) / 10
 	}
 	for _, s := range sources {
 		result.Sources = append(result.Sources, *s)

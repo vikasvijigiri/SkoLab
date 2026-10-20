@@ -35,6 +35,9 @@ type openAlexWork struct {
 	Abstract        map[string][]int `json:"abstract_inverted_index"`
 	PrimaryLocation *struct {
 		LandingPageURL string `json:"landing_page_url"`
+		Source         *struct {
+			DisplayName string `json:"display_name"`
+		} `json:"source"`
 	} `json:"primary_location"`
 }
 
@@ -97,9 +100,25 @@ func (o OpenAlex) Search(ctx context.Context, query string) ([]Work, error) {
 			Year:     r.PublicationYear,
 			URL:      link,
 			Abstract: abstract(r.Abstract),
+			Database: openAlexDatabase(r),
 		})
 	}
 	return works, nil
+}
+
+// preprintServers are where a work's primary location makes it a preprint.
+var preprintServers = []string{"arxiv", "biorxiv", "medrxiv", "chemrxiv", "ssrn", "research square", "preprints.org", "osf preprints", "techrxiv", "psyarxiv", "socarxiv", "eartharxiv"}
+
+func openAlexDatabase(w openAlexWork) string {
+	if w.PrimaryLocation != nil && w.PrimaryLocation.Source != nil {
+		name := strings.ToLower(w.PrimaryLocation.Source.DisplayName)
+		for _, server := range preprintServers {
+			if strings.Contains(name, server) {
+				return DatabasePreprints
+			}
+		}
+	}
+	return DatabasePublications
 }
 
 // abstract rebuilds text from OpenAlex's inverted index (word -> positions).

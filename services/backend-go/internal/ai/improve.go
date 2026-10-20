@@ -200,8 +200,16 @@ func (h *handlers) status(c *gin.Context) {
 		}
 		return gin.H{"available": enabled, "daily_limit": perUser, "left_today": left}
 	}
+	// What an originality check searches here, so the page can say so before it runs.
+	sources := []gin.H{}
+	for _, p := range Sources(h.Config, nil) {
+		sources = append(sources, gin.H{"source": p.Name, "database": p.Database, "configured": p.Search != nil})
+	}
+	originality := feature(h.Config.OriginalityEnabled, "originality", h.Config.OriginalityPerUser, searchKey, h.Config.SearchDaily, h.Config.MaxProbes)
+	originality["sources"] = sources
+	originality["writing_estimate"] = h.Config.OriginalityEnabled && h.Config.WritingEstimate
 	c.JSON(http.StatusOK, gin.H{
 		"improve":     feature(h.Config.ImproveEnabled, "improve", h.Config.ImprovePerUser, modelKey, h.Config.ModelDaily, 1),
-		"originality": feature(h.Config.OriginalityEnabled, "originality", h.Config.OriginalityPerUser, searchKey, h.Config.SearchDaily, h.Config.MaxProbes),
+		"originality": originality,
 	})
 }

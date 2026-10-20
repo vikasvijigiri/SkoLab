@@ -1,5 +1,5 @@
 import { apiRequest } from "./client";
-import type { AIStatus, ImproveGoal, ImproveResult, OriginalityReport } from "./editorTypes";
+import type { AIStatus, ImproveGoal, ImproveResult, OriginalityDatabase, OriginalityReport, OriginalitySourceName } from "./editorTypes";
 
 export type { AIFeature, AIStatus, ImproveGoal, ImproveResult, OriginalityMatch, OriginalityReport, OriginalityResult, OriginalitySource, Suggestion } from "./editorTypes";
 
@@ -47,3 +47,27 @@ export function verdict(score: number): { band: "low" | "moderate" | "high"; lab
   if (score < 25) return { band: "moderate", label: "Some overlap" };
   return { band: "high", label: "High overlap" };
 }
+
+/** How an AI-writing estimate reads. A model's estimate, never proof. */
+export function writingVerdict(score: number): { band: "low" | "moderate" | "high"; label: string } {
+  if (score < 10) return { band: "low", label: "Little sign of AI writing" };
+  if (score < 40) return { band: "moderate", label: "Some passages read as AI-written" };
+  return { band: "high", label: "Much of the text reads as AI-written" };
+}
+
+/** What each source is, in words. */
+export const SOURCE_LABELS: Record<OriginalitySourceName, { name: string; covers: string }> = {
+  openalex: { name: "OpenAlex", covers: "250M+ journal articles, conference papers and books (titles and abstracts)" },
+  semantic_scholar: { name: "Semantic Scholar", covers: "full texts of open-access papers, including arXiv and PubMed Central" },
+  core: { name: "CORE", covers: "open-access full texts from 10,000+ university and research repositories" },
+  europe_pmc: { name: "Europe PMC", covers: "life-science literature, phrases matched in open-access full texts" },
+  arxiv: { name: "arXiv", covers: "the newest preprints in physics, mathematics, computer science and more" },
+  web: { name: "The web", covers: "web pages, including Wikipedia, course notes and publishers' sites" },
+};
+
+export const DATABASE_LABELS: Record<OriginalityDatabase, string> = {
+  publications: "Publications",
+  full_text: "Open-access full texts",
+  preprints: "Preprints",
+  web: "Web",
+};

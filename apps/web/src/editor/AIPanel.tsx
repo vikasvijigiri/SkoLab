@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { aiStatus, improve, originalityReport, originalityReports, startOriginality, verdict, type AIStatus, type ImproveGoal, type OriginalityReport, type Suggestion } from "../api/ai";
+import { aiStatus, DATABASE_LABELS, improve, originalityReport, originalityReports, SOURCE_LABELS, startOriginality, verdict, writingVerdict, type AIStatus, type ImproveGoal, type OriginalityReport, type Suggestion } from "../api/ai";
+import type { OriginalityCoverage, OriginalityDatabase } from "../api/editorTypes";
 import { ApiError } from "../api/client";
 import { Alert } from "../components/Alert";
 import { CheckIcon, ExternalIcon, SearchIcon } from "../components/Icons";
@@ -542,17 +543,12 @@ export function locate(latex: string, sentence: string): [number, number] | null
   return null;
 }
 
-function ScoreRing({ score }: { score: number }) {
-  const band = verdict(score).band;
-  const color = band === "low" ? "text-emerald-500" : band === "moderate" ? "text-amber-500" : "text-rose-500";
-  const radius = 34;
-  const circumference = 2 * Math.PI * radius;
-  return (
-    <svg viewBox="0 0 80 80" aria-hidden="true" className="size-24 shrink-0 -rotate-90">
-      <circle cx="40" cy="40" r={radius} className="fill-none stroke-zinc-200 dark:stroke-zinc-800" strokeWidth="8" />
-      <circle cx="40" cy="40" r={radius} className={`fill-none stroke-current ${color}`} strokeWidth="8" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={circumference * (1 - Math.min(score, 100) / 100)} />
-    </svg>
-  );
+/** The sources this server searches, in a sentence. */
+function searchedHere(left: AIStatus["originality"] | undefined): string {
+  const configured = (left?.sources ?? []).filter((s) => s.configured).map((s) => SOURCE_LABELS[s.source].name);
+  if (configured.length === 0) return "Compares wording with 250M+ published works (OpenAlex).";
+  const list = configured.length === 1 ? configured[0] : `${configured.slice(0, -1).join(", ")} and ${configured[configured.length - 1]}`;
+  return `Searches ${list}: publications, open-access full texts, preprints and the web.`;
 }
 
 function OriginalityTab({
@@ -650,7 +646,7 @@ function OriginalityTab({
             className="flex cursor-pointer items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {starting || pending ? <Spinner /> : <SearchIcon className="size-4" />}
-            {pending ? "Checking…" : current ? "Check again" : "Run originality check"}
+            {pending ? "Checking…" : current ? "Check again" : "Check similarity and AI writing"}
           </button>
         )}
       </div>
@@ -667,14 +663,14 @@ function OriginalityTab({
             <SearchIcon className="size-6" />
           </span>
           <p className="mt-3 text-sm font-semibold">No checks yet</p>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Compare your manuscript's wording with the titles and abstracts of 250M+ published works.</p>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">One check gives two numbers: how much of your wording is found in published literature and on the web, and how much of the prose reads as AI-written.</p>
         </div>
       ) : pending ? (
         <div role="status" className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
           <p className="flex items-center gap-2 text-sm font-semibold">
-            <Spinner /> {current.status === "queued" ? "Starting the check…" : "Searching the scholarly record…"}
+            <Spinner /> {current.status === "queued" ? "Starting the check…" : "Searching the literature and the web, then estimating AI writing…"}
           </p>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">This usually takes under a minute. You can keep writing; the report stays here.</p>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">This usually takes one to three minutes. You can keep writing; the report stays here.</p>
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
             <div className="h-full w-1/3 animate-pulse rounded-full bg-brand-500" />
           </div>
@@ -706,43 +702,123 @@ function OriginalityTab({
         </section>
       )}
       <p className="text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
-        Compares wording with the titles and abstracts of 250M+ works in OpenAlex. It finds text copied word for word and text lightly reworded (words swapped, phrases shuffled). It cannot see full texts, web pages or unpublished work, and does not judge ideas rewritten from scratch, so a low score is not a guarantee.
+        {searchedHere(left)} It finds text copied word for word and text lightly reworded (words swapped, phrases shuffled). No free service can see full texts behind journal subscriptions, unpublished work, or ideas rewritten from scratch, so a low score is not a guarantee.
       </p>
     </div>
   );
 }
 
+function ScoreRing({ score, band, tone = "overlap" }: { score: number; band: "low" | "moderate" | "high"; tone?: "overlap" | "writing" }) {
+  const color =
+    tone === "writing"
+      ? band === "low" ? "text-emerald-500" : band === "moderate" ? "text-violet-500" : "text-fuchsia-600"
+      : band === "low" ? "text-emerald-500" : band === "moderate" ? "text-amber-500" : "text-rose-500";
+  const radius = 34;
+  const circumference = 2 * Math.PI * radius;
+  return (
+    <svg viewBox="0 0 80 80" aria-hidden="true" className="size-20 shrink-0 -rotate-90">
+      <circle cx="40" cy="40" r={radius} className="fill-none stroke-zinc-200 dark:stroke-zinc-800" strokeWidth="8" />
+      <circle cx="40" cy="40" r={radius} className={`fill-none stroke-current ${color}`} strokeWidth="8" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={circumference * (1 - Math.min(score, 100) / 100)} />
+    </svg>
+  );
+}
+
+const BAND_TEXT = {
+  overlap: { low: "text-emerald-700 dark:text-emerald-400", moderate: "text-amber-700 dark:text-amber-400", high: "text-rose-700 dark:text-rose-400" },
+  writing: { low: "text-emerald-700 dark:text-emerald-400", moderate: "text-violet-700 dark:text-violet-300", high: "text-fuchsia-700 dark:text-fuchsia-300" },
+} as const;
+
+const DATABASE_COLORS: Record<OriginalityDatabase, string> = {
+  publications: "bg-sky-500",
+  full_text: "bg-indigo-500",
+  preprints: "bg-amber-500",
+  web: "bg-rose-500",
+};
+
+const WRITING_MISSING: Record<string, string> = {
+  too_short: "Too little prose to estimate: it needs at least 150 words.",
+  unavailable: "The AI-writing estimate was unavailable for this check. Run it again later.",
+  off: "The AI-writing estimate is not switched on yet.",
+};
+
 function Report({ report, onShow }: { report: OriginalityReport; onShow: (sentence: string) => void }) {
   const result = report.result;
   if (!result) return null;
   const v = verdict(result.score);
-  const tone = v.band === "low" ? "text-emerald-700 dark:text-emerald-400" : v.band === "moderate" ? "text-amber-700 dark:text-amber-400" : "text-rose-700 dark:text-rose-400";
+  const writing = result.writing ?? null;
+  const w = writing ? writingVerdict(writing.score) : null;
+  const byDatabase = Object.entries(result.by_database ?? {}).filter(([, share]) => share > 0) as [OriginalityDatabase, number][];
+  const flagged = writing?.passages.filter((p) => p.likely) ?? [];
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-4 rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800">
-        <div className="relative grid place-items-center">
-          <ScoreRing score={result.score} />
-          <span className="absolute text-xl font-bold tabular-nums">{result.score}%</span>
-        </div>
-        <div className="min-w-0">
-          <p className={`text-base font-semibold ${tone}`}>{v.label}</p>
-          <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">
-            {result.matched_words.toLocaleString()} of {result.words.toLocaleString()} words in sentences found in published abstracts.
-          </p>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            {result.sources_checked} works compared · {timeAgo(report.finished_at ?? report.created_at)}
-          </p>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <section aria-label="Similarity" className="flex items-center gap-3 rounded-2xl border border-zinc-200 p-3.5 dark:border-zinc-800">
+          <div className="relative grid place-items-center">
+            <ScoreRing score={result.score} band={v.band} />
+            <span className="absolute text-lg font-bold tabular-nums">{result.score}%</span>
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold tracking-wider text-zinc-500 uppercase dark:text-zinc-400">Similarity</p>
+            <p className={`text-sm font-semibold ${BAND_TEXT.overlap[v.band]}`}>{v.label}</p>
+            <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">
+              {result.matched_words.toLocaleString()} of {result.words.toLocaleString()} words found in other sources
+            </p>
+          </div>
+        </section>
+        <section aria-label="AI-written" className="flex items-center gap-3 rounded-2xl border border-zinc-200 p-3.5 dark:border-zinc-800">
+          {writing && w ? (
+            <>
+              <div className="relative grid place-items-center">
+                <ScoreRing score={writing.score} band={w.band} tone="writing" />
+                <span className="absolute text-lg font-bold tabular-nums">{writing.score}%</span>
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold tracking-wider text-zinc-500 uppercase dark:text-zinc-400">AI-written</p>
+                <p className={`text-sm font-semibold ${BAND_TEXT.writing[w.band]}`}>{w.label}</p>
+                <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">
+                  of {writing.words.toLocaleString()} words, in {writing.passages.length} {writing.passages.length === 1 ? "passage" : "passages"}
+                </p>
+              </div>
+            </>
+          ) : (
+            <div className="min-w-0">
+              <p className="text-xs font-semibold tracking-wider text-zinc-500 uppercase dark:text-zinc-400">AI-written</p>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{WRITING_MISSING[result.writing_status ?? "off"] ?? WRITING_MISSING.off}</p>
+            </div>
+          )}
+        </section>
       </div>
-      {result.partial && <Alert tone="info">SkoLab's daily search capacity ran out during this check, so fewer works were compared than usual.</Alert>}
+      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        {result.sources_checked.toLocaleString()} works and pages compared · {timeAgo(report.finished_at ?? report.created_at)}
+      </p>
+
+      {byDatabase.length > 0 && (
+        <section aria-label="Where the similar text was found">
+          <div className="flex h-2 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800" aria-hidden="true">
+            {byDatabase.map(([database, share]) => (
+              <div key={database} className={DATABASE_COLORS[database]} style={{ width: `${Math.min(share, 100)}%` }} />
+            ))}
+          </div>
+          <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-600 dark:text-zinc-400">
+            {byDatabase.map(([database, share]) => (
+              <li key={database} className="flex items-center gap-1.5">
+                <span aria-hidden="true" className={`size-2 rounded-full ${DATABASE_COLORS[database]}`} />
+                {DATABASE_LABELS[database]} <span className="font-semibold tabular-nums">{share}%</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {result.partial && <Alert tone="info">SkoLab's daily search capacity ran out during this check, so fewer sources were searched than usual.</Alert>}
       {result.sources.length === 0 ? (
         <p className="flex items-center gap-2 text-sm text-emerald-800 dark:text-emerald-300">
-          <CheckIcon className="size-4" /> No sentence matched a published title or abstract.
+          <CheckIcon className="size-4" /> No sentence was found in the sources searched.
         </p>
       ) : (
         <ul className="space-y-3">
           {result.sources.map((source) => (
-            <SourceCard key={source.id} title={source.title} year={source.year} url={source.url} doi={source.doi}>
+            <SourceCard key={source.id} title={source.title} year={source.year} url={source.url} doi={source.doi} database={source.database ?? "publications"}>
               {result.matches
                 .filter((m) => m.source_id === source.id)
                 .map((m, n) => (
@@ -766,11 +842,76 @@ function Report({ report, onShow }: { report: OriginalityReport; onShow: (senten
           ))}
         </ul>
       )}
+
+      {writing && (
+        <section aria-labelledby="writing-heading" className="rounded-2xl border border-zinc-200 p-3.5 dark:border-zinc-800">
+          <h3 id="writing-heading" className="text-sm font-semibold">
+            {flagged.length === 0 ? "No passage scored as likely AI-written" : `${flagged.length} ${flagged.length === 1 ? "passage reads" : "passages read"} as likely AI-written`}
+          </h3>
+          <ul className="mt-2 space-y-2">
+            {flagged.map((p, n) => (
+              <li key={n} className="rounded-lg bg-violet-50/60 p-2.5 dark:bg-violet-950/30">
+                <p className="text-xs font-semibold text-violet-800 tabular-nums dark:text-violet-200">
+                  {Math.round(p.probability * 100)}% likely AI-written · {p.words} words
+                </p>
+                <p className="mt-1 line-clamp-3 text-sm leading-relaxed">{p.text}</p>
+                <button type="button" onClick={() => onShow(firstSentence(p.text))} className="mt-1.5 cursor-pointer text-xs font-semibold text-brand-700 hover:underline dark:text-brand-300">
+                  Show in document
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+            An estimate from an open classifier ({writing.model}), scoring the prose in passages of 150 to 300 words. On human-written abstracts from before AI writing tools it rarely raises a false alarm at this threshold, but it can be wrong: polished, formulaic or edited prose may score high, and AI-written text that was reworded may score low. Treat it as a prompt to look again, never as proof.
+          </p>
+        </section>
+      )}
+
+      {result.coverage && result.coverage.length > 0 && <Coverage coverage={result.coverage} />}
     </div>
   );
 }
 
-function SourceCard({ title, year, url, doi, children }: { title: string; year?: number | undefined; url: string; doi?: string | undefined; children: ReactNode }) {
+/** The opening words of a passage: enough to find it in the editor. */
+function firstSentence(text: string): string {
+  const end = text.search(/[.!?]\s/);
+  return end > 20 ? text.slice(0, end + 1) : text.split(/\s+/).slice(0, 12).join(" ");
+}
+
+const COVERAGE_STATUS: Record<OriginalityCoverage["status"], { label: string; tone: string }> = {
+  searched: { label: "Searched", tone: "text-emerald-700 dark:text-emerald-400" },
+  partial: { label: "Partly searched", tone: "text-amber-700 dark:text-amber-400" },
+  unavailable: { label: "Unavailable", tone: "text-rose-700 dark:text-rose-400" },
+  unconfigured: { label: "Not set up", tone: "text-zinc-500 dark:text-zinc-400" },
+};
+
+function Coverage({ coverage }: { coverage: OriginalityCoverage[] }) {
+  return (
+    <details className="group rounded-2xl border border-zinc-200 p-3.5 dark:border-zinc-800">
+      <summary className="cursor-pointer text-sm font-semibold">What was searched</summary>
+      <ul className="mt-2 space-y-1.5">
+        {coverage.map((c) => {
+          const label = SOURCE_LABELS[c.source];
+          const status = COVERAGE_STATUS[c.status];
+          return (
+            <li key={c.source} className="flex items-start justify-between gap-3 text-xs">
+              <span className="min-w-0">
+                <span className="font-semibold">{label.name}</span>
+                <span className="text-zinc-500 dark:text-zinc-400"> · {label.covers}</span>
+              </span>
+              <span className={`shrink-0 font-semibold ${status.tone}`}>
+                {status.label}
+                {c.searches > 0 ? <span className="font-normal tabular-nums"> ({c.searches})</span> : null}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </details>
+  );
+}
+
+function SourceCard({ title, year, url, doi, database, children }: { title: string; year?: number | undefined; url: string; doi?: string | undefined; database: OriginalityDatabase; children: ReactNode }) {
   return (
     <li className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
       <a href={url} target="_blank" rel="noreferrer" className="group flex items-start gap-2 text-sm font-semibold hover:text-brand-700 dark:hover:text-brand-300">
@@ -780,7 +921,13 @@ function SourceCard({ title, year, url, doi, children }: { title: string; year?:
         </span>
         <ExternalIcon className="mt-0.5 size-3.5 opacity-60 group-hover:opacity-100" />
       </a>
-      {doi && <p className="mt-0.5 font-mono text-[11px] text-zinc-500">doi:{doi}</p>}
+      <p className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
+        <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-1.5 py-0.5 font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+          <span aria-hidden="true" className={`size-1.5 rounded-full ${DATABASE_COLORS[database]}`} />
+          {DATABASE_LABELS[database]}
+        </span>
+        {doi && <span className="font-mono">doi:{doi}</span>}
+      </p>
       <ul className="mt-2 space-y-2">{children}</ul>
     </li>
   );

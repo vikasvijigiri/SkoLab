@@ -498,8 +498,7 @@ func newRouter(g gateway) *gin.Engine {
 		Config:    aiConfig,
 		Reports:   aiReports,
 		Budgets:   aiBudgets,
-		Runner: ai.NewRunner(aiReports, ai.BudgetedSearch(aiBudgets, aiConfig.SearchDaily,
-			ai.OpenAlex{Key: aiConfig.OpenAlexKey, Client: aiClient}), aiConfig.MaxProbes, 2),
+		Runner:    aiRunner(aiConfig, aiReports, aiBudgets, aiClient, g.python),
 	})
 
 	// ── Editor templates (Firebase-authenticated) ─────────────────────────────
@@ -521,6 +520,17 @@ func newRouter(g gateway) *gin.Engine {
 	}
 
 	return r
+}
+
+// aiRunner runs originality checks across every configured source, with
+// the AI-writing estimate (through the Python service) when switched on.
+func aiRunner(cfg ai.Config, reports ai.ReportStore, budgets ai.Budgets, client *http.Client, python string) *ai.Runner {
+	runner := ai.NewRunner(reports, nil, cfg.MaxProbes, 2).WithSources(budgets, ai.Sources(cfg, client))
+	if cfg.WritingEstimate {
+		token := os.Getenv("INTERNAL_API_TOKEN")
+		runner.WithDetector(ai.PythonDetector(client, python, token), ai.PythonWarmer(client, python, token))
+	}
+	return runner
 }
 
 // envLimit and envBurst read a positive rate limit setting, else def.

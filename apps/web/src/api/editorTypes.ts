@@ -306,9 +306,18 @@ export interface AIFeature {
   left_today: number;
 }
 
+export type OriginalitySourceName = "openalex" | "semantic_scholar" | "core" | "europe_pmc" | "arxiv" | "web";
+/** publications: journals, conferences, books (titles and abstracts); full_text: open-access full texts; preprints; web. */
+export type OriginalityDatabase = "publications" | "full_text" | "preprints" | "web";
+
 export interface AIStatus {
   improve: AIFeature;
-  originality: AIFeature;
+  originality: AIFeature & {
+    /** What a check searches on this server (older servers: absent). */
+    sources?: { source: OriginalitySourceName; database: OriginalityDatabase; configured: boolean }[];
+    /** Reports include the AI-writing estimate. */
+    writing_estimate?: boolean;
+  };
 }
 
 export type ImproveGoal = "clarity" | "concise" | "academic" | "grammar" | "flow";
@@ -337,6 +346,8 @@ export interface OriginalitySource {
   year?: number;
   url: string;
   doi?: string;
+  /** Older reports have none (publications). */
+  database?: OriginalityDatabase;
   sentences: number;
   words: number;
 }
@@ -362,6 +373,30 @@ export interface OriginalityResult {
   partial: boolean;
   matches: OriginalityMatch[];
   sources: OriginalitySource[];
+  /** The score's share from each kind of source (percent of words). Absent on older reports. */
+  by_database?: Partial<Record<OriginalityDatabase, number>>;
+  /** Every source and what it was asked. Absent on older reports. */
+  coverage?: OriginalityCoverage[];
+  /** The AI-writing estimate; null when writing_status says why not. */
+  writing?: AIWriting | null;
+  writing_status?: "ok" | "too_short" | "unavailable" | "off";
+}
+
+export interface OriginalityCoverage {
+  source: OriginalitySourceName;
+  database: OriginalityDatabase;
+  searches: number;
+  works: number;
+  status: "searched" | "partial" | "unavailable" | "unconfigured";
+}
+
+export interface AIWriting {
+  /** Percent of the scored words in passages judged likely AI-written. */
+  score: number;
+  words: number;
+  threshold: number;
+  model: string;
+  passages: { text: string; words: number; probability: number; likely: boolean }[];
 }
 
 export interface OriginalityReport {

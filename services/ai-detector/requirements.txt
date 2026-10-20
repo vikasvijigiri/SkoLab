@@ -1,0 +1,10 @@
+# The versions services/qa/ai_detect_eval.py measured with.
+torch==2.14.1+cpu
+transformers==5.20.1
+huggingface_hub==2.2.0
+safetensors==0.8.0
+sentencepiece==0.2.2
+protobuf==7.36.2
+fastapi==0.141.1
+uvicorn==0.52.4
+pydantic==2.12.5

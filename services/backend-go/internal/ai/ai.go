@@ -51,7 +51,28 @@ type Config struct {
 	OriginalityPerUser int // AI_ORIGINALITY_DAILY_PER_USER, default 5
 	ModelDaily         int // AI_MODEL_DAILY_LIMIT, default 800 (Groq's free tier: 1,000)
 	SearchDaily        int // AI_SEARCH_DAILY_LIMIT, default 800 (OpenAlex's free key: 1,000)
-	MaxProbes          int // searches per originality check, default 10
+	MaxProbes          int // sentences searched per originality check, default 20
+
+	// More sources for the originality check (sources.go). Each needs a
+	// free key except Europe PMC and arXiv, on unless switched off.
+	SemanticScholarKey string // SEMANTIC_SCHOLAR_API_KEY
+	COREKey            string // CORE_API_KEY
+	TavilyKey          string // TAVILY_API_KEY (the web)
+	EuropePMC          bool   // AI_SOURCE_EUROPE_PMC, default on
+	ArXiv              bool   // AI_SOURCE_ARXIV, default on
+
+	// Daily search budgets per source, all checks together.
+	SemanticScholarDaily int // AI_SEARCH_DAILY_SEMANTIC_SCHOLAR, default 2000
+	COREDaily            int // AI_SEARCH_DAILY_CORE, default 500
+	EuropePMCDaily       int // AI_SEARCH_DAILY_EUROPE_PMC, default 2000
+	ArXivDaily           int // AI_SEARCH_DAILY_ARXIV, default 500
+	// Tavily's free plan is 1,000 searches a month.
+	WebDaily    int // AI_SEARCH_DAILY_WEB, default 30
+	WebPerCheck int // AI_SEARCH_WEB_PER_CHECK, default 6
+
+	// The AI-writing estimate (Python's /api/v1/ai/detect, which calls the
+	// detector service): AI_WRITING_ESTIMATE=on once that is deployed; off by default.
+	WritingEstimate bool
 }
 
 // FromEnv reads Config.
@@ -65,8 +86,32 @@ func FromEnv() Config {
 		OriginalityPerUser: envInt("AI_ORIGINALITY_DAILY_PER_USER", 5),
 		ModelDaily:         envInt("AI_MODEL_DAILY_LIMIT", 800),
 		SearchDaily:        envInt("AI_SEARCH_DAILY_LIMIT", 800),
-		MaxProbes:          envInt("AI_ORIGINALITY_SEARCHES", 10),
+		MaxProbes:          envInt("AI_ORIGINALITY_SEARCHES", 20),
+
+		SemanticScholarKey: strings.TrimSpace(os.Getenv("SEMANTIC_SCHOLAR_API_KEY")),
+		COREKey:            strings.TrimSpace(os.Getenv("CORE_API_KEY")),
+		TavilyKey:          strings.TrimSpace(os.Getenv("TAVILY_API_KEY")),
+		EuropePMC:          envOn("AI_SOURCE_EUROPE_PMC"),
+		ArXiv:              envOn("AI_SOURCE_ARXIV"),
+
+		SemanticScholarDaily: envInt("AI_SEARCH_DAILY_SEMANTIC_SCHOLAR", 2000),
+		COREDaily:            envInt("AI_SEARCH_DAILY_CORE", 500),
+		EuropePMCDaily:       envInt("AI_SEARCH_DAILY_EUROPE_PMC", 2000),
+		ArXivDaily:           envInt("AI_SEARCH_DAILY_ARXIV", 500),
+		WebDaily:             envInt("AI_SEARCH_DAILY_WEB", 30),
+		WebPerCheck:          envInt("AI_SEARCH_WEB_PER_CHECK", 6),
+
+		WritingEstimate: strings.EqualFold(strings.TrimSpace(os.Getenv("AI_WRITING_ESTIMATE")), "on"),
 	}
+}
+
+// envOn is true unless the variable is set to off, false, no or 0.
+func envOn(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "off", "false", "no", "0":
+		return false
+	}
+	return true
 }
 
 func envInt(key string, fallback int) int {

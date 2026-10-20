@@ -26,7 +26,7 @@ var (
 
 const (
 	keepReports   = 20              // per workspace
-	checkTimeout  = 2 * time.Minute // one check, all searches included
+	checkTimeout  = 7 * time.Minute // one check: every source's searches, then the AI-writing estimate (its detector may start cold)
 	staleAfter    = 5 * time.Minute // a queued or running report older than this was interrupted
 	maxSourceSize = 400_000         // characters of LaTeX checked
 	listReports   = 10              // reports listed per workspace
@@ -72,11 +72,30 @@ type Runner struct {
 	search    Searcher
 	maxProbes int
 	slots     chan struct{}
+	// Set by WithSources: each check searches through its own Fanout.
+	budgets   Budgets
+	providers []Provider
+	detect    Detector
+	warm      Warmer
 }
 
 // NewRunner runs up to parallel checks at once with search.
 func NewRunner(store ReportStore, search Searcher, maxProbes, parallel int) *Runner {
 	return &Runner{store: store, search: search, maxProbes: maxProbes, slots: make(chan struct{}, max(parallel, 1))}
+}
+
+// WithSources searches every provider for each check instead of search,
+// and reports what each was asked.
+func (r *Runner) WithSources(b Budgets, providers []Provider) *Runner {
+	r.budgets, r.providers = b, providers
+	return r
+}
+
+// WithDetector adds the AI-writing estimate to every report; warm (may be
+// nil) wakes the detector as each check starts.
+func (r *Runner) WithDetector(d Detector, warm Warmer) *Runner {
+	r.detect, r.warm = d, warm
+	return r
 }
 
 // Submit starts report r in the background. done (when not nil) is called
@@ -106,10 +125,39 @@ func (r *Runner) run(ctx context.Context, report Report) {
 		slog.Error("ai: could not start an originality check", "report", report.ID, "err", err)
 		return
 	}
+	if r.detect != nil && r.warm != nil {
+		go r.warm(context.WithoutCancel(ctx))
+	}
 	source, _, err := r.store.Source(ctx, report.WorkspaceID)
 	if err == nil {
 		var result Result
-		if result, err = Check(ctx, source, r.search, r.maxProbes); err == nil {
+		search, fanout := r.search, (*Fanout)(nil)
+		if len(r.providers) > 0 {
+			fanout = NewFanout(r.budgets, r.providers)
+			search = fanout.Search
+		}
+		if result, err = Check(ctx, source, search, r.maxProbes); err == nil {
+			if fanout != nil {
+				result.Coverage = fanout.Coverage()
+			}
+			result.WritingStatus = "off"
+			if r.detect != nil {
+				// The estimate is part of the report when it can be made; a
+				// report without it says why rather than failing.
+				writing, werr := EstimateWriting(ctx, source, r.detect)
+				switch {
+				case werr == nil:
+					result.Writing, result.WritingStatus = writing, "ok"
+					countRequest(ctx, "writing", "ok")
+				case errors.Is(werr, ErrTooShort):
+					result.WritingStatus = "too_short"
+					countRequest(ctx, "writing", "too_short")
+				default:
+					result.WritingStatus = "unavailable"
+					slog.Warn("ai: AI-writing estimate unavailable", "report", report.ID, "err", werr)
+					countRequest(ctx, "writing", "unavailable")
+				}
+			}
 			if err = r.store.Finish(ctx, report.ID, result); err == nil {
 				outcome := "ok"
 				if result.Partial {

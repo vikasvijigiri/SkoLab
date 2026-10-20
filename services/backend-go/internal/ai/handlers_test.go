@@ -337,6 +337,14 @@ func TestStatusShowsWhatIsLeft(t *testing.T) {
 	if w.Code != 200 || improve["left_today"] != float64(2) || improve["daily_limit"] != float64(3) || originality["left_today"] != float64(2) || improve["available"] != true {
 		t.Fatalf("%d %v", w.Code, body)
 	}
+	// It names every source and whether this server can search it.
+	sources, _ := originality["sources"].([]any)
+	if len(sources) != 6 || originality["writing_estimate"] != false {
+		t.Fatalf("%v", originality)
+	}
+	if first := sources[0].(map[string]any); first["source"] != "openalex" || first["database"] != DatabasePublications {
+		t.Fatalf("%v", first)
+	}
 	h = newHarness(t, func(c *Config) { c.ImproveEnabled, c.OriginalityEnabled = false, false })
 	_, body = h.do(t, "ada", "GET", "/api/v1/ai/status", "")
 	if body["improve"].(map[string]any)["available"] != false || body["originality"].(map[string]any)["left_today"] != float64(0) {

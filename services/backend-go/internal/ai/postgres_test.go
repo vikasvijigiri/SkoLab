@@ -278,13 +278,35 @@ func TestFromEnv(t *testing.T) {
 	t.Setenv("OPENALEX_API_KEY", " oa ")
 	t.Setenv("AI_IMPROVE_DAILY_PER_USER", "7")
 	t.Setenv("AI_SEARCH_DAILY_LIMIT", "nonsense")
+	t.Setenv("SEMANTIC_SCHOLAR_API_KEY", " s2 ")
+	t.Setenv("CORE_API_KEY", "")
+	t.Setenv("TAVILY_API_KEY", "tv")
+	t.Setenv("AI_SOURCE_ARXIV", "off")
+	t.Setenv("AI_SOURCE_EUROPE_PMC", "")
+	t.Setenv("AI_SEARCH_WEB_PER_CHECK", "3")
+	t.Setenv("AI_WRITING_ESTIMATE", "no")
 	c := FromEnv()
-	if !c.ImproveEnabled || !c.OriginalityEnabled || c.OpenAlexKey != "oa" || c.ImprovePerUser != 7 || c.SearchDaily != 800 || c.MaxProbes != 10 {
-		t.Fatalf("%+v", c)
+	// Never print c: it holds keys.
+	if !c.ImproveEnabled || !c.OriginalityEnabled || c.OpenAlexKey != "oa" || c.ImprovePerUser != 7 || c.SearchDaily != 800 || c.MaxProbes != 20 {
+		t.Fatal("defaults and overrides not read")
+	}
+	if c.SemanticScholarKey != "s2" || c.COREKey != "" || c.TavilyKey != "tv" || c.ArXiv || !c.EuropePMC || c.WebPerCheck != 3 || c.WebDaily != 30 || c.WritingEstimate {
+		t.Fatal("sources not read")
+	}
+	names := []string{}
+	configured := []string{}
+	for _, p := range Sources(c, nil) {
+		names = append(names, p.Name)
+		if p.Search != nil {
+			configured = append(configured, p.Name)
+		}
+	}
+	if strings.Join(names, ",") != "openalex,semantic_scholar,core,europe_pmc,arxiv,web" || strings.Join(configured, ",") != "openalex,semantic_scholar,europe_pmc,web" {
+		t.Fatal(names, configured)
 	}
 	t.Setenv("GROQ_API", "")
 	t.Setenv("OPENALEX_API_KEY", "")
 	if c := FromEnv(); c.ImproveEnabled || c.OriginalityEnabled {
-		t.Fatalf("%+v", c)
+		t.Fatal("still enabled without keys")
 	}
 }

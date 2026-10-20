@@ -31,7 +31,7 @@ def render(pdf: Path, page: int, work: Path) -> Path | None:
     result = subprocess.run(
         ["pdftoppm", "-jpeg", "-jpegopt", f"quality={QUALITY}", "-f", str(page), "-l", str(page),
          "-scale-to", str(WIDTH), "-singlefile", str(pdf), str(stem)],
-        capture_output=True, timeout=60,
+        capture_output=True, timeout=60, check=False,
     )
     image = stem.with_suffix(".jpg")
     return image if result.returncode == 0 and image.exists() else None
