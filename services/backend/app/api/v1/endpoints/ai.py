@@ -17,6 +17,7 @@ from app.schemas.ai import (
     DetectResponse,
     ImproveRequest,
     ImproveResponse,
+    WarmResponse,
 )
 from app.services import detector, llm
 
@@ -58,8 +59,10 @@ async def detect(request: DetectRequest) -> DetectResponse:
 
 
 @router.post(
-    "/ai/detect/warm", status_code=204, dependencies=[Depends(require_gateway)]
+    "/ai/detect/warm",
+    response_model=WarmResponse,
+    dependencies=[Depends(require_gateway)],
 )
-async def warm() -> None:
+async def warm() -> WarmResponse:
     """Wakes the detector while a check searches its sources."""
-    await detector.warm()
+    return WarmResponse(awake=await detector.warm())

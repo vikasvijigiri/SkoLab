@@ -60,7 +60,9 @@ def test_compile_reruns_until_references_settle(monkeypatch):
         return 0, "Output written", False
 
     monkeypatch.setattr(colab, "_run_bounded", fake_run)
-    result = colab._compile_source(r"\documentclass{article}\begin{document}\ref{x}\end{document}")
+    result = colab._compile_source(
+        r"\documentclass{article}\begin{document}\ref{x}\end{document}"
+    )
     assert result.status == "compiled"
     assert base64.b64decode(result.pdf_base64 or "") == b"%PDF-1.7 pass 2"
     assert len(timeouts) == 2
@@ -74,7 +76,9 @@ def test_compile_stops_after_the_last_allowed_pass(monkeypatch):
 
     def fake_run(command, cwd, env, timeout):
         passes.append(timeout)
-        (Path(cwd) / "main.log").write_text("Package rerunfilecheck Warning: (rerunfilecheck) Rerun to get outlines right")
+        (Path(cwd) / "main.log").write_text(
+            "Package rerunfilecheck Warning: (rerunfilecheck) Rerun to get outlines right"
+        )
         (Path(cwd) / "main.pdf").write_bytes(b"%PDF-1.7")
         return 0, "", False
 
@@ -112,7 +116,9 @@ async def test_compile_route_returns_typed_response(client, app, monkeypatch):
     monkeypatch.setattr(
         colab,
         "_compile_source",
-        lambda _source, _files=None: CompileResponse(status="compiled", pdf_base64="cGRm"),
+        lambda _source, _files=None: CompileResponse(
+            status="compiled", pdf_base64="cGRm"
+        ),
     )
     try:
         response = await client.post(
@@ -255,7 +261,9 @@ def test_saturated_workers_refuse_fast_with_retry_after(monkeypatch):
     assert exc.value.headers["Retry-After"]
 
 
-async def test_compile_is_not_charged_again_behind_the_gateway(client, app, monkeypatch):
+async def test_compile_is_not_charged_again_behind_the_gateway(
+    client, app, monkeypatch
+):
     """The gateway charges the compile quota; Python must not charge it twice."""
     from app.api.dependencies import get_verified_user
     from app.core import quota
@@ -358,7 +366,9 @@ def test_real_compile_contains_denylist_bypasses(tmp_path, name):
     marker = tmp_path / "pwned"
     body = _BYPASSES[name] % {"secret": secret.as_posix(), "marker": marker.as_posix()}
     source = _DOC % (body + "x")
-    assert colab._find_forbidden(source) is None, "bypass no longer bypasses; rewrite it"
+    assert colab._find_forbidden(source) is None, (
+        "bypass no longer bypasses; rewrite it"
+    )
     result = colab._compile_source(source)
     pdf = base64.b64decode(result.pdf_base64 or "")
     assert "SUPER-SECRET" not in (result.log or "") and b"SUPER-SECRET" not in pdf
@@ -469,7 +479,10 @@ async def test_invalid_project_files_are_422_on_the_route(client, app):
     try:
         response = await client.post(
             "/api/v1/colab/compile",
-            json={"latex_source": "x", "files": [{"path": "../x", "content_base64": ""}]},
+            json={
+                "latex_source": "x",
+                "files": [{"path": "../x", "content_base64": ""}],
+            },
         )
     finally:
         app.dependency_overrides.pop(get_verified_user, None)
@@ -512,14 +525,22 @@ def test_project_files_are_written_privately_in_subfolders(monkeypatch):
         if os.name == "posix":
             seen["modes"] = {
                 p: (root / p).stat().st_mode & 0o777
-                for p in ("chapters", "chapters/one", "chapters/one/intro.tex", "main.tex")
+                for p in (
+                    "chapters",
+                    "chapters/one",
+                    "chapters/one/intro.tex",
+                    "main.tex",
+                )
             }
         (root / "main.pdf").write_bytes(b"%PDF-1.7")
         return 0, "", False
 
     monkeypatch.setattr(colab, "_run_bounded", fake_run)
     files = _files(("chapters/one/intro.tex", b"hi"), ("figs/a.png", b"\x89PNG"))
-    assert colab._compile_source(_DOC % r"\input{chapters/one/intro}", files).status == "compiled"
+    assert (
+        colab._compile_source(_DOC % r"\input{chapters/one/intro}", files).status
+        == "compiled"
+    )
     assert seen["intro"] == b"hi" and seen["png"] == b"\x89PNG"
     if os.name == "posix":
         assert seen["modes"] == {
@@ -560,11 +581,17 @@ def test_forbidden_primitive_in_an_included_file_is_refused(monkeypatch):
         _DOC % r"\input{sub/evil}", _files(("sub/evil.tex", rb"\newread\f"))
     )
     assert result.status == "error"
-    assert "Unsupported construct" in result.errors[0] and "sub/evil.tex" in result.errors[0]
+    assert (
+        "Unsupported construct" in result.errors[0]
+        and "sub/evil.tex" in result.errors[0]
+    )
 
 
 def test_data_files_are_not_scanned_as_tex():
-    assert colab._find_forbidden_in_project("x", _files(("data.txt", rb"\newread"))) is None
+    assert (
+        colab._find_forbidden_in_project("x", _files(("data.txt", rb"\newread")))
+        is None
+    )
 
 
 def test_bibtex_runs_once_then_two_more_passes(monkeypatch):
@@ -572,7 +599,9 @@ def test_bibtex_runs_once_then_two_more_passes(monkeypatch):
     commands = []
 
     def fake_run(command, cwd, env, timeout):
-        commands.append(Path(command[-2] if command[-1] == "main" else command[-1]).name)
+        commands.append(
+            Path(command[-2] if command[-1] == "main" else command[-1]).name
+        )
         assert env["openin_any"] == "p"
         root = Path(cwd)
         (root / "main.aux").write_text(r"\citation{k}\bibdata{refs}")
@@ -581,7 +610,9 @@ def test_bibtex_runs_once_then_two_more_passes(monkeypatch):
         return 0, "", False
 
     monkeypatch.setattr(colab, "_run_bounded", fake_run)
-    result = colab._compile_source(_DOC % r"\cite{k}\bibliography{refs}", _files(("refs.bib", b"@misc{k}")))
+    result = colab._compile_source(
+        _DOC % r"\cite{k}\bibliography{refs}", _files(("refs.bib", b"@misc{k}"))
+    )
     assert result.status == "compiled"
     # pdflatex, bibtex, then passes until settled (the rerun hint never
     # clears here, so the 4-pass cap stops it).
@@ -606,7 +637,10 @@ def test_no_bibtex_without_bibdata(monkeypatch):
 @needs_tex
 def test_real_compile_inputs_project_files():
     files = _files(
-        ("chapters/intro.tex", rb"\section{Intro}\label{s}See~\ref{s}. \message{INTRO-WAS-READ}"),
+        (
+            "chapters/intro.tex",
+            rb"\section{Intro}\label{s}See~\ref{s}. \message{INTRO-WAS-READ}",
+        ),
         ("appendix.tex", b"Appendix text."),
     )
     result = colab._compile_source(

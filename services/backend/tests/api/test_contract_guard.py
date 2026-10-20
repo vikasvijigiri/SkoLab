@@ -58,13 +58,13 @@ def test_route_table_is_populated(app):
 
 
 def test_every_route_has_a_response_model_or_is_allowlisted(app):
-    offenders: list[tuple[str, list[str]]] = []
+    offenders: list[tuple[str, tuple[str, ...]]] = []
     for path, route in _routes(app):
         if route.response_model is not None:
             continue
         if path in PERMANENT_ALLOWLIST or path in UNTYPED_ALLOWLIST:
             continue
-        offenders.append((path, sorted(route.methods)))
+        offenders.append((path, tuple(sorted(route.methods))))
 
     assert not offenders, (
         "routes without response_model and not allow-listed: "

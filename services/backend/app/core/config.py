@@ -156,7 +156,10 @@ class Settings:
         # "skip the check" — a deliberate local-dev convenience that becomes
         # "compile runs with no authentication" if left unset in a real
         # deployment. Development is unaffected.
-        if self.environment in ("staging", "production") and not self.internal_api_token:
+        if (
+            self.environment in ("staging", "production")
+            and not self.internal_api_token
+        ):
             raise RuntimeError(
                 "INTERNAL_API_TOKEN is unset while "
                 f"APP_ENV={self.environment}. Set it (and the matching value on "

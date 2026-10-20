@@ -161,7 +161,9 @@ class WorkspaceDocument(Base):
     stats_version = Column(Integer, nullable=False, default=0, server_default="0")
 
     __table_args__ = (
-        CheckConstraint("char_length(source) <= 100000", name="chk_workspace_document_size"),
+        CheckConstraint(
+            "char_length(source) <= 100000", name="chk_workspace_document_size"
+        ),
         CheckConstraint("version >= 1", name="chk_workspace_document_version"),
     )
 
@@ -199,10 +201,16 @@ class WorkspaceFile(Base):
     )
 
     __table_args__ = (
-        CheckConstraint("kind IN ('folder', 'text', 'binary')", name="chk_workspace_file_kind"),
-        CheckConstraint("size >= 0 AND size <= 5242880", name="chk_workspace_file_size"),
+        CheckConstraint(
+            "kind IN ('folder', 'text', 'binary')", name="chk_workspace_file_kind"
+        ),
+        CheckConstraint(
+            "size >= 0 AND size <= 5242880", name="chk_workspace_file_size"
+        ),
         CheckConstraint("version >= 1", name="chk_workspace_file_version"),
-        Index("uq_workspace_files_path", "workspace_id", text("lower(path)"), unique=True),
+        Index(
+            "uq_workspace_files_path", "workspace_id", text("lower(path)"), unique=True
+        ),
     )
 
 
@@ -234,13 +242,20 @@ class WorkspaceActivity(Base):
         nullable=False,
     )
     kind = Column(String(32), nullable=False)
-    actor_id = Column(String(100), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    subject_id = Column(String(100), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    actor_id = Column(
+        String(100), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    subject_id = Column(
+        String(100), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     role = Column(String(20), nullable=True)
     # Server defaults too: the Go gateway writes rows with plain SQL.
     count = Column(Integer, nullable=False, default=1, server_default=text("1"))
     occurred_at = Column(
-        DateTime, default=utcnow, nullable=False, server_default=text("(now() AT TIME ZONE 'utc')")
+        DateTime,
+        default=utcnow,
+        nullable=False,
+        server_default=text("(now() AT TIME ZONE 'utc')"),
     )
 
     __table_args__ = (
@@ -274,20 +289,37 @@ class OriginalityReport(Base):
     __tablename__ = "originality_reports"
 
     id = Column(String(36), primary_key=True)
-    workspace_id = Column(String(100), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
-    requested_by = Column(String(100), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    status = Column(String(16), nullable=False, default="queued", server_default="queued")
+    workspace_id = Column(
+        String(100), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    requested_by = Column(
+        String(100), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    status = Column(
+        String(16), nullable=False, default="queued", server_default="queued"
+    )
     document_version = Column(Integer, nullable=False, default=0, server_default="0")
     score = Column(Float, nullable=True)
     result = Column(JSONB, nullable=True)
     error = Column(String(200), nullable=True)
-    created_at = Column(DateTime, nullable=False, default=utcnow, server_default=text("(now() AT TIME ZONE 'utc')"))
+    created_at = Column(
+        DateTime,
+        nullable=False,
+        default=utcnow,
+        server_default=text("(now() AT TIME ZONE 'utc')"),
+    )
     started_at = Column(DateTime, nullable=True)
     finished_at = Column(DateTime, nullable=True)
 
     __table_args__ = (
-        CheckConstraint("status IN ('queued', 'running', 'done', 'failed')", name="chk_originality_report_status"),
-        CheckConstraint("score IS NULL OR (score >= 0 AND score <= 100)", name="chk_originality_report_score"),
+        CheckConstraint(
+            "status IN ('queued', 'running', 'done', 'failed')",
+            name="chk_originality_report_status",
+        ),
+        CheckConstraint(
+            "score IS NULL OR (score >= 0 AND score <= 100)",
+            name="chk_originality_report_score",
+        ),
         Index("ix_originality_reports_workspace", "workspace_id", "created_at"),
     )
 
@@ -315,7 +347,9 @@ class WorkspaceOutput(Base):
     )
 
     __table_args__ = (
-        CheckConstraint("size >= 0 AND size <= 8388608", name="chk_workspace_output_size"),
+        CheckConstraint(
+            "size >= 0 AND size <= 8388608", name="chk_workspace_output_size"
+        ),
     )
 
 
@@ -389,7 +423,9 @@ class WebSocketTicket(Base):
     )
     expires_at = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(
-        DateTime(timezone=True), nullable=False, server_default=text("CURRENT_TIMESTAMP")
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("CURRENT_TIMESTAMP"),
     )
 
     __table_args__ = (Index("ix_websocket_tickets_expires_at", "expires_at"),)

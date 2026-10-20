@@ -123,7 +123,8 @@ async def test_routes_admit_only_the_gateway_and_validate(client, monkeypatch):
     answer = await _post(client, "/api/v1/ai/detect", {"passages": ["a", "b"]})
     assert answer.status_code == 200
     assert answer.json() == {"probabilities": [0.9, 0.9], "model": "fake"}
-    assert (await _post(client, "/api/v1/ai/detect/warm")).status_code == 204
+    woke = await _post(client, "/api/v1/ai/detect/warm")
+    assert woke.status_code == 200 and woke.json() == {"awake": True}
 
 
 @pytest.mark.usefixtures("gateway")

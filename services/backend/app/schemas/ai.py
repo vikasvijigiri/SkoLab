@@ -57,3 +57,9 @@ class DetectRequest(BaseModel):
 class DetectResponse(BaseModel):
     probabilities: list[float]
     model: str
+
+
+class WarmResponse(BaseModel):
+    """Whether the detector answered (it may still be starting)."""
+
+    awake: bool
