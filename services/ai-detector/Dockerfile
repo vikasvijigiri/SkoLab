@@ -1,5 +1,5 @@
-# SkoLab's AI-writing detector on a Hugging Face Space (Docker SDK).
-# Deployed by services/ai-detector/deploy.py; see app.py.
+# SkoLab's AI-writing detector as a container, for any host with 2 GB.
+# Production runs it on Modal (modal_app.py); see README.md and app.py.
 FROM python:3.12-slim@sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f
 
 RUN useradd -m -u 1000 user
