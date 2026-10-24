@@ -1,7 +1,7 @@
 # Keep in step with go.mod's go directive (CI's image job builds this file, so
 # drift fails the PR). GOTOOLCHAIN=local: the build uses this image's Go and
 # never downloads a different toolchain at build time.
-FROM golang:1.26-alpine@sha256:c95332c2af86b6d89b91bd0500f4b9529ccbd090a0d1855c6d1ceaa142ae8615 AS builder
+FROM golang:1.26-alpine@sha256:27f2d3b83cfc5803c8078f8e730af0f7c431bf067afaec8f60a36fb763187cba AS builder
 
 WORKDIR /app
 

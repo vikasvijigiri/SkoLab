@@ -54,8 +54,8 @@ func TestFanoutAsksEverySourceAndReportsWhatEachDid(t *testing.T) {
 	want := map[string]Coverage{
 		"openalex":   {Source: "openalex", Database: DatabasePublications, Searches: 3, Works: 3, Status: "searched"},
 		"web":        {Source: "web", Database: DatabaseWeb, Searches: 2, Works: 4, Status: "searched"},
-		"arxiv":      {Source: "arxiv", Database: DatabasePreprints, Searches: 2, Works: 0, Status: "partial"}, // one a day
-		"europe_pmc": {Source: "europe_pmc", Database: DatabaseFullText, Searches: 3, Works: 0, Status: "unavailable"},
+		"arxiv":      {Source: "arxiv", Database: DatabasePreprints, Searches: 2, Works: 0, Status: "partial"},                  // one a day
+		"europe_pmc": {Source: "europe_pmc", Database: DatabaseFullText, Searches: breakAfter, Works: 0, Status: "unavailable"}, // down: asked twice, then left alone
 		"core":       {Source: "core", Database: DatabaseFullText, Status: "unconfigured"},
 	}
 	for name, w := range want {
@@ -169,5 +169,36 @@ func TestCheckMergesOnePaperFoundInSeveralSources(t *testing.T) {
 	}
 	if result.ByDatabase[DatabaseFullText] != result.Score || result.Score == 0 {
 		t.Fatalf("%v %v", result.ByDatabase, result.Score)
+	}
+}
+
+func TestFanoutStopsAskingASourceThatKeepsFailing(t *testing.T) {
+	calls := 0
+	f := NewFanout(nil, []Provider{{Name: "down", Search: func(context.Context, string) ([]Work, error) {
+		calls++
+		return nil, errors.New("503")
+	}}})
+	for i := 0; i < 5; i++ {
+		if _, err := f.Search(context.Background(), "q"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if calls != breakAfter || f.Coverage()[0].Status != "unavailable" || f.Coverage()[0].Searches != breakAfter {
+		t.Fatal(calls, f.Coverage())
+	}
+	// A success in between resets the count: one failure is not an outage.
+	n := 0
+	g := NewFanout(nil, []Provider{{Name: "flaky", Search: func(context.Context, string) ([]Work, error) {
+		n++
+		if n%2 == 1 {
+			return nil, errors.New("blip")
+		}
+		return nil, nil
+	}}})
+	for i := 0; i < 6; i++ {
+		_, _ = g.Search(context.Background(), "q")
+	}
+	if n != 6 || g.Coverage()[0].Status != "partial" {
+		t.Fatal(n, g.Coverage())
 	}
 }
