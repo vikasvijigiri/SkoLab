@@ -870,10 +870,10 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
       <span role="status" className="truncate">
         {openFile ? fileStatus : editable ? (titleStatus ?? saveLabel(save)) : "View only"}
       </span>
-      <span aria-hidden="true" className="hidden xl:inline">
+      <span aria-hidden="true" className="hidden 2xl:inline">
         ·
       </span>
-      <span className="hidden truncate xl:inline">Created {formatDate(workspace.created_at)}</span>
+      <span className="hidden truncate 2xl:inline">Created {formatDate(workspace.created_at)}</span>
     </>
   );
 
