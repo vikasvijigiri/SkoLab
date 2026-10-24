@@ -311,3 +311,36 @@ func TestContentWordsSkipShortAndCommonWords(t *testing.T) {
 		t.Fatalf("%v", got)
 	}
 }
+
+func TestFrontMatterIsNotProse(t *testing.T) {
+	latex := `\begin{document}
+\title{Classical ice rules, quantum lines}
+\author{Vikas Vijigiri}
+\email{vikasvikki@iopb.res.in}
+\affiliation[IOP]{Institute of Physics, Bhubaneswar-751005, Odisha, India}
+\author*{K.G. Paulson\thanks{Corresponding {\em author}}}
+\date{\today}
+\titlerunning{kept: not front matter}
+\maketitle
+Squaric acid is a layered hydrogen-bonded crystal.
+\end{document}`
+	got := Prose(latex)
+	for _, gone := range []string{"Classical ice", "Vijigiri", "iopb", "Bhubaneswar", "Paulson", "Corresponding", "author"} {
+		if strings.Contains(got, gone) {
+			t.Errorf("%q is still in %q", gone, got)
+		}
+	}
+	if !strings.Contains(got, "Squaric acid is a layered hydrogen-bonded crystal.") || !strings.Contains(got, "kept: not front matter") {
+		t.Fatalf("prose lost: %q", got)
+	}
+	// A command alone, without an argument, is left as it is.
+	if WithoutFrontMatter(`\title alone`) != `\title alone` {
+		t.Fatal("changed a bare command")
+	}
+	// The windows the AI-writing estimate scores leave it out too.
+	for _, w := range Paragraphs(latex + strings.Repeat(" More prose about the crystal and its protons.", 40)) {
+		if strings.Contains(w, "Vijigiri") {
+			t.Fatal("front matter in a window")
+		}
+	}
+}

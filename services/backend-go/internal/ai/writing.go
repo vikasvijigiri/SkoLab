@@ -72,7 +72,7 @@ func Paragraphs(latex string) []string {
 	if i := strings.Index(latex, `\end{document}`); i >= 0 {
 		latex = latex[:i]
 	}
-	latex = bibliography.ReplaceAllString(latex, " ")
+	latex = WithoutFrontMatter(bibliography.ReplaceAllString(latex, " "))
 	var windows [][]string
 	var current []string
 	flush := func() {
