@@ -11,20 +11,29 @@ const variants: Record<Variant, string> = {
   ghost: "text-brand-700 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-950",
 };
 
+type Size = "md" | "sm";
+
+// md fills its form row; sm is a toolbar button, as tall as the others there.
+const sizes: Record<Size, string> = {
+  md: "h-11 w-full gap-2.5 px-4",
+  sm: "h-8 w-auto gap-1.5 px-3",
+};
+
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
+  size?: Size;
   loading?: boolean;
   icon?: ReactNode;
 }
 
-export function Button({ variant = "primary", loading = false, icon, disabled, className = "", children, ...rest }: ButtonProps) {
+export function Button({ variant = "primary", size = "md", loading = false, icon, disabled, className = "", children, ...rest }: ButtonProps) {
   return (
     <button
       type="button"
       {...rest}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={`relative inline-flex h-11 w-full cursor-pointer items-center justify-center gap-2.5 rounded-lg px-4 text-sm font-semibold transition-colors duration-150 disabled:cursor-not-allowed ${variants[variant]} ${className}`}
+      className={`relative inline-flex cursor-pointer items-center justify-center rounded-lg text-sm font-semibold transition-colors duration-150 disabled:cursor-not-allowed ${sizes[size]} ${variants[variant]} ${className}`}
     >
       {loading ? <Spinner /> : icon}
       <span>{children}</span>

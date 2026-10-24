@@ -84,6 +84,14 @@ export const SparkIcon = ({ className }: IconProps) => (
   </Icon>
 );
 
+/** A wand with sparkles: Scribe, the writing assistant. */
+export const WandIcon = ({ className }: IconProps) => (
+  <Icon className={className}>
+    <path d="m21.6 3.6-1.2-1.2a1.2 1.2 0 0 0-1.7 0L2.4 18.7a1.2 1.2 0 0 0 0 1.7l1.2 1.2a1.2 1.2 0 0 0 1.7 0L21.6 5.3a1.2 1.2 0 0 0 0-1.7Z" />
+    <path d="m14 7 3 3M5 6v4M19 14v4M10 2v2M7 8H3M21 16h-4M11 3H9" />
+  </Icon>
+);
+
 export const GridIcon = ({ className }: IconProps) => (
   <Icon className={className}>
     <rect x="3" y="3" width="7" height="7" rx="1.5" />
