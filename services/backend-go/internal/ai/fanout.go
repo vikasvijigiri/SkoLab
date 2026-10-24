@@ -34,12 +34,17 @@ type Fanout struct {
 	works    map[string]int
 	failures map[string]int
 	stopped  map[string]bool
+	// streak counts a provider's failures in a row; after breakAfter, the
+	// check stops asking it (a source that is down stays down for minutes).
+	streak map[string]int
 }
+
+const breakAfter = 2
 
 // NewFanout is the search for one check. Providers without a Search are
 // reported as not configured.
 func NewFanout(b Budgets, providers []Provider) *Fanout {
-	f := &Fanout{budgets: b, searches: map[string]int{}, works: map[string]int{}, failures: map[string]int{}, stopped: map[string]bool{}}
+	f := &Fanout{budgets: b, searches: map[string]int{}, works: map[string]int{}, failures: map[string]int{}, stopped: map[string]bool{}, streak: map[string]int{}}
 	for _, p := range providers {
 		if p.Search == nil {
 			f.unconfigured = append(f.unconfigured, p)
@@ -110,8 +115,10 @@ func (f *Fanout) Search(ctx context.Context, query string) ([]Work, error) {
 				f.stopped[p.Name] = true
 			case err != nil:
 				f.failures[p.Name]++
+				f.streak[p.Name]++
 			default:
 				f.works[p.Name] += len(works)
+				f.streak[p.Name] = 0
 			}
 			f.mu.Unlock()
 			if err == nil {
@@ -148,7 +155,7 @@ func (f *Fanout) allStopped() bool {
 func (f *Fanout) take(p Provider) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.stopped[p.Name] || (p.PerCheck > 0 && f.searches[p.Name] >= p.PerCheck) {
+	if f.stopped[p.Name] || f.streak[p.Name] >= breakAfter || (p.PerCheck > 0 && f.searches[p.Name] >= p.PerCheck) {
 		return false
 	}
 	f.searches[p.Name]++
