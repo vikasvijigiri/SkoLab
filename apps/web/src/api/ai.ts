@@ -50,7 +50,8 @@ export function verdict(score: number): { band: "low" | "moderate" | "high"; lab
 
 /** How an AI-writing estimate reads. A model's estimate, never proof. */
 export function writingVerdict(score: number): { band: "low" | "moderate" | "high"; label: string } {
-  if (score < 10) return { band: "low", label: "Little sign of AI writing" };
+  // "Not detected", never "not AI": the detector can miss the newest models' writing.
+  if (score < 10) return { band: "low", label: "No AI writing detected" };
   if (score < 40) return { band: "moderate", label: "Some passages read as AI-written" };
   return { band: "high", label: "Much of the text reads as AI-written" };
 }

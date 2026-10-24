@@ -446,6 +446,88 @@ var (
 // Prose is the readable text of a LaTeX source: the document body without
 // the preamble, comments, math, citations, references or commands (their
 // prose arguments, such as section titles and emphasis, stay).
+// frontMatter are the title-page commands: who wrote the paper and where,
+// not what it says. Their text matches the authors' other papers and says
+// nothing about how the prose was written, so neither check reads it.
+var frontMatter = []string{
+	"title", "author", "affiliation", "altaffiliation", "address", "email", "thanks",
+	"date", "keywords", "pacs", "orcid", "homepage", "collaboration", "institute",
+	"affil", "corresp", "dedicatory", "subjclass",
+}
+
+// WithoutFrontMatter drops each front-matter command with its optional and
+// braced arguments (nested braces included).
+func WithoutFrontMatter(latex string) string {
+	var b strings.Builder
+	for i := 0; i < len(latex); {
+		if latex[i] == '\\' {
+			if end := frontMatterEnd(latex, i+1); end > 0 {
+				b.WriteByte(' ')
+				i = end
+				continue
+			}
+		}
+		b.WriteByte(latex[i])
+		i++
+	}
+	return b.String()
+}
+
+// frontMatterEnd answers where a front-matter command starting at name
+// (just after its backslash) ends, or 0 when it is not one.
+func frontMatterEnd(latex string, name int) int {
+	j := name
+	for j < len(latex) && (latex[j] >= 'a' && latex[j] <= 'z' || latex[j] >= 'A' && latex[j] <= 'Z') {
+		j++
+	}
+	word := latex[name:j]
+	known := false
+	for _, f := range frontMatter {
+		if word == f {
+			known = true
+			break
+		}
+	}
+	if !known {
+		return 0
+	}
+	if j < len(latex) && latex[j] == '*' {
+		j++
+	}
+	skipSpace := func() {
+		for j < len(latex) && (latex[j] == ' ' || latex[j] == '\t' || latex[j] == '\n' || latex[j] == '\r') {
+			j++
+		}
+	}
+	group := func(open, close byte) bool {
+		skipSpace()
+		if j >= len(latex) || latex[j] != open {
+			return false
+		}
+		depth := 0
+		for ; j < len(latex); j++ {
+			switch latex[j] {
+			case '\\':
+				j++ // an escaped brace does not count
+			case open:
+				depth++
+			case close:
+				depth--
+				if depth == 0 {
+					j++
+					return true
+				}
+			}
+		}
+		return true
+	}
+	group('[', ']')
+	if !group('{', '}') {
+		return 0 // \title alone, not a command we understand: leave it
+	}
+	return j
+}
+
 func Prose(latex string) string {
 	if i := strings.Index(latex, `\begin{document}`); i >= 0 {
 		latex = latex[i+len(`\begin{document}`):]
@@ -454,6 +536,7 @@ func Prose(latex string) string {
 		latex = latex[:i]
 	}
 	latex = bibliography.ReplaceAllString(latex, " ")
+	latex = WithoutFrontMatter(latex)
 	m := Mask(latex)
 	var b strings.Builder
 	inPlaceholder := false

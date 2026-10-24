@@ -216,11 +216,36 @@ describe("AI writing assistant", () => {
 
     expect(within(sheet).getByRole("heading", { name: "1 passage reads as likely AI-written" })).toBeInTheDocument();
     expect(within(sheet).getByText(/99% likely AI-written/)).toBeInTheDocument();
-    expect(within(sheet).getByText(/never as proof/)).toBeInTheDocument();
+    expect(within(sheet).getByText(/a low score is not proof/)).toBeInTheDocument();
 
     await user.click(within(sheet).getByText("What was searched"));
     expect(within(sheet).getByText("Not set up")).toBeInTheDocument();
     expect(within(sheet).getByText("Partly searched")).toBeInTheDocument();
+  });
+
+  it("never presents a low AI-writing score as proof of human writing", async () => {
+    backend.setOriginality({
+      score: 0,
+      words: 400,
+      matched_words: 0,
+      sentences: 20,
+      probes: 10,
+      sources_checked: 60,
+      partial: false,
+      matches: [],
+      sources: [],
+      writing: { score: 0, words: 400, threshold: 0.98, model: "test classifier", passages: [{ text: "Our prose.", words: 400, probability: 0.01, likely: false }] },
+      writing_status: "ok",
+    });
+    const { user } = await open();
+    await user.click(screen.getByRole("button", { name: "AI" }));
+    const sheet = screen.getByRole("dialog", { name: "AI writing assistant" });
+    await user.click(within(sheet).getByRole("tab", { name: "Originality" }));
+    await user.click(within(sheet).getByRole("button", { name: /Check similarity and AI writing/ }));
+    const ai = await within(sheet).findByRole("region", { name: "AI-written" }, { timeout: 5000 });
+    expect(within(ai).getByText("No AI writing detected")).toBeInTheDocument();
+    expect(within(ai).getByText(/Not proof of human writing/)).toBeInTheDocument();
+    expect(within(sheet).getByText(/a low score is not proof that a person wrote it/)).toBeInTheDocument();
   });
 
   it("says why there is no AI-writing estimate", async () => {

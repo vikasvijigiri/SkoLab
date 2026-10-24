@@ -778,6 +778,9 @@ function Report({ report, onShow }: { report: OriginalityReport; onShow: (senten
                 <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">
                   of {writing.words.toLocaleString()} words, in {writing.passages.length} {writing.passages.length === 1 ? "passage" : "passages"}
                 </p>
+                {w.band === "low" && (
+                  <p className="mt-1 text-[11px] leading-snug text-amber-700 dark:text-amber-400">Not proof of human writing: it can miss text from the newest AI models, especially technical writing.</p>
+                )}
               </div>
             </>
           ) : (
@@ -862,7 +865,7 @@ function Report({ report, onShow }: { report: OriginalityReport; onShow: (senten
             ))}
           </ul>
           <p className="mt-2 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
-            An estimate from an open classifier ({writing.model}), scoring the prose in passages of 150 to 300 words. On human-written abstracts from before AI writing tools it rarely raises a false alarm at this threshold, but it can be wrong: polished, formulaic or edited prose may score high, and AI-written text that was reworded may score low. Treat it as a prompt to look again, never as proof.
+            An estimate from an open classifier ({writing.model}), scoring the prose in passages of 200 to 300 words. It is tuned to almost never accuse human writing: on human-written abstracts from before AI writing tools it raised no false alarms at this threshold. The price is that it misses some AI writing, most often dense technical prose from the newest AI models, and text that was edited after it was generated. A high score is a prompt to look again; a low score is not proof that a person wrote it.
           </p>
         </section>
       )}
