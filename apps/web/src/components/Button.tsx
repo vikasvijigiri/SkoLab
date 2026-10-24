@@ -11,12 +11,13 @@ const variants: Record<Variant, string> = {
   ghost: "text-brand-700 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-950",
 };
 
-type Size = "md" | "sm";
+type Size = "md" | "sm" | "xs";
 
-// md fills its form row; sm is a toolbar button, as tall as the others there.
+// md fills its form row; sm is a toolbar button, as tall as the others there; xs fits a pane's header row.
 const sizes: Record<Size, string> = {
   md: "h-11 w-full gap-2.5 px-4",
   sm: "h-8 w-auto gap-1.5 px-3",
+  xs: "h-7 w-auto gap-1.5 px-2.5",
 };
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
