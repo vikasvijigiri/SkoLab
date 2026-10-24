@@ -47,6 +47,18 @@ OWN = (
     "We report the alignment procedure step by step and the residual drift we measured "
     "over three weeks of daily observations in an unheated basement room."
 )
+# More of the same note, so the document is long enough (200+ words) for the
+# AI-writing estimate to be made.
+OWN_MORE = (
+    "The bench consists of a helium-neon laser, two kinematic mirror mounts taken from a "
+    "retired interferometer, a beam splitter we bought second hand and a photodiode read out "
+    "by a borrowed lock-in amplifier. Because the room has no heating, we logged the air "
+    "temperature next to every reading with a cheap thermistor taped to the table. The drift "
+    "followed the temperature closely: on cold mornings the fringe pattern moved by almost a "
+    "full fringe before lunch, while on milder days it hardly moved at all. We therefore fitted "
+    "a linear correction against temperature and applied it to the remaining data, which cut "
+    "the residual drift to roughly a tenth of a fringe over a working day."
+)
 FLAWED = r"The measurements was repeated three time and the results \cite{smith2020} shows a clear trend when $T < T_c$, which are consistent with our expectation."
 
 MANUSCRIPT = rf"""\documentclass{{article}}
@@ -55,6 +67,8 @@ MANUSCRIPT = rf"""\documentclass{{article}}
 {COPIED}
 
 {OWN}
+
+{OWN_MORE}
 
 {FLAWED}
 \end{{document}}
@@ -137,7 +151,8 @@ def run(base: str, api_key: str, email: str, password: str) -> list[str]:
     status, started_check = call("POST", f"{base}/api/v1/workspaces/{ws}/ai/originality", token=token)
     expect(status == 202, f"originality: HTTP {status} {started_check}")
     report_id = started_check["report"]["id"]
-    deadline = time.monotonic() + 180
+    # Every source is searched, then the AI-writing detector (which may start cold) scores the prose.
+    deadline = time.monotonic() + 420
     report: dict = {}
     while time.monotonic() < deadline:
         status, report = call("GET", f"{base}/api/v1/workspaces/{ws}/ai/originality/{report_id}", token=token)
@@ -154,6 +169,18 @@ def run(base: str, api_key: str, email: str, password: str) -> list[str]:
     lines.extend(f"  - {s['title']} ({s.get('year', '')}): {s['sentences']} sentence(s)" for s in result["sources"][:5])
     expect(result["score"] > 0 and any("attention" in t.lower() for t in titles), f"originality: the copied abstract was not found (sources: {titles})")
     expect(not any(OWN.split(".")[0] in m["sentence"] for m in result["matches"]), "originality: original prose was reported as matched")
+    coverage = result.get("coverage") or []
+    lines.append("- Searched: " + ", ".join(f"{c['source']} {c['status']} ({c['searches']})" for c in coverage))
+    expect(any(c["source"] == "openalex" and c["status"] == "searched" for c in coverage), f"originality: OpenAlex was not searched ({coverage})")
+    writing, writing_status = result.get("writing"), result.get("writing_status")
+    if writing:
+        flagged = sum(1 for p in writing["passages"] if p["likely"])
+        lines.append(f"- AI-written: {writing['score']}% of {writing['words']} words ({flagged} of {len(writing['passages'])} passages flagged, {writing['model']})")
+    else:
+        lines.append(f"- AI-written: no estimate ({writing_status})")
+    if ai["originality"].get("writing_estimate"):
+        # Switched on: the document is long enough, so the report has the estimate.
+        expect(writing_status == "ok" and writing, f"originality: the AI-writing estimate is on but was {writing_status}")
     return lines
 
 
