@@ -44,7 +44,7 @@ import { FilePreview } from "../editor/FilePreview";
 import { AIPanel } from "../editor/AIPanel";
 import { SelectionToolbar } from "../editor/SelectionToolbar";
 import type { ImproveGoal } from "../api/editorTypes";
-import { SparkIcon } from "../components/Icons";
+import { WandIcon } from "../components/Icons";
 import { FileTree, filesMessage, type FilesState, type OpenTarget } from "../editor/FileTree";
 import { RETRY_DELAY_MS, SAVE_DELAY_MS, saveLabel, type SaveState } from "../editor/saving";
 import { Avatar, Share } from "../editor/Share";
@@ -809,7 +809,7 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
           aria-pressed={layout === name}
           title={`${label} (${keys.replace("Alt", isMac ? "⌥" : "Alt")})`}
           onClick={() => changeLayout(name)}
-          className={`grid size-8 cursor-pointer place-items-center rounded-md transition-colors ${layout === name ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-white" : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"}`}
+          className={`grid size-7 cursor-pointer place-items-center rounded-md transition-colors ${layout === name ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-white" : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"}`}
         >
           <LayoutIcon layout={name} />
         </button>
@@ -824,10 +824,10 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
     <div className={`flex h-dvh flex-col ${dragRatio !== null ? "cursor-col-resize select-none" : ""}`}>
       <title>{`${title.trim() || "Untitled"} · SkoLab`}</title>
       {!focusMode && (
-        <header className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-zinc-200/80 bg-white/85 px-2 py-1.5 backdrop-blur-md sm:px-3 dark:border-zinc-800/80 dark:bg-zinc-950/85">
+        <header className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-zinc-200/80 bg-white/85 px-2 py-1 backdrop-blur-md sm:px-3 dark:border-zinc-800/80 dark:bg-zinc-950/85">
           <Link
             to="/"
-            className="grid size-9 shrink-0 place-items-center rounded-lg text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
+            className="grid size-8 shrink-0 place-items-center rounded-lg text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
             aria-label="Back to your projects"
             title="Your projects"
           >
@@ -843,13 +843,13 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
                   maxLength={255}
-                  className="w-full min-w-0 truncate rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-[15px] font-semibold tracking-tight hover:border-zinc-300 focus:border-brand-500 dark:hover:border-zinc-700"
+                  className="w-full min-w-0 truncate rounded-md border border-transparent bg-transparent px-1.5 py-0 text-sm leading-6 font-semibold tracking-tight hover:border-zinc-300 focus:border-brand-500 dark:hover:border-zinc-700"
                 />
               </label>
             ) : (
-              <h1 className="truncate px-1.5 py-0.5 text-[15px] font-semibold tracking-tight">{title}</h1>
+              <h1 className="truncate px-1.5 text-sm leading-6 font-semibold tracking-tight">{title}</h1>
             )}
-            <p className="flex min-w-0 items-center gap-1.5 px-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+            <p className="flex min-w-0 items-center gap-1.5 px-1.5 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">
               <span className="max-w-48 shrink-0 truncate font-medium text-zinc-700 dark:text-zinc-300" title="Open file">
                 {openFile?.path ?? "main.tex"}
               </span>
@@ -869,7 +869,7 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
             onClick={() => setPalette(true)}
             aria-label="Search or run a command"
             aria-keyshortcuts={isMac ? "Meta+K" : "Control+K"}
-            className="order-last flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-sm text-zinc-500 transition-colors hover:border-zinc-300 hover:bg-white sm:order-none sm:w-auto sm:min-w-56 sm:flex-1 md:max-w-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
+            className="order-last flex h-8 w-full cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-sm text-zinc-500 transition-colors hover:border-zinc-300 hover:bg-white sm:order-none sm:w-auto sm:min-w-56 sm:flex-1 md:max-w-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <circle cx="11" cy="11" r="7" />
@@ -887,7 +887,7 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
               aria-controls="editor-files"
               onClick={() => setShowFiles(!showFiles)}
               title="Show or hide the sidebar: project files and outline"
-              className="hidden h-9 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-sm font-semibold hover:bg-zinc-100 md:flex dark:hover:bg-zinc-900"
+              className="hidden h-8 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-sm font-semibold hover:bg-zinc-100 md:flex dark:hover:bg-zinc-900"
             >
               <FilesIcon />
               Files
@@ -896,7 +896,7 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
               type="button"
               aria-label="Open project files"
               onClick={() => setSheet("files")}
-              className="flex h-9 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-sm font-semibold hover:bg-zinc-100 md:hidden dark:hover:bg-zinc-900"
+              className="flex h-8 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-sm font-semibold hover:bg-zinc-100 md:hidden dark:hover:bg-zinc-900"
             >
               <FilesIcon />
               Files
@@ -908,11 +908,11 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
                 setAiTab("improve");
                 setSheet("ai");
               }}
-              title="AI writing assistant: improve a passage, or check originality"
-              className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg bg-gradient-to-r from-brand-600 to-violet-600 px-3 text-sm font-semibold text-white shadow-sm shadow-brand-600/30 transition hover:from-brand-700 hover:to-violet-700"
+              title="Scribe, your writing assistant: improve a passage, check similarity and AI writing"
+              className="group flex h-8 cursor-pointer items-center gap-1.5 rounded-lg bg-gradient-to-r from-brand-600 via-violet-600 to-fuchsia-600 px-2.5 text-sm font-semibold text-white shadow-sm shadow-violet-600/30 transition hover:brightness-110"
             >
-              <SparkIcon className="size-4" />
-              AI
+              <WandIcon className="size-4 transition-transform group-hover:-rotate-12" />
+              Scribe
             </button>
 
             <button
@@ -920,7 +920,7 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
               onClick={() => setSheet("overview")}
               aria-label={`Progress ${insights.progress.percent}%. Open the overview`}
               title="Progress, contents and details"
-              className="flex h-9 cursor-pointer items-center gap-2 rounded-lg px-2 text-sm font-semibold tabular-nums hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              className="flex h-8 cursor-pointer items-center gap-2 rounded-lg px-2 text-sm font-semibold tabular-nums hover:bg-zinc-100 dark:hover:bg-zinc-900"
             >
               <ProgressRing percent={insights.progress.percent} size={22} stroke={3} />
               {insights.progress.percent}%
@@ -930,7 +930,7 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
               type="button"
               onClick={() => setSheet("share")}
               title="Invite co-authors and manage access"
-              className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 bg-white pr-3 pl-1.5 text-sm font-semibold shadow-xs hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+              className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 bg-white pr-3 pl-1.5 text-sm font-semibold shadow-xs hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
             >
               {members.length > 0 ? (
                 <span className="flex -space-x-2">
@@ -947,13 +947,13 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
               {members.length > 3 && <span className="text-xs font-medium text-zinc-500">+{members.length - 3}</span>}
             </button>
 
-            <Button variant="secondary" className="!h-9 !w-auto" onClick={() => download(`${fileName(title)}.tex`, source, "application/x-tex")}>
+            <Button variant="secondary" size="sm" onClick={() => download(`${fileName(title)}.tex`, source, "application/x-tex")}>
               .tex
             </Button>
-            <Button variant="secondary" className="!h-9 !w-auto" disabled={!pdf && !listing?.output} onClick={downloadPdf}>
+            <Button variant="secondary" size="sm" disabled={!pdf && !listing?.output} onClick={downloadPdf}>
               PDF
             </Button>
-            <Button className="!h-9 !w-auto" loading={compiling} onClick={() => void runCompile()} title={`Compile (${isMac ? "⌘" : "Ctrl"}+Enter)`}>
+            <Button size="sm" loading={compiling} onClick={() => void runCompile()} title={`Compile (${isMac ? "⌘" : "Ctrl"}+Enter)`}>
               {compiling ? "Compiling" : "Compile"}
             </Button>
           </div>
@@ -1287,8 +1287,8 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
       )}
       {sheet === "ai" && (
         <Sheet
-          title="AI writing assistant"
-          description="Suggestions you approve one by one, and an originality check against published work."
+          title="Scribe"
+          description="Your writing assistant: suggestions you approve one by one, and a similarity and AI-writing check."
           onClose={() => {
             setSheet(null);
             setAiGoal(undefined);

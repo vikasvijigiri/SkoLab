@@ -52,8 +52,8 @@ describe("AI writing assistant", () => {
   it("improves the paragraph at the cursor and applies suggestions one by one", async () => {
     const { user } = await open();
     place(SOURCE.indexOf("We measured") + 3);
-    await user.click(screen.getByRole("button", { name: "AI" }));
-    const sheet = screen.getByRole("dialog", { name: "AI writing assistant" });
+    await user.click(screen.getByRole("button", { name: "Scribe" }));
+    const sheet = screen.getByRole("dialog", { name: "Scribe" });
     expect(within(sheet).getByText(PARAGRAPH)).toBeInTheDocument();
     expect(await within(sheet).findByText("30 uses left today")).toBeInTheDocument();
 
@@ -76,8 +76,8 @@ describe("AI writing assistant", () => {
     const { user } = await open();
     const at = SOURCE.indexOf("We measured");
     place(at, at + PARAGRAPH.length);
-    await user.click(screen.getByRole("button", { name: "AI" }));
-    const sheet = screen.getByRole("dialog", { name: "AI writing assistant" });
+    await user.click(screen.getByRole("button", { name: "Scribe" }));
+    const sheet = screen.getByRole("dialog", { name: "Scribe" });
     await user.click(within(sheet).getByRole("button", { name: /Clarity/ }));
     const cards = await within(sheet).findAllByRole("listitem");
     // Text inserted before the paragraph shifts everything: found by its context.
@@ -95,8 +95,8 @@ describe("AI writing assistant", () => {
   it("accepts all at once, dismisses, and says when there is nothing to change", async () => {
     const { user } = await open();
     place(SOURCE.indexOf("We measured") + 3);
-    await user.click(screen.getByRole("button", { name: "AI" }));
-    const sheet = screen.getByRole("dialog", { name: "AI writing assistant" });
+    await user.click(screen.getByRole("button", { name: "Scribe" }));
+    const sheet = screen.getByRole("dialog", { name: "Scribe" });
     await user.click(within(sheet).getByRole("button", { name: /Concise/ }));
     await user.click(await within(sheet).findByRole("button", { name: "Accept all" }));
     expect(source()).toContain("We measured the field at $T<T_c$ and the results");
@@ -110,8 +110,8 @@ describe("AI writing assistant", () => {
     backend.setAI("improve", { left: 0 });
     const { user } = await open();
     place(SOURCE.indexOf("We measured") + 3);
-    await user.click(screen.getByRole("button", { name: "AI" }));
-    const sheet = screen.getByRole("dialog", { name: "AI writing assistant" });
+    await user.click(screen.getByRole("button", { name: "Scribe" }));
+    const sheet = screen.getByRole("dialog", { name: "Scribe" });
     expect(await within(sheet).findByText("You've used today's allowance. It resets at midnight UTC.")).toBeInTheDocument();
     expect(within(sheet).getByRole("button", { name: /Academic tone/ })).toBeDisabled();
 
@@ -124,8 +124,8 @@ describe("AI writing assistant", () => {
 
   it("is read-only for viewers", async () => {
     const { user } = await open("viewer");
-    await user.click(screen.getByRole("button", { name: "AI" }));
-    const sheet = screen.getByRole("dialog", { name: "AI writing assistant" });
+    await user.click(screen.getByRole("button", { name: "Scribe" }));
+    const sheet = screen.getByRole("dialog", { name: "Scribe" });
     expect(within(sheet).getByText(/Only the owner and editors/)).toBeInTheDocument();
     await user.click(within(sheet).getByRole("tab", { name: "Originality" }));
     expect(within(sheet).queryByRole("button", { name: /Check similarity and AI writing/ })).not.toBeInTheDocument();
@@ -144,8 +144,8 @@ describe("AI writing assistant", () => {
       sources: [{ id: "W1", title: "Magnons at low temperature", year: 2021, url: "https://doi.org/10.1/m", doi: "10.1/m", sentences: 1, words: 37 }],
     });
     const { user } = await open();
-    await user.click(screen.getByRole("button", { name: "AI" }));
-    const sheet = screen.getByRole("dialog", { name: "AI writing assistant" });
+    await user.click(screen.getByRole("button", { name: "Scribe" }));
+    const sheet = screen.getByRole("dialog", { name: "Scribe" });
     await user.click(within(sheet).getByRole("tab", { name: "Originality" }));
     expect(await within(sheet).findByText("No checks yet")).toBeInTheDocument();
     await user.click(within(sheet).getByRole("button", { name: /Check similarity and AI writing/ }));
@@ -155,7 +155,7 @@ describe("AI writing assistant", () => {
     expect(within(sheet).getByText(/82% of its wording/)).toBeInTheDocument();
 
     await user.click(within(sheet).getByRole("button", { name: "Show in document" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "AI writing assistant" })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Scribe" })).not.toBeInTheDocument());
     const selection = view().state.selection.main;
     expect(view().state.sliceDoc(selection.from, selection.to)).toMatch(/^We measured teh field at \$T<T_c\$ and teh results/);
   });
@@ -196,8 +196,8 @@ describe("AI writing assistant", () => {
       writing_status: "ok",
     });
     const { user } = await open();
-    await user.click(screen.getByRole("button", { name: "AI" }));
-    const sheet = screen.getByRole("dialog", { name: "AI writing assistant" });
+    await user.click(screen.getByRole("button", { name: "Scribe" }));
+    const sheet = screen.getByRole("dialog", { name: "Scribe" });
     await user.click(within(sheet).getByRole("tab", { name: "Originality" }));
     expect(within(sheet).getByText(/Searches OpenAlex, Europe PMC, arXiv and The web/)).toBeInTheDocument();
     await user.click(within(sheet).getByRole("button", { name: /Check similarity and AI writing/ }));
@@ -238,8 +238,8 @@ describe("AI writing assistant", () => {
       writing_status: "ok",
     });
     const { user } = await open();
-    await user.click(screen.getByRole("button", { name: "AI" }));
-    const sheet = screen.getByRole("dialog", { name: "AI writing assistant" });
+    await user.click(screen.getByRole("button", { name: "Scribe" }));
+    const sheet = screen.getByRole("dialog", { name: "Scribe" });
     await user.click(within(sheet).getByRole("tab", { name: "Originality" }));
     await user.click(within(sheet).getByRole("button", { name: /Check similarity and AI writing/ }));
     const ai = await within(sheet).findByRole("region", { name: "AI-written" }, { timeout: 5000 });
@@ -251,8 +251,8 @@ describe("AI writing assistant", () => {
   it("says why there is no AI-writing estimate", async () => {
     backend.setOriginality({ score: 0, words: 90, matched_words: 0, sentences: 4, probes: 2, sources_checked: 9, partial: false, matches: [], sources: [], writing: null, writing_status: "too_short" });
     const { user } = await open();
-    await user.click(screen.getByRole("button", { name: "AI" }));
-    const sheet = screen.getByRole("dialog", { name: "AI writing assistant" });
+    await user.click(screen.getByRole("button", { name: "Scribe" }));
+    const sheet = screen.getByRole("dialog", { name: "Scribe" });
     await user.click(within(sheet).getByRole("tab", { name: "Originality" }));
     await user.click(within(sheet).getByRole("button", { name: /Check similarity and AI writing/ }));
     expect(await within(sheet).findByText(/needs at least 150 words/, {}, { timeout: 5000 })).toBeInTheDocument();
@@ -260,8 +260,8 @@ describe("AI writing assistant", () => {
 
   it("reports a clean document and keeps earlier checks", async () => {
     const { user } = await open();
-    await user.click(screen.getByRole("button", { name: "AI" }));
-    const sheet = screen.getByRole("dialog", { name: "AI writing assistant" });
+    await user.click(screen.getByRole("button", { name: "Scribe" }));
+    const sheet = screen.getByRole("dialog", { name: "Scribe" });
     await user.click(within(sheet).getByRole("tab", { name: "Originality" }));
     await user.click(await within(sheet).findByRole("button", { name: /Check similarity and AI writing/ }));
     expect(await within(sheet).findByText("No sentence was found in the sources searched.", {}, { timeout: 5000 })).toBeInTheDocument();
@@ -271,8 +271,8 @@ describe("AI writing assistant", () => {
 
   it("improves the whole document in parts and applies across them", async () => {
     const { user } = await open();
-    await user.click(screen.getByRole("button", { name: "AI" }));
-    const sheet = screen.getByRole("dialog", { name: "AI writing assistant" });
+    await user.click(screen.getByRole("button", { name: "Scribe" }));
+    const sheet = screen.getByRole("dialog", { name: "Scribe" });
     await user.click(within(sheet).getByRole("button", { name: "Whole document" }));
     expect(within(sheet).getByText(/All of main.tex's prose, in 1 part/)).toBeInTheDocument();
     await user.click(within(sheet).getByRole("button", { name: /Grammar/ }));
@@ -284,8 +284,8 @@ describe("AI writing assistant", () => {
   it("refuses a whole document that needs more uses than are left", async () => {
     backend.setAI("improve", { left: 0 });
     const { user } = await open();
-    await user.click(screen.getByRole("button", { name: "AI" }));
-    const sheet = screen.getByRole("dialog", { name: "AI writing assistant" });
+    await user.click(screen.getByRole("button", { name: "Scribe" }));
+    const sheet = screen.getByRole("dialog", { name: "Scribe" });
     await user.click(within(sheet).getByRole("button", { name: "Whole document" }));
     expect(await within(sheet).findByText("You've used today's allowance. It resets at midnight UTC.")).toBeInTheDocument();
     expect(within(sheet).getByRole("button", { name: /Grammar/ })).toBeDisabled();
@@ -296,7 +296,7 @@ describe("AI writing assistant", () => {
     await user.keyboard("{Control>}k{/Control}");
     await user.type(await screen.findByRole("combobox"), "originality");
     await user.keyboard("{Enter}");
-    const sheet = await screen.findByRole("dialog", { name: "AI writing assistant" });
+    const sheet = await screen.findByRole("dialog", { name: "Scribe" });
     expect(within(sheet).getByRole("tab", { name: "Originality" })).toHaveAttribute("aria-selected", "true");
   });
 });
