@@ -1,5 +1,5 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { EditorView } from "@codemirror/view";
 import type { FakeBackend, FakeCompileInput } from "../test/fakeBackend";
 import { renderApp, stubBackend } from "../test/renderApp";
@@ -407,13 +407,23 @@ describe("project files", () => {
     expect(await screen.findByRole("list", { name: "Project files" })).toBeInTheDocument();
   });
 
-  it("opens the files in a panel on phones, and hides the column on wider screens", async () => {
+  it("hides the files column from the tool rail on wider screens", async () => {
     const { user } = await open({ files: { "intro.tex": "x" } });
+    expect(screen.getByRole("navigation", { name: "Editor tools" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open project files" })).not.toBeInTheDocument();
     const toggle = screen.getByRole("button", { name: "Files" });
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     await user.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("list", { name: "Project files" })).not.toBeInTheDocument();
+  });
+
+  it("opens the files in a panel on phones", async () => {
+    const query = { matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() };
+    vi.stubGlobal("matchMedia", () => query);
+    onTestFinished(() => void vi.unstubAllGlobals());
+    const { user } = await open({ files: { "intro.tex": "x" } });
+    expect(screen.queryByRole("navigation", { name: "Editor tools" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Open project files" }));
     const sheet = screen.getByRole("dialog", { name: "Project files" });

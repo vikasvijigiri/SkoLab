@@ -100,13 +100,32 @@ const isRatio = (value: unknown): value is number => typeof value === "number" &
 const AUTO_COMPILE_DELAY_MS = 2500;
 const NO_ERRORS: string[] = [];
 
+const WIDE = "(min-width: 768px)";
+
 /** Wide screens have the sidebar; phones get sheets. Browsers without matchMedia (tests) count as wide. */
 function wide(): boolean {
   try {
-    return window.matchMedia("(min-width: 768px)").matches;
+    return window.matchMedia(WIDE).matches;
   } catch {
     return true;
   }
+}
+
+/** wide(), kept current as the window is resized: wide screens get the tool rail, phones the top bar. */
+function useWide(): boolean {
+  const [isWide, setWide] = useState(wide);
+  useEffect(() => {
+    let query: MediaQueryList;
+    try {
+      query = window.matchMedia(WIDE);
+    } catch {
+      return;
+    }
+    const change = () => setWide(query.matches);
+    query.addEventListener("change", change);
+    return () => query.removeEventListener("change", change);
+  }, []);
+  return isWide;
 }
 
 /** Whether a key press is typing into a field (the source editor included), where plain keys like ? are text. */
@@ -240,6 +259,7 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
   const [openId, setOpenId] = useState<string | null>(null);
   const [fileStatus, setFileStatus] = useState("");
   const [showFiles, setShowFiles] = useState(true);
+  const isWide = useWide();
   // A project PDF shown in the preview instead of the compiled output.
   const [previewing, setPreviewing] = useState<string | null>(null);
   const fileEditor = useRef<FileEditorHandle>(null);
@@ -794,7 +814,7 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
   );
 
   const layoutButtons = (
-    <div role="group" aria-label="Layout" className="hidden items-center rounded-lg bg-zinc-100 p-0.5 lg:flex dark:bg-zinc-900">
+    <div role="group" aria-label="Layout" className="flex flex-col items-center gap-0.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-900">
       {(
         [
           ["split", "Source and PDF", "Alt+1"],
@@ -819,11 +839,130 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
 
   const sourceVisible = focusMode || layout !== "pdf";
   const pdfVisible = !focusMode && layout !== "source";
+  const firstMember = members[0];
+
+  const openScribe = () => {
+    setAiTab("improve");
+    setSheet("ai");
+  };
+
+  const titleField = (className: string) =>
+    isOwner ? (
+      <label className="block min-w-0">
+        <span className="sr-only">Document title</span>
+        <input
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          maxLength={255}
+          className={`w-full min-w-0 truncate rounded-md border border-transparent bg-transparent px-1.5 py-0 text-sm leading-6 font-semibold tracking-tight hover:border-zinc-300 focus:border-brand-500 dark:hover:border-zinc-700 ${className}`}
+        />
+      </label>
+    ) : (
+      <h1 className={`truncate px-1.5 text-sm leading-6 font-semibold tracking-tight ${className}`}>{title}</h1>
+    );
+
+  const fileAndStatus = (
+    <>
+      <span className="max-w-48 shrink-0 truncate font-medium text-zinc-700 dark:text-zinc-300" title="Open file">
+        {openFile?.path ?? "main.tex"}
+      </span>
+      <span aria-hidden="true">·</span>
+      <span role="status" className="truncate">
+        {openFile ? fileStatus : editable ? (titleStatus ?? saveLabel(save)) : "View only"}
+      </span>
+      <span aria-hidden="true" className="hidden xl:inline">
+        ·
+      </span>
+      <span className="hidden truncate xl:inline">Created {formatDate(workspace.created_at)}</span>
+    </>
+  );
+
+  const outputs = (
+    <>
+      <Button variant="secondary" size={isWide ? "xs" : "sm"} onClick={() => download(`${fileName(title)}.tex`, source, "application/x-tex")}>
+        .tex
+      </Button>
+      <Button variant="secondary" size={isWide ? "xs" : "sm"} disabled={!pdf && !listing?.output} onClick={downloadPdf}>
+        PDF
+      </Button>
+      <Button size={isWide ? "xs" : "sm"} loading={compiling} onClick={() => void runCompile()} title={`Compile (${isMac ? "⌘" : "Ctrl"}+Enter)`}>
+        {compiling ? "Compiling" : "Compile"}
+      </Button>
+    </>
+  );
+
+  // On wide screens the title sits over the source pane and the outputs over the PDF; each moves to the other pane when its own is hidden.
+  const paneBar = "flex h-9 shrink-0 items-center gap-2 border-b border-zinc-200 px-2 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400";
+  const titleBar = (
+    <div className="flex min-w-0 flex-1 items-center gap-1.5">
+      {titleField("max-w-72 field-sizing-content")}
+      <p className="flex min-w-0 items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">{fileAndStatus}</p>
+    </div>
+  );
+  const railButton = "relative grid size-9 shrink-0 cursor-pointer place-items-center rounded-lg text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100";
 
   return (
-    <div className={`flex h-dvh flex-col ${dragRatio !== null ? "cursor-col-resize select-none" : ""}`}>
+    <div className={`flex h-dvh ${isWide ? "flex-row" : "flex-col"} ${dragRatio !== null ? "cursor-col-resize select-none" : ""}`}>
       <title>{`${title.trim() || "Untitled"} · SkoLab`}</title>
-      {!focusMode && (
+      {!focusMode && isWide && (
+        <nav aria-label="Editor tools" className="flex w-12 shrink-0 flex-col items-center gap-1 border-r border-zinc-200 bg-white py-2 dark:border-zinc-800 dark:bg-zinc-950">
+          <Link to="/" className={railButton} aria-label="Back to your projects" title="Your projects">
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </Link>
+          <button
+            type="button"
+            onClick={() => setPalette(true)}
+            aria-label="Search or run a command"
+            aria-keyshortcuts={isMac ? "Meta+K" : "Control+K"}
+            title={`Search or run a command (${isMac ? "⌘" : "Ctrl"}+K)`}
+            className={railButton}
+          >
+            <SearchIcon />
+          </button>
+          <button
+            type="button"
+            aria-label="Files"
+            aria-expanded={showFiles}
+            aria-controls="editor-files"
+            onClick={() => setShowFiles(!showFiles)}
+            title="Show or hide the sidebar: project files and outline"
+            className={`${railButton} ${showFiles ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100" : ""}`}
+          >
+            <FilesIcon />
+          </button>
+          <span aria-hidden="true" className="my-1 h-px w-6 bg-zinc-200 dark:bg-zinc-800" />
+          <button
+            type="button"
+            onClick={openScribe}
+            aria-label="Scribe"
+            title="Scribe, your writing assistant: improve a passage, check similarity and AI writing"
+            className="group grid size-9 shrink-0 cursor-pointer place-items-center rounded-xl bg-gradient-to-br from-brand-600 via-violet-600 to-fuchsia-600 text-white shadow-sm shadow-violet-600/30 transition hover:brightness-110"
+          >
+            <WandIcon className="size-[18px] transition-transform group-hover:-rotate-12" />
+          </button>
+          <button type="button" onClick={() => setSheet("overview")} aria-label={`Progress ${insights.progress.percent}%. Open the overview`} title={`Progress ${insights.progress.percent}%: contents and details`} className={railButton}>
+            <ProgressRing percent={insights.progress.percent} size={24} stroke={3} />
+          </button>
+          <button type="button" onClick={() => setSheet("share")} aria-label="Share" title="Invite co-authors and manage access" className={railButton}>
+            {firstMember ? (
+              <Avatar id={firstMember.user_id} name={firstMember.display_name || "?"} className="size-7 text-[11px]" />
+            ) : (
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM19 8v6M22 11h-6" />
+              </svg>
+            )}
+            {members.length > 1 && (
+              <span aria-hidden="true" className="absolute -right-0.5 -bottom-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-zinc-900 px-1 text-[9px] font-bold text-white ring-2 ring-white dark:bg-zinc-100 dark:text-zinc-900 dark:ring-zinc-950">
+                {members.length}
+              </span>
+            )}
+          </button>
+          <div className="mt-auto">{layoutButtons}</div>
+        </nav>
+      )}
+      {!focusMode && !isWide && (
         <header className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-zinc-200/80 bg-white/85 px-2 py-1 backdrop-blur-md sm:px-3 dark:border-zinc-800/80 dark:bg-zinc-950/85">
           <Link
             to="/"
@@ -835,33 +974,9 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
               <path d="M15 18l-6-6 6-6" />
             </svg>
           </Link>
-          <div className="min-w-32 flex-1 md:max-w-xs lg:max-w-sm">
-            {isOwner ? (
-              <label className="block">
-                <span className="sr-only">Document title</span>
-                <input
-                  value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  maxLength={255}
-                  className="w-full min-w-0 truncate rounded-md border border-transparent bg-transparent px-1.5 py-0 text-sm leading-6 font-semibold tracking-tight hover:border-zinc-300 focus:border-brand-500 dark:hover:border-zinc-700"
-                />
-              </label>
-            ) : (
-              <h1 className="truncate px-1.5 text-sm leading-6 font-semibold tracking-tight">{title}</h1>
-            )}
-            <p className="flex min-w-0 items-center gap-1.5 px-1.5 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">
-              <span className="max-w-48 shrink-0 truncate font-medium text-zinc-700 dark:text-zinc-300" title="Open file">
-                {openFile?.path ?? "main.tex"}
-              </span>
-              <span aria-hidden="true">·</span>
-              <span role="status" className="truncate">
-                {openFile ? fileStatus : editable ? (titleStatus ?? saveLabel(save)) : "View only"}
-              </span>
-              <span aria-hidden="true" className="hidden xl:inline">
-                ·
-              </span>
-              <span className="hidden truncate xl:inline">Created {formatDate(workspace.created_at)}</span>
-            </p>
+          <div className="min-w-32 flex-1">
+            {titleField("")}
+            <p className="flex min-w-0 items-center gap-1.5 px-1.5 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">{fileAndStatus}</p>
           </div>
 
           <button
@@ -869,45 +984,22 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
             onClick={() => setPalette(true)}
             aria-label="Search or run a command"
             aria-keyshortcuts={isMac ? "Meta+K" : "Control+K"}
-            className="order-last flex h-8 w-full cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-sm text-zinc-500 transition-colors hover:border-zinc-300 hover:bg-white sm:order-none sm:w-auto sm:min-w-56 sm:flex-1 md:max-w-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
+            className="order-last flex h-8 w-full cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-sm text-zinc-500 transition-colors hover:border-zinc-300 hover:bg-white sm:order-none sm:w-auto sm:min-w-56 sm:flex-1 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <circle cx="11" cy="11" r="7" />
-              <path d="m20 20-3.5-3.5" />
-            </svg>
+            <SearchIcon />
             <span className="flex-1 truncate text-left">Search or run a command…</span>
             <Keys keys="Mod+K" className="hidden sm:inline-flex" />
           </button>
 
           <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
-            {layoutButtons}
-            <button
-              type="button"
-              aria-expanded={showFiles}
-              aria-controls="editor-files"
-              onClick={() => setShowFiles(!showFiles)}
-              title="Show or hide the sidebar: project files and outline"
-              className="hidden h-8 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-sm font-semibold hover:bg-zinc-100 md:flex dark:hover:bg-zinc-900"
-            >
-              <FilesIcon />
-              Files
-            </button>
-            <button
-              type="button"
-              aria-label="Open project files"
-              onClick={() => setSheet("files")}
-              className="flex h-8 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-sm font-semibold hover:bg-zinc-100 md:hidden dark:hover:bg-zinc-900"
-            >
+            <button type="button" aria-label="Open project files" onClick={() => setSheet("files")} className="flex h-8 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-sm font-semibold hover:bg-zinc-100 dark:hover:bg-zinc-900">
               <FilesIcon />
               Files
             </button>
 
             <button
               type="button"
-              onClick={() => {
-                setAiTab("improve");
-                setSheet("ai");
-              }}
+              onClick={openScribe}
               title="Scribe, your writing assistant: improve a passage, check similarity and AI writing"
               className="group flex h-8 cursor-pointer items-center gap-1.5 rounded-lg bg-gradient-to-r from-brand-600 via-violet-600 to-fuchsia-600 px-2.5 text-sm font-semibold text-white shadow-sm shadow-violet-600/30 transition hover:brightness-110"
             >
@@ -947,280 +1039,289 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
               {members.length > 3 && <span className="text-xs font-medium text-zinc-500">+{members.length - 3}</span>}
             </button>
 
-            <Button variant="secondary" size="sm" onClick={() => download(`${fileName(title)}.tex`, source, "application/x-tex")}>
-              .tex
-            </Button>
-            <Button variant="secondary" size="sm" disabled={!pdf && !listing?.output} onClick={downloadPdf}>
-              PDF
-            </Button>
-            <Button size="sm" loading={compiling} onClick={() => void runCompile()} title={`Compile (${isMac ? "⌘" : "Ctrl"}+Enter)`}>
-              {compiling ? "Compiling" : "Compile"}
-            </Button>
+            {outputs}
           </div>
         </header>
       )}
 
-      {!editable && !focusMode && (
-        <div className="border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
-          <Alert tone="info">You can read and compile this document. Ask its owner for edit access to change it.</Alert>
-        </div>
-      )}
-      {save.state === "conflict" && (
-        <div className="border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
-          <Alert tone="error">
-            <p className="font-semibold">Someone else saved this document while you were editing.</p>
-            <p>Your latest changes are not saved. Load their version, or replace it with yours.</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <Button variant="secondary" className="!h-8 !w-auto" onClick={onReload}>
-                Load their version
-              </Button>
-              <Button variant="secondary" className="!h-8 !w-auto" onClick={() => keepMine(save.currentVersion)}>
-                Keep mine
-              </Button>
-            </div>
-          </Alert>
-        </div>
-      )}
-      {save.state === "locked" && (
-        <div className="border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
-          <Alert tone="error">{save.message}</Alert>
-        </div>
-      )}
-      {skipped.length > 0 && !focusMode && (
-        <div className="border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
-          <Alert tone="info">
-            <p>
-              Project imported. {skipped.length === 1 ? "One file was" : `${skipped.length} files were`} left out because SkoLab can't use {skipped.length === 1 ? "it" : "them"}:{" "}
-              <span className="font-mono text-xs break-all">{skipped.join(", ")}</span>
-            </p>
-            <button type="button" className="mt-1 cursor-pointer font-semibold underline underline-offset-4" onClick={() => setSkipped([])}>
-              Dismiss
-            </button>
-          </Alert>
-        </div>
-      )}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
 
-      {!focusMode && (
-        <div className="flex border-b border-zinc-200 md:hidden dark:border-zinc-800" role="tablist" aria-label="Editor view">
-          {(["source", "pdf"] as const).map((name) => (
-            <button
-              key={name}
-              type="button"
-              role="tab"
-              aria-selected={pane === name}
-              onClick={() => setPane(name)}
-              className={`flex-1 cursor-pointer py-2.5 text-sm font-semibold ${pane === name ? "border-b-2 border-brand-600 text-brand-700 dark:text-brand-300" : "text-zinc-600 dark:text-zinc-400"}`}
-            >
-              {name === "source" ? "Source" : "PDF"}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="flex min-h-0 flex-1">
-        {showFiles && !focusMode && (
-          <aside id="editor-files" aria-label="Project files and outline" className="hidden w-60 shrink-0 animate-fade border-r border-zinc-200 bg-white md:block dark:border-zinc-800 dark:bg-zinc-950">
-            {sidebar}
-          </aside>
+        {!editable && !focusMode && (
+          <div className="border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
+            <Alert tone="info">You can read and compile this document. Ask its owner for edit access to change it.</Alert>
+          </div>
         )}
-        <div
-          ref={panes}
-          className="flex min-w-0 flex-1"
-          // Where the divider sits, read by the source pane's width on wide screens.
-          style={{ "--split": `${(pdfVisible && sourceVisible ? shownRatio : 1) * 100}%` } as React.CSSProperties}
-        >
-          <section
-            aria-label="LaTeX source"
-            className={`latex-editor relative min-h-0 w-full min-w-0 md:w-auto md:shrink-0 md:basis-(--split) ${pane === "source" || focusMode ? "block" : "hidden"} ${sourceVisible ? "md:block" : "md:hidden"} ${pdfVisible ? "" : "md:flex-1"}`}
-          >
-            <div className="h-full min-h-0" hidden={openFile !== null}>
-              <LatexEditor
-                ref={editor}
-                initialValue={doc.source}
-                onChange={setSource}
-                onCompile={() => void runCompile()}
-                label="LaTeX source"
-                readOnly={!editable}
-                index={index}
-                focusMode={focusMode}
-                onCursor={setCursor}
-                onProblems={setProblems}
-                onNavigate={followElsewhere}
-                {...(editable ? { onImages: uploadImages } : {})}
-              />
-            </div>
-            {openFile?.kind === "text" && (
-              <FileEditor
-                key={openFile.id}
-                ref={fileEditor}
-                workspaceId={workspace.id}
-                file={openFile}
-                editable={editable}
-                onStatus={setFileStatus}
-                onCompile={() => void runCompile()}
-                onSaved={() => void refreshFiles()}
-              />
-            )}
-            {openFile?.kind === "binary" && (
-              <FilePreview
-                key={openFile.id}
-                workspaceId={workspace.id}
-                file={openFile}
-                onShowPdf={(bytes, path) => {
-                  setPdf(bytes);
-                  setPreviewing(path);
-                  setPane("pdf");
-                }}
-              />
-            )}
-          </section>
-
-          {pdfVisible && sourceVisible && (
-            // A focusable separator is a widget (WAI-ARIA "window splitter"): arrows move it.
-            // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize the source and PDF panes"
-              aria-valuemin={20}
-              aria-valuemax={80}
-              aria-valuenow={Math.round(shownRatio * 100)}
-              // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-              tabIndex={0}
-              onPointerDown={dragDivider}
-              onDoubleClick={() => setRatio(0.5)}
-              onKeyDown={(event) => {
-                const step = event.key === "ArrowLeft" ? -0.05 : event.key === "ArrowRight" ? 0.05 : 0;
-                if (step) {
-                  event.preventDefault();
-                  setRatio(Math.min(0.8, Math.max(0.2, Math.round((ratio + step) * 20) / 20)));
-                } else if (event.key === "Home" || event.key === "End") {
-                  event.preventDefault();
-                  setRatio(event.key === "Home" ? 0.2 : 0.8);
-                }
-              }}
-              title="Drag to resize; double-click to reset"
-              className="group relative z-10 -mx-1 hidden w-2 shrink-0 cursor-col-resize touch-none md:block"
-            >
-              <span aria-hidden="true" className={`absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-zinc-200 transition-all group-hover:w-1 group-hover:bg-brand-500/60 dark:bg-zinc-800 ${dragRatio !== null ? "w-1 bg-brand-500/70" : ""}`} />
-            </div>
-          )}
-
-          <section aria-label="PDF preview" className={`min-h-0 min-w-0 flex-1 flex-col bg-zinc-100 dark:bg-zinc-900 ${pane === "pdf" && !focusMode ? "flex" : "hidden"} ${pdfVisible ? "md:flex" : "md:hidden"}`}>
-            <div className="flex items-center justify-between gap-2 border-b border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
-              <span className="truncate">
-                {previewing ? (
-                  `Showing ${previewing}`
-                ) : template ? (
-                  <>
-                    Template: {template.name} ({template.license})
-                  </>
-                ) : (
-                  "Blank project"
-                )}
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  aria-label="Zoom out"
-                  disabled={zoom === stepZoom(zoom, -1)}
-                  onClick={() => setZoom(stepZoom(zoom, -1))}
-                  className="cursor-pointer rounded px-2 py-1 font-semibold hover:bg-zinc-200 disabled:opacity-40 dark:hover:bg-zinc-800"
-                >
-                  −
-                </button>
-                <span aria-live="polite">{Math.round(zoom * 100)}%</span>
-                <button
-                  type="button"
-                  aria-label="Zoom in"
-                  disabled={zoom === stepZoom(zoom, 1)}
-                  onClick={() => setZoom(stepZoom(zoom, 1))}
-                  className="cursor-pointer rounded px-2 py-1 font-semibold hover:bg-zinc-200 disabled:opacity-40 dark:hover:bg-zinc-800"
-                >
-                  +
-                </button>
+        {save.state === "conflict" && (
+          <div className="border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
+            <Alert tone="error">
+              <p className="font-semibold">Someone else saved this document while you were editing.</p>
+              <p>Your latest changes are not saved. Load their version, or replace it with yours.</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button variant="secondary" className="!h-8 !w-auto" onClick={onReload}>
+                  Load their version
+                </Button>
+                <Button variant="secondary" className="!h-8 !w-auto" onClick={() => keepMine(save.currentVersion)}>
+                  Keep mine
+                </Button>
               </div>
-            </div>
+            </Alert>
+          </div>
+        )}
+        {save.state === "locked" && (
+          <div className="border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
+            <Alert tone="error">{save.message}</Alert>
+          </div>
+        )}
+        {skipped.length > 0 && !focusMode && (
+          <div className="border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
+            <Alert tone="info">
+              <p>
+                Project imported. {skipped.length === 1 ? "One file was" : `${skipped.length} files were`} left out because SkoLab can't use {skipped.length === 1 ? "it" : "them"}:{" "}
+                <span className="font-mono text-xs break-all">{skipped.join(", ")}</span>
+              </p>
+              <button type="button" className="mt-1 cursor-pointer font-semibold underline underline-offset-4" onClick={() => setSkipped([])}>
+                Dismiss
+              </button>
+            </Alert>
+          </div>
+        )}
 
-            {/* Scrollable, so keyboard users must be able to reach it (WCAG 2.1.1). */}
-            {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
-            <div className="min-h-0 flex-1 overflow-auto" role="region" aria-label="PDF pages" tabIndex={0} data-pdf-scroll>
-              {compile.state === "failed" && (
-                <div className="space-y-2 p-3">
-                  <Alert tone="error">
-                    <p className="font-semibold">Compilation failed{pdf ? "; showing the last good PDF" : ""}.</p>
-                    <p className="text-xs opacity-80">Errors are underlined in the source too; press F8 to step through them.</p>
-                    <ul className="mt-1 space-y-1">
-                      {compile.errors.map((message, index) => {
-                        const at = lineOf(message);
-                        return (
-                          <li key={index}>
-                            {at ? (
-                              <button type="button" className="cursor-pointer text-left underline underline-offset-2" onClick={() => showMain(at)}>
-                                {message}
-                              </button>
-                            ) : (
-                              message
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </Alert>
-                  {compile.log && (
-                    <details className="rounded-lg border border-zinc-200 bg-white text-xs dark:border-zinc-800 dark:bg-zinc-950">
-                      <summary className="cursor-pointer px-3 py-2 font-semibold">Compiler log</summary>
-                      <pre className="max-h-72 overflow-auto px-3 pb-3 whitespace-pre-wrap">{compile.log}</pre>
-                    </details>
+        {!focusMode && (
+          <div className="flex border-b border-zinc-200 md:hidden dark:border-zinc-800" role="tablist" aria-label="Editor view">
+            {(["source", "pdf"] as const).map((name) => (
+              <button
+                key={name}
+                type="button"
+                role="tab"
+                aria-selected={pane === name}
+                onClick={() => setPane(name)}
+                className={`flex-1 cursor-pointer py-2.5 text-sm font-semibold ${pane === name ? "border-b-2 border-brand-600 text-brand-700 dark:text-brand-300" : "text-zinc-600 dark:text-zinc-400"}`}
+              >
+                {name === "source" ? "Source" : "PDF"}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="flex min-h-0 flex-1">
+          {showFiles && !focusMode && (
+            <aside id="editor-files" aria-label="Project files and outline" className="hidden w-60 shrink-0 animate-fade border-r border-zinc-200 bg-white md:block dark:border-zinc-800 dark:bg-zinc-950">
+              {sidebar}
+            </aside>
+          )}
+          <div
+            ref={panes}
+            className="flex min-w-0 flex-1"
+            // Where the divider sits, read by the source pane's width on wide screens.
+            style={{ "--split": `${(pdfVisible && sourceVisible ? shownRatio : 1) * 100}%` } as React.CSSProperties}
+          >
+            <section
+              aria-label="LaTeX source"
+              className={`latex-editor relative min-h-0 w-full min-w-0 flex-col md:w-auto md:shrink-0 md:basis-(--split) ${pane === "source" || focusMode ? "flex" : "hidden"} ${sourceVisible ? "md:flex" : "md:hidden"} ${pdfVisible ? "" : "md:flex-1"}`}
+            >
+              {isWide && !focusMode && (
+                <div className={`${paneBar} bg-white dark:bg-zinc-950`}>
+                  {titleBar}
+                  {!pdfVisible && <div className="flex shrink-0 items-center gap-1.5">{outputs}</div>}
+                </div>
+              )}
+              <div className="relative min-h-0 flex-1">
+                <div className="h-full min-h-0" hidden={openFile !== null}>
+                  <LatexEditor
+                    ref={editor}
+                    initialValue={doc.source}
+                    onChange={setSource}
+                    onCompile={() => void runCompile()}
+                    label="LaTeX source"
+                    readOnly={!editable}
+                    index={index}
+                    focusMode={focusMode}
+                    onCursor={setCursor}
+                    onProblems={setProblems}
+                    onNavigate={followElsewhere}
+                    {...(editable ? { onImages: uploadImages } : {})}
+                  />
+                </div>
+                {openFile?.kind === "text" && (
+                  <FileEditor
+                    key={openFile.id}
+                    ref={fileEditor}
+                    workspaceId={workspace.id}
+                    file={openFile}
+                    editable={editable}
+                    onStatus={setFileStatus}
+                    onCompile={() => void runCompile()}
+                    onSaved={() => void refreshFiles()}
+                  />
+                )}
+                {openFile?.kind === "binary" && (
+                  <FilePreview
+                    key={openFile.id}
+                    workspaceId={workspace.id}
+                    file={openFile}
+                    onShowPdf={(bytes, path) => {
+                      setPdf(bytes);
+                      setPreviewing(path);
+                      setPane("pdf");
+                    }}
+                  />
+                )}
+              </div>
+            </section>
+
+            {pdfVisible && sourceVisible && (
+              // A focusable separator is a widget (WAI-ARIA "window splitter"): arrows move it.
+              // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize the source and PDF panes"
+                aria-valuemin={20}
+                aria-valuemax={80}
+                aria-valuenow={Math.round(shownRatio * 100)}
+                // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+                tabIndex={0}
+                onPointerDown={dragDivider}
+                onDoubleClick={() => setRatio(0.5)}
+                onKeyDown={(event) => {
+                  const step = event.key === "ArrowLeft" ? -0.05 : event.key === "ArrowRight" ? 0.05 : 0;
+                  if (step) {
+                    event.preventDefault();
+                    setRatio(Math.min(0.8, Math.max(0.2, Math.round((ratio + step) * 20) / 20)));
+                  } else if (event.key === "Home" || event.key === "End") {
+                    event.preventDefault();
+                    setRatio(event.key === "Home" ? 0.2 : 0.8);
+                  }
+                }}
+                title="Drag to resize; double-click to reset"
+                className="group relative z-10 -mx-1 hidden w-2 shrink-0 cursor-col-resize touch-none md:block"
+              >
+                <span aria-hidden="true" className={`absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-zinc-200 transition-all group-hover:w-1 group-hover:bg-brand-500/60 dark:bg-zinc-800 ${dragRatio !== null ? "w-1 bg-brand-500/70" : ""}`} />
+              </div>
+            )}
+
+            <section aria-label="PDF preview" className={`min-h-0 min-w-0 flex-1 flex-col bg-zinc-100 dark:bg-zinc-900 ${pane === "pdf" && !focusMode ? "flex" : "hidden"} ${pdfVisible ? "md:flex" : "md:hidden"}`}>
+              <div className={isWide ? paneBar : "flex items-center justify-between gap-2 border-b border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400"}>
+                {isWide && !sourceVisible && titleBar}
+                <span className={`truncate ${isWide ? (sourceVisible ? "flex-1" : "hidden xl:inline") : ""}`}>
+                  {previewing ? (
+                    `Showing ${previewing}`
+                  ) : template ? (
+                    <>
+                      Template: {template.name} ({template.license})
+                    </>
+                  ) : (
+                    "Blank project"
                   )}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    aria-label="Zoom out"
+                    disabled={zoom === stepZoom(zoom, -1)}
+                    onClick={() => setZoom(stepZoom(zoom, -1))}
+                    className="cursor-pointer rounded px-2 py-1 font-semibold hover:bg-zinc-200 disabled:opacity-40 dark:hover:bg-zinc-800"
+                  >
+                    −
+                  </button>
+                  <span aria-live="polite">{Math.round(zoom * 100)}%</span>
+                  <button
+                    type="button"
+                    aria-label="Zoom in"
+                    disabled={zoom === stepZoom(zoom, 1)}
+                    onClick={() => setZoom(stepZoom(zoom, 1))}
+                    className="cursor-pointer rounded px-2 py-1 font-semibold hover:bg-zinc-200 disabled:opacity-40 dark:hover:bg-zinc-800"
+                  >
+                    +
+                  </button>
                 </div>
-              )}
-              {compile.state === "unavailable" && (
-                <div className="p-3">
-                  <Alert tone="error">{compile.message}</Alert>
-                </div>
-              )}
-              {compiling && !pdf && (
-                <div role="status" className="flex items-center justify-center gap-2 p-10 text-sm text-zinc-600 dark:text-zinc-300">
-                  <Spinner /> Compiling with pdfLaTeX…
-                </div>
-              )}
-              {pdf && (
-                <Suspense fallback={<Spinner className="mx-auto mt-10 size-6" />}>
-                  <PdfPreview pdf={pdf} zoom={zoom} />
-                </Suspense>
-              )}
-            </div>
-          </section>
-        </div>
-      </div>
+                {isWide && (
+                  <div className="flex shrink-0 items-center gap-1.5 border-l border-zinc-200 pl-2 dark:border-zinc-800">
+                    {outputs}
+                  </div>
+                )}
+              </div>
 
-      {focusMode ? (
-        <div className="pointer-events-none fixed inset-x-0 top-3 z-20 flex justify-center">
-          <div className="pointer-events-auto flex animate-fade items-center gap-3 rounded-full border border-zinc-200 bg-white/90 py-1 pr-1 pl-4 text-xs text-zinc-600 shadow-lg backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/90 dark:text-zinc-300">
-            <span className="tabular-nums">{insights.stats.words.toLocaleString()} words</span>
-            {section && <span className="max-w-48 truncate">{section}</span>}
-            <span role="status">{editable ? saveLabel(save) : "View only"}</span>
-            <button type="button" onClick={() => setFocusMode(false)} className="flex h-7 cursor-pointer items-center gap-1.5 rounded-full bg-zinc-900 px-3 font-semibold text-white hover:bg-zinc-700 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200">
-              Leave focus <Keys keys="Esc" className="opacity-80" />
-            </button>
+              {/* Scrollable, so keyboard users must be able to reach it (WCAG 2.1.1). */}
+              {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+              <div className="min-h-0 flex-1 overflow-auto" role="region" aria-label="PDF pages" tabIndex={0} data-pdf-scroll>
+                {compile.state === "failed" && (
+                  <div className="space-y-2 p-3">
+                    <Alert tone="error">
+                      <p className="font-semibold">Compilation failed{pdf ? "; showing the last good PDF" : ""}.</p>
+                      <p className="text-xs opacity-80">Errors are underlined in the source too; press F8 to step through them.</p>
+                      <ul className="mt-1 space-y-1">
+                        {compile.errors.map((message, index) => {
+                          const at = lineOf(message);
+                          return (
+                            <li key={index}>
+                              {at ? (
+                                <button type="button" className="cursor-pointer text-left underline underline-offset-2" onClick={() => showMain(at)}>
+                                  {message}
+                                </button>
+                              ) : (
+                                message
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </Alert>
+                    {compile.log && (
+                      <details className="rounded-lg border border-zinc-200 bg-white text-xs dark:border-zinc-800 dark:bg-zinc-950">
+                        <summary className="cursor-pointer px-3 py-2 font-semibold">Compiler log</summary>
+                        <pre className="max-h-72 overflow-auto px-3 pb-3 whitespace-pre-wrap">{compile.log}</pre>
+                      </details>
+                    )}
+                  </div>
+                )}
+                {compile.state === "unavailable" && (
+                  <div className="p-3">
+                    <Alert tone="error">{compile.message}</Alert>
+                  </div>
+                )}
+                {compiling && !pdf && (
+                  <div role="status" className="flex items-center justify-center gap-2 p-10 text-sm text-zinc-600 dark:text-zinc-300">
+                    <Spinner /> Compiling with pdfLaTeX…
+                  </div>
+                )}
+                {pdf && (
+                  <Suspense fallback={<Spinner className="mx-auto mt-10 size-6" />}>
+                    <PdfPreview pdf={pdf} zoom={zoom} />
+                  </Suspense>
+                )}
+              </div>
+            </section>
           </div>
         </div>
-      ) : (
-        <StatusBar
-          words={insights.stats.words}
-          section={section}
-          problems={problems}
-          line={line}
-          column={cursor?.column ?? 1}
-          autoCompile={autoCompile}
-          editable={editable}
-          onNextProblem={() => act("next-problem")}
-          onAutoCompile={setAutoCompile}
-          onCommands={() => setPalette(true)}
-          onShortcuts={() => setSheet("shortcuts")}
-        />
-      )}
+
+        {focusMode ? (
+          <div className="pointer-events-none fixed inset-x-0 top-3 z-20 flex justify-center">
+            <div className="pointer-events-auto flex animate-fade items-center gap-3 rounded-full border border-zinc-200 bg-white/90 py-1 pr-1 pl-4 text-xs text-zinc-600 shadow-lg backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/90 dark:text-zinc-300">
+              <span className="tabular-nums">{insights.stats.words.toLocaleString()} words</span>
+              {section && <span className="max-w-48 truncate">{section}</span>}
+              <span role="status">{editable ? saveLabel(save) : "View only"}</span>
+              <button type="button" onClick={() => setFocusMode(false)} className="flex h-7 cursor-pointer items-center gap-1.5 rounded-full bg-zinc-900 px-3 font-semibold text-white hover:bg-zinc-700 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200">
+                Leave focus <Keys keys="Esc" className="opacity-80" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <StatusBar
+            words={insights.stats.words}
+            section={section}
+            problems={problems}
+            line={line}
+            column={cursor?.column ?? 1}
+            autoCompile={autoCompile}
+            editable={editable}
+            onNextProblem={() => act("next-problem")}
+            onAutoCompile={setAutoCompile}
+            onCommands={() => setPalette(true)}
+            onShortcuts={() => setSheet("shortcuts")}
+          />
+        )}
+      </div>
 
       {openFile === null && <MathPreview cursor={cursor} macros={macros} />}
       {openFile === null && editable && sheet === null && !palette && (
@@ -1313,6 +1414,15 @@ function LayoutIcon({ layout }: { layout: Layout }) {
       {layout === "split" && <path d="M10 3.5v13" />}
       {layout === "source" && <path d="M5.5 7.5h6M5.5 10h8M5.5 12.5h5" strokeLinecap="round" />}
       {layout === "pdf" && <path d="M7 6.5h6v7H7z" />}
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-[18px] shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
     </svg>
   );
 }
