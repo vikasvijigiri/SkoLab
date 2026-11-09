@@ -3,7 +3,9 @@ package files
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"path"
@@ -70,10 +72,79 @@ func zipBundle(b Bundle, at time.Time) ([]byte, error) {
 			return nil, err
 		}
 	}
+	if b.Research != nil {
+		if err := add("SKOLAB_REPRODUCIBILITY.md", []byte(reproducibilityMarkdown(b)), zip.Deflate); err != nil {
+			return nil, err
+		}
+	}
 	if err := w.Close(); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+func reproducibilityMarkdown(b Bundle) string {
+	r := b.Research.Reproducibility
+	var out strings.Builder
+	out.WriteString("# Research reproducibility record\n\n")
+	out.WriteString("- Project: " + emptyAsNotProvided(b.Title) + "\n")
+	out.WriteString(fmt.Sprintf("- Research notes version: %d\n", b.Research.Version))
+	if b.Research.UpdatedAt != nil {
+		out.WriteString("- Research notes saved at: " + b.Research.UpdatedAt.UTC().Format("2006-01-02 15:04:05 UTC") + "\n")
+	}
+	out.WriteString("\n")
+	out.WriteString("Generated from SkoLab project research notes. These are author-provided disclosures, not a verification or guarantee of reproducibility.\n\n")
+	out.WriteString("## Data availability\n\n" + emptyAsNotProvided(r.DataAvailability) + "\n\n")
+	out.WriteString("## Code availability\n\n" + emptyAsNotProvided(r.CodeAvailability) + "\n\n")
+	out.WriteString("## Software and versions\n\n" + emptyAsNotProvided(r.Software) + "\n\n")
+	out.WriteString("## Analysis steps\n\n" + emptyAsNotProvided(r.AnalysisSteps) + "\n\n")
+	out.WriteString("## Preregistration\n\n" + emptyAsNotProvided(r.Preregistration) + "\n\n")
+	out.WriteString("## Additional notes\n\n" + emptyAsNotProvided(r.Notes) + "\n\n")
+	out.WriteString("## Evidence records\n\n")
+	if len(b.Research.Items) == 0 {
+		out.WriteString("No evidence records were added.\n\n")
+	} else {
+		for _, item := range b.Research.Items {
+			out.WriteString("### " + item.CitationKey + "\n\n")
+			out.WriteString("- Manuscript claim: " + emptyAsNotProvided(item.Claim) + "\n")
+			out.WriteString("- Source passage: " + emptyAsNotProvided(item.Quote) + "\n")
+			out.WriteString("- Locator: " + emptyAsNotProvided(item.Locator) + "\n")
+			out.WriteString("- Researcher assessment: " + strings.ReplaceAll(item.Status, "_", " ") + "\n")
+			out.WriteString("- Study type: " + emptyAsNotProvided(item.StudyType) + "\n")
+			out.WriteString("- Sample or dataset: " + emptyAsNotProvided(item.Sample) + "\n")
+			out.WriteString("- Findings: " + emptyAsNotProvided(item.Findings) + "\n")
+			out.WriteString("- Limitations: " + emptyAsNotProvided(item.Limitations) + "\n")
+			out.WriteString("- Relevance: " + emptyAsNotProvided(item.Relevance) + "\n\n")
+		}
+	}
+	out.WriteString("## Files in this archive\n\n")
+	type manifestFile struct {
+		name string
+		data []byte
+	}
+	files := []manifestFile{{name: MainPath, data: []byte(b.Main)}}
+	for _, f := range b.Files {
+		if f.Kind != KindFolder {
+			files = append(files, manifestFile{name: f.Path, data: f.Data})
+		}
+	}
+	if b.Output != nil {
+		files = append(files, manifestFile{name: OutputPath, data: b.Output})
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i].name < files[j].name })
+	for _, file := range files {
+		digest := sha256.Sum256(file.data)
+		name := strings.ReplaceAll(file.name, "`", "\\`")
+		out.WriteString(fmt.Sprintf("- `%s` — SHA-256 `%x`\n", name, digest))
+	}
+	return out.String()
+}
+
+func emptyAsNotProvided(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "Not provided."
+	}
+	return value
 }
 
 // imported is a project unpacked from a .zip.

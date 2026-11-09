@@ -650,6 +650,51 @@ paths:
         "429": { $ref: "#/components/responses/TooMany" }
         "503": { $ref: "#/components/responses/Unavailable" }
 
+  /api/v1/workspaces/{id}/research:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+    get:
+      tags: [editor]
+      operationId: getResearchNotes
+      summary: Evidence matrix, reproducibility notes, and citation coverage audit
+      description: The audit checks citation keys against project BibTeX files and author-entered evidence notes. It does not determine whether a source supports a claim.
+      responses:
+        "200":
+          description: Research notes and mechanical citation coverage checks.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResearchDocument" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    put:
+      tags: [editor]
+      operationId: saveResearchNotes
+      summary: Save the evidence matrix and reproducibility notes (owner or editor)
+      description: Uses optimistic concurrency. base_version 0 creates the record. Status is an author assessment, never an automated verdict.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResearchSave" }
+      responses:
+        "200":
+          description: Saved research notes.
+          headers:
+            ETag: { schema: { type: string, pattern: '^"v[0-9]+"$' } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResearchDocument" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/schemas/VersionConflict" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
   /api/v1/workspaces/{id}/files:
     parameters:
       - $ref: "#/components/parameters/WorkspaceId"
@@ -884,7 +929,11 @@ paths:
       tags: [editor]
       operationId: downloadProject
       summary: The whole project as a .zip (any active member)
-      description: main.tex, every file and folder, and output.pdf when the project has been compiled.
+      description: >-
+        main.tex, every file and folder, and output.pdf when the project has
+        been compiled. If workspace research notes exist, the archive also
+        contains SKOLAB_REPRODUCIBILITY.md with author-provided reproducibility
+        disclosures and evidence records.
       responses:
         "200":
           description: The archive, named after the workspace.
@@ -1718,6 +1767,59 @@ components:
       maxLength: 100000
       description: At most 100,000 characters; no control characters other than tab, newline and carriage return.
       pattern: "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f-\\u009f]*$"
+    EvidenceItem:
+      type: object
+      required: [id, claim, citation_key, quote, locator, study_type, sample, findings, limitations, relevance, status]
+      properties:
+        id: { type: string, minLength: 1, maxLength: 80 }
+        claim: { type: string, maxLength: 10000 }
+        citation_key: { type: string, minLength: 1, maxLength: 10000 }
+        quote: { type: string, maxLength: 10000 }
+        locator: { type: string, maxLength: 10000, description: Page, section, table, or paragraph locator supplied by the researcher. }
+        study_type: { type: string, maxLength: 10000 }
+        sample: { type: string, maxLength: 10000 }
+        findings: { type: string, maxLength: 10000 }
+        limitations: { type: string, maxLength: 10000 }
+        relevance: { type: string, maxLength: 10000 }
+        status: { type: string, enum: [to_review, supported_by_author, needs_revision], description: Researcher-assigned review status; never an automated verdict. }
+    ReproducibilityNotes:
+      type: object
+      required: [data_availability, code_availability, software, analysis_steps, preregistration, notes]
+      properties:
+        data_availability: { type: string, maxLength: 10000 }
+        code_availability: { type: string, maxLength: 10000 }
+        software: { type: string, maxLength: 10000 }
+        analysis_steps: { type: string, maxLength: 10000 }
+        preregistration: { type: string, maxLength: 10000 }
+        notes: { type: string, maxLength: 10000 }
+    CitationQuality:
+      type: object
+      required: [cited_keys, bibliography_keys, unresolved_keys, citations_without_evidence, unused_references]
+      properties:
+        cited_keys: { type: array, items: { type: string } }
+        bibliography_keys: { type: array, items: { type: string } }
+        unresolved_keys: { type: array, items: { type: string } }
+        citations_without_evidence: { type: array, items: { type: string } }
+        unused_references: { type: array, items: { type: string } }
+    ResearchDocument:
+      type: object
+      required: [workspace_id, items, reproducibility, version, updated_at, role, quality]
+      properties:
+        workspace_id: { type: string }
+        items: { type: array, maxItems: 500, items: { $ref: "#/components/schemas/EvidenceItem" } }
+        reproducibility: { $ref: "#/components/schemas/ReproducibilityNotes" }
+        version: { type: integer, minimum: 0 }
+        updated_at: { type: [string, "null"], format: date-time }
+        role: { $ref: "#/components/schemas/Role" }
+        quality: { $ref: "#/components/schemas/CitationQuality" }
+    ResearchSave:
+      type: object
+      additionalProperties: false
+      required: [base_version, items, reproducibility]
+      properties:
+        base_version: { type: integer, minimum: 0 }
+        items: { type: array, maxItems: 500, items: { $ref: "#/components/schemas/EvidenceItem" } }
+        reproducibility: { $ref: "#/components/schemas/ReproducibilityNotes" }
     Document:
       type: object
       required: [workspace_id, source, template_id, version, updated_at, updated_by, role, insights]

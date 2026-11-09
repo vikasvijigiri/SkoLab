@@ -33,6 +33,8 @@ var unloaded = map[string]string{
 	"GET /ws/colab/:workspace_id":                "a socket's lifetime is not a latency; the e2e and Hurl suites cover it",
 	"HEAD /gateway-health":                       "the GET is driven",
 	"POST /api/v1/workspaces/:id/ai/originality": "would spend the shared OpenAlex allowance; ai_live.py checks it weekly",
+	"GET /api/v1/workspaces/:id/research":        "research quality and workspace permissions are covered by the Hurl research workflow",
+	"PUT /api/v1/workspaces/:id/research":        "version conflicts and workspace permissions are covered by the Hurl research workflow",
 }
 
 func routeKeys(t *testing.T) []string {

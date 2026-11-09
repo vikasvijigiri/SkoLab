@@ -3,12 +3,16 @@ package files
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"io"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/skolab/backend-go/internal/research"
 )
 
 var (
@@ -141,6 +145,42 @@ func TestZipBundleHoldsMainFilesFoldersAndThePDF(t *testing.T) {
 	want := map[string]string{"main.tex": `\documentclass{article}`, "fig/": "", "fig/a.png": string(pngBytes), "refs.bib": "@a{}", "output.pdf": string(pdfBytes)}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("%v", got)
+	}
+}
+
+func TestReproducibilityBundleIncludesAuthorNotesEvidenceAndProjectManifest(t *testing.T) {
+	data, err := zipBundle(Bundle{Main: "main", Files: []Stored{{Path: "analysis.R", Kind: KindText, Data: []byte("run")}}, Research: &research.Document{
+		Items:           []research.Item{{CitationKey: "smith2024", Claim: "claim", Quote: "supporting passage", Locator: "p. 4", Status: "supported_by_author"}},
+		Reproducibility: research.Reproducibility{DataAvailability: "data.csv in this project", CodeAvailability: "analysis.R", Software: "R 4.4", AnalysisSteps: "Run analysis.R", Preregistration: "https://osf.io/example"},
+	}}, time.Date(2026, 11, 9, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var readme string
+	for _, entry := range zr.File {
+		if entry.Name == "SKOLAB_REPRODUCIBILITY.md" {
+			rc, _ := entry.Open()
+			body, _ := io.ReadAll(rc)
+			_ = rc.Close()
+			readme = string(body)
+		}
+	}
+	for _, want := range []string{"R 4.4", "analysis.R", "smith2024", "supporting passage", "not a verification or guarantee", "main.tex", "data.csv in this project", fmt.Sprintf("SHA-256 `%x`", sha256.Sum256([]byte("run")))} {
+		if !strings.Contains(readme, want) {
+			t.Errorf("reproducibility bundle missing %q: %s", want, readme)
+		}
+	}
+}
+
+func TestGeneratedReproducibilityPathIsReserved(t *testing.T) {
+	for _, name := range []string{"SKOLAB_REPRODUCIBILITY.md", "skolab_reproducibility.md"} {
+		if ValidPath(name) {
+			t.Errorf("generated archive path is writable: %s", name)
+		}
 	}
 }
 

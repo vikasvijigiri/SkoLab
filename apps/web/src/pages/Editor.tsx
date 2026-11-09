@@ -42,6 +42,7 @@ import { Overview, ProgressRing } from "../editor/Overview";
 import { FileEditor, type FileEditorHandle } from "../editor/FileEditor";
 import { FilePreview } from "../editor/FilePreview";
 import { AIPanel } from "../editor/AIPanel";
+import { ResearchPanel } from "../editor/ResearchPanel";
 import { SelectionToolbar } from "../editor/SelectionToolbar";
 import type { ImproveGoal } from "../api/editorTypes";
 import { WandIcon } from "../components/Icons";
@@ -250,7 +251,7 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
   const [insights, setInsights] = useState<Insights>(doc.insights);
   const [lastSaved, setLastSaved] = useState({ at: doc.updated_at, by: doc.updated_by, version: doc.version });
   const [members, setMembers] = useState<Member[]>([]);
-  const [sheet, setSheet] = useState<"share" | "overview" | "files" | "outline" | "shortcuts" | "ai" | null>(null);
+  const [sheet, setSheet] = useState<"share" | "overview" | "files" | "outline" | "shortcuts" | "ai" | "research" | null>(null);
   const [aiTab, setAiTab] = useState<"improve" | "originality">("improve");
   // A goal picked on the selection toolbar, run as soon as the panel opens.
   const [aiGoal, setAiGoal] = useState<ImproveGoal | undefined>(undefined);
@@ -701,6 +702,7 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
     { id: "download-tex", title: "Download main.tex", group: "Actions", keywords: "save export source", run: () => download(`${fileName(title)}.tex`, source, "application/x-tex") },
     ...(pdf || listing?.output ? [{ id: "download-pdf", title: "Download the PDF", group: "Actions", keywords: "export save", run: downloadPdf }] : []),
     { id: "share", title: "Share and invite co-authors", group: "Actions", keywords: "collaborate members access", run: () => setSheet("share") },
+    { id: "research", title: "Research quality and evidence", group: "Research", keywords: "citation evidence matrix reproducibility claims sources", run: () => setSheet("research") },
     {
       id: "ai-improve",
       title: "Improve writing with AI",
@@ -944,6 +946,9 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
           </button>
           <button type="button" onClick={() => setSheet("overview")} aria-label={`Progress ${insights.progress.percent}%. Open the overview`} title={`Progress ${insights.progress.percent}%: contents and details`} className={railButton}>
             <ProgressRing percent={insights.progress.percent} size={24} stroke={3} />
+          </button>
+          <button type="button" onClick={() => setSheet("research")} aria-label="Research quality and evidence" title="Citation checks, evidence matrix, and reproducibility notes" className={railButton}>
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3.75h8l4 4V20a.75.75 0 0 1-.75.75h-10.5A.75.75 0 0 1 6 20z"/><path d="M14 4v4h4M9 13h6M9 16h6M9 10h1"/></svg>
           </button>
           <button type="button" onClick={() => setSheet("share")} aria-label="Share" title="Invite co-authors and manage access" className={railButton}>
             {firstMember ? (
@@ -1384,6 +1389,11 @@ function DocumentEditor({ opened, onReload }: { opened: Opened; onReload: () => 
               role: doc.role,
             }}
           />
+        </Sheet>
+      )}
+      {sheet === "research" && (
+        <Sheet title="Research quality" description="Check citation coverage, record evidence, and document reproducibility details." onClose={() => setSheet(null)}>
+          <ResearchPanel workspaceId={workspace.id} editable={editable} token={idToken} />
         </Sheet>
       )}
       {sheet === "ai" && (

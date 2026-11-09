@@ -65,6 +65,38 @@ describe("editor overview and sharing", () => {
     expect(await screen.findByRole("button", { name: /^Progress 37%/ }, { timeout: 3000 })).toBeInTheDocument();
   });
 
+  it("checks citation coverage, saves source evidence, and stores reproducibility notes", async () => {
+    const id = backend.seed(ADA, "Evidence paper", { source: "\\documentclass{article}\n\\begin{document}Claim \\cite{known,missing}.\\end{document}" });
+    backend.addFile(id, "refs.bib", "@article{known, title={Known source}}\n@article{unused, title={Unused source}}");
+    const { user } = await renderApp(`/editor/${id}`, async (auth) => { await auth.signInWithGoogle(); });
+    await screen.findByTestId("pdf", {}, { timeout: 5000 });
+    await user.click(screen.getByRole("button", { name: "Research quality and evidence" }));
+    const sheet = screen.getByRole("dialog", { name: "Research quality" });
+    expect(await within(sheet).findAllByText("missing")).toHaveLength(2);
+    expect(within(sheet).getByText("known")).toBeInTheDocument();
+    expect(within(sheet).getByText("unused")).toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: "Refresh check" }));
+    expect(backend.requests.filter((request) => request.method === "GET" && request.url.endsWith("/research")).length).toBeGreaterThanOrEqual(2);
+
+    await user.click(within(sheet).getByRole("tab", { name: "Evidence matrix" }));
+    await user.click(within(sheet).getByRole("button", { name: "Add source" }));
+    await user.type(within(sheet).getByLabelText("Claim in the manuscript"), "Claim in the paper");
+    await user.type(within(sheet).getByLabelText("BibTeX citation key"), "known");
+    await user.type(within(sheet).getByLabelText("Supporting passage from the source"), "An author-recorded supporting passage");
+    await user.type(within(sheet).getByLabelText("Page, section, or table"), "p. 4");
+    await user.click(within(sheet).getByRole("button", { name: "Save research notes" }));
+    expect(await within(sheet).findByRole("status")).toHaveTextContent("Research notes saved.");
+    await user.click(within(sheet).getByRole("tab", { name: "Quality check" }));
+    await waitFor(() => expect(within(sheet).queryByText("known")).not.toBeInTheDocument());
+
+    await user.click(within(sheet).getByRole("tab", { name: "Reproducibility" }));
+    await user.type(within(sheet).getByLabelText("Software and versions"), "R 4.4.0");
+    await user.type(within(sheet).getByLabelText("Analysis steps"), "Run analysis.R");
+    await user.click(within(sheet).getByRole("button", { name: "Save research notes" }));
+    expect(await within(sheet).findByRole("status")).toHaveTextContent("Research notes saved.");
+    expect(backend.requests.some((request) => request.method === "PUT" && request.url.endsWith("/research"))).toBe(true);
+  });
+
   it("creates an invite link, lists it and revokes it", async () => {
     const { user, id } = await open();
     await user.click(screen.getByRole("button", { name: /Share/ }));
