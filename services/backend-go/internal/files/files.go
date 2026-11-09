@@ -31,6 +31,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/skolab/backend-go/internal/research"
 	"github.com/skolab/backend-go/internal/texsandbox"
 )
 
@@ -164,10 +165,11 @@ type Stored struct {
 
 // Bundle is a whole project, for a compile or an archive.
 type Bundle struct {
-	Title  string
-	Main   string
-	Files  []Stored
-	Output []byte
+	Title    string
+	Main     string
+	Files    []Stored
+	Output   []byte
+	Research *research.Document
 }
 
 // textTypes and binaryTypes are the extensions a project may hold, with the
@@ -221,7 +223,7 @@ func ValidPath(p string) bool {
 // reserved reports whether p names main.tex or output.pdf at the root.
 func reserved(p string) bool {
 	lower := strings.ToLower(p)
-	return lower == MainPath || lower == OutputPath
+	return lower == MainPath || lower == OutputPath || lower == "skolab_reproducibility.md"
 }
 
 // pathError says why ValidPath refused p.

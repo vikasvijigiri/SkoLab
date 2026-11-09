@@ -37,6 +37,7 @@ import (
 	"github.com/skolab/backend-go/internal/health"
 	"github.com/skolab/backend-go/internal/middleware"
 	"github.com/skolab/backend-go/internal/quota"
+	"github.com/skolab/backend-go/internal/research"
 	"github.com/skolab/backend-go/internal/security"
 	"github.com/skolab/backend-go/internal/shared"
 	"github.com/skolab/backend-go/internal/telemetry"
@@ -470,6 +471,9 @@ func newRouter(g gateway) *gin.Engine {
 	// The workspace's LaTeX source (one main.tex), saved with optimistic
 	// versioning so two editors never overwrite each other. See internal/document.
 	document.Register(workspacesAPI, document.NewPostgresStore(g.pool), templates.Known)
+	// Evidence records and reproducibility disclosures belong to the paper and
+	// follow the same workspace access controls and optimistic concurrency.
+	research.Register(workspacesAPI, research.NewPostgresStore(g.pool))
 	// Everything else in the project: folders, more .tex and .bib files,
 	// uploaded images, the last compiled PDF, .zip download and import, and
 	// compiling the whole project. See internal/files.

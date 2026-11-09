@@ -5,6 +5,12 @@ membership, real-time collaboration, and LaTeX compilation. The public Go
 gateway handles authentication, authorization, rate limits, and WebSockets. It
 calls an internal FastAPI service for the Python operations it still needs.
 
+Workspace research notes include an author-maintained evidence matrix and
+reproducibility disclosures. The editor's citation coverage check compares
+LaTeX citation keys with project BibTeX files and evidence records; it does not
+judge whether a cited source supports a claim. Project ZIP downloads include
+`SKOLAB_REPRODUCIBILITY.md` when research notes have been saved.
+
 | Path | Purpose |
 | --- | --- |
 | `apps/web` | Web app (sign-in and account flows), a static site on Render |

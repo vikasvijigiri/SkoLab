@@ -1,4 +1,5 @@
 import type { ActivityItem, ImproveGoal, OriginalityReport, OriginalityResult, Suggestion } from "../api/editorTypes";
+import { emptyReproducibility, type CitationQuality, type EvidenceItem, type ReproducibilityNotes } from "../api/research";
 import {
   characterCount,
   kindForPath,
@@ -52,6 +53,7 @@ interface StoredWorkspace {
   document: Omit<LatexDocument, "workspace_id" | "role" | "insights"> | null;
   files: StoredFile[];
   output: { bytes: Uint8Array; info: ProjectOutput } | null;
+  research: { items: EvidenceItem[]; reproducibility: ReproducibilityNotes; version: number; updated_at: string | null } | null;
 }
 
 /** One part of a multipart body that carried a file. */
@@ -276,6 +278,14 @@ export function createFakeBackend(templates: readonly Template[]) {
     const doc = stored.document ?? { source: "", template_id: null, version: 0, updated_at: null, updated_by: null };
     return { workspace_id: stored.workspace.id, ...doc, role, insights: fakeInsights(doc.source) };
   }
+
+function fakeCitationQuality(stored: StoredWorkspace): CitationQuality {
+  const source = stored.document?.source ?? "";
+  const cited = new Set([...source.matchAll(/\\(?:cite|citep|citet|autocite|parencite|textcite)\*?(?:\[[^\]]*\]){0,2}\s*\{([^}]*)\}/g)].flatMap((match) => (match[1] ?? "").split(",").map((key) => key.trim()).filter(Boolean)));
+  const bib = new Set(stored.files.filter(({ file }) => file.path.toLowerCase().endsWith(".bib")).flatMap(({ text }) => [...(text ?? "").matchAll(/@\w+\s*[({]\s*([^,\s]+)\s*,/g)].map((match) => match[1] ?? "")));
+  const evidence = new Set(stored.research?.items.map((entry) => entry.citation_key) ?? []);
+  return { cited_keys: [...cited].sort(), bibliography_keys: [...bib].sort(), unresolved_keys: [...cited].filter((key) => !bib.has(key)).sort(), citations_without_evidence: [...cited].filter((key) => !evidence.has(key)).sort(), unused_references: [...bib].filter((key) => !cited.has(key)).sort() };
+}
 
   function shareRoute(id: string, collection: string, item: string | undefined, method: string, uid: string, body: unknown): FakeAnswer {
     const stored = workspaces.get(id);
@@ -661,6 +671,7 @@ export function createFakeBackend(templates: readonly Template[]) {
           options.source === undefined ? null : { source: options.source, template_id: options.templateId ?? null, version: 1, updated_at: now(), updated_by: ownerUid },
         files: [],
         output: null,
+        research: null,
       });
       return id;
     },
@@ -970,6 +981,22 @@ export function createFakeBackend(templates: readonly Template[]) {
 
       const sharing = /^\/api\/v1\/workspaces\/([^/]+)\/(members|invites|invite-options)(?:\/([^/]+))?$/.exec(path);
       if (sharing) return shareRoute(sharing[1] ?? "", sharing[2] ?? "", sharing[3], method, uid, request.body);
+
+      const research = /^\/api\/v1\/workspaces\/([^/]+)\/research$/.exec(path);
+      if (research) {
+        const stored = workspaces.get(research[1] ?? "");
+        const role = stored ? roleOf(stored, uid) : null;
+        if (!stored || !role) return error(404, "not_found", "Not found, or you do not have access to it");
+        const state = stored.research ?? { items: [], reproducibility: { ...emptyReproducibility }, version: 0, updated_at: null };
+        if (method === "GET") return { status: 200, body: { workspace_id: stored.workspace.id, ...state, role, quality: fakeCitationQuality(stored) } };
+        if (method !== "PUT") return error(405, "method_not_allowed", "Method not allowed");
+        if (role !== "owner" && role !== "editor") return error(403, "edit_forbidden", "Only editors can change research notes");
+        const body = request.body as { base_version?: unknown; items?: unknown; reproducibility?: unknown } | null;
+        if (!body || !Number.isInteger(body.base_version) || !Array.isArray(body.items) || typeof body.reproducibility !== "object" || body.reproducibility === null) return error(400, "invalid_body", "Research notes are invalid");
+        if (body.base_version !== state.version) return error(409, "version_conflict", "Research notes changed", { current_version: state.version });
+        stored.research = { items: body.items as EvidenceItem[], reproducibility: body.reproducibility as ReproducibilityNotes, version: state.version + 1, updated_at: now() };
+        return { status: 200, body: { workspace_id: stored.workspace.id, ...stored.research, role, quality: fakeCitationQuality(stored) }, headers: { ETag: `"v${state.version + 1}"` } };
+      }
 
       const match = /^\/api\/v1\/workspaces\/([^/]+)(\/document)?$/.exec(path);
       if (!match) return error(404, "not_found", "Not found");

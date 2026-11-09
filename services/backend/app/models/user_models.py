@@ -145,6 +145,8 @@ class WorkspaceDocument(Base):
         ForeignKey("workspaces.id", ondelete="CASCADE"),
         primary_key=True,
     )
+
+
     source = Column(Text, nullable=False)
     template_id = Column(String(64), nullable=True)
     version = Column(Integer, nullable=False, default=1)
@@ -164,6 +166,23 @@ class WorkspaceDocument(Base):
         CheckConstraint("char_length(source) <= 100000", name="chk_workspace_document_size"),
         CheckConstraint("version >= 1", name="chk_workspace_document_version"),
     )
+
+
+class WorkspaceResearch(Base):
+    """Evidence matrix and reproducibility notes attached to a workspace."""
+
+    __tablename__ = "workspace_research"
+
+    workspace_id = Column(
+        String(100), ForeignKey("workspaces.id", ondelete="CASCADE"), primary_key=True
+    )
+    items = Column(JSONB, nullable=False, default=list, server_default="[]")
+    reproducibility = Column(JSONB, nullable=False, default=dict, server_default="{}")
+    version = Column(Integer, nullable=False, default=1, server_default="1")
+    updated_at = Column(DateTime, nullable=False, default=utcnow, server_default=text("(now() AT TIME ZONE 'utc')"))
+    updated_by = Column(String(100), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    __table_args__ = (CheckConstraint("version >= 1", name="chk_workspace_research_version"),)
 
 
 class WorkspaceFile(Base):

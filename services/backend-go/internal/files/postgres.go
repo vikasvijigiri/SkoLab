@@ -2,6 +2,7 @@ package files
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/skolab/backend-go/internal/document"
+	"github.com/skolab/backend-go/internal/research"
 	"github.com/skolab/backend-go/internal/workspace"
 )
 
@@ -527,6 +529,25 @@ func (s *postgresStore) Bundle(ctx context.Context, workspaceID, userID string, 
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return Bundle{}, unavailable(err)
 		}
+	}
+	var rawItems, rawRepro []byte
+	var version int
+	var updated time.Time
+	err = tx.QueryRow(ctx, `SELECT items,reproducibility,version,updated_at FROM workspace_research WHERE workspace_id=$1`, workspaceID).Scan(&rawItems, &rawRepro, &version, &updated)
+	if err == nil {
+		var value research.Document
+		value.WorkspaceID = workspaceID
+		value.Version = version
+		value.UpdatedAt = &updated
+		if err = json.Unmarshal(rawItems, &value.Items); err != nil {
+			return Bundle{}, unavailable(err)
+		}
+		if err = json.Unmarshal(rawRepro, &value.Reproducibility); err != nil {
+			return Bundle{}, unavailable(err)
+		}
+		b.Research = &value
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return Bundle{}, unavailable(err)
 	}
 	return b, nil
 }
